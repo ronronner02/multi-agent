@@ -103,6 +103,18 @@ The host preflight passed 29/29 checks against policy revision 2, with no prereq
 
 Claude Code's live sandboxed tool execution needs an authenticated worker home and a model call. It is exercised through the managed launch path in U4, under a recorded run budget.
 
+## Source Authority and Windows Export
+
+The WSL checkout `/home/leo/src/multi-agent` is the only development source. Provision, preflight, build and test from that checkout. `D:\Multi-Agent` is a preserved read-only copy; it changes only through the one-way export described in `docs/development.md`.
+
+Outside the repository:
+
+- `~/.local/state/multi-agent/cutover/` holds the cutover record and the byte manifest of the Windows workspace.
+- `~/.local/state/multi-agent/exports/` holds export records.
+- `~/.cache/multi-agent/` holds the checksum-verified upstream archive.
+
+Keep these directories when rolling back, because `engine/test/project-baseline.test.mjs` uses them to prove the Windows files were preserved.
+
 ## Rollback
 
 To remove the worker boundary completely:

@@ -31,7 +31,9 @@ export const PIN = Object.freeze({
   manifestDigest: '8efe21ebbf4e9994c8b18b362d41fc76b120f36db8a03a3ea653013493e4ef82',
   counts: { files: 3548, symlinks: 5, excluded: 18 },
   // Imported paths later changed on purpose; verify reports them as adapted.
-  adapted: [],
+  // Application version 0.1.0 (package identifiers kept) and the approved
+  // dependency install scripts (better-sqlite3, esbuild) in allowScripts.
+  adapted: ['package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json', 'packages/ui/package.json'],
 });
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
