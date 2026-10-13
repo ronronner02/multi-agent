@@ -9,13 +9,15 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { PIN, ImportError, auditArchive, importInto, verifyTree, fetchArchive, gitListedFiles } from '../../tools/upstream-import.mjs';
+import { ExportError, applyExport, exportRecord, exportRecordPath, loadPrevious, planExport } from '../../tools/windows-export.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const engineRoot = path.join(here, '..');
@@ -254,5 +256,194 @@ describe('pinned: engine/ matches the audited upstream archive', () => {
     const tree = verifyTree(result, engineRoot, { files: gitListedFiles(engineRoot) });
     assert.deepEqual({ missing: tree.missing, changed: tree.changed, extra: tree.extra }, { missing: [], changed: [], extra: [] });
     assert.deepEqual(tree.adapted.sort(), [...PIN.adapted].sort(), 'every declared adaptation must still differ from upstream');
+  });
+});
+
+describe('offline: one-way Windows export', () => {
+  const sha = (s) => createHash('sha256').update(s).digest('hex');
+  const src = (entries) => new Map(Object.entries(entries).map(([k, v]) => [k, Buffer.from(v)]));
+  const baseline = (entries) => new Map(Object.entries(entries).map(([k, v]) => [k, { hash: sha(v), owned: false }]));
+  const toPrevious = (record) =>
+    new Map([
+      ...Object.entries(record.baseline).map(([k, hash]) => [k, { hash, owned: false }]),
+      ...Object.entries(record.owned).map(([k, hash]) => [k, { hash, owned: true }]),
+    ]);
+  const exportOnce = (dir, source, previous, opts = {}) => {
+    const plan = planExport({ source, destRoot: dir, previous, ...opts });
+    const applied = applyExport(plan, { source, destRoot: dir });
+    return { plan, applied, previous: toPrevious(exportRecord({ source, plan, previous, applied, sourceCommit: 'c0ffee' })) };
+  };
+  const read = (dir, rel) => readFileSync(path.join(dir, rel), 'utf8');
+
+  test('first export replaces cutover-baseline files, adds new ones, and never touches other Windows files', () =>
+    withTempDir((dir) => {
+      writeFileSync(path.join(dir, 'README.md'), 'old');
+      writeFileSync(path.join(dir, 'personal.txt'), 'mine');
+      const { plan } = exportOnce(dir, src({ 'README.md': 'new', 'docs/a.md': 'a' }), baseline({ 'README.md': 'old', 'personal.txt': 'mine' }));
+      assert.deepEqual(plan.write.sort(), ['README.md', 'docs/a.md']);
+      assert.equal(read(dir, 'README.md'), 'new');
+      assert.equal(read(dir, 'personal.txt'), 'mine');
+    }));
+
+  test('a cutover-only Windows file is never deleted or adopted, even with --delete', () =>
+    withTempDir((dir) => {
+      mkdirSync(path.join(dir, '.claude'));
+      writeFileSync(path.join(dir, '.claude/skill.md'), 'host mirror');
+      const first = exportOnce(dir, src({ 'a.md': 'a' }), baseline({ '.claude/skill.md': 'host mirror' }), { allowDelete: true });
+      assert.deepEqual([first.plan.delete, first.plan.keptDeletions], [[], []]);
+      assert.equal(first.previous.get('.claude/skill.md').owned, false, 'stays baseline-only after an export');
+      const second = planExport({ source: src({ 'a.md': 'a2' }), destRoot: dir, previous: first.previous, allowDelete: true });
+      assert.deepEqual(second.delete, []);
+      assert.equal(read(dir, '.claude/skill.md'), 'host mirror');
+    }));
+
+  test('re-exporting the same source is a no-op', () =>
+    withTempDir((dir) => {
+      const source = src({ 'a.md': 'a' });
+      const { previous } = exportOnce(dir, source, new Map());
+      const plan = planExport({ source, destRoot: dir, previous });
+      assert.deepEqual([plan.write, plan.unchanged, plan.conflicts], [[], ['a.md'], []]);
+    }));
+
+  test('an external edit, deletion or unknown file (even with identical bytes) stops the export with nothing written', () =>
+    withTempDir((dir) => {
+      const { previous } = exportOnce(dir, src({ 'a.md': 'a', 'b.md': 'b' }), new Map());
+      writeFileSync(path.join(dir, 'a.md'), 'edited on Windows');
+      rmSync(path.join(dir, 'b.md'));
+      writeFileSync(path.join(dir, 'c.md'), 'c');
+      const next = src({ 'a.md': 'a2', 'b.md': 'b2', 'c.md': 'c', 'd.md': 'd' });
+      const plan = planExport({ source: next, destRoot: dir, previous });
+      assert.deepEqual(plan.conflicts, [
+        { path: 'a.md', reason: 'destination-changed' },
+        { path: 'b.md', reason: 'destination-deleted' },
+        { path: 'c.md', reason: 'destination-unknown' },
+      ]);
+      assert.throws(() => applyExport(plan, { source: next, destRoot: dir }), (err) => err instanceof ExportError && err.code === 'export-conflict');
+      assert.equal(read(dir, 'a.md'), 'edited on Windows');
+      assert.equal(existsSync(path.join(dir, 'd.md')), false);
+    }));
+
+  test('dropped exported files are kept without --delete, removed with it, and never removed once changed', () =>
+    withTempDir((dir) => {
+      const first = exportOnce(dir, src({ 'keep.md': 'k', 'gone.md': 'g', 'edited.md': 'e' }), new Map());
+      writeFileSync(path.join(dir, 'edited.md'), 'edited on Windows');
+      const second = planExport({ source: src({ 'keep.md': 'k' }), destRoot: dir, previous: first.previous });
+      assert.deepEqual(second.keptDeletions.sort(), ['edited.md', 'gone.md']);
+      const kept = exportOnce(dir, src({ 'keep.md': 'k' }), first.previous);
+      assert.equal(existsSync(path.join(dir, 'gone.md')), true);
+      const plan = planExport({ source: src({ 'keep.md': 'k' }), destRoot: dir, previous: kept.previous, allowDelete: true });
+      assert.deepEqual([plan.delete, plan.conflicts], [['gone.md'], [{ path: 'edited.md', reason: 'deletion-changed' }]]);
+      writeFileSync(path.join(dir, 'edited.md'), 'e');
+      const deleted = exportOnce(dir, src({ 'keep.md': 'k' }), kept.previous, { allowDelete: true });
+      assert.deepEqual(deleted.applied.deleted.sort(), ['edited.md', 'gone.md']);
+      assert.equal(existsSync(path.join(dir, 'gone.md')), false, 'deletion is actually applied');
+      assert.equal(deleted.previous.has('gone.md'), false);
+    }));
+
+  test('rejects case collisions and never deletes a case alias of a kept file', () =>
+    withTempDir((dir) => {
+      const collide = planExport({ source: src({ 'README.md': 'a', 'readme.md': 'b' }), destRoot: dir, previous: new Map() });
+      assert.deepEqual(collide.conflicts.map((c) => c.reason), ['case-collision']);
+      const { previous } = exportOnce(dir, src({ 'README.md': 'same' }), new Map());
+      const renamed = planExport({ source: src({ 'readme.md': 'same' }), destRoot: dir, previous, allowDelete: true });
+      assert.deepEqual(renamed.delete, []);
+    }));
+
+  test('rejects path escapes, symlinked or dangling components and files in place of directories', () =>
+    withTempDir((dir) =>
+      withTempDir((outside) => {
+        symlinkSync(outside, path.join(dir, 'linked'));
+        symlinkSync(path.join(outside, 'missing-dir'), path.join(dir, 'dangling'));
+        writeFileSync(path.join(dir, 'plain'), 'a file');
+        const plan = planExport({ source: src({ 'linked/new.md': 'x', 'dangling/new.md': 'y', 'plain/child.md': 'z' }), destRoot: dir, previous: new Map() });
+        assert.deepEqual(plan.conflicts.map((c) => c.reason), ['path-escape', 'path-escape', 'parent-not-directory']);
+        for (const bad of ['../up.md', '/abs.md', 'a//b.md', 'a/./b.md']) {
+          assert.throws(() => planExport({ source: src({ [bad]: 'x' }), destRoot: dir, previous: new Map() }), (err) => err.code === 'path-escape');
+        }
+        assert.equal(existsSync(path.join(outside, 'missing-dir')), false);
+      }),
+    ));
+
+  test('a destination change between planning and applying aborts with nothing written and no temp files left', () =>
+    withTempDir((dir) => {
+      const { previous } = exportOnce(dir, src({ 'a.md': 'a', 'b.md': 'b' }), new Map());
+      const next = src({ 'a.md': 'a2', 'b.md': 'b2' });
+      const plan = planExport({ source: next, destRoot: dir, previous });
+      writeFileSync(path.join(dir, 'b.md'), 'edited during export');
+      assert.throws(() => applyExport(plan, { source: next, destRoot: dir }), (err) => err.code === 'destination-changed-during-apply');
+      assert.equal(read(dir, 'a.md'), 'a');
+      assert.deepEqual(readdirSync(dir).sort(), ['a.md', 'b.md']);
+    }));
+
+  test('an edit to an unchanged file or a swapped destination root also aborts before any write', () =>
+    withTempDir((dir) =>
+      withTempDir((elsewhere) => {
+        const root = path.join(dir, 'dest');
+        mkdirSync(root);
+        const { previous } = exportOnce(root, src({ 'same.md': 's', 'b.md': 'b' }), new Map());
+        const next = src({ 'same.md': 's', 'b.md': 'b2', 'new/c.md': 'c' });
+        const plan = planExport({ source: next, destRoot: root, previous });
+        writeFileSync(path.join(root, 'same.md'), 'edited during export');
+        assert.throws(() => applyExport(plan, { source: next, destRoot: root }), (err) => err.code === 'destination-changed-during-apply');
+        assert.equal(existsSync(path.join(root, 'new')), false, 'no directory is created before revalidation');
+        writeFileSync(path.join(root, 'same.md'), 's');
+        const replan = planExport({ source: next, destRoot: root, previous });
+        // The look-alike holds identical files, so only the pinned root can tell them apart.
+        writeFileSync(path.join(elsewhere, 'same.md'), 's');
+        writeFileSync(path.join(elsewhere, 'b.md'), 'b');
+        rmSync(root, { recursive: true });
+        symlinkSync(elsewhere, root);
+        assert.throws(() => applyExport(replan, { source: next, destRoot: root }), (err) => err.code === 'destination-changed-during-apply');
+        assert.deepEqual(readdirSync(elsewhere).sort(), ['b.md', 'same.md']);
+        assert.equal(readFileSync(path.join(elsewhere, 'b.md'), 'utf8'), 'b');
+      }),
+    ));
+
+  test('path-keyed state survives a file named __proto__', () =>
+    withTempDir((dir) => {
+      const { applied, previous } = exportOnce(dir, src({ ['__proto__']: 'p', 'a.md': 'a' }), new Map());
+      assert.deepEqual(applied.written.sort(), ['__proto__', 'a.md']);
+      assert.equal(previous.get('__proto__').owned, true);
+    }));
+
+  test('loadPrevious prefers the export record over the cutover manifest', () =>
+    withTempDir((dir) => {
+      const manifest = path.join(dir, 'cutover.json');
+      const record = path.join(dir, 'record.json');
+      writeFileSync(manifest, JSON.stringify({ root: dir, files: { 'a.md': sha('a') } }));
+      assert.deepEqual([...loadPrevious(dir, { recordPath: record, cutoverManifest: manifest })], [['a.md', { hash: sha('a'), owned: false }]]);
+      writeFileSync(record, JSON.stringify({ schema: 'multi-agent-windows-export/v2', owned: { 'b.md': sha('b') }, baseline: { 'a.md': sha('a') } }));
+      assert.deepEqual(
+        [...loadPrevious(dir, { recordPath: record, cutoverManifest: manifest })].sort(),
+        [['a.md', { hash: sha('a'), owned: false }], ['b.md', { hash: sha('b'), owned: true }]],
+      );
+    }));
+});
+
+// Host checks for the KTD7 cutover; they run where the cutover was recorded.
+const CUTOVER_DIR = path.join(process.env.XDG_STATE_HOME ?? path.join(process.env.HOME ?? '', '.local', 'state'), 'multi-agent', 'cutover');
+const cutoverSkip = existsSync(path.join(CUTOVER_DIR, 'cutover.json')) ? false : 'no cutover record on this host';
+
+describe('host: WSL source-authority cutover', { skip: cutoverSkip }, () => {
+  const record = cutoverSkip ? null : JSON.parse(readFileSync(path.join(CUTOVER_DIR, 'cutover.json'), 'utf8'));
+  const repoRoot = path.join(engineRoot, '..');
+  const git = (...args) => execFileSync('git', ['-C', repoRoot, ...args], { encoding: 'utf8' }).trim();
+
+  test('this checkout is the recorded authority and descends from the verified bootstrap', () => {
+    assert.equal(realpathSync(repoRoot), realpathSync(record.authority));
+    assert.equal(git('rev-parse', `${record.bootstrap_commit}^{tree}`), record.bootstrap_tree);
+    assert.doesNotThrow(() => git('merge-base', '--is-ancestor', record.bootstrap_commit, 'HEAD'));
+  });
+
+  test('preserved Windows workspace files are unchanged except through recorded exports', () => {
+    const manifest = JSON.parse(readFileSync(path.join(CUTOVER_DIR, record.windows_manifest), 'utf8'));
+    const exportPath = exportRecordPath(manifest.root);
+    const exported = existsSync(exportPath) ? JSON.parse(readFileSync(exportPath, 'utf8')).owned : {};
+    const expected = { ...manifest.files, ...exported };
+    const drift = Object.entries(expected).filter(([rel, hash]) => {
+      const file = path.join(manifest.root, rel);
+      return !existsSync(file) || createHash('sha256').update(readFileSync(file)).digest('hex') !== hash;
+    });
+    assert.deepEqual(drift.map(([rel]) => rel), []);
   });
 });
