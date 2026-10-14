@@ -33,7 +33,8 @@ export const PIN = Object.freeze({
   // Imported paths later changed on purpose; verify reports them as adapted.
   // Application version 0.1.0 (package identifiers kept) and the approved
   // dependency install scripts (better-sqlite3, esbuild) in allowScripts;
-  // the shared authority contract, queue state tuple and additive migration registration.
+  // the shared authority contract, queue state tuple and additive migration registration;
+  // the shared language catalog workspace and its consumer dependency declarations.
   adapted: [
     'package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json',
     'packages/cli/src/commands/release.ts',
@@ -53,6 +54,7 @@ export const PIN = Object.freeze({
     'packages/daemon/test/down-route.test.ts',
     'packages/daemon/test/helpers/test-app.ts',
     'packages/daemon/test/p34-call-site-allowlist.test.ts',
+    'packages/tui/package.json',
     'packages/ui/package.json',
   ],
 });
@@ -69,6 +71,14 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/db/migrations/104_team_governance.ts',
   'packages/daemon/test/team-governance.test.ts',
   'packages/daemon/test/team-migration.test.ts',
+  'packages/i18n/package.json',
+  'packages/i18n/tsconfig.json',
+  'packages/i18n/src/index.ts',
+  'packages/i18n/src/catalogs/en.json',
+  'packages/i18n/src/catalogs/zh-CN.json',
+  'packages/i18n/src/display-width.ts',
+  'packages/i18n/test/catalog-parity.test.ts',
+  'packages/i18n/test/display-width.test.ts',
 ];
 
 export class ImportError extends Error {
