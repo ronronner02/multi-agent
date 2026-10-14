@@ -1,7 +1,7 @@
 ---
 title: "Multi-Agent Engineering Team - Tasks"
 type: "task-pack"
-status: "draft"
+status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
 source_plan_hash: "sha256:d1a52af83f2c2f576fc8b250c9bfa9878fffe561e87e358b16342f6634d822e8"
@@ -24,22 +24,22 @@ source_sections:
 
 ## Overview
 
-This **non-executable draft** decomposes the active, implementation-ready source plan into **30 bounded tasks in 20 waves**, covering U1-U12. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe proposed work; none represents completed implementation.
+This derived execution index decomposes the active, implementation-ready source plan into **30 bounded tasks in 20 waves**, covering U1-U12. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
-**Current validation blocker:** the installed validator rejects T004's plan-declared source file `engine/packages/daemon/src/middleware/auth-bearer-token.ts` with `task-pack-task-file-secret-denied`. Its filename contract matches `**/*token*`, including this TypeScript middleware path. The file remains in scope; moving it into a reading pointer or dropping it merely to pass validation would lose required authority work. The source path/hash resolve and match. Keep this pack draft until the validator policy conflict is resolved through separately scoped tooling work, then revalidate before semantic review or execution.
+**Validation boundary:** T004 retains the plan-declared `engine/packages/daemon/src/middleware/auth-bearer-token.ts` source path. The validator contract must contain the audited exact-path allowance; broader credential-name denials remain in force. Validate this regenerated pack from the WSL artifact root before execution. Do not remove required source paths or treat a manual exception as a passing receipt.
 
-**Conditional high-risk review handoff:** after deterministic validation succeeds, review this pack before selecting execution. Shared authority contracts, worker isolation, native approvals, owner browser/terminal access and two-repository live acceptance need semantic review beyond deterministic structure checks. The current request authorizes task compilation only, not source import, OS provisioning, live provider calls, delegated execution, independent review dispatch or publication.
+**High-risk review gate:** after deterministic validation, review this pack against the current source plan and imported owners. Shared authority contracts, worker isolation, native approvals, owner clients and two-repository acceptance need semantic review beyond structural validation. The pack records neither review approval nor permission to execute, provision hosts, spend provider quota or publish changes.
 
 ### Repository and file ownership
 
 | Target identity | Scope | Tasks |
 | --- | --- | --- |
-| `ronronner02/multi-agent` | Engine, control-side harnesses and project documents. Before the approved cutover, the source workspace is `D:/Multi-Agent`; afterward the verified WSL checkout is the sole development authority. | All except T025-T026 |
+| `ronronner02/multi-agent` | Engine, control-side harnesses and project documents. The verified WSL checkout at `/home/leo/src/multi-agent` is the sole development authority; `D:/Multi-Agent` is a preserved reference copy. | All except T025-T026 |
 | `work-board` | Separately registered local demo root, outside the orchestrator's physical ancestry, with run-local candidate copies. No remote repository. | T025-T026 |
 
 Every card's `files` is relative to its `target_repo`, not the artifact resolution root. The `--repo` used to validate this document selects only the artifact/source root. Resolve physical roots and reject aliases/nesting before writes. The demo seed, feature candidate and control-side acceptance harness have different owners. No worker receives orchestrator source, control state or writable acceptance expectations.
 
-T002 is the only **pinned import operation**, explicitly authorized by U1's source-tree scope when execution is selected. Its exact import/transfer manifest must be audited, frozen and approved before extraction; the listed manifest/build/document paths are the adaptation entrypoints, not an invented full archive inventory. All subsequent edits are restricted to concrete card paths. T002 must map the plan's shorthand native adapters/pickup owners to actual imported files: if additional mutation paths are needed, stop and regenerate this pack before dispatching the affected task. New filenames inside plan-declared directories are proposed implementation choices, not claims that files exist.
+T002 is the only **pinned import operation**, explicitly authorized by U1's source-tree scope when execution is selected. Its exact import/transfer manifest must be audited, frozen and approved before extraction; the listed manifest/build/document paths are the adaptation entrypoints, not an invented full archive inventory. All subsequent edits are restricted to concrete card paths and bounded expected side effects. Native adapter/pickup owners are reconciled with `docs/upstream-baseline.md`; additional mutation paths still require scoped regeneration. Changes to imported files must be recorded in `tools/upstream-import.mjs` `PIN.adapted`, without weakening the provenance verifier. This shared side effect is serialized, including tasks listed in the same wave. New filenames inside plan-declared directories are proposed implementation choices, not claims that files exist.
 
 ### Execution-wide gates
 
@@ -51,16 +51,18 @@ T002 is the only **pinned import operation**, explicitly authorized by U1's sour
 - Each granted run has at most three live sessions including the separate lead, one diagnosed recoverable retry, two review/rework cycles and 60 cumulative active minutes. New IDs, restart, retry, concurrent sessions and staged task cards do not reset or multiply that budget. Only a durable pause while all work is stopped pauses accounting.
 - T017 owns deadline/no-progress/storage-cap enforcement; T018 owns conservative crash reconciliation. Unknown identity, ambiguous effects, stale plan, rejected grant, failed persistence or exhausted limits stop dependent dispatch. Preserve unrelated files, processes and durable evidence.
 - Shared dependency declarations and lockfile changes are owned by T005 before parallel UI work. Missing shared language keys or unexpected imported owners require a serialized scoped pack revision, not an unlisted parallel edit.
+- Review each logical change with `gpt-6.1-sol` and `claude-opus-5-5` through locally configured URLs and credentials, without persisting or disclosing keys. Both reviews are report-only and inspect the same frozen candidate; use at most two rounds and leave the gate open when a model is unavailable.
+- Stop at T015-T016 and T019-T022 until the owner has reviewed the corresponding design proposal.
 - `parallelizable` and waves describe possible implementation scheduling, not worker-dispatch authorization. Independent review intent is not a record that review passed.
-- Commit, push, PR creation, merge, release, deployment, remote CI activation and destructive cleanup are outside this request and need their respective grants.
+- Commit, push, PR creation, merge, release, deployment, remote CI activation and destructive cleanup need their respective current grants; the task pack grants none.
 
 ## Source Summary
 
 - **Source:** [the single active plan](../plans/2026-10-13-001-feat-multi-agent-team-plan.md).
-- **Branch:** draft-only after compilation encountered a deterministic validator policy conflict; the dependent security, process, browser, TUI and comparative-acceptance surfaces justify finer slices than one task per unit. Scope is retained rather than changed to fit the validator.
+- **Branch:** regenerated derived pack with concrete imported owners and serialized import-manifest maintenance; independent semantic review follows deterministic validation.
 - **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC6/KTD1-KTD18, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U12; Verification Contract and Definition of Done.
 - **Boundary-driven decomposition:** separate preflight from import, persistent authority from enforcement, catalog from context manifests, native launch from safe mailbox consumption and actual-client proof, ownership from review, browser authentication from terminal authority, terminal projection from controls, cancellation from recovery, UI construction from browser proof, demo seed from feature work, and primary/reverse/comparative evidence from final closeout.
-- **Implementation-time unknowns retained:** WSL checkout/demo physical paths; actual client/tool versions, authentication and models; owner provisioning and live-run budgets; concrete imported native adapter/pickup owner paths; audit results, available browser capability and effective instruction discovery. These are execution gates, not assumptions of success or new product decisions.
+- **Implementation-time unknowns retained:** the separate demo root, current client authentication and effective context, owner provisioning/live-run caps and actual browser/client behavior. Native adapter and queue-owner paths are now mapped to the imported source; additional owners remain stop conditions.
 - **Excluded/deferred:** distributed nodes, concurrent projects, Pi/DSH support, every optional workflow's live execution, TUI goal authoring/session administration, hostile-admin containment, and Milestone 2 domain/tunnel/passkey/app/push-notification work. Responsive local layouts are included now.
 - **Scope preservation:** the selected engine remains selected; the second engine is only a same-frozen-task evaluation. Generated mockups stay historical; `docs/Rendering.png` remains the benchmark. Existing generated runtime directories and personal configuration stay intact.
 
@@ -143,7 +145,7 @@ U8 waits for all earlier source-unit outputs through transitive dependencies. Th
 
 ## Execution Waves
 
-Tasks in a wave have disjoint declared file ownership, including target-repository identity. This is a scheduling option only; execute serially when worker authorization or isolation is absent. Named dependencies, not the passage of a wave, establish eligibility.
+Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared import-manifest side effect are marked non-parallel and run serially despite sharing a wave. Other concurrency remains a scheduling option only; execute serially when worker authorization or isolation is absent. Named dependencies, not the passage of a wave, establish eligibility.
 
 | Wave | Tasks | Output / gate |
 | --- | --- | --- |
@@ -334,7 +336,9 @@ The following JSON is the single machine-readable task source. Human cards below
       "files": [
         "engine/config/isolation/worker-policy.json",
         "engine/test/worker-isolation-preflight.test.mjs",
-        "docs/operations.md"
+        "docs/operations.md",
+        "engine/config/isolation/worker-launch.mjs",
+        "engine/config/isolation/provision-host.sh"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u1-establish-the-pinned-source-and-reproducible-wsl-foundation",
@@ -350,7 +354,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "review_gate": "required",
       "review_focus": "Check that real worker subprocess probes, rather than launch flags, establish isolation and that the launcher is not a general privileged executor.",
       "notes": "Minimal harness/policy scaffolding only; no source import, business task, client auto-upgrade or model run by inference. Select a new Linux checkout and separate demo allocation; preserve existing Windows and personal files.",
-      "risk_note": "No local engine source or WSL/client acceptance existed at compilation; failed feasibility blocks adaptation, not a weaker fallback."
+      "risk_note": "Source and client inventory must be reverified before a repeated preflight; a failed capability blocks adaptation rather than weakening containment."
     },
     {
       "task_id": "T002",
@@ -384,7 +388,11 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/test/project-baseline.test.mjs",
         "docs/upstream-baseline.md",
         "docs/development.md",
-        "docs/operations.md"
+        "docs/operations.md",
+        "tools/upstream-import.mjs",
+        "tools/windows-export.mjs",
+        "engine/packages/cli/package.json",
+        "engine/packages/ui/package.json"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u1-establish-the-pinned-source-and-reproducible-wsl-foundation",
@@ -437,10 +445,22 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/domain/plan-governance.ts",
         "engine/packages/daemon/src/domain/queue-repository.ts",
         "engine/packages/daemon/src/domain/event-bus.ts",
+        "engine/packages/daemon/src/domain/types.ts",
         "engine/packages/daemon/src/db/migrations/104_team_governance.ts",
         "engine/packages/daemon/src/db/all-migrations.ts",
         "engine/packages/daemon/test/team-governance.test.ts",
-        "engine/packages/daemon/test/team-migration.test.ts"
+        "engine/packages/daemon/test/team-migration.test.ts",
+        "engine/packages/daemon/test/helpers/test-app.ts",
+        "engine/packages/daemon/test/p34-call-site-allowlist.test.ts",
+        "engine/test/project-baseline.test.mjs",
+        "engine/packages/daemon/src/domain/rig-repository.ts",
+        "engine/packages/daemon/src/domain/rig-lifecycle-service.ts",
+        "engine/packages/daemon/src/domain/rig-teardown.ts",
+        "engine/packages/daemon/src/routes/rigs.ts",
+        "engine/packages/daemon/test/rig-repository.test.ts",
+        "engine/packages/daemon/test/rig-lifecycle-route.test.ts",
+        "engine/packages/daemon/test/rig-teardown.test.ts",
+        "engine/packages/daemon/test/rigs-routes.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u2-establish-plan-bound-authority-and-durable-control-contracts",
@@ -448,14 +468,18 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Plan/action/repository/policy binding, entity-version compare-and-set, idempotent decisions, rejection persistence, approval consumption, attempt/budget evidence and post-commit event publication; additive migrations and paired restore fixtures.",
+      "test_focus": "Plan/action/repository/policy binding, entity-version compare-and-set, idempotent decisions, rejection persistence, approval consumption, attempt/budget evidence and post-commit event publication; additive migrations and paired restore fixtures. Register migration and transactional-writer fixtures; verify exact-file provenance and adjacent-file rejection. Cover expired unconsumed renewal through a new pending owner decision, blocked owner escalation without dispatch, observed stopped task outcomes and history-preserving rig deletion conflicts before lifecycle side effects.",
       "done_signal": "Focused tests demonstrate one ordered approve/cancel result, no acknowledgement on persistence failure, stale-plan invalidation and old-message preservation. One exported contract serves later clients; event versions and null-with-reason usage fields are validated.",
       "wave": 3,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Implementation introduces another task scheduler/store, removes still-used schema fields, treats a task pack as approval, or silently reuses a changed migration number.",
       "review_gate": "required",
-      "review_focus": "Inspect transaction boundaries, exact approval payload/digest binding, budget durability and compatibility with the retained queue owner.",
-      "risk_note": "A guarded new endpoint is insufficient while a legacy route, internal wake path or direct worker control-state path remains open."
+      "review_focus": "Inspect transaction boundaries, exact approval payload/digest binding, budget durability and compatibility with the retained queue owner. Preserve rejection/consumption fences, counters and immutable bindings across renewal and escalation. Check stopped-attempt evidence before terminal transitions, and retained delete/release/teardown compatibility.",
+      "risk_note": "A guarded new endpoint is insufficient while a legacy route, internal wake path or direct worker control-state path remains open.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ],
+      "notes": "No dependency additions, upgrades or lockfile changes. The package edit only exports the shared contract. Record changes to imported files in PIN.adapted through the declared, serialized import-manifest side effect. The existing domain/types.ts RigEvent union owns event-bus typing; extend it additively with the shared event contract rather than creating a second event store or bypassing type checks. Approved follow-up is bounded to existing foundation compatibility: renew only expired unconsumed grants through new pending decisions; allow non-dispatching owner escalation records while blocked without applying limits or scope changes; record observed terminal outcomes without reopening dispatch; deny deletion of rigs with governance history before deletion-related lifecycle effects. Imported fixture, lifecycle and route owners are exact PIN.adapted entries. Register the six new authority files individually in LOCAL_ENGINE_PATHS and distinguish exact file entries from slash-terminated directory entries. No cascading removal of governance history or broad legacy authority enforcement is included."
     },
     {
       "task_id": "T004",
@@ -490,7 +514,12 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/middleware/auth-bearer-token.ts",
         "engine/packages/daemon/src/middleware/browser-boundary.ts",
         "engine/packages/daemon/test/team-control-auth.test.ts",
-        "engine/packages/daemon/test/team-governance.test.ts"
+        "engine/packages/daemon/test/team-governance.test.ts",
+        "engine/packages/daemon/src/domain/queue-recovery.ts",
+        "engine/packages/daemon/src/domain/queue-waiting.ts",
+        "engine/packages/daemon/src/domain/queue-stuck-sweep.ts",
+        "engine/packages/daemon/src/domain/policies/idle-gate-qitem.ts",
+        "engine/packages/daemon/src/domain/workflow-runtime.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u2-establish-plan-bound-authority-and-durable-control-contracts",
@@ -505,8 +534,11 @@ The following JSON is the single machine-readable task source. Human cards below
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An unguarded legacy/internal path remains, control authority relies on request-body identity, or closing a gap needs source owners outside the verified task file boundary.",
       "review_gate": "required",
       "review_focus": "Look for alternate entry paths, fail-open capability checks, race windows and confused owner/browser/worker credentials.",
-      "notes": "Direct worker-process isolation proof remains separately owned by T010; HTTP tests alone do not establish OS containment. Keep managed dispatch off.",
-      "risk_note": "A guarded new endpoint is insufficient while a legacy route, internal wake path or direct worker control-state path remains open."
+      "notes": "Direct worker-process isolation proof remains separately owned by T010; HTTP tests alone do not establish OS containment. Keep managed dispatch off. The imported queue recovery, waiting, sweep, idle-gate and workflow owners are explicit guard-inventory targets; inspect each actual entry before deciding which requires a change. Additional route owners still require scoped regeneration.",
+      "risk_note": "A guarded new endpoint is insufficient while a legacy route, internal wake path or direct worker control-state path remains open.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T005",
@@ -543,12 +575,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Catalog/interpolation parity, fallback reporting, unknown-code passthrough and widths for Chinese, emoji and combining marks; consumer-ready runtime switch API.",
       "done_signal": "Package tests pass; Chinese is the interface default; state/event codes remain English identifiers; both clients can consume the same catalog and persist language in owner configuration without translating agent text.",
       "wave": 3,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A separate client-owned managed-run string table, another UI framework or unrelated runtime dependency is required.",
       "review_gate": "required",
       "review_focus": "Check that the shared package remains display-only and does not mutate event/state identity.",
       "notes": "Wire both consumer dependency declarations and the shared lockfile in this foundation task so later TUI/Web implementation can proceed without concurrent lockfile writes. Only the planned i18next library family is added; clients keep no duplicate managed-run catalog.",
-      "risk_note": "Translation must not change stored identifiers, evidence or agent output."
+      "risk_note": "Translation must not change stored identifiers, evidence or agent output.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T006",
@@ -647,7 +682,10 @@ The following JSON is the single machine-readable task source. Human cards below
       "review_gate": "required",
       "review_focus": "Check source/runtime separation and scope preservation through projected instructions, role selection and upstream validator results.",
       "notes": "engine/config/team/roles.json is a proposed concrete file within U3's declared application-owned configuration directory, not an existing source claim. Mutable native state stays separate from read-only instructions and their parent directories.",
-      "risk_note": "Pinned file presence does not prove effective client discovery, and installed runtime mirrors may differ from the planned revision."
+      "risk_note": "Pinned file presence does not prove effective client discovery, and installed runtime mirrors may differ from the planned revision.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T008",
@@ -686,7 +724,22 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/adapters/worker-launch.ts",
         "engine/packages/daemon/src/domain/native-approval-bridge.ts",
         "engine/packages/daemon/test/managed-native-policy.test.ts",
-        "engine/packages/daemon/test/native-session-contract.test.ts"
+        "engine/packages/daemon/test/native-session-contract.test.ts",
+        "engine/packages/daemon/src/adapters/claude-code-adapter.ts",
+        "engine/packages/daemon/src/adapters/claude-resume.ts",
+        "engine/packages/daemon/src/adapters/claude-resume-launch.ts",
+        "engine/packages/daemon/src/adapters/codex-runtime-adapter.ts",
+        "engine/packages/daemon/src/adapters/codex-resume.ts",
+        "engine/packages/daemon/src/adapters/tmux.ts",
+        "engine/packages/daemon/src/adapters/tmux-exec.ts",
+        "engine/packages/daemon/test/claude-runtime-adapter.test.ts",
+        "engine/packages/daemon/test/claude-resume.test.ts",
+        "engine/packages/daemon/test/codex-runtime-adapter.test.ts",
+        "engine/packages/daemon/test/codex-resume.test.ts",
+        "engine/packages/daemon/test/tmux-server.test.ts",
+        "engine/packages/daemon/test/tmux-pane-cwd-native.test.ts",
+        "engine/packages/daemon/test/terminal-pipe-utf8.test.ts",
+        "engine/packages/daemon/test/seat-activity-retirement-hooks.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u4-adapt-native-sessions-and-persistent-peer-communication",
@@ -697,12 +750,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; inherited broad-access flags; verified native decision channels. Redact credentials before shared output and bound raw execution logs without losing evidence references.",
       "done_signal": "Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; native prompts lacking a verified channel remain pending rather than receiving blind keys. Worker deadlines are enforced outside controller-only timers.",
       "wave": 7,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs weaker permissions or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.",
       "review_gate": "required",
       "review_focus": "Check the launch boundary on fresh sessions and resume, including native subprocesses, separate approvals and non-spoofable attempt identity.",
-      "notes": "Resolve plan shorthand for Claude/Codex adapter owners against T002's imported inventory before editing. If integration requires additional files, stop and regenerate exact ownership rather than guessing paths. Focused fixtures are not the live gate in T010.",
-      "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority."
+      "notes": "Concrete native adapters and primary existing tests were reconciled with the pinned import. Diagnose the three recorded native-tmux baseline failures before changing their owners. Additional mutation paths still require regeneration. Focused fixtures do not replace the live gate in T010.",
+      "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T009",
@@ -742,11 +798,14 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Recipient/task/reply/attachment identity, capability-scoped polling, at-least-once deduplication and idempotent consumption receipts; prompt-active, reconnect and queued-wait cases.",
       "done_signal": "Messages persist once with task/run/sender/recipient/artifact references; duplicate delivery produces one consumption outcome; prompt-answer text, newlines and control characters remain data; safe later polling needs no owner relay.",
       "wave": 7,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Delivery falls back to terminal input/Enter, peer content becomes an approval response, attachments cross task scope, or a second message store is introduced.",
       "review_gate": "required",
       "review_focus": "Inspect prompt-state race handling and authority separation between mailbox consumption, structured wake/resume and native decisions.",
-      "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority."
+      "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T010",
@@ -850,12 +909,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Cycles, 100-task admission limit, overlapping writes and symlinks; validated-success prerequisites versus failed/denied/canceled/handed-off states; commit-backed worktrees and unborn-repository snapshots.",
       "done_signal": "Tests demonstrate that only evidence-backed completion, including a validated handoff successor, unlocks dependents. Candidate manifests include untracked files; original dirty files retain hashes and no commit/merge is created.",
       "wave": 9,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Isolation requires changing unrelated work, manufacturing a base commit, treating a handed-off state as success or adding another scheduler.",
       "review_gate": "required",
       "review_focus": "Inspect ownership and handoff success semantics, including internal pickup/recovery paths and snapshot identity.",
       "notes": "Resolve any additional existing pickup owner from T002 before mutation and regenerate concrete paths if needed. Local integration assembles a candidate, not Git merge.",
-      "risk_note": "Untracked files, stale candidate digests and ambiguous handoffs can otherwise produce false independent-review or completion claims."
+      "risk_note": "Untracked files, stale candidate digests and ambiguous handoffs can otherwise produce false independent-review or completion claims.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T012",
@@ -901,11 +963,14 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Separate reviewer identity, read-only complete candidate, manifest/diff-bound findings, stale-review invalidation, durable rework/retry counters and integrated-failure rejection.",
       "done_signal": "Tests show the reviewer sees the exact tracked/untracked candidate without write permission, changes invalidate prior review, two review/rework cycles and one diagnosed recoverable retry persist across restart, and process success does not override failed acceptance.",
       "wave": 10,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The implementer can satisfy its own review, findings lack candidate identity, counters reset through retries, or review grants delivery actions.",
       "review_gate": "required",
       "review_focus": "Inspect independent evidence authority, candidate completeness and bounded repair instead of trusting completion text.",
-      "risk_note": "Untracked files, stale candidate digests and ambiguous handoffs can otherwise produce false independent-review or completion claims."
+      "risk_note": "Untracked files, stale candidate digests and ambiguous handoffs can otherwise produce false independent-review or completion claims.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T013",
@@ -950,12 +1015,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation.",
       "done_signal": "Tests verify 30-minute idle and 12-hour absolute expiry, one-request revocation, no worker pairing/session-store access and no credential in query/log/event output. Windows browser pairing works through the verified WSL localhost path without non-local binding.",
       "wave": 9,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Remote Host exceptions, URL bearer tokens, worker pairing, duplicate session authority stores or relaxed Origin/anti-forgery checks are needed.",
       "review_gate": "required",
       "review_focus": "Inspect credential derivation, route ordering and all browser/upgrade paths for forgery and credential leaks.",
       "notes": "webUiEnabled remains false until the complete U9 session/terminal gates pass; fixture success is not owner-host browser acceptance.",
-      "risk_note": "Browser script execution can wield its session; terminal/owner identity separation and inert content remain required in addition to anti-forgery."
+      "risk_note": "Browser script execution can wield its session; terminal/owner identity separation and inert content remain required in addition to anti-forgery.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T014",
@@ -1000,12 +1068,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Read-only agent streams; session-scoped owner take-over; release/disconnect/revocation/15-minute inactivity expiry; owner-host absence; identity/socket separation and non-loopback rejection.",
       "done_signal": "Route and real-process tests prove input without take-over is rejected/audited, only the owner-started owner-account host supplies a shell, absent host reports unavailable, workers cannot reach its socket, and daemon storage contains no owner-terminal keystrokes/output.",
       "wave": 10,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The daemon spawns a fallback shell, owner terminal runs as control/worker, raw worker terminal-control APIs appear, or take-over can address another session or a non-loopback client.",
       "review_gate": "required",
       "review_focus": "Inspect end-to-end shell identity, relay authentication, audit durability and disconnect/revocation races.",
       "notes": "Take-over is owner keyboard input, never a peer-message transport. Record open/close and take-over audit decisions, not terminal content.",
-      "risk_note": "Browser script execution can wield its session; terminal/owner identity separation and inert content remain required in addition to anti-forgery."
+      "risk_note": "Browser script execution can wield its session; terminal/owner identity separation and inert content remain required in addition to anti-forgery.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T015",
@@ -1057,12 +1128,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters.",
       "done_signal": "Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned.",
       "wave": 11,
-      "parallelizable": true,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced.",
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
       "review_focus": "Inspect projection authority, false success/zero-cost displays and shared-contract consumption.",
       "notes": "Use the shared catalog; any missing key requires a serialized, scoped catalog update rather than parallel client-local tables.",
-      "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert."
+      "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T016",
@@ -1114,11 +1188,14 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; unsupported native prompt path.",
       "done_signal": "Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI.",
       "wave": 12,
-      "parallelizable": true,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace.",
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
       "review_focus": "Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.",
-      "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert."
+      "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T017",
@@ -1170,12 +1247,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Intent-before-effect, dispatch closure, recorded process-group identity, five-second escalation/fifteen-second unresolved outcome; cumulative 60-minute budget, ten-minute no-progress distinction and controller-absent deadline enforcement. Enforce 64 MiB raw logs per run and 256 MiB aggregate artifacts before further dispatch.",
       "done_signal": "Fault/process tests show no dependent dispatch after cancellation, no signal against reused/unowned identities, resistant children remain unresolved, retries/restarts count against the same budget and supervised silent tools retain only their recorded bounded deadline. Capacity pauses preserve durable decisions/evidence and disclose omitted/truncated logs; no history is deleted automatically.",
       "wave": 13,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Cancellation assumes button success, kills unrelated sessions, deletes user work or evidence, or controller absence gives workers unbounded runtime.",
       "review_gate": "required",
       "review_focus": "Inspect independent deadlines, process lineage and conservative unknown intervals; only a durable pause with all work stopped pauses accounting.",
       "notes": "Runtime-adapter and worker-launch are shared U4 identity/deadline owners, deliberately serialized after their earlier tasks. Real-process drills need their applicable run/setup grants.",
-      "risk_note": "Unknown process identity or external effects must block replay; restoring SQLite does not undo agent filesystem effects."
+      "risk_note": "Unknown process identity or external effects must block replay; restoring SQLite does not undo agent filesystem effects.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T018",
@@ -1227,11 +1307,14 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Crash windows around dispatch/ack; active/resumable/unknown identity; PID/pane reuse; rejected/stale grants, mailbox and worker policy after resume; disk-full/corruption and WAL-consistent backup/restore.",
       "done_signal": "Fault-injection and authorized restart/restore receipts prove no ambiguous side-effect replay, no lease-expiry duplicate launch and preserved counters/evidence. A matching binary/database pair restores with external effects reconciled and unrelated process/file inventory unchanged.",
       "wave": 14,
-      "parallelizable": true,
+      "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Recovery silently creates another attempt, copies only a live main database file, discards external receipts, or cleanup touches unrelated tmux/Docker/workstation state.",
       "review_gate": "required",
       "review_focus": "Inspect ambiguity blockers, backup consistency and evidence preservation rather than equating database restore with side-effect undo.",
-      "risk_note": "Unknown process identity or external effects must block replay; restoring SQLite does not undo agent filesystem effects."
+      "risk_note": "Unknown process identity or external effects must block replay; restoring SQLite does not undo agent filesystem effects.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T019",
@@ -1299,12 +1382,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state.",
       "done_signal": "Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest.",
       "wave": 11,
-      "parallelizable": true,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark.",
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
       "review_focus": "Inspect evidence-derived projections and safe read-only rendering, including re-pair without losing the current view.",
       "notes": "New team filenames are concrete proposed modules within U11's declared directory. Reuse existing primitives; no Lead chat composer. Final responsive and live-browser proof belongs to T021/T027.",
-      "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety."
+      "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T020",
@@ -1364,11 +1450,14 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Task details/discussion/diff/tests/review; owner dialog requester/action/files/digest/version; idempotency, stale/version conflicts, session expiry; audited take-over and owner-host unavailable state.",
       "done_signal": "Component tests prove a double click sends one action, stale views disable decisions, conflicts refresh and ask again, requested outcomes wait for daemon evidence, unsupported native prompts offer open-session without approve, and agent text remains inert.",
       "wave": 12,
-      "parallelizable": true,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Detailed Lead conversation becomes a new chat box, terminal input lacks take-over, client fields grant authority, or legacy query-token authentication is reintroduced.",
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Detailed Lead conversation becomes a new chat box, terminal input lacks take-over, client fields grant authority, or legacy query-token authentication is reintroduced. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
       "review_focus": "Inspect version binding, browser script injection, authenticated terminal component reuse and display of requested versus observed actions.",
-      "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety."
+      "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T021",
@@ -1417,12 +1506,15 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Fixture-driven real-browser checks at 1440/1024/390 px in both languages; side-by-side Rendering.png adaptations; keyboard/focus, dialog error announcements, AA contrast, text/glyph status, reduced motion and 44px touch targets.",
       "done_signal": "Source-bound browser receipts cover all six width/language combinations; the 390px layout hides the owner terminal; reference-region adaptations and accessibility outcomes are recorded with failures retained. Browser capability absence leaves this gate unmet.",
       "wave": 13,
-      "parallelizable": true,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Passing component snapshots are proposed as browser acceptance, remote exposure is required, or visual changes contradict recorded reference adaptations.",
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Passing component snapshots are proposed as browser acceptance, remote exposure is required, or visual changes contradict recorded reference adaptations. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "optional",
       "review_focus": "Inspect benchmark fidelity and accessibility without claiming that fixture-run UI checks prove live integration.",
       "notes": "Live-run checks at the same widths/languages remain required in T027; no extra provider trial is implied by a visual test.",
-      "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety."
+      "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T022",
@@ -1462,11 +1554,14 @@ The following JSON is the single machine-readable task source. Human cards below
       "test_focus": "Canonical target and candidate diff browsing; traversal/symlink denial; policy credential exclusions; owner-only plan/requirements/solution browsing with inert Markdown.",
       "done_signal": "Route tests and browser receipts show only the registered target/candidates plus the explicitly allowed owner knowledge documents; embedded HTML/scripts remain inert and credential files are excluded.",
       "wave": 14,
-      "parallelizable": true,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases.",
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
       "review_focus": "Inspect distinction between owner knowledge access and forbidden worker context, plus file/Markdown disclosure paths.",
-      "risk_note": "Owner browsing and editing must not expose owner/control data to workers or silently alter approved scope."
+      "risk_note": "Owner browsing and editing must not expose owner/control data to workers or silently alter approved scope.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T023",
@@ -2035,7 +2130,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U1`; `R2`, `R3`, `R7`, `R13`, `R20`, `R21`, `F1`, `F4`, `AE2`, `AE6`, `AE12`, `AE13`, `KTD2`, `KTD6`, `KTD7`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 1; none.
-- **Files:** `engine/config/isolation/worker-policy.json`; `engine/test/worker-isolation-preflight.test.mjs`; `docs/operations.md`.
+- **Files:** `engine/config/isolation/worker-policy.json`; `engine/test/worker-isolation-preflight.test.mjs`; `docs/operations.md`; `engine/config/isolation/worker-launch.mjs`; `engine/config/isolation/provision-host.sh`.
 - **Test focus:** Read-only inventory followed only by authorized minimal probes: worker scratch write succeeds while token/database/WAL/shared-memory/socket/owner-pane access, host-process access and Windows interoperation fail; both native clients retain protections; Windows browser reaches WSL localhost without non-loopback binding.
 - **Done signal:** Redacted receipts record Ubuntu/kernel, identities, isolated mounts/process boundary, launcher ownership/hashes and client versions; each required capability is either demonstrated or blocks T002. Offline checks spend no provider quota.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. OS account/privilege changes, launcher provisioning, a provider call, or another host is needed without its specific grant; any denial boundary fails or a client requires broad-access settings.
@@ -2045,7 +2140,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U1`; `R2`, `R3`, `R7`, `R13`, `R20`, `R21`, `AE2`, `AE6`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD7`, `KTD10`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 2; T001.
-- **Files:** `engine/package.json`; `engine/package-lock.json`; `engine/packages/daemon/package.json`; `engine/packages/tui/package.json`; `engine/test/project-baseline.test.mjs`; `docs/upstream-baseline.md`; `docs/development.md`; `docs/operations.md`.
+- **Files:** `engine/package.json`; `engine/package-lock.json`; `engine/packages/daemon/package.json`; `engine/packages/tui/package.json`; `engine/test/project-baseline.test.mjs`; `docs/upstream-baseline.md`; `docs/development.md`; `docs/operations.md`; `tools/upstream-import.mjs`; `tools/windows-export.mjs`; `engine/packages/cli/package.json`; `engine/packages/ui/package.json`.
 - **Test focus:** Archive/symlink escape and lifecycle-script audit; additive pinned import with license/notices; manifest transfer and conflicting-export rejection; clean Node 24/npm build, lint, tests, UI tests and SQLite ABI verification.
 - **Done signal:** Preserved Windows file hashes match; approved bootstrap source hashes match the new WSL checkout; cutover authority is recorded; imported script names and exact source owners are inventoried; reproducible baseline results bind source hashes and exact versions.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Archive entries escape, import would overwrite user files, source/license differs from the pin, a manifest/script or required source owner is missing, or WSL transfer loses identity. Reconcile concrete downstream paths and regenerate the pack before dispatch if the imported layout differs.
@@ -2055,17 +2150,21 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U2`; `R1`, `R4`, `R5`, `R13`, `R19`, `R21`, `R22`, `F1`, `F4`, `AE1`, `AE4`, `AE6`, `AE11`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD9`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 3; T002.
-- **Files:** `engine/packages/daemon/src/contracts/team-control.ts`; `engine/packages/daemon/src/team-control-surface.ts`; `engine/packages/daemon/package.json`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/domain/event-bus.ts`; `engine/packages/daemon/src/db/migrations/104_team_governance.ts`; `engine/packages/daemon/src/db/all-migrations.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/test/team-migration.test.ts`.
-- **Test focus:** Plan/action/repository/policy binding, entity-version compare-and-set, idempotent decisions, rejection persistence, approval consumption, attempt/budget evidence and post-commit event publication; additive migrations and paired restore fixtures.
+- **Files:** `engine/packages/daemon/src/contracts/team-control.ts`; `engine/packages/daemon/src/team-control-surface.ts`; `engine/packages/daemon/package.json`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/domain/event-bus.ts`; `engine/packages/daemon/src/domain/types.ts`; `engine/packages/daemon/src/db/migrations/104_team_governance.ts`; `engine/packages/daemon/src/db/all-migrations.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/test/team-migration.test.ts`; `engine/packages/daemon/test/helpers/test-app.ts`; `engine/packages/daemon/test/p34-call-site-allowlist.test.ts`; `engine/test/project-baseline.test.mjs`; `engine/packages/daemon/src/domain/rig-repository.ts`; `engine/packages/daemon/src/domain/rig-lifecycle-service.ts`; `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/routes/rigs.ts`; `engine/packages/daemon/test/rig-repository.test.ts`; `engine/packages/daemon/test/rig-lifecycle-route.test.ts`; `engine/packages/daemon/test/rig-teardown.test.ts`; `engine/packages/daemon/test/rigs-routes.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations, plus file-versus-directory matching; serialize this shared owner.
+- **Test focus:** Plan/action/repository/policy binding, entity-version compare-and-set, idempotent decisions, rejection persistence, approval consumption, attempt/budget evidence and post-commit event publication; additive migrations and paired restore fixtures. Register migration and transactional-writer fixtures; verify exact-file provenance and adjacent-file rejection. Cover expired unconsumed renewal through a new pending owner decision, blocked owner escalation without dispatch, observed stopped task outcomes and history-preserving rig deletion conflicts before lifecycle side effects.
 - **Done signal:** Focused tests demonstrate one ordered approve/cancel result, no acknowledgement on persistence failure, stale-plan invalidation and old-message preservation. One exported contract serves later clients; event versions and null-with-reason usage fields are validated.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Implementation introduces another task scheduler/store, removes still-used schema fields, treats a task pack as approval, or silently reuses a changed migration number.
-- **Review intent:** required; Inspect transaction boundaries, exact approval payload/digest binding, budget durability and compatibility with the retained queue owner.
+- **Review intent:** required; Inspect transaction boundaries, exact approval payload/digest binding, budget durability and compatibility with the retained queue owner. Preserve rejection/consumption fences, counters and immutable bindings across renewal and escalation. Check stopped-attempt evidence before terminal transitions, and retained delete/release/teardown compatibility.
+
+- **Compatibility boundary:** existing foundation compatibility: renew only expired unconsumed grants through new pending decisions; allow non-dispatching owner escalation records while blocked without applying limits or scope changes; record observed terminal outcomes without reopening dispatch; deny deletion of rigs with governance history before deletion-related lifecycle effects. Imported fixture, lifecycle and route owners are exact PIN.adapted entries. Register the six new authority files individually in LOCAL_ENGINE_PATHS and distinguish exact file entries from slash-terminated directory entries. No cascading removal of governance history or broad legacy authority enforcement is included.
 
 ### T004. Enforce owner-only authority across new and legacy managed-work entry paths.
 
 - **Source / requirements:** `U2`; `R1`, `R4`, `R5`, `R13`, `R19`, `R21`, `R22`, `AE1`, `AE4`, `AE6`, `AE11`, `AE13`, `KTD4`, `KTD5`, `KTD6`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 4; T003.
-- **Files:** `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/src/index.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/middleware/auth-bearer-token.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/test/team-control-auth.test.ts`; `engine/packages/daemon/test/team-governance.test.ts`.
+- **Files:** `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/src/index.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/middleware/auth-bearer-token.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/test/team-control-auth.test.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/queue-waiting.ts`; `engine/packages/daemon/src/domain/queue-stuck-sweep.ts`; `engine/packages/daemon/src/domain/policies/idle-gate-qitem.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** New/legacy routes and internal start/wake/restore/complete/stop paths share eligibility checks; forged owner identities, worker approval/limit edits, unapproved plans and stale policy fail before effects.
 - **Done signal:** An explicit managed-mutation-path coverage inventory and route tests show no agent token grants authority, rejected grants survive retries, incompatible protocol versions disable controls and verified provider-policy capability is required for eligibility.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An unguarded legacy/internal path remains, control authority relies on request-body identity, or closing a gap needs source owners outside the verified task file boundary.
@@ -2076,6 +2175,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U10`; `R12`, `PC2`, `KTD15`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 3; T002.
 - **Files:** `engine/packages/i18n/package.json`; `engine/packages/i18n/src/index.ts`; `engine/packages/i18n/src/catalogs/zh-CN.json`; `engine/packages/i18n/src/catalogs/en.json`; `engine/packages/i18n/src/display-width.ts`; `engine/packages/i18n/test/catalog-parity.test.ts`; `engine/packages/i18n/test/display-width.test.ts`; `engine/package.json`; `engine/package-lock.json`; `engine/packages/tui/package.json`; `engine/packages/ui/package.json`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Catalog/interpolation parity, fallback reporting, unknown-code passthrough and widths for Chinese, emoji and combining marks; consumer-ready runtime switch API.
 - **Done signal:** Package tests pass; Chinese is the interface default; state/event codes remain English identifiers; both clients can consume the same catalog and persist language in owner configuration without translating agent text.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A separate client-owned managed-run string table, another UI framework or unrelated runtime dependency is required.
@@ -2096,6 +2196,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U3`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R19`, `R21`, `R22`, `AE1`, `AE2`, `AE3`, `AE4`, `AE11`, `AE13`, `KTD3`, `KTD4`, `KTD5`, `KTD6`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 6; T006.
 - **Files:** `engine/packages/daemon/src/integrations/framework/context-manifest.ts`; `engine/packages/daemon/src/domain/team-assignment.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/config/team/roles.json`; `engine/packages/daemon/test/framework-context-manifest.test.ts`; `engine/packages/daemon/test/team-assignment.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Direct plan and optional upstream-validated task-pack assignment; minimal staffing; repository/path/role/dependency/output/permission validation; immutable projected context and negative ancestor/global contamination cases.
 - **Done signal:** Assignments carry exact plan/repository/policy identity and separate lead/member configuration; stale/invalid packs reject before dispatch; generated/observed context hashes are recorded and unexpected launch/resume sources block work.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Assignment generation grants new product scope, root runtime mirrors are copied into worker context, an unaccounted instruction source appears, or effective context cannot be established.
@@ -2105,7 +2206,8 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U4`; `R6`, `R7`, `R12`, `R15`, `R16`, `R19`, `R21`, `F2`, `F4`, `AE3`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD9`, `KTD11`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 7; T007.
-- **Files:** `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/kernel-authority.ts`; `engine/packages/daemon/src/adapters/yolo-mode.ts`; `engine/packages/daemon/src/adapters/tmux-server.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/src/domain/native-approval-bridge.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`.
+- **Files:** `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/kernel-authority.ts`; `engine/packages/daemon/src/adapters/yolo-mode.ts`; `engine/packages/daemon/src/adapters/tmux-server.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/src/domain/native-approval-bridge.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/src/adapters/claude-code-adapter.ts`; `engine/packages/daemon/src/adapters/claude-resume.ts`; `engine/packages/daemon/src/adapters/claude-resume-launch.ts`; `engine/packages/daemon/src/adapters/codex-runtime-adapter.ts`; `engine/packages/daemon/src/adapters/codex-resume.ts`; `engine/packages/daemon/src/adapters/tmux.ts`; `engine/packages/daemon/src/adapters/tmux-exec.ts`; `engine/packages/daemon/test/claude-runtime-adapter.test.ts`; `engine/packages/daemon/test/claude-resume.test.ts`; `engine/packages/daemon/test/codex-runtime-adapter.test.ts`; `engine/packages/daemon/test/codex-resume.test.ts`; `engine/packages/daemon/test/tmux-server.test.ts`; `engine/packages/daemon/test/tmux-pane-cwd-native.test.ts`; `engine/packages/daemon/test/terminal-pipe-utf8.test.ts`; `engine/packages/daemon/test/seat-activity-retirement-hooks.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; inherited broad-access flags; verified native decision channels. Redact credentials before shared output and bound raw execution logs without losing evidence references.
 - **Done signal:** Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; native prompts lacking a verified channel remain pending rather than receiving blind keys. Worker deadlines are enforced outside controller-only timers.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs weaker permissions or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.
@@ -2116,6 +2218,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U4`; `R8`, `R9`, `R12`, `R15`, `R19`, `R21`, `F2`, `F4`, `AE5`, `AE8`, `AE13`, `KTD4`, `KTD11`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 7; T007.
 - **Files:** `engine/packages/daemon/src/domain/chat-repository.ts`; `engine/packages/daemon/src/routes/chat.ts`; `engine/packages/daemon/src/domain/mailbox-delivery.ts`; `engine/packages/daemon/test/team-messaging.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Recipient/task/reply/attachment identity, capability-scoped polling, at-least-once deduplication and idempotent consumption receipts; prompt-active, reconnect and queued-wait cases.
 - **Done signal:** Messages persist once with task/run/sender/recipient/artifact references; duplicate delivery produces one consumption outcome; prompt-answer text, newlines and control characters remain data; safe later polling needs no owner relay.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Delivery falls back to terminal input/Enter, peer content becomes an approval response, attachments cross task scope, or a second message store is introduced.
@@ -2136,6 +2239,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U5`; `R4`, `R5`, `R6`, `R10`, `R11`, `R16`, `R17`, `R18`, `R21`, `R22`, `F2`, `F3`, `AE2`, `AE3`, `AE4`, `AE5`, `AE9`, `AE10`, `AE11`, `AE13`, `KTD4`, `KTD8`, `KTD9`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 9; T010.
 - **Files:** `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/test/team-dependencies.test.ts`; `engine/packages/daemon/test/team-workspace.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Cycles, 100-task admission limit, overlapping writes and symlinks; validated-success prerequisites versus failed/denied/canceled/handed-off states; commit-backed worktrees and unborn-repository snapshots.
 - **Done signal:** Tests demonstrate that only evidence-backed completion, including a validated handoff successor, unlocks dependents. Candidate manifests include untracked files; original dirty files retain hashes and no commit/merge is created.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Isolation requires changing unrelated work, manufacturing a base commit, treating a handed-off state as success or adding another scheduler.
@@ -2146,6 +2250,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U5`; `R4`, `R5`, `R6`, `R10`, `R11`, `R16`, `R17`, `R18`, `R21`, `R22`, `F3`, `AE4`, `AE9`, `AE10`, `AE11`, `AE13`, `KTD4`, `KTD8`, `KTD9`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T011.
 - **Files:** `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/review-evidence.ts`; `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/test/team-review-cycle.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Separate reviewer identity, read-only complete candidate, manifest/diff-bound findings, stale-review invalidation, durable rework/retry counters and integrated-failure rejection.
 - **Done signal:** Tests show the reviewer sees the exact tracked/untracked candidate without write permission, changes invalidate prior review, two review/rework cycles and one diagnosed recoverable retry persist across restart, and process success does not override failed acceptance.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The implementer can satisfy its own review, findings lack candidate identity, counters reset through retries, or review grants delivery actions.
@@ -2156,6 +2261,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U9`; `R12`, `R13`, `R14`, `R19`, `R21`, `R22`, `F4`, `AE6`, `AE13`, `KTD6`, `KTD14`, `KTD18`, `PC1`, `PC4`, `PC5`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 9; T010.
 - **Files:** `engine/packages/daemon/src/routes/owner-session.ts`; `engine/packages/daemon/src/domain/owner-session.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/src/db/migrations/105_owner_sessions.ts`; `engine/packages/daemon/src/db/all-migrations.ts`; `engine/packages/daemon/test/owner-session.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation.
 - **Done signal:** Tests verify 30-minute idle and 12-hour absolute expiry, one-request revocation, no worker pairing/session-store access and no credential in query/log/event output. Windows browser pairing works through the verified WSL localhost path without non-local binding.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Remote Host exceptions, URL bearer tokens, worker pairing, duplicate session authority stores or relaxed Origin/anti-forgery checks are needed.
@@ -2166,6 +2272,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U9`; `R12`, `R13`, `R14`, `R19`, `R21`, `R22`, `F4`, `AE6`, `AE13`, `KTD6`, `KTD14`, `KTD16`, `KTD18`, `PC1`, `PC4`, `PC5`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T013.
 - **Files:** `engine/packages/daemon/src/domain/terminal-takeover.ts`; `engine/packages/daemon/src/terminal/owner-terminal-host.ts`; `engine/packages/daemon/src/routes/terminal-ws.ts`; `engine/packages/daemon/src/terminal/TerminalSessionBroker.ts`; `engine/packages/daemon/test/terminal-takeover.test.ts`; `engine/packages/daemon/test/owner-terminal-host.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Read-only agent streams; session-scoped owner take-over; release/disconnect/revocation/15-minute inactivity expiry; owner-host absence; identity/socket separation and non-loopback rejection.
 - **Done signal:** Route and real-process tests prove input without take-over is rejected/audited, only the owner-started owner-account host supplies a shell, absent host reports unavailable, workers cannot reach its socket, and daemon storage contains no owner-terminal keystrokes/output.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The daemon spawns a fallback shell, owner terminal runs as control/worker, raw worker terminal-control APIs appear, or take-over can address another session or a non-loopback client.
@@ -2176,9 +2283,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T012, T014, T005.
 - **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/live-events.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/test/team-projection.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters.
 - **Done signal:** Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect projection authority, false success/zero-cost displays and shared-contract consumption.
 
 ### T016. Connect TUI owner decisions, browser pairing and terminal take-over with real-terminal acceptance.
@@ -2186,9 +2294,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T015.
 - **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/input.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/src/terminals/terminal-model.ts`; `engine/packages/tui/test/team-controls.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; unsupported native prompt path.
 - **Done signal:** Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.
 
 ### T017. Persist cancellation and enforce cumulative budgets outside controller-only timers.
@@ -2196,6 +2305,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U7`; `R5`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R21`, `R22`, `F4`, `AE4`, `AE6`, `AE7`, `AE8`, `AE9`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T016.
 - **Files:** `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/daemon-shutdown.ts`; `engine/packages/daemon/src/domain/team-reconciliation.ts`; `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/test/team-cancellation.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Intent-before-effect, dispatch closure, recorded process-group identity, five-second escalation/fifteen-second unresolved outcome; cumulative 60-minute budget, ten-minute no-progress distinction and controller-absent deadline enforcement. Enforce 64 MiB raw logs per run and 256 MiB aggregate artifacts before further dispatch.
 - **Done signal:** Fault/process tests show no dependent dispatch after cancellation, no signal against reused/unowned identities, resistant children remain unresolved, retries/restarts count against the same budget and supervised silent tools retain only their recorded bounded deadline. Capacity pauses preserve durable decisions/evidence and disclose omitted/truncated logs; no history is deleted automatically.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Cancellation assumes button success, kills unrelated sessions, deletes user work or evidence, or controller absence gives workers unbounded runtime.
@@ -2206,6 +2316,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U7`; `R5`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R21`, `R22`, `F4`, `AE4`, `AE6`, `AE7`, `AE8`, `AE9`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T017.
 - **Files:** `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/team-reconciliation.ts`; `engine/packages/daemon/src/daemon-shutdown.ts`; `engine/packages/daemon/test/team-recovery.test.ts`; `docs/operations.md`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Crash windows around dispatch/ack; active/resumable/unknown identity; PID/pane reuse; rejected/stale grants, mailbox and worker policy after resume; disk-full/corruption and WAL-consistent backup/restore.
 - **Done signal:** Fault-injection and authorized restart/restore receipts prove no ambiguous side-effect replay, no lease-expiry duplicate launch and preserved counters/evidence. A matching binary/database pair restores with external effects reconciled and unrelated process/file inventory unchanged.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Recovery silently creates another attempt, copies only a live main database file, discards external receipts, or cleanup touches unrelated tmux/Docker/workstation state.
@@ -2216,9 +2327,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U11`; `R9`, `R12`, `R13`, `R14`, `R15`, `R16`, `R18`, `F2`, `F3`, `F4`, `AE5`, `AE6`, `AE7`, `AE9`, `AE10`, `AE12`, `KTD2`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`, `PC6`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T012, T014, T005.
 - **Files:** `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/App.tsx`; `engine/packages/ui/src/globals.css`; `engine/packages/ui/tailwind.config.ts`; `engine/packages/ui/src/lib/theme.ts`; `engine/packages/ui/src/lib/status-colors.ts`; `engine/packages/ui/src/hooks/useTeamRun.ts`; `engine/packages/ui/src/hooks/useTeamEvents.ts`; `engine/packages/ui/src/hooks/useOwnerSession.ts`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/team/overview.tsx`; `engine/packages/ui/src/team/run-stepper.tsx`; `engine/packages/ui/src/team/task-list.tsx`; `engine/packages/ui/src/team/agent-status.tsx`; `engine/packages/ui/src/team/system-status.tsx`; `engine/packages/ui/src/team/activity.tsx`; `engine/packages/ui/src/team/__tests__/overview.test.tsx`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state.
 - **Done signal:** Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect evidence-derived projections and safe read-only rendering, including re-pair without losing the current view.
 
 ### T020. Add Web task evidence, owner decision dialogs and read-only session/owner terminal views.
@@ -2226,9 +2338,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U11`; `R9`, `R12`, `R13`, `R14`, `R15`, `R16`, `R18`, `F2`, `F3`, `F4`, `AE5`, `AE6`, `AE7`, `AE9`, `AE10`, `AE12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T019.
 - **Files:** `engine/packages/ui/src/team/task-detail.tsx`; `engine/packages/ui/src/team/decision-card.tsx`; `engine/packages/ui/src/team/decision-dialog.tsx`; `engine/packages/ui/src/team/bottom-panel.tsx`; `engine/packages/ui/src/team/agent-monitor.tsx`; `engine/packages/ui/src/team/review-decisions.tsx`; `engine/packages/ui/src/team/logs.tsx`; `engine/packages/ui/src/team/settings.tsx`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/hooks/useOwnerSession.ts`; `engine/packages/ui/src/team/__tests__/task-detail.test.tsx`; `engine/packages/ui/src/team/__tests__/decisions.test.tsx`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Task details/discussion/diff/tests/review; owner dialog requester/action/files/digest/version; idempotency, stale/version conflicts, session expiry; audited take-over and owner-host unavailable state.
 - **Done signal:** Component tests prove a double click sends one action, stale views disable decisions, conflicts refresh and ask again, requested outcomes wait for daemon evidence, unsupported native prompts offer open-session without approve, and agent text remains inert.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Detailed Lead conversation becomes a new chat box, terminal input lacks take-over, client fields grant authority, or legacy query-token authentication is reintroduced.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Detailed Lead conversation becomes a new chat box, terminal input lacks take-over, client fields grant authority, or legacy query-token authentication is reintroduced. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect version binding, browser script injection, authenticated terminal component reuse and display of requested versus observed actions.
 
 ### T021. Verify responsive, accessible, bilingual Web UI behavior against the reference.
@@ -2236,9 +2349,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U11`; `R12`, `R13`, `R14`, `R16`, `R18`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `KTD18`, `PC1`, `PC2`, `PC3`, `PC4`, `PC6`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T020.
 - **Files:** `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/team/overview.tsx`; `engine/packages/ui/src/team/bottom-panel.tsx`; `engine/packages/ui/src/team/decision-dialog.tsx`; `engine/packages/ui/src/globals.css`; `engine/packages/ui/src/team/__tests__/responsive.test.tsx`; `engine/packages/ui/src/team/__tests__/decisions.test.tsx`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Fixture-driven real-browser checks at 1440/1024/390 px in both languages; side-by-side Rendering.png adaptations; keyboard/focus, dialog error announcements, AA contrast, text/glyph status, reduced motion and 44px touch targets.
 - **Done signal:** Source-bound browser receipts cover all six width/language combinations; the 390px layout hides the owner terminal; reference-region adaptations and accessibility outcomes are recorded with failures retained. Browser capability absence leaves this gate unmet.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Passing component snapshots are proposed as browser acceptance, remote exposure is required, or visual changes contradict recorded reference adaptations.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Passing component snapshots are proposed as browser acceptance, remote exposure is required, or visual changes contradict recorded reference adaptations. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** optional; Inspect benchmark fidelity and accessibility without claiming that fixture-run UI checks prove live integration.
 
 ### T022. Add scoped read-only Workspace and Knowledge views.
@@ -2246,9 +2360,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U12`; `R4`, `R5`, `R12`, `R16`, `R21`, `R22`, `AE4`, `AE13`, `KTD5`, `KTD17`, `PC5`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T021.
 - **Files:** `engine/packages/daemon/src/routes/files.ts`; `engine/packages/daemon/src/routes/workspace.ts`; `engine/packages/daemon/test/workspace-scope.test.ts`; `engine/packages/ui/src/team/workspace/workspace-view.tsx`; `engine/packages/ui/src/team/knowledge/knowledge-view.tsx`; `engine/packages/ui/src/routes.tsx`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Canonical target and candidate diff browsing; traversal/symlink denial; policy credential exclusions; owner-only plan/requirements/solution browsing with inert Markdown.
 - **Done signal:** Route tests and browser receipts show only the registered target/candidates plus the explicitly allowed owner knowledge documents; embedded HTML/scripts remain inert and credential files are excluded.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect distinction between owner knowledge access and forbidden worker context, plus file/Markdown disclosure paths.
 
 ### T023. Classify owner task edits and suspend scope changes for plan re-approval.
@@ -2333,27 +2448,22 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ## Orientation Evidence
 
-- **Provider:** `direct-repo-reads`.
-- **Posture:** `bounded`.
-- **Evidence refs:** the exact source plan's Planning Contract, U1-U12 and Verification Contract; root `AGENTS.md`; the local directory inventory and `git status --short`; `docs/Rendering.png` as a confirmed present reference file.
-- **Observed current state:** `engine/` is absent; the current branch is `master` with no HEAD commit; existing root/configuration/document files are untracked. No existing task pack was overwritten. This supports additive import and the snapshot lane, not permission to commit.
-- **Limitations:** imported engine source/tests, WSL toolchain, effective native configuration, authentication, actual process isolation and browser behavior were not verified during compilation. The reference image's role and presence were checked; no pixel-level visual acceptance occurred. Planned new paths are prospective. No LSP, source import, package installation, OS mutation, provider session, demo creation, implementation or delegated review was performed.
-- **Validator diagnosis:** bounded read-only inspection of the installed task validator, its `helpers/secret-deny-patterns.js` helper and `contracts/security/secret-deny-patterns.json` established that the source filename is rejected by the `token-secret-names` filename category. No installed tooling or deny policy was changed.
-- **Applicability:** active project language/privacy instructions govern this document; plan scope governs future mutations. Installed task-writing contract references were read for artifact shape, not as a replacement for the pinned framework implementation contract.
-- **Fallback:** T001 verifies execution prerequisites and T002 verifies actual imported ownership before downstream mutation. Reconcile path mismatches into a regenerated concrete pack rather than expanding scope at dispatch. Local orientation cannot turn planning evidence into runtime acceptance.
+- **Provider / posture:** direct bounded reads of the source plan, the imported owners, the root instructions and current Git state.
+- **Artifact / mutation root:** `/home/leo/src/multi-agent`. The preserved Windows workspace is not an execution source.
+- **Observed source:** the baseline commit is `85ac0b2f6181ea4a992800cd5c6c381e9ff884a8`; the worktree was clean at intake. `engine/` exists with the pinned import. `docs/upstream-baseline.md` maps shorthand owners; the latest imported migration is `103_session_stop_intent.ts`, leaving `104` for T003.
+- **Reconciled scope:** T001/T002 scaffolding and package owners; T004 internal queue guards; T008 native launch/resume/tmux source and existing tests; serialized provenance-manifest side effects. These are existing-plan owners, not new product scope.
+- **Limitations:** historical preflight and baseline results in `docs/development.md` and `docs/operations.md` are not rerun evidence. The six documented upstream test failures remain explicit limitations. No T003+ behavior, live client acceptance or UI design approval follows from this regeneration.
 
 ## Validation Notes
 
-- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md` with canonical body hash `sha256:d1a52af83f2c2f576fc8b250c9bfa9878fffe561e87e358b16342f6634d822e8`.
-- **Hash evidence:** computed using `spec-first tasks hash docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md --repo D:/Multi-Agent --json`, with `source-plan-body-v1` canonicalization, complete frontmatter removed and 128460 canonical body bytes.
-- **Observed deterministic result before draft marking:** `spec-first tasks validate docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md --repo D:/Multi-Agent --json` exited 1 with `task_pack_validity: invalid`, `deterministic_handoff: false`, `source_plan_hash: matched` and `task_pack_contract: invalid`. Its only contract error was `task-pack-task-file-secret-denied` for T004's `engine/packages/daemon/src/middleware/auth-bearer-token.ts`. The optional missing compatibility trace was a limitation, not the blocker.
-- **Non-executable draft:** `status: draft` intentionally prevents execution while this conflict remains. Final validation also reports this intentional draft-status rejection. Keep `mode: derived` to preserve source subordination; no hash or path has been fabricated. The final response reports the actual final validation fields.
-- **Validation scope:** identity, freshness and structure only, including concrete paths, dependency/wave consistency and same-wave overlap. A deterministic pass does not establish plan approval, good task decomposition, imported-path existence, execution safety or runtime acceptance.
-- **Optional trace:** neither source nor pack carries `spec_id`; missing optional compatibility trace must be disclosed as `task-pack-spec-id-trace-missing`, not invented.
-- **Useful split checks:** T001/T002 prevent broad adaptation before feasibility/source authority; T010 prevents fixture-only containment claims; T014 separates browser sessions from owner shell identity; T021 distinguishes visual fixtures from T027 live UI acceptance; T024/T025/T026 separate immutable acceptance, seed and feature ownership; T029 retains actual comparison rather than replacing it with a manual baseline.
-- **Evidence discipline during execution:** verify actual imported npm scripts before use. Run engine commands in the authoritative WSL `engine/`, and demo tests only in its explicitly registered target. Every result includes command/interaction, environment/client versions, source commit or manifest digest, plan digest, run/task/attempt identity, outcome and redacted evidence location.
-- **Handoff stopped:** resolve the tooling policy conflict in a separately scoped diagnosis/fix, restore `status: derived` only when appropriate, and re-run deterministic validation. A valid result would then require independent, byte-preserving document review because this pack is high risk. Neither tooling repair nor review has been dispatched. Generation supplies `semantic_posture: generated-this-run`, not an independent semantic review or permission to begin work.
-- **Closeout:** final adapted regressions, real-client proofs, six live-browser width/language cases, two-size bilingual terminal checks, owner interactions and comparative evidence remain future required work. None was run by compilation.
+- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:d1a52af83f2c2f576fc8b250c9bfa9878fffe561e87e358b16342f6634d822e8`. Regeneration does not edit the source plan.
+- **Exact filename exception:** the maintained validator contract allows only the audited middleware source path. Adjacent credential-like files, backups, prefixed copies and actual credentials retain their denials. Use the tested CLI, not a patched receipt or omitted source path.
+- **Commands:** run `spec-first tasks hash docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md --repo /home/leo/src/multi-agent --json` and `spec-first tasks validate docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md --repo /home/leo/src/multi-agent --json` from WSL; a Windows host may address the same root through its UNC path. Pin the current receipt and pack digest in run-local evidence.
+- **Validation scope:** identity, freshness and structure only. A deterministic pass is not semantic approval, implementation completion, runtime acceptance or spending/delivery authority.
+- **Optional trace:** neither source nor pack carries `spec_id`; preserve `task-pack-spec-id-trace-missing` rather than inventing one.
+- **Semantic handoff:** both requested reviewers must assess the regenerated pack without editing it. Resolve blocking findings, revalidate after any pack change, and then pin the reviewed bytes before executing T003. At most two review rounds apply.
+- **Current bounded continuation:** only T003 follows pack repair and the scheduled quota wait. T005/dependency work, subsequent tasks, UI design implementation and delivery actions are not implied.
+- **Evidence discipline:** current source-bound checks, real-client outcomes and the full milestone verification remain separate proof levels. Record failed/not-run checks honestly; preserve all later verification obligations.
 
 ## Regeneration Rules
 
