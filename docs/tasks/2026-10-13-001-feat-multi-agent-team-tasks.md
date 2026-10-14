@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:98f28b40bffbc7ba6f52a1cd4a579e395f7ac55575865c85bbbdfadd2bb7cc3e"
+source_plan_hash: "sha256:5573c7270f31510e4eeab6dad7cd42204d4f0fbfa0829ca1ced252f34a97ccb2"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -514,6 +514,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/domain/gateway/gateway-subsystem.ts",
         "engine/packages/daemon/src/domain/plan-governance.ts",
         "engine/packages/daemon/src/domain/queue-repository.ts",
+        "engine/packages/daemon/src/domain/queue-retention.ts",
+        "engine/packages/daemon/src/domain/queue-wake-ladder.ts",
         "engine/packages/daemon/src/domain/seat-delivery-guard.ts",
         "engine/packages/daemon/src/middleware/auth-bearer-token.ts",
         "engine/packages/daemon/src/middleware/browser-boundary.ts",
