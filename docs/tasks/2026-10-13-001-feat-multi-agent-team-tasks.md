@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:d1a52af83f2c2f576fc8b250c9bfa9878fffe561e87e358b16342f6634d822e8"
+source_plan_hash: "sha256:a47433afe0fadb8e4fb450583859ca6d408e0e2e465f68fd33efead7798015e2"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -509,6 +509,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "files": [
         "engine/packages/daemon/src/routes/team-control.ts",
         "engine/packages/daemon/src/index.ts",
+        "engine/packages/daemon/src/server.ts",
         "engine/packages/daemon/src/domain/plan-governance.ts",
         "engine/packages/daemon/src/domain/queue-repository.ts",
         "engine/packages/daemon/src/middleware/auth-bearer-token.ts",
@@ -2163,7 +2164,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U2`; `R1`, `R4`, `R5`, `R13`, `R19`, `R21`, `R22`, `AE1`, `AE4`, `AE6`, `AE11`, `AE13`, `KTD4`, `KTD5`, `KTD6`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 4; T003.
-- **Files:** `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/src/index.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/middleware/auth-bearer-token.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/test/team-control-auth.test.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/queue-waiting.ts`; `engine/packages/daemon/src/domain/queue-stuck-sweep.ts`; `engine/packages/daemon/src/domain/policies/idle-gate-qitem.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`.
+- **Files:** `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/src/index.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/middleware/auth-bearer-token.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/test/team-control-auth.test.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/queue-waiting.ts`; `engine/packages/daemon/src/domain/queue-stuck-sweep.ts`; `engine/packages/daemon/src/domain/policies/idle-gate-qitem.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** New/legacy routes and internal start/wake/restore/complete/stop paths share eligibility checks; forged owner identities, worker approval/limit edits, unapproved plans and stale policy fail before effects.
 - **Done signal:** An explicit managed-mutation-path coverage inventory and route tests show no agent token grants authority, rejected grants survive retries, incompatible protocol versions disable controls and verified provider-policy capability is required for eligibility.
