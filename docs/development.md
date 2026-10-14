@@ -19,6 +19,16 @@ Not transferred: the untracked host runtime mirrors (`.agents/`, `.claude/`, `.c
 
 `engine/test/project-baseline.test.mjs` checks that this checkout is the recorded authority and descends from the verified bootstrap. It also checks that the preserved Windows files are still byte-identical.
 
+## Review Requirements
+
+Use `gpt-6.1-sol` and `claude-opus-5-5` for separate, report-only reviews of each logical change. Call the gateway URLs and API credentials configured locally on the owner's machine; never embed credentials in prompts, repository files, command arguments or review logs. Do not substitute models when quota or access is unavailable.
+
+Both reviewers inspect the same frozen candidate, relevant plan sections, tests and verification evidence. Record the requested and returned model identifiers, candidate digest, findings and any coverage limitations. Allow at most two review rounds per logical change: the initial review and one follow-up after corrections. A missing review, a blocking finding or a changed candidate leaves the review gate open.
+
+Dependency and lockfile changes remain separately scoped to T005. T003 may add the shared contract export but does not add or upgrade dependencies. UI/TUI design work at T015-T016 and T019-T022 waits for the owner's review of a design proposal.
+
+Local implementation, review, commit, push, PR creation and merge are separate actions. Without explicit delivery authorization, keep verified changes uncommitted.
+
 ## Toolchain
 
 | Tool | Version | Source |
