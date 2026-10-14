@@ -15,6 +15,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { PlanGovernance } from "../src/domain/plan-governance.js";
+import { QueueRepository } from "../src/domain/queue-repository.js";
 
 
 function mockTmux(killResult?: { ok: boolean; code?: string; message?: string }): TmuxAdapter {
@@ -61,6 +63,17 @@ describe("RigTeardownOrchestrator", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  function createPendingRun(rigId: string) {
+    const governance = new PlanGovernance(db, eventBus, new QueueRepository(db, eventBus));
+    return governance.createRun({ id: "racing-teardown-run", rigId, binding: {
+      artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
+      planRef: "docs/plan.md", planDigest: `sha256:${"a".repeat(64)}`,
+      repository: { root: "/workspace/project", identity: `git:${"b".repeat(40)}` }, readPaths: ["src"], writePaths: ["src"], roles: ["lead"],
+      policyRevision: 1, policyFingerprint: `sha256:${"c".repeat(64)}`,
+      limits: { maxSessions: 3, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
+    } });
+  }
+
   function seedRig(): { rigId: string; nodeId: string; sessionId: string } {
     const rig = rigRepo.createRig("test-rig");
     const node = rigRepo.addNode(rig.id, "dev");
@@ -85,6 +98,149 @@ describe("RigTeardownOrchestrator", () => {
       eventBus,
     });
   }
+
+  function failDeletionFinalization() {
+    db.exec(`CREATE TRIGGER fail_reservation_release BEFORE INSERT ON events
+      WHEN NEW.type = 'rig.deletion_fence' AND json_extract(NEW.payload, '$.phase') = 'released'
+      BEGIN SELECT RAISE(ABORT, 'reservation release failed'); END;`);
+  }
+
+  it.each([true, false])("preserves committed teardown outcomes when deletion finalization fails with live sessions=%s", async (live) => {
+    const rigId = live ? seedRig().rigId : rigRepo.createRig("stopped-finalization").id;
+    failDeletionFinalization();
+    const result = await buildTeardown().teardown(rigId, { delete: true });
+    expect(result).toMatchObject({ deleted: true, deleteBlocked: false, sessionsKilled: live ? 1 : 0,
+      snapshotId: live ? "snap-1" : null, alreadyStopped: !live,
+      deletionFinalization: { error: "reservation release failed", reservationId: expect.any(String) } });
+    expect(result.errors).toEqual([expect.stringMatching(/finalization failed.*reservation release failed/)]);
+    expect(rigRepo.getRig(rigId)).toBeNull();
+    expect(() => rigRepo.assertNoPendingDeletion(rigId)).toThrow(/deletion is in progress/);
+    expect(db.prepare("SELECT json_extract(payload, '$.phase') AS phase FROM events WHERE type = 'rig.deletion_fence' ORDER BY seq").all())
+      .toEqual([{ phase: "reserved" }]);
+  });
+
+  it.each([new Error("native stop failed"), undefined])("preserves a thrown primary value alongside deletion finalization failure: %s", async (primaryError) => {
+    const { rigId } = seedRig();
+    const tmux = mockTmux();
+    tmux.killSession = vi.fn(async () => { throw primaryError; });
+    failDeletionFinalization();
+    const failure = await buildTeardown(tmux).teardown(rigId, { delete: true }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).cause).toBe(primaryError);
+    expect((failure as AggregateError).errors).toEqual([primaryError, expect.objectContaining({ message: "reservation release failed" })]);
+    expect(rigRepo.getRig(rigId)).not.toBeNull();
+    expect(() => createPendingRun(rigId)).toThrow(/deletion is in progress/);
+  });
+
+  it("preserves the primary error identity when deletion finalization succeeds", async () => {
+    const { rigId } = seedRig();
+    const primaryError = Object.freeze(new Error("native stop failed"));
+    const tmux = mockTmux();
+    tmux.killSession = vi.fn(async () => { throw primaryError; });
+    await expect(buildTeardown(tmux).teardown(rigId, { delete: true })).rejects.toBe(primaryError);
+    expect(createPendingRun(rigId).state).toBe("pending");
+  });
+
+  it("preserves returned kill failures alongside deletion finalization warnings", async () => {
+    const { rigId } = seedRig();
+    failDeletionFinalization();
+    const result = await buildTeardown(mockTmux({ ok: false, message: "native stop failed" })).teardown(rigId, { delete: true });
+    expect(result).toMatchObject({ deleted: false, deleteBlocked: true, sessionsKilled: 0 });
+    expect(result.errors).toEqual([expect.stringMatching(/native stop failed/), expect.stringMatching(/deletion blocked/),
+      expect.stringMatching(/reservation release failed/)]);
+    expect(() => createPendingRun(rigId)).toThrow(/deletion is in progress/);
+  });
+
+  it.each([true, false])("blocks governed-rig deletion before teardown side effects with live sessions=%s", async (live) => {
+    const rigId = live ? seedRig().rigId : rigRepo.createRig("governed-stopped").id;
+    db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
+      VALUES ('retained-run', ?, '{}', 'retained-binding', 'blocked', 'now', 'now')`).run(rigId);
+    const tmux = mockTmux();
+    const snapshotCapture = mockSnapshotCapture(db);
+    const teardownServices = vi.fn(async () => ({ ok: true }));
+    const td = new RigTeardownOrchestrator({ db, rigRepo, sessionRegistry, tmuxAdapter: tmux, snapshotCapture, eventBus,
+      serviceOrchestrator: { teardown: teardownServices } as never });
+    const sessionsBefore = sessionRegistry.getSessionsForRig(rigId);
+    const eventsBefore = db.prepare("SELECT * FROM events").all();
+    const result = await td.teardown(rigId, { delete: true });
+    expect(result).toMatchObject({ deleted: false, deleteBlocked: true, sessionsKilled: 0, snapshotId: null });
+    expect(result.errors.join(" ")).toMatch(/governance history/);
+    expect(tmux.killSession).not.toHaveBeenCalled();
+    expect(snapshotCapture.captureSnapshot).not.toHaveBeenCalled();
+    expect(teardownServices).not.toHaveBeenCalled();
+    expect(sessionRegistry.getSessionsForRig(rigId)).toEqual(sessionsBefore);
+    expect(db.prepare("SELECT * FROM events").all()).toEqual(eventsBefore);
+    expect(rigRepo.getRig(rigId)).not.toBeNull();
+  });
+
+  it.each(["native-probe", "service-teardown"])("fences governance creation while destructive teardown awaits %s", async (boundary) => {
+    const rigId = boundary === "native-probe" ? seedRig().rigId : rigRepo.createRig("service-only-interleaving").id;
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => { entered = resolve; });
+    let resume!: () => void;
+    const continuation = new Promise<void>((resolve) => { resume = resolve; });
+    const tmux = mockTmux();
+    tmux.probeSession = vi.fn(async () => { entered(); await continuation; return { state: "present" as const }; });
+    const teardownServices = vi.fn(async () => {
+      if (boundary === "service-teardown") { entered(); await continuation; }
+      return { ok: true };
+    });
+    const td = new RigTeardownOrchestrator({ db, rigRepo, sessionRegistry, tmuxAdapter: tmux,
+      snapshotCapture: mockSnapshotCapture(db), eventBus, serviceOrchestrator: { teardown: teardownServices } as never });
+    const teardown = td.teardown(rigId, { delete: true }).catch((error: unknown) => ({ failure: String(error) }));
+    await waiting;
+    const transactionHeld = db.inTransaction;
+    let creationError: unknown;
+    try { createPendingRun(rigId); } catch (error) { creationError = error; } finally { resume(); }
+    const result = await teardown;
+    expect(creationError).toMatchObject({ code: "rig_deletion_in_progress" });
+    expect(transactionHeld).toBe(false);
+    expect(result).toMatchObject({ deleted: true, errors: [] });
+    expect(db.prepare("SELECT id FROM team_runs WHERE rig_id = ?").all(rigId)).toEqual([]);
+    expect(rigRepo.getRig(rigId)).toBeNull();
+  });
+
+  it("performs no teardown effects when the deletion reservation fails to persist", async () => {
+    const { rigId } = seedRig();
+    const tmux = mockTmux();
+    const snapshotCapture = mockSnapshotCapture(db);
+    const teardownServices = vi.fn(async () => ({ ok: true }));
+    const td = new RigTeardownOrchestrator({ db, rigRepo, sessionRegistry, tmuxAdapter: tmux, snapshotCapture, eventBus,
+      serviceOrchestrator: { teardown: teardownServices } as never });
+    const sessionsBefore = sessionRegistry.getSessionsForRig(rigId);
+    db.exec(`CREATE TRIGGER fail_deletion_reservation BEFORE INSERT ON events
+      WHEN NEW.type = 'rig.deletion_fence'
+      BEGIN SELECT RAISE(ABORT, 'reservation write failed'); END;`);
+    await expect(td.teardown(rigId, { delete: true })).rejects.toThrow(/reservation write failed/);
+    expect(tmux.killSession).not.toHaveBeenCalled();
+    expect(snapshotCapture.captureSnapshot).not.toHaveBeenCalled();
+    expect(teardownServices).not.toHaveBeenCalled();
+    expect(sessionRegistry.getSessionsForRig(rigId)).toEqual(sessionsBefore);
+    expect(db.prepare("SELECT * FROM events WHERE type = 'rig.deletion_fence'").all()).toEqual([]);
+  });
+
+  it.each(["returned-failure", "thrown-error"])("releases only its reservation after teardown settles with %s", async (failure) => {
+    const { rigId } = seedRig();
+    const tmux = mockTmux({ ok: false, code: "transport_unavailable", message: "native stop failed" });
+    if (failure === "thrown-error") tmux.killSession = vi.fn(async () => { throw new Error("native stop failed"); });
+    const td = buildTeardown(tmux);
+    if (failure === "thrown-error") await expect(td.teardown(rigId, { delete: true })).rejects.toThrow(/native stop failed/);
+    else expect(await td.teardown(rigId, { delete: true })).toMatchObject({ deleted: false, deleteBlocked: true });
+    expect(rigRepo.getRig(rigId)).not.toBeNull();
+    expect(createPendingRun(rigId).state).toBe("pending");
+    expect(db.prepare("SELECT json_extract(payload, '$.phase') AS phase FROM events WHERE type = 'rig.deletion_fence' ORDER BY seq").all())
+      .toEqual([{ phase: "reserved" }, { phase: "released" }]);
+  });
+
+  it("keeps non-deleting teardown compatible with retained governance history", async () => {
+    const { rigId } = seedRig();
+    const run = createPendingRun(rigId);
+    const result = await buildTeardown().teardown(rigId);
+    expect(result).toMatchObject({ deleted: false, deleteBlocked: false, sessionsKilled: 1 });
+    expect(rigRepo.getRig(rigId)).not.toBeNull();
+    expect(db.prepare("SELECT id FROM team_runs WHERE rig_id = ?").all(rigId)).toEqual([{ id: run.id }]);
+    expect(db.prepare("SELECT * FROM events WHERE type = 'rig.deletion_fence'").all()).toEqual([]);
+  });
 
   // T1: Kills tmux sessions
   it.each([true, false])("reports service project retention with live sessions=%s", async (live) => {

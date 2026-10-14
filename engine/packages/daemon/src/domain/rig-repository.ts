@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { EventBus } from "./event-bus.js";
 import { resolveActiveOccupantRow } from "./active-occupant.js";
 import { resolve } from "node:path";
 import { ulid } from "ulid";
@@ -139,6 +140,49 @@ interface NodeOptions {
   resolvedSpecVersion?: string;
   resolvedSpecHash?: string;
 }
+
+export class RigDeletionBlockedError extends Error {
+  readonly code = "governance_history";
+
+  constructor() {
+    super("Rig has retained governance history; archive it instead of deleting it.");
+  }
+}
+
+export class RigDeletionInProgressError extends Error {
+  readonly code = "rig_deletion_in_progress";
+
+  constructor() {
+    super("Rig deletion is in progress or awaits reconciliation.");
+  }
+}
+
+export interface RigDeletionFinalizationFailure {
+  reservationId: string;
+  error: string;
+}
+
+export class RigDeletionFinalizationError extends AggregateError {
+  readonly code = "rig_deletion_finalization_failed";
+  readonly finalization: RigDeletionFinalizationFailure;
+  readonly warning: string;
+
+  constructor(reservationId: string, finalizationError: unknown, primaryFailure?: { error: unknown }) {
+    const detail = finalizationError instanceof Error ? finalizationError.message : String(finalizationError);
+    const warning = `Deletion reservation ${reservationId} finalization failed: ${detail}. Reservation state requires reconciliation.`;
+    const primary = primaryFailure?.error;
+    super(
+      primaryFailure ? [primary, finalizationError] : [finalizationError],
+      primaryFailure ? `${primary instanceof Error ? primary.message : String(primary)}; ${warning}` : warning,
+      { cause: primaryFailure ? primary : finalizationError },
+    );
+    this.name = "RigDeletionFinalizationError";
+    this.finalization = { reservationId, error: detail };
+    this.warning = warning;
+  }
+}
+
+type RigDeletionFence = Extract<import("./types.js").RigEvent, { type: "rig.deletion_fence" }>;
 
 export class RigRepository {
   readonly db: Database.Database;
@@ -631,8 +675,64 @@ export class RigRepository {
     return result.changes > 0;
   }
 
-  deleteRig(rigId: string): void {
-    this.db.prepare("DELETE FROM rigs WHERE id = ?").run(rigId);
+  hasGovernanceHistory(rigId: string): boolean {
+    // Retained pre-governance schema fixtures have no ledger; an existing ledger is never ignored.
+    if (!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'team_runs'").get()) return false;
+    return this.db.prepare("SELECT 1 FROM team_runs WHERE rig_id = ? LIMIT 1").get(rigId) !== undefined;
+  }
+
+  private deletionFence(rigId: string): RigDeletionFence | null {
+    const row = this.db.prepare("SELECT payload FROM events WHERE rig_id = ? AND type = 'rig.deletion_fence' ORDER BY seq DESC LIMIT 1")
+      .get(rigId) as { payload: string } | undefined;
+    if (!row) return null;
+    let value: unknown;
+    try { value = JSON.parse(row.payload); } catch { throw new RigDeletionInProgressError(); }
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new RigDeletionInProgressError();
+    const fence = value as Partial<RigDeletionFence>;
+    if (fence.type !== "rig.deletion_fence" || fence.version !== 1 || fence.rigId !== rigId
+      || typeof fence.reservationId !== "string" || !fence.reservationId
+      || (fence.operation !== "release" && fence.operation !== "teardown")
+      || (fence.phase !== "reserved" && fence.phase !== "released")) throw new RigDeletionInProgressError();
+    return fence as RigDeletionFence;
+  }
+
+  assertNoPendingDeletion(rigId: string, reservationId?: string): void {
+    const fence = this.deletionFence(rigId);
+    if (fence?.phase === "reserved") {
+      if (reservationId !== fence.reservationId) throw new RigDeletionInProgressError();
+    } else if (reservationId !== undefined) {
+      throw new RigDeletionInProgressError();
+    }
+  }
+
+  reserveRigDeletion(rigId: string, operation: RigDeletionFence["operation"], events: EventBus): string {
+    if (events.db !== this.db || this.db.inTransaction) throw new Error("Rig deletion must own its notification transaction");
+    return events.withNotifyEnvelope((register) => {
+      if (!this.db.prepare("SELECT 1 FROM rigs WHERE id = ?").get(rigId)) throw new Error("Rig not found");
+      if (this.hasGovernanceHistory(rigId)) throw new RigDeletionBlockedError();
+      this.assertNoPendingDeletion(rigId);
+      const reservationId = ulid();
+      // The existing append-only log preserves an unfinished reservation across controller loss.
+      register(events.persistWithinTransaction({ type: "rig.deletion_fence", version: 1, rigId, reservationId, operation, phase: "reserved" }));
+      return reservationId;
+    });
+  }
+
+  finishRigDeletion(rigId: string, reservationId: string, events: EventBus): void {
+    if (events.db !== this.db || this.db.inTransaction) throw new Error("Rig deletion must own its notification transaction");
+    events.withNotifyEnvelope((register) => {
+      const fence = this.deletionFence(rigId);
+      if (fence?.phase !== "reserved" || fence.reservationId !== reservationId) throw new RigDeletionInProgressError();
+      register(events.persistWithinTransaction({ ...fence, phase: "released" }));
+    });
+  }
+
+  deleteRig(rigId: string, reservationId?: string): void {
+    this.db.transaction(() => {
+      this.assertNoPendingDeletion(rigId, reservationId);
+      if (this.hasGovernanceHistory(rigId)) throw new RigDeletionBlockedError();
+      this.db.prepare("DELETE FROM rigs WHERE id = ?").run(rigId);
+    })();
   }
 
   deleteNode(nodeId: string): void {

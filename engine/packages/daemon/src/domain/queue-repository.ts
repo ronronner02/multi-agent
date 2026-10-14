@@ -1,4 +1,5 @@
 import { readWakeLadderBackstop } from "./queue-wake-ladder.js";
+import { TEAM_QUEUE_STATES as QUEUE_STATES } from "../contracts/team-control.js";
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import type { EventBus } from "./event-bus.js";
@@ -30,16 +31,7 @@ import { WatchdogJobsRepository } from "./watchdog-jobs-repository.js";
 import { armQueueWait, backOffQueueWait, refreshQueueWaits, evaluateQueueWait, retargetQueueWait, isQueueWait } from "./queue-wait-backoff.js";
 import { parseHumanQuestions, unansweredQuestions, describeTypedReplyPlacement, type HumanQuestion, type HumanAnswers, type TypedHumanReply, type RecordHumanAnswerResult } from "./human-questions.js";
 
-export const QUEUE_STATES = [
-  "pending",
-  "in-progress",
-  "done",
-  "blocked",
-  "failed",
-  "denied",
-  "canceled",
-  "handed-off",
-] as const;
+export { QUEUE_STATES };
 export type QueueState = (typeof QUEUE_STATES)[number];
 
 /** OPR.0.4.6.FS-1 (W2 P1): the queue's terminal state set, named ONCE. The

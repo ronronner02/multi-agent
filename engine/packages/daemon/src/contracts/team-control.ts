@@ -1,0 +1,323 @@
+export const TEAM_CONTROL_VERSION = "1.0";
+export const TEAM_QUEUE_STATES = ["pending", "in-progress", "done", "blocked", "failed", "denied", "canceled", "handed-off"] as const;
+export type TeamQueueState = (typeof TEAM_QUEUE_STATES)[number];
+export type TeamRole = "lead" | "implementer" | "reviewer";
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+export type ApprovalKind = "orchestrator" | "native";
+export type ApprovalAction = "implementation" | "commit" | "push" | "pr-create" | "merge" | "release" | "deploy" | "scope-change" | "limit-increase" | "native-tool";
+export type ApprovalState = "pending" | "approved" | "rejected" | "expired" | "invalidated";
+export type TeamRunState = "pending" | "approved" | "cancel_requested" | "invalidated" | "blocked";
+export type AttemptState = "running" | "stopped" | "unknown";
+
+export interface TeamLimits {
+  maxSessions: number;
+  maxActiveMs: number;
+  maxRetries: number;
+  maxReviewRounds: number;
+}
+
+export interface PlanBinding {
+  artifactContract: "spec-unified-plan/v1";
+  artifactReadiness: "implementation-ready";
+  execution: "code";
+  status: "active";
+  planRef: string;
+  planDigest: string;
+  repository: { root: string; identity: string };
+  readPaths: string[];
+  writePaths: string[];
+  roles: TeamRole[];
+  policyRevision: number;
+  policyFingerprint: string;
+  limits: TeamLimits;
+}
+
+export interface ScopedAssignment {
+  taskId: string;
+  role: TeamRole;
+  paths: string[];
+  dependencies: string[];
+}
+
+export interface UsageMetric {
+  value: number | null;
+  reason: string | null;
+}
+
+export interface UsageEvidence {
+  activeMs: number;
+  inputTokens: UsageMetric;
+  outputTokens: UsageMetric;
+  costUsd: UsageMetric;
+}
+
+export interface NativeAttemptIdentity {
+  nativeSessionId: string;
+  tmuxServer: string;
+  paneId: string;
+  processId: number;
+  processStart: string;
+  generation: number;
+  policyFingerprint: string;
+}
+
+export interface TeamRun {
+  id: string;
+  rigId: string;
+  binding: PlanBinding;
+  bindingDigest: string;
+  state: TeamRunState;
+  stateReason: string | null;
+  entityVersion: number;
+  activeMs: number;
+  accountedAt: string | null;
+  retriesUsed: number;
+  reviewRoundsUsed: number;
+  usage: UsageEvidence;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamApproval {
+  id: string;
+  runId: string;
+  kind: ApprovalKind;
+  action: ApprovalAction;
+  payload: JsonObject;
+  payloadDigest: string;
+  targetDigest: string;
+  bindingDigest: string;
+  state: ApprovalState;
+  entityVersion: number;
+  expiresAt: string;
+  decisionActor: string | null;
+}
+
+export interface TeamTaskAuthority {
+  qitemId: string;
+  runId: string;
+  assignment: ScopedAssignment;
+  entityVersion: number;
+  evidence: JsonObject | null;
+}
+
+export interface TeamAttempt {
+  id: string;
+  runId: string;
+  qitemId: string | null;
+  role: TeamRole;
+  provider: "claude" | "codex";
+  identity: NativeAttemptIdentity | null;
+  unknownReason: string | null;
+  state: AttemptState;
+  usage: UsageEvidence;
+  entityVersion: number;
+}
+
+export interface ApprovalConsumption {
+  approvalId: string;
+  runId: string;
+  attemptId: string;
+  state: "reserved" | "confirmed" | "ambiguous";
+  receipt: JsonObject | null;
+}
+
+export interface ControlActor {
+  kind: "owner" | "worker";
+  sessionId: string;
+}
+
+export interface ControlRequest<T = JsonValue> {
+  protocolVersion: string;
+  runId: string;
+  actionId: string;
+  expectedEntityVersion: number;
+  idempotencyKey: string;
+  payload: T;
+}
+
+export interface ControlReceipt<T = unknown> {
+  status: "accepted" | "pending-execution" | "conflict" | "denied" | "observed";
+  runId: string;
+  entityVersion: number;
+  replayed: boolean;
+  effectMayStart: boolean;
+  value: T | null;
+  reason: string | null;
+}
+
+export interface TeamControlEvent {
+  type: "team.control";
+  protocolVersion: string;
+  eventId: string;
+  rigId: string;
+  runId: string;
+  taskId: string | null;
+  attemptId: string | null;
+  entityId: string;
+  entityVersion: number;
+  action: string;
+  payload: JsonObject;
+}
+
+export class TeamContractError extends Error {
+  readonly code = "invalid_team_contract";
+  constructor(readonly field: string) {
+    super(`Invalid team contract field: ${field}`);
+    this.name = "TeamContractError";
+  }
+}
+
+export function object(value: unknown, field: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new TeamContractError(field);
+  return value as Record<string, unknown>;
+}
+
+export function text(value: unknown, field: string, max = 1024): string {
+  if (typeof value !== "string" || !value.trim() || value.length > max || /[\u0000-\u001f\u007f]/.test(value)) throw new TeamContractError(field);
+  return value;
+}
+
+export function integer(value: unknown, field: string, min = 0, max = Number.MAX_SAFE_INTEGER): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) throw new TeamContractError(field);
+  return value;
+}
+
+export function digest(value: unknown, field: string): string {
+  if (typeof value !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value)) throw new TeamContractError(field);
+  return value;
+}
+
+export function relativePath(value: unknown, field: string): string {
+  const result = text(value, field, 4096);
+  if (result.startsWith("/") || result.startsWith("~") || /[\\:*?\[\]{}]/.test(result)
+    || result.split("/").some((part) => part === "" || part === "." || part === "..")) throw new TeamContractError(field);
+  return result;
+}
+
+function absolutePath(value: unknown, field: string): string {
+  const result = text(value, field, 4096);
+  if (!result.startsWith("/") || result === "/" || result.includes("\\")
+    || result.slice(1).split("/").some((part) => !part || part === "." || part === "..")) throw new TeamContractError(field);
+  return result;
+}
+
+function strings(value: unknown, field: string, parse = text): string[] {
+  if (!Array.isArray(value) || value.length > 1000) throw new TeamContractError(field);
+  const result = value.map((item) => parse(item, field));
+  if (new Set(result).size !== result.length) throw new TeamContractError(field);
+  return result;
+}
+
+function role(value: unknown): TeamRole {
+  if (value !== "lead" && value !== "implementer" && value !== "reviewer") throw new TeamContractError("role");
+  return value;
+}
+
+export function parseProtocolVersion(value: unknown): string {
+  if (typeof value !== "string" || value.length > 32 || !/^1\.(0|[1-9][0-9]*)$/.test(value)) throw new TeamContractError("protocolVersion");
+  return value;
+}
+
+export function parsePlanBinding(value: unknown): PlanBinding {
+  const v = object(value, "binding");
+  for (const [key, expected] of Object.entries({ artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active" })) {
+    if (v[key] !== expected) throw new TeamContractError(key);
+  }
+  const repository = object(v.repository, "repository");
+  const root = absolutePath(repository.root, "repository.root");
+  const identity = text(repository.identity, "repository.identity");
+  if (!/^(git:(?:[a-f0-9]{40}|[a-f0-9]{64})|snapshot:sha256:[a-f0-9]{64})$/.test(identity)) throw new TeamContractError("repository.identity");
+  const limits = object(v.limits, "limits");
+  const roles = strings(v.roles, "roles").map(role);
+  if (!roles.length) throw new TeamContractError("roles");
+  const readPaths = strings(v.readPaths, "readPaths", relativePath);
+  const writePaths = strings(v.writePaths, "writePaths", relativePath);
+  if (!readPaths.length && !writePaths.length) throw new TeamContractError("scope");
+  return {
+    artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
+    planRef: relativePath(v.planRef, "planRef"), planDigest: digest(v.planDigest, "planDigest"),
+    repository: { root, identity }, readPaths, writePaths, roles,
+    policyRevision: integer(v.policyRevision, "policyRevision", 1), policyFingerprint: digest(v.policyFingerprint, "policyFingerprint"),
+    limits: { maxSessions: integer(limits.maxSessions, "maxSessions", 1, 3), maxActiveMs: integer(limits.maxActiveMs, "maxActiveMs", 1, 3_600_000),
+      maxRetries: integer(limits.maxRetries, "maxRetries", 0, 1), maxReviewRounds: integer(limits.maxReviewRounds, "maxReviewRounds", 0, 2) },
+  };
+}
+
+export function parseAssignment(value: unknown): ScopedAssignment {
+  const v = object(value, "assignment");
+  const taskId = text(v.taskId, "taskId", 256);
+  const dependencies = strings(v.dependencies, "dependencies");
+  if (dependencies.includes(taskId)) throw new TeamContractError("dependencies");
+  const paths = strings(v.paths, "paths", relativePath);
+  if (!paths.length) throw new TeamContractError("paths");
+  return { taskId, role: role(v.role), paths, dependencies };
+}
+
+export function jsonValue(value: unknown, field = "payload", depth = 0): JsonValue {
+  if (depth > 32) throw new TeamContractError(field);
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) {
+    if (Reflect.ownKeys(value).length !== value.length + 1) throw new TeamContractError(field);
+    return Array.from({ length: value.length }, (_, index) => {
+      const property = Object.getOwnPropertyDescriptor(value, index);
+      if (!property?.enumerable || !("value" in property)) throw new TeamContractError(field);
+      return jsonValue(property.value, field, depth + 1);
+    });
+  }
+  const record = object(value, field);
+  const keys = Reflect.ownKeys(record);
+  if (keys.some((key) => typeof key !== "string")) throw new TeamContractError(field);
+  return Object.fromEntries((keys as string[]).sort().map((key) => {
+    const property = Object.getOwnPropertyDescriptor(record, key)!;
+    if (!property.enumerable || !("value" in property)) throw new TeamContractError(field);
+    return [key, jsonValue(property.value, field, depth + 1)];
+  }));
+}
+
+export function canonicalJson(value: unknown): string {
+  const result = JSON.stringify(jsonValue(value));
+  if (new TextEncoder().encode(result).length > 1_048_576) throw new TeamContractError("payload_size");
+  return result;
+}
+
+export function parseUsage(value: unknown): UsageEvidence {
+  const v = object(value, "usage");
+  function metric(input: unknown, field: string, whole: boolean): UsageMetric {
+    const m = object(input, field);
+    if (m.value === null) return { value: null, reason: text(m.reason, `${field}.reason`) };
+    if (typeof m.value !== "number" || !Number.isFinite(m.value) || m.value < 0 || (whole && !Number.isSafeInteger(m.value)) || m.reason !== null) throw new TeamContractError(field);
+    return { value: m.value, reason: null };
+  }
+  return { activeMs: integer(v.activeMs, "usage.activeMs"), inputTokens: metric(v.inputTokens, "inputTokens", true),
+    outputTokens: metric(v.outputTokens, "outputTokens", true), costUsd: metric(v.costUsd, "costUsd", false) };
+}
+
+export function parseAttemptIdentity(value: unknown): NativeAttemptIdentity {
+  const v = object(value, "attemptIdentity");
+  const paneId = text(v.paneId, "paneId");
+  if (!/^%[0-9]+$/.test(paneId)) throw new TeamContractError("paneId");
+  return { nativeSessionId: text(v.nativeSessionId, "nativeSessionId"), tmuxServer: absolutePath(v.tmuxServer, "tmuxServer"),
+    paneId, processId: integer(v.processId, "processId", 1), processStart: text(v.processStart, "processStart"),
+    generation: integer(v.generation, "generation", 1), policyFingerprint: digest(v.policyFingerprint, "policyFingerprint") };
+}
+
+export function parseControlRequest(value: unknown): ControlRequest {
+  const v = object(value, "controlRequest");
+  return { protocolVersion: parseProtocolVersion(v.protocolVersion), runId: text(v.runId, "runId", 256),
+    actionId: text(v.actionId, "actionId", 256), expectedEntityVersion: integer(v.expectedEntityVersion, "expectedEntityVersion", 1),
+    idempotencyKey: text(v.idempotencyKey, "idempotencyKey", 256), payload: JSON.parse(canonicalJson(v.payload)) as JsonValue };
+}
+
+export function parseTeamEvent(value: unknown): TeamControlEvent {
+  const v = object(value, "event");
+  if (v.type !== "team.control") throw new TeamContractError("event.type");
+  return { type: "team.control", protocolVersion: parseProtocolVersion(v.protocolVersion), eventId: text(v.eventId, "eventId"),
+    rigId: text(v.rigId, "rigId"), runId: text(v.runId, "runId"), taskId: v.taskId === null ? null : text(v.taskId, "taskId"),
+    attemptId: v.attemptId === null ? null : text(v.attemptId, "attemptId"), entityId: text(v.entityId, "entityId"),
+    entityVersion: integer(v.entityVersion, "entityVersion", 1), action: text(v.action, "action"),
+    payload: JSON.parse(canonicalJson(object(v.payload, "event.payload"))) as JsonObject };
+}

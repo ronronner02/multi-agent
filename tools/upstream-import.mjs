@@ -32,15 +32,44 @@ export const PIN = Object.freeze({
   counts: { files: 3548, symlinks: 5, excluded: 18 },
   // Imported paths later changed on purpose; verify reports them as adapted.
   // Application version 0.1.0 (package identifiers kept) and the approved
-  // dependency install scripts (better-sqlite3, esbuild) in allowScripts.
-  adapted: ['package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json', 'packages/ui/package.json'],
+  // dependency install scripts (better-sqlite3, esbuild) in allowScripts;
+  // the shared authority contract, queue state tuple and additive migration registration.
+  adapted: [
+    'package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json',
+    'packages/cli/src/commands/release.ts',
+    'packages/cli/test/lifecycle.test.ts',
+    'packages/daemon/src/db/all-migrations.ts',
+    'packages/daemon/src/domain/queue-repository.ts',
+    'packages/daemon/src/domain/types.ts',
+    'packages/daemon/src/domain/rig-repository.ts',
+    'packages/daemon/src/domain/rig-lifecycle-service.ts',
+    'packages/daemon/src/domain/rig-teardown.ts',
+    'packages/daemon/src/routes/rigs.ts',
+    'packages/daemon/src/routes/down.ts',
+    'packages/daemon/test/rig-repository.test.ts',
+    'packages/daemon/test/rigs-routes.test.ts',
+    'packages/daemon/test/rig-lifecycle-route.test.ts',
+    'packages/daemon/test/rig-teardown.test.ts',
+    'packages/daemon/test/down-route.test.ts',
+    'packages/daemon/test/helpers/test-app.ts',
+    'packages/daemon/test/p34-call-site-allowlist.test.ts',
+    'packages/ui/package.json',
+  ],
 });
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEST = path.join(repoRoot, 'engine');
 const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'multi-agent', `openrig-${PIN.commit}.tar.gz`);
-// Files that exist under engine/ before the import and are owned by this repository.
-const LOCAL_ENGINE_PATHS = ['config/isolation/', 'test/worker-isolation-preflight.test.mjs', 'test/project-baseline.test.mjs'];
+// Application-owned files are exact entries; only a trailing slash grants a directory subtree.
+const LOCAL_ENGINE_PATHS = [
+  'config/isolation/', 'test/worker-isolation-preflight.test.mjs', 'test/project-baseline.test.mjs',
+  'packages/daemon/src/contracts/team-control.ts',
+  'packages/daemon/src/team-control-surface.ts',
+  'packages/daemon/src/domain/plan-governance.ts',
+  'packages/daemon/src/db/migrations/104_team_governance.ts',
+  'packages/daemon/test/team-governance.test.ts',
+  'packages/daemon/test/team-migration.test.ts',
+];
 
 export class ImportError extends Error {
   constructor(code, message) {
@@ -241,7 +270,7 @@ export function verifyTree(audit, dest, { local = LOCAL_ENGINE_PATHS, adapted = 
     if (!same) (adapted.includes(rel) ? result.adapted : result.changed).push(rel);
   }
   for (const rel of files) {
-    if (!expected.has(rel) && !local.some((prefix) => rel === prefix || rel.startsWith(prefix))) {
+    if (!expected.has(rel) && !local.some((entry) => entry.endsWith('/') ? rel.startsWith(entry) : rel === entry)) {
       result.extra.push(rel);
     }
   }

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
+import { PlanGovernance } from "../src/domain/plan-governance.js";
 
 describe("Rig lifecycle routes", () => {
   let db: Database.Database;
@@ -15,6 +16,34 @@ describe("Rig lifecycle routes", () => {
   afterEach(() => {
     db.close();
   });
+
+  function createPendingRun(rigId: string, id: string) {
+    const governance = new PlanGovernance(db, setup.eventBus, new QueueRepository(db, setup.eventBus));
+    return governance.createRun({ id, rigId, binding: {
+      artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
+      planRef: "docs/plan.md", planDigest: `sha256:${"a".repeat(64)}`,
+      repository: { root: "/workspace/project", identity: `git:${"b".repeat(40)}` }, readPaths: ["src"], writePaths: ["src"], roles: ["lead"],
+      policyRevision: 1, policyFingerprint: `sha256:${"c".repeat(64)}`,
+      limits: { maxSessions: 3, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
+    } });
+  }
+
+  function failDeletionFinalization() {
+    db.exec(`CREATE TRIGGER fail_reservation_release BEFORE INSERT ON events
+      WHEN NEW.type = 'rig.deletion_fence' AND json_extract(NEW.payload, '$.phase') = 'released'
+      BEGIN SELECT RAISE(ABORT, 'reservation release failed'); END;`);
+  }
+
+  async function seedClaimedReleaseRig() {
+    const rig = setup.rigRepo.createRig("release-finalization");
+    const discovered = setup.discoveryRepo.upsertDiscoveredSession({
+      tmuxSession: "manual-finalization", tmuxPane: "%39", cwd: "/tmp", activeCommand: "codex", runtimeHint: "codex", confidence: "high",
+    });
+    setup.rigRepo.addNode(rig.id, "external.helper", { runtime: "codex" });
+    const claimed = await setup.claimService.bind({ discoveredId: discovered.id, rigId: rig.id, logicalId: "external.helper" });
+    expect(claimed.ok).toBe(true);
+    return { rig, discovered };
+  }
 
   it("POST /api/sessions/:sessionRef/unclaim releases a claimed session and reactivates discovery", async () => {
     const rig = setup.rigRepo.createRig("claim-rig");
@@ -110,6 +139,157 @@ describe("Rig lifecycle routes", () => {
 
     const killSession = setup.tmuxAdapter.killSession as ReturnType<typeof import("vitest").vi.fn>;
     expect(killSession).not.toHaveBeenCalled();
+  });
+
+  it("release with delete preserves governed rigs before unclaiming any session", async () => {
+    const rig = setup.rigRepo.createRig("governed-release");
+    const discovered = setup.discoveryRepo.upsertDiscoveredSession({
+      tmuxSession: "manual-governed", tmuxPane: "%9", cwd: "/tmp", activeCommand: "codex", runtimeHint: "codex", confidence: "high",
+    });
+    setup.rigRepo.addNode(rig.id, "external.helper", { runtime: "codex" });
+    const claimed = await setup.claimService.bind({ discoveredId: discovered.id, rigId: rig.id, logicalId: "external.helper" });
+    expect(claimed.ok).toBe(true);
+    db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
+      VALUES ('retained-run', ?, '{}', 'retained-binding', 'blocked', 'now', 'now')`).run(rig.id);
+    const sessionsBefore = setup.sessionRegistry.getSessionsForRig(rig.id);
+    const discoveryBefore = setup.discoveryRepo.getDiscoveredSession(discovered.id);
+    const rigBefore = setup.rigRepo.getRig(rig.id);
+    const eventsBefore = db.prepare("SELECT * FROM events").all();
+    const res = await setup.app.request(`/api/rigs/${rig.id}/release`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: true }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ ok: false, code: "governance_history" });
+    expect(setup.rigRepo.getRig(rig.id)).toEqual(rigBefore);
+    expect(setup.sessionRegistry.getSessionsForRig(rig.id)).toEqual(sessionsBefore);
+    expect(setup.discoveryRepo.getDiscoveredSession(discovered.id)).toEqual(discoveryBefore);
+    expect(db.prepare("SELECT * FROM events").all()).toEqual(eventsBefore);
+    expect(setup.tmuxAdapter.killSession).not.toHaveBeenCalled();
+  });
+
+  it("fences governance creation while destructive release awaits tmux metadata", async () => {
+    const rig = setup.rigRepo.createRig("release-interleaving");
+    const otherRig = setup.rigRepo.createRig("unrelated-governance");
+    const discovered = setup.discoveryRepo.upsertDiscoveredSession({
+      tmuxSession: "manual-interleaving", tmuxPane: "%19", cwd: "/tmp", activeCommand: "codex", runtimeHint: "codex", confidence: "high",
+    });
+    setup.rigRepo.addNode(rig.id, "external.helper", { runtime: "codex" });
+    expect((await setup.claimService.bind({ discoveredId: discovered.id, rigId: rig.id, logicalId: "external.helper" })).ok).toBe(true);
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => { entered = resolve; });
+    let resume!: () => void;
+    const continuation = new Promise<void>((resolve) => { resume = resolve; });
+    setup.tmuxAdapter.setSessionOption = async () => { entered(); await continuation; };
+    const release = setup.app.request(`/api/rigs/${rig.id}/release`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: true }),
+    });
+    await waiting;
+    let creationError: unknown;
+    const transactionHeld = db.inTransaction;
+    let otherRun: unknown;
+    try {
+      try { createPendingRun(rig.id, "racing-release-run"); } catch (error) { creationError = error; }
+      otherRun = createPendingRun(otherRig.id, "unrelated-run");
+    } finally { resume(); }
+    const response = await release;
+    expect(creationError).toMatchObject({ code: "rig_deletion_in_progress" });
+    expect(transactionHeld).toBe(false);
+    expect(otherRun).toMatchObject({ id: "unrelated-run", state: "pending" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ deleted: true });
+    expect(db.prepare("SELECT id FROM team_runs WHERE rig_id = ?").all(rig.id)).toEqual([]);
+    expect(setup.rigRepo.getRig(rig.id)).toBeNull();
+  });
+
+  it("performs no release effects when the deletion reservation fails to persist", async () => {
+    const rig = setup.rigRepo.createRig("release-reservation-failure");
+    const discovered = setup.discoveryRepo.upsertDiscoveredSession({
+      tmuxSession: "manual-reservation-failure", tmuxPane: "%29", cwd: "/tmp", activeCommand: "codex", runtimeHint: "codex", confidence: "high",
+    });
+    setup.rigRepo.addNode(rig.id, "external.helper", { runtime: "codex" });
+    expect((await setup.claimService.bind({ discoveredId: discovered.id, rigId: rig.id, logicalId: "external.helper" })).ok).toBe(true);
+    const sessionsBefore = setup.sessionRegistry.getSessionsForRig(rig.id);
+    const discoveryBefore = setup.discoveryRepo.getDiscoveredSession(discovered.id);
+    const eventsBefore = db.prepare("SELECT * FROM events").all();
+    let metadataTouched = false;
+    setup.tmuxAdapter.setSessionOption = async () => { metadataTouched = true; };
+    db.exec(`CREATE TRIGGER fail_deletion_reservation BEFORE INSERT ON events
+      WHEN NEW.type = 'rig.deletion_fence'
+      BEGIN SELECT RAISE(ABORT, 'reservation write failed'); END;`);
+    const response = await setup.app.request(`/api/rigs/${rig.id}/release`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: true }),
+    });
+    expect(response.status).toBe(500);
+    expect(metadataTouched).toBe(false);
+    expect(setup.sessionRegistry.getSessionsForRig(rig.id)).toEqual(sessionsBefore);
+    expect(setup.discoveryRepo.getDiscoveredSession(discovered.id)).toEqual(discoveryBefore);
+    expect(db.prepare("SELECT * FROM events").all()).toEqual(eventsBefore);
+    expect(setup.rigRepo.getRig(rig.id)).not.toBeNull();
+  });
+
+  it("reports committed release outcomes as partial when deletion finalization fails", async () => {
+    const { rig, discovered } = await seedClaimedReleaseRig();
+    failDeletionFinalization();
+    const response = await setup.app.request(`/api/rigs/${rig.id}/release`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: true }),
+    });
+    expect(setup.rigRepo.getRig(rig.id)).toBeNull();
+    expect(setup.discoveryRepo.getDiscoveredSession(discovered.id)?.status).toBe("active");
+    expect(() => setup.rigRepo.assertNoPendingDeletion(rig.id)).toThrow(/deletion is in progress/);
+    expect(response.status).toBe(207);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, status: "partial", deleted: true, failed: [],
+      deletionFinalization: { error: "reservation release failed", reservationId: expect.any(String) } });
+    expect(body.released).toHaveLength(1);
+    expect(body.warnings).toEqual([expect.stringMatching(/finalization failed.*reservation release failed/)]);
+    expect(setup.tmuxAdapter.killSession).not.toHaveBeenCalled();
+    expect(db.prepare("SELECT json_extract(payload, '$.phase') AS phase FROM events WHERE type = 'rig.deletion_fence' ORDER BY seq").all())
+      .toEqual([{ phase: "reserved" }]);
+  });
+
+  it.each(["service", "route"])("preserves the primary release error and deletion finalization failure through the %s", async (boundary) => {
+    const { rig } = await seedClaimedReleaseRig();
+    failDeletionFinalization();
+    db.exec(`CREATE TRIGGER fail_detachment BEFORE INSERT ON events
+      WHEN NEW.type = 'session.detached'
+      BEGIN SELECT RAISE(ABORT, 'session detachment failed'); END;`);
+    if (boundary === "service") {
+      const failure = await setup.rigLifecycleService.releaseRig(rig.id, { delete: true }).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(AggregateError);
+      expect(failure).toMatchObject({ cause: { message: "session detachment failed" },
+        errors: [expect.objectContaining({ message: "session detachment failed" }), expect.objectContaining({ message: "reservation release failed" })] });
+    } else {
+      const response = await setup.app.request(`/api/rigs/${rig.id}/release`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: true }),
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ error: expect.stringMatching(/session detachment failed.*reservation release failed/),
+        deletionFinalization: { error: "reservation release failed" } });
+    }
+    expect(setup.rigRepo.getRig(rig.id)).not.toBeNull();
+    expect(() => createPendingRun(rig.id, "retained-release-reservation")).toThrow(/deletion is in progress/);
+    expect(db.prepare("SELECT type FROM events WHERE type IN ('session.detached', 'rig.deleted')").all()).toEqual([]);
+  });
+
+  it("keeps node failures separate from deletion finalization warnings", async () => {
+    const { rig } = await seedClaimedReleaseRig();
+    setup.rigLifecycleService.unclaimSession = async () => ({ ok: false, code: "session_not_found", error: "claimed session disappeared" });
+    failDeletionFinalization();
+    const result = await setup.rigLifecycleService.releaseRig(rig.id, { delete: true });
+    expect(result).toMatchObject({ status: "partial", deleted: false, released: [],
+      failed: [expect.objectContaining({ logicalId: "external.helper", error: "claimed session disappeared" })],
+      warnings: [expect.stringMatching(/reservation release failed/)] });
+    expect(() => createPendingRun(rig.id, "partial-release-reservation")).toThrow(/deletion is in progress/);
+  });
+
+  it("does not run deletion finalization for a non-deleting release", async () => {
+    const { rig } = await seedClaimedReleaseRig();
+    failDeletionFinalization();
+    const result = await setup.rigLifecycleService.releaseRig(rig.id);
+    expect(result).toMatchObject({ status: "ok", deleted: false, failed: [] });
+    expect(result).not.toHaveProperty("deletionFinalization");
+    expect(result).not.toHaveProperty("warnings");
+    expect(createPendingRun(rig.id, "non-deleting-release").state).toBe("pending");
   });
 
   it("POST /api/rigs/:rigId/release refuses rigs containing launched nodes", async () => {

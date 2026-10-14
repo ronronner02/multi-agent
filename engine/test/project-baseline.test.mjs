@@ -227,6 +227,26 @@ describe('offline: import and verification', () => {
       assert.equal(statSync(path.join(dir, 'LICENSE')).mode & 0o777, 0o644);
     }));
 
+  test('local files match exactly while slash-terminated directories admit only descendants', () =>
+    withTempDir((dir) => {
+      const result = audit(archive(validEntries()));
+      importInto(result, dir);
+      const localFiles = [
+        'local/owned.ts', 'local/owned.ts.extra', 'local/adjacent.ts',
+        'config/isolation/policy.json', 'config/isolation-extra/policy.json',
+      ];
+      for (const rel of localFiles) {
+        mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        writeFileSync(path.join(dir, rel), 'local fixture');
+      }
+      const tree = verifyTree(result, dir, { local: ['local/owned.ts', 'config/isolation/'], adapted: [] });
+      assert.deepEqual(tree.missing, []);
+      assert.deepEqual(tree.changed, []);
+      assert.deepEqual(tree.extra.sort(), [
+        'config/isolation-extra/policy.json', 'local/adjacent.ts', 'local/owned.ts.extra',
+      ]);
+    }));
+
   test('reports changed, missing and extra files; declared adaptations are separated', () =>
     withTempDir((dir) => {
       const result = audit(archive(validEntries()));

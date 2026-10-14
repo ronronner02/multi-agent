@@ -2,8 +2,62 @@ import { describe, it, expect, vi } from "vitest";
 import { createFullTestDb, createTestApp, mockTmuxAdapter } from "./helpers/test-app.js";
 import { RigTeardownOrchestrator } from "../src/domain/rig-teardown.js";
 import { createApp } from "../src/server.js";
+import { DeliveryGuardError } from "../src/domain/seat-delivery-guard.js";
+import { RigNotFoundError } from "../src/domain/errors.js";
 
 describe("POST /api/down route", () => {
+  it("returns committed teardown details and warnings when deletion finalization fails", async () => {
+    const db = createFullTestDb();
+    try {
+      const { app, rigRepo, sessionRegistry } = createTestApp(db);
+      const rig = rigRepo.createRig("finalization-warning");
+      const node = rigRepo.addNode(rig.id, "n1");
+      const session = sessionRegistry.registerSession(node.id, "r01-finalization");
+      sessionRegistry.updateStatus(session.id, "running");
+      db.exec(`CREATE TRIGGER fail_reservation_release BEFORE INSERT ON events
+        WHEN NEW.type = 'rig.deletion_fence' AND json_extract(NEW.payload, '$.phase') = 'released'
+        BEGIN SELECT RAISE(ABORT, 'reservation release failed'); END;`);
+      const response = await app.request("/api/down", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rigId: rig.id, delete: true }),
+      });
+      expect(rigRepo.getRig(rig.id)).toBeNull();
+      expect(() => rigRepo.assertNoPendingDeletion(rig.id)).toThrow(/deletion is in progress/);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ deleted: true, sessionsKilled: 1,
+        deletionFinalization: { error: "reservation release failed" }, errors: [expect.stringMatching(/reservation release failed/)] });
+    } finally { db.close(); }
+  });
+
+  it.each([
+    ["internal", new Error("native stop failed"), 500, "rig_deletion_finalization_failed"],
+    ["delivery guard", new DeliveryGuardError("guard_target_changed", "seat changed"), 409, "guard_target_changed"],
+    ["not found", new RigNotFoundError("missing-during-stop"), 404, "rig_deletion_finalization_failed"],
+  ] as const)("preserves the %s response and both errors when deletion finalization fails", async (_kind, primaryError, status, code) => {
+    const db = createFullTestDb();
+    try {
+      const tmux = mockTmuxAdapter();
+      (tmux.killSession as ReturnType<typeof vi.fn>).mockRejectedValue(primaryError);
+      const { app, rigRepo, sessionRegistry } = createTestApp(db, { tmux });
+      const rig = rigRepo.createRig("dual-failure");
+      const node = rigRepo.addNode(rig.id, "n1");
+      const session = sessionRegistry.registerSession(node.id, "r01-dual-failure");
+      sessionRegistry.updateStatus(session.id, "running");
+      db.exec(`CREATE TRIGGER fail_reservation_release BEFORE INSERT ON events
+        WHEN NEW.type = 'rig.deletion_fence' AND json_extract(NEW.payload, '$.phase') = 'released'
+        BEGIN SELECT RAISE(ABORT, 'reservation release failed'); END;`);
+      const response = await app.request("/api/down", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rigId: rig.id, delete: true }),
+      });
+      expect(response.status).toBe(status);
+      const body = await response.json();
+      expect(body).toMatchObject({ code, deletionFinalization: { error: "reservation release failed" } });
+      expect(body.error).toContain(primaryError.message);
+      expect(body.error).toContain("reservation release failed");
+      expect(rigRepo.getRig(rig.id)).not.toBeNull();
+      expect(() => rigRepo.assertNoPendingDeletion(rig.id)).toThrow(/deletion is in progress/);
+    } finally { db.close(); }
+  });
+
   // R1: missing rigId -> 400
   it("returns 400 when rigId is missing", async () => {
     const { app } = createTestApp(createFullTestDb());

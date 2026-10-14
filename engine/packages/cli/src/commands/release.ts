@@ -58,8 +58,13 @@ Notes:
 
       if (status === "partial") {
         console.error(`Partially released ${released.length} claimed session(s) from rig ${rigId}`);
+        if (res.data["deleted"] === true) console.error("Rig deleted");
         for (const entry of failed) {
           console.error(`  ${entry["logicalId"]}: ${entry["error"]}`);
+        }
+        const warnings = Array.isArray(res.data["warnings"]) ? res.data["warnings"] : [];
+        for (const warning of warnings) {
+          if (typeof warning === "string") console.error(`  warning: ${warning}`);
         }
         process.exitCode = 1;
         return;

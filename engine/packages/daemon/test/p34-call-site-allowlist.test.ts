@@ -23,9 +23,9 @@
 //
 // WHAT THIS GUARD DOES NOT CLAIM. It is a CHECK-TIME guard, not runtime
 // enforcement. better-sqlite3 exposes no commit hook and each writer owns its own
-// db.transaction, so a fourth writer can be FIXED at runtime but never CAUGHT
+// db.transaction, so an additional writer can be FIXED at runtime but never CAUGHT
 // there. The honest wave claim is therefore permanent: "impossible via the queue's
-// terminal verbs; a fourth writer FAILS THE GUARD at check time; not
+// terminal verbs; an additional writer FAILS THE GUARD at check time; not
 // runtime-enforced." Never bare "impossible".
 
 import { describe, it, expect } from "vitest";
@@ -55,6 +55,10 @@ import { join } from "node:path";
  *  label is the point: adding a writer means stating what it does, not just
  *  silencing a checker. */
 const SANCTIONED: Record<string, { sites: number; why: string }> = {
+  "domain/plan-governance.ts": {
+    sites: 1,
+    why: "governance-owned task transition joins queue state, authority evidence and events in one post-commit notification envelope",
+  },
   "domain/mission-control/mission-control-write-contract.ts": {
     sites: 2,
     why: "P34 terminal close + successor create (route/handoff) at :160; the non-terminal resolve update at :415",
@@ -202,9 +206,9 @@ describe("P34 RED 3 — the enumeration guard (rev 2: call-site granularity)", (
   it("the LIVE corpus matches the sanctioned set exactly, by CALL SITE", () => {
     const result = checkCallSites(realCorpus(), SANCTIONED);
     expect(result.violations).toEqual([]);
-    // Counts SITES, not files. 12 sites across 3 files.
+    // Counts SITES, not files. 13 sites across 4 files.
     expect(result.examined).toBe(TOTAL_SITES);
-    expect(result.examined).toBe(12);
+    expect(result.examined).toBe(13);
     expect(result.vacuous).toBe(false);
   });
 
@@ -308,6 +312,6 @@ describe("P34 RED 5 — KNOWN-NEGATIVE: a guard that examines nothing must FAIL"
   it("the LIVE run is NOT vacuous and examined the expected number of SITES", () => {
     const live = checkCallSites(realCorpus(), SANCTIONED);
     expect(live.vacuous).toBe(false);
-    expect(live.examined).toBe(12);
+    expect(live.examined).toBe(13);
   });
 });

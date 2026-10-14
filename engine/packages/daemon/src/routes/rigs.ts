@@ -3,7 +3,7 @@ import { DeliveryGuardError } from "../domain/seat-delivery-guard.js";
 import { Hono } from "hono";
 import { observeInventoryHandler, observeInventoryQuery } from "../domain/request-phase-observer.js";
 import type Database from "better-sqlite3";
-import type { RigRepository } from "../domain/rig-repository.js";
+import { RigDeletionBlockedError, RigDeletionInProgressError, RigDeletionFinalizationError, type RigRepository } from "../domain/rig-repository.js";
 import type { SessionRegistry } from "../domain/session-registry.js";
 import type { EventBus } from "../domain/event-bus.js";
 import { summarizeSnapshot, type SnapshotRepository } from "../domain/snapshot-repository.js";
@@ -37,7 +37,7 @@ import type { Pod, ExpansionPodFragment } from "../domain/types.js";
 import type { RigExpansionService } from "../domain/rig-expansion-service.js";
 import type { PodRigInstantiator } from "../domain/rigspec-instantiator.js";
 import { convergeOp } from "../domain/topology-converge.js";
-import type { RigLifecycleService } from "../domain/rig-lifecycle-service.js";
+import type { RigLifecycleService, ReleaseRigResult } from "../domain/rig-lifecycle-service.js";
 import type { SelfAttachService } from "../domain/self-attach-service.js";
 
 export const rigsRoutes = new Hono();
@@ -455,6 +455,8 @@ rigsRoutes.delete("/:id", async (c) => {
   });
 
   try {
+    if (repo.hasGovernanceHistory(rigId)) throw new RigDeletionBlockedError();
+    repo.assertNoPendingDeletion(rigId);
     const remove = async () => {
       const persistedEvent = txn();
       eventBus.notifySubscribers(persistedEvent);
@@ -464,6 +466,7 @@ rigsRoutes.delete("/:id", async (c) => {
     return guard ? await guard.lifecycle(rig.nodes.map(node => node.id), remove) : await remove();
   } catch (err) {
     if (err instanceof DeliveryGuardError) throw err;
+    if (err instanceof RigDeletionBlockedError || err instanceof RigDeletionInProgressError) return c.json({ code: err.code, error: err.message }, 409);
     return c.json({ error: "delete failed" }, 500);
   }
 });
@@ -543,9 +546,17 @@ rigsRoutes.post("/:id/release", async (c) => {
   }
 
   const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
-  const result = await rigLifecycleService.releaseRig(rigId, {
-    delete: body["delete"] === true,
-  });
+  let result: ReleaseRigResult;
+  try {
+    result = await rigLifecycleService.releaseRig(rigId, {
+      delete: body["delete"] === true,
+    });
+  } catch (error) {
+    if (!(error instanceof RigDeletionFinalizationError)) throw error;
+    const primary = error.cause;
+    return c.json({ ok: false, code: primary instanceof DeliveryGuardError ? primary.code : error.code,
+      error: error.message, deletionFinalization: error.finalization }, primary instanceof DeliveryGuardError ? 409 : 500);
+  }
 
   if (result.ok) {
     return c.json(result, result.status === "partial" ? 207 : 200);
@@ -555,6 +566,8 @@ rigsRoutes.post("/:id/release", async (c) => {
     case "rig_not_found":
       return c.json(result, 404);
     case "contains_launched_nodes":
+    case "governance_history":
+    case "rig_deletion_in_progress":
       return c.json(result, 409);
     default:
       return c.json(result, 500);

@@ -106,6 +106,7 @@ export interface Session {
 // -- Event types --
 
 export type RigEvent =
+  | import("../contracts/team-control.js").TeamControlEvent
   | { type: "proof.judged" | "proof.sources_changed"; scope: string; revision: string }
   | { type: "event.delivery_poisoned"; poisonedSeq: number; error: string; payloadSha: string }
   | { type: "rig.created"; rigId: string }
@@ -123,6 +124,7 @@ export type RigEvent =
       channels: Array<{ channel: string; target: string | null; status: string; detail?: string }>;
     }
   | { type: "rig.deleted"; rigId: string }
+  | { type: "rig.deletion_fence"; version: 1; rigId: string; reservationId: string; operation: "release" | "teardown"; phase: "reserved" | "released" }
   | { type: "node.added"; rigId: string; nodeId: string; logicalId: string }
   | { type: "node.removed"; rigId: string; nodeId: string }
   | { type: "binding.updated"; rigId: string; nodeId: string }
