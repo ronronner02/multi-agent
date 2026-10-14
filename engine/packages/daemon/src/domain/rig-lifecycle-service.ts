@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { RigRepository } from "./rig-repository.js";
+import { RigDeletionBlockedError, RigDeletionInProgressError, RigDeletionFinalizationError, type RigDeletionFinalizationFailure, type RigRepository } from "./rig-repository.js";
 import type { SessionRegistry } from "./session-registry.js";
 import type { DiscoveryRepository } from "./discovery-repository.js";
 import type { EventBus } from "./event-bus.js";
@@ -97,10 +97,12 @@ export type ReleaseRigResult =
         sessionName: string | null;
         error: string;
       }>;
+      warnings?: string[];
+      deletionFinalization?: RigDeletionFinalizationFailure;
     }
   | {
       ok: false;
-      code: "rig_not_found" | "contains_launched_nodes";
+      code: "rig_not_found" | "contains_launched_nodes" | "governance_history" | "rig_deletion_in_progress";
       error: string;
       launchedLogicalIds?: string[];
     };
@@ -263,6 +265,10 @@ export class RigLifecycleService {
       return { ok: false, code: "rig_not_found", error: `Rig '${rigId}' not found.` };
     }
 
+    if (opts?.delete && this.rigRepo.hasGovernanceHistory(rigId)) {
+      return { ok: false, code: "governance_history", error: "Rig has retained governance history; release without deletion or archive it." };
+    }
+
     const rows = this.db.prepare(`
       SELECT
         n.id AS node_id,
@@ -294,73 +300,103 @@ export class RigLifecycleService {
       };
     }
 
-    const released: Array<{
-      nodeId: string;
-      logicalId: string;
-      sessionId: string;
-      sessionName: string;
-    }> = [];
-    const failed: Array<{
-      nodeId: string;
-      logicalId: string;
-      sessionId: string | null;
-      sessionName: string | null;
-      error: string;
-    }> = [];
-
-    for (const row of rows) {
-      if (!row.session_id || row.session_origin !== "claimed") continue;
-      const result = await this.unclaimSession(row.session_id);
-      if (result.ok) {
-        released.push({
-          nodeId: result.nodeId,
-          logicalId: result.logicalId,
-          sessionId: result.sessionId,
-          sessionName: result.sessionName,
-        });
-      } else {
-        failed.push({
-          nodeId: row.node_id,
-          logicalId: row.logical_id,
-          sessionId: row.session_id,
-          sessionName: row.session_name,
-          error: result.error,
-        });
+    let reservationId: string | undefined;
+    if (opts?.delete) {
+      try { reservationId = this.rigRepo.reserveRigDeletion(rigId, "release", this.eventBus); }
+      catch (error) {
+        if (error instanceof RigDeletionBlockedError || error instanceof RigDeletionInProgressError) {
+          return { ok: false, code: error.code, error: error.message };
+        }
+        throw error;
       }
     }
+    let outcome: Extract<ReleaseRigResult, { ok: true }> | undefined;
+    let primaryFailure: { error: unknown } | undefined;
+    try {
+      const released: Array<{
+        nodeId: string;
+        logicalId: string;
+        sessionId: string;
+        sessionName: string;
+      }> = [];
+      const failed: Array<{
+        nodeId: string;
+        logicalId: string;
+        sessionId: string | null;
+        sessionName: string | null;
+        error: string;
+      }> = [];
 
-    let deleted = false;
-    if (failed.length === 0 && opts?.delete) {
-      let persistedSeq = 0;
-      let persistedAt = "";
-      const tx = this.db.transaction(() => {
-        const event = this.eventBus.persistWithinTransaction({
+      for (const row of rows) {
+        if (!row.session_id || row.session_origin !== "claimed") continue;
+        const result = await this.unclaimSession(row.session_id);
+        if (result.ok) {
+          released.push({
+            nodeId: result.nodeId,
+            logicalId: result.logicalId,
+            sessionId: result.sessionId,
+            sessionName: result.sessionName,
+          });
+        } else {
+          failed.push({
+            nodeId: row.node_id,
+            logicalId: row.logical_id,
+            sessionId: row.session_id,
+            sessionName: row.session_name,
+            error: result.error,
+          });
+        }
+      }
+
+      let deleted = false;
+      if (failed.length === 0 && opts?.delete) {
+        let persistedSeq = 0;
+        let persistedAt = "";
+        const tx = this.db.transaction(() => {
+          const event = this.eventBus.persistWithinTransaction({
+            type: "rig.deleted",
+            rigId,
+          });
+          persistedSeq = event.seq;
+          persistedAt = event.createdAt;
+          this.rigRepo.deleteRig(rigId, reservationId);
+        });
+        tx();
+
+        this.eventBus.notifySubscribers({
           type: "rig.deleted",
           rigId,
+          seq: persistedSeq,
+          createdAt: persistedAt,
         });
-        persistedSeq = event.seq;
-        persistedAt = event.createdAt;
-        this.rigRepo.deleteRig(rigId);
-      });
-      tx();
+        deleted = true;
+      }
 
-      this.eventBus.notifySubscribers({
-        type: "rig.deleted",
+      outcome = {
+        ok: true,
+        status: failed.length > 0 ? "partial" : "ok",
         rigId,
-        seq: persistedSeq,
-        createdAt: persistedAt,
-      });
-      deleted = true;
+        deleted,
+        released,
+        failed,
+      };
+      return outcome;
+    } catch (error) {
+      primaryFailure = { error };
+      throw error;
+    } finally {
+      if (reservationId !== undefined) {
+        try {
+          this.rigRepo.finishRigDeletion(rigId, reservationId, this.eventBus);
+        } catch (error) {
+          const failure = new RigDeletionFinalizationError(reservationId, error, primaryFailure);
+          if (primaryFailure || !outcome) throw failure;
+          outcome.status = "partial";
+          outcome.warnings = [failure.warning];
+          outcome.deletionFinalization = failure.finalization;
+        }
+      }
     }
-
-    return {
-      ok: true,
-      status: failed.length > 0 ? "partial" : "ok",
-      rigId,
-      deleted,
-      released,
-      failed,
-    };
   }
 
   async removeNode(

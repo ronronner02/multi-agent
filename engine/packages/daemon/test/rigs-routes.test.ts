@@ -7,6 +7,8 @@ import type { SnapshotRepository } from "../src/domain/snapshot-repository.js";
 import type { SnapshotCapture } from "../src/domain/snapshot-capture.js";
 import type { RestoreOrchestrator } from "../src/domain/restore-orchestrator.js";
 import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
+import { PlanGovernance } from "../src/domain/plan-governance.js";
+import { QueueRepository } from "../src/domain/queue-repository.js";
 import { SeatIdentityStore } from "../src/domain/seat-identity-store.js";
 
 function insertStartupContextRow(db: Database.Database, nodeId: string) {
@@ -17,6 +19,7 @@ function insertStartupContextRow(db: Database.Database, nodeId: string) {
 
 describe("Rig CRUD routes", () => {
   let db: Database.Database;
+  let setup: ReturnType<typeof createTestApp>;
   let app: Hono;
   let repo: RigRepository;
   let sessionRegistry: SessionRegistry;
@@ -26,7 +29,7 @@ describe("Rig CRUD routes", () => {
 
   beforeEach(() => {
     db = createFullTestDb();
-    const setup = createTestApp(db);
+    setup = createTestApp(db);
     app = setup.app;
     repo = setup.rigRepo;
     sessionRegistry = setup.sessionRegistry;
@@ -103,6 +106,71 @@ describe("Rig CRUD routes", () => {
     const res = await app.request(`/api/rigs/${rig.id}`, { method: "DELETE" });
     expect(res.status).toBe(204);
     expect(repo.getRig(rig.id)).toBeNull();
+  });
+
+  it("DELETE /api/rigs/:id returns a history-preserving conflict before lifecycle effects", async () => {
+    const rig = repo.createRig("governed");
+    const governance = new PlanGovernance(db, setup.eventBus, new QueueRepository(db, setup.eventBus));
+    governance.createRun({ id: "retained-run", rigId: rig.id, binding: {
+      artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
+      planRef: "docs/plan.md", planDigest: `sha256:${"a".repeat(64)}`,
+      repository: { root: "/workspace/project", identity: `git:${"b".repeat(40)}` }, readPaths: ["src"], writePaths: ["src"], roles: ["lead"],
+      policyRevision: 1, policyFingerprint: `sha256:${"c".repeat(64)}`,
+      limits: { maxSessions: 3, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
+    } });
+    const runBefore = governance.getRun("retained-run");
+    const eventsBefore = db.prepare("SELECT * FROM events").all();
+    const notifications: unknown[] = []; setup.eventBus.subscribe((event) => notifications.push(event));
+    const lifecycle = vi.fn(async (_ids: string[], remove: () => Promise<Response>) => remove());
+    setup.tmuxAdapter.deliveryGuard = { lifecycle } as never;
+    const res = await app.request(`/api/rigs/${rig.id}`, { method: "DELETE" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "governance_history" });
+    expect(repo.getRig(rig.id)).not.toBeNull();
+    expect(governance.getRun("retained-run")).toEqual(runBefore);
+    expect(db.prepare("SELECT * FROM events").all()).toEqual(eventsBefore);
+    expect(notifications).toEqual([]);
+    expect(lifecycle).not.toHaveBeenCalled();
+  });
+
+  it("rechecks governance inside DELETE's transaction after an interleaved history insertion", async () => {
+    const rig = repo.createRig("interleaved-history");
+    const eventsBefore = db.prepare("SELECT * FROM events").all();
+    const notifications: unknown[] = []; setup.eventBus.subscribe((event) => notifications.push(event));
+    const lifecycle = vi.fn(async (_ids: string[], remove: () => Promise<Response>) => {
+      db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
+        VALUES ('interleaved-run', ?, '{}', 'retained-binding', 'pending', 'now', 'now')`).run(rig.id);
+      return remove();
+    });
+    setup.tmuxAdapter.deliveryGuard = { lifecycle } as never;
+    const res = await app.request(`/api/rigs/${rig.id}`, { method: "DELETE" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "governance_history" });
+    expect(lifecycle).toHaveBeenCalledOnce();
+    expect(repo.getRig(rig.id)).not.toBeNull();
+    expect(db.prepare("SELECT id FROM team_runs").all()).toEqual([{ id: "interleaved-run" }]);
+    expect(db.prepare("SELECT * FROM events").all()).toEqual(eventsBefore);
+    expect(notifications).toEqual([]);
+  });
+
+  it("deleting routes reject another lifecycle operation's reservation before entering its delivery guard", async () => {
+    const rig = repo.createRig("deletion-already-reserved");
+    const reservation = repo.reserveRigDeletion(rig.id, "teardown", setup.eventBus);
+    const eventsBefore = db.prepare("SELECT * FROM events").all();
+    const lifecycle = vi.fn(async (_ids: string[], remove: () => Promise<Response>) => remove());
+    setup.tmuxAdapter.deliveryGuard = { lifecycle } as never;
+    const response = await app.request(`/api/rigs/${rig.id}`, { method: "DELETE" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "rig_deletion_in_progress" });
+    const release = await app.request(`/api/rigs/${rig.id}/release`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delete: true }),
+    });
+    expect(release.status).toBe(409);
+    expect(await release.json()).toMatchObject({ code: "rig_deletion_in_progress" });
+    expect(lifecycle).not.toHaveBeenCalled();
+    expect(repo.getRig(rig.id)).not.toBeNull();
+    expect(db.prepare("SELECT * FROM events").all()).toEqual(eventsBefore);
+    repo.finishRigDeletion(rig.id, reservation, setup.eventBus);
   });
 
   it("DELETE /api/rigs/:id -> rig.deleted event row in DB", async () => {

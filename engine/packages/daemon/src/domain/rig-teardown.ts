@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { RigRepository } from "./rig-repository.js";
+import { RigDeletionBlockedError, RigDeletionInProgressError, RigDeletionFinalizationError, type RigDeletionFinalizationFailure, type RigRepository } from "./rig-repository.js";
 import type { SessionRegistry } from "./session-registry.js";
 import type { TmuxAdapter } from "../adapters/tmux.js";
 import type { SnapshotCapture } from "./snapshot-capture.js";
@@ -20,6 +20,7 @@ export interface TeardownResult {
   deleteBlocked: boolean;
   alreadyStopped: boolean;
   errors: string[];
+  deletionFinalization?: RigDeletionFinalizationFailure;
 }
 
 interface TeardownOptions {
@@ -75,26 +76,134 @@ export class RigTeardownOrchestrator {
     const rig = this.deps.rigRepo.getRig(rigId);
     if (!rig) throw new RigNotFoundError(rigId);
 
-    const guard = this.deps.tmuxAdapter.deliveryGuard;
-    const ids = rig.nodes.map(node => node.id);
-    if (guard && ids.some(id => !guard.ownsLifecycle(id))) return guard.lifecycle(ids, () => this.teardown(rigId, opts));
     const result: TeardownResult = {
       rigId, sessionsKilled: 0, snapshotId: null,
       deleted: false, deleteBlocked: false, alreadyStopped: false, errors: [],
     };
-    const archived = this.db.prepare("SELECT archived_at FROM rigs WHERE id = ?").get(rigId) as { archived_at: string | null };
-    // A live seat can create its guidance while teardown awaits tmux. Resolve
-    // file identities only after those waits, immediately before each cleanup.
-    const currentLiveGuidanceTargets = () => this.liveGuidanceTargets(rigId);
+    if (opts?.delete && this.deps.rigRepo.hasGovernanceHistory(rigId)) {
+      result.deleteBlocked = true;
+      result.errors.push("Rig has retained governance history; stop without deletion or archive it.");
+      return result;
+    }
+    const guard = this.deps.tmuxAdapter.deliveryGuard;
+    const ids = rig.nodes.map(node => node.id);
+    if (guard && ids.some(id => !guard.ownsLifecycle(id))) return guard.lifecycle(ids, () => this.teardown(rigId, opts));
+    let reservationId: string | undefined;
+    if (opts?.delete) {
+      try { reservationId = this.deps.rigRepo.reserveRigDeletion(rigId, "teardown", this.deps.eventBus); }
+      catch (error) {
+        if (error instanceof RigDeletionBlockedError || error instanceof RigDeletionInProgressError) {
+          result.deleteBlocked = true;
+          result.errors.push(error.message);
+          return result;
+        }
+        throw error;
+      }
+    }
+    let primaryFailure: { error: unknown } | undefined;
+    try {
+      const archived = this.db.prepare("SELECT archived_at FROM rigs WHERE id = ?").get(rigId) as { archived_at: string | null };
+      // A live seat can create its guidance while teardown awaits tmux. Resolve
+      // file identities only after those waits, immediately before each cleanup.
+      const currentLiveGuidanceTargets = () => this.liveGuidanceTargets(rigId);
 
-    // 2. Get latest session per node
-    const liveSessions = this.getLatestLiveSessions(rigId);
+      // 2. Get latest session per node
+      const liveSessions = this.getLatestLiveSessions(rigId);
 
-    // 3. Check if already stopped
-    if (liveSessions.length === 0) {
+      // 3. Check if already stopped
+      if (liveSessions.length === 0) {
+        this.cleanupManagedGuidanceFiles(rigId, currentLiveGuidanceTargets());
+        result.alreadyStopped = true;
+        // Still tear down services even if no agent sessions are running
+        if (this.deps.serviceOrchestrator) {
+          try {
+            const serviceResult = await this.deps.serviceOrchestrator.teardown(rigId);
+            if (!serviceResult.ok) result.errors.push(`Service teardown warning: ${serviceResult.error}`);
+            else if (serviceResult.kept) result.errors.push(serviceResult.kept);
+          } catch (err) {
+            result.errors.push(`Service teardown warning: ${(err as Error).message}`);
+          }
+        }
+        // Skip to delete if requested
+        if (opts?.delete) {
+          this.atomicDelete(rigId, reservationId);
+          result.deleted = true;
+        } else {
+          this.deps.eventBus.emit({ type: "rig.stopped", rigId });
+        }
+        return result;
+      }
+
+      // 4. Auto-snapshot before teardown (always, best-effort)
+      try {
+        if (this.deps.resumeMetadataRefresher) {
+          // A live namesake cannot supply resume metadata for an archived row.
+          // Keep that row's own token in the snapshot, just as the kill below
+          // leaves the other owner's session alone.
+          const refreshableSessions = archived.archived_at === null ? liveSessions : liveSessions.filter(
+            session => findOtherSessionOwner(this.db, session.sessionName, session.nodeId, { ignoreArchived: true }) === null,
+          );
+          await this.deps.resumeMetadataRefresher.refresh(refreshableSessions);
+        }
+      } catch (err) {
+        result.errors.push(`Resume metadata refresh failed: ${(err as Error).message}`);
+      }
+      // Discovery is best-effort; preserve the durable ledger even if it fails.
+      try {
+        const snap = this.deps.snapshotCapture.captureSnapshot(rigId, "auto-pre-down");
+        result.snapshotId = snap.id;
+      } catch (err) {
+        result.errors.push(`Snapshot failed: ${(err as Error).message}`);
+        // Best-effort — teardown proceeds even if snapshot fails
+      }
+
+      // 5. Kill each live session
+      let killFailures = 0;
+      for (const session of liveSessions) {
+        // An archived rig may retain a stale row for a name now owned by a live rig.
+        // That name cannot identify the archived rig's tmux session for a kill.
+        const ownedByAnotherRig = archived.archived_at !== null && findOtherSessionOwner(
+          this.db, session.sessionName, session.nodeId, { ignoreArchived: true },
+        ) !== null;
+        let absent = ownedByAnotherRig;
+        if (!absent && this.deps.tmuxAdapter.probeSession) {
+          try {
+            const probe = await this.deps.tmuxAdapter.probeSession(session.sessionName);
+            absent = probe.state === "absent";
+            if (probe.state !== "present" && !absent) {
+              result.errors.push(`Could not confirm session '${session.sessionName}' is absent: ${probe.state === "transport_unavailable" ? probe.cause : probe.state}`);
+              killFailures++;
+              continue;
+            }
+          } catch (err) {
+            result.errors.push(`Could not check session '${session.sessionName}': ${(err as Error).message}`);
+            killFailures++;
+            continue;
+          }
+        }
+        const killResult = absent ? { ok: false, code: "session_not_found" } :
+          await this.deps.tmuxAdapter.killSession(session.sessionName);
+
+        const missingSession = (killResult as { code?: string; message?: string }).code === "session_not_found" &&
+          !/no server running/i.test((killResult as { message?: string }).message ?? "");
+        if (killResult.ok || missingSession) {
+          // Stop capture only when termination is confirmed. A failed kill leaves
+          // the session running. An archived namesake leaves the live owner's
+          // rotation intact even when its stale row is removed.
+          if (!ownedByAnotherRig) stopTranscriptRotation(session.sessionName);
+          // Success or already gone — update DB atomically
+          this.atomicNodeCleanup(session);
+          this.cleanupManagedGuidanceFileForNode(rigId, session.runtime, session.cwd, currentLiveGuidanceTargets());
+          if (killResult.ok) result.sessionsKilled++;
+        } else {
+          // Real kill failure — don't update this node
+          result.errors.push(`Kill failed for session '${session.sessionName}': ${(killResult as { message?: string }).message ?? "unknown"}`);
+          killFailures++;
+        }
+      }
       this.cleanupManagedGuidanceFiles(rigId, currentLiveGuidanceTargets());
-      result.alreadyStopped = true;
-      // Still tear down services even if no agent sessions are running
+
+      // 5b. Tear down services if they exist
       if (this.deps.serviceOrchestrator) {
         try {
           const serviceResult = await this.deps.serviceOrchestrator.teardown(rigId);
@@ -102,120 +211,46 @@ export class RigTeardownOrchestrator {
           else if (serviceResult.kept) result.errors.push(serviceResult.kept);
         } catch (err) {
           result.errors.push(`Service teardown warning: ${(err as Error).message}`);
+          // Best-effort — rig teardown continues
         }
       }
-      // Skip to delete if requested
+
+      // 6. Delete if requested (blocked by kill failures)
       if (opts?.delete) {
-        this.atomicDelete(rigId);
-        result.deleted = true;
+        if (killFailures > 0) {
+          result.errors.push("Rig deletion blocked: some sessions could not be killed");
+          result.deleted = false;
+          result.deleteBlocked = true;
+        } else {
+          try {
+            this.atomicDelete(rigId, reservationId);
+            result.deleted = true;
+          } catch (err) {
+            result.errors.push(`Rig deletion failed: ${(err as Error).message}`);
+            result.deleted = false;
+          }
+        }
       } else {
+        // Emit stopped event
         this.deps.eventBus.emit({ type: "rig.stopped", rigId });
       }
+
       return result;
-    }
-
-    // 4. Auto-snapshot before teardown (always, best-effort)
-    try {
-      if (this.deps.resumeMetadataRefresher) {
-        // A live namesake cannot supply resume metadata for an archived row.
-        // Keep that row's own token in the snapshot, just as the kill below
-        // leaves the other owner's session alone.
-        const refreshableSessions = archived.archived_at === null ? liveSessions : liveSessions.filter(
-          session => findOtherSessionOwner(this.db, session.sessionName, session.nodeId, { ignoreArchived: true }) === null,
-        );
-        await this.deps.resumeMetadataRefresher.refresh(refreshableSessions);
-      }
-    } catch (err) {
-      result.errors.push(`Resume metadata refresh failed: ${(err as Error).message}`);
-    }
-    // Discovery is best-effort; preserve the durable ledger even if it fails.
-    try {
-      const snap = this.deps.snapshotCapture.captureSnapshot(rigId, "auto-pre-down");
-      result.snapshotId = snap.id;
-    } catch (err) {
-      result.errors.push(`Snapshot failed: ${(err as Error).message}`);
-      // Best-effort — teardown proceeds even if snapshot fails
-    }
-
-    // 5. Kill each live session
-    let killFailures = 0;
-    for (const session of liveSessions) {
-      // An archived rig may retain a stale row for a name now owned by a live rig.
-      // That name cannot identify the archived rig's tmux session for a kill.
-      const ownedByAnotherRig = archived.archived_at !== null && findOtherSessionOwner(
-        this.db, session.sessionName, session.nodeId, { ignoreArchived: true },
-      ) !== null;
-      let absent = ownedByAnotherRig;
-      if (!absent && this.deps.tmuxAdapter.probeSession) {
+    } catch (error) {
+      primaryFailure = { error };
+      throw error;
+    } finally {
+      if (reservationId !== undefined) {
         try {
-          const probe = await this.deps.tmuxAdapter.probeSession(session.sessionName);
-          absent = probe.state === "absent";
-          if (probe.state !== "present" && !absent) {
-            result.errors.push(`Could not confirm session '${session.sessionName}' is absent: ${probe.state === "transport_unavailable" ? probe.cause : probe.state}`);
-            killFailures++;
-            continue;
-          }
-        } catch (err) {
-          result.errors.push(`Could not check session '${session.sessionName}': ${(err as Error).message}`);
-          killFailures++;
-          continue;
+          this.deps.rigRepo.finishRigDeletion(rigId, reservationId, this.deps.eventBus);
+        } catch (error) {
+          const failure = new RigDeletionFinalizationError(reservationId, error, primaryFailure);
+          if (primaryFailure) throw failure;
+          result.errors.push(failure.warning);
+          result.deletionFinalization = failure.finalization;
         }
       }
-      const killResult = absent ? { ok: false, code: "session_not_found" } :
-        await this.deps.tmuxAdapter.killSession(session.sessionName);
-
-      const missingSession = (killResult as { code?: string; message?: string }).code === "session_not_found" &&
-        !/no server running/i.test((killResult as { message?: string }).message ?? "");
-      if (killResult.ok || missingSession) {
-        // Stop capture only when termination is confirmed. A failed kill leaves
-        // the session running. An archived namesake leaves the live owner's
-        // rotation intact even when its stale row is removed.
-        if (!ownedByAnotherRig) stopTranscriptRotation(session.sessionName);
-        // Success or already gone — update DB atomically
-        this.atomicNodeCleanup(session);
-        this.cleanupManagedGuidanceFileForNode(rigId, session.runtime, session.cwd, currentLiveGuidanceTargets());
-        if (killResult.ok) result.sessionsKilled++;
-      } else {
-        // Real kill failure — don't update this node
-        result.errors.push(`Kill failed for session '${session.sessionName}': ${(killResult as { message?: string }).message ?? "unknown"}`);
-        killFailures++;
-      }
     }
-    this.cleanupManagedGuidanceFiles(rigId, currentLiveGuidanceTargets());
-
-    // 5b. Tear down services if they exist
-    if (this.deps.serviceOrchestrator) {
-      try {
-        const serviceResult = await this.deps.serviceOrchestrator.teardown(rigId);
-        if (!serviceResult.ok) result.errors.push(`Service teardown warning: ${serviceResult.error}`);
-        else if (serviceResult.kept) result.errors.push(serviceResult.kept);
-      } catch (err) {
-        result.errors.push(`Service teardown warning: ${(err as Error).message}`);
-        // Best-effort — rig teardown continues
-      }
-    }
-
-    // 6. Delete if requested (blocked by kill failures)
-    if (opts?.delete) {
-      if (killFailures > 0) {
-        result.errors.push("Rig deletion blocked: some sessions could not be killed");
-        result.deleted = false;
-        result.deleteBlocked = true;
-      } else {
-        try {
-          this.atomicDelete(rigId);
-          result.deleted = true;
-        } catch (err) {
-          result.errors.push(`Rig deletion failed: ${(err as Error).message}`);
-          result.deleted = false;
-        }
-      }
-    } else {
-      // Emit stopped event
-      this.deps.eventBus.emit({ type: "rig.stopped", rigId });
-    }
-
-    return result;
   }
 
   /** Atomically mark session exited + clear binding + persist event */
@@ -228,14 +263,14 @@ export class RigTeardownOrchestrator {
   }
 
   /** Atomically delete rig + persist rig.deleted event */
-  private atomicDelete(rigId: string): void {
+  private atomicDelete(rigId: string, reservationId?: string): void {
     let persistedSeq = 0;
     let persistedAt = "";
     const tx = this.db.transaction(() => {
       const event = this.deps.eventBus.persistWithinTransaction({ type: "rig.deleted", rigId });
       persistedSeq = event.seq;
       persistedAt = event.createdAt;
-      this.deps.rigRepo.deleteRig(rigId);
+      this.deps.rigRepo.deleteRig(rigId, reservationId);
     });
     tx();
     this.deps.eventBus.notifySubscribers({

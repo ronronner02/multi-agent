@@ -82,6 +82,18 @@ describe("Lifecycle CLI commands", () => {
         return;
       }
 
+      if (req.method === "POST" && req.url === "/api/rigs/rig-finalization-failed/release") {
+        res.writeHead(207, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          ok: true, status: "partial", rigId: "rig-finalization-failed", deleted: true,
+          released: [{ nodeId: "node-1", logicalId: "external.helper", sessionId: "session-123", sessionName: "manual-helper" }],
+          failed: [],
+          warnings: ["Deletion reservation reservation-1 finalization failed: reservation release failed. Reservation state requires reconciliation."],
+          deletionFinalization: { reservationId: "reservation-1", error: "reservation release failed" },
+        }));
+        return;
+      }
+
       if (req.method === "POST" && req.url === "/api/rigs/rig-launched/release") {
         res.writeHead(409, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
@@ -233,6 +245,32 @@ describe("Lifecycle CLI commands", () => {
     expect(exitCode).toBeUndefined();
     expect(logs.join("\n")).toContain("Released claimed session manual-helper");
     expect(logs.join("\n")).toContain("external.helper");
+  });
+
+  it("release reports completed deletion and finalization warnings with a nonzero exit", async () => {
+    const program = new Command();
+    program.exitOverride();
+    program.addCommand(releaseCommand(runningDeps()));
+    const { logs, exitCode } = await captureLogs(async () => {
+      await program.parseAsync(["node", "rig", "release", "rig-finalization-failed", "--delete"]);
+    });
+    expect(exitCode).toBe(1);
+    expect(logs.join("\n")).toContain("Partially released 1 claimed session(s)");
+    expect(logs.join("\n")).toContain("Rig deleted");
+    expect(logs.join("\n")).toContain("reservation release failed");
+    expect(logs.join("\n")).toContain("Reservation state requires reconciliation");
+  });
+
+  it("release JSON preserves deletion finalization details with a nonzero exit", async () => {
+    const program = new Command();
+    program.exitOverride();
+    program.addCommand(releaseCommand(runningDeps()));
+    const { logs, exitCode } = await captureLogs(async () => {
+      await program.parseAsync(["node", "rig", "release", "rig-finalization-failed", "--delete", "--json"]);
+    });
+    expect(exitCode).toBe(1);
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({ deleted: true, status: "partial", failed: [],
+      deletionFinalization: { reservationId: "reservation-1", error: "reservation release failed" } });
   });
 
   it("remove prints removed node details", async () => {

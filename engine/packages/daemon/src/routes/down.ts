@@ -1,7 +1,7 @@
 import { DeliveryGuardError } from "../domain/seat-delivery-guard.js";
 import { Hono } from "hono";
 import type { RigTeardownOrchestrator } from "../domain/rig-teardown.js";
-import type { RigRepository } from "../domain/rig-repository.js";
+import { RigDeletionFinalizationError, type RigRepository } from "../domain/rig-repository.js";
 import { RigNotFoundError } from "../domain/errors.js";
 
 export const downRoutes = new Hono();
@@ -55,6 +55,12 @@ downRoutes.post("/", async (c) => {
     const enriched = { ...result, rigName, isUniqueName };
     return c.json(enriched, 200);
   } catch (err) {
+    if (err instanceof RigDeletionFinalizationError) {
+      const primary = err.cause;
+      const status = primary instanceof DeliveryGuardError ? 409 : primary instanceof RigNotFoundError ? 404 : 500;
+      return c.json({ ok: false, code: primary instanceof DeliveryGuardError ? primary.code : err.code,
+        error: err.message, deletionFinalization: err.finalization }, status);
+    }
     if (err instanceof DeliveryGuardError) throw err;
     if (err instanceof RigNotFoundError) {
       return c.json({ error: err.message }, 404);

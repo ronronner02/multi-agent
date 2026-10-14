@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createFullTestDb } from "./helpers/test-app.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
+import { EventBus } from "../src/domain/event-bus.js";
 
 function setupDb(): Database.Database {
   return createFullTestDb();
@@ -139,6 +140,78 @@ describe("RigRepository", () => {
     expect(repo.archiveRig(predecessor.id)).toBe(true);
 
     expect(repo.getLiveServicesSuccessor(predecessor.id, "shared-project")).toEqual({ id: live.id, name: "same-name" });
+  });
+
+  it("retains governance history on deletion and permits reversible archive", () => {
+    const rig = repo.createRig("governed");
+    // Even a partially recoverable ledger must prevent destructive deletion.
+    db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
+      VALUES ('retained-run', ?, '{}', 'retained-binding', 'blocked', 'now', 'now')`).run(rig.id);
+    expect(() => repo.deleteRig(rig.id)).toThrow(/governance history/);
+    expect(repo.getRig(rig.id)).not.toBeNull();
+    expect(db.prepare("SELECT id FROM team_runs").all()).toEqual([{ id: "retained-run" }]);
+    expect(repo.archiveRig(rig.id)).toBe(true);
+    expect(repo.unarchiveRig(rig.id)).toBe(true);
+    expect(() => repo.deleteRig(rig.id)).toThrow(/governance history/);
+  });
+
+  it("binds deletion and reservation release to the current operation and publishes only after commit", () => {
+    const rig = repo.createRig("reserved-deletion");
+    const events = new EventBus(db);
+    const notifications: Array<{ phase: string; inTransaction: boolean }> = [];
+    events.subscribe((event) => {
+      if (event.type === "rig.deletion_fence") notifications.push({ phase: event.phase, inTransaction: db.inTransaction });
+    });
+    const first = repo.reserveRigDeletion(rig.id, "release", events);
+    expect(() => repo.reserveRigDeletion(rig.id, "teardown", events)).toThrow(/deletion is in progress/);
+    expect(() => repo.deleteRig(rig.id)).toThrow(/deletion is in progress/);
+    expect(() => repo.deleteRig(rig.id, "wrong-operation")).toThrow(/deletion is in progress/);
+    expect(() => repo.finishRigDeletion(rig.id, "wrong-operation", events)).toThrow(/deletion is in progress/);
+    expect(repo.getRig(rig.id)).not.toBeNull();
+    repo.finishRigDeletion(rig.id, first, events);
+    const second = repo.reserveRigDeletion(rig.id, "teardown", events);
+    expect(second).not.toBe(first);
+    expect(() => repo.finishRigDeletion(rig.id, first, events)).toThrow(/deletion is in progress/);
+    expect(() => repo.deleteRig(rig.id, first)).toThrow(/deletion is in progress/);
+    repo.deleteRig(rig.id, second);
+    repo.finishRigDeletion(rig.id, second, events);
+    expect(repo.getRig(rig.id)).toBeNull();
+    expect(notifications).toEqual(["reserved", "released", "reserved", "released"].map((phase) => ({ phase, inTransaction: false })));
+  });
+
+  it("retains an unfinished reservation when its release fails to persist", () => {
+    const rig = repo.createRig("reservation-release-failure");
+    const events = new EventBus(db);
+    const reservation = repo.reserveRigDeletion(rig.id, "teardown", events);
+    db.exec(`CREATE TRIGGER fail_reservation_release BEFORE INSERT ON events
+      WHEN NEW.type = 'rig.deletion_fence' AND json_extract(NEW.payload, '$.phase') = 'released'
+      BEGIN SELECT RAISE(ABORT, 'reservation release failed'); END;`);
+    expect(() => repo.finishRigDeletion(rig.id, reservation, events)).toThrow(/reservation release failed/);
+    expect(() => repo.assertNoPendingDeletion(rig.id)).toThrow(/deletion is in progress/);
+    expect(db.prepare("SELECT json_extract(payload, '$.phase') AS phase FROM events WHERE type = 'rig.deletion_fence'").all()).toEqual([{ phase: "reserved" }]);
+    db.exec("DROP TRIGGER fail_reservation_release");
+    repo.finishRigDeletion(rig.id, reservation, events);
+    expect(() => repo.assertNoPendingDeletion(rig.id)).not.toThrow();
+  });
+
+  it("rejects an outer transaction before publishing a deletion reservation", () => {
+    const rig = repo.createRig("nested-reservation");
+    const events = new EventBus(db);
+    expect(() => db.transaction(() => repo.reserveRigDeletion(rig.id, "release", events))()).toThrow(/own its notification transaction/);
+    expect(db.prepare("SELECT * FROM events WHERE type = 'rig.deletion_fence'").all()).toEqual([]);
+  });
+
+  it.each(["malformed-json", "unknown-version", "unknown-phase"])("blocks deletion when the durable reservation has %s", (kind) => {
+    const rig = repo.createRig("invalid-reservation");
+    const payload = kind === "malformed-json" ? "not-json" : JSON.stringify({
+      type: "rig.deletion_fence", version: kind === "unknown-version" ? 2 : 1, rigId: rig.id,
+      reservationId: "unresolved", operation: "teardown", phase: kind === "unknown-phase" ? "unknown" : "reserved",
+    });
+    db.prepare("INSERT INTO events (rig_id, type, payload) VALUES (?, 'rig.deletion_fence', ?)").run(rig.id, payload);
+    expect(() => repo.assertNoPendingDeletion(rig.id)).toThrow(/deletion is in progress/);
+    expect(() => repo.reserveRigDeletion(rig.id, "release", new EventBus(db))).toThrow(/deletion is in progress/);
+    expect(() => repo.deleteRig(rig.id)).toThrow(/deletion is in progress/);
+    expect(repo.getRig(rig.id)).not.toBeNull();
   });
 
   it("deleteRig cascades — nodes and edges gone", () => {
