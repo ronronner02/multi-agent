@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "workspaces": [
+    "packages/i18n",
     "packages/daemon",
     "packages/ui",
     "packages/cli",
@@ -14,10 +15,10 @@
     "build": "npm run build --workspaces",
     "test": "npm run test:repo && npm run test:workspaces",
     "test:repo": "npm run build -w packages/daemon && node --test --test-concurrency=1 scripts/*.test.mjs && node --import tsx scripts/check-first-run-references.mjs && node scripts/check-docs-guard.mjs && node scripts/mirror-skills.mjs --check && node scripts/generate-context-packs.mjs --check",
-    "test:workspaces": "npm run test -w packages/daemon -w packages/cli -w packages/tui",
+    "test:workspaces": "npm run test -w packages/i18n -w packages/daemon -w packages/cli -w packages/tui",
     "test:ui": "npm run test -w packages/ui",
-    "typecheck:prep": "npm run build -w packages/daemon",
-    "lint": "npm run typecheck:prep && tsc --noEmit --project packages/daemon/tsconfig.json && tsc --noEmit --project packages/ui/tsconfig.json && tsc --noEmit --project packages/cli/tsconfig.json && tsc --noEmit --project packages/tui/tsconfig.json",
+    "typecheck:prep": "npm run build -w packages/i18n -w packages/daemon",
+    "lint": "npm run typecheck:prep && npm run typecheck -w packages/i18n && tsc --noEmit --project packages/daemon/tsconfig.json && tsc --noEmit --project packages/ui/tsconfig.json && tsc --noEmit --project packages/cli/tsconfig.json && tsc --noEmit --project packages/tui/tsconfig.json",
     "build:package": "bash scripts/build-package.sh",
     "test:tui-package": "node scripts/test-tui-package.mjs",
     "mirror-skills": "node scripts/mirror-skills.mjs",
@@ -29,6 +30,13 @@
   },
   "engines": {
     "node": "^22 || ^24"
+  },
+  "overrides": {
+    "react-i18next": {
+      "@babel/runtime": "7.29.7",
+      "html-parse-stringify": "4.0.1",
+      "use-sync-external-store": "1.6.0"
+    }
   },
   "allowScripts": {
     "better-sqlite3@13.0.3": true,
