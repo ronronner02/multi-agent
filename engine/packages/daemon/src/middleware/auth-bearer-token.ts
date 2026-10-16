@@ -26,6 +26,8 @@ import { timingSafeEqual } from "node:crypto";
 import { promises as dns } from "node:dns";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import type { MiddlewareHandler } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
+import type { ControlActor } from "../contracts/team-control.js";
 
 /**
  * Constant-time string equality using Node's timingSafeEqual.
@@ -261,4 +263,44 @@ export async function assertBindAuthInvariant(opts: {
       `Either: (a) bind to 127.0.0.1 / localhost, (b) bind to a tailscale interface (100.64.0.0/10 IPv4 or fd7a:115c:a1e0::/48 IPv6), ` +
       `or (c) set OPENRIG_AUTH_BEARER_TOKEN to a non-empty value before starting the daemon.`,
   );
+}
+
+export interface TeamControlCredentials {
+  ownerToken: string | null;
+  workers?: readonly { token: string; sessionId: string; runId: string }[];
+}
+
+export type TeamControlEnv = {
+  Variables: { controlActor: ControlActor; controlRunId: string | null };
+};
+
+/** Dedicated local control credentials; legacy, browser and worker tokens never imply owner authority. */
+export function teamControlAuthentication(
+  readCredentials: () => TeamControlCredentials,
+  legacyTokens: readonly (string | null | undefined)[] = [],
+): MiddlewareHandler<TeamControlEnv> {
+  return async (c, next) => {
+    let peer: string | undefined;
+    try { peer = getConnInfo(c).remote.address; } catch { /* Missing socket identity is not local proof. */ }
+    if (!peer || !isLoopbackBind(peer.replace(/^::ffff:/i, ""))) {
+      return c.json({ code: "local_control_required", error: "A loopback control connection is required." }, 403);
+    }
+    const { ownerToken, workers = [] } = readCredentials();
+    const configured = [ownerToken, ...workers.map(worker => worker.token)].filter((value): value is string => !!value);
+    if (new Set(configured).size !== configured.length
+      || configured.some(token => legacyTokens.some(legacy => !!legacy && constantTimeEqual(token, legacy)))
+      || workers.some(worker => !worker.token.trim() || !worker.sessionId.trim() || !worker.runId.trim())) {
+      return c.json({ code: "control_credentials_conflict", error: "Control credentials must have distinct roles." }, 503);
+    }
+    const header = c.req.header("Authorization");
+    const provided = header && /^Bearer ([^\s,]+)$/i.exec(header)?.[1];
+    if (!provided) return c.json({ code: "control_auth_required", error: "A dedicated control credential is required." }, 401);
+    const owner = !!ownerToken && constantTimeEqual(provided, ownerToken);
+    const worker = workers.find(candidate => constantTimeEqual(provided, candidate.token));
+    if (!owner && !worker) return c.json({ code: "control_auth_required", error: "A dedicated control credential is required." }, 401);
+    c.set("controlActor", owner ? { kind: "owner", sessionId: "owner-control" } : { kind: "worker", sessionId: worker!.sessionId });
+    c.set("controlRunId", owner ? null : worker!.runId);
+    c.header("Cache-Control", "no-store");
+    await next();
+  };
 }

@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:cd3b32c5c87c0ca3f48c6f8b37273f02aa6bd0797c251198220dfc2a65efa572"
+source_plan_hash: "sha256:b11c198417ef8113901ce43003f16779876d5215964eb85b89020cc76db33a51"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -24,11 +24,11 @@ source_sections:
 
 ## Overview
 
-This derived execution index decomposes the active, implementation-ready source plan into **30 bounded tasks in 20 waves**, covering U1-U12. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
+This derived execution index decomposes the active, implementation-ready source plan into **33 bounded tasks in 22 waves**, covering U1-U12. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
 **Validation boundary:** T004 retains the plan-declared `engine/packages/daemon/src/middleware/auth-bearer-token.ts` source path. The validator contract must contain the audited exact-path allowance; broader credential-name denials remain in force. Validate this regenerated pack from the WSL artifact root before execution. Do not remove required source paths or treat a manual exception as a passing receipt.
 
-**High-risk review gate:** after deterministic validation, review this pack against the current source plan and imported owners. Shared authority contracts, worker isolation, native approvals, owner clients and two-repository acceptance need semantic review beyond structural validation. The pack records neither review approval nor permission to execute, provision hosts, spend provider quota or publish changes.
+**High-risk review gate:** after deterministic validation, review this pack against the current source plan and imported owners. Shared authority contracts, worker isolation, the PC7 unattended launch mode, owner clients and two-repository acceptance need semantic review beyond structural validation. The pack records neither review approval nor permission to execute, provision hosts, spend provider quota or publish changes.
 
 ### Repository and file ownership
 
@@ -44,12 +44,12 @@ T002 is the only **pinned import operation**, explicitly authorized by U1's sour
 ### Execution-wide gates
 
 - Revalidate source lifecycle, canonical hash, task-pack bytes, repository identity and task scope at intake and continuation. Framework task freshness uses the canonical body hash above; the product's runtime plan approval uses the stricter exact-byte invalidation required by KTD5. Do not substitute one digest policy for the other.
-- The owner-confirmed Planning Contract and PC1-PC6 govern milestone changes over historical Product Contract statements. In particular, both authenticated owner clients are supported; the earlier TUI-only wording does not remove browser authority.
-- Establish Ubuntu identity/filesystem/process feasibility before substantial adaptation. No weaker identity, broad-access flag, alternative host, raw worker terminal API or shared control socket is a fallback.
+- The owner-confirmed Planning Contract and PC1-PC7 govern milestone changes over historical Product Contract statements. In particular, both authenticated owner clients are supported; the earlier TUI-only wording does not remove browser authority.
+- Establish Ubuntu identity/filesystem/process feasibility before substantial adaptation. No weaker identity, launch outside the worker boundary, alternative host, raw worker terminal API or shared control socket is a fallback. PC7's native no-prompt flags apply only inside that boundary and only through the launcher.
 - Keep automatic managed dispatch disabled through foundation/integration gates. Only explicitly scoped preflight/native probes are allowed before U8; they are not broad autonomous feature work. Keep `webUiEnabled` false until U9's session/terminal gates pass, and keep the listener loopback-only throughout this milestone.
 - Offline tests must not start provider sessions. Setup/privilege changes require their explicit scope; each live compatibility probe, primary run, reverse-contract run and comparison trial needs its own grant and recorded supported spending cap or explicit time-only posture.
 - Each granted run has at most three live sessions including the separate lead, one diagnosed recoverable retry, two review/rework cycles and 60 cumulative active minutes. New IDs, restart, retry, concurrent sessions and staged task cards do not reset or multiply that budget. Only a durable pause while all work is stopped pauses accounting.
-- T017 owns deadline/no-progress/storage-cap enforcement; T018 owns conservative crash reconciliation. Unknown identity, ambiguous effects, stale plan, rejected grant, failed persistence or exhausted limits stop dependent dispatch. Preserve unrelated files, processes and durable evidence.
+- T017 owns deadline/no-progress/storage-cap enforcement; T033 owns failure classification, retry eligibility and attempt phases; T018 owns conservative crash reconciliation. Unknown identity, ambiguous effects, stale plan, rejected grant, failed persistence or exhausted limits stop dependent dispatch. Preserve unrelated files, processes and durable evidence.
 - Shared dependency declarations and lockfile changes are owned by T005 before parallel UI work. Missing shared language keys or unexpected imported owners require a serialized scoped pack revision, not an unlisted parallel edit.
 - Review each logical change with `gpt-6.1-sol` and `claude-opus-5-5` through locally configured URLs and credentials, without persisting or disclosing keys. Both reviews are report-only and inspect the same frozen candidate; use at most two rounds and leave the gate open when a model is unavailable.
 - Stop at T015-T016 and T019-T022 until the owner has reviewed the corresponding design proposal.
@@ -60,7 +60,7 @@ T002 is the only **pinned import operation**, explicitly authorized by U1's sour
 
 - **Source:** [the single active plan](../plans/2026-10-13-001-feat-multi-agent-team-plan.md).
 - **Branch:** regenerated derived pack with concrete imported owners and serialized import-manifest maintenance; independent semantic review follows deterministic validation.
-- **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC6/KTD1-KTD18, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U12; Verification Contract and Definition of Done.
+- **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC7/KTD1-KTD21, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U12; Verification Contract and Definition of Done.
 - **Boundary-driven decomposition:** separate preflight from import, persistent authority from enforcement, catalog from context manifests, native launch from safe mailbox consumption and actual-client proof, ownership from review, browser authentication from terminal authority, terminal projection from controls, cancellation from recovery, UI construction from browser proof, demo seed from feature work, and primary/reverse/comparative evidence from final closeout.
 - **Implementation-time unknowns retained:** the separate demo root, current client authentication and effective context, owner provisioning/live-run caps and actual browser/client behavior. Native adapter and queue-owner paths are now mapped to the imported source; additional owners remain stop conditions.
 - **Excluded/deferred:** distributed nodes, concurrent projects, Pi/DSH support, every optional workflow's live execution, TUI goal authoring/session administration, hostile-admin containment, and Milestone 2 domain/tunnel/passkey/app/push-notification work. Responsive local layouts are included now.
@@ -73,17 +73,17 @@ The matrix preserves all source units and their source requirement anchors; the 
 | Source | Requirements / acceptance | Task(s) | Primary validation |
 | --- | --- | --- | --- |
 | U1 | R2, R3, R7, R13, R20, R21; AE2, AE6, AE12, AE13; KTD1, KTD2, KTD6, KTD7, KTD10 | T001-T002 | Actual isolation preflight, pinned import/transfer hashes, preserved Windows source and reproducible build |
-| U2 | R1, R4, R5, R13, R19, R21, R22; AE1, AE4, AE6, AE11, AE13; KTD4-KTD6 | T003-T004 | Transactional migration/governance and exhaustive managed-entry authority checks |
-| U3 | R1-R6, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness and effective-context manifests |
-| U4 | R6-R9, R12, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11 | T008-T010 | Safe mailbox/launch contracts plus actual two-client containment and resume proof |
+| U2 | R1, R4, R5, R13, R19, R21, R22; AE1, AE4, AE6, AE11, AE13; KTD4-KTD6, KTD22 | T003-T004 | Transactional migration/governance, fixed daemon mode, admission invariants and owner-level managed-entry authority checks |
+| U3 | R1-R6, R11, R18, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6, KTD21 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness, effective-context manifests and the Lead operating protocol |
+| U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21; PC7 | T008-T010, T031-T032 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
 | U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9 | T011-T012 | Dependency/snapshot isolation, exact independent review and persistent bounded rework |
 | U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
-| U7 | R5, R9-R15, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9 | T017-T018 | Owned-process cancel/deadlines, crash fault injection, no duplicate side effects and paired restore |
+| U7 | R5, R9-R15, R18, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9, KTD20 | T017-T018, T033 | Owned-process cancel/deadlines, failure classification and retry eligibility, crash fault injection, no duplicate side effects and paired restore |
 | U9 | R12-R14, R19, R21, R22; AE6, AE13; KTD6, KTD14, KTD16, KTD18; PC1, PC4, PC5 | T013-T014 | Session/forgery/expiry gates, owner-host identity and audited read-only/take-over boundaries |
 | U10 | R12; KTD15; PC2 | T005 | Shared catalog/interpolation parity, fallback and display-width tests |
 | U11 | R9, R12-R16, R18; AE5-AE7, AE9, AE10, AE12; KTD2, KTD13-KTD16; PC1-PC4, PC6 | T019-T021 | Component behavior, reference adaptations, six browser width/language combinations and accessibility |
 | U12 | R4, R5, R12, R16, R21, R22; AE4, AE13; KTD5, KTD17; PC5 | T022-T023 | Canonical read-only paths/inert Markdown and versioned plan-bound task edits |
-| U8 | R1-R22, F1-F4, AE1-AE13; KTD1-KTD18; PC1-PC6; all Success Criteria | T024-T030 | Frozen seed, primary live feature/owner acceptance, reverse contracts, actual candidate comparison and final proof reconciliation |
+| U8 | R1-R22, F1-F4, AE1-AE13; KTD1-KTD21; PC1-PC7; all Success Criteria | T024-T030 | Frozen seed, primary live feature/owner acceptance, reverse contracts, actual candidate comparison and final proof reconciliation |
 
 ### Required-proof ownership
 
@@ -91,9 +91,10 @@ The matrix preserves all source units and their source requirement anchors; the 
 | --- | --- | --- |
 | Scope, framework routing, approval and assignment freshness | T003-T004, T006-T007 | T027, T030 |
 | Distinct native clients and direct addressed collaboration | T008-T010 | T027-T028 |
-| Rejection, native permission separation, context and control isolation | T001, T004, T007-T010, T013-T014 | T027-T028 |
+| Structured native channels and Lead wake bounds | T007, T031-T032 | T010, T030 |
+| Rejection, PC7 launch mode, context and control isolation | T001, T004, T007-T010, T013-T014 | T027-T028 |
 | Candidate integrity, independent review and integrated acceptance | T011-T012, T024-T026 | T027, T030 |
-| Cancellation, restart, ambiguous effects and cumulative limits | T017-T018 | T027-T028 |
+| Cancellation, restart, ambiguous effects and cumulative limits | T017-T018, T033 | T027-T028 |
 | Reproducible source/build and database rollback | T001-T003, T018 | T030 |
 | TUI interaction, log visibility, replay timing and durable projection | T015-T016 | T027 |
 | Reference Web UI and responsive/accessibility behavior | T019-T021 | T027 |
@@ -116,14 +117,17 @@ flowchart TD
   T002 --> T005
   T007 --> T008
   T007 --> T009
-  T008 --> T010
-  T009 --> T010
+  T008 --> T031
+  T009 --> T031
+  T009 --> T032
+  T031 --> T010
+  T032 --> T010
   T010 --> T011 --> T012
   T010 --> T013 --> T014
   T012 --> T015
   T014 --> T015
   T005 --> T015
-  T015 --> T016 --> T017 --> T018
+  T015 --> T016 --> T017 --> T033 --> T018
   T012 --> T019
   T014 --> T019
   T005 --> T019
@@ -154,21 +158,23 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 3 | T003, T005 | Shared authority/persistence and shared language/dependency foundations |
 | 4 | T004 | New and legacy managed-entry authority enforcement |
 | 5 | T006 | Pinned catalog and invocation preservation |
-| 6 | T007 | Scope-bound assignments and immutable context manifests |
-| 7 | T008, T009 | Native launch/approval boundary and safe durable mailbox |
-| 8 | T010 | Actual native containment/provenance/prompt/resume gates |
-| 9 | T011, T013 | Candidate/dependency isolation and browser owner sessions |
-| 10 | T012, T014 | Independent review and owner terminal/take-over gates |
-| 11 | T015, T019 | TUI projections and Web shell/data |
-| 12 | T016, T020 | Terminal owner controls and browser task/decision/session views |
-| 13 | T017, T021 | Cancellation/resource enforcement and responsive browser proof |
-| 14 | T018, T022, T023 | Recovery/rollback, scoped read views and bounded edits |
-| 15 | T024, T025 | Control-side harness and separately owned frozen demo seed |
-| 16 | T026 | Approved primary demo implementation/review |
-| 17 | T027 | Primary live owner-flow and adversarial evidence |
-| 18 | T028 | Separately authorized reverse-pairing contracts |
-| 19 | T029 | Separately authorized same-frozen-task comparison |
-| 20 | T030 | Final source-bound proof reconciliation and local closeout |
+| 6 | T007 | Scope-bound assignments, immutable context manifests and the Lead operating protocol |
+| 7 | T008, T009 | PC7 native launch boundary and safe durable mailbox |
+| 8 | T031, T032 | KTD19 channel spike and Lead wake guards |
+| 9 | T010 | Actual native containment/provenance/PC7 launch/channel/resume gates |
+| 10 | T011, T013 | Candidate/dependency isolation and browser owner sessions |
+| 11 | T012, T014 | Independent review and owner terminal/take-over gates |
+| 12 | T015, T019 | TUI projections and Web shell/data |
+| 13 | T016, T020 | Terminal owner controls and browser task/decision/session views |
+| 14 | T017, T021 | Cancellation/resource enforcement and responsive browser proof |
+| 15 | T022, T023, T033 | Scoped read views, bounded edits and failure classification |
+| 16 | T018 | Recovery/rollback through the shared classifier |
+| 17 | T024, T025 | Control-side harness and separately owned frozen demo seed |
+| 18 | T026 | Approved primary demo implementation/review |
+| 19 | T027 | Primary live owner-flow and adversarial evidence |
+| 20 | T028 | Separately authorized reverse-pairing contracts |
+| 21 | T029 | Separately authorized same-frozen-task comparison |
+| 22 | T030 | Final source-bound proof reconciliation and local closeout |
 
 ## Task Pack Contract
 
@@ -225,85 +231,98 @@ The following JSON is the single machine-readable task source. Human cards below
     {
       "wave": 8,
       "tasks": [
-        "T010"
+        "T031",
+        "T032"
       ]
     },
     {
       "wave": 9,
+      "tasks": [
+        "T010"
+      ]
+    },
+    {
+      "wave": 10,
       "tasks": [
         "T011",
         "T013"
       ]
     },
     {
-      "wave": 10,
+      "wave": 11,
       "tasks": [
         "T012",
         "T014"
       ]
     },
     {
-      "wave": 11,
+      "wave": 12,
       "tasks": [
         "T015",
         "T019"
       ]
     },
     {
-      "wave": 12,
+      "wave": 13,
       "tasks": [
         "T016",
         "T020"
       ]
     },
     {
-      "wave": 13,
+      "wave": 14,
       "tasks": [
         "T017",
         "T021"
       ]
     },
     {
-      "wave": 14,
+      "wave": 15,
       "tasks": [
-        "T018",
         "T022",
-        "T023"
+        "T023",
+        "T033"
       ]
     },
     {
-      "wave": 15,
+      "wave": 16,
+      "tasks": [
+        "T018"
+      ]
+    },
+    {
+      "wave": 17,
       "tasks": [
         "T024",
         "T025"
       ]
     },
     {
-      "wave": 16,
+      "wave": 18,
       "tasks": [
         "T026"
       ]
     },
     {
-      "wave": 17,
+      "wave": 19,
       "tasks": [
         "T027"
       ]
     },
     {
-      "wave": 18,
+      "wave": 20,
       "tasks": [
         "T028"
       ]
     },
     {
-      "wave": 19,
+      "wave": 21,
       "tasks": [
         "T029"
       ]
     },
     {
-      "wave": 20,
+      "wave": 22,
       "tasks": [
         "T030"
       ]
@@ -492,6 +511,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "R19",
         "R21",
         "R22",
+        "F1",
+        "F4",
         "AE1",
         "AE4",
         "AE6",
@@ -499,9 +520,10 @@ The following JSON is the single machine-readable task source. Human cards below
         "AE13",
         "KTD4",
         "KTD5",
-        "KTD6"
+        "KTD6",
+        "KTD22"
       ],
-      "goal": "Enforce owner-only authority across new and legacy managed-work entry paths.",
+      "goal": "Fix daemon mode at startup and enforce managed-control grants at the owner-level legacy boundaries.",
       "dependencies": [
         "T003"
       ],
@@ -511,49 +533,34 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/index.ts",
         "engine/packages/daemon/src/server.ts",
         "engine/packages/daemon/src/startup.ts",
-        "engine/packages/daemon/src/domain/gateway/gateway-subsystem.ts",
         "engine/packages/daemon/src/domain/plan-governance.ts",
         "engine/packages/daemon/src/domain/queue-repository.ts",
-        "engine/packages/daemon/src/domain/queue-retention.ts",
-        "engine/packages/daemon/src/domain/queue-wake-ladder.ts",
-        "engine/packages/daemon/src/domain/seat-delivery-guard.ts",
-        "engine/packages/daemon/src/domain/rig-teardown.ts",
-        "engine/packages/daemon/src/domain/restore-orchestrator.ts",
-        "engine/packages/daemon/src/domain/kernel-boot.ts",
-        "engine/packages/daemon/src/domain/bootstrap-orchestrator.ts",
-        "engine/packages/daemon/src/domain/startup-orchestrator.ts",
-        "engine/packages/daemon/src/domain/external-install-executor.ts",
-        "engine/packages/daemon/src/domain/rigspec-instantiator.ts",
-        "engine/packages/daemon/src/domain/bundle-content-routing.ts",
-        "engine/packages/daemon/src/domain/workflow-boot-sweep.ts",
         "engine/packages/daemon/src/adapters/tmux.ts",
         "engine/packages/daemon/src/middleware/auth-bearer-token.ts",
         "engine/packages/daemon/src/middleware/browser-boundary.ts",
+        "docs/operations.md",
         "engine/packages/daemon/test/team-control-auth.test.ts",
         "engine/packages/daemon/test/team-governance.test.ts",
-        "engine/packages/daemon/test/rig-teardown.test.ts",
-        "engine/packages/daemon/test/kernel-boot.test.ts",
-        "engine/packages/daemon/src/domain/queue-recovery.ts",
-        "engine/packages/daemon/src/domain/queue-waiting.ts",
-        "engine/packages/daemon/src/domain/queue-stuck-sweep.ts",
-        "engine/packages/daemon/src/domain/policies/idle-gate-qitem.ts",
-        "engine/packages/daemon/src/domain/workflow-runtime.ts"
+        "engine/packages/daemon/test/daemon-mode.test.ts",
+        "engine/packages/daemon/test/startup-wiring-pins.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u2-establish-plan-bound-authority-and-durable-control-contracts",
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#interface-contracts",
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants",
+        "engine/packages/daemon/src/domain/plan-governance.ts",
+        "engine/packages/daemon/src/index.ts",
+        "engine/packages/daemon/test/daemon-mode.test.ts"
       ],
-      "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "New/legacy routes and internal start/wake/restore/complete/stop paths share eligibility checks; forged owner identities, worker approval/limit edits, unapproved plans and stale policy fail before effects.",
-      "done_signal": "An explicit managed-mutation-path coverage inventory and route tests show no agent token grants authority, rejected grants survive retries, incompatible protocol versions disable controls and verified provider-policy capability is required for eligibility.",
+      "entry_hint": "Start with U2's KTD22 approach and the daemon-mode test's startup inventory.",
+      "test_focus": "Managed-mode createDaemon and startServer start none of the KTD22 legacy services; every legacy /api/* path returns managed_control_required and legacy pages return 404; legacy mode refuses managed-authority registration while preserving upstream behavior; persisted managed authority selects managed mode at startup; ungranted queue mutators and tmux session create/input/kill are refused at the owner while calls inside a managed-control grant succeed; effects admitted before revocation still record outcomes.",
+      "done_signal": "Daemon-mode tests cover both boot paths and the startup inventory; route and auth tests cover the managed allowlist and legacy refusal; owner-level queue/tmux tests prove grant-aware refusal and success; admission tests prove post-revocation outcome recording; operations documentation states the fixed startup mode and managed-mode responses.",
       "wave": 4,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An unguarded legacy/internal path remains, control authority relies on request-body identity, or closing a gap needs source owners outside the verified task file boundary.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Restoring per-call-site guards, adding another scheduler/store, changing the managed route architecture, or editing owners outside the revised U2 file list requires plan reconciliation.",
       "review_gate": "required",
-      "review_focus": "Look for alternate entry paths, fail-open capability checks, race windows and confused owner/browser/worker credentials.",
-      "notes": "Direct worker-process isolation proof remains separately owned by T010; HTTP tests alone do not establish OS containment. Keep managed dispatch off. The imported queue recovery, waiting, sweep, idle-gate and workflow owners are explicit guard-inventory targets; inspect each actual entry before deciding which requires a change. Additional route owners still require scoped regeneration.",
-      "risk_note": "A guarded new endpoint is insufficient while a legacy route, internal wake path or direct worker control-state path remains open.",
+      "review_focus": "Check KTD22 startup composition in createDaemon and startServer, the single managed-route allowlist, grant-aware owner checks, admission outcome recording, and legacy compatibility.",
+      "notes": "Continue the existing uncommitted T004 work. Keep the governance contracts and fixed mode; remove only unreachable per-call-site guards. The managed-control grant must remain the authorization boundary for shared queue and tmux owners, and outcome/receipt writes remain admissible after revocation.",
+      "risk_note": "A route-only green result can miss a startServer boot path or an owner-level bypass; direct queue and tmux calls must exercise both ungranted and granted cases.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
       ]
@@ -671,7 +678,10 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD3",
         "KTD4",
         "KTD5",
-        "KTD6"
+        "KTD6",
+        "R11",
+        "R18",
+        "KTD21"
       ],
       "goal": "Bind scoped assignments to immutable effective-context manifests.",
       "dependencies": [
@@ -684,7 +694,9 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/domain/workflow-runtime.ts",
         "engine/config/team/roles.json",
         "engine/packages/daemon/test/framework-context-manifest.test.ts",
-        "engine/packages/daemon/test/team-assignment.test.ts"
+        "engine/packages/daemon/test/team-assignment.test.ts",
+        "engine/config/team/lead-protocol.md",
+        "engine/packages/daemon/test/lead-protocol.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u3-connect-the-full-framework-catalog-to-bounded-team-assignments",
@@ -692,8 +704,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Direct plan and optional upstream-validated task-pack assignment; minimal staffing; repository/path/role/dependency/output/permission validation; immutable projected context and negative ancestor/global contamination cases.",
-      "done_signal": "Assignments carry exact plan/repository/policy identity and separate lead/member configuration; stale/invalid packs reject before dispatch; generated/observed context hashes are recorded and unexpected launch/resume sources block work.",
+      "test_focus": "Direct plan and optional upstream-validated task-pack assignment; minimal staffing; repository/path/role/dependency/output/permission validation; immutable projected context and negative ancestor/global contamination cases. KTD21 Lead protocol, roster and run instructions delivered read-only on every Lead activation; Lead requests to write an assigned tree, submit review outcomes or record acceptance are rejected; activations without a recorded evaluation stay visibly incomplete.",
+      "done_signal": "Assignments carry exact plan/repository/policy identity and separate lead/member configuration; stale/invalid packs reject before dispatch; generated/observed context hashes are recorded and unexpected launch/resume sources block work. Every Lead activation manifest carries the current protocol version, roster and run instructions as read-only entries.",
       "wave": 6,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Assignment generation grants new product scope, root runtime mirrors are copied into worker context, an unaccounted instruction source appears, or effective context cannot be established.",
@@ -727,9 +739,10 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD6",
         "KTD7",
         "KTD9",
-        "KTD11"
+        "KTD11",
+        "PC7"
       ],
-      "goal": "Integrate restricted native launch, resume identity and the separate native-approval bridge.",
+      "goal": "Integrate restricted native launch with the PC7 unattended launch mode and resume identity.",
       "dependencies": [
         "T007"
       ],
@@ -740,7 +753,6 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/adapters/yolo-mode.ts",
         "engine/packages/daemon/src/adapters/tmux-server.ts",
         "engine/packages/daemon/src/adapters/worker-launch.ts",
-        "engine/packages/daemon/src/domain/native-approval-bridge.ts",
         "engine/packages/daemon/test/managed-native-policy.test.ts",
         "engine/packages/daemon/test/native-session-contract.test.ts",
         "engine/packages/daemon/src/adapters/claude-code-adapter.ts",
@@ -765,13 +777,13 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; inherited broad-access flags; verified native decision channels. Redact credentials before shared output and bound raw execution logs without losing evidence references.",
-      "done_signal": "Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; native prompts lacking a verified channel remain pending rather than receiving blind keys. Worker deadlines are enforced outside controller-only timers.",
+      "test_focus": "Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; launcher-only PC7 flags (Claude Code `bypassPermissions`; Codex `approval_policy = \"never\"` with `danger-full-access`), refusing sessions that still prompt, keep a native sandbox on, or start outside the worker boundary; provider sign-in from each worker home. Redact credentials before shared output and bound raw execution logs without losing evidence references.",
+      "done_signal": "Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; a session that still raises a native prompt is blocked as a configuration fault and nothing is typed into it; a signed-out worker home is a launch blocker. Worker deadlines are enforced outside controller-only timers.",
       "wave": 7,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs weaker permissions or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs a weaker worker boundary or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.",
       "review_gate": "required",
-      "review_focus": "Check the launch boundary on fresh sessions and resume, including native subprocesses, separate approvals and non-spoofable attempt identity.",
+      "review_focus": "Check the launch boundary on fresh sessions and resume, including native subprocesses, PC7 launch-mode enforcement and non-spoofable attempt identity.",
       "notes": "Concrete native adapters and primary existing tests were reconciled with the pinned import. Diagnose the three recorded native-tmux baseline failures before changing their owners. Additional mutation paths still require regeneration. Focused fixtures do not replace the live gate in T010.",
       "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority.",
       "expected_side_effects": [
@@ -819,7 +831,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Delivery falls back to terminal input/Enter, peer content becomes an approval response, attachments cross task scope, or a second message store is introduced.",
       "review_gate": "required",
-      "review_focus": "Inspect prompt-state race handling and authority separation between mailbox consumption, structured wake/resume and native decisions.",
+      "review_focus": "Inspect prompt-state race handling and authority separation between mailbox consumption, structured wake/resume and owner decisions.",
       "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -847,19 +859,26 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD3",
         "KTD6",
         "KTD7",
-        "KTD11"
+        "KTD11",
+        "KTD19",
+        "KTD21",
+        "PC7"
       ],
       "goal": "Prove both native clients preserve containment, provenance and safe messaging through managed launch and resume.",
       "dependencies": [
         "T008",
-        "T009"
+        "T009",
+        "T031",
+        "T032"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
         "engine/packages/daemon/test/worker-control-isolation.test.ts",
         "engine/packages/daemon/test/managed-native-policy.test.ts",
         "engine/packages/daemon/test/team-messaging.test.ts",
-        "engine/packages/daemon/test/native-session-contract.test.ts"
+        "engine/packages/daemon/test/native-session-contract.test.ts",
+        "engine/packages/daemon/test/native-channel-contract.test.ts",
+        "engine/packages/daemon/test/lead-wake-policy.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u4-adapt-native-sessions-and-persistent-peer-communication",
@@ -867,11 +886,11 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#commands-and-evidence-binding"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; expected native prompts and context; prompt-active mailbox text safely consumed later; repeat after resume.",
-      "done_signal": "Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable.",
-      "wave": 8,
+      "test_focus": "Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart.",
+      "done_signal": "Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts and the spike record are bound to the same source, policy and client versions.",
+      "wave": 9,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader access or changes personal configuration.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration.",
       "review_gate": "required",
       "review_focus": "Reject false-green launch flags/mocks and enforce a failed live client contract as a blocker for all dependent managed work.",
       "notes": "At most three live sessions including the lead; probes require their own grant and cumulative cap. This is compatibility verification, not the full feature trial or the reverse-pairing acceptance task.",
@@ -926,7 +945,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Cycles, 100-task admission limit, overlapping writes and symlinks; validated-success prerequisites versus failed/denied/canceled/handed-off states; commit-backed worktrees and unborn-repository snapshots.",
       "done_signal": "Tests demonstrate that only evidence-backed completion, including a validated handoff successor, unlocks dependents. Candidate manifests include untracked files; original dirty files retain hashes and no commit/merge is created.",
-      "wave": 9,
+      "wave": 10,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Isolation requires changing unrelated work, manufacturing a base commit, treating a handed-off state as success or adding another scheduler.",
       "review_gate": "required",
@@ -980,7 +999,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Separate reviewer identity, read-only complete candidate, manifest/diff-bound findings, stale-review invalidation, durable rework/retry counters and integrated-failure rejection.",
       "done_signal": "Tests show the reviewer sees the exact tracked/untracked candidate without write permission, changes invalidate prior review, two review/rework cycles and one diagnosed recoverable retry persist across restart, and process success does not override failed acceptance.",
-      "wave": 10,
+      "wave": 11,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The implementer can satisfy its own review, findings lack candidate identity, counters reset through retries, or review grants delivery actions.",
       "review_gate": "required",
@@ -1032,7 +1051,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation.",
       "done_signal": "Tests verify 30-minute idle and 12-hour absolute expiry, one-request revocation, no worker pairing/session-store access and no credential in query/log/event output. Windows browser pairing works through the verified WSL localhost path without non-local binding.",
-      "wave": 9,
+      "wave": 10,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Remote Host exceptions, URL bearer tokens, worker pairing, duplicate session authority stores or relaxed Origin/anti-forgery checks are needed.",
       "review_gate": "required",
@@ -1085,7 +1104,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Read-only agent streams; session-scoped owner take-over; release/disconnect/revocation/15-minute inactivity expiry; owner-host absence; identity/socket separation and non-loopback rejection.",
       "done_signal": "Route and real-process tests prove input without take-over is rejected/audited, only the owner-started owner-account host supplies a shell, absent host reports unavailable, workers cannot reach its socket, and daemon storage contains no owner-terminal keystrokes/output.",
-      "wave": 10,
+      "wave": 11,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The daemon spawns a fallback shell, owner terminal runs as control/worker, raw worker terminal-control APIs appear, or take-over can address another session or a non-loopback client.",
       "review_gate": "required",
@@ -1145,7 +1164,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters.",
       "done_signal": "Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned.",
-      "wave": 11,
+      "wave": 12,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
@@ -1203,9 +1222,9 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; unsupported native prompt path.",
+      "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7.",
       "done_signal": "Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI.",
-      "wave": 12,
+      "wave": 13,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
@@ -1264,7 +1283,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Intent-before-effect, dispatch closure, recorded process-group identity, five-second escalation/fifteen-second unresolved outcome; cumulative 60-minute budget, ten-minute no-progress distinction and controller-absent deadline enforcement. Enforce 64 MiB raw logs per run and 256 MiB aggregate artifacts before further dispatch.",
       "done_signal": "Fault/process tests show no dependent dispatch after cancellation, no signal against reused/unowned identities, resistant children remain unresolved, retries/restarts count against the same budget and supervised silent tools retain only their recorded bounded deadline. Capacity pauses preserve durable decisions/evidence and disclose omitted/truncated logs; no history is deleted automatically.",
-      "wave": 13,
+      "wave": 14,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Cancellation assumes button success, kills unrelated sessions, deletes user work or evidence, or controller absence gives workers unbounded runtime.",
       "review_gate": "required",
@@ -1302,11 +1321,12 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD7",
         "KTD8",
         "KTD9",
-        "KTD10"
+        "KTD10",
+        "KTD20"
       ],
       "goal": "Reconcile restart ambiguity and prove paired binary/database rollback.",
       "dependencies": [
-        "T017"
+        "T033"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
@@ -1322,9 +1342,9 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#local-rollout-and-rollback"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Crash windows around dispatch/ack; active/resumable/unknown identity; PID/pane reuse; rejected/stale grants, mailbox and worker policy after resume; disk-full/corruption and WAL-consistent backup/restore.",
+      "test_focus": "Crash windows around dispatch/ack; active/resumable/unknown identity; PID/pane reuse; rejected/stale grants, mailbox and worker policy after resume; disk-full/corruption and WAL-consistent backup/restore. A stopped session with `resume_safe: false` is never resumed. Recovery takes retry and resume decisions only from the T033 classifier.",
       "done_signal": "Fault-injection and authorized restart/restore receipts prove no ambiguous side-effect replay, no lease-expiry duplicate launch and preserved counters/evidence. A matching binary/database pair restores with external effects reconciled and unrelated process/file inventory unchanged.",
-      "wave": 14,
+      "wave": 16,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Recovery silently creates another attempt, copies only a live main database file, discards external receipts, or cleanup touches unrelated tmux/Docker/workstation state.",
       "review_gate": "required",
@@ -1399,7 +1419,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state.",
       "done_signal": "Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest.",
-      "wave": 11,
+      "wave": 12,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
@@ -1467,7 +1487,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Task details/discussion/diff/tests/review; owner dialog requester/action/files/digest/version; idempotency, stale/version conflicts, session expiry; audited take-over and owner-host unavailable state.",
       "done_signal": "Component tests prove a double click sends one action, stale views disable decisions, conflicts refresh and ask again, requested outcomes wait for daemon evidence, unsupported native prompts offer open-session without approve, and agent text remains inert.",
-      "wave": 12,
+      "wave": 13,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Detailed Lead conversation becomes a new chat box, terminal input lacks take-over, client fields grant authority, or legacy query-token authentication is reintroduced. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
@@ -1523,7 +1543,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Fixture-driven real-browser checks at 1440/1024/390 px in both languages; side-by-side Rendering.png adaptations; keyboard/focus, dialog error announcements, AA contrast, text/glyph status, reduced motion and 44px touch targets.",
       "done_signal": "Source-bound browser receipts cover all six width/language combinations; the 390px layout hides the owner terminal; reference-region adaptations and accessibility outcomes are recorded with failures retained. Browser capability absence leaves this gate unmet.",
-      "wave": 13,
+      "wave": 14,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Passing component snapshots are proposed as browser acceptance, remote exposure is required, or visual changes contradict recorded reference adaptations. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "optional",
@@ -1571,7 +1591,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Canonical target and candidate diff browsing; traversal/symlink denial; policy credential exclusions; owner-only plan/requirements/solution browsing with inert Markdown.",
       "done_signal": "Route tests and browser receipts show only the registered target/candidates plus the explicitly allowed owner knowledge documents; embedded HTML/scripts remain inert and credential files are excluded.",
-      "wave": 14,
+      "wave": 15,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
@@ -1618,7 +1638,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Versioned priority/role/order/notes/existing-link edits versus add/remove/scope/path/acceptance/limit plan changes; cycle and unvalidated prerequisite rejection; agent denial and concurrent state changes.",
       "done_signal": "Daemon/component/browser checks show allowed edits apply once, material edits return plan-change-required with transactional suspension of affected work, conflicts ask again and no edit bypasses prerequisite evidence or owner re-approval.",
-      "wave": 14,
+      "wave": 15,
       "parallelizable": true,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Edit classification lives only in the browser, assignee/dependency changes expand authorized scope, or task edits update product authority without a new plan binding.",
       "review_gate": "required",
@@ -1700,7 +1720,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Explicit registered-root validation and frozen-feature acceptance expectations; offline negative/receipt tests; opt-in native/comparison branches; planted defect, drift, prompt, rejection, cancellation and restart fixtures.",
       "done_signal": "Offline harness tests neither start provider sessions nor spend quota; workers cannot alter acceptance expectations; root alias/nesting checks, source/plan/task/attempt evidence binding and default-off live branches are demonstrated.",
-      "wave": 15,
+      "wave": 17,
       "parallelizable": true,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The harness discovers targets through orchestrator ancestry, live mode starts by default, agents can modify control-side checks, or fixture passes are promoted to live acceptance.",
       "review_gate": "required",
@@ -1754,7 +1774,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Separate physical root outside orchestrator ancestry; minimal SQLite fixed rows, list-only API/browser view and baseline tests; explicit source manifest excludes runtime database data.",
       "done_signal": "List-only tests pass and a frozen seed digest is recorded before evaluated agent work; filtering, completion mutation, feature validation and persistence updates are demonstrably absent. No commit or remote repository is created.",
-      "wave": 15,
+      "wave": 17,
       "parallelizable": true,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The physical target aliases/nests in the orchestrator, baseline already contains any evaluated feature, a previous run is overwritten, or an unapproved demo scope is introduced.",
       "review_gate": "required",
@@ -1834,7 +1854,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Approved demo feature plan before dispatch; primary implementer/reviewer pairing; GET /items status=open|done, PATCH /items/:id status update, 400 invalid input, 404 missing item, browser interactions and restart persistence; planted-defect bounded repair.",
       "done_signal": "A separately authorized primary run produces an isolated candidate, independent read-only review of its exact digest and passing demo API/client checks with receipts. The seed and control harness remain unchanged; owner-visible acceptance is still required in T027.",
-      "wave": 16,
+      "wave": 18,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Feature work precedes plan approval, provider budget/auth is missing, workers see orchestrator/control source, comparison seed is altered, or required review/rework/budget gates fail.",
       "review_gate": "required",
@@ -1927,7 +1947,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Primary candidate API/UI filtering, completion and restart; real drift/control-access/prompt/rejection/cancellation/restart cases; Web at 1440/1024/390 in both languages and TUI at two sizes in both languages; pairing, decision, Lead take-over, workspace diff and re-approval edit.",
       "done_signal": "The report links exact source/seed/candidate/plan/run/task/attempt/version receipts, independent review, user-flow outcomes and before/after preservation evidence. Required missing/skipped/failed outcomes remain incomplete; integrated failure overrides agent/process completion.",
-      "wave": 17,
+      "wave": 19,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Evidence is not from the final candidate, a fresh run is needed without a new grant, owner interaction is missing, or drills would exceed the primary run's cumulative remaining budget.",
       "review_gate": "required",
@@ -1984,7 +2004,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Codex implementation-role and Claude review-role permitted/denied actions, read-only reviewer scope, prompt-active mailbox delivery, instruction provenance and resume.",
       "done_signal": "A separately authorized bounded reverse-contract run yields observed receipts for each named contract and preserves lead independence, configured limits and source identity. It is not reported as a second complete feature task.",
-      "wave": 18,
+      "wave": 20,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Reverse checks need an unapproved extra feature trial, fail isolation/provenance, or merely reuse the primary pairing's receipts.",
       "review_gate": "required",
@@ -2032,7 +2052,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Selected engine and pinned ReevesAgents 39ce3ace2dd2f2df451e943c432d505fb61d5946 attempt the identical frozen seed/task with matching protections, available models/roles, acceptance checks and separately granted caps.",
       "done_signal": "A comparative report contains observed attempts or evidenced blocked scenarios per candidate, configuration differences, adaptation/glue effort, interventions, failures, recovery and reliable elapsed/usage metrics. Unknown cost is unknown; an unattempted comparison or manual baseline does not satisfy this gate.",
-      "wave": 19,
+      "wave": 21,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The comparison changes the selected production engine, weakens isolation, reuses a mutated seed, lacks another required run grant or substitutes source inspection for an attempted scenario.",
       "review_gate": "required",
@@ -2128,13 +2148,153 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Final adapted build/lint/unit/UI regressions on the authoritative WSL revision; proof-intent reconciliation; paired rollback, source transfer/export, provenance/licenses, unavailable metrics and delivery permission boundaries.",
       "done_signal": "Every required proof intent links a current actual outcome and owner; final source matches accepted/reviewed candidates, no unresolved delivery-blocking P0/P1 defects remain, preservation checks pass and the owner receives local results with limitations and the next delivery decision. Missing evidence prevents verified completion.",
-      "wave": 20,
+      "wave": 22,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A required proof is stale/missing/ambiguous, tests lack an actual manifest script, final edits invalidate acceptance, source authority diverges or a publication action lacks its separate grant.",
       "review_gate": "required",
       "review_focus": "Inspect claim ceilings, source freshness and retained requirements rather than accepting a green aggregate with missing native/browser/owner evidence.",
       "notes": "No commit, push, PR, merge, release, deployment, remote CI activation or cleanup of unrelated files is included. Optional manual baseline and deferred Milestone 2 work remain outside required current tasks.",
       "risk_note": "Offline fixtures, process exit and source-only comparison cannot substitute for source-bound live, independent-review and owner acceptance evidence."
+    },
+    {
+      "task_id": "T031",
+      "source_unit": "U4",
+      "requirement_refs": [
+        "R7",
+        "R8",
+        "R12",
+        "R13",
+        "R19",
+        "R21",
+        "AE5",
+        "AE12",
+        "KTD11",
+        "KTD16",
+        "KTD19",
+        "PC7"
+      ],
+      "goal": "Run the KTD19 structured-channel spike per client and adopt only passing channels for mailbox delivery and steering.",
+      "dependencies": [
+        "T008",
+        "T009"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/domain/mailbox-delivery.ts",
+        "engine/packages/daemon/src/adapters/claude-code-adapter.ts",
+        "engine/packages/daemon/src/adapters/codex-runtime-adapter.ts",
+        "engine/packages/daemon/test/native-channel-contract.test.ts",
+        "docs/validation/native-channel-spike.md"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u4-adapt-native-sessions-and-persistent-peer-communication",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#evidence--limitations"
+      ],
+      "entry_hint": "Start with KTD19, then the U4 spike approach and the pinned client versions in docs/operations.md.",
+      "test_focus": "Per client and pinned version: the channel exists; the KTD16 read-only session view and audited take-over survive (mandatory for the Lead); the session runs with the PC7 launch flags; absent or altered channel configuration fails closed to pending; delivery is at least once with one consumption receipt; message text arrives as context, never as a user turn or approval.",
+      "done_signal": "`docs/validation/native-channel-spike.md` records pinned client versions and pass or fail per client against every KTD19 condition. Passing channels deliver through the existing mailbox owner with receipts; a failing client stays on KTD11 polling with that fallback evidenced.",
+      "wave": 8,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A channel needs terminal input, a second message store, a weaker worker boundary, or loss of the Lead's session view or take-over; a channel carries a native approval; the spike needs more than its single recorded budget grant; or `engine/config/isolation/worker-policy.json` must change, which needs owner-approved re-provisioning, a full U1 host preflight rerun and pack regeneration first.",
+      "review_gate": "required",
+      "review_focus": "Check that adoption follows the recorded spike result, message text never becomes a user turn or approval, and the KTD11 fallback is real for failing clients.",
+      "notes": "Timebox to one recorded budget grant. A failing result is a valid outcome, not a reason to relax KTD16 or the worker boundary.",
+      "risk_note": "Documentation and headless reference drivers do not prove the channels work with the pinned clients in interactive tmux panes.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
+    },
+    {
+      "task_id": "T032",
+      "source_unit": "U4",
+      "requirement_refs": [
+        "R8",
+        "R11",
+        "R12",
+        "R15",
+        "R22",
+        "KTD9",
+        "KTD11",
+        "KTD21"
+      ],
+      "goal": "Enforce the KTD21 Lead wake guards on every wake path.",
+      "dependencies": [
+        "T009"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/domain/lead-wake-policy.ts",
+        "engine/packages/daemon/src/domain/queue-wake-ladder.ts",
+        "engine/packages/daemon/src/domain/wake-resolver.ts",
+        "engine/packages/daemon/src/domain/wake-resolve-service.ts",
+        "engine/packages/daemon/src/domain/queue-wake-repository.ts",
+        "engine/packages/daemon/src/routes/wake-resolve.ts",
+        "engine/packages/daemon/test/lead-wake-policy.test.ts"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u4-adapt-native-sessions-and-persistent-peer-communication",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#interface-contracts"
+      ],
+      "entry_hint": "Start with KTD21 and the existing queue wake ladder.",
+      "test_focus": "The Lead's own message never wakes it; duplicate triggers coalesce to one pending wake; an addressed peer-to-peer message wakes only its recipient; a third agent-only wake cycle on one task without an owner action or new validated evidence pauses the run with an owner decision; the thirteenth activation within an hour is refused while its trigger stays pending behind an owner-visible blocker; counters survive restart.",
+      "done_signal": "Wake-policy tests pass for every guard on new and legacy wake paths; refused wakes are never dropped; raising either limit requires an owner grant.",
+      "wave": 8,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A wake path outside the listed owners must change, a guard would drop a trigger, or the Lead could raise its own limits.",
+      "review_gate": "required",
+      "review_focus": "Inspect every wake entry path, including legacy routes guarded in T004, for bypasses and lost triggers.",
+      "notes": "None",
+      "risk_note": "An unlisted legacy wake path would silently bypass the guards.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
+    },
+    {
+      "task_id": "T033",
+      "source_unit": "U7",
+      "requirement_refs": [
+        "R11",
+        "R15",
+        "R18",
+        "R22",
+        "AE8",
+        "KTD9",
+        "KTD20"
+      ],
+      "goal": "Classify failed attempts once and route retry, resume and attempt phases through that classifier.",
+      "dependencies": [
+        "T017"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/domain/attempt-failure.ts",
+        "engine/packages/daemon/src/domain/runtime-adapter.ts",
+        "engine/packages/daemon/src/domain/rig-teardown.ts",
+        "engine/packages/daemon/src/domain/review-evidence.ts",
+        "engine/packages/daemon/test/attempt-failure.test.ts",
+        "engine/packages/daemon/test/fixtures/attempt-failure/client-errors.json",
+        "docs/operations.md"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u7-make-cancellation-restart-and-data-rollback-reliable",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
+      ],
+      "entry_hint": "Start with KTD20 and the captured error fixtures.",
+      "test_focus": "Captured client-error fixtures map to their KTD20 codes and retry eligibility; `provider_network` retries once and a second failure becomes a blocker; auth, quota, configuration, missing-executable and `unknown` never retry and name the owner action; after `context_overflow` or `provider_invalid_request` the continuation starts a fresh session on the same tree; a long completed answer quoting a failure marker is not a failure; `starting` fails as `start_timeout` after 5 minutes and `waiting_workspace_lock` waits for the lock; a successful exit without validated evidence leaves the task unaccepted.",
+      "done_signal": "Only KTD20-eligible codes retry, once, within KTD9's cap; poisoned sessions are never resumed; recovery, cancellation and the U5 rework counter consume the classifier result; `docs/operations.md` lists every reason code with its owner action.",
+      "wave": 15,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Classification would add attempts or budget, an unknown code would retry, a consumer re-derives eligibility outside the classifier, or a poisoned session would be resumed.",
+      "review_gate": "required",
+      "review_focus": "Check conservative classification (uncertain means not retried), single classifier ownership and no budget reset.",
+      "notes": "`runtime-adapter.ts` is a shared U4/U7 owner, serialized after T017.",
+      "risk_note": "Text-fingerprint classification can misfire; structured exit and provider evidence must come first.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     }
   ]
 }
@@ -2177,16 +2337,18 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Compatibility boundary:** existing foundation compatibility: renew only expired unconsumed grants through new pending decisions; allow non-dispatching owner escalation records while blocked without applying limits or scope changes; record observed terminal outcomes without reopening dispatch; deny deletion of rigs with governance history before deletion-related lifecycle effects. Imported fixture, lifecycle and route owners are exact PIN.adapted entries. Register the six new authority files individually in LOCAL_ENGINE_PATHS and distinguish exact file entries from slash-terminated directory entries. No cascading removal of governance history or broad legacy authority enforcement is included.
 
-### T004. Enforce owner-only authority across new and legacy managed-work entry paths.
+### T004. Fix daemon mode at startup and enforce owner-level managed-work authority.
 
-- **Source / requirements:** `U2`; `R1`, `R4`, `R5`, `R13`, `R19`, `R21`, `R22`, `AE1`, `AE4`, `AE6`, `AE11`, `AE13`, `KTD4`, `KTD5`, `KTD6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 4; T003.
-- **Files:** `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/src/index.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/startup.ts`; `engine/packages/daemon/src/domain/gateway/gateway-subsystem.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/domain/queue-retention.ts`; `engine/packages/daemon/src/domain/queue-wake-ladder.ts`; `engine/packages/daemon/src/domain/seat-delivery-guard.ts`; `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/domain/restore-orchestrator.ts`; `engine/packages/daemon/src/domain/kernel-boot.ts`; `engine/packages/daemon/src/domain/bootstrap-orchestrator.ts`; `engine/packages/daemon/src/domain/startup-orchestrator.ts`; `engine/packages/daemon/src/domain/external-install-executor.ts`; `engine/packages/daemon/src/domain/rigspec-instantiator.ts`; `engine/packages/daemon/src/domain/bundle-content-routing.ts`; `engine/packages/daemon/src/domain/workflow-boot-sweep.ts`; `engine/packages/daemon/src/adapters/tmux.ts`; `engine/packages/daemon/src/middleware/auth-bearer-token.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/test/team-control-auth.test.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/test/rig-teardown.test.ts`; `engine/packages/daemon/test/kernel-boot.test.ts`; `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/queue-waiting.ts`; `engine/packages/daemon/src/domain/queue-stuck-sweep.ts`; `engine/packages/daemon/src/domain/policies/idle-gate-qitem.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`.
-- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** New/legacy routes and internal start/wake/restore/complete/stop paths share eligibility checks; forged owner identities, worker approval/limit edits, unapproved plans and stale policy fail before effects.
-- **Done signal:** An explicit managed-mutation-path coverage inventory and route tests show no agent token grants authority, rejected grants survive retries, incompatible protocol versions disable controls and verified provider-policy capability is required for eligibility.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An unguarded legacy/internal path remains, control authority relies on request-body identity, or closing a gap needs source owners outside the verified task file boundary.
-- **Review intent:** required; Look for alternate entry paths, fail-open capability checks, race windows and confused owner/browser/worker credentials.
+- **Source / requirements:** U2; R1, R4, R5, R13, R19, R21, R22, F1, F4, AE1, AE4, AE6, AE11, AE13, KTD4, KTD5, KTD6, KTD22.
+- **Target / wave / dependencies:** ronronner02/multi-agent; wave 4; T003.
+- **Files:** engine/packages/daemon/src/routes/team-control.ts; engine/packages/daemon/src/index.ts; engine/packages/daemon/src/server.ts; engine/packages/daemon/src/startup.ts; engine/packages/daemon/src/domain/plan-governance.ts; engine/packages/daemon/src/domain/queue-repository.ts; engine/packages/daemon/src/adapters/tmux.ts; engine/packages/daemon/src/middleware/auth-bearer-token.ts; engine/packages/daemon/src/middleware/browser-boundary.ts; docs/operations.md; engine/packages/daemon/test/team-control-auth.test.ts; engine/packages/daemon/test/team-governance.test.ts; engine/packages/daemon/test/daemon-mode.test.ts; engine/packages/daemon/test/startup-wiring-pins.test.ts.
+- **Expected side effects:** tools/upstream-import.mjs, limited to the task-owned PIN.adapted entries; serialize this shared owner.
+- **Test focus:** Managed-mode createDaemon and startServer start none of the KTD22 legacy services; every legacy /api/* path returns managed_control_required and legacy pages return 404; legacy mode refuses managed-authority registration while preserving upstream behavior; persisted managed authority selects managed mode at startup; ungranted queue mutators and tmux session create/input/kill are refused at the owner while calls inside a managed-control grant succeed; effects admitted before revocation still record outcomes.
+- **Done signal:** Daemon-mode tests cover both boot paths and the startup inventory; route and auth tests cover the managed allowlist and legacy refusal; owner-level queue/tmux tests prove grant-aware refusal and success; admission tests prove post-revocation outcome recording; operations documentation states the fixed startup mode and managed-mode responses.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Restoring per-call-site guards, adding another scheduler/store, changing the managed route architecture, or editing owners outside the revised U2 file list requires plan reconciliation.
+- **Review intent:** required; Check KTD22 startup composition in createDaemon and startServer, the single managed-route allowlist, grant-aware owner checks, admission outcome recording, and legacy compatibility.
+- **Notes:** Continue the existing uncommitted T004 work. Keep the governance contracts and fixed mode; remove only unreachable per-call-site guards. The managed-control grant must remain the authorization boundary for shared queue and tmux owners, and outcome/receipt writes remain admissible after revocation.
+- **Risk note:** A route-only green result can miss a startServer boot path or an owner-level bypass; direct queue and tmux calls must exercise both ungranted and granted cases.
 
 ### T005. Create the shared typed Chinese/English catalog and display-width package.
 
@@ -2211,25 +2373,25 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T007. Bind scoped assignments to immutable effective-context manifests.
 
-- **Source / requirements:** `U3`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R19`, `R21`, `R22`, `AE1`, `AE2`, `AE3`, `AE4`, `AE11`, `AE13`, `KTD3`, `KTD4`, `KTD5`, `KTD6`.
+- **Source / requirements:** `U3`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R19`, `R21`, `R22`, `AE1`, `AE2`, `AE3`, `AE4`, `AE11`, `AE13`, `KTD3`, `KTD4`, `KTD5`, `KTD6`, `R11`, `R18`, `KTD21`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 6; T006.
-- **Files:** `engine/packages/daemon/src/integrations/framework/context-manifest.ts`; `engine/packages/daemon/src/domain/team-assignment.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/config/team/roles.json`; `engine/packages/daemon/test/framework-context-manifest.test.ts`; `engine/packages/daemon/test/team-assignment.test.ts`.
+- **Files:** `engine/packages/daemon/src/integrations/framework/context-manifest.ts`; `engine/packages/daemon/src/domain/team-assignment.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/config/team/roles.json`; `engine/packages/daemon/test/framework-context-manifest.test.ts`; `engine/packages/daemon/test/team-assignment.test.ts`; `engine/config/team/lead-protocol.md`; `engine/packages/daemon/test/lead-protocol.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Direct plan and optional upstream-validated task-pack assignment; minimal staffing; repository/path/role/dependency/output/permission validation; immutable projected context and negative ancestor/global contamination cases.
-- **Done signal:** Assignments carry exact plan/repository/policy identity and separate lead/member configuration; stale/invalid packs reject before dispatch; generated/observed context hashes are recorded and unexpected launch/resume sources block work.
+- **Test focus:** Direct plan and optional upstream-validated task-pack assignment; minimal staffing; repository/path/role/dependency/output/permission validation; immutable projected context and negative ancestor/global contamination cases. KTD21 Lead protocol, roster and run instructions delivered read-only on every Lead activation; Lead requests to write an assigned tree, submit review outcomes or record acceptance are rejected; activations without a recorded evaluation stay visibly incomplete.
+- **Done signal:** Assignments carry exact plan/repository/policy identity and separate lead/member configuration; stale/invalid packs reject before dispatch; generated/observed context hashes are recorded and unexpected launch/resume sources block work. Every Lead activation manifest carries the current protocol version, roster and run instructions as read-only entries.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Assignment generation grants new product scope, root runtime mirrors are copied into worker context, an unaccounted instruction source appears, or effective context cannot be established.
 - **Review intent:** required; Check source/runtime separation and scope preservation through projected instructions, role selection and upstream validator results.
 
-### T008. Integrate restricted native launch, resume identity and the separate native-approval bridge.
+### T008. Integrate restricted native launch with the PC7 unattended launch mode and resume identity.
 
-- **Source / requirements:** `U4`; `R6`, `R7`, `R12`, `R15`, `R16`, `R19`, `R21`, `F2`, `F4`, `AE3`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD9`, `KTD11`.
+- **Source / requirements:** `U4`; `R6`, `R7`, `R12`, `R15`, `R16`, `R19`, `R21`, `F2`, `F4`, `AE3`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD9`, `KTD11`, `PC7`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 7; T007.
-- **Files:** `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/kernel-authority.ts`; `engine/packages/daemon/src/adapters/yolo-mode.ts`; `engine/packages/daemon/src/adapters/tmux-server.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/src/domain/native-approval-bridge.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/src/adapters/claude-code-adapter.ts`; `engine/packages/daemon/src/adapters/claude-resume.ts`; `engine/packages/daemon/src/adapters/claude-resume-launch.ts`; `engine/packages/daemon/src/adapters/codex-runtime-adapter.ts`; `engine/packages/daemon/src/adapters/codex-resume.ts`; `engine/packages/daemon/src/adapters/tmux.ts`; `engine/packages/daemon/src/adapters/tmux-exec.ts`; `engine/packages/daemon/test/claude-runtime-adapter.test.ts`; `engine/packages/daemon/test/claude-resume.test.ts`; `engine/packages/daemon/test/codex-runtime-adapter.test.ts`; `engine/packages/daemon/test/codex-resume.test.ts`; `engine/packages/daemon/test/tmux-server.test.ts`; `engine/packages/daemon/test/tmux-pane-cwd-native.test.ts`; `engine/packages/daemon/test/terminal-pipe-utf8.test.ts`; `engine/packages/daemon/test/seat-activity-retirement-hooks.test.ts`.
+- **Files:** `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/kernel-authority.ts`; `engine/packages/daemon/src/adapters/yolo-mode.ts`; `engine/packages/daemon/src/adapters/tmux-server.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/src/adapters/claude-code-adapter.ts`; `engine/packages/daemon/src/adapters/claude-resume.ts`; `engine/packages/daemon/src/adapters/claude-resume-launch.ts`; `engine/packages/daemon/src/adapters/codex-runtime-adapter.ts`; `engine/packages/daemon/src/adapters/codex-resume.ts`; `engine/packages/daemon/src/adapters/tmux.ts`; `engine/packages/daemon/src/adapters/tmux-exec.ts`; `engine/packages/daemon/test/claude-runtime-adapter.test.ts`; `engine/packages/daemon/test/claude-resume.test.ts`; `engine/packages/daemon/test/codex-runtime-adapter.test.ts`; `engine/packages/daemon/test/codex-resume.test.ts`; `engine/packages/daemon/test/tmux-server.test.ts`; `engine/packages/daemon/test/tmux-pane-cwd-native.test.ts`; `engine/packages/daemon/test/terminal-pipe-utf8.test.ts`; `engine/packages/daemon/test/seat-activity-retirement-hooks.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; inherited broad-access flags; verified native decision channels. Redact credentials before shared output and bound raw execution logs without losing evidence references.
-- **Done signal:** Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; native prompts lacking a verified channel remain pending rather than receiving blind keys. Worker deadlines are enforced outside controller-only timers.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs weaker permissions or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.
-- **Review intent:** required; Check the launch boundary on fresh sessions and resume, including native subprocesses, separate approvals and non-spoofable attempt identity.
+- **Test focus:** Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; launcher-only PC7 flags (Claude Code `bypassPermissions`; Codex `approval_policy = "never"` with `danger-full-access`), refusing sessions that still prompt, keep a native sandbox on, or start outside the worker boundary; provider sign-in from each worker home. Redact credentials before shared output and bound raw execution logs without losing evidence references.
+- **Done signal:** Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; a session that still raises a native prompt is blocked as a configuration fault and nothing is typed into it; a signed-out worker home is a launch blocker. Worker deadlines are enforced outside controller-only timers.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs a weaker worker boundary or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.
+- **Review intent:** required; Check the launch boundary on fresh sessions and resume, including native subprocesses, PC7 launch-mode enforcement and non-spoofable attempt identity.
 
 ### T009. Extend the existing durable chat owner with addressed mailbox consumption.
 
@@ -2240,22 +2402,22 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Test focus:** Recipient/task/reply/attachment identity, capability-scoped polling, at-least-once deduplication and idempotent consumption receipts; prompt-active, reconnect and queued-wait cases.
 - **Done signal:** Messages persist once with task/run/sender/recipient/artifact references; duplicate delivery produces one consumption outcome; prompt-answer text, newlines and control characters remain data; safe later polling needs no owner relay.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Delivery falls back to terminal input/Enter, peer content becomes an approval response, attachments cross task scope, or a second message store is introduced.
-- **Review intent:** required; Inspect prompt-state race handling and authority separation between mailbox consumption, structured wake/resume and native decisions.
+- **Review intent:** required; Inspect prompt-state race handling and authority separation between mailbox consumption, structured wake/resume and owner decisions.
 
 ### T010. Prove both native clients preserve containment, provenance and safe messaging through managed launch and resume.
 
-- **Source / requirements:** `U4`; `R6`, `R7`, `R8`, `R9`, `R12`, `R15`, `R16`, `R19`, `R21`, `AE3`, `AE5`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD11`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 8; T008, T009.
-- **Files:** `engine/packages/daemon/test/worker-control-isolation.test.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/team-messaging.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`.
-- **Test focus:** Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; expected native prompts and context; prompt-active mailbox text safely consumed later; repeat after resume.
-- **Done signal:** Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader access or changes personal configuration.
+- **Source / requirements:** `U4`; `R6`, `R7`, `R8`, `R9`, `R12`, `R15`, `R16`, `R19`, `R21`, `AE3`, `AE5`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD11`, `KTD19`, `KTD21`, `PC7`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 9; T008, T009, T031, T032.
+- **Files:** `engine/packages/daemon/test/worker-control-isolation.test.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/team-messaging.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/test/native-channel-contract.test.ts`; `engine/packages/daemon/test/lead-wake-policy.test.ts`.
+- **Test focus:** Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart.
+- **Done signal:** Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts and the spike record are bound to the same source, policy and client versions.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration.
 - **Review intent:** required; Reject false-green launch flags/mocks and enforce a failed live client contract as a blocker for all dependent managed work.
 
 ### T011. Enforce dependency eligibility and isolated candidate ownership.
 
 - **Source / requirements:** `U5`; `R4`, `R5`, `R6`, `R10`, `R11`, `R16`, `R17`, `R18`, `R21`, `R22`, `F2`, `F3`, `AE2`, `AE3`, `AE4`, `AE5`, `AE9`, `AE10`, `AE11`, `AE13`, `KTD4`, `KTD8`, `KTD9`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 9; T010.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T010.
 - **Files:** `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/test/team-dependencies.test.ts`; `engine/packages/daemon/test/team-workspace.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Cycles, 100-task admission limit, overlapping writes and symlinks; validated-success prerequisites versus failed/denied/canceled/handed-off states; commit-backed worktrees and unborn-repository snapshots.
@@ -2266,7 +2428,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T012. Bind independent review and bounded rework to the exact candidate.
 
 - **Source / requirements:** `U5`; `R4`, `R5`, `R6`, `R10`, `R11`, `R16`, `R17`, `R18`, `R21`, `R22`, `F3`, `AE4`, `AE9`, `AE10`, `AE11`, `AE13`, `KTD4`, `KTD8`, `KTD9`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T011.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T011.
 - **Files:** `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/review-evidence.ts`; `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/test/team-review-cycle.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Separate reviewer identity, read-only complete candidate, manifest/diff-bound findings, stale-review invalidation, durable rework/retry counters and integrated-failure rejection.
@@ -2277,7 +2439,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T013. Add paired browser sessions and loopback-only owner authentication.
 
 - **Source / requirements:** `U9`; `R12`, `R13`, `R14`, `R19`, `R21`, `R22`, `F4`, `AE6`, `AE13`, `KTD6`, `KTD14`, `KTD18`, `PC1`, `PC4`, `PC5`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 9; T010.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T010.
 - **Files:** `engine/packages/daemon/src/routes/owner-session.ts`; `engine/packages/daemon/src/domain/owner-session.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/src/db/migrations/105_owner_sessions.ts`; `engine/packages/daemon/src/db/all-migrations.ts`; `engine/packages/daemon/test/owner-session.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation.
@@ -2288,7 +2450,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T014. Implement the isolated owner terminal relay and audited per-session take-over.
 
 - **Source / requirements:** `U9`; `R12`, `R13`, `R14`, `R19`, `R21`, `R22`, `F4`, `AE6`, `AE13`, `KTD6`, `KTD14`, `KTD16`, `KTD18`, `PC1`, `PC4`, `PC5`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T013.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T013.
 - **Files:** `engine/packages/daemon/src/domain/terminal-takeover.ts`; `engine/packages/daemon/src/terminal/owner-terminal-host.ts`; `engine/packages/daemon/src/routes/terminal-ws.ts`; `engine/packages/daemon/src/terminal/TerminalSessionBroker.ts`; `engine/packages/daemon/test/terminal-takeover.test.ts`; `engine/packages/daemon/test/owner-terminal-host.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Read-only agent streams; session-scoped owner take-over; release/disconnect/revocation/15-minute inactivity expiry; owner-host absence; identity/socket separation and non-loopback rejection.
@@ -2299,7 +2461,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T015. Project durable team state, inert logs and shared language labels into the TUI.
 
 - **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T012, T014, T005.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T012, T014, T005.
 - **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/live-events.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/test/team-projection.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters.
@@ -2310,10 +2472,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T016. Connect TUI owner decisions, browser pairing and terminal take-over with real-terminal acceptance.
 
 - **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T015.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T015.
 - **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/input.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/src/terminals/terminal-model.ts`; `engine/packages/tui/test/team-controls.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; unsupported native prompt path.
+- **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7.
 - **Done signal:** Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.
@@ -2321,7 +2483,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T017. Persist cancellation and enforce cumulative budgets outside controller-only timers.
 
 - **Source / requirements:** `U7`; `R5`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R21`, `R22`, `F4`, `AE4`, `AE6`, `AE7`, `AE8`, `AE9`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T016.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T016.
 - **Files:** `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/daemon-shutdown.ts`; `engine/packages/daemon/src/domain/team-reconciliation.ts`; `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/test/team-cancellation.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Intent-before-effect, dispatch closure, recorded process-group identity, five-second escalation/fifteen-second unresolved outcome; cumulative 60-minute budget, ten-minute no-progress distinction and controller-absent deadline enforcement. Enforce 64 MiB raw logs per run and 256 MiB aggregate artifacts before further dispatch.
@@ -2331,11 +2493,11 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T018. Reconcile restart ambiguity and prove paired binary/database rollback.
 
-- **Source / requirements:** `U7`; `R5`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R21`, `R22`, `F4`, `AE4`, `AE6`, `AE7`, `AE8`, `AE9`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T017.
+- **Source / requirements:** `U7`; `R5`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R21`, `R22`, `F4`, `AE4`, `AE6`, `AE7`, `AE8`, `AE9`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`, `KTD20`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 16; T033.
 - **Files:** `engine/packages/daemon/src/domain/queue-recovery.ts`; `engine/packages/daemon/src/domain/team-reconciliation.ts`; `engine/packages/daemon/src/daemon-shutdown.ts`; `engine/packages/daemon/test/team-recovery.test.ts`; `docs/operations.md`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Crash windows around dispatch/ack; active/resumable/unknown identity; PID/pane reuse; rejected/stale grants, mailbox and worker policy after resume; disk-full/corruption and WAL-consistent backup/restore.
+- **Test focus:** Crash windows around dispatch/ack; active/resumable/unknown identity; PID/pane reuse; rejected/stale grants, mailbox and worker policy after resume; disk-full/corruption and WAL-consistent backup/restore. A stopped session with `resume_safe: false` is never resumed. Recovery takes retry and resume decisions only from the T033 classifier.
 - **Done signal:** Fault-injection and authorized restart/restore receipts prove no ambiguous side-effect replay, no lease-expiry duplicate launch and preserved counters/evidence. A matching binary/database pair restores with external effects reconciled and unrelated process/file inventory unchanged.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Recovery silently creates another attempt, copies only a live main database file, discards external receipts, or cleanup touches unrelated tmux/Docker/workstation state.
 - **Review intent:** required; Inspect ambiguity blockers, backup consistency and evidence preservation rather than equating database restore with side-effect undo.
@@ -2343,7 +2505,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T019. Build the reference-derived Web UI shell and durable run projections.
 
 - **Source / requirements:** `U11`; `R9`, `R12`, `R13`, `R14`, `R15`, `R16`, `R18`, `F2`, `F3`, `F4`, `AE5`, `AE6`, `AE7`, `AE9`, `AE10`, `AE12`, `KTD2`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`, `PC6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T012, T014, T005.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T012, T014, T005.
 - **Files:** `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/App.tsx`; `engine/packages/ui/src/globals.css`; `engine/packages/ui/tailwind.config.ts`; `engine/packages/ui/src/lib/theme.ts`; `engine/packages/ui/src/lib/status-colors.ts`; `engine/packages/ui/src/hooks/useTeamRun.ts`; `engine/packages/ui/src/hooks/useTeamEvents.ts`; `engine/packages/ui/src/hooks/useOwnerSession.ts`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/team/overview.tsx`; `engine/packages/ui/src/team/run-stepper.tsx`; `engine/packages/ui/src/team/task-list.tsx`; `engine/packages/ui/src/team/agent-status.tsx`; `engine/packages/ui/src/team/system-status.tsx`; `engine/packages/ui/src/team/activity.tsx`; `engine/packages/ui/src/team/__tests__/overview.test.tsx`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state.
@@ -2354,7 +2516,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T020. Add Web task evidence, owner decision dialogs and read-only session/owner terminal views.
 
 - **Source / requirements:** `U11`; `R9`, `R12`, `R13`, `R14`, `R15`, `R16`, `R18`, `F2`, `F3`, `F4`, `AE5`, `AE6`, `AE7`, `AE9`, `AE10`, `AE12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T019.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T019.
 - **Files:** `engine/packages/ui/src/team/task-detail.tsx`; `engine/packages/ui/src/team/decision-card.tsx`; `engine/packages/ui/src/team/decision-dialog.tsx`; `engine/packages/ui/src/team/bottom-panel.tsx`; `engine/packages/ui/src/team/agent-monitor.tsx`; `engine/packages/ui/src/team/review-decisions.tsx`; `engine/packages/ui/src/team/logs.tsx`; `engine/packages/ui/src/team/settings.tsx`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/hooks/useOwnerSession.ts`; `engine/packages/ui/src/team/__tests__/task-detail.test.tsx`; `engine/packages/ui/src/team/__tests__/decisions.test.tsx`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Task details/discussion/diff/tests/review; owner dialog requester/action/files/digest/version; idempotency, stale/version conflicts, session expiry; audited take-over and owner-host unavailable state.
@@ -2365,7 +2527,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T021. Verify responsive, accessible, bilingual Web UI behavior against the reference.
 
 - **Source / requirements:** `U11`; `R12`, `R13`, `R14`, `R16`, `R18`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `KTD18`, `PC1`, `PC2`, `PC3`, `PC4`, `PC6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T020.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T020.
 - **Files:** `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/team/overview.tsx`; `engine/packages/ui/src/team/bottom-panel.tsx`; `engine/packages/ui/src/team/decision-dialog.tsx`; `engine/packages/ui/src/globals.css`; `engine/packages/ui/src/team/__tests__/responsive.test.tsx`; `engine/packages/ui/src/team/__tests__/decisions.test.tsx`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Fixture-driven real-browser checks at 1440/1024/390 px in both languages; side-by-side Rendering.png adaptations; keyboard/focus, dialog error announcements, AA contrast, text/glyph status, reduced motion and 44px touch targets.
@@ -2376,7 +2538,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T022. Add scoped read-only Workspace and Knowledge views.
 
 - **Source / requirements:** `U12`; `R4`, `R5`, `R12`, `R16`, `R21`, `R22`, `AE4`, `AE13`, `KTD5`, `KTD17`, `PC5`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T021.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 15; T021.
 - **Files:** `engine/packages/daemon/src/routes/files.ts`; `engine/packages/daemon/src/routes/workspace.ts`; `engine/packages/daemon/test/workspace-scope.test.ts`; `engine/packages/ui/src/team/workspace/workspace-view.tsx`; `engine/packages/ui/src/team/knowledge/knowledge-view.tsx`; `engine/packages/ui/src/routes.tsx`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Canonical target and candidate diff browsing; traversal/symlink denial; policy credential exclusions; owner-only plan/requirements/solution browsing with inert Markdown.
@@ -2387,7 +2549,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T023. Classify owner task edits and suspend scope changes for plan re-approval.
 
 - **Source / requirements:** `U12`; `R4`, `R5`, `R12`, `R16`, `R21`, `R22`, `AE4`, `AE13`, `KTD5`, `KTD17`, `PC5`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T021.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 15; T021.
 - **Files:** `engine/packages/daemon/src/domain/task-edit.ts`; `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/test/task-edit.test.ts`; `engine/packages/ui/src/team/task-edit/task-edit-dialog.tsx`; `engine/packages/ui/src/team/task-detail.tsx`; `engine/packages/ui/src/team/__tests__/task-edit.test.tsx`.
 - **Test focus:** Versioned priority/role/order/notes/existing-link edits versus add/remove/scope/path/acceptance/limit plan changes; cycle and unvalidated prerequisite rejection; agent denial and concurrent state changes.
 - **Done signal:** Daemon/component/browser checks show allowed edits apply once, material edits return plan-change-required with transactional suspension of affected work, conflicts ask again and no edit bypasses prerequisite evidence or owner re-approval.
@@ -2397,7 +2559,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T024. Prepare the control-side acceptance harness and adversarial fixtures without running the demo feature.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD6`, `KTD8`, `KTD9`, `KTD11`, `KTD12`, `KTD14`, `KTD16`, `KTD17`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 15; T018, T022, T023.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 17; T018, T022, T023.
 - **Files:** `engine/test/team-e2e.test.mjs`; `engine/test/candidate-comparison.test.mjs`; `engine/test/fixtures/team-failure-cases/plan-drift.json`; `engine/test/fixtures/team-failure-cases/prompt-active-message.json`; `engine/test/fixtures/team-failure-cases/review-defect.patch`; `engine/test/fixtures/team-failure-cases/restart-cancel.json`.
 - **Test focus:** Explicit registered-root validation and frozen-feature acceptance expectations; offline negative/receipt tests; opt-in native/comparison branches; planted defect, drift, prompt, rejection, cancellation and restart fixtures.
 - **Done signal:** Offline harness tests neither start provider sessions nor spend quota; workers cannot alter acceptance expectations; root alias/nesting checks, source/plan/task/attempt evidence binding and default-off live branches are demonstrated.
@@ -2407,7 +2569,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T025. Create and freeze the separate list-only demo seed.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R10`, `R16`, `R18`, `R21`, `R22`, `AE1`, `AE2`, `AE10`, `AE13`, `KTD7`, `KTD8`, `KTD12`.
-- **Target / wave / dependencies:** `work-board`; wave 15; T018, T022, T023.
+- **Target / wave / dependencies:** `work-board`; wave 17; T018, T022, T023.
 - **Files:** `package.json`; `package-lock.json`; `tsconfig.json`; `src/server.ts`; `src/client.ts`; `src/schema.ts`; `test/api.test.ts`; `test/client.test.ts`.
 - **Test focus:** Separate physical root outside orchestrator ancestry; minimal SQLite fixed rows, list-only API/browser view and baseline tests; explicit source manifest excludes runtime database data.
 - **Done signal:** List-only tests pass and a frozen seed digest is recorded before evaluated agent work; filtering, completion mutation, feature validation and persistence updates are demonstrably absent. No commit or remote repository is created.
@@ -2417,7 +2579,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T026. Run the approved primary implementation and independent review through the product on a fresh frozen seed candidate.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD3`, `KTD5`, `KTD6`, `KTD8`, `KTD9`, `KTD11`, `KTD12`.
-- **Target / wave / dependencies:** `work-board`; wave 16; T024, T025.
+- **Target / wave / dependencies:** `work-board`; wave 18; T024, T025.
 - **Files:** `src/server.ts`; `src/client.ts`; `src/schema.ts`; `test/api.test.ts`; `test/client.test.ts`.
 - **Test focus:** Approved demo feature plan before dispatch; primary implementer/reviewer pairing; GET /items status=open|done, PATCH /items/:id status update, 400 invalid input, 404 missing item, browser interactions and restart persistence; planted-defect bounded repair.
 - **Done signal:** A separately authorized primary run produces an isolated candidate, independent read-only review of its exact digest and passing demo API/client checks with receipts. The seed and control harness remain unchanged; owner-visible acceptance is still required in T027.
@@ -2427,7 +2589,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T027. Verify and record the primary live run, owner clients and adversarial outcomes.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD3`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`, `KTD11`, `KTD12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `KTD17`, `KTD18`, `PC1`, `PC2`, `PC3`, `PC4`, `PC5`, `PC6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 17; T026.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 19; T026.
 - **Files:** `docs/validation/first-team.md`.
 - **Test focus:** Primary candidate API/UI filtering, completion and restart; real drift/control-access/prompt/rejection/cancellation/restart cases; Web at 1440/1024/390 in both languages and TUI at two sizes in both languages; pairing, decision, Lead take-over, workspace diff and re-approval edit.
 - **Done signal:** The report links exact source/seed/candidate/plan/run/task/attempt/version receipts, independent review, user-flow outcomes and before/after preservation evidence. Required missing/skipped/failed outcomes remain incomplete; integrated failure overrides agent/process completion.
@@ -2437,7 +2599,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T028. Run and record the explicitly scoped reverse-pairing native contracts.
 
 - **Source / requirements:** `U8`; `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R13`, `R15`, `R16`, `R17`, `R19`, `R21`, `R22`, `AE3`, `AE4`, `AE5`, `AE6`, `AE8`, `AE9`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD8`, `KTD9`, `KTD11`, `KTD12`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 18; T027.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 20; T027.
 - **Files:** `engine/test/team-e2e.test.mjs`; `docs/validation/first-team.md`.
 - **Test focus:** Codex implementation-role and Claude review-role permitted/denied actions, read-only reviewer scope, prompt-active mailbox delivery, instruction provenance and resume.
 - **Done signal:** A separately authorized bounded reverse-contract run yields observed receipts for each named contract and preserves lead independence, configured limits and source identity. It is not reported as a second complete feature task.
@@ -2447,7 +2609,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T029. Execute and report the same-frozen-task pinned candidate comparison.
 
 - **Source / requirements:** `U8`; `R7`, `R13`, `R16`, `R18`, `R19`, `R20`, `R21`, `R22`, `AE6`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD6`, `KTD9`, `KTD12`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 19; T028.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 21; T028.
 - **Files:** `engine/test/candidate-comparison.test.mjs`; `docs/validation/candidate-comparison.md`.
 - **Test focus:** Selected engine and pinned ReevesAgents 39ce3ace2dd2f2df451e943c432d505fb61d5946 attempt the identical frozen seed/task with matching protections, available models/roles, acceptance checks and separately granted caps.
 - **Done signal:** A comparative report contains observed attempts or evidenced blocked scenarios per candidate, configuration differences, adaptation/glue effort, interventions, failures, recovery and reliable elapsed/usage metrics. Unknown cost is unknown; an unattempted comparison or manual baseline does not satisfy this gate.
@@ -2457,12 +2619,45 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T030. Reconcile all required proof and produce the local delivery and operations documentation.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD3`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`, `KTD11`, `KTD12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `KTD17`, `KTD18`, `PC1`, `PC2`, `PC3`, `PC4`, `PC5`, `PC6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 20; T029.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 22; T029.
 - **Files:** `docs/validation/first-team.md`; `docs/validation/candidate-comparison.md`; `docs/development.md`; `docs/operations.md`.
 - **Test focus:** Final adapted build/lint/unit/UI regressions on the authoritative WSL revision; proof-intent reconciliation; paired rollback, source transfer/export, provenance/licenses, unavailable metrics and delivery permission boundaries.
 - **Done signal:** Every required proof intent links a current actual outcome and owner; final source matches accepted/reviewed candidates, no unresolved delivery-blocking P0/P1 defects remain, preservation checks pass and the owner receives local results with limitations and the next delivery decision. Missing evidence prevents verified completion.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A required proof is stale/missing/ambiguous, tests lack an actual manifest script, final edits invalidate acceptance, source authority diverges or a publication action lacks its separate grant.
 - **Review intent:** required; Inspect claim ceilings, source freshness and retained requirements rather than accepting a green aggregate with missing native/browser/owner evidence.
+
+### T031. Run the KTD19 structured-channel spike per client and adopt only passing channels for mailbox delivery and steering.
+
+- **Source / requirements:** `U4`; `R7`, `R8`, `R12`, `R13`, `R19`, `R21`, `AE5`, `AE12`, `KTD11`, `KTD16`, `KTD19`, `PC7`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 8; T008, T009.
+- **Files:** `engine/packages/daemon/src/domain/mailbox-delivery.ts`; `engine/packages/daemon/src/adapters/claude-code-adapter.ts`; `engine/packages/daemon/src/adapters/codex-runtime-adapter.ts`; `engine/packages/daemon/test/native-channel-contract.test.ts`; `docs/validation/native-channel-spike.md`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner.
+- **Test focus:** Per client and pinned version: the channel exists; the KTD16 read-only session view and audited take-over survive (mandatory for the Lead); the session runs with the PC7 launch flags; absent or altered channel configuration fails closed to pending; delivery is at least once with one consumption receipt; message text arrives as context, never as a user turn or approval.
+- **Done signal:** `docs/validation/native-channel-spike.md` records pinned client versions and pass or fail per client against every KTD19 condition. Passing channels deliver through the existing mailbox owner with receipts; a failing client stays on KTD11 polling with that fallback evidenced.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A channel needs terminal input, a second message store, a weaker worker boundary, or loss of the Lead's session view or take-over; a channel carries a native approval; the spike needs more than its single recorded budget grant; or `engine/config/isolation/worker-policy.json` must change, which needs owner-approved re-provisioning, a full U1 host preflight rerun and pack regeneration first.
+- **Review intent:** required; Check that adoption follows the recorded spike result, message text never becomes a user turn or approval, and the KTD11 fallback is real for failing clients.
+
+### T032. Enforce the KTD21 Lead wake guards on every wake path.
+
+- **Source / requirements:** `U4`; `R8`, `R11`, `R12`, `R15`, `R22`, `KTD9`, `KTD11`, `KTD21`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 8; T009.
+- **Files:** `engine/packages/daemon/src/domain/lead-wake-policy.ts`; `engine/packages/daemon/src/domain/queue-wake-ladder.ts`; `engine/packages/daemon/src/domain/wake-resolver.ts`; `engine/packages/daemon/src/domain/wake-resolve-service.ts`; `engine/packages/daemon/src/domain/queue-wake-repository.ts`; `engine/packages/daemon/src/routes/wake-resolve.ts`; `engine/packages/daemon/test/lead-wake-policy.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner.
+- **Test focus:** The Lead's own message never wakes it; duplicate triggers coalesce to one pending wake; an addressed peer-to-peer message wakes only its recipient; a third agent-only wake cycle on one task without an owner action or new validated evidence pauses the run with an owner decision; the thirteenth activation within an hour is refused while its trigger stays pending behind an owner-visible blocker; counters survive restart.
+- **Done signal:** Wake-policy tests pass for every guard on new and legacy wake paths; refused wakes are never dropped; raising either limit requires an owner grant.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A wake path outside the listed owners must change, a guard would drop a trigger, or the Lead could raise its own limits.
+- **Review intent:** required; Inspect every wake entry path, including legacy routes guarded in T004, for bypasses and lost triggers.
+
+### T033. Classify failed attempts once and route retry, resume and attempt phases through that classifier.
+
+- **Source / requirements:** `U7`; `R11`, `R15`, `R18`, `R22`, `AE8`, `KTD9`, `KTD20`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 15; T017.
+- **Files:** `engine/packages/daemon/src/domain/attempt-failure.ts`; `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/domain/review-evidence.ts`; `engine/packages/daemon/test/attempt-failure.test.ts`; `engine/packages/daemon/test/fixtures/attempt-failure/client-errors.json`; `docs/operations.md`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner.
+- **Test focus:** Captured client-error fixtures map to their KTD20 codes and retry eligibility; `provider_network` retries once and a second failure becomes a blocker; auth, quota, configuration, missing-executable and `unknown` never retry and name the owner action; after `context_overflow` or `provider_invalid_request` the continuation starts a fresh session on the same tree; a long completed answer quoting a failure marker is not a failure; `starting` fails as `start_timeout` after 5 minutes and `waiting_workspace_lock` waits for the lock; a successful exit without validated evidence leaves the task unaccepted.
+- **Done signal:** Only KTD20-eligible codes retry, once, within KTD9's cap; poisoned sessions are never resumed; recovery, cancellation and the U5 rework counter consume the classifier result; `docs/operations.md` lists every reason code with its owner action.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Classification would add attempts or budget, an unknown code would retry, a consumer re-derives eligibility outside the classifier, or a poisoned session would be resumed.
+- **Review intent:** required; Check conservative classification (uncertain means not retried), single classifier ownership and no budget reset.
 
 ## Orientation Evidence
 
@@ -2471,16 +2666,17 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Observed source:** the baseline commit is `85ac0b2f6181ea4a992800cd5c6c381e9ff884a8`; the worktree was clean at intake. `engine/` exists with the pinned import. `docs/upstream-baseline.md` maps shorthand owners; the latest imported migration is `103_session_stop_intent.ts`, leaving `104` for T003.
 - **Reconciled scope:** T001/T002 scaffolding and package owners; T004 internal queue guards; T008 native launch/resume/tmux source and existing tests; serialized provenance-manifest side effects. These are existing-plan owners, not new product scope.
 - **Limitations:** historical preflight and baseline results in `docs/development.md` and `docs/operations.md` are not rerun evidence. The six documented upstream test failures remain explicit limitations. No T003+ behavior, live client acceptance or UI design approval follows from this regeneration.
+- **2026-10-15 regeneration:** bounded reads of the revised U2 plan section (KTD22 fixed startup mode, the admission invariant, refined scenarios 9-13 and review convergence) and the existing task-pack contract. T004 is narrowed to the KTD22 boot owners, managed-route middleware, owner-level queue/tmux checks, operations wording and their focused tests; T031-T033 remain serialized after T004. Current implementation state is execution evidence, not task-pack scope authority.
 
 ## Validation Notes
 
-- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:d1a52af83f2c2f576fc8b250c9bfa9878fffe561e87e358b16342f6634d822e8`. Regeneration does not edit the source plan.
+- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:b11c198417ef8113901ce43003f16779876d5215964eb85b89020cc76db33a51` at source commit `19eb791`. Regeneration does not edit the source plan.
 - **Exact filename exception:** the maintained validator contract allows only the audited middleware source path. Adjacent credential-like files, backups, prefixed copies and actual credentials retain their denials. Use the tested CLI, not a patched receipt or omitted source path.
 - **Commands:** run `spec-first tasks hash docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md --repo /home/leo/src/multi-agent --json` and `spec-first tasks validate docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md --repo /home/leo/src/multi-agent --json` from WSL; a Windows host may address the same root through its UNC path. Pin the current receipt and pack digest in run-local evidence.
 - **Validation scope:** identity, freshness and structure only. A deterministic pass is not semantic approval, implementation completion, runtime acceptance or spending/delivery authority.
 - **Optional trace:** neither source nor pack carries `spec_id`; preserve `task-pack-spec-id-trace-missing` rather than inventing one.
 - **Semantic handoff:** both requested reviewers must assess the regenerated pack without editing it. Resolve blocking findings, revalidate after any pack change, and then pin the reviewed bytes before executing T003. At most two review rounds apply.
-- **Current bounded continuation:** only T003 follows pack repair and the scheduled quota wait. T005/dependency work, subsequent tasks, UI design implementation and delivery actions are not implied.
+- **Current bounded continuation:** only the in-flight T004 resumes after this regenerated pack passes validation and its semantic review, rechecked against PC7 (owner decisions cover orchestration actions only). T005 and later tasks, UI design implementation and delivery actions are not implied.
 - **Evidence discipline:** current source-bound checks, real-client outcomes and the full milestone verification remain separate proof levels. Record failed/not-run checks honestly; preserve all later verification obligations.
 
 ## Regeneration Rules

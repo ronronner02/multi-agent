@@ -34,13 +34,21 @@ export const PIN = Object.freeze({
   // Application version 0.1.0 (package identifiers kept) and the approved
   // dependency install scripts (better-sqlite3, esbuild) in allowScripts;
   // the shared authority contract, queue state tuple and additive migration registration;
-  // the shared language catalog workspace and its consumer dependency declarations.
+  // the shared language catalog workspace and its consumer dependency declarations;
+  // the KTD22 startup daemon mode, team-control wiring and owner-level managed checks.
   adapted: [
     'package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json',
     'packages/cli/src/commands/release.ts',
     'packages/cli/test/lifecycle.test.ts',
     'packages/daemon/src/db/all-migrations.ts',
     'packages/daemon/src/domain/queue-repository.ts',
+    'packages/daemon/src/server.ts',
+    'packages/daemon/src/index.ts',
+    'packages/daemon/src/startup.ts',
+    'packages/daemon/src/adapters/tmux.ts',
+    'packages/daemon/src/middleware/auth-bearer-token.ts',
+    'packages/daemon/src/middleware/browser-boundary.ts',
+    'packages/daemon/test/index.test.ts',
     'packages/daemon/src/domain/types.ts',
     'packages/daemon/src/domain/rig-repository.ts',
     'packages/daemon/src/domain/rig-lifecycle-service.ts',
@@ -68,9 +76,12 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/contracts/team-control.ts',
   'packages/daemon/src/team-control-surface.ts',
   'packages/daemon/src/domain/plan-governance.ts',
+  'packages/daemon/src/routes/team-control.ts',
   'packages/daemon/src/db/migrations/104_team_governance.ts',
   'packages/daemon/test/team-governance.test.ts',
   'packages/daemon/test/team-migration.test.ts',
+  'packages/daemon/test/team-control-auth.test.ts',
+  'packages/daemon/test/daemon-mode.test.ts',
   'packages/i18n/package.json',
   'packages/i18n/tsconfig.json',
   'packages/i18n/src/index.ts',

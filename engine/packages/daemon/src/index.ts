@@ -8,6 +8,7 @@ import { resolveDaemonDbPath } from "./daemon-db-path.js";
 import { createDaemon } from "./startup.js";
 import { removeParentSessionEnv } from "./domain/parent-session-env.js";
 import { resolveBindPlan } from "./domain/bind-plan.js";
+import { isManagedMode } from "./domain/plan-governance.js";
 import { runQueueRetentionSweep, RETENTION_DEFAULTS } from "./domain/queue-retention.js";
 import {
   createStuckSweepStatus,
@@ -243,6 +244,14 @@ async function isTrustedLocalOrTailnetBind(host: string): Promise<boolean> {
 }
 
 export async function startServer(port?: number) {
+  // Consume control credentials before bootstrap or discovery can spawn a child.
+  const ownerToken = process.env.MULTI_AGENT_OWNER_TOKEN?.trim() || null;
+  delete process.env.MULTI_AGENT_OWNER_TOKEN;
+  // KTD22: the owner chooses the mode at start; switching requires a restart.
+  const requestedMode = process.env.MULTI_AGENT_MODE?.trim() || "legacy";
+  if (requestedMode !== "legacy" && requestedMode !== "managed") {
+    throw new Error(`MULTI_AGENT_MODE must be "legacy" or "managed", got "${requestedMode}"`);
+  }
   const p = port ?? parseInt(readOpenRigEnv("OPENRIG_PORT", "RIGGED_PORT") ?? "7433", 10);
   // D15 — anchor the default db under OPENRIG_HOME, never a bare CWD-relative
   // filename (which could open the shared fleet db). Explicit OPENRIG_DB wins.
@@ -306,6 +315,8 @@ export async function startServer(port?: number) {
 
   const { app, contextMonitor, deps, eventLoopMonitor, injectWebSocket } = await createDaemon({
     dbPath,
+    managedMode: requestedMode === "managed",
+    teamControl: { credentials: { ownerToken } },
     bearerToken,
     terminalBearerToken,
     // S20 — the effective bind plan rides the health surface so adoption gates verify
@@ -324,11 +335,12 @@ export async function startServer(port?: number) {
   // P7 — lifecycle heartbeat: advance last-seen every tick while running.
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   const servers: ServerType[] = [];
+  // KTD22: a managed-mode daemon starts none of the legacy schedulers and monitors below.
+  const managed = isManagedMode(deps.rigRepo.db);
   for (const host of bindHosts) {
     const srv = serve({ fetch: app.fetch, port: p, hostname: host }, (info) => {
       console.log(`OpenRig daemon listening on http://${host}:${info.port}`);
-      if (!monitorsStarted) {
-        monitorsStarted = true;
+      if (!monitorsStarted && !managed) {
         contextMonitor.start();
         // PL-004 Phase C: start watchdog scheduler. Joins the supervision
         // tree post-bind so the HTTP surface is ready before the first
@@ -358,6 +370,9 @@ export async function startServer(port?: number) {
         // S01 — wake-or-escalate on batons: a failed baton wake retries on schedule,
         // then escalates through recorded rungs; never a silent park.
         wakeLadderScheduler = startWakeLadderScheduler(deps);
+      }
+      if (!monitorsStarted) {
+        monitorsStarted = true;
         // P7 — lifecycle heartbeat (advances last-seen). A write failure logs and
         // continues (the render degrades to an older last-seen honestly); the
         // store guards not-stopped so a tick can never pass stopped_at.
@@ -378,7 +393,7 @@ export async function startServer(port?: number) {
   // PL-004 Phase C: graceful shutdown — stop scheduler before process
   // exit so any in-flight policy evaluation completes (or is awaited).
   // Multi-bind: close every serve() instance in parallel.
-  deps.healthDiagnosis?.start();
+  if (!managed) deps.healthDiagnosis?.start();
   const shutdown = createDaemonShutdown({
     receiptPath: path.join(OPENRIG_HOME, DAEMON_SHUTDOWN_RECEIPT),
     phases: [
