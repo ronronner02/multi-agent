@@ -1,0 +1,421 @@
+import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { canonicalJson, parseAttemptIdentity, type NativeAttemptIdentity } from "../contracts/team-control.js";
+import type { AssignmentInput } from "../domain/team-assignment.js";
+import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
+import type { ContextObservation } from "../integrations/framework/context-manifest.js";
+import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, NodeBinding, ReadinessResult } from "../domain/runtime-adapter.js";
+import type { ResumeResult } from "./claude-resume.js";
+
+export type WorkerClient = "claude-code" | "codex";
+export interface WorkerLaunchInput {
+  client: WorkerClient;
+  attempt: ManagedAttempt;
+  resumeToken?: string;
+  model?: string;
+  effort?: string;
+}
+export interface WorkerLauncher {
+  launch(input: WorkerLaunchInput): Promise<HarnessLaunchResult>;
+  checkReady(attempt: ManagedAttempt): Promise<ReadinessResult>;
+}
+
+export async function launchManagedHarness(
+  launcher: WorkerLauncher | undefined, client: WorkerClient, binding: NodeBinding,
+  opts: { resumeToken?: string; forkSource?: unknown },
+): Promise<HarnessLaunchResult> {
+  if (!launcher) return { ok: false, error: "Managed worker launch is unavailable" };
+  if (opts.forkSource) return { ok: false, error: "Managed attempts require a fresh session or an exact resume identity" };
+  return launcher.launch({ client, attempt: binding.managedAttempt!, resumeToken: opts.resumeToken,
+    model: binding.model, effort: binding.effort });
+}
+
+export async function checkManagedReady(launcher: WorkerLauncher | undefined, attempt: ManagedAttempt): Promise<ReadinessResult> {
+  if (!launcher) return { ready: false, code: "managed_launch_unavailable", reason: "Managed worker launch is unavailable" };
+  return launcher.checkReady(attempt);
+}
+
+export async function resumeManagedAttempt(
+  launcher: WorkerLauncher | undefined, client: WorkerClient, attempt: ManagedAttempt,
+  type: string | null, token: string | null, model?: string | null, effort?: string | null,
+): Promise<ResumeResult> {
+  if (!launcher) return { ok: false, code: "managed_launch_unavailable", message: "Managed worker launch is unavailable" };
+  if (type !== (client === "codex" ? "codex_id" : "claude_id") || !token) {
+    return { ok: false, code: "managed_identity_mismatch", message: "Managed resume requires an exact native session ID" };
+  }
+  const result = await launcher.launch({ client, attempt, resumeToken: token, model: model ?? undefined, effort: effort ?? undefined });
+  return result.ok ? { ok: true, managedSession: result.managedSession, appliedLaunch: result.appliedLaunch }
+    : { ok: false, code: "managed_launch_failed", message: result.error };
+}
+
+export interface WorkerMount { source: string; target: string; access: "ro" | "rw" }
+export interface WorkerBoundary {
+  uid: number;
+  groups: number[];
+  home: string;
+  configHome: string;
+  mountNamespace: string;
+  userNamespace: string;
+  networkNamespace: string;
+  networkProfileFingerprint: string;
+  mounts: WorkerMount[];
+  inheritedDescriptors: { fd: number; kind: "tty" | "pipe" | "file" | "directory" | "socket" }[];
+}
+export interface WorkerLaunchPreflight {
+  assignment: AssignmentInput;
+  worker: { name: string; uid: number; groups: number[]; home: string; scratch: string; tree: string };
+  control: { uid: number; mountNamespace: string; userNamespace: string };
+  executable: string;
+  executableVersion: string;
+  generation: number;
+  policyFingerprint: string;
+  policyRevision: number;
+  /** Root-owned installed policy observed by the control preflight, bound to the approved fingerprint. */
+  installedPolicy: WorkerLaunchPolicy;
+  network: WorkerNetworkPolicy;
+  provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string };
+  previous?: ManagedSessionReceipt;
+  /** Secret values are used only for output redaction, never copied to receipts or argv. */
+  credentialValues: string[];
+}
+export interface WorkerNetworkPolicy {
+  mode: "isolated-allowlist" | "filtered-proxy" | "host-shared" | "unknown";
+  hostNamespace: string;
+  profileFingerprint: string;
+  preflightRef: string;
+}
+export interface WorkerCommand {
+  file: "/usr/bin/sudo";
+  args: string[];
+  attemptId: string;
+  deadline: number;
+  contextHash: string;
+  client: WorkerClient;
+  nativeArgv: string[];
+  network: WorkerNetworkPolicy;
+}
+export interface WorkerObservation {
+  identity: NativeAttemptIdentity;
+  attemptId: string;
+  processGroupId: number;
+  boundary: WorkerBoundary;
+  context: ContextObservation;
+  /** Observed at exec by the control transport, rather than read from pane text. */
+  nativeArgv: string[];
+  sessionSource: "exec" | "process_session_file";
+  effectiveMode: { permissionMode?: string; approvalPolicy?: string; sandbox?: string };
+  readiness: "ready" | "starting" | "prompt" | "unknown" | "unsupported";
+  screen: string;
+  output: { text: string; evidenceRef: string };
+}
+export interface WorkerQuiescenceRequest {
+  command: Readonly<WorkerCommand>;
+  identity?: NativeAttemptIdentity;
+  processGroupId?: number;
+  causeCode: string;
+}
+export interface WorkerQuiescenceReceipt {
+  command: Readonly<WorkerCommand>;
+  status: "terminated" | "quarantined" | "not_started";
+  identity?: NativeAttemptIdentity;
+  processGroupId?: number;
+  evidenceRef: string;
+}
+export interface WorkerLaunchEvent {
+  phase: "prepared" | "observed" | "blocked";
+  attemptId: string;
+  deadline: number;
+  contextHash: string;
+  code?: string;
+  causeCode?: string;
+  quiescence?: WorkerQuiescenceReceipt;
+  session?: ManagedSessionReceipt;
+  network?: WorkerNetworkPolicy;
+  output?: { text: string; truncated: boolean; evidenceRef: string };
+}
+/**
+ * Control-owned capability: preflight and observation must come from the supervisor's
+ * authenticated OS/native-client probes. Worker metadata and terminal output cannot
+ * implement this interface. The transport executes the fixed privileged launcher,
+ * closes inherited descriptors, and forwards the deadline to the U7 supervisor.
+ */
+export interface WorkerLaunchControl {
+  preflight(input: WorkerLaunchInput): Promise<WorkerLaunchPreflight>;
+  start(command: Readonly<WorkerCommand>): Promise<NativeAttemptIdentity>;
+  observe(identity: NativeAttemptIdentity): Promise<WorkerObservation>;
+  /**
+   * Authenticated supervisor operation, registered against the immutable command
+   * before start effects. Resolve only after the entire owned process group and
+   * its descendants cannot execute. Locate ambiguous starts by command when no
+   * valid identity was returned; not_started also excludes any future start effect.
+   * Never select a target from an unverified observation or terminal output.
+   */
+  quiesce(request: Readonly<WorkerQuiescenceRequest>): Promise<WorkerQuiescenceReceipt>;
+  record(event: Readonly<WorkerLaunchEvent>): Promise<void>;
+}
+type LaunchState = {
+  input: WorkerLaunchInput;
+  preflight?: WorkerLaunchPreflight;
+  command?: WorkerCommand;
+  identity?: NativeAttemptIdentity;
+  startRequested?: boolean;
+  processGroupId?: number;
+  receipt?: ManagedSessionReceipt;
+  blocked?: string;
+  blockCause?: string;
+  blocking?: Promise<void>;
+  quiescence?: WorkerQuiescenceReceipt;
+  evidencePersistenceFailed?: boolean;
+};
+class WorkerLaunchFault extends Error {
+  constructor(readonly code: string) { super(code); }
+}
+function requireFact(condition: unknown, code: string): asserts condition {
+  if (!condition) throw new WorkerLaunchFault(code);
+}
+function same(a: unknown, b: unknown): boolean { return canonicalJson(a) === canonicalJson(b); }
+function groups(value: number[]): number[] { return [...value].sort((a, b) => a - b); }
+const configHome = (client: WorkerClient) => "/home/worker/" + (client === "codex" ? ".codex" : ".claude");
+export interface WorkerLaunchPolicy {
+  policy_revision: number; worker_identities: string[];
+  paths: { toolchain_dir: string }; sandbox: { etc_ro_binds: string[]; masked_paths: string[] };
+}
+const reference = (value: string) => /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,255}$/.test(value);
+
+function sharedOutput(output: WorkerObservation["output"], secrets: string[]): WorkerLaunchEvent["output"] {
+  requireFact(reference(output.evidenceRef), "managed_evidence_invalid");
+  let text = output.text.replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|[\x00-\x08\x0b-\x1f\x7f]/g, "");
+  for (const secret of [...secrets].filter(Boolean).sort((a, b) => b.length - a.length)) text = text.split(secret).join("[redacted]");
+  text = text.replace(/(Bearer\s+)[A-Za-z0-9._~+\/=-]+/gi, "$1[redacted]")
+    .replace(/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|authorization)["']?\s*[:=]\s*["']?)[^\s"',;}\]]+/gi, "$1[redacted]")
+    .replace(/(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, "$1[redacted]@");
+  const bytes = Buffer.from(text);
+  const bounded = bytes.subarray(0, 8192).toString("utf8").replace(/\uFFFD$/, "");
+  return { text: bounded, truncated: bytes.length > 8192, evidenceRef: output.evidenceRef };
+}
+
+/** Composes assignment/context authority with the existing privileged launch boundary. */
+export class RestrictedWorkerLauncher implements WorkerLauncher {
+  private states = new Map<string, LaunchState>();
+  private context?: typeof import("../integrations/framework/context-manifest.js");
+  constructor(private control: WorkerLaunchControl, private now: () => number = Date.now, private sessionId: () => string = randomUUID) {}
+
+  async launch(input: WorkerLaunchInput): Promise<HarnessLaunchResult> {
+    let state: LaunchState;
+    try {
+      this.context = await import("../integrations/framework/context-manifest.js");
+      input = { ...input, attempt: this.context.immutable(structuredClone(input.attempt)) };
+      requireFact(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(input.attempt.attemptId), "managed_attempt_invalid");
+      requireFact(!this.states.has(input.attempt.attemptId), "managed_attempt_already_started");
+      state = { input };
+      this.states.set(input.attempt.attemptId, state);
+    } catch { return { ok: false, error: "Managed launch blocked: managed_attempt_invalid_or_duplicate" }; }
+    try {
+      const { immutable } = this.context!;
+      const { prepareTeamAssignment } = await import("../domain/team-assignment.js");
+      const { attempt, client, resumeToken } = input;
+      this.checkDeadline(attempt);
+      requireFact(attempt.context.client === client, "managed_client_mismatch");
+      const { assignment, ...metadata } = await this.control.preflight(input);
+      const preflight = state.preflight = {
+        ...immutable(structuredClone(metadata)),
+        assignment: { ...assignment, observed: immutable(structuredClone(assignment.observed)) },
+      };
+      const policy = preflight.installedPolicy;
+      const network = this.networkPolicy(preflight);
+      const prepared = await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
+      requireFact(prepared.context.generatedHash === attempt.context.generatedHash, "managed_context_mismatch");
+      requireFact(preflight.worker.uid !== preflight.control.uid && preflight.worker.uid > 0
+        && preflight.worker.uid === attempt.context.workerUid && same(groups(preflight.worker.groups), groups(attempt.context.workerGroups)),
+      "managed_worker_identity_mismatch");
+      requireFact(policy.worker_identities.includes(preflight.worker.name), "managed_worker_identity_mismatch");
+      requireFact(preflight.policyFingerprint === attempt.context.binding.policyFingerprint
+        && preflight.policyRevision === attempt.context.binding.policyRevision && preflight.policyRevision === policy.policy_revision, "managed_policy_mismatch");
+      for (const root of [preflight.worker.home, preflight.worker.scratch, preflight.worker.tree]) {
+        requireFact(realpathSync(root) === root, "managed_worker_root_invalid");
+      }
+      requireFact(preflight.executable === policy.paths.toolchain_dir + "/clients/bin/" + (client === "codex" ? "codex" : "claude")
+        && preflight.executableVersion.trim(), "managed_executable_unsupported");
+      for (const option of [input.model, input.effort]) requireFact(option === undefined
+        || (option.length > 0 && option.length <= 256 && !option.startsWith("-") && !/[\x00-\x1f\x7f]/.test(option)), "managed_launch_option_invalid");
+      requireFact(resumeToken === undefined || /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(resumeToken), "managed_resume_identity_mismatch");
+      requireFact(preflight.provider.status === "signed_in" && preflight.provider.client === client
+        && preflight.provider.home === preflight.worker.home && reference(preflight.provider.evidenceRef), "managed_provider_signin_required");
+      if (resumeToken !== undefined) {
+        const previous = attempt.previous;
+        requireFact(previous && preflight.previous && same(previous, preflight.previous), "managed_resume_identity_mismatch");
+        requireFact(previous.identity.nativeSessionId === resumeToken && previous.client === client
+          && previous.runId === attempt.context.runId && previous.contextHash === attempt.context.generatedHash
+          && previous.workerUid === preflight.worker.uid && previous.identity.policyFingerprint === preflight.policyFingerprint
+          && attempt.deadline <= previous.deadline && preflight.generation === previous.identity.generation + 1
+          && previous.network?.mode === network.mode && previous.network.profileFingerprint === network.profileFingerprint, "managed_resume_identity_mismatch");
+      } else requireFact(!attempt.previous && !preflight.previous && preflight.generation === 1, "managed_resume_identity_mismatch");
+      const nativeArgv = client === "claude-code"
+        ? [preflight.executable, "--permission-mode", "bypassPermissions",
+          ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
+          ...(resumeToken ? ["--resume", resumeToken] : ["--session-id", this.sessionId()])]
+        : [preflight.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false",
+          ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
+          ...(resumeToken ? ["resume", resumeToken] : [])];
+      const command: WorkerCommand = state.command = immutable({
+        file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
+          "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
+          "--attempt", attempt.attemptId, "--", ...nativeArgv],
+        nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
+      });
+      await this.record(state, { phase: "prepared" });
+      this.checkDeadline(attempt);
+      await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
+      this.checkDeadline(attempt);
+      state.startRequested = true;
+      state.identity = immutable(parseAttemptIdentity(await this.control.start(command)));
+      const observed = await this.control.observe(state.identity);
+      const receipt = this.verifyObservation(state, observed);
+      await this.record(state, { phase: "observed", session: receipt, output: sharedOutput(observed.output, preflight.credentialValues) });
+      state.receipt = receipt;
+      return { ok: true, managedSession: receipt, resumeToken: receipt.identity.nativeSessionId, resumeType: client === "codex" ? "codex_id" : "claude_id" };
+    } catch (error) {
+      const code = error instanceof WorkerLaunchFault ? error.code : "managed_launch_unverified";
+      await this.block(state, code);
+      return { ok: false, error: "Managed launch blocked: " + state.blocked + "; " + this.blockReason(state), recovery: "attention_required" };
+    }
+  }
+
+  async checkReady(attempt: ManagedAttempt): Promise<ReadinessResult> {
+    const state = this.states.get(attempt?.attemptId);
+    if (state?.blocked) {
+      await state.blocking;
+      return { ready: false, code: state.blocked, reason: this.blockReason(state) };
+    }
+    if (!state?.receipt || !state.identity) return { ready: false, code: "managed_identity_unobserved" };
+    try {
+      requireFact(same(attempt, state.input.attempt), "managed_context_changed");
+      const receipt = this.verifyObservation(state, await this.control.observe(state.identity));
+      requireFact(same(receipt, state.receipt), "managed_identity_changed");
+      if (state.blocked) {
+        await state.blocking;
+        return { ready: false, code: state.blocked, reason: this.blockReason(state) };
+      }
+      return { ready: true };
+    } catch (error) {
+      await this.block(state, error instanceof WorkerLaunchFault ? error.code : "managed_observation_unavailable");
+      return { ready: false, code: state.blocked, reason: this.blockReason(state) };
+    }
+  }
+
+  private async block(state: LaunchState, causeCode: string): Promise<void> {
+    state.blocked ??= causeCode;
+    state.blockCause ??= causeCode;
+    // Defer the operation until the shared promise is installed, including when
+    // the transport synchronously triggers another readiness check.
+    state.blocking ??= Promise.resolve().then(async () => {
+      if (state.startRequested) {
+        try {
+          const request = this.context!.immutable({ command: state.command!, causeCode: state.blockCause!,
+            ...(state.identity ? { identity: state.identity } : {}),
+            ...(state.processGroupId ? { processGroupId: state.processGroupId } : {}) });
+          const receipt = await this.control.quiesce(request);
+          requireFact(receipt && same(receipt.command, request.command) && reference(receipt.evidenceRef), "managed_quiescence_unconfirmed");
+          let identity: NativeAttemptIdentity | undefined;
+          if (receipt.status === "not_started") {
+            requireFact(!state.identity && receipt.identity === undefined && receipt.processGroupId === undefined,
+              "managed_quiescence_unconfirmed");
+          } else {
+            requireFact(receipt.status === "terminated" || receipt.status === "quarantined", "managed_quiescence_unconfirmed");
+            identity = parseAttemptIdentity(receipt.identity);
+            requireFact((!state.identity || same(identity, state.identity))
+              && identity.policyFingerprint === state.preflight!.policyFingerprint && identity.generation === state.preflight!.generation
+              && Number.isSafeInteger(receipt.processGroupId) && receipt.processGroupId! > 0
+              && (state.processGroupId === undefined || receipt.processGroupId === state.processGroupId), "managed_quiescence_unconfirmed");
+          }
+          state.quiescence = this.context!.immutable({ command: state.command!, status: receipt.status,
+            ...(identity ? { identity, processGroupId: receipt.processGroupId } : {}), evidenceRef: receipt.evidenceRef });
+        } catch { state.blocked = "managed_quiescence_unconfirmed"; }
+      }
+      try {
+        await this.record(state, { phase: "blocked", code: state.blocked, causeCode: state.blockCause, quiescence: state.quiescence });
+      } catch {
+        state.evidencePersistenceFailed = true;
+        if (state.blocked !== "managed_quiescence_unconfirmed") state.blocked = "managed_evidence_persistence_failed";
+      }
+    });
+    await state.blocking;
+  }
+
+  private blockReason(state: LaunchState): string {
+    return "Owner configuration check required; cause: " + state.blockCause
+      + (state.evidencePersistenceFailed ? "; managed_evidence_persistence_failed" : "");
+  }
+
+  private checkDeadline(attempt: ManagedAttempt): void {
+    requireFact(Number.isSafeInteger(attempt.deadline) && attempt.deadline > this.now(), "managed_deadline_expired");
+  }
+
+  private networkPolicy(preflight: WorkerLaunchPreflight) {
+    const network = preflight.network;
+    requireFact(network && (network.mode === "isolated-allowlist" || network.mode === "filtered-proxy")
+      && /^net:\[\d+\]$/.test(network.hostNamespace) && /^sha256:[a-f0-9]{64}$/.test(network.profileFingerprint)
+      && reference(network.preflightRef) && preflight.policyRevision >= 3, "managed_network_policy_unavailable");
+    return { ...network, mode: network.mode };
+  }
+
+  private verifyObservation(state: LaunchState, observed: WorkerObservation): ManagedSessionReceipt {
+    const { attempt, client, resumeToken } = state.input, p = state.preflight!, command = state.command!, policy = p.installedPolicy;
+    const { immutable, verifyEffectiveContext } = this.context!;
+    this.checkDeadline(attempt);
+    const identity = parseAttemptIdentity(observed.identity), b = observed.boundary;
+    const network = this.networkPolicy(p);
+    requireFact(same(identity, state.identity) && identity.policyFingerprint === p.policyFingerprint
+      && identity.generation === p.generation && observed.attemptId === attempt.attemptId
+      && Number.isSafeInteger(observed.processGroupId) && observed.processGroupId > 0, "managed_identity_mismatch");
+    state.processGroupId ??= observed.processGroupId;
+    requireFact(/^net:\[\d+\]$/.test(b.networkNamespace) && b.networkNamespace !== network.hostNamespace
+      && b.networkProfileFingerprint === network.profileFingerprint, "managed_network_boundary_mismatch");
+    requireFact(["exec", "process_session_file"].includes(observed.sessionSource), "managed_identity_unobserved");
+    requireFact(same(observed.nativeArgv, command.nativeArgv), "managed_launch_mode_mismatch");
+    requireFact(b.uid === p.worker.uid && b.uid !== p.control.uid && same(groups(b.groups), groups(p.worker.groups))
+      && b.home === "/home/worker" && b.configHome === configHome(client), "managed_worker_boundary_mismatch");
+    requireFact(b.mountNamespace && b.userNamespace && b.mountNamespace !== p.control.mountNamespace
+      && b.userNamespace !== p.control.userNamespace, "managed_worker_boundary_mismatch");
+    const expected: WorkerMount[] = [
+      { source: p.worker.home, target: "/home/worker", access: "rw" },
+      { source: p.worker.scratch, target: "/scratch", access: "rw" },
+      { source: p.worker.tree, target: "/work", access: attempt.context.role === "reviewer" ? "ro" : "rw" },
+      { source: attempt.context.frameworkRoot, target: "/framework", access: "ro" },
+    ];
+    for (const mount of expected) requireFact(b.mounts.filter(m => m.target === mount.target).length === 1
+      && b.mounts.some(m => same(m, mount)), "managed_worker_mount_mismatch");
+    const hostReadOnly = ["/usr", policy.paths.toolchain_dir, ...policy.sandbox.etc_ro_binds];
+    requireFact(b.mounts.every(m => expected.some(e => same(e, m))
+      || (m.access === "ro" && m.source === m.target && hostReadOnly.includes(m.target))
+      || (m.access === "ro" && m.source === "tmpfs" && policy.sandbox.masked_paths.includes(m.target))
+      || (["/", "/tmp", "/run", "/dev", "/var/tmp", "/proc"].includes(m.target) && ["tmpfs", "devtmpfs", "proc"].includes(m.source))),
+    "managed_worker_mount_mismatch");
+    requireFact(b.inheritedDescriptors.every(d => Number.isSafeInteger(d.fd) && d.fd >= 0 && d.fd <= 2
+      && ["tty", "pipe", "file"].includes(d.kind)), "managed_descriptor_leak");
+    const observedContextHash = verifyEffectiveContext(attempt.context, {
+      ...observed.context,
+      discoveryRoots: [...observed.context.discoveryRoots].sort(),
+      files: [...observed.context.files].sort((a, b) => a.path.localeCompare(b.path)),
+    });
+    if (client === "claude-code") requireFact(observed.effectiveMode.permissionMode === "bypassPermissions"
+      && identity.nativeSessionId === (resumeToken ?? command.nativeArgv[command.nativeArgv.indexOf("--session-id") + 1]), "managed_launch_mode_mismatch");
+    else requireFact(observed.effectiveMode.approvalPolicy === "never" && observed.effectiveMode.sandbox === "danger-full-access"
+      && (!resumeToken || identity.nativeSessionId === resumeToken), "managed_launch_mode_mismatch");
+    const probe = assessNativeResumeProbe({ runtime: client, paneCommand: client === "codex" ? "codex" : "claude",
+      paneContent: observed.screen, claudeAutoIdentityVerified: true, claudeResumeIdentityVerified: true });
+    requireFact(observed.readiness !== "prompt" && !/(?:gate|login|auth|selection_prompt)/.test(probe.code)
+      && !/permission required|approve this|allow this (?:command|tool)|requires? approval/i.test(observed.screen), "managed_native_prompt");
+    requireFact(observed.readiness === "ready" && probe.status === "resumed", "managed_readiness_unknown");
+    return immutable({ identity, attemptId: attempt.attemptId, runId: attempt.context.runId, client,
+      contextHash: attempt.context.generatedHash, observedContextHash, workerUid: b.uid, deadline: attempt.deadline,
+      processGroupId: observed.processGroupId, executableVersion: p.executableVersion,
+      network: { namespace: b.networkNamespace, mode: network.mode, profileFingerprint: network.profileFingerprint, preflightRef: network.preflightRef } });
+  }
+
+  private async record(state: LaunchState, event: Pick<WorkerLaunchEvent, "phase" | "code" | "causeCode" | "quiescence" | "session" | "output">): Promise<void> {
+    await this.control.record(this.context!.immutable({ ...event,
+      ...(state.command ? { network: state.command.network } : {}), attemptId: state.input.attempt.attemptId,
+      deadline: state.input.attempt.deadline, contextHash: state.input.attempt.context?.generatedHash ?? "unverified" }));
+  }
+}

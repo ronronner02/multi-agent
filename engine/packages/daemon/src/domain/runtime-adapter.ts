@@ -7,6 +7,8 @@ import type { ProjectionPlan } from "./projection-planner.js";
 
 export interface NodeBinding extends Binding {
   cwd: string;
+  /** Present only for an admitted team attempt; never falls back to a personal launch. */
+  managedAttempt?: ManagedAttempt;
   model?: string;
   effort?: string;
   codexConfigProfile?: string;
@@ -27,6 +29,32 @@ export interface NodeBinding extends Binding {
   launchGeneration?: string;
   /** #25: the rig's `managed_blocks.claude-code` file. Absent = CLAUDE.md. Only the Claude adapter reads it. */
   claudeManagedBlockFile?: import("./managed-blocks.js").ClaudeManagedBlockFile;
+}
+
+export interface ManagedAttempt {
+  attemptId: string;
+  deadline: number;
+  context: import("../integrations/framework/context-manifest.js").ContextManifest;
+  previous?: ManagedSessionReceipt;
+}
+
+export interface ManagedSessionReceipt {
+  identity: import("../contracts/team-control.js").NativeAttemptIdentity;
+  attemptId: string;
+  runId: string;
+  client: "claude-code" | "codex";
+  contextHash: string;
+  workerUid: number;
+  processGroupId: number;
+  executableVersion: string;
+  observedContextHash: string;
+  network: {
+    namespace: string;
+    mode: "isolated-allowlist" | "filtered-proxy";
+    profileFingerprint: string;
+    preflightRef: string;
+  };
+  deadline: number;
 }
 
 // -- Resolved startup file with source-root provenance --
@@ -87,7 +115,7 @@ export const ATTENTION_REQUIRED_READINESS_CODES = new Set([
 ]);
 
 export function isAttentionRequiredReadinessCode(code: string | undefined): boolean {
-  return !!code && ATTENTION_REQUIRED_READINESS_CODES.has(code);
+  return !!code && (code.startsWith("managed_") || ATTENTION_REQUIRED_READINESS_CODES.has(code));
 }
 
 // -- Harness launch result --
@@ -97,7 +125,7 @@ export type HarnessLaunchRecovery = "retry_fresh" | "attention_required";
 // `launchedProcess` (Claude resume launches): the first process the launch's own readiness check
 // pinned as the one it started, kept even when a later sample saw it replaced (#1077).
 export type HarnessLaunchResult =
-  | { ok: true; resumeToken?: string; resumeType?: string; appliedLaunch?: import("./permission-drift.js").AppliedLaunchObservation;
+  | { ok: true; managedSession?: ManagedSessionReceipt; resumeToken?: string; resumeType?: string; appliedLaunch?: import("./permission-drift.js").AppliedLaunchObservation;
     launchedProcess?: import("./native-process-lineage.js").ClaudeLaunchedProcess }
   // `evidence` carries the last-N pane lines for `attention_required` outcomes
   // so the failure can flow honest evidence through to RestoreNodeResult's

@@ -1,3 +1,4 @@
+import { launchManagedHarness, checkManagedReady, type WorkerLauncher } from "./worker-launch.js";
 import { operationalLaunchArg } from "./kernel-authority.js";
 import nodePath from "node:path";
 import fs from "node:fs";
@@ -89,6 +90,7 @@ export interface CodexAdapterFsOps {
 export class CodexRuntimeAdapter implements RuntimeAdapter {
   readonly runtime = "codex";
   private tmux: TmuxAdapter;
+  private workerLauncher?: WorkerLauncher;
   private seatLaunchEnvironment?: SeatLaunchEnvironment;
   private fs: CodexAdapterFsOps;
   private listProcesses: () => CodexProcess[] | Promise<CodexProcess[]>;
@@ -122,6 +124,7 @@ export class CodexRuntimeAdapter implements RuntimeAdapter {
 
   constructor(deps: {
     tmux: TmuxAdapter;
+    workerLauncher?: WorkerLauncher;
     seatLaunchEnvironment?: SeatLaunchEnvironment;
     fsOps: CodexAdapterFsOps;
     listProcesses?: () => CodexProcess[] | Promise<CodexProcess[]>;
@@ -140,6 +143,7 @@ export class CodexRuntimeAdapter implements RuntimeAdapter {
     prepareTeamWorkspace?: PrepareCodexTeamWorkspace;
   }) {
     this.tmux = deps.tmux;
+    this.workerLauncher = deps.workerLauncher;
     this.prepareTeamWorkspace = deps.prepareTeamWorkspace;
     this.seatLaunchEnvironment = deps.seatLaunchEnvironment;
     this.fs = deps.fsOps;
@@ -367,6 +371,9 @@ export class CodexRuntimeAdapter implements RuntimeAdapter {
     binding: NodeBinding,
     opts: { name: string; resumeToken?: string; forkSource?: import("../domain/runtime-adapter.js").ForkSource },
   ): Promise<HarnessLaunchResult> {
+    if (binding.managedAttempt !== undefined) {
+      return launchManagedHarness(this.workerLauncher, this.runtime, binding, opts);
+    }
     if (!binding.tmuxSession) {
       return { ok: false, error: "No tmux session bound — cannot launch Codex harness" };
     }
@@ -560,6 +567,7 @@ export class CodexRuntimeAdapter implements RuntimeAdapter {
   }
 
   async checkReady(binding: NodeBinding): Promise<ReadinessResult> {
+    if (binding.managedAttempt !== undefined) return checkManagedReady(this.workerLauncher, binding.managedAttempt);
     if (!binding.tmuxSession) {
       return { ready: false, reason: "No tmux session bound" };
     }

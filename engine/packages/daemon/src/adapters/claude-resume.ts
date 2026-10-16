@@ -1,3 +1,5 @@
+import { resumeManagedAttempt, type WorkerLauncher } from "./worker-launch.js";
+import type { ManagedAttempt } from "../domain/runtime-adapter.js";
 import { operationalLaunchArgs, operationalLaunchArg } from "./kernel-authority.js";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { TmuxAdapter } from "./tmux.js";
@@ -13,7 +15,7 @@ import type { ClaudeManagedLaunch } from "../domain/claude-managed-launch.js";
 
 export type ResumeResult =
   // `launchedProcess` (Claude): the process this resume's own identity check observed (#1077).
-  | { ok: true; appliedLaunch?: AppliedLaunchObservation; launchedProcess?: ClaudeLaunchedProcess }
+  | { ok: true; managedSession?: import("../domain/runtime-adapter.js").ManagedSessionReceipt; appliedLaunch?: AppliedLaunchObservation; launchedProcess?: ClaudeLaunchedProcess }
   // Non-terminal: a chooser or an inconclusive observation must preserve the
   // launch. Attention is not proof of native identity or successful continuity.
   | { ok: false; code: "attention_required"; message: string; evidence?: string }
@@ -28,6 +30,7 @@ export function isClaudeResumeType(resumeType: string | null | undefined): boole
 
 interface ClaudeResumeOptions {
   seatLaunchEnvironment?: SeatLaunchEnvironment;
+  workerLauncher?: WorkerLauncher;
   claudeManagedLaunch?: ClaudeManagedLaunch;
   listProcesses?: NativeProcessLister;
   pollMs?: number;
@@ -65,7 +68,11 @@ export class ClaudeResumeAdapter {
     nonInterruptive?: boolean,
     kernelAuthority?: boolean,
     teamPermissionDefault?: boolean,
+    managedAttempt?: ManagedAttempt,
   ): Promise<ResumeResult> {
+    if (managedAttempt !== undefined) {
+      return resumeManagedAttempt(this.options.workerLauncher, "claude-code", managedAttempt, resumeType, resumeToken, model, effort);
+    }
     if (!this.canResume(resumeType, resumeToken)) {
       return { ok: false, code: "no_resume", message: "Claude resume not available" };
     }
