@@ -1,0 +1,5 @@
+{
+  "lead": { "client": "codex", "permissions": ["request-assignment", "record-evaluation", "propose-acceptance", "yield"] },
+  "implementer": { "client": "claude-code", "permissions": ["write-assigned-tree", "submit-evidence"] },
+  "reviewer": { "client": "codex", "permissions": ["submit-review"] }
+}
