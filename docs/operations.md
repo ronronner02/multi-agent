@@ -29,7 +29,7 @@ The installed policy (`/etc/multi-agent/worker-policy.json`) and launcher are ro
 Known boundary properties:
 
 - **WSL interop is global.** `/run/WSL/*_interop` sockets are world-writable, and `/mnt/c` and `/mnt/d` are drvfs mounts readable by every local uid. Outside the sandbox, a worker uid could start Windows processes or read Windows files. The sandbox hides both paths, and the preflight harness proves that neither a mounted nor a copied Windows executable runs inside it. Never launch a worker outside the launcher.
-- **Network namespace is shared** (`sandbox.network: host-shared`) because the native clients need outbound provider access, and no user-mode network stack is packaged for this release. Workers can therefore reach loopback TCP listeners and host abstract unix sockets. Control-plane services must use authenticated loopback listeners or path-based unix sockets under the control state directory, and must never use abstract sockets. The preflight receipt records how many abstract sockets are visible.
+- **The worker network is currently shared with the host, and that is not an acceptable posture.** Policy revision 2 sets `sandbox.network: host-shared` because the native clients need outbound provider access. A sandboxed worker therefore reaches whatever the host reaches, and on a WSL host with `networkingMode=mirrored` that includes Windows `127.0.0.1` listeners and the host's overlay-network peers. KTD23 replaces this with a narrowed network: provider and dependency egress only, with host loopback, overlay peers, MagicDNS names, the local LAN and host abstract sockets unreachable. Until that policy revision is provisioned and its preflight passes, no managed launch may run. Control-plane services must in any case use authenticated loopback listeners or path-based unix sockets under the control state directory, and must never use abstract sockets.
 - **Interactive panes rely on the kernel TIOCSTI restriction.** Interactive sessions keep the tmux pane as their controlling terminal. The launcher refuses to start one unless `dev.tty.legacy_tiocsti` is `0`.
 
 ## Host Provisioning
@@ -87,6 +87,8 @@ Missing tools, identities, launcher installation, kernel capability or preflight
 
 The host preflight passed 29/29 checks against policy revision 2, with no prerequisite or fixture blockers. The receipt is `preflight-8a55c69d.json`.
 
+**This receipt is stale for the current host and must not be cited as current evidence.** It was taken on 2026-10-13 under WSL2 NAT networking. On 2026-10-16 the host was switched to `networkingMode=mirrored`, which changes what a sandboxed process can reach, and the receipt's only loopback check ran in the Windows-to-WSL direction. A receipt is valid only for the host networking and policy revision it was taken under; re-run the preflight before the next managed launch.
+
 | Fact | Value |
 | --- | --- |
 | OS / kernel | Ubuntu 26.04.1 LTS / `6.18.33.2-microsoft-standard-WSL2` |
@@ -98,8 +100,8 @@ The host preflight passed 29/29 checks against policy revision 2, with no prereq
 | Denials | All sentinel, Windows-drive, interop-socket, other-worker and owner-tmux paths return `ENOENT` inside the sandbox, although each was confirmed live from its owner's side first. The reviewer candidate returns `EROFS`. A live host PID returns `ESRCH`. A copied Windows executable is present but cannot run. A directory on stdin is rejected (`stdio-not-allowed`). |
 | Windows-backed mounts | The `/usr/lib/wsl/drivers` 9p mount is covered by the read-only mask and does not resolve. No other 9p/drvfs/virtiofs mount appears. The only path-backed descriptor in the worker is `/dev/null`. |
 | Native protections | Nested bubblewrap and `socat` work. Codex `:read-only` write, out-of-workspace write and network access are denied, with the resulting files absent and the network positive control succeeding outside Codex. `:workspace` write is allowed and the file exists. |
-| Loopback | A Windows process reaches a WSL listener on `127.0.0.1` (HTTP 200); the listener is bound only to `127.0.0.1`. |
-| Limitation | 6 host abstract unix sockets are visible inside the sandbox because the network namespace is shared (see Known boundary properties). |
+| Loopback (Windows to WSL only) | A Windows process reaches a WSL listener on `127.0.0.1` (HTTP 200); the listener is bound only to `127.0.0.1`. The reverse direction, and the reachable set from inside the sandbox, were not measured and are required by KTD23. |
+| Limitation | 6 host abstract unix sockets are visible inside the sandbox because the network namespace was shared at that time (see Known boundary properties). Under KTD23 the sandbox must not reach host abstract sockets at all, and the preflight enumerates the reachable set from inside the sandbox. |
 
 Claude Code's live sandboxed tool execution needs an authenticated worker home and a model call. It is exercised through the managed launch path in U4, under a recorded run budget.
 
