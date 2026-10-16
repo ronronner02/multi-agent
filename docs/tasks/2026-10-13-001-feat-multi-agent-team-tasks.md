@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:b11c198417ef8113901ce43003f16779876d5215964eb85b89020cc76db33a51"
+source_plan_hash: "sha256:27832e0eade095dec02f6c79fa085f7abf04c4ed2be0f76a3823216607db7b8f"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -49,7 +49,8 @@ T002 is the only **pinned import operation**, explicitly authorized by U1's sour
 - Keep automatic managed dispatch disabled through foundation/integration gates. Only explicitly scoped preflight/native probes are allowed before U8; they are not broad autonomous feature work. Keep `webUiEnabled` false until U9's session/terminal gates pass, and keep the listener loopback-only throughout this milestone.
 - Offline tests must not start provider sessions. Setup/privilege changes require their explicit scope; each live compatibility probe, primary run, reverse-contract run and comparison trial needs its own grant and recorded supported spending cap or explicit time-only posture.
 - Each granted run has at most three live sessions including the separate lead, one diagnosed recoverable retry, two review/rework cycles and 60 cumulative active minutes. New IDs, restart, retry, concurrent sessions and staged task cards do not reset or multiply that budget. Only a durable pause while all work is stopped pauses accounting.
-- T017 owns deadline/no-progress/storage-cap enforcement; T033 owns failure classification, retry eligibility and attempt phases; T018 owns conservative crash reconciliation. Unknown identity, ambiguous effects, stale plan, rejected grant, failed persistence or exhausted limits stop dependent dispatch. Preserve unrelated files, processes and durable evidence.
+- No managed launch may run under `sandbox.network: host-shared` (KTD23); the narrowed-network policy revision and its preflight receipt must exist first, and a preflight receipt is void once host networking or `policy_revision` changes.
+- T017 owns independent worker-deadline (launcher-enforced, on the privileged isolation owner)/no-progress/storage-cap enforcement; T033 owns failure classification, retry eligibility and attempt phases; T018 owns conservative crash reconciliation. Unknown identity, ambiguous effects, stale plan, rejected grant, failed persistence or exhausted limits stop dependent dispatch. Preserve unrelated files, processes and durable evidence.
 - Shared dependency declarations and lockfile changes are owned by T005 before parallel UI work. Missing shared language keys or unexpected imported owners require a serialized scoped pack revision, not an unlisted parallel edit.
 - Review each logical change with `gpt-6.1-sol` and `claude-opus-5-5` through locally configured URLs and credentials, without persisting or disclosing keys. Both reviews are report-only and inspect the same frozen candidate; use at most two rounds and leave the gate open when a model is unavailable.
 - Stop at T015-T016 and T019-T022 until the owner has reviewed the corresponding design proposal.
@@ -60,7 +61,7 @@ T002 is the only **pinned import operation**, explicitly authorized by U1's sour
 
 - **Source:** [the single active plan](../plans/2026-10-13-001-feat-multi-agent-team-plan.md).
 - **Branch:** regenerated derived pack with concrete imported owners and serialized import-manifest maintenance; independent semantic review follows deterministic validation.
-- **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC7/KTD1-KTD21, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U12; Verification Contract and Definition of Done.
+- **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC7/KTD1-KTD24, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U12; Verification Contract and Definition of Done.
 - **Boundary-driven decomposition:** separate preflight from import, persistent authority from enforcement, catalog from context manifests, native launch from safe mailbox consumption and actual-client proof, ownership from review, browser authentication from terminal authority, terminal projection from controls, cancellation from recovery, UI construction from browser proof, demo seed from feature work, and primary/reverse/comparative evidence from final closeout.
 - **Implementation-time unknowns retained:** the separate demo root, current client authentication and effective context, owner provisioning/live-run caps and actual browser/client behavior. Native adapter and queue-owner paths are now mapped to the imported source; additional owners remain stop conditions.
 - **Excluded/deferred:** distributed nodes, concurrent projects, Pi/DSH support, every optional workflow's live execution, TUI goal authoring/session administration, hostile-admin containment, and Milestone 2 domain/tunnel/passkey/app/push-notification work. Responsive local layouts are included now.
@@ -72,10 +73,10 @@ The matrix preserves all source units and their source requirement anchors; the 
 
 | Source | Requirements / acceptance | Task(s) | Primary validation |
 | --- | --- | --- | --- |
-| U1 | R2, R3, R7, R13, R20, R21; AE2, AE6, AE12, AE13; KTD1, KTD2, KTD6, KTD7, KTD10 | T001-T002 | Actual isolation preflight, pinned import/transfer hashes, preserved Windows source and reproducible build |
+| U1 | R2, R3, R7, R13, R20, R21; AE2, AE6, AE12, AE13; KTD1, KTD2, KTD6, KTD7, KTD10, KTD23 | T001-T002 | Actual isolation preflight, pinned import/transfer hashes, preserved Windows source and reproducible build |
 | U2 | R1, R4, R5, R13, R19, R21, R22; AE1, AE4, AE6, AE11, AE13; KTD4-KTD6, KTD22 | T003-T004 | Transactional migration/governance, fixed daemon mode, admission invariants and owner-level managed-entry authority checks |
 | U3 | R1-R6, R11, R18, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6, KTD21 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness, effective-context manifests and the Lead operating protocol |
-| U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21; PC7 | T008-T010, T031-T032 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
+| U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21, KTD23, KTD24; PC7 | T008-T010, T031-T032 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
 | U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9 | T011-T012 | Dependency/snapshot isolation, exact independent review and persistent bounded rework |
 | U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
 | U7 | R5, R9-R15, R18, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9, KTD20 | T017-T018, T033 | Owned-process cancel/deadlines, failure classification and retry eligibility, crash fault injection, no duplicate side effects and paired restore |
@@ -83,7 +84,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | U10 | R12; KTD15; PC2 | T005 | Shared catalog/interpolation parity, fallback and display-width tests |
 | U11 | R9, R12-R16, R18; AE5-AE7, AE9, AE10, AE12; KTD2, KTD13-KTD16; PC1-PC4, PC6 | T019-T021 | Component behavior, reference adaptations, six browser width/language combinations and accessibility |
 | U12 | R4, R5, R12, R16, R21, R22; AE4, AE13; KTD5, KTD17; PC5 | T022-T023 | Canonical read-only paths/inert Markdown and versioned plan-bound task edits |
-| U8 | R1-R22, F1-F4, AE1-AE13; KTD1-KTD21; PC1-PC7; all Success Criteria | T024-T030 | Frozen seed, primary live feature/owner acceptance, reverse contracts, actual candidate comparison and final proof reconciliation |
+| U8 | R1-R22, F1-F4, AE1-AE13; KTD1-KTD24; PC1-PC7; all Success Criteria | T024-T030 | Frozen seed, primary live feature/owner acceptance, reverse contracts, actual candidate comparison and final proof reconciliation |
 
 ### Required-proof ownership
 
@@ -92,7 +93,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | Scope, framework routing, approval and assignment freshness | T003-T004, T006-T007 | T027, T030 |
 | Distinct native clients and direct addressed collaboration | T008-T010 | T027-T028 |
 | Structured native channels and Lead wake bounds | T007, T031-T032 | T010, T030 |
-| Rejection, PC7 launch mode, context and control isolation | T001, T004, T007-T010, T013-T014 | T027-T028 |
+| Rejection, PC7 launch mode, context and control isolation | T001-T002, T004, T007-T010, T013-T014 | T027-T028 |
 | Candidate integrity, independent review and integrated acceptance | T011-T012, T024-T026 | T027, T030 |
 | Cancellation, restart, ambiguous effects and cumulative limits | T017-T018, T033 | T027-T028 |
 | Reproducible source/build and database rollback | T001-T003, T018 | T030 |
@@ -347,7 +348,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "AE13",
         "KTD2",
         "KTD6",
-        "KTD7"
+        "KTD7",
+        "KTD23"
       ],
       "goal": "Prove the WSL worker-isolation and native-client prerequisites before adapting the engine.",
       "dependencies": [],
@@ -365,14 +367,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#risks-and-execution-prerequisites"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Read-only inventory followed only by authorized minimal probes: worker scratch write succeeds while token/database/WAL/shared-memory/socket/owner-pane access, host-process access and Windows interoperation fail; both native clients retain protections; Windows browser reaches WSL localhost without non-loopback binding.",
+      "test_focus": "Read-only inventory followed only by authorized minimal probes: worker scratch write succeeds while token/database/WAL/shared-memory/socket/owner-pane access, host-process access and Windows interoperation fail; both native clients retain protections; Windows browser reaches WSL localhost without non-loopback binding. The preflight also enumerates the sandbox reachable set: provider and dependency endpoints succeed while Windows host loopback services, overlay-network peers and their MagicDNS names, the local LAN and host abstract sockets all fail (KTD23). That enumeration is a re-run gate, not a one-time result: a receipt is valid only for the host networking and policy_revision it was taken under, so changing either invalidates it and requires the preflight to run again before the next managed launch.",
       "done_signal": "Redacted receipts record Ubuntu/kernel, identities, isolated mounts/process boundary, launcher ownership/hashes and client versions; each required capability is either demonstrated or blocks T002. Offline checks spend no provider quota.",
       "wave": 1,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. OS account/privilege changes, launcher provisioning, a provider call, or another host is needed without its specific grant; any denial boundary fails or a client requires broad-access settings.",
       "review_gate": "required",
       "review_focus": "Check that real worker subprocess probes, rather than launch flags, establish isolation and that the launcher is not a general privileged executor.",
-      "notes": "Minimal harness/policy scaffolding only; no source import, business task, client auto-upgrade or model run by inference. Select a new Linux checkout and separate demo allocation; preserve existing Windows and personal files.",
+      "notes": "Minimal harness/policy scaffolding only; no source import, business task, client auto-upgrade or model run by inference. Select a new Linux checkout and separate demo allocation; preserve existing Windows and personal files. Provisioning also creates the pinned framework tree at the policy's framework_dir, which the U4 sandbox mounts read-only, and installs the narrowed worker network path KTD23 requires; a missing framework tree blocks live managed acceptance but not adapter implementation, while a host network posture that cannot be narrowed blocks managed launch entirely.",
       "risk_note": "Source and client inventory must be reverified before a repeated preflight; a failed capability blocks adaptation rather than weakening containment."
     },
     {
@@ -740,6 +742,7 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD7",
         "KTD9",
         "KTD11",
+        "KTD23",
         "PC7"
       ],
       "goal": "Integrate restricted native launch with the PC7 unattended launch mode and resume identity.",
@@ -777,14 +780,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; launcher-only PC7 flags (Claude Code `bypassPermissions`; Codex `approval_policy = \"never\"` with `danger-full-access`), refusing sessions that still prompt, keep a native sandbox on, or start outside the worker boundary; provider sign-in from each worker home. Redact credentials before shared output and bound raw execution logs without losing evidence references.",
-      "done_signal": "Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; a session that still raises a native prompt is blocked as a configuration fault and nothing is typed into it; a signed-out worker home is a launch blocker. Worker deadlines are enforced outside controller-only timers.",
+      "test_focus": "Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; launcher-only PC7 flags (Claude Code `bypassPermissions`; Codex `approval_policy = \"never\"` with `danger-full-access`), refusing sessions that still prompt, keep a native sandbox on, or start outside the worker boundary; provider sign-in from each worker home; the launch and resume paths preserve the KTD23 boundary so a managed session reaches only its provider and dependency endpoints; U4 scenario 19: a verification failure after start, or readiness drift, quiesces the attempt through the authenticated control-side `WorkerLaunchControl.quiesce` bound to its recorded identity and process group, with targeted cases for initial boundary failure, post-ready drift, observation failure, evidence-write failure and quiesce failure. Redact credentials before shared output and bound raw execution logs without losing evidence references.",
+      "done_signal": "Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; a session that still raises a native prompt is blocked as a configuration fault and nothing is typed into it; a signed-out worker home is a launch blocker; a blocked transition after start completes only with a `terminated` or `quarantined` receipt, and an unconfirmed quiesce remains an unresolved blocker. The U4 scenario 20 context-mount projection is T010's, not this card's. Independent worker-deadline enforcement is T017's obligation under U7, not part of this card: this task records and forwards each attempt deadline and is not gated on the privileged launcher or its policy.",
       "wave": 7,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs a weaker worker boundary or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.",
       "review_gate": "required",
       "review_focus": "Check the launch boundary on fresh sessions and resume, including native subprocesses, PC7 launch-mode enforcement and non-spoofable attempt identity.",
-      "notes": "Concrete native adapters and primary existing tests were reconciled with the pinned import. Diagnose the three recorded native-tmux baseline failures before changing their owners. Additional mutation paths still require regeneration. Focused fixtures do not replace the live gate in T010.",
+      "notes": "Concrete native adapters and primary existing tests were reconciled with the pinned import. Diagnose the three recorded native-tmux baseline failures before changing their owners. Additional mutation paths still require regeneration. Focused fixtures do not replace the live gate in T010. U7 owns independent worker-deadline enforcement, including any engine/config/isolation/worker-launch.mjs change and the U1 host preflight it requires; this card is not blocked on them. The KTD23 boundary is implemented here; the separately authorized live reachable-set denial is T010's, not this card's.",
       "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -862,6 +865,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD11",
         "KTD19",
         "KTD21",
+        "KTD23",
+        "KTD24",
         "PC7"
       ],
       "goal": "Prove both native clients preserve containment, provenance and safe messaging through managed launch and resume.",
@@ -878,7 +883,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/test/team-messaging.test.ts",
         "engine/packages/daemon/test/native-session-contract.test.ts",
         "engine/packages/daemon/test/native-channel-contract.test.ts",
-        "engine/packages/daemon/test/lead-wake-policy.test.ts"
+        "engine/packages/daemon/test/lead-wake-policy.test.ts",
+        "engine/packages/daemon/src/adapters/worker-launch.ts",
+        "engine/packages/daemon/src/integrations/framework/context-manifest.ts",
+        "engine/packages/daemon/test/framework-context-manifest.test.ts",
+        "engine/config/isolation/worker-launch.mjs",
+        "engine/config/isolation/worker-policy.json",
+        "engine/config/isolation/provision-host.sh",
+        "engine/test/worker-isolation-preflight.test.mjs"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u4-adapt-native-sessions-and-persistent-peer-communication",
@@ -886,14 +898,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#commands-and-evidence-binding"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart.",
-      "done_signal": "Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts and the spike record are bound to the same source, policy and client versions.",
+      "test_focus": "Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. The KTD23 reachable set measured from inside a real managed session: provider and dependency endpoints succeed while Windows host loopback services, overlay-network peers and their MagicDNS names, the LAN and host abstract sockets are unreachable, on fresh launch and again after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart. KTD24 and U4 scenario 20 (deferred here from T008): build the per-attempt read-only projection under `/var/lib/multi-agent/context/<worker>/<runId>/<attemptId>/`, mount it at `/context` through a verified descriptor, make the `/framework` and `/context` mounts mandatory, and map host to worker paths through the two policy-derived prefixes only; the manifest records host and worker paths, out-of-mount context is refused at manifest build, launch and resume, observed in-worker discovery matches the worker paths, and one worker cannot read another's projection.",
+      "done_signal": "Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts, the KTD23 reachable-set receipts and the spike record are bound to the same source, policy and client versions. The KTD24 policy revision is re-provisioned and passes the full U1 host preflight before any live probe; required context outside every admitted mount is refused, by focused tests and in the live probes.",
       "wave": 9,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration; the KTD24 policy revision cannot pass the full U1 host preflight, or another `policy_revision` change is in flight.",
       "review_gate": "required",
       "review_focus": "Reject false-green launch flags/mocks and enforce a failed live client contract as a blocker for all dependent managed work.",
-      "notes": "At most three live sessions including the lead; probes require their own grant and cumulative cap. This is compatibility verification, not the full feature trial or the reverse-pairing acceptance task.",
+      "notes": "At most three live sessions including the lead; probes require their own grant and cumulative cap. This is compatibility verification, not the full feature trial or the reverse-pairing acceptance task. The KTD24 context-mount change was deferred here from T008 by owner decision on 2026-10-16. context-manifest.ts is shared with T007, and the launcher/policy/provisioning owners are shared with T001 (KTD23) and T017 (deadline). The KTD24 policy change bumps policy_revision, is re-provisioned by the owner and re-runs the full U1 host preflight; serialize it with any other policy_revision change.",
       "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority."
     },
     {
@@ -1273,6 +1285,9 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/domain/team-reconciliation.ts",
         "engine/packages/daemon/src/domain/runtime-adapter.ts",
         "engine/packages/daemon/src/adapters/worker-launch.ts",
+        "engine/config/isolation/worker-launch.mjs",
+        "engine/config/isolation/worker-policy.json",
+        "engine/test/worker-isolation-preflight.test.mjs",
         "engine/packages/daemon/test/team-cancellation.test.ts"
       ],
       "context_refs": [
@@ -1288,7 +1303,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Cancellation assumes button success, kills unrelated sessions, deletes user work or evidence, or controller absence gives workers unbounded runtime.",
       "review_gate": "required",
       "review_focus": "Inspect independent deadlines, process lineage and conservative unknown intervals; only a durable pause with all work stopped pauses accounting.",
-      "notes": "Runtime-adapter and worker-launch are shared U4 identity/deadline owners, deliberately serialized after their earlier tasks. Real-process drills need their applicable run/setup grants.",
+      "notes": "Runtime-adapter and worker-launch are shared identity owners, deliberately serialized after their earlier tasks. This card owns independent worker-deadline enforcement: the deadline must survive daemon absence, enforced at the privileged launcher against the recorded process group. A new launcher option or policy key bumps policy_revision, is re-provisioned, and re-runs the full U1 host preflight before managed launch. Real-process drills need their applicable run/setup grants.",
       "risk_note": "Unknown process identity or external effects must block replay; restoring SQLite does not undo agent filesystem effects.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -1409,7 +1424,13 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/ui/src/team/agent-status.tsx",
         "engine/packages/ui/src/team/system-status.tsx",
         "engine/packages/ui/src/team/activity.tsx",
-        "engine/packages/ui/src/team/__tests__/overview.test.tsx"
+        "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+        "engine/packages/ui/src/skins/shuimo-danqing/skin.css",
+        "engine/packages/ui/src/skins/shuimo-danqing/ATTRIBUTION.md",
+        "engine/packages/ui/public/skins/shuimo-danqing/shuimo-danqing-loop.mp4",
+        "engine/packages/ui/public/skins/shuimo-danqing/sm-paper-grain.webp",
+        "engine/packages/ui/public/skins/shuimo-danqing/sm-paper-grain-strong.webp",
+        "engine/packages/ui/src/team/__tests__/skins.test.tsx"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u11-build-the-reference-benchmark-web-ui",
@@ -1417,14 +1438,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#interface-contracts"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state.",
-      "done_signal": "Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest.",
+      "test_focus": "Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state; the optional skin layer and the shuimo-danqing skin (U11 scenarios 13-15).",
+      "done_signal": "Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest; switching skins changes no layout or data and persists only the selection, and reduced motion pauses the skin video and its animations.",
       "wave": 12,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
       "review_focus": "Inspect evidence-derived projections and safe read-only rendering, including re-pair without losing the current view.",
-      "notes": "New team filenames are concrete proposed modules within U11's declared directory. Reuse existing primitives; no Lead chat composer. Final responsive and live-browser proof belongs to T021/T027.",
+      "notes": "New team filenames are concrete proposed modules within U11's declared directory. Reuse existing primitives; no Lead chat composer. Final responsive and live-browser proof belongs to T021/T027. The skin media are the creator's files, copied from the DSH skin and adapted; the two-phase contrast check (U11 scenario 15) is part of T021's real-browser proof.",
       "risk_note": "Component fixtures and visual agreement do not establish live owner workflow acceptance or authenticated terminal safety.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -2306,11 +2327,11 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T001. Prove the WSL worker-isolation and native-client prerequisites before adapting the engine.
 
-- **Source / requirements:** `U1`; `R2`, `R3`, `R7`, `R13`, `R20`, `R21`, `F1`, `F4`, `AE2`, `AE6`, `AE12`, `AE13`, `KTD2`, `KTD6`, `KTD7`.
+- **Source / requirements:** `U1`; `R2`, `R3`, `R7`, `R13`, `R20`, `R21`, `F1`, `F4`, `AE2`, `AE6`, `AE12`, `AE13`, `KTD2`, `KTD6`, `KTD7`, `KTD23`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 1; none.
 - **Files:** `engine/config/isolation/worker-policy.json`; `engine/test/worker-isolation-preflight.test.mjs`; `docs/operations.md`; `engine/config/isolation/worker-launch.mjs`; `engine/config/isolation/provision-host.sh`.
 - **Test focus:** Read-only inventory followed only by authorized minimal probes: worker scratch write succeeds while token/database/WAL/shared-memory/socket/owner-pane access, host-process access and Windows interoperation fail; both native clients retain protections; Windows browser reaches WSL localhost without non-loopback binding.
-- **Done signal:** Redacted receipts record Ubuntu/kernel, identities, isolated mounts/process boundary, launcher ownership/hashes and client versions; each required capability is either demonstrated or blocks T002. Offline checks spend no provider quota.
+- **Done signal:** Redacted receipts record Ubuntu/kernel, identities, isolated mounts/process boundary, launcher ownership/hashes and client versions; each required capability is either demonstrated or blocks T002. Offline checks spend no provider quota. Provisioning also creates the pinned framework tree at the policy's `framework_dir`, which the U4 sandbox mounts read-only; a missing framework tree blocks live managed acceptance but not adapter implementation.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. OS account/privilege changes, launcher provisioning, a provider call, or another host is needed without its specific grant; any denial boundary fails or a client requires broad-access settings.
 - **Review intent:** required; Check that real worker subprocess probes, rather than launch flags, establish isolation and that the launcher is not a general privileged executor.
 
@@ -2384,12 +2405,12 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T008. Integrate restricted native launch with the PC7 unattended launch mode and resume identity.
 
-- **Source / requirements:** `U4`; `R6`, `R7`, `R12`, `R15`, `R16`, `R19`, `R21`, `F2`, `F4`, `AE3`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD9`, `KTD11`, `PC7`.
+- **Source / requirements:** `U4`; `R6`, `R7`, `R12`, `R15`, `R16`, `R19`, `R21`, `F2`, `F4`, `AE3`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD9`, `KTD11`, `KTD23`, `PC7`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 7; T007.
 - **Files:** `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/kernel-authority.ts`; `engine/packages/daemon/src/adapters/yolo-mode.ts`; `engine/packages/daemon/src/adapters/tmux-server.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/src/adapters/claude-code-adapter.ts`; `engine/packages/daemon/src/adapters/claude-resume.ts`; `engine/packages/daemon/src/adapters/claude-resume-launch.ts`; `engine/packages/daemon/src/adapters/codex-runtime-adapter.ts`; `engine/packages/daemon/src/adapters/codex-resume.ts`; `engine/packages/daemon/src/adapters/tmux.ts`; `engine/packages/daemon/src/adapters/tmux-exec.ts`; `engine/packages/daemon/test/claude-runtime-adapter.test.ts`; `engine/packages/daemon/test/claude-resume.test.ts`; `engine/packages/daemon/test/codex-runtime-adapter.test.ts`; `engine/packages/daemon/test/codex-resume.test.ts`; `engine/packages/daemon/test/tmux-server.test.ts`; `engine/packages/daemon/test/tmux-pane-cwd-native.test.ts`; `engine/packages/daemon/test/terminal-pipe-utf8.test.ts`; `engine/packages/daemon/test/seat-activity-retirement-hooks.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; launcher-only PC7 flags (Claude Code `bypassPermissions`; Codex `approval_policy = "never"` with `danger-full-access`), refusing sessions that still prompt, keep a native sandbox on, or start outside the worker boundary; provider sign-in from each worker home. Redact credentials before shared output and bound raw execution logs without losing evidence references.
-- **Done signal:** Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; a session that still raises a native prompt is blocked as a configuration fault and nothing is typed into it; a signed-out worker home is a launch blocker. Worker deadlines are enforced outside controller-only timers.
+- **Test focus:** Fresh/resume worker UID, mounts, closed descriptors, immutable context, isolated provider config and native session/attempt identity; prompt classification; launcher-only PC7 flags (Claude Code `bypassPermissions`; Codex `approval_policy = "never"` with `danger-full-access`), refusing sessions that still prompt, keep a native sandbox on, or start outside the worker boundary; provider sign-in from each worker home; U4 scenario 19: a verification failure after start, or readiness drift, quiesces the attempt through the authenticated control-side `WorkerLaunchControl.quiesce` bound to its recorded identity and process group, with targeted cases for initial boundary failure, post-ready drift, observation failure, evidence-write failure and quiesce failure. Redact credentials before shared output and bound raw execution logs without losing evidence references.
+- **Done signal:** Adapter tests reject unsupported/unknown readiness and unsafe launch/resume defaults; actual launch metadata is observable; personal configs stay byte-identical; a session that still raises a native prompt is blocked as a configuration fault and nothing is typed into it; a signed-out worker home is a launch blocker; a blocked transition after start completes only with a `terminated` or `quarantined` receipt, and an unconfirmed quiesce remains an unresolved blocker. The U4 scenario 20 context-mount projection is T010's, not this card's. Independent worker-deadline enforcement is T017's obligation under U7, not part of this card: this task records and forwards each attempt deadline and is not gated on the privileged launcher or its policy.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Either selected client needs a weaker worker boundary or shared control sockets, a model command would run as control identity, or actual Claude/Codex adapter owners differ from the verified file list.
 - **Review intent:** required; Check the launch boundary on fresh sessions and resume, including native subprocesses, PC7 launch-mode enforcement and non-spoofable attempt identity.
 
@@ -2406,12 +2427,12 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T010. Prove both native clients preserve containment, provenance and safe messaging through managed launch and resume.
 
-- **Source / requirements:** `U4`; `R6`, `R7`, `R8`, `R9`, `R12`, `R15`, `R16`, `R19`, `R21`, `AE3`, `AE5`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD11`, `KTD19`, `KTD21`, `PC7`.
+- **Source / requirements:** `U4`; `R6`, `R7`, `R8`, `R9`, `R12`, `R15`, `R16`, `R19`, `R21`, `AE3`, `AE5`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD11`, `KTD19`, `KTD21`, `KTD23`, `KTD24`, `PC7`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 9; T008, T009, T031, T032.
-- **Files:** `engine/packages/daemon/test/worker-control-isolation.test.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/team-messaging.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/test/native-channel-contract.test.ts`; `engine/packages/daemon/test/lead-wake-policy.test.ts`.
-- **Test focus:** Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart.
-- **Done signal:** Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts and the spike record are bound to the same source, policy and client versions.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration.
+- **Files:** `engine/packages/daemon/test/worker-control-isolation.test.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`; `engine/packages/daemon/test/team-messaging.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/test/native-channel-contract.test.ts`; `engine/packages/daemon/test/lead-wake-policy.test.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/src/integrations/framework/context-manifest.ts`; `engine/packages/daemon/test/framework-context-manifest.test.ts`; `engine/config/isolation/worker-launch.mjs`; `engine/config/isolation/worker-policy.json`; `engine/config/isolation/provision-host.sh`; `engine/test/worker-isolation-preflight.test.mjs`.
+- **Test focus:** Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart. KTD24 and U4 scenario 20 (deferred here from T008): build the per-attempt read-only projection under `/var/lib/multi-agent/context/<worker>/<runId>/<attemptId>/`, mount it at `/context` through a verified descriptor, make the `/framework` and `/context` mounts mandatory, and map host to worker paths through the two policy-derived prefixes only; the manifest records host and worker paths, out-of-mount context is refused at manifest build, launch and resume, observed in-worker discovery matches the worker paths, and one worker cannot read another's projection.
+- **Done signal:** Separately authorized probes for both installed clients produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts and the spike record are bound to the same source, policy and client versions. The KTD24 policy revision is re-provisioned and passes the full U1 host preflight before any live probe; required context outside every admitted mount is refused, by focused tests and in the live probes.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Authentication, model configuration or a live spending grant is absent; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration; the KTD24 policy revision cannot pass the full U1 host preflight, or another `policy_revision` change is in flight.
 - **Review intent:** required; Reject false-green launch flags/mocks and enforce a failed live client contract as a blocker for all dependent managed work.
 
 ### T011. Enforce dependency eligibility and isolated candidate ownership.
@@ -2484,7 +2505,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U7`; `R5`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R21`, `R22`, `F4`, `AE4`, `AE6`, `AE7`, `AE8`, `AE9`, `AE13`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T016.
-- **Files:** `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/daemon-shutdown.ts`; `engine/packages/daemon/src/domain/team-reconciliation.ts`; `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/test/team-cancellation.test.ts`.
+- **Files:** `engine/packages/daemon/src/domain/rig-teardown.ts`; `engine/packages/daemon/src/daemon-shutdown.ts`; `engine/packages/daemon/src/domain/team-reconciliation.ts`; `engine/packages/daemon/src/domain/runtime-adapter.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/config/isolation/worker-launch.mjs` and `engine/config/isolation/worker-policy.json` only when an independent deadline needs a new launcher option or policy key (bump `policy_revision`, re-provision, re-run the U1 host preflight); `engine/test/worker-isolation-preflight.test.mjs`; `engine/packages/daemon/test/team-cancellation.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Intent-before-effect, dispatch closure, recorded process-group identity, five-second escalation/fifteen-second unresolved outcome; cumulative 60-minute budget, ten-minute no-progress distinction and controller-absent deadline enforcement. Enforce 64 MiB raw logs per run and 256 MiB aggregate artifacts before further dispatch.
 - **Done signal:** Fault/process tests show no dependent dispatch after cancellation, no signal against reused/unowned identities, resistant children remain unresolved, retries/restarts count against the same budget and supervised silent tools retain only their recorded bounded deadline. Capacity pauses preserve durable decisions/evidence and disclose omitted/truncated logs; no history is deleted automatically.
@@ -2506,10 +2527,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U11`; `R9`, `R12`, `R13`, `R14`, `R15`, `R16`, `R18`, `F2`, `F3`, `F4`, `AE5`, `AE6`, `AE7`, `AE9`, `AE10`, `AE12`, `KTD2`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`, `PC6`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T012, T014, T005.
-- **Files:** `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/App.tsx`; `engine/packages/ui/src/globals.css`; `engine/packages/ui/tailwind.config.ts`; `engine/packages/ui/src/lib/theme.ts`; `engine/packages/ui/src/lib/status-colors.ts`; `engine/packages/ui/src/hooks/useTeamRun.ts`; `engine/packages/ui/src/hooks/useTeamEvents.ts`; `engine/packages/ui/src/hooks/useOwnerSession.ts`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/team/overview.tsx`; `engine/packages/ui/src/team/run-stepper.tsx`; `engine/packages/ui/src/team/task-list.tsx`; `engine/packages/ui/src/team/agent-status.tsx`; `engine/packages/ui/src/team/system-status.tsx`; `engine/packages/ui/src/team/activity.tsx`; `engine/packages/ui/src/team/__tests__/overview.test.tsx`.
+- **Files:** `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/App.tsx`; `engine/packages/ui/src/globals.css`; `engine/packages/ui/tailwind.config.ts`; `engine/packages/ui/src/lib/theme.ts`; `engine/packages/ui/src/lib/status-colors.ts`; `engine/packages/ui/src/hooks/useTeamRun.ts`; `engine/packages/ui/src/hooks/useTeamEvents.ts`; `engine/packages/ui/src/hooks/useOwnerSession.ts`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/ui/src/team/overview.tsx`; `engine/packages/ui/src/team/run-stepper.tsx`; `engine/packages/ui/src/team/task-list.tsx`; `engine/packages/ui/src/team/agent-status.tsx`; `engine/packages/ui/src/team/system-status.tsx`; `engine/packages/ui/src/team/activity.tsx`; `engine/packages/ui/src/team/__tests__/overview.test.tsx`; `engine/packages/ui/src/skins/shuimo-danqing/skin.css`; `engine/packages/ui/src/skins/shuimo-danqing/ATTRIBUTION.md`; `engine/packages/ui/public/skins/shuimo-danqing/shuimo-danqing-loop.mp4`; `engine/packages/ui/public/skins/shuimo-danqing/sm-paper-grain.webp`; `engine/packages/ui/public/skins/shuimo-danqing/sm-paper-grain-strong.webp`; `engine/packages/ui/src/team/__tests__/skins.test.tsx`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state.
-- **Done signal:** Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest.
+- **Test focus:** Existing primitives/router/query client with navy reference tokens; managed navigation, current plan, stepper, all-state task filters, task progress and status/activity; durable hydration/replay and language/session state; the optional skin layer and the shuimo-danqing skin (U11 scenarios 13-15).
+- **Done signal:** Component tests render all overview regions in both languages; 3/4 verified criteria remains 3/4 despite agent claims; earliest unfinished required stage and awaiting-delivery-decision are correct; unknown usage and stale/disconnected state are honest; switching skins changes no layout or data and persists only the selection, and reduced motion pauses the skin video and its animations.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A new UI framework or duplicated schema/catalog is introduced, inactive upstream pages enter managed navigation, or generated mockups replace the owner benchmark. The owner has not approved the UI/TUI design proposal for this task.
 - **Review intent:** required; Inspect evidence-derived projections and safe read-only rendering, including re-pair without losing the current view.
 
@@ -2666,11 +2687,12 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Observed source:** the baseline commit is `85ac0b2f6181ea4a992800cd5c6c381e9ff884a8`; the worktree was clean at intake. `engine/` exists with the pinned import. `docs/upstream-baseline.md` maps shorthand owners; the latest imported migration is `103_session_stop_intent.ts`, leaving `104` for T003.
 - **Reconciled scope:** T001/T002 scaffolding and package owners; T004 internal queue guards; T008 native launch/resume/tmux source and existing tests; serialized provenance-manifest side effects. These are existing-plan owners, not new product scope.
 - **Limitations:** historical preflight and baseline results in `docs/development.md` and `docs/operations.md` are not rerun evidence. The six documented upstream test failures remain explicit limitations. No T003+ behavior, live client acceptance or UI design approval follows from this regeneration.
+- **2026-10-16 regeneration:** bounded reads of the U4 and U7 plan sections, the state/operational invariants and this pack's T008/T017 cards. The plan owner resolved which unit owns independent supervision: U7 enforces each attempt deadline at an owner that survives daemon absence (the privileged launcher), while U4 only records and forwards it. No task identity, dependency or product scope changed.
 - **2026-10-15 regeneration:** bounded reads of the revised U2 plan section (KTD22 fixed startup mode, the admission invariant, refined scenarios 9-13 and review convergence) and the existing task-pack contract. T004 is narrowed to the KTD22 boot owners, managed-route middleware, owner-level queue/tmux checks, operations wording and their focused tests; T031-T033 remain serialized after T004. Current implementation state is execution evidence, not task-pack scope authority.
 
 ## Validation Notes
 
-- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:b11c198417ef8113901ce43003f16779876d5215964eb85b89020cc76db33a51` at source commit `19eb791`. Regeneration does not edit the source plan.
+- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:27832e0eade095dec02f6c79fa085f7abf04c4ed2be0f76a3823216607db7b8f` (uncommitted working copy over `8b7652e`). Regeneration does not edit the source plan.
 - **Exact filename exception:** the maintained validator contract allows only the audited middleware source path. Adjacent credential-like files, backups, prefixed copies and actual credentials retain their denials. Use the tested CLI, not a patched receipt or omitted source path.
 - **Commands:** run `spec-first tasks hash docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md --repo /home/leo/src/multi-agent --json` and `spec-first tasks validate docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md --repo /home/leo/src/multi-agent --json` from WSL; a Windows host may address the same root through its UNC path. Pin the current receipt and pack digest in run-local evidence.
 - **Validation scope:** identity, freshness and structure only. A deterministic pass is not semantic approval, implementation completion, runtime acceptance or spending/delivery authority.
@@ -2678,6 +2700,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Semantic handoff:** both requested reviewers must assess the regenerated pack without editing it. Resolve blocking findings, revalidate after any pack change, and then pin the reviewed bytes before executing T003. At most two review rounds apply.
 - **Current bounded continuation:** only the in-flight T004 resumes after this regenerated pack passes validation and its semantic review, rechecked against PC7 (owner decisions cover orchestration actions only). T005 and later tasks, UI design implementation and delivery actions are not implied.
 - **Evidence discipline:** current source-bound checks, real-client outcomes and the full milestone verification remain separate proof levels. Record failed/not-run checks honestly; preserve all later verification obligations.
+- **2026-10-16 network-isolation regeneration:** the plan adds KTD23 (a narrowed worker network instead of the host namespace), a U1 scenario and receipt requirement for the sandbox reachable set, and U4 scenario 18 repeating that denial through the real managed path. Context: mirrored WSL networking made the host's loopback listeners, including a VNC bridge, and the owner's tailnet reachable from inside WSL; the 2026-10-13 preflight predates that and is marked stale in `docs/operations.md`. T001 and T008 carry the new proof obligations; no task identity or dependency changed.
+- **2026-10-16 standing delivery grant:** the plan's delivery-permission line now records the owner's single standing grant for the delivery steps a finished task needs (scoped commit, branch push, PR creation/update, and the head-bound rebase merge once acceptance and required review are evidenced), recorded in `AGENTS.md`. Release, deployment, scope expansion, resource-limit increases and Windows exports remain outside it. No task identity, dependency or product scope changed.
+- **2026-10-16 regeneration:** the source plan now assigns independent worker-deadline enforcement to U7 and the privileged-launcher change it needs, and U1 to provisioning the pinned framework tree. T008's deadline clause moved to T017, and T017 gained the conditional launcher/policy/preflight owners; T008 is no longer blocked on them. T008's remaining scope, T010's live gate and the pinned-framework acceptance prerequisite are unchanged.
+- **2026-10-16 T008-review regeneration:** the owner resolved the two open T008 P1 review findings. Stop: post-start verification failure and readiness drift quiesce the attempt through the authenticated control-side `WorkerLaunchControl.quiesce` (U4 scenario 19), an internal T008 repair within its existing owners. Context-mount: the immutable context projection and host-to-worker mapping are deferred to T010 (U4 scenario 20); T010 gains `worker-launch.ts`, `context-manifest.ts` and its test. A 2026-10-17 follow-up records that mapping as KTD24 (a per-attempt read-only `/context` mount plus `/framework`, with a two-prefix host-to-worker mapping); T010 gains KTD24 and the launcher, policy, provisioning and preflight-test owners it needs. The plan also adds an optional skin layer to U11 (scenarios 13-15), carried by T019 with its skin files. No task identity, dependency or wave changed.
 
 ## Regeneration Rules
 
