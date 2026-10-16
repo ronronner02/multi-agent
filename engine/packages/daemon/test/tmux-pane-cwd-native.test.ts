@@ -20,11 +20,13 @@ describe.skipIf(process.platform === "win32")("native tmux pane paths", () => {
     delete env.TMUX;
     delete env.TMUX_TMPDIR;
     try {
-      await runFile("tmux", ["-f", "/dev/null", "-S", socket, "new-session", "-d", "-s", "fixture", "-x", "120", "-y", "30", "-c", cwd, "sleep 60"], { env });
+      await runFile("tmux", ["-f", "/dev/null", "-S", socket, "new-session", "-d", "-s", "fixture", "-x", "120", "-y", "30", "-c", cwd, "printf 'native-pane-ready'; exec sleep 60"], { env });
       const adapter = new TmuxAdapter(async cmd => {
         expect(cmd).toMatch(/^tmux /);
         return (await run(`tmux -S ${shellQuote(socket)} ${cmd.slice(5)}`, { env })).stdout;
       });
+      // new-session can return before its child has changed directory and exec'd.
+      await expect.poll(() => adapter.capturePaneContent("fixture"), { timeout: 5000 }).toContain("native-pane-ready");
       const panes = await adapter.listPanes("fixture");
       expect(panes).toHaveLength(1);
       expect(panes[0]).toMatchObject({ cwd: fs.realpathSync(cwd), index: 0, width: 120, height: 30, active: true });

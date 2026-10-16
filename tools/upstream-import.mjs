@@ -36,6 +36,8 @@ export const PIN = Object.freeze({
   // the shared authority contract, queue state tuple and additive migration registration;
   // the shared language catalog workspace and its consumer dependency declarations;
   // the KTD22 startup daemon mode, team-control wiring and owner-level managed checks.
+  // Five inherited daemon fixtures account for WSL socket-close readiness,
+  // private tmux server lifetime and child chdir/exec timing before assertions.
   adapted: [
     'package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json',
     'packages/cli/src/commands/release.ts',
@@ -62,6 +64,11 @@ export const PIN = Object.freeze({
     'packages/daemon/test/down-route.test.ts',
     'packages/daemon/test/helpers/test-app.ts',
     'packages/daemon/test/p34-call-site-allowlist.test.ts',
+    'packages/daemon/test/crash-cart-probes.test.ts',
+    'packages/daemon/test/seat-activity-retirement-hooks.test.ts',
+    'packages/daemon/test/seat-activity-retirement.test.ts',
+    'packages/daemon/test/tmux-pane-cwd-native.test.ts',
+    'packages/daemon/test/tmux-parent-env-hook-native.test.ts',
     'packages/tui/package.json',
     'packages/ui/package.json',
   ],

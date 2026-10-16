@@ -47,6 +47,8 @@ describe.skipIf(process.platform === "win32")("parent-session cleanup with an af
       const own = seatPanes.filter(([id]) => id !== ownerPane);
       expect(own).toHaveLength(1);
       if (process.platform === "linux") {
+        // /proc still exposes the forked tmux process's environment until exec.
+        await expect.poll(() => path.basename(fs.readlinkSync(`/proc/${own[0]![1]}/exe`)), { timeout: 5000 }).not.toBe("tmux");
         const environ = fs.readFileSync(`/proc/${own[0]![1]}/environ`, "utf8").split("\0");
         expect(environ.filter(entry => entry.startsWith("CLAUDECODE="))).toEqual([]);
         expect(environ).toContain("OPENRIG_NODE_ID=n1");
