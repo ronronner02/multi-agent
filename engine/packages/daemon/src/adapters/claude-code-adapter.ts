@@ -1,3 +1,4 @@
+import { launchManagedHarness, checkManagedReady, type WorkerLauncher } from "./worker-launch.js";
 import { operationalLaunchArgs, operationalLaunchArg } from "./kernel-authority.js";
 import nodePath from "node:path";
 import fs from "node:fs";
@@ -50,6 +51,7 @@ const SHELL_COMMANDS = new Set(["bash", "fish", "nu", "sh", "tmux", "zsh"]);
 export class ClaudeCodeAdapter implements RuntimeAdapter {
   readonly runtime = "claude-code";
   private tmux: TmuxAdapter;
+  private workerLauncher?: WorkerLauncher;
   private seatLaunchEnvironment?: SeatLaunchEnvironment;
   private fs: ClaudeAdapterFsOps;
   private sessionIdFactory: () => string;
@@ -68,6 +70,7 @@ export class ClaudeCodeAdapter implements RuntimeAdapter {
 
   constructor(deps: {
     tmux: TmuxAdapter;
+    workerLauncher?: WorkerLauncher;
     seatLaunchEnvironment?: SeatLaunchEnvironment;
     fsOps: ClaudeAdapterFsOps;
     sessionIdFactory?: () => string;
@@ -87,6 +90,7 @@ export class ClaudeCodeAdapter implements RuntimeAdapter {
     recordProjection?: (targetPath: string, content: string) => void;
   }) {
     this.tmux = deps.tmux;
+    this.workerLauncher = deps.workerLauncher;
     this.seatLaunchEnvironment = deps.seatLaunchEnvironment;
     this.fs = deps.fsOps;
     this.sessionIdFactory = deps.sessionIdFactory ?? randomUUID;
@@ -236,6 +240,9 @@ export class ClaudeCodeAdapter implements RuntimeAdapter {
     binding: NodeBinding,
     opts: { name: string; resumeToken?: string; forkSource?: import("../domain/runtime-adapter.js").ForkSource },
   ): Promise<HarnessLaunchResult> {
+    if (binding.managedAttempt !== undefined) {
+      return launchManagedHarness(this.workerLauncher, this.runtime, binding, opts);
+    }
     binding = { ...binding };
     this.autoLaunches.delete(binding.nodeId);
     opts = { ...opts, ...(opts.forkSource ? { forkSource: { ...opts.forkSource } } : {}) };
@@ -351,6 +358,7 @@ export class ClaudeCodeAdapter implements RuntimeAdapter {
   }
 
   async checkReady(binding: NodeBinding): Promise<ReadinessResult> {
+    if (binding.managedAttempt !== undefined) return checkManagedReady(this.workerLauncher, binding.managedAttempt);
     binding = { ...binding };
     if (!binding.tmuxSession) {
       return { ready: false, reason: "No tmux session bound" };

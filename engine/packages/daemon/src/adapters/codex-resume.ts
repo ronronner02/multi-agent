@@ -1,3 +1,5 @@
+import { resumeManagedAttempt, type WorkerLauncher } from "./worker-launch.js";
+import type { ManagedAttempt } from "../domain/runtime-adapter.js";
 import { codexTeamWorkspaceArg, type PrepareCodexTeamWorkspace } from "../domain/codex-team-workspace.js";
 import { operationalLaunchArg } from "./kernel-authority.js";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -20,6 +22,7 @@ export { type ResumeResult };
 interface CodexResumeOptions {
   prepareTeamWorkspace?: PrepareCodexTeamWorkspace;
   seatLaunchEnvironment?: SeatLaunchEnvironment;
+  workerLauncher?: WorkerLauncher;
   launchPath?: string;
   codexHome?: string;
   pollMs?: number;
@@ -64,7 +67,11 @@ export class CodexResumeAdapter {
     nonInterruptive?: boolean,
     kernelAuthority?: boolean,
     teamPermissionDefault?: boolean,
+    managedAttempt?: ManagedAttempt,
   ): Promise<ResumeResult> {
+    if (managedAttempt !== undefined) {
+      return resumeManagedAttempt(this.options.workerLauncher, "codex", managedAttempt, resumeType, resumeToken, model, effort);
+    }
     if (!this.canResume(resumeType, resumeToken)) {
       return { ok: false, code: "no_resume", message: "Codex resume not available" };
     }
