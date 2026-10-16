@@ -19,6 +19,73 @@ export function hashBinding(binding: unknown): string {
   return hashBytes(canonicalJson(parsePlanBinding(binding)));
 }
 
+export interface ProviderPolicyCapability {
+  policyRevision: number;
+  policyFingerprint: string;
+  verifiedProviders: readonly ("claude" | "codex")[];
+}
+
+export class ManagedControlError extends Error {
+  readonly code = "managed_control_required";
+  constructor() { super("Legacy operations are inactive while managed authority exists; managed dispatch remains disabled."); }
+  getResponse(): Response {
+    return Response.json({ code: this.code, error: this.message }, { status: 403 });
+  }
+}
+
+export function hasManagedAuthority(db: Database.Database): boolean {
+  return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'team_runs'").get()
+    && !!db.prepare("SELECT 1 FROM team_runs LIMIT 1").get();
+}
+
+export type DaemonMode = "legacy" | "managed";
+
+const daemonModes = new WeakMap<Database.Database, DaemonMode>();
+
+/** KTD22: the mode is fixed once per process, before any service starts. Existing authority
+ * forces managed mode, so a legacy-mode process never runs beside managed authority. */
+export function fixDaemonMode(db: Database.Database, managedRequested: boolean): DaemonMode {
+  const mode: DaemonMode = managedRequested || hasManagedAuthority(db) ? "managed" : "legacy";
+  const fixed = daemonModes.get(db);
+  if (fixed && fixed !== mode) throw new Error(`Daemon mode is already fixed as ${fixed}; restart to switch modes`);
+  daemonModes.set(db, mode);
+  return mode;
+}
+
+export function daemonModeOf(db: Database.Database): DaemonMode | undefined {
+  return daemonModes.get(db);
+}
+
+export function isManagedMode(db: Database.Database): boolean {
+  const fixed = daemonModes.get(db);
+  if (fixed !== undefined) return fixed === "managed";
+  return hasManagedAuthority(db);
+}
+
+export function assertLegacyOperationAllowed(db: Database.Database): void {
+  if (isManagedMode(db)) throw new ManagedControlError();
+}
+
+const queueWrites = new WeakMap<Database.Database, { operation: "create" | "update"; qitemId?: string }>();
+
+// Only the two synchronous, transaction-owned queue writes below receive this grant.
+// It is never supplied by a request, inherited by a detached task, or retained through notification.
+function withQueueWrite<T>(db: Database.Database, grant: { operation: "create" | "update"; qitemId?: string }, write: () => T): T {
+  const previous = queueWrites.get(db);
+  queueWrites.set(db, grant);
+  try { return write(); }
+  finally {
+    if (previous) queueWrites.set(db, previous);
+    else queueWrites.delete(db);
+  }
+}
+
+export function assertGovernedQueueWrite(db: Database.Database, operation: "create" | "update", qitemId?: string): void {
+  const grant = queueWrites.get(db);
+  if (grant?.operation === operation && grant.qitemId === qitemId && db.inTransaction) return;
+  assertLegacyOperationAllowed(db);
+}
+
 interface CommandContext {
   request: ControlRequest;
   run: TeamRun;
@@ -97,6 +164,7 @@ export class PlanGovernance {
     private readonly events: EventBus,
     private readonly queue: QueueRepository,
     private readonly clock: () => Date = () => new Date(),
+    private readonly readPolicyCapability?: () => ProviderPolicyCapability | null,
   ) {
     if (events.db !== db || queue.db !== db) throw new Error("Governance, queue and events must share one database connection");
     this.rigs = new RigRepository(db);
@@ -104,6 +172,7 @@ export class PlanGovernance {
 
   createRun(input: { id: string; rigId: string; binding: unknown }): TeamRun {
     this.assertStandalone();
+    if (daemonModeOf(this.db) === "legacy") throw new Error("A legacy-mode daemon cannot register managed authority; restart in managed mode");
     const id = text(input.id, "runId", 256);
     const rigId = text(input.rigId, "rigId", 256);
     const binding = parsePlanBinding(input.binding);
@@ -135,6 +204,12 @@ export class PlanGovernance {
       .map((attempt) => parseUsage(JSON.parse(attempt.usage_json)));
     return { ...run, binding: parsePlanBinding(JSON.parse(bindingJson)), usage: { activeMs: run.activeMs,
       inputTokens: cumulativeMetric(usages, "inputTokens"), outputTokens: cumulativeMetric(usages, "outputTokens"), costUsd: cumulativeMetric(usages, "costUsd") } };
+  }
+
+  listApprovals(runId: string): TeamApproval[] {
+    this.getRun(runId);
+    const rows = this.db.prepare("SELECT id FROM team_approvals WHERE run_id = ? ORDER BY created_at, id").all(runId) as Array<{ id: string }>;
+    return rows.map(row => this.getApproval(row.id)!);
   }
 
   getApproval(id: string): TeamApproval | null {
@@ -178,6 +253,7 @@ export class PlanGovernance {
     const requester = actorIdentity(actor);
     return this.command("approval.requested", raw, requester, (ctx) => {
       const approval = approvalPayload(ctx.request.payload);
+      if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       const v = object(ctx.request.payload, "approval");
       const expiresAt = timestamp(v.expiresAt, "expiresAt");
       if (expiresAt <= ctx.now) return deny("Approval expiry must be in the future");
@@ -206,6 +282,7 @@ export class PlanGovernance {
       if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
       const approval = this.getApproval(ctx.request.actionId);
       if (!approval || approval.runId !== ctx.run.id) throw new Error("Approval not found in this run");
+      if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       const v = object(ctx.request.payload, "decision");
       if (approval.state !== "pending") return deny("Approval is no longer pending");
       if (integer(v.approvalVersion, "approvalVersion", 1) !== approval.entityVersion) throw new Error("Approval version conflict");
@@ -255,9 +332,10 @@ export class PlanGovernance {
       if (assignment.paths.some((entry) => !paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`)))) return deny("Assignment path is outside the binding");
       const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id = ?").get(ctx.run.id) as { count: number };
       if (count.count >= 100) return deny("Managed task limit reached");
-      if (typeof v.body !== "string" || !v.body.trim() || v.body.length > 262_144) throw new TeamContractError("task.body");
-      const created = this.queue.createWithinTransaction({ sourceSession: text(v.sourceSession, "sourceSession"),
-        destinationSession: text(v.destinationSession, "destinationSession"), body: v.body, targetRepo: ctx.run.binding.repository.root, nudge: false });
+      const body = v.body;
+      if (typeof body !== "string" || !body.trim() || body.length > 262_144) throw new TeamContractError("task.body");
+      const created = withQueueWrite(this.db, { operation: "create" }, () => this.queue.createWithinTransaction({ sourceSession: text(v.sourceSession, "sourceSession"),
+        destinationSession: text(v.destinationSession, "destinationSession"), body, targetRepo: ctx.run.binding.repository.root, nudge: false }));
       ctx.register(created.persistedEvent);
       this.db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json) VALUES (?, ?, ?, ?)`)
         .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment));
@@ -308,9 +386,9 @@ export class PlanGovernance {
     const optionalText = (key: string) => v[key] === undefined ? undefined : text(v[key], key);
     let transitionNote = optionalText("transitionNote");
     if (observedOutcome) transitionNote = `Owner observation of ${v.actorSession}${transitionNote ? `: ${transitionNote}` : ""}`;
-    const updated = this.queue.updateWithinTransaction({ qitemId: task.qitemId, actorSession: observedBy ?? text(v.actorSession, "actorSession"),
+    const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({ qitemId: task.qitemId, actorSession: observedBy ?? text(v.actorSession, "actorSession"),
       state: v.state as QueueState, transitionNote, closureReason: optionalText("closureReason"),
-      closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") });
+      closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") }));
     for (const event of updated.persistedEvents) ctx.register(event);
     const evidence = v.evidence === undefined ? task.evidence : jsonValue(object(v.evidence, "evidence"));
     const changed = this.db.prepare(`UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ?
@@ -399,6 +477,7 @@ export class PlanGovernance {
       const v = object(ctx.request.payload, "consumption");
       const approval = this.getApproval(ctx.request.actionId);
       if (!approval || approval.runId !== ctx.run.id) throw new Error("Approval not found in this run");
+      if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       // A mismatched kind is a denied claim, not authority to reinterpret it.
       if (v.kind !== approval.kind || v.action !== approval.action || v.targetDigest !== approval.targetDigest
         || hashBytes(canonicalJson(v.payload)) !== approval.payloadDigest || approval.bindingDigest !== ctx.run.bindingDigest) return deny("Approval does not match the exact operation");
@@ -497,6 +576,16 @@ export class PlanGovernance {
     if (!this.db.prepare(`SELECT id FROM team_approvals WHERE run_id = ? AND kind = 'orchestrator' AND action = 'implementation'
       AND binding_digest = ? AND state = 'approved' AND expires_at > ?`).get(ctx.run.id, ctx.run.bindingDigest, ctx.now)) return "Implementation approval is not active";
     if (this.db.prepare("SELECT id FROM team_attempts WHERE run_id = ? AND state = 'unknown' LIMIT 1").get(ctx.run.id)) return "Native identity is unknown; reconciliation is required";
+    try {
+      const capability = this.readPolicyCapability?.();
+      if (!capability || capability.policyRevision !== ctx.run.binding.policyRevision
+        || capability.policyFingerprint !== ctx.run.binding.policyFingerprint
+        || !["claude", "codex"].every(provider => capability.verifiedProviders.includes(provider as "claude" | "codex"))) {
+        return "Provider policy capability is not verified for the current binding";
+      }
+    } catch {
+      return "Provider policy capability is not verified for the current binding";
+    }
     return null;
   }
 

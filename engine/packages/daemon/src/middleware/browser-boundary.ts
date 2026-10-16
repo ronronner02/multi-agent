@@ -283,6 +283,12 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
   };
 
   return async (c, next) => {
+    // Paired browser sessions are a separate boundary; this bearer control surface is not a pairing shortcut.
+    if ((c.req.path === "/api/team-control" || c.req.path.startsWith("/api/team-control/"))
+      && (rawHeader(c, "origin") !== undefined || c.req.header("Cookie") !== undefined
+        || c.req.header("Sec-Fetch-Site") !== undefined)) {
+      return refuse(c, "browser_origin_refused", "(unpaired control client)", "Browser control requires a paired owner session.");
+    }
     const hostHeader = rawHeader(c, "host");
     // A duplicated (ambiguous) Host is malformed; an explicitly empty one fails parsing.
     const host = hostHeader === null ? { kind: "malformed" as const } : parseHostHeader(hostHeader);

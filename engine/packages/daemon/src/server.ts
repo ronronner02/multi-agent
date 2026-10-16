@@ -125,7 +125,7 @@ import { healthRoutes } from "./routes/health.js";
 import { gatewayRoutes } from "./routes/gateway.js";
 import type { StreamStore } from "./domain/stream-store.js";
 import { createSlowOpRequestMiddleware, type SlowOperationInstrumentation } from "./domain/slow-op-recorder.js";
-import type { QueueRepository } from "./domain/queue-repository.js";
+import { QueueRepository } from "./domain/queue-repository.js";
 import type { InboxHandler } from "./domain/inbox-handler.js";
 import type { OutboxHandler } from "./domain/outbox-handler.js";
 import type { ProjectClassifier } from "./domain/project-classifier.js";
@@ -142,8 +142,14 @@ import type { RigLifecycleService } from "./domain/rig-lifecycle-service.js";
 import { seatRoutes } from "./routes/seat.js";
 import { createRouteTimingMiddleware } from "./domain/route-timing-recorder.js";
 import { browserBoundary, type BrowserBoundaryOptions } from "./middleware/browser-boundary.js";
+import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
+import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
+
+/** KTD22: the only `/api` paths a managed-mode daemon serves. */
+const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
 
 export interface AppDeps {
+  teamControl?: TeamControlOptions;
   proofSourceWatch?: import("./domain/proof/source-watch.js").ProofSourceWatch;
   /** S20 — effective bind plan for the health surface (absent = legacy body). */
   bindPlan?: { mode: "explicit" | "default"; hosts: string[]; tailscaleDetected: boolean; ignoredRoutingHost?: string };
@@ -653,6 +659,18 @@ export function createApp(deps: AppDeps): Hono {
     onDecision: deps.browserBoundaryObserver,
   }));
 
+  // KTD22: in managed mode this is the only route gate. Each managed route a later unit adds
+  // joins this allowlist with its own authenticated managed-control check.
+  app.use("/api/*", async (c, next) => {
+    if (daemonModeOf(deps.rigRepo.db) === "managed" && !MANAGED_ROUTE_PREFIXES.some(prefix => c.req.path === prefix || c.req.path.startsWith(`${prefix}/`))) {
+      return c.json({ code: "managed_control_required", error: "Legacy interfaces are inactive in a managed-mode daemon." }, 403);
+    }
+    await next();
+  });
+  const teamOptions: TeamControlOptions = deps.teamControl ?? { credentials: { ownerToken: null } };
+  const teamGovernance = new PlanGovernance(deps.rigRepo.db, deps.eventBus,
+    deps.queueRepo ?? new QueueRepository(deps.rigRepo.db, deps.eventBus), undefined, teamOptions.readPolicyCapability);
+
   // OPR.0.4.6.MH2 FR-2/FR-7 — the single-host READ-THROUGH edge (the read
   // twin of the mission-control remote-forward). Consumes a `?host=<id>`
   // envelope on allowlisted GET reads; refuses non-GET / non-allowlisted
@@ -660,6 +678,8 @@ export function createApp(deps: AppDeps): Hono {
   // error, never forwarding them. Absent/local host param falls through to
   // the existing handlers untouched (the FR-2 zero-regression negative).
   app.use("/api/*", hostReadThrough());
+  app.route("/api/team-control", teamControlRoutes(teamGovernance, teamOptions,
+    [deps.missionControlBearerToken, deps.terminalBearerToken]));
 
   app.get("/healthz", (c) => {
     // OPR.0.4.3.21 — enrich the health surface with event-loop wedge evidence
@@ -855,6 +875,11 @@ export function createApp(deps: AppDeps): Hono {
 
     if (requestPath === "/healthz" || requestPath.startsWith("/api/")) {
       return c.notFound();
+    }
+
+    if (daemonModeOf(deps.rigRepo.db) === "managed") {
+      c.header("X-OpenRig-Web-UI", "off");
+      return c.text("Legacy pages are inactive in a managed-mode daemon.", 404);
     }
 
     if (deps.webUiEnabled !== true) {

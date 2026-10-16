@@ -145,6 +145,7 @@ import { SettingsStore as ContextPackSettingsStore } from "./domain/user-setting
 import { WhoamiService } from "./domain/whoami-service.js";
 import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
+import { fixDaemonMode } from "./domain/plan-governance.js";
 import { ProviderServiceImpl } from "./domain/provider/provider-service-impl.js";
 import { collectClaudeSignalsFromProviderUsageDirectory } from "./domain/provider/claude-usage-reader.js";
 import { legacyProviderUsageDirectory, providerUsageDirectory } from "./domain/telemetry-state-paths.js";
@@ -180,6 +181,9 @@ import {
 
 interface DaemonOptions {
   dbPath?: string;
+  /** KTD22: start in managed mode. Existing managed authority forces it regardless. */
+  managedMode?: boolean;
+  teamControl?: AppDeps["teamControl"];
   /** S20 — the effective bind plan (mode/hosts/tailscaleDetected/ignoredRoutingHost),
    *  computed once in index.ts and exposed on /healthz so adoption gates verify
    *  listeners by binding evidence. Absent (tests/legacy) = healthz body unchanged. */
@@ -288,6 +292,10 @@ export function collectAllowlistedProviderAuthEnv(
 }
 
 export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> {
+  // Direct callers share the same pre-spawn credential boundary as startServer.
+  const ownerToken = process.env.MULTI_AGENT_OWNER_TOKEN?.trim() || null;
+  delete process.env.MULTI_AGENT_OWNER_TOKEN;
+  const teamControl = opts?.teamControl ?? { credentials: { ownerToken } };
   const daemonHome = os.homedir();
   const configuredCodexHome = process.env.CODEX_HOME || undefined;
   if (configuredCodexHome && !nodePath.isAbsolute(configuredCodexHome)) {
@@ -299,6 +307,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const dbPath = opts?.dbPath ?? ":memory:";
   const db = createDb(dbPath);
   migrate(db, ALL_MIGRATIONS);
+  // KTD22: fixed before any service is built. Managed mode runs no legacy boot effect below.
+  const managed = fixDaemonMode(db, opts?.managedMode === true) === "managed";
 
   // 51-09 increment 1 — establish the daemon's durable self-host identity at
   // boot (mint on first boot, reconcile thereafter). host.name is a display-only
@@ -456,7 +466,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // so queue/inbox/project mutations emit view.changed for affected built-in
   // views. SSE consumers on /api/views/:name/sse now receive change events
   // when underlying state mutates.
-  wireViewEventBridge(eventBus, viewProjectorInstance);
+  if (!managed) wireViewEventBridge(eventBus, viewProjectorInstance);
 
   // PL-004 Phase C — watchdog supervision tree. Repository + history-log
   // are constructed early; the policy engine + scheduler are constructed
@@ -474,10 +484,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     settingsStore: new ContextPackSettingsStore(),
     warn: (message) => console.warn(message),
   });
-  sessionRegistry.setWatchdogRegistrationObserver(watchdogAutoRegistration);
-  // Existing sessions predate the structural mint hook. Audit them at every
-  // boot without creating jobs: additive coverage stays loud, core boot stays live.
-  watchdogAutoRegistration.assertLiveSeatCoverage();
+  if (!managed) {
+    sessionRegistry.setWatchdogRegistrationObserver(watchdogAutoRegistration);
+    // Existing sessions predate the structural mint hook. Audit them at every
+    // legacy boot without creating jobs: additive coverage stays loud, core boot stays live.
+    watchdogAutoRegistration.assertLiveSeatCoverage();
+  }
   const watchdogHistoryLogInstance = new WatchdogHistoryLog(db);
 
   const argvExec = opts?.argvExec
@@ -487,7 +499,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // An injected exec has no server of its own: printed attach commands stay in the default form.
   setDaemonTmuxServer(opts?.tmuxExec ? [] : tmuxServerArgs(process.env));
   const deliveryGuard = new SeatDeliveryGuard(db, target => resolveGuardTarget(db, target));
-  deliveryGuard.recoverActivation();
+  if (!managed) deliveryGuard.recoverActivation();
   tmuxAdapter.deliveryGuard = deliveryGuard;
 
   // Slice 15 — Seat-activity service for the `terminal-active` primitive.
@@ -542,12 +554,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // the ingest expected-token (server dep below) and the seats' env value, so
   // hook POSTs authenticate. Also snapshotted to activity-endpoint.json for the
   // relay file-discovery fallback used by reconcile/restored seats (B3).
-  const resolvedActivityHookToken = activityHookToken ?? ensureActivityHookToken(OPENRIG_HOME);
+  const resolvedActivityHookToken = activityHookToken ?? (managed ? undefined : ensureActivityHookToken(OPENRIG_HOME));
   // Derive from the daemon's OWN bound host+port (honors an explicit OPENRIG_HOST
   // single-host bind; wildcard/absent → loopback) so seats post to a reachable
   // address — a hardcoded 127.0.0.1 breaks an explicit tailnet/hostname bind.
   const resolvedActivityHookUrl = activityHookUrl ?? deriveActivityUrl(openRigHost, openRigPort);
-  writeActivityEndpointFile(OPENRIG_HOME, { baseUrl: resolvedActivityHookUrl, token: resolvedActivityHookToken });
+  if (!managed && resolvedActivityHookToken) writeActivityEndpointFile(OPENRIG_HOME, { baseUrl: resolvedActivityHookUrl, token: resolvedActivityHookToken });
   const startupSettings = new ContextPackSettingsStore().resolveConfig();
   const providerAuthEnv = collectAllowlistedProviderAuthEnv(
     startupSettings.recoveryProviderAuthEnvAllowlistRaw,
@@ -657,13 +669,13 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   });
 
   // Connect to cmux at startup — degrades gracefully if absent
-  await cmuxAdapter.connect();
+  if (!managed) await cmuxAdapter.connect();
 
   // Reconcile all managed rigs — marks stale sessions as detached.
   // Capture aggregate counts and log a compact summary so cold-start truth
   // repair is visible in daemon output instead of silently swallowed.
   const reconciler = new Reconciler({ db, sessionRegistry, eventBus, tmuxAdapter });
-  const rigs = rigRepo.listRigs();
+  const rigs = managed ? [] : rigRepo.listRigs();
   let reconcileChecked = 0;
   let reconcileDetached = 0;
   let reconcileErrors = 0;
@@ -695,7 +707,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // Transcript rotators are process-local. Reattach them after lifecycle
   // reconciliation so surviving tmux sessions keep ingesting across daemon
   // restarts while genuinely detached sessions stay excluded.
-  try {
+  if (!managed) try {
     await resumeRunningTranscriptCaptures(db, tmuxAdapter, transcriptStore);
   } catch (err) {
     try {
@@ -799,7 +811,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // user-owned Claude compaction extra-instructions placeholder.
   // Operator can disable Codex hooks via OPENRIG_RUNTIME_CODEX_HOOKS_ENABLED
   // or rig config set runtime.codex.hooks_enabled false.
-  try {
+  if (!managed) try {
     const {
       SettingsStore,
       ensureDefaultClaudeCompactionFiles,
@@ -839,7 +851,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // github.com/mvschwarz/openrig-plugins is best-effort + 404-tolerant
   // (repo currently empty as of 2026-05-10; vendored
   // copy is the source of truth at v0).
-  try {
+  if (!managed) try {
     const { PluginVendorService } = await import("./domain/plugin-vendor-service.js");
     const vendoredAssetsDir = nodePath.resolve(import.meta.dirname, "../assets/plugins");
     const userPluginsDir = getDefaultOpenRigPath("plugins");
@@ -917,7 +929,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // direct createDaemon test harnesses compatible.
     const userPacksRoot = new ContextPackSettingsStore().resolveOne("context.root").value as string;
     const [contextRoot, systemPacksRoot] = openRigContextLibraryRoots(userPacksRoot);
-    try { fs.mkdirSync(systemPacksRoot, { recursive: true }); } catch { /* best-effort */ }
+    if (!managed) try { fs.mkdirSync(systemPacksRoot, { recursive: true }); } catch { /* best-effort */ }
     const roots: Array<{ path: string; sourceType: "builtin" | "user_file" | "workspace" }> = [
       { path: contextRoot, sourceType: "user_file" },
       { path: systemPacksRoot, sourceType: "user_file" },
@@ -947,7 +959,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // below so /api/agent-images/* + the SnapshotCapturer share it.
   const agentImageRootBuilder = () => {
     const userImagesRoot = getDefaultOpenRigPath("agent-images");
-    try { fs.mkdirSync(userImagesRoot, { recursive: true }); } catch { /* best-effort */ }
+    if (!managed) try { fs.mkdirSync(userImagesRoot, { recursive: true }); } catch { /* best-effort */ }
     const roots: Array<{ path: string; sourceType: "builtin" | "user_file" | "workspace" }> = [
       { path: userImagesRoot, sourceType: "user_file" },
     ];
@@ -1048,7 +1060,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // auto-boots; other rigs require explicit operator-initiated
   // `rig up` / `rig restore` per amended IMPL-PRD §16.2.
   let kernelBootTracker: import("./domain/kernel-boot-tracker.js").KernelBootTracker | undefined;
-  try {
+  if (!managed) try {
     const { bootKernelIfNeeded } = await import("./domain/kernel-boot.js");
     const degradedRaw = readOpenRigEnv("OPENRIG_KERNEL_DEGRADED_MS");
     const degradedTimeoutMs = degradedRaw && /^\d+$/.test(degradedRaw)
@@ -1211,6 +1223,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const compatibleSpecLibraryRoot = getCompatibleOpenRigPath("specs");
 
   const deps: AppDeps = {
+    teamControl,
     rigRepo,
     sessionRegistry,
     daemonLifecycleStore,
@@ -1399,7 +1412,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     specLibraryService: (() => {
       const userSpecsRoot = userSpecLibraryRoot;
       const legacySpecsRoot = compatibleSpecLibraryRoot;
-      try { fs.mkdirSync(userSpecsRoot, { recursive: true }); } catch { /* best-effort */ }
+      if (!managed) try { fs.mkdirSync(userSpecsRoot, { recursive: true }); } catch { /* best-effort */ }
       // From src/ or dist/, ../specs points to packages/daemon/specs/
       const builtinSpecsRoot = nodePath.resolve(import.meta.dirname, "../specs");
       const roots: Array<{ path: string; sourceType: "builtin" | "user_file" }> = [
@@ -1466,7 +1479,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   Object.assign(deps, { watchdogAutoRegistration });
 
   // Copy bundled reference docs to ~/.openrig/reference/ so agents can find them at a stable path
-  try {
+  if (!managed) try {
     const bundledDocsDir = nodePath.resolve(import.meta.dirname, "../docs/reference");
     if (fs.existsSync(bundledDocsDir)) {
       const referenceDir = getDefaultOpenRigPath("reference");
@@ -1483,7 +1496,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // inspection copies at $OPENRIG_HOME/reference/policies/builtin/ (same
   // best-effort posture as the reference docs above; ../policies/builtin
   // resolves from the compiled dist in BOTH the repo-run and assembled layouts)
-  try {
+  if (!managed) try {
     materializeBuiltinPolicyReference({
       bundledDir: nodePath.resolve(import.meta.dirname, "../policies/builtin"),
       targetDir: getDefaultOpenRigPath(nodePath.join("reference", "policies", "builtin")),
@@ -1554,10 +1567,10 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       "./domain/workflow/starter-spec-loader.js"
     );
     const builtinSpecsDir = defaultBuiltinSpecsDir();
-    const starterResult = loadStarterWorkflowSpecs({
+    const starterResult = !managed ? loadStarterWorkflowSpecs({
       cache: workflowRuntime.specCache,
       builtinDir: builtinSpecsDir,
-    });
+    }) : undefined;
     // Surface the resolved path to the routes layer so
     // GET /api/workflow/specs can compute the per-row isBuiltIn flag.
     deps.workflowBuiltinSpecsDir = builtinSpecsDir;
@@ -1586,7 +1599,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // — wasteful at best, broken if the loader ever skips re-seeding).
     // Pass the resolved install root so rows under it are preserved.
     const { getOpenRigInstallRoot } = await import("./domain/cwd-resolution.js");
-    workflowRuntime.specCache.pruneNoiseDirRows(getOpenRigInstallRoot());
+    if (!managed) workflowRuntime.specCache.pruneNoiseDirRows(getOpenRigInstallRoot());
 
     try {
       const settingsStore = new ContextPackSettingsStore();
@@ -1596,7 +1609,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       }
     } catch { /* settings unavailable — folder scan stays disabled */ }
 
-    if (starterResult.errors.length > 0) {
+    if (starterResult && starterResult.errors.length > 0) {
       console.warn(
         `[starter-spec-loader] ${starterResult.errors.length} spec(s) failed to load:`,
         starterResult.errors,
@@ -1696,7 +1709,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
           includeVerbCompletion,
           missionControlBaseUrl,
         });
-        dispatcher.start();
+        if (!managed) dispatcher.start();
         deps.missionControlNotificationDispatcher = dispatcher;
       }
     }
@@ -1787,7 +1800,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       workflowSpecCache: workflowRuntime?.specCache,
     });
     deps.sliceIndexer = sliceIndexer;
-    if (sliceIndexer.isReady()) {
+    if (!managed && sliceIndexer.isReady()) {
       const { watchProofSources } = await import("./domain/proof/source-watch.js");
       deps.proofSourceWatch = watchProofSources(sliceIndexer.slicesRoot, () => sliceIndexer.invalidate(), eventBus);
     }
@@ -2168,7 +2181,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         }),
       ],
     });
-    queueRepoInstance.startWaitReminders();
+    if (!managed) queueRepoInstance.startWaitReminders();
     const watchdogScheduler = new WatchdogScheduler({
       jobsRepo: watchdogJobsRepoInstance,
       policyEngine: watchdogPolicyEngine,
@@ -2185,7 +2198,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // the durable episode receipts. Rigs created after startup are BORN ARMED:
     // rigRepo.onRigCreated (wired below) runs the same ensure in the creation
     // act itself (the birth-property ruling) — no restart wait, no watcher.
-    {
+    if (!managed) {
       const ensureParkedOwnerJob = (rigName: string) => {
         const anchor = makeRigAnchor(rigName);
         watchdogJobsRepoInstance.ensureAutoRegistration({
@@ -2209,7 +2222,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // OPR.0.5.6.1 — the two digest windows as idempotent watchdog jobs (AM-F1:
     // the flush rides the same named substrate; restart-durable by the same
     // SQLite schedule; a daemon down across a window flushes on the next tick).
-    {
+    if (!managed) {
       const ensureDigestJob = (window: "4h" | "daily", intervalSeconds: number) => {
         watchdogJobsRepoInstance.ensureAutoRegistration({
           policy: "delivery-digest-flush",
@@ -2347,7 +2360,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
           });
         },
       });
-      modelDivergenceMonitor.startPolling(60_000);
+      if (!managed) modelDivergenceMonitor.startPolling(60_000);
       deps.modelDivergenceMonitor = modelDivergenceMonitor;
     }
 
@@ -2357,7 +2370,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // watchdog + transport are wired so re-nudges actually deliver.
     // Failures are logged, never fatal: a sweep problem must not
     // bring the daemon down.
-    if (workflowRuntime && queueRepoForWorkflow) {
+    if (!managed && workflowRuntime && queueRepoForWorkflow) {
       try {
         const { runWorkflowBootSweep } = await import("./domain/workflow-boot-sweep.js");
         await runWorkflowBootSweep({
@@ -2383,7 +2396,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // actually land. Non-fatal — a sweep failure must not bring the daemon down.
     // No periodic timer (ruled out of scope): a transient failure lands the row
     // in a VISIBLE state and is retried on the next start.
-    try {
+    if (!managed) try {
       // BLOCKING 1: reconcile abandoned `sending` claims (a prior crash) FIRST,
       // then drain committed `pending` intents. Reconcile is a one-time boundary
       // step, separate from the drain.
@@ -2500,7 +2513,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // from ever shelling `claude --help`.
   const { PermissionDriftObserver, ClaudePermissionModeCache } = await import("./domain/permission-drift-observer.js");
   const permissionModes = new ClaudePermissionModeCache();
-  permissionModes.warm();
+  if (!managed) permissionModes.warm();
   deps.permissionDriftObserver = new PermissionDriftObserver({ db, permissionModes });
 
   // S10 (OPR.0.5.5.10) — activate the gateway as an IN-DAEMON SUBSYSTEM at boot (M1 §3 as
@@ -2521,7 +2534,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     }),
     log: (m) => console.log(`[gateway] ${m}`),
   });
-  gatewaySubsystem.start();
+  if (!managed) gatewaySubsystem.start();
   deps.gatewaySubsystem = gatewaySubsystem;
   // OPR.0.5.6.1 — bind the delivery policies' late gateway ref.
   lateGatewayDispatch.fn = (op, ref, payload, opts) => gatewaySubsystem.dispatch(op, ref, payload, opts);

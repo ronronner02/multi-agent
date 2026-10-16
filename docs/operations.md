@@ -103,6 +103,19 @@ The host preflight passed 29/29 checks against policy revision 2, with no prereq
 
 Claude Code's live sandboxed tool execution needs an authenticated worker home and a model call. It is exercised through the managed launch path in U4, under a recorded run budget.
 
+## Daemon Mode
+
+The daemon runs in exactly one mode per process, fixed at startup:
+
+| Mode | How it starts | What runs |
+| --- | --- | --- |
+| Legacy | Default, or `MULTI_AGENT_MODE=legacy` | Upstream OpenRig behavior. Registering a managed run is refused. |
+| Managed | `MULTI_AGENT_MODE=managed`, or automatically when the database already holds a managed run | Team control only. No legacy background service starts; every non-`/api/team-control` `/api/*` path returns HTTP 403 with `managed_control_required`, and legacy pages return HTTP 404. |
+
+Any other `MULTI_AGENT_MODE` value stops the daemon at startup. Pass the owner control credential in `MULTI_AGENT_OWNER_TOKEN`; the daemon reads it and removes it from its environment before starting anything else.
+
+Switching modes requires a daemon restart. Once a database holds a managed run, the daemon starts in managed mode from then on. Legacy tmux sessions that already exist when a managed daemon starts are left untouched; the managed daemon neither adopts nor stops them.
+
 ## Source Authority and Windows Export
 
 The WSL checkout `/home/leo/src/multi-agent` is the only development source. Provision, preflight, build and test from that checkout. `D:\Multi-Agent` is a preserved read-only copy; it changes only through the one-way export described in `docs/development.md`.

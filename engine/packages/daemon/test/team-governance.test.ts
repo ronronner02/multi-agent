@@ -25,6 +25,8 @@ const binding: PlanBinding = {
   policyRevision: 2, policyFingerprint: sha("c"),
   limits: { maxSessions: 3, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
 };
+const verifiedPolicy = () => ({ policyRevision: binding.policyRevision, policyFingerprint: binding.policyFingerprint,
+  verifiedProviders: ["claude", "codex"] as const });
 const unavailable = { value: null, reason: "provider did not report usage" };
 const usage = (activeMs = 0): UsageEvidence => ({ activeMs, inputTokens: unavailable, outputTokens: unavailable, costUsd: unavailable });
 const identity = { nativeSessionId: "native-session", tmuxServer: "/control/tmux.sock", paneId: "%1", processId: 123,
@@ -103,7 +105,7 @@ describe("transactional plan governance", () => {
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus);
     now = new Date("2026-10-14T00:00:00.000Z");
-    governance = new PlanGovernance(db, bus, queue, () => now);
+    governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
     nextKey = 0;
     governance.createRun({ id: "run-1", rigId: "rig-1", binding });
   });
@@ -135,6 +137,39 @@ describe("transactional plan governance", () => {
     assignment: { taskId: "logical-task", role: "implementer", paths: ["src/change.ts"], dependencies: [] },
     sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Implement the approved scope",
   }), binding);
+  it("requires verified provider policy rather than a matching policy digest alone", () => {
+    approvePlan();
+    governance = new PlanGovernance(db, bus, queue, () => now);
+    const receipt = createTask();
+    expect(receipt.status).toBe("denied");
+    expect(receipt.reason).toMatch(/provider.policy.*verified/i);
+    expect(db.prepare("SELECT count(*) AS count FROM team_queue_authority").get()).toEqual({ count: 0 });
+  });
+
+  it.each([
+    () => null,
+    () => ({ ...verifiedPolicy(), policyRevision: binding.policyRevision + 1 }),
+    () => ({ ...verifiedPolicy(), policyFingerprint: sha("d") }),
+    () => ({ ...verifiedPolicy(), verifiedProviders: ["claude"] as const }),
+    () => { throw new Error("policy evidence unavailable"); },
+  ])("fails closed on unavailable, stale or incomplete provider capability", (readCapability) => {
+    approvePlan();
+    governance = new PlanGovernance(db, bus, queue, () => now, readCapability);
+    expect(createTask()).toMatchObject({ status: "denied", effectMayStart: false });
+    expect(db.prepare("SELECT count(*) AS count FROM team_queue_authority").get()).toEqual({ count: 0 });
+  });
+
+  it("does not leak the transactional queue grant to legacy writers", () => {
+    approvePlan();
+    const created = createTask();
+    const qitemId = (created.value as { qitemId: string }).qitemId;
+    expect(() => queue.update({ qitemId, actorSession: "owner-control", state: "in-progress" })).toThrow(/managed/i);
+    expect(() => db.transaction(() => queue.updateWithinTransaction({ qitemId, actorSession: "owner-control", state: "done" }))()).toThrow(/managed/i);
+    expect(() => queue.claim({ qitemId, destinationSession: "builder@rig-1" })).toThrow(/managed/i);
+    expect(() => queue.unclaim(qitemId, "builder@rig-1", "forged owner")).toThrow(/managed/i);
+    expect(queue.getById(qitemId)?.state).toBe("pending");
+  });
+
   const useFileDatabase = () => {
     const directory = mkdtempSync(path.join(tmpdir(), "team-governance-"));
     directories.push(directory);
@@ -143,13 +178,13 @@ describe("transactional plan governance", () => {
     db = createDb(file); migrate(db, ALL_MIGRATIONS);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();
     bus = new EventBus(db); queue = new QueueRepository(db, bus);
-    governance = new PlanGovernance(db, bus, queue, () => now);
+    governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
     governance.createRun({ id: "run-1", rigId: "rig-1", binding });
     return file;
   };
   const reopen = (file: string) => {
     db.close(); db = createDb(file); bus = new EventBus(db); queue = new QueueRepository(db, bus);
-    governance = new PlanGovernance(db, bus, queue, () => now);
+    governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
   };
 
   it("creates a pending run and does not grant work just because its binding is well formed", () => {
@@ -190,7 +225,7 @@ describe("transactional plan governance", () => {
   it("keeps a rejection through controller recreation and stops a renamed duplicate request", () => {
     requestPlan();
     governance.decideApproval(command("plan-approval", { approvalVersion: 1, decision: "rejected" }), owner, binding);
-    governance = new PlanGovernance(db, new EventBus(db), new QueueRepository(db, new EventBus(db)), () => now);
+    governance = new PlanGovernance(db, new EventBus(db), new QueueRepository(db, new EventBus(db)), () => now, verifiedPolicy);
     expect(governance.getApproval("plan-approval")?.state).toBe("rejected");
     expect(governance.requestApproval(command("new-plan-approval", {
       kind: "orchestrator", action: "implementation", payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding), expiresAt: "2026-10-14T01:00:00.000Z",
@@ -296,7 +331,7 @@ describe("transactional plan governance", () => {
   it("emits references rather than copying arbitrary approval payloads into the event stream", () => {
     approvePlan();
     governance.requestApproval(command("private-action", {
-      kind: "native", action: "native-tool", payload: { privateInput: "sensitive-fixture-content" },
+      kind: "orchestrator", action: "commit", payload: { privateInput: "sensitive-fixture-content" },
       targetDigest: sha("d"), expiresAt: "2026-10-14T01:00:00.000Z",
     }), worker);
     expect(governance.getApproval("private-action")?.payload).toEqual({ privateInput: "sensitive-fixture-content" });
@@ -314,6 +349,21 @@ describe("transactional plan governance", () => {
     governance.cancelRun(command("cancel", { reason: "owner stop" }), owner);
     expect(governance.getRun("run-1").state).toBe("cancel_requested");
     expect(queue.getById(qitemId)?.state).toBe("pending");
+  });
+
+  it("records an admitted task's outcome after cancellation but admits no new task", () => {
+    approvePlan();
+    const qitemId = (createTask().value as { qitemId: string }).qitemId;
+    governance.recordAttempt(command("task-attempt", { qitemId, role: "implementer", provider: "claude", identity,
+      unknownReason: null, state: "stopped", usage: usage() }), binding);
+    governance.cancelRun(command("cancel", { reason: "owner stop" }), owner);
+    expect(governance.recordTaskOutcome(command(qitemId, { expectedTaskVersion: 1, state: "failed", actorSession: "builder@rig-1",
+      attemptId: "task-attempt", expectedAttemptVersion: 1, evidence: { receipt: "observed-exit" } }), owner).status).toBe("observed");
+    expect(queue.getById(qitemId)?.state).toBe("failed");
+    expect(governance.createTask(command("next-task", {
+      assignment: { taskId: "next-task", role: "implementer", paths: ["src/next.ts"], dependencies: [] },
+      sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Start more work",
+    }), binding).status).toBe("denied");
   });
 
   it.each(["done", "failed", "denied", "canceled", "handed-off"])("denies ordinary %s transitions in an approved run with a live attempt", (state) => {
@@ -642,7 +692,7 @@ describe("transactional plan governance", () => {
       expect(governance.recordCycle(cycle, binding).status).toBe("accepted");
       expect(governance.recordCycle(cycle, binding).replayed).toBe(true);
     }
-    governance = new PlanGovernance(db, bus, queue, () => now);
+    governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
     expect(governance.recordCycle(command(`${kind}-over`, { kind, reason: "over limit" }), binding).status).toBe("denied");
     expect(governance.getRun("run-1")[counter]).toBe(limit);
     expect(governance.getRun("run-1").state).toBe("blocked");
@@ -797,7 +847,7 @@ describe("transactional plan governance", () => {
     const otherDb = createDb(file);
     try {
       const otherBus = new EventBus(otherDb);
-      const other = new PlanGovernance(otherDb, otherBus, new QueueRepository(otherDb, otherBus), () => now);
+      const other = new PlanGovernance(otherDb, otherBus, new QueueRepository(otherDb, otherBus), () => now, verifiedPolicy);
       other.cancelRun(cancel, owner);
       expect(() => governance.decideApproval(decision, owner, binding)).toThrow(/version/);
       expect(governance.getRun("run-1").state).toBe("cancel_requested");
@@ -805,16 +855,22 @@ describe("transactional plan governance", () => {
   });
 
   it("keeps pending deletion fenced across connections and database reopen without blocking another rig", () => {
-    const file = useFileDatabase();
+    const directory = mkdtempSync(path.join(tmpdir(), "team-governance-"));
+    directories.push(directory);
+    const file = path.join(directory, "control.db");
+    db.close();
+    db = createDb(file); migrate(db, ALL_MIGRATIONS);
+    bus = new EventBus(db); queue = new QueueRepository(db, bus);
+    governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
     const repository = new RigRepository(db);
     const rig = repository.createRig("pending-deletion");
+    const independent = repository.createRig("independent");
     const reservation = repository.reserveRigDeletion(rig.id, "teardown", bus);
     const otherDb = createDb(file);
     try {
       const otherBus = new EventBus(otherDb);
-      const other = new PlanGovernance(otherDb, otherBus, new QueueRepository(otherDb, otherBus), () => now);
+      const other = new PlanGovernance(otherDb, otherBus, new QueueRepository(otherDb, otherBus), () => now, verifiedPolicy);
       expect(() => other.createRun({ id: "blocked-run", rigId: rig.id, binding })).toThrow(/deletion is in progress/);
-      const independent = new RigRepository(otherDb).createRig("independent");
       expect(other.createRun({ id: "independent-run", rigId: independent.id, binding }).state).toBe("pending");
       expect(otherDb.inTransaction).toBe(false);
     } finally { otherDb.close(); }
