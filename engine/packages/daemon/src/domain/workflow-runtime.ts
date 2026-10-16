@@ -1,3 +1,6 @@
+import { PlanGovernance, hashBinding } from "./plan-governance.js";
+import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
+import type { ContextManifest, ContextObservation } from "../integrations/framework/context-manifest.js";
 import { readWorkflowGuidance, type GuidanceInput } from "./workflow-guidance.js";
 import { exceptionConfigurationSource, inspectExceptionReadiness, type ExceptionReadiness } from "./workflow-exception-readiness.js";
 import { inspectGraph, recoverGraphOperation, reviseGraph } from "./workflow-reconciliation.js";
@@ -145,6 +148,20 @@ export interface InstantiateResult {
 }
 
 export class WorkflowRuntime {
+  prepareTeamAssignment(runId: string, input: Omit<AssignmentInput, "binding" | "dependencySatisfied">) {
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo), run = governance.getRun(runId);
+    if (run.state !== "approved" || input.context.runId !== runId || hashBinding(run.binding) !== hashBinding(input.currentBinding)) throw new Error("Run is not approved for this assignment");
+    const dependencySatisfied = (taskId: string) => {
+      const rows = this.db.prepare("SELECT qitem_id AS id FROM team_queue_authority WHERE run_id = ? AND task_id = ?").all(runId, taskId) as { id: string }[];
+      return rows.length === 1 && this.queueRepo.getById(rows[0]!.id)?.state === "done" && governance.getTask(rows[0]!.id)?.evidence?.validated === true;
+    };
+    return prepareTeamAssignment({ ...input, binding: run.binding, dependencySatisfied });
+  }
+  async startLeadActivation(manifest: ContextManifest, observed: ContextObservation, currentBinding: AssignmentInput["currentBinding"]) {
+    await this.prepareTeamAssignment(manifest.runId, { currentBinding, assignment: manifest.assignment, outputs: manifest.outputs, permissions: manifest.permissions, context: manifest, observed });
+    return new LeadActivation(manifest, observed);
+  }
+
   readonly specCache: WorkflowSpecCache;
   readonly instanceStore: WorkflowInstanceStore;
   readonly trailLog: WorkflowStepTrailLog;
