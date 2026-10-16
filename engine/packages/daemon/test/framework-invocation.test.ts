@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PlanBinding } from "../src/contracts/team-control.js";
-import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
+import { FRAMEWORK_PIN, frameworkEntry } from "../src/integrations/framework/catalog.js";
 import { invokeFramework, type FrameworkRequest } from "../src/integrations/framework/invocation.js";
 
 function fixture(client: FrameworkRequest["client"] = "claude-code") {
@@ -14,7 +14,7 @@ function fixture(client: FrameworkRequest["client"] = "claude-code") {
   };
   const request: FrameworkRequest = { client, entrypoint: "spec-work", origin: "caller", binding, input: "Implement the assigned slice", readOnly: false };
   const bridge = {
-    checkReadiness: vi.fn(async () => ({ ready: true, reason: "" })),
+    checkReadiness: vi.fn(async (): Promise<{ ready: boolean; reason?: string }> => ({ ready: true, reason: "" })),
     invoke: vi.fn(async (_request: unknown): Promise<unknown> => ({ status: "complete", artifacts: ["evidence/result.md"] })),
   };
   return { request, bridge };
@@ -69,6 +69,37 @@ describe("bounded framework invocation", () => {
     bridge.checkReadiness.mockResolvedValue({ ready: false, reason: "source-plan-hash-drift" });
     expect(await invokeFramework(request, bridge)).toMatchObject({ status: "blocked", reason: "source-plan-hash-drift" });
     expect(bridge.invoke).not.toHaveBeenCalled();
+  });
+  describe.each(["claude-code", "codex"] as const)("%s readiness diagnostics", client => {
+    describe.each(["spec-test-browser", "autoresearch"])("%s capability gate", entrypoint => {
+      it.each([undefined, "", " \t "])("preserves the prerequisite when the bridge reason is %j", async reason => {
+        const { request, bridge } = fixture(client);
+        request.entrypoint = entrypoint;
+        const entry = frameworkEntry(entrypoint)!;
+        bridge.checkReadiness.mockResolvedValue({ ready: false, ...(reason === undefined ? {} : { reason }) });
+        expect(await invokeFramework(request, bridge)).toEqual({ status: "blocked", artifacts: [], reason: entry.prerequisite });
+        expect(bridge.checkReadiness).toHaveBeenCalledOnce();
+        expect(bridge.checkReadiness).toHaveBeenCalledWith(expect.objectContaining({ client, entrypoint }), entry);
+        expect(bridge.invoke).not.toHaveBeenCalled();
+      });
+      it("preserves an explicit bridge reason", async () => {
+        const { request, bridge } = fixture(client);
+        request.entrypoint = entrypoint;
+        bridge.checkReadiness.mockResolvedValue({ ready: false, reason: "capability-not-installed" });
+        expect(await invokeFramework(request, bridge)).toEqual({ status: "blocked", artifacts: [], reason: "capability-not-installed" });
+        expect(bridge.checkReadiness).toHaveBeenCalledOnce();
+        expect(bridge.checkReadiness).toHaveBeenCalledWith(expect.objectContaining({ client, entrypoint }), frameworkEntry(entrypoint));
+        expect(bridge.invoke).not.toHaveBeenCalled();
+      });
+    });
+    it("retains the generic fallback for a supported entry", async () => {
+      const { request, bridge } = fixture(client);
+      bridge.checkReadiness.mockResolvedValue({ ready: false });
+      expect(await invokeFramework(request, bridge)).toEqual({ status: "blocked", artifacts: [], reason: "framework-not-ready" });
+      expect(bridge.checkReadiness).toHaveBeenCalledOnce();
+      expect(bridge.checkReadiness).toHaveBeenCalledWith(expect.objectContaining({ client, entrypoint: "spec-work" }), frameworkEntry("spec-work"));
+      expect(bridge.invoke).not.toHaveBeenCalled();
+    });
   });
   describe.each(["claude-code", "codex"] as const)("%s artifact references", client => {
     it.each([

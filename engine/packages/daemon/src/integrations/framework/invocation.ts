@@ -50,7 +50,7 @@ export async function invokeFramework(request: FrameworkRequest, bridge: Framewo
   // Catalog availability never substitutes for the upstream owner's readiness or grant checks.
   const readiness = await bridge.checkReadiness(prepared, entry);
   if (readiness?.ready !== true) return blocked(typeof readiness?.reason === "string" && readiness.reason.trim()
-    ? readiness.reason : "framework-not-ready");
+    ? readiness.reason : entry.status === "gated" ? entry.prerequisite : "framework-not-ready");
   const output = await bridge.invoke(prepared);
   const incomplete: FrameworkOutcome = { status: "incomplete", artifacts: [], reason: "malformed-framework-outcome" };
   if (output === null || typeof output !== "object") return incomplete;

@@ -74,6 +74,8 @@ describe("seat oracle retirement", () => {
 
   it("a revived same-name seat gets fresh sampler evidence after retirement", async () => {
     const f = await fixture(); await f.add(1, "node-a", "a@fixture");
+    // Keep this fixture's server alive while its only seat is retired.
+    await f.tmux("set-option", "-s", "exit-empty", "off");
     await f.svc.pollAllRunningTmuxSeats(f.db);
     await f.tmux("kill-session", "-t", "a@fixture");
     f.db.prepare("UPDATE sessions SET status = 'exited'").run();

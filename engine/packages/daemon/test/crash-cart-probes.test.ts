@@ -1,12 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { createServer } from "node:net";
+import { createConnection, createServer } from "node:net";
 import { classifyProbeError, probeHealthz } from "../src/domain/crash-cart-probes.js";
 
-// A GUARANTEED-refused local port: bind an ephemeral port, capture it, close → connecting now refuses
-// (real RST). This is a REAL socket refusal — not a hand-built error — so the test buys the actual Node
-// rejection shape (guard round-6 / r1: a stubbed error shape is a claim about Node; buy it with a socket).
+// Establish a real refused socket before exercising Node's fetch rejection shape.
+// A closed listener can briefly still accept/reset connections on WSL.
 async function refusedPort(): Promise<number> {
-  return await new Promise<number>((resolve, reject) => {
+  const port = await new Promise<number>((resolve, reject) => {
     const srv = createServer();
     srv.once("error", reject);
     srv.listen(0, "127.0.0.1", () => {
@@ -15,6 +14,13 @@ async function refusedPort(): Promise<number> {
       srv.close(() => resolve(port));
     });
   });
+  await expect.poll(() => new Promise<string>(resolve => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    socket.once("error", (error: NodeJS.ErrnoException) => resolve(error.code ?? "unknown"));
+    socket.once("connect", () => { socket.destroy(); resolve("connected"); });
+    socket.setTimeout(500, () => { socket.destroy(); resolve("timeout"); });
+  }), { timeout: 1500, interval: 10 }).toBe("ECONNREFUSED");
+  return port;
 }
 
 // Crash-cart C3 — the REAL /healthz probe classification (feeds resolveDaemonState). A connection

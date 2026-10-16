@@ -75,6 +75,8 @@ describe("retired hook evidence through the real HTTP route", () => {
       async argv => tmux(...argv.slice(1)));
     const f = fixture(adapter, () => new Date(Date.now() + 10_000));
     await tmux("new-session", "-d", "-s", f.session.sessionName, "sleep 60");
+    // Retirement must not race the private server's last-session shutdown.
+    await tmux("set-option", "-s", "exit-empty", "off");
     await f.oracle.pollAllRunningTmuxSeats(f.db);
     expect(f.oracle.getSeatStateBySession(f.session.sessionName)?.activity).toBe("idle-at-prompt");
     await tmux("kill-session", "-t", f.session.sessionName);
