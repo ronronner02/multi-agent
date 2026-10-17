@@ -1,7 +1,14 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { EventBus } from "../domain/event-bus.js";
 import type { ChatRepository } from "../domain/chat-repository.js";
+import {
+  MailboxDelivery,
+  MailboxDeliveryError,
+  mailboxSessionState,
+  type MailboxSessionState,
+} from "../domain/mailbox-delivery.js";
 import { requireSenderIdentity } from "./require-sender-identity.js";
 import { queryLimit } from "./query-limit.js";
 
@@ -23,6 +30,168 @@ export function chatRoutes(): Hono {
   function getEventBus(c: { get: (key: string) => unknown }): EventBus {
     return c.get("eventBus" as never) as EventBus;
   }
+
+  function getMailboxDelivery(c: { get: (key: string) => unknown }): MailboxDelivery {
+    const injected = c.get("mailboxDelivery" as never);
+    if (injected instanceof MailboxDelivery) return injected;
+    // No prompt-state reader here, so this fallback never admits delivery.
+    return new MailboxDelivery(getChatRepo(c));
+  }
+
+  function mailboxErrorResponse(c: Context, error: unknown): Response {
+    if (error instanceof MailboxDeliveryError
+      && (error.code === "mailbox_scope_mismatch" || error.code === "mailbox_not_found")) {
+      // A foreign scope answers exactly like a missing message, so ids cannot be probed.
+      return c.json({ error: "mailbox_not_found", message: "mailbox message not found" }, 404);
+    }
+    if (error instanceof MailboxDeliveryError) {
+      const status = error.code === "mailbox_not_found" ? 404
+        : error.code === "mailbox_transport_identity_required" ? 403
+        : error.code === "mailbox_id_conflict" ? 409
+        : error.code === "mailbox_not_admitted" ? 409
+        : error.code === "mailbox_corrupt" ? 500
+        : ["invalid_mailbox_input", "invalid_mailbox_limit", "invalid_mailbox_state", "attachment_scope_mismatch"].includes(error.code)
+          ? 400
+          : 500;
+      // Internal failure detail stays in the daemon.
+      return c.json({ error: error.code, message: status === 500 ? "internal error" : error.message }, status as 200);
+    }
+    return c.json({ error: "internal_error", message: "internal error" }, 500);
+  }
+
+  // A body-claimed recipient could be any caller, including the sender, who
+  // also holds the capability; only the transport identity proves the worker.
+  function transportIdentityRequired(c: Context): Response {
+    return mailboxErrorResponse(c, new MailboxDeliveryError(
+      "mailbox_transport_identity_required",
+      "mailbox poll and consume need the recipient's transport identity (X-OpenRig-Session)",
+    ));
+  }
+
+  function parseMailboxState(value: string | undefined): MailboxSessionState | undefined {
+    return value === undefined || value === "" ? undefined : mailboxSessionState(value);
+  }
+
+  const handleMailboxSend = async (c: Context): Promise<Response> => {
+    const rigId = c.req.param("rigId");
+    if (!rigId) return c.json({ error: "Missing rigId" }, 400);
+    const payload: unknown = await c.req.json().catch(() => null);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return c.json({ error: "Expected a JSON object" }, 400);
+    }
+    const body = payload as Record<string, unknown>;
+    for (const field of ["recipient", "taskId", "runId", "body"]) {
+      if (body[field] !== undefined && typeof body[field] !== "string") {
+        return c.json({ error: `${field} must be a string` }, 400);
+      }
+    }
+    for (const field of ["sender", "messageId", "deliveryId", "replyTo", "capability"]) {
+      if (body[field] !== undefined && body[field] !== null && typeof body[field] !== "string") {
+        return c.json({ error: `${field} must be a string` }, 400);
+      }
+    }
+
+    const identity = requireSenderIdentity(c, {
+      verb: "mailbox send",
+      bodyClaim: body.sender as string | null | undefined,
+    });
+    if (!identity.ok) return identity.response;
+
+    try {
+      const message = getMailboxDelivery(c).send({
+        rigId,
+        sender: identity.session,
+        recipient: body.recipient as string,
+        taskId: body.taskId as string,
+        runId: body.runId as string,
+        body: body.body as string,
+        messageId: (body.messageId ?? body.deliveryId) as string | undefined,
+        replyTo: body.replyTo as string | null | undefined,
+        attachment: body.attachment,
+        capability: body.capability as string | undefined,
+      });
+      getEventBus(c).emit({
+        type: "chat.message",
+        rigId,
+        messageId: message.id,
+        sender: message.sender,
+        kind: message.kind,
+        body: "",
+      });
+      return c.json(message, 201);
+    } catch (error) {
+      return mailboxErrorResponse(c, error);
+    }
+  };
+
+  const handleMailboxPoll = (c: Context): Response => {
+    const rigId = c.req.param("rigId");
+    if (!rigId) return c.json({ error: "Missing rigId" }, 400);
+    const recipientClaim = c.req.query("recipient");
+    const identity = requireSenderIdentity(c, { verb: "mailbox poll", bodyClaim: recipientClaim });
+    if (!identity.ok) return identity.response;
+    if (identity.provenance === "claimed:v1") return transportIdentityRequired(c);
+    const parsedLimit = queryLimit(c);
+    if (!parsedLimit.ok) return parsedLimit.response;
+    try {
+      const state = parseMailboxState(c.req.query("state") ?? c.req.query("sessionState"));
+      const capability = c.req.query("capability") ?? c.req.header("x-openrig-mailbox-capability");
+      return c.json(getMailboxDelivery(c).poll({
+        rigId,
+        recipient: identity.session,
+        taskId: c.req.query("taskId") ?? "",
+        runId: c.req.query("runId") ?? "",
+        capability: capability ?? "",
+        state,
+        limit: parsedLimit.limit,
+      }));
+    } catch (error) {
+      return mailboxErrorResponse(c, error);
+    }
+  };
+
+  const handleMailboxConsume = async (c: Context): Promise<Response> => {
+    const rigId = c.req.param("rigId");
+    const messageId = c.req.param("messageId");
+    if (!rigId || !messageId) return c.json({ error: "Missing mailbox identity" }, 400);
+    const payload: unknown = await c.req.json().catch(() => ({}));
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return c.json({ error: "Expected a JSON object" }, 400);
+    }
+    const body = payload as Record<string, unknown>;
+    for (const field of ["recipient", "taskId", "runId", "capability", "state"]) {
+      if (body[field] !== undefined && typeof body[field] !== "string") {
+        return c.json({ error: `${field} must be a string` }, 400);
+      }
+    }
+    const identity = requireSenderIdentity(c, {
+      verb: "mailbox consume",
+      bodyClaim: body.recipient as string | null | undefined,
+    });
+    if (!identity.ok) return identity.response;
+    if (identity.provenance === "claimed:v1") return transportIdentityRequired(c);
+    try {
+      return c.json(getMailboxDelivery(c).consume({
+        rigId,
+        messageId,
+        recipient: identity.session,
+        taskId: body.taskId as string,
+        runId: body.runId as string,
+        capability: body.capability as string,
+        state: parseMailboxState(body.state as string | undefined),
+        consumedBy: identity.session,
+        consumedByProvenance: identity.provenance,
+      }));
+    } catch (error) {
+      return mailboxErrorResponse(c, error);
+    }
+  };
+
+  app.post("/mailbox", handleMailboxSend);
+  app.post("/mailbox/send", handleMailboxSend);
+  app.get("/mailbox", handleMailboxPoll);
+  app.get("/mailbox/poll", handleMailboxPoll);
+  app.post("/mailbox/:messageId/consume", handleMailboxConsume);
 
   // POST /send — persist message + emit event
   app.post("/send", async (c) => {
@@ -100,7 +269,7 @@ export function chatRoutes(): Hono {
       const pendingMessages: Array<{ id: string; data: string }> = [];
       let initialDone = false;
       const unsubscribe = eventBus.subscribe((event) => {
-        if (event.type === "chat.message" && "rigId" in event && (event as { rigId: string }).rigId === rigId) {
+        if (event.type === "chat.message" && event.kind !== "mailbox" && "rigId" in event && (event as { rigId: string }).rigId === rigId) {
           const chatEvent = event as { messageId: string; sender: string; kind: string; body: string; topic?: string; rigId: string };
           const msg = {
             id: chatEvent.messageId,

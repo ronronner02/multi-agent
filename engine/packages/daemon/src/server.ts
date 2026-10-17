@@ -87,6 +87,7 @@ import { agentImagesRoutes } from "./routes/agent-images.js";
 import type { SpecReviewService } from "./domain/spec-review-service.js";
 import type { SpecLibraryService } from "./domain/spec-library-service.js";
 import type { ChatRepository } from "./domain/chat-repository.js";
+import { MailboxDelivery, createMailboxPromptStateReader } from "./domain/mailbox-delivery.js";
 import { whoamiRoutes } from "./routes/whoami.js";
 import { providerRoutes } from "./routes/provider.js";
 import type { ProviderService } from "./domain/provider/provider-service.js";
@@ -508,6 +509,15 @@ export function createApp(deps: AppDeps): Hono {
     ?? new PermissionDriftObserver({ db: deps.rigRepo.db });
 
   // Inject dependencies into context for all routes
+  // One mailbox owner per daemon, admitted only by the daemon's own seat evidence (KTD11).
+  const mailboxDelivery = deps.chatRepo
+    ? new MailboxDelivery(deps.chatRepo, createMailboxPromptStateReader({
+        db: deps.rigRepo.db,
+        seatActivity: deps.seatActivityService,
+        agentActivityStore: deps.agentActivityStore,
+        observedSince: new Date().toISOString(),
+      }))
+    : undefined;
   app.use("*", async (c, next) => {
     c.set("rigRepo" as never, deps.rigRepo);
     c.set("sessionRegistry" as never, deps.sessionRegistry);
@@ -561,6 +571,7 @@ export function createApp(deps: AppDeps): Hono {
     c.set("askService" as never, deps.askService);
     c.set("wakeResolveService" as never, deps.wakeResolveService);
     c.set("chatRepo" as never, deps.chatRepo);
+    c.set("mailboxDelivery" as never, mailboxDelivery);
     c.set("streamStore" as never, deps.streamStore);
     c.set("queueRepo" as never, deps.queueRepo);
     c.set("inboxHandler" as never, deps.inboxHandler);
