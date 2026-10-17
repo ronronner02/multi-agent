@@ -91,6 +91,8 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/contracts/team-control.ts',
   'packages/daemon/src/team-control-surface.ts',
   'packages/daemon/src/domain/plan-governance.ts',
+  'packages/daemon/src/domain/lead-wake-policy.ts',
+  'packages/daemon/test/lead-wake-policy.test.ts',
   'packages/daemon/src/routes/team-control.ts',
   'packages/daemon/src/db/migrations/104_team_governance.ts',
   'packages/daemon/test/team-governance.test.ts',
