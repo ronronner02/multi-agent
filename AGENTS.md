@@ -60,4 +60,9 @@ These rules apply to every agent that implements tasks in this repository, atten
   - Never force-push, never rewrite published history, never push directly to the default branch, and never merge a task whose gate or required review is not evidenced.
   - This grant covers no other action. Scope expansion, resource-limit increases, release, deployment, and any Windows export still need their own explicit owner grant.
   - Record each task's commit, pushed head, PR and landing outcome in its run report, and state plainly when a gate or review is still open.
+  - Start each task's branch from the current `origin/main` (`feat/<task-id>-<slug>`), never from a previous task's branch.
+- **Standing review-dispatch authorization (owner grant, 2026-10-17).** A task's required independent review may always dispatch isolated, report-only reviewer subagents. Record `worker_dispatch_authorization: authorized` with `authorization_ref: "AGENTS.md standing review-dispatch grant (2026-10-17)"`; do not wait for a per-session grant.
+  - Reviewers get no source-mutation access and write only to the run's review scratch directory. Fixes stay with the task owner, inside the task's Files list.
+  - An inline fallback never closes a required review gate. If the session cannot spawn subagents, stop with `required_gate_eligible: false` and report the missing capability. Do not substitute the fallback for the gate.
+  - The grant covers review dispatch only, not implementation subagents, live provider probes or delivery.
 - Do not stash, reset or revert unless the owner explicitly asks. Commit messages carry no tool or AI attribution.
