@@ -39,7 +39,7 @@ These rules apply to every agent that implements tasks in this repository, atten
 - Never weaken a legacy test to make it pass. Legacy mode must behave exactly as before.
 
 ### Bounded loops and stop conditions
-- Make at most two fix-and-rerun cycles per failing check. Each task gets at most two review rounds, under the plan's Review convergence rule. After that, P2/P3 findings become recorded residuals, and an open P0/P1 stops the task and goes back to the plan owner.
+- Make at most two fix-and-rerun cycles per failing check. Each task gets at most two review rounds, under the plan's Review convergence rule. After that, P2/P3 findings become recorded residuals, and an open P0/P1 stops the task and goes back to the plan owner. When the plan owner records a fix decision for that P0/P1, implement only the decided fix, refresh the candidate and rerun verification; the fix gets one further review round, and a P0/P1 that survives it goes back to the owner again.
 - When running unattended, do not ask questions. Take the most conservative option these rules allow, record it, and continue.
 - Stop and report rather than improvise when:
   - the plan conflicts with the current source;
