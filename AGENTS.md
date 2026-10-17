@@ -39,13 +39,20 @@ These rules apply to every agent that implements tasks in this repository, atten
 - Never weaken a legacy test to make it pass. Legacy mode must behave exactly as before.
 
 ### Bounded loops and stop conditions
-- Make at most two fix-and-rerun cycles per failing check. Each task gets at most two review rounds, under the plan's Review convergence rule. After that, P2/P3 findings become recorded residuals, and an open P0/P1 stops the task and goes back to the plan owner. When the plan owner records a fix decision for that P0/P1, implement only the decided fix, refresh the candidate and rerun verification; the fix gets one further review round, and a P0/P1 that survives it goes back to the owner again.
+- Make at most two fix-and-rerun cycles per failing check. Each task gets two review rounds, under the plan's Review convergence rule; after round 2, P2/P3 findings become recorded residuals. Rounds 3 and 4 run only for open P0/P1 findings, and only while the progress gate holds: the open P0/P1 count is strictly lower than after the previous round, and no P0/P1 fixed earlier reappears. Those rounds fix only the open P0/P1 findings. When the gate fails, or a P0/P1 is still open after round 4, the task goes back to the plan owner. When the plan owner records a fix decision for that P0/P1, implement only the decided fix, refresh the candidate and rerun verification; the fix gets one further review round, and a P0/P1 that survives it goes back to the owner again.
 - When running unattended, do not ask questions. Take the most conservative option these rules allow, record it, and continue.
 - Stop and report rather than improvise when:
   - the plan conflicts with the current source;
   - a fix needs an out-of-scope file that affects architecture or a contract;
   - a required tool or credential is missing;
-  - a P0/P1 finding survives the second review round.
+  - a P0/P1 finding fails the progress gate or survives round 4.
+
+### Review and verification cost
+These rules size review and verification to the change. They take precedence over a workflow skill's default review shape, and they never lower a task's done signal or required review gate.
+- Pick review lenses from the diff. Correctness, testing and security always run. Adversarial runs when the diff touches authority, admission, isolation, credentials or the mailbox. Performance, reliability, maintainability, project standards, learnings, agent-native and the simplify passes run only when the diff touches what that lens checks. Record each skipped lens and the reason.
+- From round 2 on, review only the fix delta against the previously reviewed candidate, with the lenses that raised findings plus correctness. Widen the round to more lenses only when the fix touches files outside the earlier findings.
+- Skip the separate final-branch review when the branch tree hash equals the reviewed candidate's; record the matching hashes. When they differ, review only the difference.
+- Run the affected package suite once, on the final candidate, and rerun it only after a later source change. A failure listed in `docs/known-failures.md` with a matching test and error is pre-existing without a new base-commit reproduction; reproduce only failures the list does not cover, and add confirmed ones to it.
 
 ### Done, evidence and git
 - A task is done when:
