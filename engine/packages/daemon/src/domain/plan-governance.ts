@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { LeadWakePolicy } from "./lead-wake-policy.js";
 import { RigRepository } from "./rig-repository.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -301,7 +302,7 @@ export class PlanGovernance {
         ctx.run.state = "approved";
         ctx.run.stateReason = null;
       }
-      return { status: "accepted", value: this.getApproval(approval.id) };
+      return { status: "accepted", value: this.getApproval(approval.id), observedBy: owner.sessionId };
     });
   }
 
@@ -400,8 +401,7 @@ export class PlanGovernance {
 
   recordAttempt(raw: ControlRequest<unknown>, currentBinding: unknown): ControlReceipt {
     return this.command("attempt.recorded", raw, null, (ctx) => {
-      const reason = this.boundEligibility(ctx, currentBinding);
-      if (reason) return deny(reason);
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
       const v = object(ctx.request.payload, "attempt");
       const state = attemptState(v.state);
       const role = text(v.role, "role");
@@ -412,7 +412,11 @@ export class PlanGovernance {
       if (state !== "unknown" && (identity === null || v.unknownReason !== null)) throw new TeamContractError("attempt.identity");
       if (identity !== null && identity.policyFingerprint !== ctx.run.binding.policyFingerprint) return deny("Attempt policy differs from the binding");
       const qitemId = v.qitemId === null ? null : text(v.qitemId, "qitemId", 256);
-      if (qitemId !== null && this.getTask(qitemId)?.runId !== ctx.run.id) throw new Error("Task not found in this run");
+      const task = qitemId === null ? null : this.getTask(qitemId);
+      if (qitemId !== null && task?.runId !== ctx.run.id) throw new Error("Task not found in this run");
+      if (task && task.assignment.role !== role) return deny("Attempt role differs from its task assignment");
+      const item = role === "lead" && qitemId !== null ? this.queue.getById(qitemId) : null;
+      if (role === "lead" && qitemId !== null && (!item || item.sourceSession === item.destinationSession)) return deny("Lead wake originates from itself");
       const usage = parseUsage(v.usage);
       if (usage.activeMs !== 0) {
         const reason = "Initial attempt registration must precede work; elapsed intervals require reconciliation";
@@ -421,6 +425,16 @@ export class PlanGovernance {
       }
       const live = this.liveAttemptCount(ctx.run.id);
       if (state === "running" && live >= ctx.run.binding.limits.maxSessions) return deny("Live session limit reached");
+      const policy = new LeadWakePolicy(this.db, this.events);
+      const wake = role === "lead" ? policy.check(ctx.run, qitemId, ctx.now) : null;
+      if (wake?.reason) {
+        policy.pause(ctx.run, wake.reason, ctx.now); policy.save(ctx.run, wake.state, ctx.register);
+        return deny(wake.reason);
+      }
+      if (wake) policy.resume(ctx.run);
+      const reason = this.eligibility(ctx);
+      if (reason) return deny(reason);
+      if (wake) policy.record(ctx.run, qitemId, ctx.now, wake, ctx.register);
       this.db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
         state, usage_json, active_ms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(ctx.request.actionId, ctx.run.id, qitemId, role, v.provider, identity === null ? null : canonicalJson(identity),

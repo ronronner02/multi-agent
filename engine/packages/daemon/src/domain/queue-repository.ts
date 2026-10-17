@@ -1,4 +1,5 @@
 import { assertGovernedQueueWrite, assertLegacyOperationAllowed } from "./plan-governance.js";
+import { LeadWakePolicy } from "./lead-wake-policy.js";
 import { readWakeLadderBackstop } from "./queue-wake-ladder.js";
 import { TEAM_QUEUE_STATES as QUEUE_STATES } from "../contracts/team-control.js";
 import type Database from "better-sqlite3";
@@ -1086,6 +1087,9 @@ export class QueueRepository {
       if (alreadyHeld.auditPointer) this.recordNudgeAttempt(alreadyHeld.auditPointer, "retained:typing_guard");
       return "retained";
     }
+    if (alreadyHeld?.deliveryState === "pending" && alreadyHeld.auditPointer
+      && new LeadWakePolicy(this.db, this.eventBus).retain(alreadyHeld.auditPointer, alreadyHeld.destinationSession)) return "skipped";
+    assertLegacyOperationAllowed(this.db);
     // MF3: CLAIM (pending→sending) BEFORE the external send so overlapping drains
     // cannot both send. A losing claim — the row is no longer `pending` (already
     // resolved, in-flight under another drainer, or claimed) — simply skips: no
@@ -1344,6 +1348,9 @@ export class QueueRepository {
     prebuiltText?: string,
     committedOutboxIds?: string[],
   ): Promise<{ classified: "verified" | "indeterminate" | "failed" | "retained"; nudgeResult: string }> {
+    const retained = new LeadWakePolicy(this.db, this.eventBus).retain(qitemId, destinationSession);
+    if (retained) return { classified: "retained", nudgeResult: retained };
+    assertLegacyOperationAllowed(this.db);
     // DEFECT FIX qitem-20260827065907-b9ae334c (S1-class, 3 live specimens): a virtual
     // @external destination has NO pane — the queue row ITSELF is the gateway
     // subsystem's input (the Slack connector polls human-destined rows and its own

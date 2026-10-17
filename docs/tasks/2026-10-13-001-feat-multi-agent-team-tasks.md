@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:700c43e0361d7a29ea8933bb93caaade7fe1c677f5203181f5300d8d9effc3b5"
+source_plan_hash: "sha256:30c882725b37a093df95b66568ac8933b7e5d13d81972f5a9dfb43246f14a124"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -2253,6 +2253,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/domain/wake-resolve-service.ts",
         "engine/packages/daemon/src/domain/queue-wake-repository.ts",
         "engine/packages/daemon/src/routes/wake-resolve.ts",
+        "engine/packages/daemon/src/domain/queue-repository.ts",
+        "engine/packages/daemon/src/domain/plan-governance.ts",
         "engine/packages/daemon/test/lead-wake-policy.test.ts"
       ],
       "context_refs": [
@@ -2261,14 +2263,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#interface-contracts"
       ],
       "entry_hint": "Start with KTD21 and the existing queue wake ladder.",
-      "test_focus": "The Lead's own message never wakes it; duplicate triggers coalesce to one pending wake; an addressed peer-to-peer message wakes only its recipient; a third agent-only wake cycle on one task without an owner action or new validated evidence pauses the run with an owner decision; the thirteenth activation within an hour is refused while its trigger stays pending behind an owner-visible blocker; counters survive restart.",
+      "test_focus": "The Lead's own message never wakes it; duplicate triggers coalesce to one pending wake; an addressed peer-to-peer message wakes only its recipient; a third agent-only wake cycle on one task without an owner action or new validated evidence pauses the run with an owner decision; the thirteenth activation within an hour is refused while its trigger stays pending behind an owner-visible blocker; counters survive restart. Cover direct queue nudges, recovered durable intents, and governed Lead-attempt admission; caller-supplied owner/evidence claims cannot reset guards.",
       "done_signal": "Wake-policy tests pass for every guard on new and legacy wake paths; refused wakes are never dropped; raising either limit requires an owner grant.",
       "wave": 8,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A wake path outside the listed owners must change, a guard would drop a trigger, or the Lead could raise its own limits.",
       "review_gate": "required",
       "review_focus": "Inspect every wake entry path, including legacy routes guarded in T004, for bypasses and lost triggers.",
-      "notes": "None",
+      "notes": "Owner-approved scope repair (2026-10-17): guard the shared queue wake-send core and governed Lead-attempt admission; persist pending trigger pointers and counter snapshots in the existing event log, expose blockers through team_runs, and preserve unbound legacy behavior. Immediate sends and recovered durable intents must not bypass the policy. No schema, launch-mode, resource-limit or T031 change.",
       "risk_note": "An unlisted legacy wake path would silently bypass the guards.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -2664,12 +2666,14 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U4`; `R8`, `R11`, `R12`, `R15`, `R22`, `KTD9`, `KTD11`, `KTD21`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 8; T009.
-- **Files:** `engine/packages/daemon/src/domain/lead-wake-policy.ts`; `engine/packages/daemon/src/domain/queue-wake-ladder.ts`; `engine/packages/daemon/src/domain/wake-resolver.ts`; `engine/packages/daemon/src/domain/wake-resolve-service.ts`; `engine/packages/daemon/src/domain/queue-wake-repository.ts`; `engine/packages/daemon/src/routes/wake-resolve.ts`; `engine/packages/daemon/test/lead-wake-policy.test.ts`.
+- **Files:** `engine/packages/daemon/src/domain/lead-wake-policy.ts`; `engine/packages/daemon/src/domain/queue-wake-ladder.ts`; `engine/packages/daemon/src/domain/wake-resolver.ts`; `engine/packages/daemon/src/domain/wake-resolve-service.ts`; `engine/packages/daemon/src/domain/queue-wake-repository.ts`; `engine/packages/daemon/src/routes/wake-resolve.ts`; `engine/packages/daemon/src/domain/queue-repository.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/test/lead-wake-policy.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner.
-- **Test focus:** The Lead's own message never wakes it; duplicate triggers coalesce to one pending wake; an addressed peer-to-peer message wakes only its recipient; a third agent-only wake cycle on one task without an owner action or new validated evidence pauses the run with an owner decision; the thirteenth activation within an hour is refused while its trigger stays pending behind an owner-visible blocker; counters survive restart.
+- **Test focus:** The Lead's own message never wakes it; duplicate triggers coalesce to one pending wake; an addressed peer-to-peer message wakes only its recipient; a third agent-only wake cycle on one task without an owner action or new validated evidence pauses the run with an owner decision; the thirteenth activation within an hour is refused while its trigger stays pending behind an owner-visible blocker; counters survive restart. Cover direct queue nudges, recovered durable intents, and governed Lead-attempt admission; caller-supplied owner/evidence claims cannot reset guards.
 - **Done signal:** Wake-policy tests pass for every guard on new and legacy wake paths; refused wakes are never dropped; raising either limit requires an owner grant.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A wake path outside the listed owners must change, a guard would drop a trigger, or the Lead could raise its own limits.
 - **Review intent:** required; Inspect every wake entry path, including legacy routes guarded in T004, for bypasses and lost triggers.
+
+- **Scope repair:** Owner-approved scope repair (2026-10-17): guard the shared queue wake-send core and governed Lead-attempt admission; persist pending trigger pointers and counter snapshots in the existing event log, expose blockers through team_runs, and preserve unbound legacy behavior. Immediate sends and recovered durable intents must not bypass the policy. No schema, launch-mode, resource-limit or T031 change.
 
 ### T033. Classify failed attempts once and route retry, resume and attempt phases through that classifier.
 
