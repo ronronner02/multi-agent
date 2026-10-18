@@ -1105,11 +1105,15 @@ function canonicalizeJsonValue(value: unknown): unknown {
   return value;
 }
 
-const CODEX_HOOK_EVENT_KEY_LABEL: Record<(typeof OPENRIG_ACTIVITY_HOOK_EVENTS)[number], string> = {
+/** Events whose hooks the daemon authors: the activity relay plus the T031 mailbox channel. */
+type CodexTrustedHookEvent = (typeof OPENRIG_ACTIVITY_HOOK_EVENTS)[number] | "PostToolUse";
+
+const CODEX_HOOK_EVENT_KEY_LABEL: Record<CodexTrustedHookEvent, string> = {
   SessionStart: "session_start",
   UserPromptSubmit: "user_prompt_submit",
   Stop: "stop",
   PermissionRequest: "permission_request",
+  PostToolUse: "post_tool_use",
 };
 
 export interface CodexHookTrustInput {
@@ -1135,7 +1139,7 @@ export interface CodexHookTrustInput {
  * PROVISIONAL-until-VM-read-back caveat.
  */
 export function computeCodexHookTrust(
-  event: (typeof OPENRIG_ACTIVITY_HOOK_EVENTS)[number],
+  event: CodexTrustedHookEvent,
   input: CodexHookTrustInput,
 ): { key: string; hash: string } {
   const label = CODEX_HOOK_EVENT_KEY_LABEL[event];
@@ -1627,4 +1631,123 @@ function commandLooksLikeCodex(command: string): boolean {
 function isSkippableCodexUpdatePrompt(paneContent: string): boolean {
   return hasCodexUpdateHeader(paneContent)
     && /^\s*[›>]?\s*3\. Skip until next version\s*$/m.test(paneContent);
+}
+
+// ── T031 / KTD19 — the Codex mailbox channel (PostToolUse additionalContext) ──
+// The spike (docs/validation/native-channel-spike.md) proved this channel on 0.160.0:
+// the text lands as a developer-role message rather than a user turn, an untrusted
+// hook does not run, and app-server `turn/steer` was rejected because it records
+// peer text as a user message.
+export const CODEX_NATIVE_CHANNEL_HOOK_TIMEOUT_SEC = 10;
+const CODEX_NATIVE_CHANNEL_BEGIN = "# BEGIN MULTI-AGENT MAILBOX CHANNEL";
+const CODEX_NATIVE_CHANNEL_END = "# END MULTI-AGENT MAILBOX CHANNEL";
+// Control characters cannot appear in a TOML string, and lone surrogates cannot be encoded.
+const CODEX_UNSAFE_TOML_TEXT = /[\u0000-\u001f\u007f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+
+/**
+ * Install the managed PostToolUse channel hook and its trust record into Codex
+ * config.toml text, replacing an earlier copy. Codex keys hook trust by group
+ * position, so the group index is the number of PostToolUse groups the parsed
+ * document already holds. Text that does not parse is returned unchanged, so
+ * the channel stays absent and delivery fails closed.
+ */
+export function upsertCodexNativeChannelHook(content: string, relayCommand: string, keySource: string): string {
+  if (relayCommand.includes("'") || CODEX_UNSAFE_TOML_TEXT.test(relayCommand)) {
+    throw new Error("codex channel relay command must be a single-line TOML literal string");
+  }
+  if (CODEX_UNSAFE_TOML_TEXT.test(keySource)) throw new Error("codex channel key source contains unsafe characters");
+  const next = upsertCodexFeaturesHooksEnabled(stripCodexNativeChannelHook(content));
+  let groupIndex: number;
+  try {
+    const hooks = (parseToml(next) as Record<string, unknown>)["hooks"];
+    const groups = isRecordValue(hooks) ? hooks["PostToolUse"] : undefined;
+    groupIndex = Array.isArray(groups) ? groups.length : 0;
+  } catch {
+    return content;
+  }
+  const { key, hash } = computeCodexHookTrust("PostToolUse", {
+    keySource, command: relayCommand, timeoutSec: CODEX_NATIVE_CHANNEL_HOOK_TIMEOUT_SEC, groupIndex,
+  });
+  const block = [
+    CODEX_NATIVE_CHANNEL_BEGIN,
+    "[[hooks.PostToolUse]]",
+    "[[hooks.PostToolUse.hooks]]",
+    'type = "command"',
+    `command = '${relayCommand}'`,
+    `timeout = ${CODEX_NATIVE_CHANNEL_HOOK_TIMEOUT_SEC}`,
+    "",
+    `[hooks.state.${JSON.stringify(key)}]`,
+    `trusted_hash = ${JSON.stringify(hash)}`,
+    CODEX_NATIVE_CHANNEL_END,
+  ].join("\n") + "\n";
+  const prefix = next.replace(/\n*$/, "");
+  const out = prefix.length > 0 ? `${prefix}\n\n${block}` : block;
+  try { parseToml(out); } catch { return content; }
+  return out;
+}
+
+/**
+ * Remove only what the installer wrote inside the managed block: its handler
+ * group and the trust record whose hash matches that handler. Codex can insert
+ * its own tables (such as [tui] or another hook's trust record) inside the
+ * block; those are kept.
+ */
+function stripCodexNativeChannelHook(content: string): string {
+  const lines = content.split("\n");
+  const drop = new Set<number>();
+  const ownHashes = new Set<string>();
+  let begin = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed === CODEX_NATIVE_CHANNEL_BEGIN) { begin = i; drop.add(i); continue; }
+    if (trimmed === CODEX_NATIVE_CHANNEL_END) { begin = -1; drop.add(i); continue; }
+    if (begin < 0 || trimmed !== "[[hooks.PostToolUse]]") continue;
+    const command = lines[i + 3]?.match(/^command = '([^']*)'$/);
+    const timeout = lines[i + 4]?.match(/^timeout = (\d+)$/);
+    if (lines[i + 1] !== "[[hooks.PostToolUse.hooks]]" || lines[i + 2] !== 'type = "command"' || !command || !timeout) continue;
+    for (let k = i; k <= i + 4; k++) drop.add(k);
+    ownHashes.add(computeCodexHookTrust("PostToolUse", { keySource: "", command: command[1]!, timeoutSec: Number(timeout[1]) }).hash);
+  }
+  begin = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed === CODEX_NATIVE_CHANNEL_BEGIN) { begin = i; continue; }
+    if (trimmed === CODEX_NATIVE_CHANNEL_END) { begin = -1; continue; }
+    if (begin < 0 || !/^\[hooks\.state\.".*:post_tool_use:\d+:0"\]$/.test(trimmed)) continue;
+    const trust = lines[i + 1]?.match(/^trusted_hash = "([^"]*)"$/);
+    if (trust && ownHashes.has(trust[1]!)) { drop.add(i); drop.add(i + 1); }
+  }
+  const kept: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (drop.has(i)) continue;
+    // Drop only the blank separators next to removed lines; other formatting stays.
+    if (lines[i]!.trim() === "" && (drop.has(i - 1) || drop.has(i + 1))) continue;
+    kept.push(lines[i]!);
+  }
+  return kept.join("\n");
+}
+
+/**
+ * Digest of everything that decides which hooks Codex runs ([features], the
+ * whole hooks tree, and profile selection), from the parsed document, or null
+ * when the text does not parse or the managed handler is not present exactly
+ * once. Codex rewrites unrelated tables at startup, so those do not change it.
+ */
+export function codexNativeChannelDigest(content: string, relayCommand: string): string | null {
+  let doc: Record<string, unknown>;
+  try { doc = parseToml(content) as Record<string, unknown>; } catch { return null; }
+  const hooks = isRecordValue(doc["hooks"]) ? doc["hooks"] : {};
+  const groups = Array.isArray(hooks["PostToolUse"]) ? hooks["PostToolUse"] : [];
+  const handlers = groups.flatMap((group) => (isRecordValue(group) && Array.isArray(group["hooks"]) ? group["hooks"] : []));
+  const ours = handlers.filter((handler) => isRecordValue(handler) && handler["command"] === relayCommand);
+  if (ours.length !== 1) return null;
+  const scope = {
+    features: doc["features"] ?? null, hooks: doc["hooks"] ?? null,
+    profile: doc["profile"] ?? null, profiles: doc["profiles"] ?? null,
+  };
+  return hashContent(JSON.stringify(canonicalizeJsonValue(scope)));
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

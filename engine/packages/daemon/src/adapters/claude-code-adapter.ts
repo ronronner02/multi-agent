@@ -1113,3 +1113,72 @@ export function readClaudeSelfReportEvidence(input: {
     return null; // unreadable dir ⇒ fall down the ladder
   }
 }
+
+// ── T031 / KTD19 — the Claude Code mailbox channel (PostToolUse additionalContext) ──
+// The spike (docs/validation/native-channel-spike.md) proved this channel on 2.1.296:
+// interactive and print sessions both run the hook, the text lands as a
+// `hook_additional_context` attachment rather than a user turn, and a missing or
+// altered entry leaves the message pending.
+export const CLAUDE_NATIVE_CHANNEL_HOOK_TIMEOUT_SEC = 10;
+
+function isChannelHookGroup(group: unknown, relayCommand: string): boolean {
+  return isPlainObject(group) && Array.isArray(group["hooks"])
+    && (group["hooks"] as unknown[]).some((hook) => hookCommand(hook) === relayCommand);
+}
+
+/**
+ * Write the managed PostToolUse channel entry into `.claude/settings.local.json`
+ * text, replacing an earlier copy and leaving user-authored hooks untouched. Text
+ * that does not parse as a JSON object is returned unchanged, so the channel
+ * stays absent and delivery fails closed.
+ */
+export function upsertClaudeNativeChannelHook(settingsText: string, relayCommand: string): string {
+  let settings: Record<string, unknown>;
+  try {
+    const parsed: unknown = settingsText.trim() === "" ? {} : JSON.parse(settingsText);
+    if (!isPlainObject(parsed)) return settingsText;
+    settings = parsed;
+  } catch {
+    return settingsText;
+  }
+  const hooks = isPlainObject(settings["hooks"]) ? { ...settings["hooks"] } : {};
+  const groups = Array.isArray(hooks["PostToolUse"]) ? (hooks["PostToolUse"] as unknown[]) : [];
+  hooks["PostToolUse"] = [
+    ...groups.filter((group) => !isChannelHookGroup(group, relayCommand)),
+    { hooks: [{ type: "command", command: relayCommand, timeout: CLAUDE_NATIVE_CHANNEL_HOOK_TIMEOUT_SEC }] },
+  ];
+  return `${JSON.stringify({ ...settings, hooks }, null, 2)}\n`;
+}
+
+/**
+ * Digest of every hook Claude Code will run for the seat, or null when the
+ * channel entry is missing, duplicated, or a scope does not parse. Pass every
+ * settings scope the session loads, in load order; a missing file is `null`.
+ * Any hook added in any scope, and `disableAllHooks`, change it; other settings
+ * do not.
+ */
+export function claudeNativeChannelDigest(scopes: readonly (string | null)[], relayCommand: string): string | null {
+  const hookSets: unknown[] = [];
+  let channelGroups = 0;
+  for (const text of scopes) {
+    if (text === null || text.trim() === "") { hookSets.push(null); continue; }
+    let settings: unknown;
+    try { settings = JSON.parse(text); } catch { return null; }
+    if (!isPlainObject(settings)) return null;
+    const hooks = settings["hooks"] ?? null;
+    if (hooks !== null && !isPlainObject(hooks)) return null;
+    const postToolUse = hooks?.["PostToolUse"];
+    if (Array.isArray(postToolUse)) channelGroups += postToolUse.filter((group) => isChannelHookGroup(group, relayCommand)).length;
+    hookSets.push({ hooks, disableAllHooks: settings["disableAllHooks"] ?? null });
+  }
+  if (channelGroups !== 1) return null;
+  return hashContent(JSON.stringify(canonicalJson(hookSets)));
+}
+
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (!isPlainObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) out[key] = canonicalJson(value[key]);
+  return out;
+}
