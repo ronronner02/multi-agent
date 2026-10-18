@@ -13,9 +13,10 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { createConnection } from 'node:net';
+import net, { createConnection } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -28,7 +29,10 @@ import {
   buildSandboxCommand,
   assertSafeStdio,
   MOUNT_FD,
+  SECCOMP_FD,
+  buildSeccompFilter,
 } from '../config/isolation/worker-launch.mjs';
+import { createEgressServer, isDeniedAddress, parseTarget, validateEgressConfig } from '../config/isolation/egress.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const policyPath = path.join(here, '..', 'config', 'isolation', 'worker-policy.json');
@@ -39,6 +43,7 @@ const USERS = {
   'ma-worker1': { name: 'ma-worker1', uid: 991, gid: 991, groups: ['ma-worker1'] },
   'ma-worker2': { name: 'ma-worker2', uid: 992, gid: 992, groups: ['ma-worker2', 'sudo'] },
   leo: { name: 'leo', uid: 1000, gid: 1000, groups: ['leo', 'sudo'] },
+  'ma-egress': { name: 'ma-egress', uid: 989, gid: 989, groups: ['ma-egress'] },
 };
 
 function fakeFacts(overrides = {}) {
@@ -55,6 +60,7 @@ function fakeFacts(overrides = {}) {
     },
     isDirectory: () => true,
     legacyTiocsti: 0,
+    egressSocket: { dirUid: 989, dirMode: 0o755, isSocket: true },
     ...overrides,
   };
 }
@@ -96,6 +102,56 @@ describe('offline: worker policy', () => {
     const bad = structuredClone(policy);
     bad.allowed_exec_prefixes.push('/mnt/c/');
     expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
+  });
+
+  test('KTD23: the host network namespace is never an accepted posture', () => {
+    for (const mutate of [
+      (p) => { p.sandbox.network = 'host-shared'; },
+      (p) => { p.policy_revision = 2; },
+      (p) => { delete p.sandbox.egress_port; },
+      (p) => { p.sandbox.egress_port = 80; },
+    ]) {
+      const bad = structuredClone(policy);
+      mutate(bad);
+      expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
+    }
+  });
+
+  test('KTD23: the egress identity is its own unprivileged identity and its paths stay out of reach', () => {
+    for (const mutate of [
+      (p) => { p.egress_identity = p.control_identity; },
+      (p) => { p.egress_identity = p.worker_identities[0]; },
+      (p) => { p.forbidden_worker_groups = p.forbidden_worker_groups.filter((g) => g !== p.egress_identity); },
+      (p) => { p.paths.egress_socket_dir = '/var/lib/multi-agent/egress'; },
+      (p) => { p.paths.installed_egress = '/usr/local/lib/egress.mjs'; },
+    ]) {
+      const bad = structuredClone(policy);
+      mutate(bad);
+      expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
+    }
+  });
+
+  test('KTD23: callers cannot pass proxy settings through the environment allow-list', () => {
+    for (const key of ['HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'ALL_PROXY']) {
+      const bad = structuredClone(policy);
+      bad.env_passthrough.push(key);
+      expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
+    }
+  });
+});
+
+describe('offline: egress filter availability at launch', () => {
+  const argv = ['--worker', 'ma-worker1', '--role', 'implementer', '--tree', TREE, '--', NODE];
+  test('a missing, foreign-owned or writable egress socket blocks the launch with a distinct code', () => {
+    for (const egressSocket of [
+      null,
+      { dirUid: 989, dirMode: 0o755, isSocket: false },
+      { dirUid: 990, dirMode: 0o755, isSocket: true },
+      { dirUid: 989, dirMode: 0o777, isSocket: true },
+    ]) {
+      expectLaunchError(() => launch(argv, { egressSocket }), 'egress-unavailable');
+    }
+    expectLaunchError(() => launch(argv, { lookupUser: (name) => (name === 'ma-egress' ? null : USERS[name] ?? null) }), 'egress-unavailable');
   });
 });
 
@@ -237,9 +293,221 @@ describe('offline: sandbox command construction', () => {
     const { args } = buildSandboxCommand(policy, resolvedFor('implementer'));
     const setenv = [];
     for (let i = 0; i < args.length; i += 1) if (args[i] === '--setenv') setenv.push(args[i + 1]);
-    assert.deepEqual(setenv.sort(), ['HOME', 'PATH', 'TERM', 'TMPDIR', 'USER'].sort());
+    const proxyKeys = ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy', 'NO_PROXY', 'no_proxy'];
+    assert.deepEqual(setenv.sort(), ['HOME', 'PATH', 'TERM', 'TMPDIR', 'USER', ...proxyKeys].sort());
     const sep = args.lastIndexOf('--');
     assert.deepEqual(args.slice(sep + 1), [NODE, '-e', '1']);
+  });
+
+  test('KTD23: the sandbox gets an empty network namespace and reaches out only through the egress socket', () => {
+    const { args } = buildSandboxCommand(policy, resolvedFor('implementer'));
+    assert.ok(args.includes('--unshare-net'), 'missing --unshare-net');
+    assert.ok(!args.includes('--share-net'), 'the host network namespace must not be shared');
+    const socketDir = policy.paths.egress_socket_dir;
+    const bind = args.findIndex((a, i) => a === '--ro-bind' && args[i + 1] === socketDir && args[i + 2] === socketDir);
+    assert.ok(bind > args.indexOf('/run'), 'the socket directory must be bound after the /run tmpfs, read-only');
+    const proxy = `http://127.0.0.1:${policy.sandbox.egress_port}`;
+    for (const key of ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy']) {
+      const i = args.findIndex((a, j) => a === '--setenv' && args[j + 1] === key);
+      assert.equal(args[i + 2], proxy, `${key} must point at the in-sandbox relay`);
+    }
+    // bwrap runs the relay, which runs the requested command.
+    const bwrapSep = args.indexOf('--', args.indexOf('--chdir'));
+    assert.deepEqual(args.slice(bwrapSep + 1, bwrapSep + 7), [
+      `${policy.paths.toolchain_dir}/node/bin/node`, policy.paths.installed_egress, 'relay',
+      String(policy.sandbox.egress_port), `${socketDir}/proxy.sock`, '--',
+    ]);
+  });
+
+  test('KTD23: a caller-supplied variable cannot replace the launcher proxy settings', () => {
+    const resolved = resolvedFor('implementer');
+    resolved.env.HTTPS_PROXY = 'http://127.0.0.1:18080';
+    const { args } = buildSandboxCommand(policy, resolved);
+    const values = args.flatMap((a, i) => (a === '--setenv' && args[i + 1] === 'HTTPS_PROXY' ? [args[i + 2]] : []));
+    assert.deepEqual(values, [`http://127.0.0.1:${policy.sandbox.egress_port}`]);
+  });
+
+  test('KTD23: bwrap loads the seccomp program from the launcher descriptor', () => {
+    const { args } = buildSandboxCommand(policy, resolvedFor('implementer'));
+    const i = args.indexOf('--seccomp');
+    assert.ok(i > args.indexOf('/usr/bin/bwrap') && i < args.indexOf('--chdir'), 'missing --seccomp');
+    assert.equal(args[i + 1], String(SECCOMP_FD));
+  });
+
+  test('KTD23: the seccomp program refuses AF_VSOCK and io_uring, and allows other sockets and syscalls', () => {
+    const prog = buildSeccompFilter();
+    // Minimal classic-BPF interpreter over seccomp_data { nr, arch, ip, args[6] }.
+    const run = ({ nr, arch = 0xc000003e, family = 0 }) => {
+      const data = Buffer.alloc(64);
+      data.writeUInt32LE(nr >>> 0, 0);
+      data.writeUInt32LE(arch >>> 0, 4);
+      data.writeUInt32LE(family >>> 0, 16);
+      let acc = 0;
+      for (let pc = 0; pc < prog.length / 8;) {
+        const code = prog.readUInt16LE(pc * 8); const jt = prog[pc * 8 + 2]; const jf = prog[pc * 8 + 3]; const k = prog.readUInt32LE(pc * 8 + 4);
+        if (code === 0x20) { acc = data.readUInt32LE(k); pc += 1; } else if (code === 0x15) pc += 1 + (acc === k ? jt : jf);
+        else if (code === 0x35) pc += 1 + (acc >= k ? jt : jf);
+        else if (code === 0x06) return k === 0x7fff0000 ? 'allow' : `errno:${k & 0xffff}`;
+        else throw new Error(`unexpected opcode ${code}`);
+      }
+      throw new Error('program fell off the end');
+    };
+    assert.equal(run({ nr: 41, family: 40 }), 'errno:97', 'socket(AF_VSOCK)');
+    assert.equal(run({ nr: 53, family: 40 }), 'errno:97', 'socketpair(AF_VSOCK)');
+    for (const nr of [425, 426, 427]) assert.equal(run({ nr }), 'errno:1', `io_uring syscall ${nr}`);
+    for (const family of [1, 2, 10, 16]) assert.equal(run({ nr: 41, family }), 'allow', `socket family ${family}`);
+    assert.equal(run({ nr: 0 }), 'allow', 'read');
+    assert.equal(run({ nr: 41 | 0x40000000, family: 40 }), 'errno:1', 'x32 syscalls are refused');
+    assert.equal(run({ nr: 41, arch: 0x40000003, family: 2 }), 'errno:1', 'a foreign architecture is refused');
+  });
+});
+
+describe('offline: KTD23 egress filter', () => {
+  test('targets are lower-case DNS names with a port; IP literals and short overlay names are refused', () => {
+    assert.deepEqual(parseTarget('Registry.NPMJS.org.:443'), { host: 'registry.npmjs.org', port: 443, key: 'registry.npmjs.org:443' });
+    for (const bad of ['1.1.1.1:443', '[::1]:443', '127.0.0.1:18080', 'hf:22', 'localhost:443', 'a.b:0', 'a.b:70000', 'user@a.b:443', 'a.b', 'a.b:443/x', 'a..b:443', '-a.b:443', 'a.1:443']) {
+      assert.equal(parseTarget(bad), null, bad);
+    }
+  });
+
+  test('the configuration accepts only exact host:port entries and a plain http upstream', () => {
+    const base = { schema: 'multi-agent-egress/v1', upstream: 'http://127.0.0.1:18080', allow: ['registry.npmjs.org:443'] };
+    assert.deepEqual(validateEgressConfig(base).upstream, { host: '127.0.0.1', port: 18080 });
+    assert.equal(validateEgressConfig({ ...base, upstream: null }).upstream, null);
+    for (const bad of [
+      { ...base, schema: 'x' },
+      { ...base, allow: [] },
+      { ...base, allow: ['REGISTRY.npmjs.org:443'] },
+      { ...base, allow: ['10.0.0.1:443'] },
+      { ...base, upstream: 'https://127.0.0.1:18080' },
+      { ...base, upstream: 'http://u:p@127.0.0.1:18080' },
+      { ...base, upstream: 'http://127.0.0.1:18080/path' },
+      { ...base, upstream: 'http://127.0.0.1' },
+    ]) {
+      assert.throws(() => validateEgressConfig(bad), (err) => err.code === 'egress-config-invalid');
+    }
+  });
+
+  test('direct resolution refuses loopback, private, link-local, overlay and multicast addresses', () => {
+    for (const a of [
+      '127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.0.10', '169.254.1.1', '100.64.0.1', '0.0.0.0', '224.0.0.1', '192.0.0.8', '198.18.0.1',
+      '::1', '::', 'fd7a:115c::1', 'fe80::1', 'fec0::1', 'ff02::1', '::ffff:127.0.0.1', '::127.0.0.1', '::7f00:1',
+      '64:ff9b::7f00:1', '64:ff9b::a00:1', '2002:7f00:1::1', 'not-an-ip',
+    ]) {
+      assert.equal(isDeniedAddress(a), true, a);
+    }
+    for (const a of ['104.16.0.1', '2606:4700::1']) assert.equal(isDeniedAddress(a), false, a);
+    // Any address bound on this host is refused, whatever its range.
+    assert.equal(isDeniedAddress('203.0.113.7', ['203.0.113.7']), true);
+  });
+
+  test('the filter tunnels only CONNECT to an allowed target, through the upstream', { skip: process.platform === 'win32' && 'unix sockets' }, async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'egress-'));
+    const socketPath = path.join(dir, 'proxy.sock');
+    const seen = [];
+    // Stand-in upstream proxy: accepts CONNECT for one host, then echoes.
+    const upstream = net.createServer((s) => {
+      s.once('data', (d) => {
+        const line = String(d).split('\r\n')[0];
+        seen.push(line);
+        if (line === 'CONNECT registry.npmjs.org:443 HTTP/1.1') {
+          s.write('HTTP/1.1 200 OK\r\n\r\n');
+          s.on('data', (x) => s.write(x));
+        } else s.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+      });
+    });
+    await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+    const logs = [];
+    const config = { schema: 'multi-agent-egress/v1', upstream: `http://127.0.0.1:${upstream.address().port}`, allow: ['registry.npmjs.org:443', 'refused.example.com:443'] };
+    const server = createEgressServer(config, { log: (e) => logs.push(e) });
+    await new Promise((resolve) => server.listen(socketPath, resolve));
+    const ask = (request, payload) => new Promise((resolve) => {
+      const c = net.connect(socketPath);
+      let out = '';
+      c.on('data', (d) => {
+        out += d;
+        if (payload && out.startsWith('HTTP/1.1 200') && !out.includes(payload)) c.write(payload);
+        if (!payload || out.includes(payload)) c.end();
+      });
+      c.on('close', () => resolve(out));
+      c.write(request);
+    });
+    try {
+      const ok = await ask('CONNECT registry.npmjs.org:443 HTTP/1.1\r\nHost: registry.npmjs.org:443\r\n\r\n', 'ping');
+      assert.match(ok, /^HTTP\/1\.1 200 Connection Established\r\n\r\nping/);
+      assert.match(await ask('CONNECT example.com:443 HTTP/1.1\r\n\r\n'), /^HTTP\/1\.1 403/);
+      assert.match(await ask('CONNECT 127.0.0.1:18080 HTTP/1.1\r\n\r\n'), /^HTTP\/1\.1 403/);
+      assert.match(await ask('GET http://registry.npmjs.org/ HTTP/1.1\r\nHost: registry.npmjs.org\r\n\r\n'), /^HTTP\/1\.1 405/);
+      assert.match(await ask('CONNECT refused.example.com:443 HTTP/1.1\r\n\r\n'), /^HTTP\/1\.1 502/);
+      // Denied requests never reach the upstream.
+      assert.deepEqual(seen, ['CONNECT registry.npmjs.org:443 HTTP/1.1', 'CONNECT refused.example.com:443 HTTP/1.1']);
+      assert.deepEqual(logs.map((e) => e.decision), ['allow', 'deny', 'deny', 'deny', 'error']);
+      assert.ok(!JSON.stringify(logs).includes('127.0.0.1:18080'), 'a refused raw target is not logged');
+    } finally {
+      server.close();
+      upstream.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a client that half-closes after its upload still receives the reply, and bytes after each head pass once', { skip: process.platform === 'win32' && 'unix sockets' }, async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'egress-'));
+    const socketPath = path.join(dir, 'proxy.sock');
+    // Upstream sends bytes with its 200, then answers only after the client's EOF.
+    const upstream = net.createServer({ allowHalfOpen: true }, (s) => {
+      let got = '';
+      s.on('data', (d) => {
+        got += d;
+        if (got.includes('\r\n\r\n') && !s.answered) { s.answered = true; s.write('HTTP/1.1 200 OK\r\n\r\nU1'); }
+      });
+      s.on('end', () => setTimeout(() => s.end(`[${got.split('\r\n\r\n')[1]}]`), 100));
+    });
+    await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+    const server = createEgressServer(
+      { schema: 'multi-agent-egress/v1', upstream: `http://127.0.0.1:${upstream.address().port}`, allow: ['registry.npmjs.org:443'] },
+      { log: () => {} },
+    );
+    await new Promise((resolve) => server.listen(socketPath, resolve));
+    try {
+      const out = await new Promise((resolve) => {
+        const c = net.connect({ path: socketPath, allowHalfOpen: true });
+        let buf = '';
+        c.on('data', (d) => {
+          buf += d;
+          if (buf.includes('U1') && !c.sent) { c.sent = true; c.end('B'); }
+        });
+        c.on('end', () => resolve(buf));
+        c.write('CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\nA');
+      });
+      assert.equal(out, 'HTTP/1.1 200 Connection Established\r\n\r\nU1[AB]');
+    } finally {
+      server.close();
+      upstream.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('without an upstream, a name that resolves to a denied address is refused', { skip: process.platform === 'win32' && 'unix sockets' }, async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'egress-'));
+    const socketPath = path.join(dir, 'proxy.sock');
+    const server = createEgressServer(
+      { schema: 'multi-agent-egress/v1', upstream: null, allow: ['rebind.example.com:443'] },
+      { log: () => {}, lookup: async () => [{ address: '127.0.0.1', family: 4 }] },
+    );
+    await new Promise((resolve) => server.listen(socketPath, resolve));
+    try {
+      const out = await new Promise((resolve) => {
+        const c = net.connect(socketPath);
+        let buf = '';
+        c.on('data', (d) => { buf += d; });
+        c.on('close', () => resolve(buf));
+        c.write('CONNECT rebind.example.com:443 HTTP/1.1\r\n\r\n');
+      });
+      assert.match(out, /^HTTP\/1\.1 502/);
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -346,6 +614,59 @@ for (const c of input.codexSandboxCases) {
   };
 }
 out.codex_sandbox = codexCases;
+if (input.net) {
+  // KTD23: enumerate what the worker can reach from inside its own network namespace.
+  const tcp = (host, port) => new Promise((resolve) => {
+    const s = net.connect({ host, port });
+    const t = setTimeout(() => { s.destroy(); resolve('TIMEOUT'); }, 2000);
+    s.once('connect', () => {
+      clearTimeout(t);
+      // Scanning the ephemeral range can make a socket connect to itself (TCP
+      // simultaneous open); that is not a listener.
+      const self = s.localPort === port && s.localAddress === s.remoteAddress;
+      s.destroy();
+      resolve(self ? 'SELF' : 'CONNECTED');
+    });
+    s.once('error', (e) => { clearTimeout(t); resolve(e.code ?? 'ERROR'); });
+  });
+  const open = [];
+  for (let base = 1; base <= 65535; base += 512) {
+    const ports = Array.from({ length: Math.min(512, 65536 - base) }, (_, i) => base + i);
+    (await Promise.all(ports.map((p) => tcp('127.0.0.1', p)))).forEach((r, i) => { if (r === 'CONNECTED') open.push(ports[i]); });
+  }
+  const targets = {};
+  for (const [host, port] of input.net.targets) targets[host + ':' + port] = await tcp(host, port);
+  const { promises: dns } = await import('node:dns');
+  const curl = (url) => {
+    const r = spawnSync('/usr/bin/curl', ['-s', '-m', '20', '-o', '/dev/null', '-w', '%{http_code} %{http_connect}', url], { encoding: 'utf8', timeout: 30000 });
+    const [code, connect] = r.stdout.trim().split(' ');
+    return { status: r.status, code, connect };
+  };
+  // Families a network namespace does not cover: AF_VSOCK (Hyper-V host channel) and io_uring.
+  const fam = spawnSync('/usr/bin/python3', ['-c', input.net.familyProbe], { encoding: 'utf8', timeout: 10000 });
+  // Every path socket visible anywhere in the sandbox; only the egress socket may accept.
+  // No -xdev: every sandbox mount is a separate filesystem and must be walked.
+  const found = spawnSync('/usr/bin/find', ['/', '(', '-path', '/proc', '-o', '-path', '/sys', ')', '-prune', '-o', '-type', 's', '-print'], { encoding: 'utf8', timeout: 60000 });
+  const unixConnect = (p) => new Promise((resolve) => {
+    const s = net.connect(p);
+    const t = setTimeout(() => { s.destroy(); resolve('TIMEOUT'); }, 2000);
+    s.once('connect', () => { clearTimeout(t); s.destroy(); resolve('CONNECTED'); });
+    s.once('error', (e) => { clearTimeout(t); resolve(e.code ?? 'ERROR'); });
+  });
+  const pathSockets = {};
+  for (const p of found.stdout.split('\n').filter(Boolean)) pathSockets[p] = await unixConnect(p);
+  out.net = {
+    families: fam.status === 0 ? JSON.parse(fam.stdout) : { error: (fam.stderr || String(fam.error?.code)).slice(0, 160) },
+    path_sockets: pathSockets,
+    netns: fs.readlinkSync('/proc/self/ns/net'),
+    loopback_open: open,
+    targets,
+    dns: await dns.lookup(input.net.dnsName).then((a) => a.address, (e) => 'ERR:' + e.code),
+    egress_allowed: curl(input.net.allowedUrl),
+    egress_denied: curl(input.net.deniedUrl),
+    egress_ip_literal: curl(input.net.ipLiteralUrl),
+  };
+}
 process.stdout.write(JSON.stringify(out));
 `;
 
@@ -433,7 +754,7 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
 
     const listener = spawn('/usr/bin/sudo', ['-n', '-u', policy.control_identity, '--', TOOL_NODE, '-e', `
       const net = require('node:net');
-      net.createServer((s) => s.end('supervisor')).listen(${JSON.stringify(sentinels.supervisorSocket)}, () => console.log(process.pid));
+      net.createServer((s) => { s.on('error', () => {}); s.end('supervisor'); }).listen(${JSON.stringify(sentinels.supervisorSocket)}, () => console.log(process.pid));
       setTimeout(() => process.exit(0), 600000);
     `], { stdio: ['ignore', 'pipe', 'inherit'] });
     ctx.cleanup.push(() => listener.kill('SIGTERM'));
@@ -482,7 +803,44 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
     });
     if (!ownerReady) ctx.blockers.push('fixture-failed:owner-tmux-socket');
     if (ctx.blockers.length) return;
-    ctx.impl = probe('ma-worker1', 'implementer', implTree);
+    // KTD23 fixtures: a live owner loopback listener the worker must not reach, plus
+    // every non-loopback host address, the gateway, the resolver and the overlay resolver.
+    const ownerListener = createServer((_, res) => res.end('owner'));
+    await new Promise((resolve) => ownerListener.listen(0, '127.0.0.1', resolve));
+    ctx.cleanup.push(() => ownerListener.close());
+    const ownerPort = ownerListener.address().port;
+    const hostAddrs = run('ip', ['-o', '-4', 'addr', 'show']).stdout.split('\n')
+      .map((l) => l.trim().split(/\s+/)[3]?.split('/')[0]).filter((a) => a && !a.startsWith('127.'));
+    const gateway = run('ip', ['-4', 'route', 'show', 'default']).stdout.match(/via (\S+)/)?.[1];
+    const resolver = readFileSync('/etc/resolv.conf', 'utf8').match(/^nameserver\s+(\S+)/m)?.[1];
+    const host6 = run('ip', ['-o', '-6', 'addr', 'show', 'scope', 'global']).stdout.split('\n')
+      .map((l) => l.trim().split(/\s+/)[3]?.split('/')[0]).filter(Boolean);
+    const hosts = [...new Set([...hostAddrs, ...host6, gateway, resolver, '100.100.100.100'].filter(Boolean))];
+    const familyProbe = [
+      'import socket, ctypes, errno, json',
+      'def s(f):',
+      '    try:',
+      '        socket.socket(f, socket.SOCK_STREAM).close(); return "ok"',
+      '    except OSError as e: return errno.errorcode.get(e.errno, str(e.errno))',
+      'libc = ctypes.CDLL(None, use_errno=True); p = ctypes.create_string_buffer(120)',
+      'r = libc.syscall(425, 1, p); e = ctypes.get_errno()',
+      'print(json.dumps({"vsock": s(40), "inet": s(socket.AF_INET), "unix": s(socket.AF_UNIX), "io_uring": "ok" if r >= 0 else errno.errorcode.get(e, str(e))}))',
+    ].join('\n');
+    // Positive control: outside the sandbox the same families work, so a denial inside is the filter's doing.
+    const hostFamilies = run('/usr/bin/python3', ['-c', familyProbe]);
+    ctx.hostFamilies = hostFamilies.status === 0 ? JSON.parse(hostFamilies.stdout) : { error: hostFamilies.stderr.slice(0, 160) };
+    ctx.netInput = {
+      familyProbe,
+      hostNetns: readlinkSync('/proc/self/ns/net'),
+      hostAbstract: readFileSync('/proc/net/unix', 'utf8').split('\n').filter((l) => / @/.test(l)).length,
+      ownerListening: run('ss', ['-Hltn', `sport = :${ownerPort}`]).stdout.includes(`127.0.0.1:${ownerPort}`),
+      targets: [['127.0.0.1', ownerPort], ...hosts.flatMap((h) => [[h, 22], [h, 53], [h, 443]])],
+      dnsName: 'registry.npmjs.org',
+      allowedUrl: 'https://registry.npmjs.org/',
+      deniedUrl: 'https://example.com/',
+      ipLiteralUrl: 'https://1.1.1.1/',
+    };
+    ctx.impl = probe('ma-worker1', 'implementer', implTree, { net: ctx.netInput });
     ctx.rev = probe('ma-worker2', 'reviewer', revTree, { windowsPe: WINDOWS_PE, codexSandboxCases: [] });
   });
 
@@ -628,6 +986,9 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
 
   test('worker cannot reach control token, database/WAL/shared memory, sockets or owner panes', () => {
     blocked();
+    // The supervisor fixture must still be live after the probes, or a refused connect proves nothing.
+    const alive = asControl(TOOL_NODE, ['-e', `require('node:net').connect(${JSON.stringify(sentinels.supervisorSocket)}).once('connect', () => process.exit(0)).once('error', () => process.exit(1))`]);
+    assert.equal(alive.status, 0, 'the supervisor socket fixture died during the probes');
     for (const probeResult of [ctx.impl, ctx.rev]) {
       assert.ok(!probeResult.launch_failed, JSON.stringify(probeResult));
       for (const [kind, entries] of Object.entries({ read: probeResult.read, write: probeResult.write, list: probeResult.list, connect: probeResult.connect })) {
@@ -675,6 +1036,71 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
       if (target) assert.equal(r.target_exists, expect === 'allow', `codex sandbox ${id} left the wrong filesystem state`);
       if (baseline) assert.equal(r.baseline_status, 0, `codex sandbox ${id} positive control failed, so its denial is unproven`);
     }
+  });
+
+  test('KTD23: the egress filter runs as its own identity from the reviewed source', () => {
+    blocked();
+    const props = Object.fromEntries(run('/usr/bin/systemctl', ['show', 'multi-agent-egress.service', '-p', 'ActiveState', '-p', 'User', '-p', 'NoNewPrivileges', '-p', 'MainPID'])
+      .stdout.trim().split('\n').map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+    ctx.facts.egress_service = props;
+    assert.equal(props.ActiveState, 'active');
+    assert.equal(props.User, policy.egress_identity);
+    assert.equal(props.NoNewPrivileges, 'yes');
+    const egressUid = run('/usr/bin/id', ['-u', policy.egress_identity]).stdout.trim();
+    assert.deepEqual(run('/usr/bin/id', ['-Gn', policy.egress_identity]).stdout.trim().split(/\s+/), [policy.egress_identity]);
+    assert.equal(readFileSync(`/proc/${props.MainPID}/status`, 'utf8').match(/^Uid:\s+(\d+)/m)?.[1], egressUid, 'the filter process must run as the egress identity');
+    const dir = statSync(P.egress_socket_dir);
+    assert.equal(String(dir.uid), egressUid);
+    assert.equal(dir.mode & 0o022, 0, 'the socket directory must not be group/other writable');
+    assert.equal(sha256File(P.installed_egress), sha256File(path.join(here, '..', 'config', 'isolation', 'egress.mjs')), 'installed egress filter differs from the reviewed source');
+    const cfgStat = statSync(P.installed_egress_config);
+    assert.equal(cfgStat.uid, 0);
+    assert.equal(cfgStat.mode & 0o022, 0);
+    const cfg = JSON.parse(readFileSync(P.installed_egress_config, 'utf8'));
+    validateEgressConfig(cfg);
+    // A receipt is bound to this profile: a changed allow-list or upstream is a new profile.
+    ctx.facts.egress_profile = { fingerprint: `sha256:${sha256File(P.installed_egress_config)}`, upstream_configured: cfg.upstream !== null, allow: cfg.allow };
+  });
+
+  test('KTD23: the worker reaches nothing on the host and leaves only through the egress filter', () => {
+    blocked();
+    const n = ctx.impl.net;
+    assert.ok(n, `implementer probe reported no network facts: ${JSON.stringify(ctx.impl).slice(0, 300)}`);
+    Object.assign(ctx.facts, {
+      host_netns: ctx.netInput.hostNetns, sandbox_netns: n.netns, sandbox_loopback_open: n.loopback_open,
+      sandbox_targets: n.targets, sandbox_dns: n.dns, host_abstract_sockets: ctx.netInput.hostAbstract,
+      egress_allowed: n.egress_allowed, egress_denied: n.egress_denied, egress_ip_literal: n.egress_ip_literal,
+    });
+    assert.notEqual(n.netns, ctx.netInput.hostNetns, 'the sandbox must not share the host network namespace');
+    assert.deepEqual(n.loopback_open, [policy.sandbox.egress_port], 'only the egress relay may listen on sandbox loopback');
+    // The fixtures must be live, or their absence from the sandbox proves nothing.
+    assert.ok(ctx.netInput.ownerListening, 'the owner loopback fixture must be listening on the host');
+    assert.ok(ctx.netInput.hostAbstract > 0, 'the host must show abstract sockets');
+    for (const [target, result] of Object.entries(n.targets)) assert.notEqual(result, 'CONNECTED', `sandbox reached ${target}`);
+    assert.match(n.dns, /^ERR:/, 'the sandbox must have no name resolution of its own');
+    assert.equal(ctx.impl.abstract_sockets, 0, 'host abstract unix sockets must be invisible');
+    assert.equal(n.egress_allowed.connect, '200', `allowed egress failed: ${JSON.stringify(n.egress_allowed)}`);
+    assert.match(n.egress_allowed.code, /^[23]\d\d$/);
+    assert.equal(n.egress_denied.connect, '403', `an unlisted host must be refused by the filter: ${JSON.stringify(n.egress_denied)}`);
+    assert.equal(n.egress_ip_literal.connect, '403', `an IP literal must be refused by the filter: ${JSON.stringify(n.egress_ip_literal)}`);
+  });
+
+  test('KTD23: no host channel outside the network namespace (AF_VSOCK, io_uring, path sockets)', () => {
+    blocked();
+    const n = ctx.impl.net;
+    // A receipt is void once host networking changes, so record the mode it was taken under.
+    ctx.facts.host_networking_mode = run('/usr/bin/wslinfo', ['--networking-mode']).stdout.trim() || 'unknown';
+    Object.assign(ctx.facts, { host_families: ctx.hostFamilies, sandbox_families: n.families, sandbox_path_sockets: n.path_sockets });
+    // Positive control first: on the host these families work, so their absence inside is the filter's doing.
+    assert.equal(ctx.hostFamilies.vsock, 'ok', `host AF_VSOCK control failed: ${JSON.stringify(ctx.hostFamilies)}`);
+    assert.equal(n.families.vsock, 'EAFNOSUPPORT', `AF_VSOCK must be refused inside the sandbox: ${JSON.stringify(n.families)}`);
+    assert.equal(n.families.inet, 'ok');
+    assert.equal(n.families.unix, 'ok');
+    if (ctx.hostFamilies.io_uring === 'ok') assert.equal(n.families.io_uring, 'EPERM', 'io_uring must be refused inside the sandbox');
+    else assert.notEqual(n.families.io_uring, 'ok');
+    const reachable = Object.entries(n.path_sockets).filter(([, r]) => r === 'CONNECTED').map(([p]) => p);
+    assert.deepEqual(reachable, [`${P.egress_socket_dir}/proxy.sock`], 'the egress socket must be the only connectable path socket');
+    assert.ok(!ctx.impl.fd_targets.some((t) => t?.includes('ma-seccomp')), 'the seccomp program descriptor must not reach the worker');
   });
 
   test('Windows browser reaches a WSL loopback-only listener', async () => {
