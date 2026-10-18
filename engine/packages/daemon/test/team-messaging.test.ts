@@ -21,6 +21,7 @@ import { SessionRegistry } from "../src/domain/session-registry.js";
 import { createFullTestDb, createTestApp as createFullTestApp } from "./helpers/test-app.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
+import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { chatRoutes } from "../src/routes/chat.js";
 
 /** A well-formed test capability: `mailbox:` plus 32 bytes in base64url. */
@@ -804,5 +805,104 @@ describe("mailbox admission through the production app", () => {
     } finally {
       db.close();
     }
+  });
+});
+
+describe("managed mailbox route isolation", () => {
+  it("admits only an authenticated recipient-scoped worker poll and consume while legacy chat stays closed", async () => {
+    const db = createFullTestDb();
+    fixDaemonMode(db, true);
+    try {
+      const chatRepo = new ChatRepository(db);
+      const recipient = "dev-qa@managed-mailbox";
+      const workerToken = "managed-worker-token";
+      const ownerToken = "managed-owner-token";
+      const built = createFullTestApp(db, {
+        appDeps: {
+          chatRepo,
+          teamControl: {
+            credentials: {
+              ownerToken,
+              workers: [
+                { token: workerToken, sessionId: recipient, runId: "managed-run" },
+                { token: "foreign-worker-token", sessionId: "other@managed-mailbox", runId: "other-run" },
+              ],
+            },
+          },
+        },
+      });
+      const rig = built.rigRepo.createRig("managed-mailbox");
+      const node = built.rigRepo.addNode(rig.id, "dev.qa", { runtime: "claude-code" });
+      built.sessionRegistry.registerSession(node.id, recipient);
+      const generation = built.sessionRegistry.currentOccupantTenure(node.id)?.generationUuid ?? null;
+      const message = new MailboxDelivery(chatRepo).send({ rigId: rig.id, sender: "lead@managed-mailbox", recipient,
+        taskId: "T010", runId: "managed-run", body: "private peer data", messageId: "managed-mail", capability: cap("managed") });
+      expect(built.agentActivityStore.recordHookEvent({ runtime: "claude-code", sessionName: recipient, hookEvent: "PreToolUse",
+        occurredAt: new Date(Date.now() + 1_000).toISOString(), generation }).ok).toBe(true);
+      const base = "/api/rigs/" + rig.id + "/chat/mailbox";
+      const query = "?taskId=T010&runId=managed-run";
+      const authHeaders = {
+        Authorization: "Bearer " + workerToken,
+        "X-OpenRig-Session": recipient,
+        "x-openrig-mailbox-capability": cap("managed"),
+      };
+      const request = (path: string, init: Parameters<typeof built.app.request>[1] = {}) =>
+        built.app.request(path, init, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+
+      for (const suffix of ["", "/poll"]) {
+        const poll = await request(base + suffix + query, { headers: authHeaders });
+        expect(poll.status).toBe(200);
+        const body = await poll.json();
+        expect(body).toMatchObject({ status: "ready", pendingCount: 1, messages: [{ id: message.id, body: "private peer data" }] });
+        expect(JSON.stringify(body)).not.toContain(cap("managed"));
+      }
+      const missingCredential = await request(base + query, {
+        headers: { "X-OpenRig-Session": recipient, "x-openrig-mailbox-capability": cap("managed") },
+      });
+      expect(missingCredential.status).toBe(401);
+      expect(await missingCredential.json()).toMatchObject({ code: "control_auth_required" });
+      const ownerCredential = await request(base + query, {
+        headers: { ...authHeaders, Authorization: "Bearer " + ownerToken },
+      });
+      expect(ownerCredential.status).toBe(403);
+      expect(await ownerCredential.json()).toMatchObject({ code: "managed_control_required" });
+      const wrongRun = await request(base + "?taskId=T010&runId=other-run", { headers: authHeaders });
+      expect(wrongRun.status).toBe(403);
+      expect(await wrongRun.json()).toMatchObject({ code: "managed_control_required" });
+      const spoofed = await request(base + query, {
+        headers: { ...authHeaders, "X-OpenRig-Session": "other@managed-mailbox" },
+      });
+      expect(spoofed.status).toBe(403);
+      expect(await spoofed.json()).toMatchObject({ code: "managed_control_required" });
+      const foreignWorker = await request(base + query, {
+        headers: { ...authHeaders, Authorization: "Bearer foreign-worker-token", "X-OpenRig-Session": "other@managed-mailbox" },
+      });
+      expect(foreignWorker.status).toBe(403);
+      expect(await foreignWorker.json()).toMatchObject({ code: "managed_control_required" });
+      const foreignCapability = await request(base + query, {
+        headers: { ...authHeaders, "x-openrig-mailbox-capability": cap("foreign") },
+      });
+      expect(await foreignCapability.json()).toMatchObject({ messages: [], pendingCount: 0 });
+
+      const consume = (capability: string, overrides: Record<string, string> = {}, runId = "managed-run") => request(base + "/" + message.id + "/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders, ...overrides },
+        body: JSON.stringify({ taskId: "T010", runId, capability }),
+      });
+      expect((await consume(cap("foreign"))).status).toBe(404);
+      expect((await consume(cap("managed"), {}, "other-run")).status).toBe(403);
+      const consumed = await consume(cap("managed"));
+      expect(consumed.status).toBe(200);
+      expect(JSON.stringify(await consumed.json())).not.toContain(cap("managed"));
+      expect((await consume(cap("managed"))).status).toBe(200);
+      for (const [path, method] of [
+        ["/api/rigs/" + rig.id + "/chat/history", "GET"],
+        ["/api/rigs/" + rig.id + "/chat/send", "POST"], [base + "/send", "POST"], [base, "POST"],
+      ]) {
+        const denied = await request(path!, { method, headers: authHeaders, ...(method === "POST" ? { body: "{}" } : {}) });
+        expect(denied.status).toBe(403);
+        expect(await denied.json()).toMatchObject({ code: "managed_control_required" });
+      }
+    } finally { db.close(); }
   });
 });

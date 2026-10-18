@@ -143,6 +143,8 @@ import type { RigLifecycleService } from "./domain/rig-lifecycle-service.js";
 import { seatRoutes } from "./routes/seat.js";
 import { createRouteTimingMiddleware } from "./domain/route-timing-recorder.js";
 import { browserBoundary, type BrowserBoundaryOptions } from "./middleware/browser-boundary.js";
+import { teamControlAuthentication } from "./middleware/auth-bearer-token.js";
+import { transportSenderSession } from "./routes/require-sender-identity.js";
 import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 
@@ -670,15 +672,45 @@ export function createApp(deps: AppDeps): Hono {
     onDecision: deps.browserBoundaryObserver,
   }));
 
+  const teamOptions: TeamControlOptions = deps.teamControl ?? { credentials: { ownerToken: null } };
+  const managedMailboxAuthentication = teamControlAuthentication(
+    () => teamOptions.credentials,
+    [deps.missionControlBearerToken, deps.terminalBearerToken],
+  );
+
   // KTD22: in managed mode this is the only route gate. Each managed route a later unit adds
   // joins this allowlist with its own authenticated managed-control check.
   app.use("/api/*", async (c, next) => {
-    if (daemonModeOf(deps.rigRepo.db) === "managed" && !MANAGED_ROUTE_PREFIXES.some(prefix => c.req.path === prefix || c.req.path.startsWith(`${prefix}/`))) {
-      return c.json({ code: "managed_control_required", error: "Legacy interfaces are inactive in a managed-mode daemon." }, 403);
+    if (daemonModeOf(deps.rigRepo.db) === "managed" && !MANAGED_ROUTE_PREFIXES.some(prefix => c.req.path === prefix || c.req.path.startsWith(prefix + "/"))) {
+      const poll = c.req.method === "GET" && /^\/api\/rigs\/[^/]+\/chat\/mailbox(?:\/poll)?$/.test(c.req.path);
+      const consume = c.req.method === "POST" && /^\/api\/rigs\/[^/]+\/chat\/mailbox\/[^/]+\/consume$/.test(c.req.path);
+      const body: unknown = consume ? await c.req.json().catch(() => null) : null;
+      const capability = poll ? c.req.query("capability") ?? c.req.header("x-openrig-mailbox-capability")
+        : body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>).capability : null;
+      const requestedRunId = poll ? c.req.query("runId")
+        : body && typeof body === "object" && !Array.isArray(body) && typeof (body as Record<string, unknown>).runId === "string"
+          ? (body as Record<string, unknown>).runId as string
+          : null;
+      // The route owner still verifies the recipient/task/run capability and daemon-observed prompt state.
+      // Sending and all legacy chat paths remain outside this managed allowlist.
+      if ((!poll && !consume) || !transportSenderSession(c) || typeof capability !== "string" || !/^mailbox:[A-Za-z0-9_-]{43}$/.test(capability)) {
+        return c.json({ code: "managed_control_required", error: "Legacy interfaces are inactive in a managed-mode daemon." }, 403);
+      }
+      let denied: Response | undefined;
+      const authenticated = await managedMailboxAuthentication(c as never, async () => {
+        const actor = c.get("controlActor" as never) as { kind: "owner" | "worker"; sessionId: string };
+        const controlRunId = c.get("controlRunId" as never) as string | null;
+        const session = transportSenderSession(c);
+        if (actor.kind !== "worker" || !session || actor.sessionId !== session || controlRunId !== requestedRunId) {
+          denied = c.json({ code: "managed_control_required", error: "An authenticated worker bound to this mailbox run is required." }, 403);
+          return;
+        }
+        await next();
+      });
+      return denied ?? authenticated;
     }
     await next();
   });
-  const teamOptions: TeamControlOptions = deps.teamControl ?? { credentials: { ownerToken: null } };
   const teamGovernance = new PlanGovernance(deps.rigRepo.db, deps.eventBus,
     deps.queueRepo ?? new QueueRepository(deps.rigRepo.db, deps.eventBus), undefined, teamOptions.readPolicyCapability);
 

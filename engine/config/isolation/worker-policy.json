@@ -1,6 +1,6 @@
 {
   "schema": "multi-agent-worker-policy/v1",
-  "policy_revision": 3,
+  "policy_revision": 4,
   "control_identity": "ma-control",
   "egress_identity": "ma-egress",
   "launch_callers": [
@@ -34,7 +34,8 @@
     "installed_policy": "/etc/multi-agent/worker-policy.json",
     "installed_egress": "/opt/multi-agent/toolchain/egress/egress.mjs",
     "installed_egress_config": "/etc/multi-agent/egress.json",
-    "egress_socket_dir": "/run/multi-agent-egress"
+    "egress_socket_dir": "/run/multi-agent-egress",
+    "context_root": "/var/lib/multi-agent/context"
   },
   "sandbox": {
     "home": "/home/worker",
@@ -63,7 +64,8 @@
       "/etc/ld.so.cache",
       "/etc/ld.so.conf",
       "/etc/ld.so.conf.d"
-    ]
+    ],
+    "context": "/context"
   },
   "roles": {
     "implementer": {
