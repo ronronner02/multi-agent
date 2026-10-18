@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RestrictedWorkerLauncher, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
@@ -10,61 +11,71 @@ import { CodexResumeAdapter } from "../src/adapters/codex-resume.js";
 import type { TmuxAdapter } from "../src/adapters/tmux.js";
 import { isAttentionRequiredReadinessCode, type ManagedAttempt, type NodeBinding } from "../src/domain/runtime-adapter.js";
 import { hashBytes } from "../src/domain/plan-governance.js";
-import { createContextManifest, roleConfiguration, type ContextInput } from "../src/integrations/framework/context-manifest.js";
+import { createContextManifest, projectContext, roleConfiguration, type ContextInput } from "../src/integrations/framework/context-manifest.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 
 const roots: string[] = [];
 afterEach(() => {
-  for (const root of roots.splice(0)) {
-    chmodSync(join(root, "context"), 0o755);
-    rmSync(root, { recursive: true, force: true });
-  }
+  const writable = (p: string) => { chmodSync(p, 0o755); for (const entry of readdirSync(p, { withFileTypes: true })) if (entry.isDirectory()) writable(join(p, entry.name)); };
+  for (const root of roots.splice(0)) { writable(root); rmSync(root, { recursive: true, force: true }); }
 });
 
 // Real filesystem/assignment/context authority; OS transport is a bounded fixture.
 // These observations do not establish native-client or host-containment acceptance.
-function fixture(client: WorkerClient, revision = 3, role: "implementer" | "reviewer" = "implementer") {
+function fixture(client: WorkerClient, revision = 4, role: "implementer" | "reviewer" = "implementer") {
   const root = mkdtempSync(join(tmpdir(), "native-contract-"));
   roots.push(root);
   chmodSync(root, 0o755);
   for (const dir of ["repo", "context", "state", "framework", "home", "scratch"]) mkdirSync(join(root, dir));
+  const contextRoot = join(root, "context", "ma-worker1", "run", "attempt-1");
+  const workerRoot = join(root, "context", "ma-worker1");
+  for (const p of [workerRoot, join(workerRoot, "run"), contextRoot]) {
+    mkdirSync(p);
+    chmodSync(p, 0o2750);
+  }
+  execFileSync("/usr/bin/setfacl", ["-b", "-k", workerRoot]);
+  execFileSync("/usr/bin/setfacl", ["-m", "u::rwx,g::r-x,m::r-x,o::---", workerRoot]);
+  execFileSync("/usr/bin/setfacl", ["-m", "d:u::rwx,d:g::r-x,d:m::r-x,d:o::---", workerRoot]);
+  const contextPolicy = { policy_revision: 4, worker_identities: ["ma-worker1", "ma-worker2", "ma-worker3"],
+    paths: { context_root: join(root, "context"), framework_dir: join(root, "framework") }, sandbox: { context: "/context", framework: "/framework" } };
   const plan = "approved plan\n", policyFingerprint = hashBytes("policy");
   const binding: ContextInput["binding"] = {
     artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
     planRef: "plan.md", planDigest: hashBytes(plan), repository: { root: join(root, "repo"), identity: "git:" + "a".repeat(40) },
-    readPaths: ["src"], writePaths: ["src"], roles: ["implementer", "reviewer"], policyRevision: revision, policyFingerprint,
+    readPaths: ["src"], writePaths: ["src"], roles: ["implementer", "reviewer"], policyRevision: 4, policyFingerprint,
     limits: { maxSessions: 3, maxActiveMs: 60000, maxRetries: 1, maxReviewRounds: 2 },
   };
   writeFileSync(join(root, "repo", "plan.md"), plan);
   const source = join(root, "framework", "skill.md");
   writeFileSync(source, "pinned instructions");
   const files = ([["framework", "pinned instructions"], ["plan", plan], ["role", JSON.stringify(roleConfiguration)]] as const).map(([kind, content]) => {
-    const path = join(root, "context", kind);
-    writeFileSync(path, content, { mode: 0o444 });
+    const path = join(contextRoot, kind);
+    writeFileSync(path, content, { mode: 0o440 });
     return { path, hash: hashBytes(content), kind, readOnly: true as const, ...(kind === "framework" ? { source } : {}) };
   });
-  chmodSync(join(root, "context"), 0o555);
+  chmodSync(contextRoot, 0o550);
   const context = createContextManifest({
+    projection: { worker: "ma-worker1", attemptId: "attempt-1", controlUid: process.getuid!(), workerGid: process.getgid!(), policy: contextPolicy },
     runId: "run", assignment: { taskId: "T008", role, paths: ["src"], dependencies: [] },
     outputs: role === "reviewer" ? [] : ["src/result.ts"],
     permissions: role === "reviewer" ? ["submit-review"] : ["write-assigned-tree"], role, client, binding,
-    root: join(root, "context"), mutableStateRoot: join(root, "state"), frameworkRoot: join(root, "framework"), frameworkRevision: FRAMEWORK_PIN.revision,
-    workerUid: process.getuid!() + 100000, workerGroups: [], discoveryRoots: [join(root, "context")], files,
+    root: contextRoot, mutableStateRoot: join(root, "state"), frameworkRoot: join(root, "framework"), frameworkRevision: FRAMEWORK_PIN.revision,
+    workerUid: process.getuid!() + 100000, workerGroups: [], discoveryRoots: [contextRoot], files,
   });
-  const observed = { discoveryRoots: [...context.discoveryRoots], files: context.files.map(({ path, hash }) => ({ path, hash })) };
+  const observed = { discoveryRoots: [...context.workerDiscoveryRoots], files: context.files.map(({ workerPath, hash }) => ({ path: workerPath, hash })) };
   const attempt: ManagedAttempt = { attemptId: "attempt-1", deadline: 61000, context };
   const p: WorkerLaunchPreflight = {
     assignment: { binding, currentBinding: structuredClone(binding), assignment: context.assignment, outputs: [...context.outputs],
       permissions: [...context.permissions], context, observed, dependencySatisfied: () => true },
-    worker: { name: "ma-worker1", uid: context.workerUid, groups: [], home: join(root, "home"), scratch: join(root, "scratch"), tree: join(root, "repo") },
+    worker: { name: "ma-worker1", uid: context.workerUid, gid: context.projection.workerGid, groups: [], home: join(root, "home"), scratch: join(root, "scratch"), tree: join(root, "repo") },
     control: { uid: process.getuid!(), mountNamespace: "mnt:control", userNamespace: "user:control" },
     executable: "/opt/multi-agent/toolchain/clients/bin/" + (client === "codex" ? "codex" : "claude"),
     executableVersion: "fixture-version", generation: 1, policyFingerprint, policyRevision: revision,
     installedPolicy: {
       policy_revision: revision, worker_identities: ["ma-worker1", "ma-worker2", "ma-worker3"],
-      paths: { toolchain_dir: "/opt/multi-agent/toolchain" }, sandbox: { etc_ro_binds: ["/etc/hosts"], masked_paths: ["/usr/lib/wsl"] },
+      paths: { ...contextPolicy.paths, toolchain_dir: "/opt/multi-agent/toolchain", egress_socket_dir: "/run/multi-agent-egress" }, sandbox: { ...contextPolicy.sandbox, network: "filtered-proxy", etc_ro_binds: ["/etc/hosts"], masked_paths: ["/usr/lib/wsl"] },
     },
-    network: { mode: "isolated-allowlist", hostNamespace: "net:[100]", profileFingerprint: hashBytes("approved egress profile"), preflightRef: "evidence/u1-network-preflight" },
+    network: { mode: "filtered-proxy", hostNamespace: "net:[100]", profileFingerprint: hashBytes("approved egress profile"), preflightRef: "evidence/u1-network-preflight" },
     provider: { status: "signed_in", client, home: join(root, "home"), evidenceRef: "evidence/provider-status" },
     credentialValues: ["FIXTURE_SECRET"],
   };
@@ -76,7 +87,8 @@ function fixture(client: WorkerClient, revision = 3, role: "implementer" | "revi
       mountNamespace: "mnt:worker", userNamespace: "user:worker",
       networkNamespace: "net:[200]", networkProfileFingerprint: p.network.profileFingerprint,
       mounts: [{ source: p.worker.home, target: "/home/worker", access: "rw" }, { source: p.worker.scratch, target: "/scratch", access: "rw" },
-        { source: p.worker.tree, target: "/work", access: role === "reviewer" ? "ro" : "rw" }, { source: context.frameworkRoot, target: "/framework", access: "ro" }],
+        { source: p.worker.tree, target: "/work", access: role === "reviewer" ? "ro" : "rw" }, { source: context.frameworkRoot, target: "/framework", access: "ro" },
+        { source: context.root, target: "/context", access: "ro" }, { source: "/run/multi-agent-egress", target: "/run/multi-agent-egress", access: "ro" }],
       inheritedDescriptors: [0, 1, 2].map(fd => ({ fd, kind: "tty" as const })) },
     context: structuredClone(observed), nativeArgv: [], sessionSource: client === "codex" ? "process_session_file" : "exec",
     effectiveMode: client === "codex" ? { approvalPolicy: "never", sandbox: "danger-full-access" } : { permissionMode: "bypassPermissions" },
@@ -107,6 +119,18 @@ function fixture(client: WorkerClient, revision = 3, role: "implementer" | "revi
     launchPosture: "floor", permissionMode: "acceptEdits", codexConfigProfile: "personal", managedAttempt: attempt };
   const launch = () => adapter.launchHarness(node, { name: "member" });
   return { root, client, context, attempt, p, observation, control, events, launcher, adapter, node, fsOps, tmux, launch, setNow: (value: number) => { now = value; } };
+}
+
+function nextProjection(f: ReturnType<typeof fixture>, attemptId = "attempt-2") {
+  const { generatedHash, protocolVersion, workerDiscoveryRoots, ...input } = f.context;
+  const root = join(input.projection.policy.paths.context_root, input.projection.worker, input.runId, attemptId);
+  const files = input.files.map(({ workerPath, ...file }) => ({ ...file, path: join(root, file.kind) }));
+  const context = projectContext({ ...input, projection: { ...input.projection, attemptId }, root, discoveryRoots: [root], files },
+    new Map(files.map((file, index) => [file.path, readFileSync(input.files[index]!.path)])));
+  const observed = { discoveryRoots: [...context.workerDiscoveryRoots], files: context.files.map(({ workerPath, hash }) => ({ path: workerPath, hash })) };
+  f.context = context; f.attempt.context = context; f.p.assignment.context = context;
+  f.p.assignment.observed = structuredClone(observed); f.observation.context = structuredClone(observed);
+  f.observation.boundary.mounts.find(m => m.target === "/context")!.source = root;
 }
 
 describe.each(["claude-code", "codex"] as const)("%s restricted native session", client => {
@@ -297,7 +321,8 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     expect(f.events[0]!.network).toEqual(f.p.network);
     expect(command.args.slice(0, 3)).toEqual(["-n", "--", "/usr/local/libexec/multi-agent/worker-launch"]);
     expect(command.nativeArgv).toEqual(client === "codex"
-      ? [f.p.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false"]
+      ? [f.p.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false",
+        "-c", 'model_catalog_json="/opt/multi-agent/toolchain/clients/codex-model-catalog.json"']
       : [f.p.executable, "--permission-mode", "bypassPermissions", "--session-id", "native-session"]);
     expect(Object.isFrozen(command.args)).toBe(true);
     expect(f.events.map(e => e.phase)).toEqual(["prepared", "observed"]);
@@ -418,7 +443,7 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     const context = createContextManifest({ ...input, discoveryRoots: [input.root, input.frameworkRoot] });
     f.attempt.context = context;
     f.p.assignment.context = context;
-    const observed = { discoveryRoots: [...context.discoveryRoots], files: context.files.map(({ path, hash }) => ({ path, hash })) };
+    const observed = { discoveryRoots: [...context.workerDiscoveryRoots], files: context.files.map(({ workerPath, hash }) => ({ path: workerPath, hash })) };
     f.p.assignment.observed = structuredClone(observed);
     f.observation.context = structuredClone(observed);
     expect(await f.launch()).toMatchObject({ ok: true });
@@ -447,11 +472,58 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     vi.mocked(f.control.record).mockImplementation(async event => {
       if (event.phase === "prepared") {
         const path = f.context.files[0]!.path;
-        chmodSync(path, 0o644); writeFileSync(path, "changed context"); chmodSync(path, 0o444);
+        chmodSync(path, 0o644); writeFileSync(path, "changed context"); chmodSync(path, 0o440);
       }
     });
     expect(await f.launch()).toMatchObject({ ok: false });
     expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  it.each(["/context", "/framework", "/run/multi-agent-egress"])("requires the installed read-only mount at %s", async target => {
+    const f = fixture(client);
+    f.observation.boundary.mounts = f.observation.boundary.mounts.filter(m => m.target !== target);
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
+    expect(f.control.quiesce).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["fresh", "resume"] as const)("refuses out-of-mount discovery before a %s start", async phase => {
+    const f = fixture(client);
+    if (phase === "resume") {
+      const first = await f.launch();
+      if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
+      f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2"; nextProjection(f);
+      f.p.previous = first.managedSession; f.p.generation = 2;
+    }
+    f.attempt.context = { ...f.context, discoveryRoots: [f.root] };
+    expect(await f.adapter.launchHarness(f.node, { name: "member", ...(phase === "resume" ? { resumeToken: "native-session" } : {}) })).toMatchObject({ ok: false });
+    expect(f.control.start).toHaveBeenCalledTimes(phase === "resume" ? 1 : 0);
+  });
+
+  it("refuses a projection whose policy differs from the installed policy", async () => {
+    const f = fixture(client);
+    f.p.installedPolicy.paths.context_root += "-other";
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_context_mount_policy_mismatch") });
+    expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  it("refuses to reuse an old projection for a new attempt", async () => {
+    const f = fixture(client), first = await f.launch();
+    if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
+    f.p.previous = first.managedSession; f.p.generation = 2;
+    const attempt = { ...f.attempt, attemptId: "attempt-2", previous: first.managedSession };
+    expect(await f.launcher.launch({ client, attempt, resumeToken: "native-session" }))
+      .toMatchObject({ ok: false, error: expect.stringContaining("managed_context_mount_policy_mismatch") });
+    expect(f.control.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses the same projection hash when the same attempt resumes after restart", async () => {
+    const f = fixture(client), first = await f.launch();
+    if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
+    const attempt = { ...f.attempt, previous: first.managedSession };
+    f.p.previous = first.managedSession; f.p.generation = 2; f.observation.identity.generation = 2;
+    const resumed = new RestrictedWorkerLauncher(f.control, () => 1000, () => "native-session");
+    expect(await resumed.launch({ client, attempt, resumeToken: "native-session" }))
+      .toMatchObject({ ok: true, managedSession: { attemptId: "attempt-1", contextHash: f.context.generatedHash } });
   });
 
   it("resumes the exact control-recorded session through the same boundary", async () => {
@@ -459,6 +531,7 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     expect(first.ok).toBe(true);
     if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
     const previous = first.managedSession;
+    nextProjection(f);
     const attempt = { ...f.attempt, attemptId: "attempt-2", previous };
     f.p.previous = previous; f.p.generation = 2;
     f.observation.attemptId = attempt.attemptId; f.observation.identity.generation = 2;
@@ -471,14 +544,16 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     expect(result).toMatchObject({ ok: true, managedSession: { attemptId: "attempt-2", identity: { generation: 2, processId: 4200 } } });
     const command = vi.mocked(f.control.start).mock.calls[1]![0];
     expect(command.nativeArgv.slice(-2)).toEqual(client === "codex" ? ["resume", "native-session"] : ["--resume", "native-session"]);
+    // Resume must keep the standard-request catalog, or the resumed model loses its shell tool.
+    if (client === "codex") expect(command.nativeArgv).toContain('model_catalog_json="/opt/multi-agent/toolchain/clients/codex-model-catalog.json"');
   });
 
   it("keeps reviewer trees read-only on fresh launch and exact resume", async () => {
-    const f = fixture(client, 3, "reviewer"), first = await f.launch();
+    const f = fixture(client, 4, "reviewer"), first = await f.launch();
     expect(first.ok).toBe(true);
     if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
     expect(await f.adapter.checkReady(f.node)).toEqual({ ready: true });
-    f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2";
+    f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2"; nextProjection(f);
     f.p.previous = first.managedSession; f.p.generation = 2;
     f.observation.attemptId = "attempt-2"; f.observation.identity.generation = 2;
     expect(await f.adapter.launchHarness(f.node, { name: "member", resumeToken: "native-session" })).toMatchObject({ ok: true });
@@ -492,11 +567,11 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
   });
 
   it.each(["fresh", "resume"] as const)("quiesces a %s reviewer whose observed tree is writable", async phase => {
-    const f = fixture(client, 3, "reviewer");
+    const f = fixture(client, 4, "reviewer");
     if (phase === "resume") {
       const first = await f.launch();
       if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
-      f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2";
+      f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2"; nextProjection(f);
       f.p.previous = first.managedSession; f.p.generation = 2;
       f.observation.attemptId = "attempt-2"; f.observation.identity.generation = 2;
     }
@@ -517,7 +592,7 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
   it.each(["deadline", "same-generation", "skipped-generation"] as const)("rejects an independent resume %s violation before another start", async kind => {
     const f = fixture(client), first = await f.launch();
     if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
-    f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2";
+    f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2"; nextProjection(f);
     f.p.previous = first.managedSession; f.p.generation = 2;
     if (kind === "deadline") f.attempt.deadline = first.managedSession.deadline + 1;
     else f.p.generation = kind === "same-generation" ? 1 : 3;
@@ -539,9 +614,10 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     expect(f.control.start).not.toHaveBeenCalled();
   });
 
-  it.each(["shared", "unknown", "missing", "revision", "reference"] as const)("rejects unprovisioned network policy: %s", async kind => {
+  it.each(["shared", "isolated", "unknown", "missing", "revision", "reference"] as const)("rejects unprovisioned network policy: %s", async kind => {
     const f = fixture(client);
     if (kind === "shared") f.p.network.mode = "host-shared";
+    if (kind === "isolated") f.p.network.mode = "isolated-allowlist";
     if (kind === "unknown") f.p.network.mode = "unknown";
     if (kind === "missing") delete (f.p as Partial<typeof f.p>).network;
     if (kind === "revision") { f.p.policyRevision = 2; f.p.installedPolicy.policy_revision = 2; }
@@ -570,7 +646,7 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     const f = fixture(client), first = await f.launch();
     if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
     f.attempt.previous = first.managedSession;
-    f.attempt.attemptId = "attempt-2";
+    f.attempt.attemptId = "attempt-2"; nextProjection(f);
     f.p.previous = first.managedSession; f.p.generation = 2;
     f.observation.attemptId = "attempt-2"; f.observation.identity.generation = 2;
     f.observation.boundary.networkNamespace = f.p.network.hostNamespace;
@@ -587,7 +663,7 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
   it("rejects an egress-profile change across resume before execution", async () => {
     const f = fixture(client), first = await f.launch();
     if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
-    f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2";
+    f.attempt.previous = first.managedSession; f.attempt.attemptId = "attempt-2"; nextProjection(f);
     f.p.previous = first.managedSession; f.p.generation = 2;
     f.p.network.profileFingerprint = hashBytes("changed egress profile");
     expect(await f.adapter.launchHarness(f.node, { name: "member", resumeToken: "native-session" })).toMatchObject({ ok: false });

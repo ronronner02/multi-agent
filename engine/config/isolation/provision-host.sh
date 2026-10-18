@@ -13,6 +13,8 @@
 # remove it after preflight. --egress-upstream and --egress-allow write the
 # machine-local /etc/multi-agent/egress.json (never the repository); without
 # them a re-run keeps the installed values.
+# First framework install takes MA_FRAMEWORK_ARCHIVE and MA_FRAMEWORK_ARCHIVE_SHA256:
+# an owner-verified git archive of the catalog pin, with --prefix=framework/.
 # Re-running is idempotent. It never edits /etc/wsl.conf or Windows state.
 
 set -euo pipefail
@@ -100,6 +102,22 @@ if [ "$(PATH="$CLIENT_PATH" claude --version 2>/dev/null || true)" != "$CLAUDE_C
   claude_pkg="$TOOLCHAIN/clients/lib/node_modules/@anthropic-ai/claude-code"
   (cd "$claude_pkg" && PATH="$TOOLCHAIN/node/bin:/usr/bin:/bin" "$NODE" install.cjs >/dev/null)
 fi
+# Managed Codex launches read this catalog. It is the pinned client's bundled catalog with
+# use_responses_lite off: the lite request shape carries tools and instructions in an
+# `additional_tools` input item, which a relay gateway drops, leaving the model with no shell.
+codex_home="$(mktemp -d)"
+CODEX_HOME="$codex_home" PATH="$CLIENT_PATH" codex debug models --bundled \
+  | "$NODE" -e '
+    let raw = ""; process.stdin.on("data", d => raw += d).on("end", () => {
+      const catalog = JSON.parse(raw);
+      if (!Array.isArray(catalog.models) || catalog.models.length === 0) throw new Error("empty bundled Codex catalog");
+      for (const model of catalog.models) model.use_responses_lite = false;
+      process.stdout.write(JSON.stringify(catalog, null, 2) + "\n");
+    });' > "$TOOLCHAIN/clients/codex-model-catalog.json.new" \
+  || die "could not derive the managed Codex model catalog"
+rm -rf "$codex_home"
+install -o root -g root -m 0644 "$TOOLCHAIN/clients/codex-model-catalog.json.new" "$TOOLCHAIN/clients/codex-model-catalog.json"
+rm -f "$TOOLCHAIN/clients/codex-model-catalog.json.new"
 # The egress filter lives in the toolchain, which every sandbox already mounts read-only.
 install -d -o root -g root -m 0755 "$TOOLCHAIN/egress"
 install -o root -g root -m 0644 "$SRC_DIR/egress.mjs" "$TOOLCHAIN/egress/egress.mjs"
@@ -123,12 +141,122 @@ log "laying out state directories"
 install -d -o root -g root -m 0755 "$STATE_ROOT"
 install -d -o "$CONTROL" -g "$CONTROL" -m 0700 "$STATE_ROOT/control"
 install -d -o root -g root -m 0711 "$STATE_ROOT/workers" "$STATE_ROOT/assignments"
+CONTEXT_ROOT="$("$NODE" -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$SRC_DIR/worker-policy.json','utf8')).paths.context_root)")"
+[ ! -L "$CONTEXT_ROOT" ] || die "context root must not be a symlink"
+install -d -o root -g root -m 0755 "$CONTEXT_ROOT"
 for w in "${WORKERS[@]}"; do
+  [ ! -L "$CONTEXT_ROOT/$w" ] || die "worker context directory must not be a symlink"
+  # Setgid and a default ACL give control-created projections this worker's group and
+  # read/search access even when the control process has umask 077.
+  install -d -o "$CONTROL" -g "$w" -m 2750 "$CONTEXT_ROOT/$w"
+  setfacl -b -k "$CONTEXT_ROOT/$w"
+  setfacl -m "u::rwx,g::r-x,m::r-x,o::---" "$CONTEXT_ROOT/$w"
+  setfacl -m "d:u::rwx,d:g::r-x,d:m::r-x,d:o::---" "$CONTEXT_ROOT/$w"
   install -d -o "$w" -g "$w" -m 0700 "$STATE_ROOT/workers/$w" "$STATE_ROOT/workers/$w/home" "$STATE_ROOT/workers/$w/scratch"
   # Control stages trees here; the worker owns and edits them.
   install -d -o "$w" -g "$CONTROL" -m 2770 "$STATE_ROOT/assignments/$w"
   setfacl -m "u:$w:rwx,g:$CONTROL:rwx" -m "d:u:$w:rwx,d:g:$CONTROL:rwx,d:o::---" "$STATE_ROOT/assignments/$w"
 done
+
+log "verifying the pinned read-only framework"
+SRC_DIR="$SRC_DIR" python3 - <<'PYFRAMEWORK'
+import hashlib, json, os, posixpath, re, shutil, tarfile, tempfile
+from pathlib import Path, PurePosixPath
+
+source = Path(os.environ["SRC_DIR"])
+policy = json.loads((source / "worker-policy.json").read_text())
+destination = Path(policy["paths"]["framework_dir"])
+catalog = source.parents[1] / "packages/daemon/src/integrations/framework/catalog.ts"
+revision = re.search(r'revision: "([a-f0-9]{40})"', catalog.read_text()).group(1)
+receipt_name = ".framework-receipt.json"
+
+def digest(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+def verify(root):
+    receipt = json.loads((root / receipt_name).read_text())
+    if receipt["revision"] != revision:
+        raise RuntimeError("installed framework revision differs from the catalog pin")
+    expected = receipt["files"]
+    actual = {str(p.relative_to(root)) for p in root.rglob("*") if p.is_symlink() or not p.is_dir()}
+    if actual != set(expected) | {receipt_name}:
+        raise RuntimeError("installed framework file set differs from its receipt")
+    for relative, facts in expected.items():
+        path = root / relative
+        if path.lstat().st_uid != 0:
+            raise RuntimeError("framework source is not root-owned")
+        if "link" in facts:
+            if not path.is_symlink() or os.readlink(path) != facts["link"] or not path.resolve().is_relative_to(root):
+                raise RuntimeError("framework link changed or escaped")
+        elif path.is_symlink() or digest(path) != facts["sha256"] or (path.stat().st_mode & 0o777) != facts["mode"]:
+            raise RuntimeError("framework source bytes or permissions changed")
+    for path in [root, *root.rglob("*")]:
+        if not path.is_symlink() and (path.stat().st_uid != 0 or path.stat().st_mode & 0o222):
+            raise RuntimeError("framework tree is not root-owned and read-only")
+
+if destination.is_symlink() or destination.parent.resolve() != destination.parent:
+    raise RuntimeError("framework destination must not be aliased")
+if destination.exists():
+    verify(destination)
+else:
+    archive = os.environ.get("MA_FRAMEWORK_ARCHIVE", "")
+    expected_hash = os.environ.get("MA_FRAMEWORK_ARCHIVE_SHA256", "")
+    if not archive or not re.fullmatch(r"[a-f0-9]{64}", expected_hash):
+        raise RuntimeError("first framework install needs an owner-verified archive and SHA-256")
+    with open(archive, "rb") as stream:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != expected_hash:
+            raise RuntimeError("framework archive checksum mismatch")
+        stream.seek(0)
+        with tarfile.open(fileobj=stream, mode="r:") as bundle:
+            if bundle.pax_headers.get("comment") != revision:
+                raise RuntimeError("framework archive does not identify the catalog pin")
+            entries = {}
+            for member in bundle.getmembers():
+                name = member.name.rstrip("/")
+                if name == "framework" and member.isdir():
+                    continue
+                if not name.startswith("framework/") or not (member.isfile() or member.isdir() or member.issym()):
+                    raise RuntimeError("unsupported framework archive entry")
+                relative = name[len("framework/"):]
+                if not relative or PurePosixPath(relative).is_absolute() or ".." in PurePosixPath(relative).parts or posixpath.normpath(relative) != relative or relative in entries or relative == receipt_name:
+                    raise RuntimeError("framework archive path is not contained and unique")
+                entries[relative] = member
+            for relative, member in entries.items():
+                if any(str(parent) in entries and entries[str(parent)].issym() for parent in PurePosixPath(relative).parents):
+                    raise RuntimeError("framework archive traverses a link")
+                if member.issym():
+                    target = posixpath.normpath(posixpath.join(posixpath.dirname(relative), member.linkname))
+                    if posixpath.isabs(member.linkname) or target not in entries or entries[target].issym() or any(str(parent) in entries and entries[str(parent)].issym() for parent in PurePosixPath(target).parents):
+                        raise RuntimeError("framework link escapes or traverses another link")
+            with tempfile.TemporaryDirectory(prefix=".framework-stage-", dir=destination.parent) as temporary:
+                stage = Path(temporary)
+                files = {}
+                for relative, member in entries.items():
+                    path = stage / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if member.isdir():
+                        path.mkdir(exist_ok=True)
+                    elif member.isfile():
+                        with bundle.extractfile(member) as incoming, path.open("xb") as outgoing:
+                            shutil.copyfileobj(incoming, outgoing)
+                        mode = 0o555 if member.mode & 0o111 else 0o444
+                        path.chmod(mode)
+                        files[relative] = {"sha256": digest(path), "mode": mode}
+                for relative, member in entries.items():
+                    if member.issym():
+                        (stage / relative).symlink_to(member.linkname)
+                        files[relative] = {"link": member.linkname}
+                receipt = {"revision": revision, "archive_sha256": expected_hash, "files": files}
+                (stage / receipt_name).write_text(json.dumps(receipt, sort_keys=True) + "\n")
+                (stage / receipt_name).chmod(0o444)
+                for path in sorted([p for p in stage.rglob("*") if p.is_dir() and not p.is_symlink()], key=lambda p: len(p.parts), reverse=True):
+                    path.chmod(0o555)
+                stage.chmod(0o555)
+                stage.rename(destination)
+    verify(destination)
+print("pinned framework verified")
+PYFRAMEWORK
 
 log "installing launcher and policy"
 install -d -o root -g root -m 0755 "$LIBEXEC" "$ETC_DIR"

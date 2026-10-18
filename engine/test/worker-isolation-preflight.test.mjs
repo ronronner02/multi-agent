@@ -59,6 +59,13 @@ function fakeFacts(overrides = {}) {
       return normalized;
     },
     isDirectory: () => true,
+    lstat: (p) => {
+      const privateRoot = policy.paths.context_root + '/ma-worker1';
+      const privatePath = p === privateRoot || p.startsWith(privateRoot + '/');
+      const depth = p.slice(privateRoot.length).split('/').filter(Boolean).length;
+      return { uid: privatePath ? 990 : 0, gid: privatePath ? 991 : 0, mode: privatePath ? (depth >= 2 ? 0o550 : 0o2750) : 0o755,
+        isDirectory: () => true, isSymbolicLink: () => false };
+    },
     legacyTiocsti: 0,
     egressSocket: { dirUid: 989, dirMode: 0o755, isSocket: true },
     ...overrides,
@@ -67,6 +74,7 @@ function fakeFacts(overrides = {}) {
 
 function launch(argv, factsOverrides) {
   const request = parseLaunchArgs(argv);
+  request.run ??= 'run-1'; request.attempt ??= 'attempt-1';
   return resolveLaunchRequest(policy, request, fakeFacts(factsOverrides));
 }
 
@@ -237,6 +245,53 @@ describe('offline: launch request validation', () => {
   });
 });
 
+describe('offline: KTD24 mandatory private context mounts', () => {
+  const argv = ['--worker', 'ma-worker1', '--role', 'implementer', '--tree', TREE, '--', NODE];
+  const context = policy.paths.context_root + '/ma-worker1/run-1/attempt-1';
+  test('run and attempt are required and traversal identifiers are rejected', () => {
+    for (const flags of [[], ['--run', 'run-1'], ['--attempt', 'attempt-1']]) {
+      const request = parseLaunchArgs([...argv.slice(0, -2), ...flags, '--', NODE]);
+      expectLaunchError(() => resolveLaunchRequest(policy, request, fakeFacts()), 'context-missing');
+    }
+    expectLaunchError(() => parseLaunchArgs(['--run', '../other', '--', NODE]), 'argument-invalid');
+  });
+  test('a missing context or framework source blocks rather than skipping its mount', () => {
+    for (const source of [context, policy.paths.framework_dir]) {
+      const facts = fakeFacts();
+      expectLaunchError(() => launch(argv, { lstat: (p) => { if (p === source) throw new Error('ENOENT'); return facts.lstat(p); } }), 'context-mount-unavailable');
+    }
+  });
+  test('context sources must be control-owned, worker-private, read-only and free of aliases', () => {
+    for (const change of [
+      (st) => ({ ...st, uid: 991 }),
+      (st) => ({ ...st, uid: 0 }),
+      (st) => ({ ...st, gid: 992 }),
+      (st) => ({ ...st, mode: 0o555 }),
+      (st) => ({ ...st, mode: 0o750 }),
+      (st) => ({ ...st, isSymbolicLink: () => true }),
+    ]) {
+      const facts = fakeFacts();
+      expectLaunchError(() => launch(argv, { lstat: (p) => p === context ? change(facts.lstat(p)) : facts.lstat(p) }), 'context-mount-unavailable');
+    }
+    const facts = fakeFacts();
+    expectLaunchError(() => launch(argv, { realpath: (p) => p === context ? context.replace('ma-worker1', 'ma-worker2') : facts.realpath(p) }), 'context-mount-unavailable');
+    expectLaunchError(() => launch(argv, { lstat: (p) => p === policy.paths.context_root ? { ...facts.lstat(p), mode: 0o777 } : facts.lstat(p) }), 'context-mount-unavailable');
+  });
+  test('policy revision and mount roots cannot alias writable or shared context', () => {
+    for (const change of [
+      (p) => { p.policy_revision = 3; },
+      (p) => { delete p.paths.context_root; },
+      (p) => { p.paths.context_root = p.paths.assignment_root; },
+      (p) => { p.paths.context_root = p.paths.framework_dir; },
+      (p) => { delete p.sandbox.context; },
+      (p) => { p.sandbox.work = '/context'; },
+    ]) {
+      const bad = structuredClone(policy); change(bad);
+      expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
+    }
+  });
+});
+
 describe('offline: sandbox command construction', () => {
   const resolvedFor = (role) =>
     launch(['--worker', 'ma-worker1', '--role', role, '--tree', TREE, '--env', 'TERM=xterm-256color', '--', NODE, '-e', '1']);
@@ -281,11 +336,17 @@ describe('offline: sandbox command construction', () => {
     assert.deepEqual(triple(rev.args, '/work'), ['--ro-bind-fd', String(MOUNT_FD.tree), '/work']);
     assert.deepEqual(triple(impl.args, '/home/worker'), ['--bind-fd', String(MOUNT_FD.home), '/home/worker']);
     assert.deepEqual(triple(impl.args, '/scratch'), ['--bind-fd', String(MOUNT_FD.scratch), '/scratch']);
+    assert.deepEqual(triple(impl.args, '/context'), ['--ro-bind-fd', String(MOUNT_FD.context), '/context']);
+    assert.deepEqual(triple(impl.args, '/framework'), ['--ro-bind-fd', String(MOUNT_FD.framework), '/framework']);
+    assert.ok(!impl.args.includes(policy.paths.framework_dir), 'the framework source must be pinned by descriptor');
+    assert.ok(!impl.args.includes(impl.mountSources.context), 'the context source must be pinned by descriptor');
     assert.ok(!impl.args.includes(TREE), 'the tree path must not reach bwrap');
     assert.deepEqual(impl.mountSources, {
       home: '/var/lib/multi-agent/workers/ma-worker1/home',
       scratch: '/var/lib/multi-agent/workers/ma-worker1/scratch',
       tree: TREE,
+      context: policy.paths.context_root + '/ma-worker1/run-1/attempt-1',
+      framework: policy.paths.framework_dir,
     });
   });
 
@@ -294,7 +355,7 @@ describe('offline: sandbox command construction', () => {
     const setenv = [];
     for (let i = 0; i < args.length; i += 1) if (args[i] === '--setenv') setenv.push(args[i + 1]);
     const proxyKeys = ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy', 'NO_PROXY', 'no_proxy'];
-    assert.deepEqual(setenv.sort(), ['HOME', 'PATH', 'TERM', 'TMPDIR', 'USER', ...proxyKeys].sort());
+    assert.deepEqual(setenv.sort(), ['HOME', 'PATH', 'TERM', 'TMPDIR', 'USER', 'MA_ATTEMPT_ID', ...proxyKeys].sort());
     const sep = args.lastIndexOf('--');
     assert.deepEqual(args.slice(sep + 1), [NODE, '-e', '1']);
   });
@@ -450,6 +511,58 @@ describe('offline: KTD23 egress filter', () => {
     }
   });
 
+  test('rejected half-open clients release the shared connection slot for every response path', { skip: process.platform === 'win32' && 'unix sockets', timeout: 10_000 }, async (t) => {
+    for (const [request, status] of [
+      ['CONNECT denied.example.com:443 HTTP/1.1\r\n\r\n', 403],
+      ['CONNECT 127.0.0.1:443 HTTP/1.1\r\n\r\n', 403],
+      ['GET / HTTP/1.1\r\n\r\n', 405],
+      ['CONNECT allowed.example.com:443 HTTP/1.1\r\n\r\n', 502],
+    ]) {
+      await t.test(request.split('\r\n')[0], async () => {
+        const dir = mkdtempSync(path.join(os.tmpdir(), 'egress-'));
+        const socketPath = path.join(dir, 'proxy.sock');
+        const server = createEgressServer(
+          { schema: 'multi-agent-egress/v1', upstream: null, allow: ['allowed.example.com:443'] },
+          { maxConnections: 1, log: () => {}, lookup: async () => [{ address: '127.0.0.1', family: 4 }], localAddresses: [] },
+        );
+        await new Promise((resolve) => server.listen(socketPath, resolve));
+        const clients = [];
+        const ask = (input, allowHalfOpen = false) => new Promise((resolve, reject) => {
+          const client = net.connect({ path: socketPath, allowHalfOpen });
+          clients.push(client);
+          let response = '';
+          client.on('data', (chunk) => {
+            response += chunk;
+            if (response.includes('\r\n\r\n')) resolve(response);
+          });
+          client.on('error', reject);
+          client.on('close', () => resolve(response));
+          client.write(input);
+        });
+        let timer;
+        try {
+          const released = new Promise((resolve) => server.once('connection', (client) => client.once('close', resolve)));
+          assert.match(await ask(request, true), new RegExp('^HTTP/1\\.1 ' + status + ' '));
+          await Promise.race([
+            released,
+            new Promise((_, reject) => {
+              timer = setTimeout(() => reject(new Error('rejected client retained the shared connection slot')), 1_000);
+            }),
+          ]);
+          clearTimeout(timer);
+          assert.equal(server.clients.size, 0);
+          assert.match(await ask('CONNECT allowed.example.com:443 HTTP/1.1\r\n\r\n'), /^HTTP\/1\.1 502 /);
+        } finally {
+          clearTimeout(timer);
+          for (const client of clients) client.destroy();
+          for (const client of server.clients) client.destroy();
+          await new Promise((resolve) => server.close(resolve));
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    }
+  });
+
   test('a client that half-closes after its upload still receives the reply, and bytes after each head pass once', { skip: process.platform === 'win32' && 'unix sockets' }, async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'egress-'));
     const socketPath = path.join(dir, 'proxy.sock');
@@ -585,6 +698,8 @@ for (const p of input.denyList) out.list[p] = attempt(() => fs.readdirSync(p).le
 for (const p of input.denySockets) out.connect[p] = await connect(p);
 const pe = spawnSync(input.windowsPe, [], { encoding: 'utf8', timeout: 5000 });
 out.exec_windows_pe = { present: fs.existsSync(input.windowsPe), ran: pe.status === 0 && !pe.error, status: pe.status, error: pe.error?.code ?? null };
+out.context_read = attempt(() => fs.readFileSync('/context/instructions.txt', 'utf8'));
+out.framework_read = attempt(() => fs.readFileSync('/framework/skills/spec-work/SKILL.md').length > 0);
 out.allow_scratch = attempt(() => { fs.writeFileSync('/scratch/' + input.marker, 'ok'); return fs.readFileSync('/scratch/' + input.marker, 'utf8'); });
 out.allow_work = attempt(() => { fs.writeFileSync('/work/' + input.marker, 'ok'); return true; });
 out.abstract_sockets = fs.readFileSync('/proc/net/unix', 'utf8').split('\n').filter((l) => / @/.test(l)).length;
@@ -685,6 +800,7 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
   };
   const implTree = `${P.assignment_root}/ma-worker1/${tag}`;
   const revTree = `${P.assignment_root}/ma-worker2/${tag}`;
+  const contextPaths = Object.fromEntries(policy.worker_identities.map(worker => [worker, path.posix.join(P.context_root, worker, tag, tag)]));
   const escapeLink = `${P.assignment_root}/ma-worker1/${tag}-escape`;
   let ownerTmuxSocket = `/tmp/tmux-${process.getuid?.()}/ma-${tag}`;
 
@@ -697,8 +813,8 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
       marker: `${tag}-${worker}`,
       hostPid: ctx.supervisorPid,
       windowsPe: `${policy.sandbox.scratch}/${tag}-whoami.exe`,
-      denyRead: [sentinels.ownerToken, sentinels.database, sentinels.browserSessions, '/mnt/c/Windows/win.ini', '/mnt/d', `/home/${process.env.USER}`, '/etc/shadow', '/etc/sudoers'],
-      denyWrite: [sentinels.database, sentinels.wal, sentinels.shm, `${P.installed_policy}`],
+      denyRead: [sentinels.ownerToken, sentinels.database, sentinels.browserSessions, ...Object.values(contextPaths).map(p => p + '/instructions.txt'), '/mnt/c/Windows/win.ini', '/mnt/d', `/home/${process.env.USER}`, '/etc/shadow', '/etc/sudoers'],
+      denyWrite: [sentinels.database, sentinels.wal, sentinels.shm, '/context/instructions.txt', '/framework/skills/spec-work/SKILL.md', `${P.installed_policy}`],
       denyList: [P.control_state_dir, '/mnt/c', '/run/WSL', `${P.worker_root}/ma-worker2`, `${P.worker_root}/ma-worker3`, `/tmp/tmux-${process.getuid?.()}`],
       denySockets: [sentinels.supervisorSocket, sentinels.controlTmux, ownerTmuxSocket, '/run/WSL/1_interop', process.env.WSL_INTEROP ?? '/run/WSL/2_interop'],
       codex: CODEX,
@@ -709,7 +825,7 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
     const leaked = openSync(policyPath, 'r');
     try {
       const r = launcherViaControl(
-        ['--worker', worker, '--role', role, '--tree', tree, '--attempt', tag, '--env', 'TERM=xterm-256color', '--', TOOL_NODE, '--input-type=module', '-e', PROBE, JSON.stringify(input)],
+        ['--worker', worker, '--role', role, '--tree', tree, '--run', tag, '--attempt', tag, '--env', 'TERM=xterm-256color', '--', TOOL_NODE, '--input-type=module', '-e', PROBE, JSON.stringify(input)],
         { stdio: ['ignore', 'pipe', 'pipe', leaked], timeout: 180_000 },
       );
       if (r.status !== 0) return { launch_failed: true, status: r.status, code: launcherError(r), stderr: r.stderr.slice(0, 400) };
@@ -721,7 +837,7 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
 
   before(() => {
     // Distinct prerequisite codes; any one blocks the dependent checks and T002.
-    for (const tool of ['/usr/bin/bwrap', '/usr/bin/setpriv', '/usr/bin/tmux', '/usr/bin/sudo', '/usr/bin/setfacl', TOOL_NODE]) {
+    for (const tool of ['/usr/bin/bwrap', '/usr/bin/setpriv', '/usr/bin/tmux', '/usr/bin/sudo', '/usr/bin/setfacl', '/usr/bin/getfacl', TOOL_NODE]) {
       if (!existsSync(tool)) ctx.blockers.push(`tool-missing:${tool}`);
     }
     for (const name of [policy.control_identity, ...policy.worker_identities]) {
@@ -731,6 +847,7 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
     const tiocsti = run('/usr/sbin/sysctl', ['-n', 'dev.tty.legacy_tiocsti']).stdout.trim();
     if (tiocsti !== '0') ctx.blockers.push(`kernel-legacy-tiocsti:${tiocsti || 'unknown'}`);
     if (Number(readFileSync('/proc/sys/user/max_user_namespaces', 'utf8')) < 1) ctx.blockers.push('kernel-userns-disabled');
+    if (!existsSync(P.framework_dir)) ctx.blockers.push('framework-not-installed');
     if (asControl('/usr/bin/true', []).status !== 0) ctx.blockers.push('preflight-access-missing:control');
     if (asUser('ma-worker1', '/usr/bin/true', []).status !== 0) ctx.blockers.push('preflight-access-missing:worker');
     if (ctx.blockers.length) return;
@@ -744,6 +861,12 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
       fs.mkdirSync(${JSON.stringify(implTree)}, { mode: 0o770 });
       fs.mkdirSync(${JSON.stringify(revTree)}, { mode: 0o770 });
       fs.writeFileSync(${JSON.stringify(`${revTree}/candidate.txt`)}, 'candidate');
+      for (const [worker, projection] of Object.entries(${JSON.stringify(contextPaths)})) {
+        fs.mkdirSync(require('node:path').dirname(projection), { mode: 0o2750 });
+        fs.mkdirSync(projection, { mode: 0o2750 });
+        fs.writeFileSync(projection + '/instructions.txt', worker, { mode: 0o440 });
+        fs.chmodSync(projection, 0o550);
+      }
       fs.symlinkSync(${JSON.stringify(P.control_state_dir)}, ${JSON.stringify(escapeLink)});
     `]);
     if (stage.status !== 0) {
@@ -917,6 +1040,25 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
     assert.equal(readFileSync(LAUNCHER, 'utf8'), `#!/bin/sh\nexec /usr/bin/env -i SUDO_UID="$SUDO_UID" PATH=/usr/bin:/bin "${TOOL_NODE}" "${P.installed_launcher}" "$@"\n`);
   });
 
+  test('managed Codex catalog is the pinned bundled catalog with every lite request shape off', () => {
+    blocked();
+    // The lite shape carries tools in an `additional_tools` input item that relay gateways drop.
+    const file = `${P.toolchain_dir}/clients/codex-model-catalog.json`;
+    const st = statSync(file);
+    assert.equal(st.uid, 0, `${file} must be root-owned`);
+    assert.equal(st.mode & 0o022, 0, `${file} must not be group/other writable`);
+    const installed = JSON.parse(readFileSync(file, 'utf8')).models;
+    const home = mkdtempSync(path.join(os.tmpdir(), 'codex-catalog-'));
+    try {
+      const r = run(CODEX, ['debug', 'models', '--bundled'], { env: { PATH: SANDBOX_PATH, CODEX_HOME: home } });
+      assert.equal(r.status, 0, r.stderr);
+      const bundled = JSON.parse(r.stdout).models;
+      assert.deepEqual(installed.map((m) => m.slug), bundled.map((m) => m.slug), 'catalog must match the pinned client');
+      assert.deepEqual(installed, bundled.map((m) => ({ ...m, use_responses_lite: false })), 'only use_responses_lite may differ');
+    } finally { rmSync(home, { recursive: true, force: true }); }
+    ctx.facts.codex_model_catalog = { sha256: sha256File(file), models: installed.length };
+  });
+
   test('identities are distinct, unprivileged and cannot reach each other or the launcher', () => {
     blocked();
     const uids = new Set();
@@ -934,15 +1076,61 @@ describe('host: worker isolation preflight', { skip: hostSkip }, () => {
     assert.notEqual(asUser('ma-worker1', '/usr/bin/sudo', ['-n', LAUNCHER, '--worker', 'ma-worker1', '--', TOOL_NODE]).status, 0);
   });
 
+  test('KTD24: each worker reads only its private immutable context and the pinned framework', () => {
+    blocked();
+    const controlUid = Number(run('/usr/bin/id', ['-u', policy.control_identity]).stdout.trim());
+    const acl = run('/usr/bin/getfacl', ['--absolute-names', P.context_root + '/ma-worker1']);
+    assert.equal(acl.status, 0, acl.stderr);
+    assert.match(acl.stdout, /default:group::r-x/);
+    assert.match(acl.stdout, /default:mask::r-x/);
+    const projections = {};
+    for (const worker of policy.worker_identities) {
+      const source = contextPaths[worker], file = source + '/instructions.txt';
+      const own = asUser(worker, '/usr/bin/cat', [file]);
+      assert.equal(own.status, 0, 'the assigned worker must read its own projection');
+      assert.equal(own.stdout, worker);
+      for (const other of policy.worker_identities.filter(name => name !== worker)) {
+        assert.notEqual(asUser(other, '/usr/bin/cat', [file]).status, 0, 'another worker must not read the projection');
+      }
+      assert.notEqual(asUser(worker, '/usr/bin/touch', [source + '/planted']).status, 0, 'the worker must not modify its projection');
+      const metadata = asControl(TOOL_NODE, ['-e', 'const fs = require("node:fs"); console.log(JSON.stringify(process.argv.slice(1).map(p => { const s = fs.lstatSync(p); return { uid: s.uid, gid: s.gid, mode: s.mode & 4095 }; })));',
+        path.dirname(path.dirname(source)), path.dirname(source), source, file]);
+      assert.equal(metadata.status, 0, metadata.stderr);
+      const facts = JSON.parse(metadata.stdout);
+      const gid = Number(run('/usr/bin/id', ['-g', worker]).stdout.trim());
+      for (const st of facts) {
+        assert.equal(st.uid, controlUid); assert.equal(st.gid, gid); assert.equal(st.mode & 0o027, 0);
+      }
+      assert.equal(facts[2].mode, 0o550); assert.equal(facts[3].mode, 0o440);
+      projections[worker] = { path: source, files: facts };
+    }
+    for (const [worker, result] of [['ma-worker1', ctx.impl], ['ma-worker2', ctx.rev]]) {
+      assert.deepEqual(result.context_read, { ok: true, v: worker });
+      assert.deepEqual(result.framework_read, { ok: true, v: true });
+      assert.equal(result.write['/context/instructions.txt'].ok, false);
+      assert.equal(result.write['/framework/skills/spec-work/SKILL.md'].ok, false);
+      assert.ok(!result.fd_targets.some(p => p === contextPaths[worker] || p === P.framework_dir), 'mount descriptors must not reach the worker');
+    }
+    const receiptPath = path.join(P.framework_dir, '.framework-receipt.json');
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+    const pin = readFileSync(path.join(here, '../packages/daemon/src/integrations/framework/catalog.ts'), 'utf8').match(/revision: "([a-f0-9]{40})"/)[1];
+    assert.equal(receipt.revision, pin);
+    const frameworkSource = 'skills/spec-work/SKILL.md';
+    assert.equal(sha256File(path.join(P.framework_dir, frameworkSource)), receipt.files[frameworkSource].sha256);
+    const writable = run('/usr/bin/find', [P.framework_dir, '-not', '-type', 'l', '(', '-perm', '/222', '-o', '-not', '-user', 'root', ')', '-print', '-quit']);
+    assert.equal(writable.status, 0, writable.stderr); assert.equal(writable.stdout.trim(), '');
+    ctx.facts.context = { projections, framework_revision: receipt.revision, framework_receipt_sha256: sha256File(receiptPath) };
+  });
+
   test('launcher rejects out-of-policy requests with distinct codes', () => {
     blocked();
-    const base = ['--role', 'implementer', '--', TOOL_NODE, '-v'];
+    const base = ['--run', tag, '--attempt', tag, '--role', 'implementer', '--', TOOL_NODE, '-v'];
     const cases = [
       [['--worker', policy.control_identity, '--tree', implTree, ...base], 'worker-not-allowed'],
       [['--worker', 'ma-worker1', '--tree', stageDir, ...base], 'tree-outside-assignment'],
       [['--worker', 'ma-worker1', '--tree', escapeLink, ...base], 'tree-outside-assignment'],
       [['--worker', 'ma-worker1', '--tree', implTree, '--env', 'LD_PRELOAD=/x', ...base], 'env-not-allowed'],
-      [['--worker', 'ma-worker1', '--tree', implTree, '--role', 'implementer', '--', WINDOWS_PE], 'command-not-allowed'],
+      [['--worker', 'ma-worker1', '--tree', implTree, '--run', tag, '--attempt', tag, '--role', 'implementer', '--', WINDOWS_PE], 'command-not-allowed'],
     ];
     for (const [args, code] of cases) {
       const r = launcherViaControl(args);

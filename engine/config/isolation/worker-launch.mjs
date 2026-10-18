@@ -20,7 +20,7 @@ const INSTALLED_POLICY = '/etc/multi-agent/worker-policy.json';
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 // Child descriptor numbers for the bubblewrap --bind-fd sources.
-export const MOUNT_FD = Object.freeze({ home: 3, scratch: 4, tree: 5 });
+export const MOUNT_FD = Object.freeze({ home: 3, scratch: 4, tree: 5, context: 7, framework: 8 });
 // Paths that must never appear as policy roots or sandbox sources.
 const HOST_DENY_ROOTS = ['/mnt', '/run/WSL', '/init', '/proc', '/sys', '/root'];
 // Set only by the launcher, to the in-sandbox egress relay; callers cannot pass them.
@@ -109,17 +109,20 @@ export function validatePolicy(policy) {
   if (policy.launch_callers.some((c) => policy.worker_identities.includes(c))) fail('a worker identity may not be a launch caller');
 
   const p = policy.paths ?? {};
-  for (const key of ['state_root', 'control_state_dir', 'worker_root', 'assignment_root', 'toolchain_dir', 'framework_dir']) {
+  for (const key of ['state_root', 'control_state_dir', 'worker_root', 'assignment_root', 'toolchain_dir', 'framework_dir', 'context_root']) {
     requireAbsolute(p[key], `paths.${key}`);
     if (HOST_DENY_ROOTS.some((deny) => overlaps(deny, p[key]))) fail(`paths.${key} overlaps a host-denied root`);
   }
-  for (const key of ['worker_root', 'assignment_root', 'toolchain_dir', 'framework_dir']) {
+  for (const key of ['worker_root', 'assignment_root', 'toolchain_dir', 'framework_dir', 'context_root']) {
     if (overlaps(p.control_state_dir, p[key])) fail(`paths.${key} overlaps the control state directory`);
   }
   if (overlaps(p.worker_root, p.assignment_root)) fail('worker_root and assignment_root must be disjoint');
 
-  // KTD23: revision 3 replaced the host network namespace with the filtered proxy; there is no fallback.
-  if (policy.policy_revision < 3) fail('policy_revision 3 or later is required');
+  for (const key of ['worker_root', 'assignment_root', 'toolchain_dir', 'framework_dir']) {
+    if (overlaps(p.context_root, p[key])) fail('paths.context_root overlaps paths.' + key);
+  }
+  // KTD24 adds mandatory private context mounts to the KTD23 filtered network.
+  if (policy.policy_revision < 4) fail('policy_revision 4 or later is required');
   const egressId = policy.egress_identity;
   if (typeof egressId !== 'string' || !ID_PATTERN.test(egressId)) fail('egress_identity must be an identity name');
   if (egressId === policy.control_identity || policy.worker_identities.includes(egressId) || policy.launch_callers.includes(egressId)) {
@@ -135,7 +138,11 @@ export function validatePolicy(policy) {
   if (!isWithin(p.toolchain_dir, p.installed_egress)) fail('paths.installed_egress must be inside the toolchain directory');
 
   const s = policy.sandbox ?? {};
-  for (const key of ['home', 'scratch', 'work', 'framework']) requireAbsolute(s[key], `sandbox.${key}`);
+  for (const key of ['home', 'scratch', 'work', 'framework', 'context']) requireAbsolute(s[key], `sandbox.${key}`);
+  if (s.context !== '/context' || s.framework !== '/framework') fail('context and framework targets must be /context and /framework');
+  for (const key of ['home', 'scratch', 'work']) {
+    if (overlaps(s.context, s[key]) || overlaps(s.framework, s[key])) fail('writable mounts must not overlap the context mounts');
+  }
   if (s.network !== 'filtered-proxy') fail('sandbox.network must be filtered-proxy; sharing the host network namespace is not allowed');
   if (!Number.isInteger(s.egress_port) || s.egress_port < 1024 || s.egress_port > 65535) fail('sandbox.egress_port must be an integer from 1024 to 65535');
   for (const masked of s.masked_paths ?? []) {
@@ -167,8 +174,8 @@ export function validatePolicy(policy) {
 }
 
 export function parseLaunchArgs(argv) {
-  const request = { worker: null, role: null, tree: null, attempt: null, env: [], command: [] };
-  const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--attempt': 'attempt' };
+  const request = { worker: null, role: null, tree: null, run: null, attempt: null, env: [], command: [] };
+  const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--run': 'run', '--attempt': 'attempt' };
   let i = 0;
   for (; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -188,14 +195,33 @@ export function parseLaunchArgs(argv) {
     throw new LaunchError('argument-unknown', `unknown argument ${arg}`);
   }
   if (request.command.length === 0) throw new LaunchError('command-missing', 'a command is required after --');
-  for (const field of ['worker', 'role', 'attempt']) {
+  for (const field of ['worker', 'role', 'run', 'attempt']) {
     if (request[field] !== null && !ID_PATTERN.test(request[field])) throw new LaunchError('argument-invalid', `invalid ${field}`);
   }
   return request;
 }
 
+function verifyReadOnlyDirectory(source, facts, worker, control, privateRoot = null) {
+  try {
+    if (facts.realpath(source) !== source) throw new Error('aliased source');
+    for (let p = source; ; p = posix.dirname(p)) {
+      const st = facts.lstat(p);
+      if (!st.isDirectory() || st.isSymbolicLink() || st.uid === worker.uid || (st.mode & 0o022)) throw new Error('writable source ancestry');
+      const access = (st.mode >> (st.gid === worker.gid ? 3 : 0)) & 7;
+      if ((access & (p === source ? 5 : 1)) !== (p === source ? 5 : 1)) throw new Error('unreadable source');
+      if (privateRoot && (p === privateRoot || isWithin(privateRoot, p))) {
+        if (st.uid !== control.uid || st.gid !== worker.gid || (st.mode & 0o007)
+          || (p === source && (st.mode & 0o222))) throw new Error('non-private context source');
+      }
+      if (p === posix.dirname(p)) break;
+    }
+  } catch {
+    throw new LaunchError('context-mount-unavailable', 'context and framework must exist with verified read-only ownership');
+  }
+}
+
 // facts: { callerUid, lookupUser(name) -> {name, uid, gid, groups[]} | null,
-//          realpath(p) -> string, isDirectory(p) -> boolean, legacyTiocsti,
+//          realpath(p) -> string, isDirectory(p) -> boolean, lstat(p) -> Stats, legacyTiocsti,
 //          egressSocket -> {dirUid, dirMode, isSocket} | null }
 export function resolveLaunchRequest(policy, request, facts) {
   validatePolicy(policy);
@@ -232,6 +258,12 @@ export function resolveLaunchRequest(policy, request, facts) {
   if (!isWithin(assignmentDir, tree)) throw new LaunchError('tree-outside-assignment', 'tree must be inside the worker assignment directory');
   if (!facts.isDirectory(tree)) throw new LaunchError('tree-missing', 'assigned tree is not a directory');
 
+  if (!request.run || !request.attempt) throw new LaunchError('context-missing', 'run and attempt are required for the context projection');
+  const contextParent = posix.join(policy.paths.context_root, request.worker);
+  const context = posix.join(contextParent, request.run, request.attempt);
+  verifyReadOnlyDirectory(context, facts, worker, control, contextParent);
+  verifyReadOnlyDirectory(policy.paths.framework_dir, facts, worker, control);
+
   const env = {};
   for (const entry of request.env) {
     const eq = entry.indexOf('=');
@@ -262,6 +294,8 @@ export function resolveLaunchRequest(policy, request, facts) {
     role: request.role,
     tree,
     treeMode: roleSpec.work_tree,
+    context,
+    framework: policy.paths.framework_dir,
     home: posix.join(policy.paths.worker_root, request.worker, 'home'),
     scratch: posix.join(policy.paths.worker_root, request.worker, 'scratch'),
     env,
@@ -327,7 +361,8 @@ export function buildSandboxCommand(policy, resolved) {
   for (const src of s.etc_ro_binds) args.push('--ro-bind-try', src, src);
   args.push(
     '--ro-bind', p.toolchain_dir, p.toolchain_dir,
-    '--ro-bind-try', p.framework_dir, s.framework,
+    '--ro-bind-fd', String(MOUNT_FD.framework), s.framework,
+    '--ro-bind-fd', String(MOUNT_FD.context), s.context,
     '--proc', '/proc',
     '--dev', '/dev',
     '--tmpfs', '/tmp',
@@ -346,7 +381,7 @@ export function buildSandboxCommand(policy, resolved) {
   );
   // Writable sources are passed as descriptors opened and re-verified by the
   // launcher, so a path swapped after validation cannot change what is mounted.
-  return { file: '/usr/bin/setpriv', args, mountSources: { home: resolved.home, scratch: resolved.scratch, tree: resolved.tree } };
+  return { file: '/usr/bin/setpriv', args, mountSources: { home: resolved.home, scratch: resolved.scratch, tree: resolved.tree, context: resolved.context, framework: resolved.framework } };
 }
 
 // A directory descriptor on stdio would let the worker openat() outside its mounts.
@@ -416,6 +451,7 @@ function hostFacts(policy) {
     lookupUser,
     realpath: (p) => realpathSync(p),
     isDirectory: (p) => statSync(p).isDirectory(),
+    lstat: (p) => lstatSync(p),
     legacyTiocsti,
     egressSocket: (() => {
       try {
@@ -449,8 +485,10 @@ export function main(argv = process.argv.slice(2)) {
     fds[MOUNT_FD.home] = openVerifiedDirectory(mountSources.home, workerDir);
     fds[MOUNT_FD.scratch] = openVerifiedDirectory(mountSources.scratch, workerDir);
     fds[MOUNT_FD.tree] = openVerifiedDirectory(mountSources.tree, assignmentDir);
+    fds[MOUNT_FD.context] = openVerifiedDirectory(mountSources.context, posix.join(policy.paths.context_root, resolved.worker.name));
+    fds[MOUNT_FD.framework] = openVerifiedDirectory(mountSources.framework, posix.dirname(policy.paths.framework_dir));
     fds[SECCOMP_FD] = openSeccompProgram();
-    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', fds[3], fds[4], fds[5], fds[6]], env: {} });
+    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', ...fds.slice(3)], env: {} });
     for (const fd of fds.slice(3)) closeSync(fd);
     for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT']) {
       process.on(signal, () => child.kill(signal));

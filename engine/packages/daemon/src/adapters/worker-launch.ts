@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { canonicalJson, parseAttemptIdentity, type NativeAttemptIdentity } from "../contracts/team-control.js";
 import type { AssignmentInput } from "../domain/team-assignment.js";
 import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
-import type { ContextObservation } from "../integrations/framework/context-manifest.js";
+import type { ContextMountPolicy, ContextObservation } from "../integrations/framework/context-manifest.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, NodeBinding, ReadinessResult } from "../domain/runtime-adapter.js";
 import type { ResumeResult } from "./claude-resume.js";
 
@@ -63,7 +63,7 @@ export interface WorkerBoundary {
 }
 export interface WorkerLaunchPreflight {
   assignment: AssignmentInput;
-  worker: { name: string; uid: number; groups: number[]; home: string; scratch: string; tree: string };
+  worker: { name: string; uid: number; gid: number; groups: number[]; home: string; scratch: string; tree: string };
   control: { uid: number; mountNamespace: string; userNamespace: string };
   executable: string;
   executableVersion: string;
@@ -176,9 +176,11 @@ function requireFact(condition: unknown, code: string): asserts condition {
 function same(a: unknown, b: unknown): boolean { return canonicalJson(a) === canonicalJson(b); }
 function groups(value: number[]): number[] { return [...value].sort((a, b) => a - b); }
 const configHome = (client: WorkerClient) => "/home/worker/" + (client === "codex" ? ".codex" : ".claude");
-export interface WorkerLaunchPolicy {
-  policy_revision: number; worker_identities: string[];
-  paths: { toolchain_dir: string }; sandbox: { etc_ro_binds: string[]; masked_paths: string[] };
+/** Provisioned beside the pinned client; it keeps tools in the standard Responses request (see provision-host.sh). */
+export const codexModelCatalog = (toolchainDir: string) => toolchainDir + "/clients/codex-model-catalog.json";
+export interface WorkerLaunchPolicy extends ContextMountPolicy {
+  paths: ContextMountPolicy["paths"] & { toolchain_dir: string; egress_socket_dir: string };
+  sandbox: ContextMountPolicy["sandbox"] & { network: string; etc_ro_binds: string[]; masked_paths: string[] };
 }
 const reference = (value: string) => /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,255}$/.test(value);
 
@@ -223,6 +225,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       };
       const policy = preflight.installedPolicy;
       const network = this.networkPolicy(preflight);
+      this.checkContextProjection(attempt, preflight);
       const prepared = await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
       requireFact(prepared.context.generatedHash === attempt.context.generatedHash, "managed_context_mismatch");
       requireFact(preflight.worker.uid !== preflight.control.uid && preflight.worker.uid > 0
@@ -245,7 +248,8 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
         const previous = attempt.previous;
         requireFact(previous && preflight.previous && same(previous, preflight.previous), "managed_resume_identity_mismatch");
         requireFact(previous.identity.nativeSessionId === resumeToken && previous.client === client
-          && previous.runId === attempt.context.runId && previous.contextHash === attempt.context.generatedHash
+          && previous.runId === attempt.context.runId
+          && (previous.attemptId !== attempt.attemptId || previous.contextHash === attempt.context.generatedHash)
           && previous.workerUid === preflight.worker.uid && previous.identity.policyFingerprint === preflight.policyFingerprint
           && attempt.deadline <= previous.deadline && preflight.generation === previous.identity.generation + 1
           && previous.network?.mode === network.mode && previous.network.profileFingerprint === network.profileFingerprint, "managed_resume_identity_mismatch");
@@ -255,12 +259,13 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
           ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
           ...(resumeToken ? ["--resume", resumeToken] : ["--session-id", this.sessionId()])]
         : [preflight.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false",
+          "-c", "model_catalog_json=" + JSON.stringify(codexModelCatalog(policy.paths.toolchain_dir)),
           ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
           ...(resumeToken ? ["resume", resumeToken] : [])];
       const command: WorkerCommand = state.command = immutable({
         file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
-          "--attempt", attempt.attemptId, "--", ...nativeArgv],
+          "--run", attempt.context.runId, "--attempt", attempt.attemptId, "--", ...nativeArgv],
         nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
       });
       await this.record(state, { phase: "prepared" });
@@ -351,11 +356,23 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
     requireFact(Number.isSafeInteger(attempt.deadline) && attempt.deadline > this.now(), "managed_deadline_expired");
   }
 
+  private checkContextProjection(attempt: ManagedAttempt, preflight: WorkerLaunchPreflight): void {
+    const projection = attempt.context.projection, policy = preflight.installedPolicy;
+    requireFact(projection && projection.worker === preflight.worker.name && projection.attemptId === attempt.attemptId
+      && projection.controlUid === preflight.control.uid && projection.workerGid === preflight.worker.gid
+      && same(projection.policy.worker_identities, policy.worker_identities)
+      && projection.policy.policy_revision === policy.policy_revision
+      && projection.policy.paths.context_root === policy.paths.context_root
+      && projection.policy.paths.framework_dir === policy.paths.framework_dir
+      && projection.policy.sandbox.context === policy.sandbox.context
+      && projection.policy.sandbox.framework === policy.sandbox.framework, "managed_context_mount_policy_mismatch");
+  }
+
   private networkPolicy(preflight: WorkerLaunchPreflight) {
     const network = preflight.network;
-    requireFact(network && (network.mode === "isolated-allowlist" || network.mode === "filtered-proxy")
+    requireFact(network && network.mode === "filtered-proxy" && preflight.installedPolicy.sandbox.network === "filtered-proxy"
       && /^net:\[\d+\]$/.test(network.hostNamespace) && /^sha256:[a-f0-9]{64}$/.test(network.profileFingerprint)
-      && reference(network.preflightRef) && preflight.policyRevision >= 3, "managed_network_policy_unavailable");
+      && reference(network.preflightRef) && preflight.policyRevision >= 4, "managed_network_policy_unavailable");
     return { ...network, mode: network.mode };
   }
 
@@ -365,6 +382,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
     this.checkDeadline(attempt);
     const identity = parseAttemptIdentity(observed.identity), b = observed.boundary;
     const network = this.networkPolicy(p);
+    this.checkContextProjection(attempt, p);
     requireFact(same(identity, state.identity) && identity.policyFingerprint === p.policyFingerprint
       && identity.generation === p.generation && observed.attemptId === attempt.attemptId
       && Number.isSafeInteger(observed.processGroupId) && observed.processGroupId > 0, "managed_identity_mismatch");
@@ -381,7 +399,9 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       { source: p.worker.home, target: "/home/worker", access: "rw" },
       { source: p.worker.scratch, target: "/scratch", access: "rw" },
       { source: p.worker.tree, target: "/work", access: attempt.context.role === "reviewer" ? "ro" : "rw" },
-      { source: attempt.context.frameworkRoot, target: "/framework", access: "ro" },
+      { source: policy.paths.framework_dir, target: policy.sandbox.framework, access: "ro" },
+      { source: attempt.context.root, target: policy.sandbox.context, access: "ro" },
+      { source: policy.paths.egress_socket_dir, target: policy.paths.egress_socket_dir, access: "ro" },
     ];
     for (const mount of expected) requireFact(b.mounts.filter(m => m.target === mount.target).length === 1
       && b.mounts.some(m => same(m, mount)), "managed_worker_mount_mismatch");

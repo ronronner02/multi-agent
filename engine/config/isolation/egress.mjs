@@ -186,7 +186,13 @@ export function createEgressServer(config, {
     return { socket: await open(addresses[0].address, target.port), rest: null };
   }
 
-  const reply = (client, status) => client.end(`HTTP/1.1 ${status} ${REASONS[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  const reply = (client, status) => {
+    // A rejected half-open peer must not retain a shared connection slot.
+    const timer = setTimeout(() => client.destroy(), 100);
+    timer.unref();
+    client.once('close', () => clearTimeout(timer));
+    client.end(`HTTP/1.1 ${status} ${REASONS[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  };
 
   async function handle(client) {
     let request;
