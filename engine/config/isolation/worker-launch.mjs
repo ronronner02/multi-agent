@@ -8,7 +8,9 @@
 // add bind mounts, sandbox flags or environment outside the policy.
 
 import { spawn } from 'node:child_process';
-import { closeSync, constants as fsConstants, fstatSync, openSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
+import {
+  closeSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync,
+} from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +23,52 @@ const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 export const MOUNT_FD = Object.freeze({ home: 3, scratch: 4, tree: 5 });
 // Paths that must never appear as policy roots or sandbox sources.
 const HOST_DENY_ROOTS = ['/mnt', '/run/WSL', '/init', '/proc', '/sys', '/root'];
+// Set only by the launcher, to the in-sandbox egress relay; callers cannot pass them.
+const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'ALL_PROXY'];
+export const EGRESS_SOCKET_NAME = 'proxy.sock';
+// Child descriptor number for the bubblewrap --seccomp program.
+export const SECCOMP_FD = 6;
+
+// KTD23: a network namespace does not cover AF_VSOCK, the Hyper-V channel to the
+// Windows host, and io_uring can create sockets without the socket() syscall.
+// This classic-BPF seccomp program (x86_64 only) refuses both; everything else is allowed.
+const SECCOMP = Object.freeze({
+  AUDIT_ARCH_X86_64: 0xc000003e, X32_SYSCALL_BIT: 0x40000000,
+  RET_ALLOW: 0x7fff0000, RET_ERRNO: 0x00050000, EPERM: 1, EAFNOSUPPORT: 97, AF_VSOCK: 40,
+  NR: { socket: 41, socketpair: 53, io_uring_setup: 425, io_uring_enter: 426, io_uring_register: 427 },
+});
+
+export function buildSeccompFilter() {
+  const S = SECCOMP;
+  const LD_ABS = 0x20; const JEQ = 0x15; const JGE = 0x35; const RET = 0x06;
+  // [code, jt, jf, k]; jumps are relative to the next instruction.
+  const program = [
+    [LD_ABS, 0, 0, 4], // arch
+    [JEQ, 1, 0, S.AUDIT_ARCH_X86_64],
+    [RET, 0, 0, S.RET_ERRNO | S.EPERM],
+    [LD_ABS, 0, 0, 0], // syscall number
+    [JGE, 6, 0, S.X32_SYSCALL_BIT],
+    [JEQ, 5, 0, S.NR.io_uring_setup],
+    [JEQ, 4, 0, S.NR.io_uring_enter],
+    [JEQ, 3, 0, S.NR.io_uring_register],
+    [JEQ, 3, 0, S.NR.socket],
+    [JEQ, 2, 0, S.NR.socketpair],
+    [RET, 0, 0, S.RET_ALLOW],
+    [RET, 0, 0, S.RET_ERRNO | S.EPERM],
+    [LD_ABS, 0, 0, 16], // low 32 bits of args[0], the address family
+    [JEQ, 0, 1, S.AF_VSOCK],
+    [RET, 0, 0, S.RET_ERRNO | S.EAFNOSUPPORT],
+    [RET, 0, 0, S.RET_ALLOW],
+  ];
+  const buf = Buffer.alloc(program.length * 8);
+  program.forEach(([code, jt, jf, k], i) => {
+    buf.writeUInt16LE(code, i * 8);
+    buf.writeUInt8(jt, i * 8 + 2);
+    buf.writeUInt8(jf, i * 8 + 3);
+    buf.writeUInt32LE(k >>> 0, i * 8 + 4);
+  });
+  return buf;
+}
 
 export class LaunchError extends Error {
   constructor(code, message) {
@@ -70,9 +118,26 @@ export function validatePolicy(policy) {
   }
   if (overlaps(p.worker_root, p.assignment_root)) fail('worker_root and assignment_root must be disjoint');
 
+  // KTD23: revision 3 replaced the host network namespace with the filtered proxy; there is no fallback.
+  if (policy.policy_revision < 3) fail('policy_revision 3 or later is required');
+  const egressId = policy.egress_identity;
+  if (typeof egressId !== 'string' || !ID_PATTERN.test(egressId)) fail('egress_identity must be an identity name');
+  if (egressId === policy.control_identity || policy.worker_identities.includes(egressId) || policy.launch_callers.includes(egressId)) {
+    fail('egress_identity must differ from the control, launch-caller and worker identities');
+  }
+  if (!policy.forbidden_worker_groups?.includes(egressId)) fail('forbidden_worker_groups must include the egress identity');
+  // Also the systemd RuntimeDirectory name, so it must be one plain path segment.
+  // The lower-case pattern also keeps it off /run/WSL, whose interop sockets are world-writable.
+  if (typeof p.egress_socket_dir !== 'string' || !/^\/run\/[a-z0-9][a-z0-9-]{0,63}$/.test(p.egress_socket_dir)) {
+    fail('paths.egress_socket_dir must be /run/<name> with a lower-case name');
+  }
+  requireAbsolute(p.installed_egress, 'paths.installed_egress');
+  if (!isWithin(p.toolchain_dir, p.installed_egress)) fail('paths.installed_egress must be inside the toolchain directory');
+
   const s = policy.sandbox ?? {};
   for (const key of ['home', 'scratch', 'work', 'framework']) requireAbsolute(s[key], `sandbox.${key}`);
-  if (s.network !== 'host-shared') fail('sandbox.network must be host-shared for this policy revision');
+  if (s.network !== 'filtered-proxy') fail('sandbox.network must be filtered-proxy; sharing the host network namespace is not allowed');
+  if (!Number.isInteger(s.egress_port) || s.egress_port < 1024 || s.egress_port > 65535) fail('sandbox.egress_port must be an integer from 1024 to 65535');
   for (const masked of s.masked_paths ?? []) {
     requireAbsolute(masked, 'sandbox.masked_paths');
     if (!isWithin('/usr', masked)) fail('sandbox.masked_paths entries must be inside /usr');
@@ -90,7 +155,9 @@ export function validatePolicy(policy) {
   if (Object.keys(policy.roles ?? {}).length === 0) fail('roles must be non-empty');
 
   for (const key of policy.env_passthrough ?? []) {
-    if (!ENV_KEY_PATTERN.test(key) || key.startsWith('LD_') || ['HOME', 'PATH', 'USER', 'TMPDIR'].includes(key)) fail(`env_passthrough may not include ${key}`);
+    if (!ENV_KEY_PATTERN.test(key) || key.startsWith('LD_') || ['HOME', 'PATH', 'USER', 'TMPDIR'].includes(key) || PROXY_ENV_KEYS.includes(key)) {
+      fail(`env_passthrough may not include ${key}`);
+    }
   }
   for (const prefix of policy.allowed_exec_prefixes ?? []) {
     if (typeof prefix !== 'string' || !prefix.startsWith('/') || !prefix.endsWith('/')) fail('allowed_exec_prefixes entries must be absolute directories ending in /');
@@ -128,7 +195,8 @@ export function parseLaunchArgs(argv) {
 }
 
 // facts: { callerUid, lookupUser(name) -> {name, uid, gid, groups[]} | null,
-//          realpath(p) -> string, isDirectory(p) -> boolean, legacyTiocsti }
+//          realpath(p) -> string, isDirectory(p) -> boolean, legacyTiocsti,
+//          egressSocket -> {dirUid, dirMode, isSocket} | null }
 export function resolveLaunchRequest(policy, request, facts) {
   validatePolicy(policy);
 
@@ -182,6 +250,13 @@ export function resolveLaunchRequest(policy, request, facts) {
     throw new LaunchError('host-tiocsti-enabled', 'dev.tty.legacy_tiocsti must be 0 for interactive worker sessions');
   }
 
+  // Without the filter the sandbox would still have no network; fail now with a distinct code.
+  const egressUser = facts.lookupUser(policy.egress_identity);
+  const egress = facts.egressSocket;
+  if (!egressUser || !egress || !egress.isSocket || egress.dirUid !== egressUser.uid || (egress.dirMode & 0o022) !== 0) {
+    throw new LaunchError('egress-unavailable', 'the worker egress filter is not running under the egress identity');
+  }
+
   return {
     worker: { name: worker.name, uid: worker.uid, gid: worker.gid },
     role: request.role,
@@ -211,7 +286,11 @@ export function buildSandboxCommand(policy, resolved) {
     '--unshare-ipc',
     '--unshare-uts',
     '--unshare-cgroup-try',
-    '--share-net',
+    // KTD23: an empty network namespace (loopback only). Host loopback, LAN,
+    // overlay peers, DNS and abstract sockets are unreachable; the only way out
+    // is the egress filter's socket bound below.
+    '--unshare-net',
+    '--seccomp', String(SECCOMP_FD),
     '--die-with-parent',
     '--hostname', s.hostname,
   ];
@@ -219,12 +298,20 @@ export function buildSandboxCommand(policy, resolved) {
   if (!s.interactive_tty) args.push('--new-session');
 
   args.push('--clearenv');
+  const proxy = `http://127.0.0.1:${s.egress_port}`;
   const env = {
     HOME: s.home,
     PATH: s.path,
     USER: resolved.worker.name,
     TMPDIR: '/tmp',
     ...resolved.env,
+    // Clients differ in which spelling they read, so both are set.
+    HTTPS_PROXY: proxy,
+    HTTP_PROXY: proxy,
+    https_proxy: proxy,
+    http_proxy: proxy,
+    NO_PROXY: 'localhost,127.0.0.1,::1',
+    no_proxy: 'localhost,127.0.0.1,::1',
   };
   for (const [key, value] of Object.entries(env)) args.push('--setenv', key, value);
 
@@ -245,11 +332,15 @@ export function buildSandboxCommand(policy, resolved) {
     '--dev', '/dev',
     '--tmpfs', '/tmp',
     '--tmpfs', '/run',
+    // After the /run tmpfs, which would otherwise cover it.
+    '--ro-bind', p.egress_socket_dir, p.egress_socket_dir,
     '--dir', '/var/tmp',
     '--bind-fd', String(MOUNT_FD.home), s.home,
     '--bind-fd', String(MOUNT_FD.scratch), s.scratch,
     resolved.treeMode === 'rw' ? '--bind-fd' : '--ro-bind-fd', String(MOUNT_FD.tree), s.work,
     '--chdir', s.work,
+    '--',
+    `${p.toolchain_dir}/node/bin/node`, p.installed_egress, 'relay', String(s.egress_port), posix.join(p.egress_socket_dir, EGRESS_SOCKET_NAME),
     '--',
     ...resolved.command,
   );
@@ -285,11 +376,25 @@ function openVerifiedDirectory(expected, allowedParent) {
   return fd;
 }
 
+// The program is written to a root-only directory and unlinked before launch; bwrap
+// reads it from the descriptor. A leaked descriptor would show this /run path.
+function openSeccompProgram() {
+  const dir = mkdtempSync('/run/ma-seccomp-');
+  try {
+    const file = path.posix.join(dir, 'filter.bpf');
+    writeFileSync(file, buildSeccompFilter(), { mode: 0o400 });
+    return openSync(file, fsConstants.O_RDONLY);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function readEtcDatabase(file) {
   return readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => line.split(':'));
 }
 
-function hostFacts() {
+function hostFacts(policy) {
+  const policySocketDir = policy.paths.egress_socket_dir;
   const passwd = readEtcDatabase('/etc/passwd');
   const groups = readEtcDatabase('/etc/group');
   const lookupUser = (name) => {
@@ -312,6 +417,15 @@ function hostFacts() {
     realpath: (p) => realpathSync(p),
     isDirectory: (p) => statSync(p).isDirectory(),
     legacyTiocsti,
+    egressSocket: (() => {
+      try {
+        const dir = lstatSync(policySocketDir);
+        if (!dir.isDirectory()) return null;
+        return { dirUid: dir.uid, dirMode: dir.mode & 0o7777, isSocket: lstatSync(path.posix.join(policySocketDir, EGRESS_SOCKET_NAME)).isSocket() };
+      } catch {
+        return null;
+      }
+    })(),
   };
 }
 
@@ -324,9 +438,10 @@ function reportError(err) {
 export function main(argv = process.argv.slice(2)) {
   try {
     if (typeof process.getuid !== 'function' || process.getuid() !== 0) throw new LaunchError('launcher-not-root', 'launcher must run as root via sudo');
+    if (process.arch !== 'x64') throw new LaunchError('host-arch-unsupported', 'the seccomp program is defined for x86_64 only');
     assertSafeStdio(stdioKinds());
     const policy = validatePolicy(JSON.parse(readFileSync(INSTALLED_POLICY, 'utf8')));
-    const resolved = resolveLaunchRequest(policy, parseLaunchArgs(argv), hostFacts());
+    const resolved = resolveLaunchRequest(policy, parseLaunchArgs(argv), hostFacts(policy));
     const { file, args, mountSources } = buildSandboxCommand(policy, resolved);
     const workerDir = path.posix.join(policy.paths.worker_root, resolved.worker.name);
     const assignmentDir = path.posix.join(realpathSync(policy.paths.assignment_root), resolved.worker.name);
@@ -334,7 +449,8 @@ export function main(argv = process.argv.slice(2)) {
     fds[MOUNT_FD.home] = openVerifiedDirectory(mountSources.home, workerDir);
     fds[MOUNT_FD.scratch] = openVerifiedDirectory(mountSources.scratch, workerDir);
     fds[MOUNT_FD.tree] = openVerifiedDirectory(mountSources.tree, assignmentDir);
-    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', fds[3], fds[4], fds[5]], env: {} });
+    fds[SECCOMP_FD] = openSeccompProgram();
+    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', fds[3], fds[4], fds[5], fds[6]], env: {} });
     for (const fd of fds.slice(3)) closeSync(fd);
     for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT']) {
       process.on(signal, () => child.kill(signal));

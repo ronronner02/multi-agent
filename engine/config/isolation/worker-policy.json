@@ -1,7 +1,8 @@
 {
   "schema": "multi-agent-worker-policy/v1",
-  "policy_revision": 2,
+  "policy_revision": 3,
   "control_identity": "ma-control",
+  "egress_identity": "ma-egress",
   "launch_callers": [
     "ma-control"
   ],
@@ -19,7 +20,8 @@
     "docker",
     "lxd",
     "disk",
-    "ma-control"
+    "ma-control",
+    "ma-egress"
   ],
   "paths": {
     "state_root": "/var/lib/multi-agent",
@@ -29,7 +31,10 @@
     "toolchain_dir": "/opt/multi-agent/toolchain",
     "framework_dir": "/opt/multi-agent/framework",
     "installed_launcher": "/usr/local/libexec/multi-agent/worker-launch.mjs",
-    "installed_policy": "/etc/multi-agent/worker-policy.json"
+    "installed_policy": "/etc/multi-agent/worker-policy.json",
+    "installed_egress": "/opt/multi-agent/toolchain/egress/egress.mjs",
+    "installed_egress_config": "/etc/multi-agent/egress.json",
+    "egress_socket_dir": "/run/multi-agent-egress"
   },
   "sandbox": {
     "home": "/home/worker",
@@ -37,7 +42,8 @@
     "work": "/work",
     "framework": "/framework",
     "hostname": "ma-sandbox",
-    "network": "host-shared",
+    "network": "filtered-proxy",
+    "egress_port": 3128,
     "interactive_tty": true,
     "require_legacy_tiocsti_disabled": true,
     "path": "/opt/multi-agent/toolchain/clients/bin:/opt/multi-agent/toolchain/node/bin:/usr/bin",

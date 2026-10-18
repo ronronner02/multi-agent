@@ -29,7 +29,16 @@ The installed policy (`/etc/multi-agent/worker-policy.json`) and launcher are ro
 Known boundary properties:
 
 - **WSL interop is global.** `/run/WSL/*_interop` sockets are world-writable, and `/mnt/c` and `/mnt/d` are drvfs mounts readable by every local uid. Outside the sandbox, a worker uid could start Windows processes or read Windows files. The sandbox hides both paths, and the preflight harness proves that neither a mounted nor a copied Windows executable runs inside it. Never launch a worker outside the launcher.
-- **The worker network is currently shared with the host, and that is not an acceptable posture.** Policy revision 2 sets `sandbox.network: host-shared` because the native clients need outbound provider access. A sandboxed worker therefore reaches whatever the host reaches, and on a WSL host with `networkingMode=mirrored` that includes Windows `127.0.0.1` listeners and the host's overlay-network peers. KTD23 replaces this with a narrowed network: provider and dependency egress only, with host loopback, overlay peers, MagicDNS names, the local LAN and host abstract sockets unreachable. Until that policy revision is provisioned and its preflight passes, no managed launch may run. Control-plane services must in any case use authenticated loopback listeners or path-based unix sockets under the control state directory, and must never use abstract sockets.
+- **The worker network is its own, and the only way out is the egress filter (KTD23).** Policy revision 3 sets `sandbox.network: filtered-proxy`.
+  - Each sandbox gets an empty network namespace (`--unshare-net`) that holds only loopback. Windows `127.0.0.1` listeners under `networkingMode=mirrored`, the LAN, overlay-network peers, MagicDNS names and host abstract unix sockets are therefore unreachable. The sandbox has no name resolution of its own.
+  - Outbound traffic goes only through `multi-agent-egress.service`. It runs as the separate `ma-egress` identity and listens on `/run/multi-agent-egress/proxy.sock`, which the launcher binds read-only into each sandbox.
+  - Inside the sandbox, a relay exposes that socket as `HTTPS_PROXY=http://127.0.0.1:3128`, which the launcher sets and callers cannot override.
+  - The filter accepts only `CONNECT` to an exact `host:port` in `/etc/multi-agent/egress.json`. It refuses IP literals and names without a dot, and forwards through the owner's upstream proxy when one is configured.
+  - Without an upstream, it connects directly and refuses names that resolve to loopback, private, link-local, overlay or multicast addresses. With an upstream, the upstream resolves names, so the allow-list is the control.
+  - A network namespace does not cover `AF_VSOCK` (the Hyper-V channel to the Windows host), and `io_uring` can create sockets without `socket()`. The launcher therefore passes bubblewrap a seccomp program (`--seccomp`, x86_64 only): `socket`/`socketpair` with `AF_VSOCK` fail with `EAFNOSUPPORT`, and `io_uring_*`, x32 and foreign-architecture syscalls fail with `EPERM`. Everything else is allowed, and nested bubblewrap still works.
+  - If the filter is not running, the launcher refuses with `egress-unavailable`. Revision 3 has no fallback to the host namespace.
+  - The service keeps `/run/multi-agent-egress` across a stop or restart (`RuntimeDirectoryPreserve=yes`), so a running sandbox reconnects to the new socket. A restart cuts open tunnels within 5 seconds. With a literal-IP upstream, the service itself may reach only that address (`IPAddressDeny=any`, `IPAddressAllow=<upstream>`).
+  - Control-plane services must in any case use authenticated loopback listeners or path-based unix sockets under the control state directory, and must never use abstract sockets.
 - **Interactive panes rely on the kernel TIOCSTI restriction.** Interactive sessions keep the tmux pane as their controlling terminal. The launcher refuses to start one unless `dev.tty.legacy_tiocsti` is `0`.
 
 ## Host Provisioning
@@ -37,8 +46,12 @@ Known boundary properties:
 Owner-run and idempotent. It requires the owner's sudo password and network access to `nodejs.org` and `registry.npmjs.org`.
 
 ```bash
-sudo bash engine/config/isolation/provision-host.sh --preflight-owner "$USER"
+sudo bash engine/config/isolation/provision-host.sh --preflight-owner "$USER" \
+  --egress-upstream http://<owner-proxy-host>:<port>     # omit for direct egress
+  # --egress-allow <gateway-host>:443                    # repeat per extra provider gateway
 ```
+
+systemd must be PID 1 (`[boot] systemd=true` in `/etc/wsl.conf`). `--egress-upstream` and `--egress-allow` write the machine-local `/etc/multi-agent/egress.json` and never the repository. The public provider and registry endpoints are always allowed: `api.anthropic.com`, `api.openai.com`, `chatgpt.com` and `registry.npmjs.org`, all on 443. A re-run without these flags keeps the installed upstream and extra entries. A custom gateway that a client is configured to use must be added with `--egress-allow`, or that client's requests are refused.
 
 It installs:
 
@@ -47,6 +60,7 @@ It installs:
 - `@anthropic-ai/claude-code@2.1.296` and `@openai/codex@0.160.0` into `/opt/multi-agent/toolchain/clients`. npm lifecycle scripts are disabled. The only shipped lifecycle script, Claude Code's `install.cjs`, was audited (it copies the bundled platform binary locally) and is run explicitly. Codex ships no lifecycle scripts.
 - The `ma-control` and `ma-worker*` identities, and `/var/lib/multi-agent/{control,workers,assignments}` with the modes listed above. Assignment directories are `<worker>:ma-control 2770`, with default ACLs so control can stage trees that the worker can edit.
 - The launcher, its `/bin/sh` wrapper (which clears the environment except `SUDO_UID`) and the policy, all root-owned.
+- The worker egress filter: `/opt/multi-agent/toolchain/egress/egress.mjs` (root-owned, inside the toolchain the sandbox already mounts) and `/etc/multi-agent/egress.json` (root-owned, `0644`; it holds no credentials). They are run by `multi-agent-egress.service` as the `ma-egress` system identity. That identity is in `forbidden_worker_groups`, has no shell or home, and runs with `NoNewPrivileges`, an empty capability set and `ProtectSystem=strict`.
 - `/etc/sudoers.d/multi-agent-launcher`: `ma-control ALL=(root) NOPASSWD: /usr/local/libexec/multi-agent/worker-launch`.
 - With `--preflight-owner`: `/etc/sudoers.d/multi-agent-preflight`, which lets that login act as the control and worker identities without a password so the harness can stage control-owned sentinels. **Remove it after preflight:**
 
@@ -79,15 +93,40 @@ The host run stages control-owned sentinels in a fresh `/var/lib/multi-agent/con
 - that ownership still denies access outside the sandbox, and that workers cannot invoke the launcher;
 - that the launcher rejects control identity, out-of-assignment trees, symlink escapes, disallowed environment, Windows commands and a directory on stdin with distinct codes;
 - that both native clients start, that nested bubblewrap (the Claude Code sandbox mechanism) and `socat` work inside the boundary, and that the Codex native sandbox still enforces its profiles: `:read-only` write denied, `:workspace` write allowed, writes outside the workspace and network denied. Each case checks the resulting filesystem state, and the network case first proves the same request succeeds outside the Codex sandbox;
-- that a Windows process reaches a WSL listener bound to `127.0.0.1`, and that the listener is not bound to other interfaces.
+- that a Windows process reaches a WSL listener bound to `127.0.0.1`, and that the listener is not bound to other interfaces;
+- that the egress filter is active as `ma-egress`, matches the reviewed `egress.mjs`, and that its profile fingerprint (the SHA-256 of `egress.json`) is recorded. A changed allow-list or upstream is a new profile;
+- KTD23 reachability, enumerated from inside the sandbox:
+  - the sandbox network namespace differs from the host's;
+  - a scan of every loopback port finds only the egress relay;
+  - a live owner loopback listener, every non-loopback host address, the default gateway, the resolver and the overlay resolver `100.100.100.100` are unreachable on ports 22, 53 and 443;
+  - name resolution fails, and no host abstract socket is visible, although the host shows some;
+  - through the filter, an allowed registry request succeeds (`CONNECT` 200), while an unlisted host and an IP literal are refused by the filter itself (`CONNECT` 403);
+  - `AF_VSOCK` socket creation fails inside (`EAFNOSUPPORT`) and works on the host, which is the positive control; `io_uring_setup` fails inside;
+  - across the whole sandbox filesystem, the only connectable path socket is the egress socket, and the seccomp descriptor does not reach the worker;
+  - the receipt records the host networking mode (`wslinfo --networking-mode`), so a later mode change visibly voids it.
 
 Missing tools, identities, launcher installation, kernel capability or preflight access fail every host check with a distinct `blocked by prerequisites:` code. Fix the prerequisite; never weaken the policy. A redacted receipt (facts, installed hashes and probe outcomes, but no sentinel contents) is written to `${XDG_STATE_HOME:-~/.local/state}/multi-agent/preflight/<run>.json`, outside the repository.
 
-### Recorded Result (2026-10-13)
+### Recorded Result (2026-10-18, policy revision 3)
+
+The host preflight passed 46/46 checks under `networkingMode=mirrored` (recorded in the receipt as `host_networking_mode`) against policy revision 3, with no prerequisite or fixture blockers. The receipt is `preflight-7d304b13.json`, recorded at 2026-10-18T02:32:45Z. A receipt is valid only for the host networking, the policy revision and the egress profile it was taken under. Re-run the preflight after any of them changes.
+
+| Fact | Value |
+| --- | --- |
+| OS / toolchain / clients | Ubuntu 26.04.1 LTS, `6.18.33.2-microsoft-standard-WSL2`; Node.js `v24.21.0`, bubblewrap 0.11.1; Claude Code `2.1.296`, Codex CLI `0.160.0` |
+| Egress filter | `multi-agent-egress.service` is active as `ma-egress`. The installed `egress.mjs` matches the source. An upstream proxy is configured. The allow-list is `api.anthropic.com:443`, `api.openai.com:443`, `chatgpt.com:443` and `registry.npmjs.org:443`. The profile fingerprint is `sha256:baf85cd58c3ac8fd3c7572d9ba574037c879ff864917f8d0ac017275e2e33649`. |
+| Network namespace | The sandbox namespace `net:[4026532311]` differs from the host namespace `net:[4026531833]`. |
+| Host channels outside the namespace | `AF_VSOCK` socket creation returns `EAFNOSUPPORT` and `io_uring_setup` returns `EPERM` inside the sandbox; both succeed on the host (positive control). Across the whole sandbox filesystem the only connectable path socket is `/run/multi-agent-egress/proxy.sock`. |
+| Reachable set inside the sandbox | A full loopback scan finds only the egress relay, `127.0.0.1:3128`. None of the 25 probed host targets connects: a live owner loopback listener, plus ports 22, 53 and 443 on every IPv4 and global IPv6 host address, the gateway, the resolver and `100.100.100.100`. Name resolution fails with `EAI_AGAIN`. Abstract sockets: 7 visible on the host, 0 in the sandbox. |
+| Egress controls | `registry.npmjs.org` returns `CONNECT 200` with an HTTP 200. `example.com` and the IP literal `1.1.1.1` are each refused by the filter with `CONNECT 403`. The Codex `:workspace` network denial is now proven: its positive control succeeds through the filter. |
+
+Before revision 3 was provisioned, an earlier probe on the same day under revision 2 found the sandbox reaching the Windows proxy, the proxy controller, the remote-desktop listener and two tailnet peers. Revision 3 closes that.
+
+### Recorded Result (2026-10-13, superseded)
 
 The host preflight passed 29/29 checks against policy revision 2, with no prerequisite or fixture blockers. The receipt is `preflight-8a55c69d.json`.
 
-**This receipt is stale for the current host and must not be cited as current evidence.** It was taken on 2026-10-13 under WSL2 NAT networking. On 2026-10-16 the host was switched to `networkingMode=mirrored`, which changes what a sandboxed process can reach, and the receipt's only loopback check ran in the Windows-to-WSL direction. A receipt is valid only for the host networking and policy revision it was taken under; re-run the preflight before the next managed launch.
+**This receipt is superseded and must not be cited as current evidence.** It was taken under WSL2 NAT networking and policy revision 2 (`host-shared`). Its only loopback check ran in the Windows-to-WSL direction.
 
 | Fact | Value |
 | --- | --- |
