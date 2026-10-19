@@ -4,13 +4,14 @@ import { canonicalJson, parseAssignment, parsePlanBinding, text, type PlanBindin
 import { hashBinding, hashBytes } from "../../domain/plan-governance.js";
 import { FRAMEWORK_PIN } from "./catalog.js";
 
-export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run"; readOnly: true; source?: string }
+export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy"; readOnly: true; source?: string }
 export interface ContextMountPolicy {
   policy_revision: number; worker_identities: string[];
   paths: { context_root: string; framework_dir: string };
   sandbox: { context: string; framework: string };
 }
 export interface ContextInput {
+  nativePolicy?: ManagedNativePolicy;
   projection: { worker: string; attemptId: string; controlUid: number; workerGid: number; policy: ContextMountPolicy };
   runId: string; assignment: ScopedAssignment; outputs: string[]; permissions: string[]; role: TeamRole; client: "claude-code" | "codex"; binding: PlanBinding;
   root: string; mutableStateRoot: string; frameworkRoot: string; frameworkRevision: string;
@@ -69,9 +70,48 @@ function privateProjection(input: ContextInput): void {
   }
 }
 
+
+function nativePolicyContextFiles(input: ContextInput): ContextFile[] {
+  const policy = input.nativePolicy;
+  if (!policy) {
+    if (input.projection.policy.policy_revision >= 5) throw new Error("Managed native policy is required");
+    return [];
+  }
+  const { digest, ...body } = policy;
+  const fixedSource = input.client === "codex" ? "/etc/codex/requirements.toml" : "/etc/claude-code/managed-settings.json";
+  const source = input.client === "codex" ? "/context/native/codex/requirements.toml" : "/context/native/claude/managed-settings.json";
+  const required = ["/context/native/managed-native-channel-relay.cjs", source,
+    ...(input.client === "codex" ? ["/context/native/codex/hooks/hooks.json"] : [])];
+  if (policy.client !== input.client || digest !== hashBytes(canonicalJson(body)) || policy.selectedSource !== fixedSource
+    || canonicalJson(policy.aliases) !== canonicalJson([{ source, target: fixedSource }])
+    || canonicalJson(policy.files.map(f => f.workerPath).sort()) !== canonicalJson(required.sort())) {
+    throw new Error("Invalid native policy identity or source paths");
+  }
+  return policy.files.map(file => {
+    if (file.hash !== hashBytes(file.content)) throw new Error("Changed native policy bytes");
+    return { path: resolve(input.root, relative("/context", file.workerPath)), hash: file.hash, kind: "native-policy", readOnly: true };
+  });
+}
+
 /** Create an attempt once; failed or cancelled projections remain with the run evidence. */
 export function projectContext(input: ContextInput, contents: ReadonlyMap<string, string | Uint8Array>): ContextManifest {
   if (input.root !== projectionRoot(input)) throw new Error("Context projection path mismatch");
+  const nativeFiles = nativePolicyContextFiles(input);
+  const providedNative = input.files.filter(f => f.kind === "native-policy");
+  if (new Set(providedNative.map(f => f.path)).size !== providedNative.length
+    || providedNative.some(f => !nativeFiles.some(expected => expected.path === f.path && expected.hash === f.hash && f.readOnly === true && f.source === undefined))
+    || input.files.some(f => f.kind !== "native-policy" && nativeFiles.some(expected => expected.path === f.path))) {
+    throw new Error("Invalid native policy projection descriptors");
+  }
+  if (nativeFiles.length) {
+    const expanded = new Map(contents);
+    nativeFiles.forEach((file, index) => {
+      if (expanded.has(file.path) && hashBytes(expanded.get(file.path)!) !== file.hash) throw new Error("Changed native policy projection bytes");
+      expanded.set(file.path, input.nativePolicy!.files[index]!.content);
+    });
+    input = { ...input, files: [...input.files.filter(f => f.kind !== "native-policy"), ...nativeFiles] };
+    contents = expanded;
+  }
   const projected = input.files.filter(f => within(input.root, f.path));
   if (projected.some(f => f.path === input.root)) throw new Error("Context files must be strict descendants of the projection root");
   if (contents.size !== projected.length || projected.some(f => !contents.has(f.path) || hashBytes(contents.get(f.path)!) !== f.hash)) {
@@ -122,6 +162,11 @@ function locked(path: string, input: ContextInput): void {
 }
 export function createContextManifest(input: ContextInput): ContextManifest {
   const spec = structuredClone(input); spec.binding = parsePlanBinding(spec.binding); spec.assignment = parseAssignment(spec.assignment);
+  const nativeFiles = nativePolicyContextFiles(spec);
+  const sortedNative = (files: ContextFile[]) => files.map(f => ({ path: f.path, hash: f.hash })).sort((a, b) => a.path.localeCompare(b.path));
+  if (canonicalJson(sortedNative(spec.files.filter(f => f.kind === "native-policy"))) !== canonicalJson(sortedNative(nativeFiles))) {
+    throw new Error("Missing or changed native policy projection");
+  }
   text(spec.runId, "runId");
   if (spec.root !== projectionRoot(spec) || spec.frameworkRoot !== spec.projection.policy.paths.framework_dir) throw new Error("Context projection path mismatch");
   if (!spec.binding.roles.includes(spec.role) || spec.assignment.role !== spec.role || !["claude-code", "codex"].includes(spec.client) || spec.frameworkRevision !== FRAMEWORK_PIN.revision) throw new Error("Context role, client or framework mismatch");
@@ -135,7 +180,7 @@ export function createContextManifest(input: ContextInput): ContextManifest {
   const kinds = spec.files.map(f => f.kind);
   if (!["framework", "role", "plan"].every(k => kinds.includes(k as ContextFile["kind"])) || new Set(spec.files.map(f => f.path)).size !== spec.files.length) throw new Error("Missing or duplicate context files");
   for (const f of spec.files) {
-    if (!["framework", "role", "plan", "protocol", "roster", "run"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
+    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
     workerContextPath(spec.projection.policy, spec.root, f.path);
     if (within(spec.root, f.path)) {
       const s = lstatSync(f.path);
@@ -168,4 +213,83 @@ export function verifyEffectiveContext(manifest: ContextManifest, observed: Cont
   const files = (items: ContextObservation["files"]) => [...items].sort((a, b) => a.path.localeCompare(b.path));
   if (canonicalJson([...observed.discoveryRoots].sort()) !== canonicalJson([...manifest.workerDiscoveryRoots].sort()) || canonicalJson(files(observed.files)) !== canonicalJson(files(manifest.files.map(({ workerPath, hash }) => ({ path: workerPath, hash }))))) throw new Error("Unexpected or unobserved instruction source");
   return hashBytes(canonicalJson(observed));
+}
+
+export interface ManagedNativePolicy {
+  client: ContextInput["client"];
+  selectedSource: string;
+  relayCommand: string;
+  hookDigest: string;
+  files: { workerPath: string; content: string; hash: string }[];
+  aliases: { source: string; target: string }[];
+  digest: string;
+}
+export interface ManagedNativePolicyObservation {
+  files: { path: string; hash: string }[];
+  aliases: { path: string; hash: string }[];
+  /** Supplied by the control observer after inventory, never inferred from expected configuration. */
+  inventory: {
+    selectedSource: string | null;
+    managedDropIns: "absent" | "present" | "unknown";
+    remotePolicy: "absent" | "present" | "unknown";
+    platformPolicy: "not-applicable" | "present" | "unknown";
+    nativeExceptions: "absent" | "present" | "unknown";
+  };
+}
+
+/** Build only immutable policy bytes. Provider sign-in and writable native state stay in the worker home. */
+export async function buildManagedNativePolicy(client: ContextInput["client"], toolchainDir: string): Promise<ManagedNativePolicy> {
+  if (!isAbsolute(toolchainDir) || resolve(toolchainDir) !== toolchainDir || toolchainDir === "/"
+    || /[^A-Za-z0-9._/-]/.test(toolchainDir)) throw new Error("Invalid native policy toolchain path");
+  if (client !== "claude-code" && client !== "codex") throw new Error("Invalid native policy client");
+  const relayPath = "/context/native/managed-native-channel-relay.cjs";
+  const relayCommand = '"' + toolchainDir + '/node/bin/node" "' + relayPath + '"';
+  const files = [{ workerPath: relayPath,
+    content: readFileSync(new URL("../../../assets/managed-native-channel-relay.cjs", import.meta.url), "utf8") }];
+  const aliases: ManagedNativePolicy["aliases"] = [];
+  let selectedSource: string, hookDigest: string | null;
+  if (client === "claude-code") {
+    const { upsertClaudeNativeChannelHook, claudeNativeChannelDigest } = await import("../../adapters/claude-code-adapter.js");
+    const content = upsertClaudeNativeChannelHook('{"allowManagedHooksOnly":true,"disableAllHooks":false}', relayCommand);
+    const workerPath = "/context/native/claude/managed-settings.json";
+    selectedSource = "/etc/claude-code/managed-settings.json";
+    files.push({ workerPath, content }); aliases.push({ source: workerPath, target: selectedSource });
+    hookDigest = claudeNativeChannelDigest([content], relayCommand);
+  } else {
+    const { upsertCodexNativeChannelHook, codexNativeChannelDigest } = await import("../../adapters/codex-runtime-adapter.js");
+    const { parse, stringify } = await import("smol-toml");
+    const hooksPath = "/context/native/codex/hooks/hooks.json";
+    const installed = parse(upsertCodexNativeChannelHook("", relayCommand, hooksPath));
+    const hooks = { PostToolUse: (installed.hooks as { PostToolUse: unknown }).PostToolUse };
+    // Managed JSON hooks are trusted by their immutable source, not a mutable user trust table.
+    files.push({ workerPath: hooksPath, content: JSON.stringify({ hooks }, null, 2) + "\n" });
+    const workerPath = "/context/native/codex/requirements.toml";
+    selectedSource = "/etc/codex/requirements.toml";
+    files.push({ workerPath, content: 'allow_managed_hooks_only = true\n[features]\nhooks = true\n[hooks]\nmanaged_dir = "/context/native/codex/hooks"\n' });
+    aliases.push({ source: workerPath, target: selectedSource });
+    hookDigest = codexNativeChannelDigest(stringify({ features: { hooks: true }, hooks }), relayCommand);
+  }
+  if (!hookDigest) throw new Error("Invalid native policy hook configuration");
+  const body = { client, selectedSource, relayCommand, hookDigest, aliases,
+    files: files.map(file => ({ ...file, hash: hashBytes(file.content) })) };
+  return immutable({ ...body, digest: hashBytes(canonicalJson(body)) });
+}
+
+/** Compare actual fixed aliases, handlers and source-selection facts; this function does not observe a process. */
+export function verifyEffectiveNativePolicy(policy: ManagedNativePolicy, observed: ManagedNativePolicyObservation): string {
+  const { digest, ...body } = policy;
+  const inventory: ManagedNativePolicyObservation["inventory"] = { selectedSource: policy.selectedSource,
+    managedDropIns: "absent", remotePolicy: "absent", platformPolicy: "not-applicable", nativeExceptions: "absent" };
+  const files = policy.files.map(f => ({ path: f.workerPath, hash: hashBytes(f.content) }));
+  const aliases = policy.aliases.map(alias => ({ path: alias.target, hash: files.find(f => f.path === alias.source)?.hash }));
+  const sorted = <T extends { path: string }>(items: T[]) => [...items].sort((a, b) => a.path.localeCompare(b.path));
+  if (digest !== hashBytes(canonicalJson(body)) || policy.files.some(f => f.hash !== hashBytes(f.content))
+    || Object.keys(observed.inventory ?? {}).length !== Object.keys(inventory).length
+    || Object.entries(inventory).some(([key, value]) => observed.inventory?.[key as keyof typeof inventory] !== value)
+    || canonicalJson(sorted(observed.files)) !== canonicalJson(sorted(files))
+    || canonicalJson(sorted(observed.aliases)) !== canonicalJson(sorted(aliases))) {
+    throw new Error("Unobserved or altered effective native policy");
+  }
+  return hashBytes(canonicalJson({ policyDigest: digest, inventory: observed.inventory,
+    files: sorted(observed.files), aliases: sorted(observed.aliases) }));
 }

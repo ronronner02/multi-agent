@@ -105,6 +105,8 @@ export interface NativeChannelSeatState {
 export type NativeChannelStateReader = (recipient: string) => NativeChannelSeatState | null;
 
 export interface NativeChannelDeliveryRequest extends MailboxScope {
+  /** Supplied by the control-owned endpoint registration, never by hook input. */
+  deliveryGeneration?: string;
   /** Messages the client took from an earlier boundary's hook output. */
   acknowledgedMessageIds?: readonly string[];
   consumedBy: string;
@@ -146,8 +148,8 @@ export function formatNativeChannelContext(messages: readonly MailboxMessage[]):
   return `${NATIVE_CHANNEL_PREAMBLE}\n${JSON.stringify(data)}`;
 }
 
-function channelScopeKey(scope: MailboxScope): string {
-  return JSON.stringify([scope.rigId, scope.recipient, scope.taskId, scope.runId, scope.capability]);
+function channelScopeKey(scope: MailboxScope, generation?: string): string {
+  return JSON.stringify([scope.rigId, scope.recipient, scope.taskId, scope.runId, scope.capability, generation ?? null]);
 }
 
 export class MailboxDeliveryError extends Error {
@@ -322,6 +324,15 @@ export class MailboxDelivery {
     }
   }
 
+  /** Endpoint retirement discards handout rights, not durable messages or receipts. */
+  invalidateNativeChannel(scope: Pick<MailboxScope, "rigId" | "recipient" | "taskId" | "runId">): void {
+    const expected = [scope.rigId, scope.recipient, scope.taskId, scope.runId].map(value => value.trim());
+    for (const key of this.channelHandouts.keys()) {
+      const values = JSON.parse(key) as unknown[];
+      if (expected.every((value, index) => values[index] === value)) this.channelHandouts.delete(key);
+    }
+  }
+
   /**
    * KTD19 delivery at a native tool boundary. Messages handed to one boundary's
    * hook output are consumed only when a later boundary acknowledges them, so a
@@ -332,7 +343,8 @@ export class MailboxDelivery {
     const scope = normalizeScope(input);
     const consumedBy = requiredText(input.consumedBy, "consumedBy");
     const limit = normalizeLimit(input.limit);
-    const key = channelScopeKey(scope);
+    const key = channelScopeKey(scope, input.deliveryGeneration === undefined
+      ? undefined : requiredText(input.deliveryGeneration, "deliveryGeneration"));
     const handedOut = this.channelHandouts.get(key) ?? new Set<string>();
     const receipts: MailboxConsumptionReceipt[] = [];
     // Only ids this daemon handed to this exact scope can be acknowledged, so a

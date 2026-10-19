@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { canonicalJson, parseAttemptIdentity, type NativeAttemptIdentity } from "../contracts/team-control.js";
 import type { AssignmentInput } from "../domain/team-assignment.js";
 import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
-import type { ContextMountPolicy, ContextObservation } from "../integrations/framework/context-manifest.js";
+import type { ContextMountPolicy, ContextObservation, ManagedNativePolicy, ManagedNativePolicyObservation } from "../integrations/framework/context-manifest.js";
+import type { WorkerMailboxBridge } from "./worker-mailbox-bridge.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, NodeBinding, ReadinessResult } from "../domain/runtime-adapter.js";
 import type { ResumeResult } from "./claude-resume.js";
 
@@ -64,7 +66,7 @@ export interface WorkerBoundary {
 export interface WorkerLaunchPreflight {
   assignment: AssignmentInput;
   worker: { name: string; uid: number; gid: number; groups: number[]; home: string; scratch: string; tree: string };
-  control: { uid: number; mountNamespace: string; userNamespace: string };
+  control: { uid: number; gid?: number; mountNamespace: string; userNamespace: string };
   executable: string;
   executableVersion: string;
   generation: number;
@@ -74,6 +76,8 @@ export interface WorkerLaunchPreflight {
   installedPolicy: WorkerLaunchPolicy;
   network: WorkerNetworkPolicy;
   provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string };
+  nativePolicy?: ManagedNativePolicy;
+  mailbox?: ReturnType<WorkerMailboxBridge["endpoint"]>;
   previous?: ManagedSessionReceipt;
   /** Secret values are used only for output redaction, never copied to receipts or argv. */
   credentialValues: string[];
@@ -100,6 +104,8 @@ export interface WorkerObservation {
   processGroupId: number;
   boundary: WorkerBoundary;
   context: ContextObservation;
+  nativePolicy?: ManagedNativePolicyObservation;
+  mailbox?: Pick<NonNullable<WorkerLaunchPreflight["mailbox"]>, "uid" | "gid" | "dev" | "ino">;
   /** Observed at exec by the control transport, rather than read from pane text. */
   nativeArgv: string[];
   sessionSource: "exec" | "process_session_file";
@@ -131,6 +137,7 @@ export interface WorkerLaunchEvent {
   quiescence?: WorkerQuiescenceReceipt;
   session?: ManagedSessionReceipt;
   network?: WorkerNetworkPolicy;
+  nativePolicy?: { installedDigest: string; observedDigest: string };
   output?: { text: string; truncated: boolean; evidenceRef: string };
 }
 /**
@@ -161,6 +168,7 @@ type LaunchState = {
   startRequested?: boolean;
   processGroupId?: number;
   receipt?: ManagedSessionReceipt;
+  nativePolicy?: WorkerLaunchEvent["nativePolicy"];
   blocked?: string;
   blockCause?: string;
   blocking?: Promise<void>;
@@ -179,8 +187,9 @@ const configHome = (client: WorkerClient) => "/home/worker/" + (client === "code
 /** Provisioned beside the pinned client; it keeps tools in the standard Responses request (see provision-host.sh). */
 export const codexModelCatalog = (toolchainDir: string) => toolchainDir + "/clients/codex-model-catalog.json";
 export interface WorkerLaunchPolicy extends ContextMountPolicy {
-  paths: ContextMountPolicy["paths"] & { toolchain_dir: string; egress_socket_dir: string };
-  sandbox: ContextMountPolicy["sandbox"] & { network: string; etc_ro_binds: string[]; masked_paths: string[] };
+  paths: ContextMountPolicy["paths"] & { toolchain_dir: string; egress_socket_dir: string; control_state_dir?: string; mailbox_root?: string };
+  sandbox: ContextMountPolicy["sandbox"] & { network: string; etc_ro_binds: string[]; masked_paths: string[];
+    mailbox?: string; native_policy_mounts?: Record<WorkerClient, { source: string; target: string }> };
 }
 const reference = (value: string) => /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,255}$/.test(value);
 
@@ -226,6 +235,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       const policy = preflight.installedPolicy;
       const network = this.networkPolicy(preflight);
       this.checkContextProjection(attempt, preflight);
+      await this.checkNativePreflight(attempt, preflight);
       const prepared = await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
       requireFact(prepared.context.generatedHash === attempt.context.generatedHash, "managed_context_mismatch");
       requireFact(preflight.worker.uid !== preflight.control.uid && preflight.worker.uid > 0
@@ -265,7 +275,8 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       const command: WorkerCommand = state.command = immutable({
         file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
-          "--run", attempt.context.runId, "--attempt", attempt.attemptId, "--", ...nativeArgv],
+          "--run", attempt.context.runId, "--attempt", attempt.attemptId,
+          ...(policy.policy_revision >= 5 ? ["--mailbox", `${preflight.mailbox!.dev}:${preflight.mailbox!.ino}`] : []), "--", ...nativeArgv],
         nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
       });
       await this.record(state, { phase: "prepared" });
@@ -368,6 +379,26 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       && projection.policy.sandbox.framework === policy.sandbox.framework, "managed_context_mount_policy_mismatch");
   }
 
+  private async checkNativePreflight(attempt: ManagedAttempt, p: WorkerLaunchPreflight): Promise<void> {
+    const policy = p.installedPolicy;
+    if (policy.policy_revision < 5) return;
+    const expected = await this.context!.buildManagedNativePolicy(attempt.context.client, policy.paths.toolchain_dir);
+    requireFact(p.nativePolicy && same(p.nativePolicy, expected) && same(attempt.context.nativePolicy, expected),
+      "managed_native_policy_mismatch");
+    const mount = policy.sandbox.native_policy_mounts?.[attempt.context.client];
+    requireFact(mount && same(expected.aliases, [{ source: policy.sandbox.context + "/" + mount.source, target: mount.target }]),
+      "managed_native_policy_mount_mismatch");
+    const root = policy.paths.control_state_dir, mailboxRoot = policy.paths.mailbox_root, mailbox = p.mailbox;
+    requireFact(root && root !== "/" && resolve(root) === root && mailboxRoot === root + "/mailboxes"
+      && policy.sandbox.mailbox === "/run/multi-agent/mailbox.sock", "managed_mailbox_policy_mismatch");
+    requireFact(mailbox && mailbox.path === mailboxRoot + "/" + p.worker.name + "/" + attempt.context.runId + "/" + attempt.attemptId + "/mailbox.sock"
+      && Number.isSafeInteger(p.control.uid) && p.control.uid >= 0 && Number.isSafeInteger(p.control.gid) && p.control.gid! >= 0
+      && mailbox.uid === p.control.uid && mailbox.gid === p.control.gid
+      && Number.isSafeInteger(mailbox.dev) && mailbox.dev >= 0 && Number.isSafeInteger(mailbox.ino) && mailbox.ino > 0
+      && typeof mailbox.generation === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(mailbox.generation),
+    "managed_mailbox_identity_mismatch");
+  }
+
   private networkPolicy(preflight: WorkerLaunchPreflight) {
     const network = preflight.network;
     requireFact(network && network.mode === "filtered-proxy" && preflight.installedPolicy.sandbox.network === "filtered-proxy"
@@ -378,7 +409,8 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
 
   private verifyObservation(state: LaunchState, observed: WorkerObservation): ManagedSessionReceipt {
     const { attempt, client, resumeToken } = state.input, p = state.preflight!, command = state.command!, policy = p.installedPolicy;
-    const { immutable, verifyEffectiveContext } = this.context!;
+    const { immutable, verifyEffectiveContext, verifyEffectiveNativePolicy } = this.context!;
+    state.nativePolicy = undefined;
     this.checkDeadline(attempt);
     const identity = parseAttemptIdentity(observed.identity), b = observed.boundary;
     const network = this.networkPolicy(p);
@@ -403,6 +435,15 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       { source: attempt.context.root, target: policy.sandbox.context, access: "ro" },
       { source: policy.paths.egress_socket_dir, target: policy.paths.egress_socket_dir, access: "ro" },
     ];
+    if (policy.policy_revision >= 5) expected.push(
+      { source: p.mailbox!.path, target: policy.sandbox.mailbox!, access: "ro" },
+      { source: "tmpfs", target: dirname(policy.sandbox.mailbox!), access: "ro" },
+      { source: "tmpfs", target: dirname(p.nativePolicy!.selectedSource), access: "ro" },
+      { source: "tmpfs", target: "/home/worker/.multi-agent/mailbox", access: "rw" },
+      { source: "tmpfs", target: "/home/worker/.multi-agent/mailbox/bootstrap.json", access: "ro" },
+      ...p.nativePolicy!.aliases.map(alias => ({ source: attempt.context.files.find(file => file.workerPath === alias.source)!.path,
+        target: alias.target, access: "ro" as const })),
+    );
     for (const mount of expected) requireFact(b.mounts.filter(m => m.target === mount.target).length === 1
       && b.mounts.some(m => same(m, mount)), "managed_worker_mount_mismatch");
     const hostReadOnly = ["/usr", policy.paths.toolchain_dir, ...policy.sandbox.etc_ro_binds];
@@ -418,6 +459,16 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       discoveryRoots: [...observed.context.discoveryRoots].sort(),
       files: [...observed.context.files].sort((a, b) => a.path.localeCompare(b.path)),
     });
+    let nativePolicy: WorkerLaunchEvent["nativePolicy"];
+    if (policy.policy_revision >= 5) {
+      const endpoint = p.mailbox!;
+      requireFact(observed.mailbox && same(observed.mailbox, { uid: endpoint.uid, gid: endpoint.gid, dev: endpoint.dev, ino: endpoint.ino }),
+        "managed_mailbox_identity_mismatch");
+      requireFact(observed.nativePolicy, "managed_native_policy_unobserved");
+      try {
+        nativePolicy = { installedDigest: p.nativePolicy!.digest, observedDigest: verifyEffectiveNativePolicy(p.nativePolicy!, observed.nativePolicy) };
+      } catch { throw new WorkerLaunchFault("managed_native_policy_mismatch"); }
+    }
     if (client === "claude-code") requireFact(observed.effectiveMode.permissionMode === "bypassPermissions"
       && identity.nativeSessionId === (resumeToken ?? command.nativeArgv[command.nativeArgv.indexOf("--session-id") + 1]), "managed_launch_mode_mismatch");
     else requireFact(observed.effectiveMode.approvalPolicy === "never" && observed.effectiveMode.sandbox === "danger-full-access"
@@ -427,6 +478,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
     requireFact(observed.readiness !== "prompt" && !/(?:gate|login|auth|selection_prompt)/.test(probe.code)
       && !/permission required|approve this|allow this (?:command|tool)|requires? approval/i.test(observed.screen), "managed_native_prompt");
     requireFact(observed.readiness === "ready" && probe.status === "resumed", "managed_readiness_unknown");
+    state.nativePolicy = nativePolicy;
     return immutable({ identity, attemptId: attempt.attemptId, runId: attempt.context.runId, client,
       contextHash: attempt.context.generatedHash, observedContextHash, workerUid: b.uid, deadline: attempt.deadline,
       processGroupId: observed.processGroupId, executableVersion: p.executableVersion,
@@ -435,6 +487,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
 
   private async record(state: LaunchState, event: Pick<WorkerLaunchEvent, "phase" | "code" | "causeCode" | "quiescence" | "session" | "output">): Promise<void> {
     await this.control.record(this.context!.immutable({ ...event,
+      ...(state.nativePolicy ? { nativePolicy: state.nativePolicy } : {}),
       ...(state.command ? { network: state.command.network } : {}), attemptId: state.input.attempt.attemptId,
       deadline: state.input.attempt.deadline, contextHash: state.input.attempt.context?.generatedHash ?? "unverified" }));
   }

@@ -1,11 +1,11 @@
 import { afterEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, chownSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, chownSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { prepareTeamAssignment } from "../src/domain/team-assignment.js";
 import { hashBytes } from "../src/domain/plan-governance.js";
-import { createContextManifest, projectContext, verifyEffectiveContext, workerContextPath, roleConfiguration, leadProtocol, type ContextInput } from "../src/integrations/framework/context-manifest.js";
+import { buildManagedNativePolicy, createContextManifest, projectContext, verifyEffectiveContext, workerContextPath, roleConfiguration, leadProtocol, type ContextInput } from "../src/integrations/framework/context-manifest.js";
 import { canonicalJson } from "../src/contracts/team-control.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 const roots: string[] = [];
@@ -156,4 +156,70 @@ it("rejects a projected file at the projection root before walking ancestors", (
   const source = input.files[0]!;
   input.files = [{ ...source, path: input.root }];
   expect(() => projectContext(input, new Map([[input.root, readFileSync(source.path)]]))).toThrow(/strict descendants/);
+});
+
+it.each(["claude-code", "codex"] as const)("projects immutable %s native policy through the context prefix only", async client => {
+  const { input } = fixture();
+  input.client = client;
+  const policy = await buildManagedNativePolicy(client, "/opt/multi-agent/toolchain");
+  const root = join(dirname(input.root), "native-attempt");
+  const files = input.files.map(f => ({ ...f, path: join(root, f.kind) }));
+  const next: ContextInput = { ...input, root, files, nativePolicy: policy, discoveryRoots: [root],
+    binding: { ...input.binding, policyRevision: 5 },
+    projection: { ...input.projection, attemptId: "native-attempt", policy: { ...input.projection.policy, policy_revision: 5 } } };
+  const contents = new Map(files.map((f, index) => [f.path, readFileSync(input.files[index]!.path)]));
+  const manifest = projectContext(next, contents);
+  const native = manifest.files.filter(f => f.kind === "native-policy");
+  expect(native.map(f => f.workerPath)).toEqual(policy.files.map(f => f.workerPath));
+  expect(native.every(f => statSync(f.path).mode % 0o1000 === 0o440)).toBe(true);
+  expect(native.every(f => f.path.startsWith(root + "/native/"))).toBe(true);
+  expect(contents.size).toBe(files.length);
+  expect(next.files).toHaveLength(files.length);
+  const observed = { discoveryRoots: manifest.workerDiscoveryRoots, files: manifest.files.map(f => ({ path: f.workerPath, hash: f.hash })) };
+  const before = verifyEffectiveContext(manifest, observed);
+  writeFileSync(join(input.mutableStateRoot, "native-cache.json"), '{"writable":true}');
+  expect(verifyEffectiveContext(manifest, observed)).toBe(before);
+  expect(() => verifyEffectiveContext(manifest, { ...observed, files: observed.files.slice(0, -1) })).toThrow();
+  const changed = native.find(f => f.path.endsWith(".cjs"))!;
+  chmodSync(changed.path, 0o640); writeFileSync(changed.path, "changed handler"); chmodSync(changed.path, 0o440);
+  expect(() => verifyEffectiveContext(manifest, observed)).toThrow();
+});
+
+it("requires the native policy before creating a revision-five projection", () => {
+  const { input } = fixture();
+  const root = join(dirname(input.root), "missing-policy");
+  const next = { ...input, root, discoveryRoots: [root], files: input.files.map(f => ({ ...f, path: join(root, f.kind) })),
+    binding: { ...input.binding, policyRevision: 5 },
+    projection: { ...input.projection, attemptId: "missing-policy", policy: { ...input.projection.policy, policy_revision: 5 } } };
+  expect(() => projectContext(next, new Map(next.files.map((f, index) => [f.path, readFileSync(input.files[index]!.path)]))))
+    .toThrow(/native policy/);
+  expect(existsSync(root)).toBe(false);
+});
+
+it("rejects native policy client drift and caller-supplied replacement bytes before writing", async () => {
+  const { input } = fixture();
+  const root = join(dirname(input.root), "policy-drift");
+  const files = input.files.map(f => ({ ...f, path: join(root, f.kind) }));
+  const next: ContextInput = { ...input, root, files, nativePolicy: await buildManagedNativePolicy("codex", "/opt/multi-agent/toolchain"),
+    discoveryRoots: [root], projection: { ...input.projection, attemptId: "policy-drift" } };
+  const contents = new Map<string, string | Uint8Array>(files.map((f, index) => [f.path, readFileSync(input.files[index]!.path)]));
+  expect(() => projectContext(next, contents)).toThrow(/native policy/);
+  next.client = "codex";
+  contents.set(join(root, "native", "managed-native-channel-relay.cjs"), "replacement");
+  expect(() => projectContext(next, contents)).toThrow(/native policy/);
+  expect(existsSync(root)).toBe(false);
+});
+
+it("rejects native policy paths outside the fixed projection prefix before writing", async () => {
+  const { input } = fixture();
+  const root = join(dirname(input.root), "policy-path");
+  const nativePolicy = structuredClone(await buildManagedNativePolicy("claude-code", "/opt/multi-agent/toolchain"));
+  nativePolicy.files[0]!.workerPath = "/home/worker/injected.cjs";
+  const { digest: _digest, ...body } = nativePolicy;
+  nativePolicy.digest = hashBytes(canonicalJson(body));
+  const next: ContextInput = { ...input, root, files: input.files.map(f => ({ ...f, path: join(root, f.kind) })), nativePolicy,
+    discoveryRoots: [root], projection: { ...input.projection, attemptId: "policy-path" } };
+  expect(() => projectContext(next, new Map(next.files.map((f, index) => [f.path, readFileSync(input.files[index]!.path)]))))
+    .toThrow(/native policy/);
+  expect(existsSync(root)).toBe(false);
 });

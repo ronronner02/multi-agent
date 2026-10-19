@@ -8,19 +8,24 @@
 // add bind mounts, sandbox flags or environment outside the policy.
 
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
-  closeSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync,
+  closeSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const POLICY_SCHEMA = 'multi-agent-worker-policy/v1';
+const NATIVE_POLICY_MOUNTS = Object.freeze({
+  'claude-code': { source: 'native/claude/managed-settings.json', target: '/etc/claude-code/managed-settings.json' },
+  codex: { source: 'native/codex/requirements.toml', target: '/etc/codex/requirements.toml' },
+});
 const INSTALLED_POLICY = '/etc/multi-agent/worker-policy.json';
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 // Child descriptor numbers for the bubblewrap --bind-fd sources.
-export const MOUNT_FD = Object.freeze({ home: 3, scratch: 4, tree: 5, context: 7, framework: 8 });
+export const MOUNT_FD = Object.freeze({ home: 3, scratch: 4, tree: 5, context: 7, framework: 8, mailbox: 9, nativePolicy: 10, bootstrap: 11 });
 // Paths that must never appear as policy roots or sandbox sources.
 const HOST_DENY_ROOTS = ['/mnt', '/run/WSL', '/init', '/proc', '/sys', '/root'];
 // Set only by the launcher, to the in-sandbox egress relay; callers cannot pass them.
@@ -122,7 +127,7 @@ export function validatePolicy(policy) {
     if (overlaps(p.context_root, p[key])) fail('paths.context_root overlaps paths.' + key);
   }
   // KTD24 adds mandatory private context mounts to the KTD23 filtered network.
-  if (policy.policy_revision < 4) fail('policy_revision 4 or later is required');
+  if (policy.policy_revision < 5) fail('policy_revision 5 or later is required');
   const egressId = policy.egress_identity;
   if (typeof egressId !== 'string' || !ID_PATTERN.test(egressId)) fail('egress_identity must be an identity name');
   if (egressId === policy.control_identity || policy.worker_identities.includes(egressId) || policy.launch_callers.includes(egressId)) {
@@ -138,6 +143,15 @@ export function validatePolicy(policy) {
   if (!isWithin(p.toolchain_dir, p.installed_egress)) fail('paths.installed_egress must be inside the toolchain directory');
 
   const s = policy.sandbox ?? {};
+  if (p.mailbox_root !== posix.join(p.control_state_dir, 'mailboxes') || s.mailbox !== '/run/multi-agent/mailbox.sock') {
+    fail('the mailbox must use the fixed control-owned source and mailbox-only target');
+  }
+  if (Object.keys(s.native_policy_mounts ?? {}).sort().join(',') !== 'claude-code,codex') fail('native policy aliases are required');
+  for (const [client, mount] of Object.entries(NATIVE_POLICY_MOUNTS)) {
+    const configured = s.native_policy_mounts[client];
+    if (!configured || Object.keys(configured).sort().join(',') !== 'source,target'
+      || configured.source !== mount.source || configured.target !== mount.target) fail('native policy aliases must be fixed');
+  }
   for (const key of ['home', 'scratch', 'work', 'framework', 'context']) requireAbsolute(s[key], `sandbox.${key}`);
   if (s.context !== '/context' || s.framework !== '/framework') fail('context and framework targets must be /context and /framework');
   for (const key of ['home', 'scratch', 'work']) {
@@ -174,8 +188,8 @@ export function validatePolicy(policy) {
 }
 
 export function parseLaunchArgs(argv) {
-  const request = { worker: null, role: null, tree: null, run: null, attempt: null, env: [], command: [] };
-  const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--run': 'run', '--attempt': 'attempt' };
+  const request = { worker: null, role: null, tree: null, run: null, attempt: null, mailbox: null, env: [], command: [] };
+  const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--run': 'run', '--attempt': 'attempt', '--mailbox': 'mailbox' };
   let i = 0;
   for (; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -197,6 +211,12 @@ export function parseLaunchArgs(argv) {
   if (request.command.length === 0) throw new LaunchError('command-missing', 'a command is required after --');
   for (const field of ['worker', 'role', 'run', 'attempt']) {
     if (request[field] !== null && !ID_PATTERN.test(request[field])) throw new LaunchError('argument-invalid', `invalid ${field}`);
+  }
+  if (request.mailbox !== null) {
+    const parts = request.mailbox.split(':').map(Number);
+    if (parts.length !== 2 || !parts.every(n => Number.isSafeInteger(n) && n >= 0) || parts.join(':') !== request.mailbox) {
+      throw new LaunchError('argument-invalid', 'mailbox must be a canonical device:inode identity');
+    }
   }
   return request;
 }
@@ -278,6 +298,54 @@ export function resolveLaunchRequest(policy, request, facts) {
     throw new LaunchError('command-not-allowed', 'command must be an absolute path under an allowed prefix');
   }
 
+  const client = exe === policy.paths.toolchain_dir + '/clients/bin/claude' ? 'claude-code'
+    : exe === policy.paths.toolchain_dir + '/clients/bin/codex' ? 'codex' : null;
+  if (client && !request.mailbox) throw new LaunchError('mailbox-unavailable', 'native launch requires its registered mailbox endpoint');
+  let mailbox, nativePolicy, bootstrap;
+  if (request.mailbox) {
+    try {
+      const socketPath = posix.join(policy.paths.mailbox_root, request.worker, request.run, request.attempt, 'mailbox.sock');
+      if (facts.realpath(socketPath) !== socketPath) throw new Error('aliased endpoint');
+      for (let p = posix.dirname(socketPath); ; p = posix.dirname(p)) {
+        const st = facts.lstat(p);
+        if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== control.uid || st.gid !== control.gid
+          || (st.mode & 0o7777) !== 0o700) throw new Error('non-private endpoint ancestry');
+        if (p === policy.paths.control_state_dir) break;
+      }
+      const st = facts.lstat(socketPath), [dev, ino] = request.mailbox.split(':').map(Number);
+      if (!st.isSocket() || st.uid !== control.uid || st.gid !== control.gid || (st.mode & 0o7777) !== 0o666
+        || st.dev !== dev || st.ino !== ino) throw new Error('unregistered endpoint');
+      mailbox = { path: socketPath, kind: 'socket', uid: st.uid, gid: st.gid, dev, ino, mode: 0o666 };
+    } catch { throw new LaunchError('mailbox-unavailable', 'mailbox identity or private ownership changed'); }
+  }
+  if (mailbox) {
+    try {
+      const source = posix.join(posix.dirname(mailbox.path), 'bootstrap.json'), st = facts.lstat(source);
+      if (facts.realpath(source) !== source || !st.isFile() || st.isSymbolicLink() || st.uid !== control.uid
+        || st.gid !== control.gid || (st.mode & 0o7777) !== 0o600 || st.size > 8_192) throw new Error('invalid private bootstrap');
+      const raw = facts.readFile(source);
+      if (Buffer.byteLength(raw) > 8_192) throw new Error('oversized bootstrap');
+      const data = JSON.parse(raw), fields = ['authorization', 'sessionId', 'runId', 'attemptId', 'generation', 'taskId', 'capability'];
+      if (!data || Array.isArray(data) || Object.keys(data).length !== fields.length
+        || fields.some(field => typeof data[field] !== 'string' || !data[field] || data[field].length > 1_024)
+        || data.runId !== request.run || data.attemptId !== request.attempt
+        || !/^mailbox:[A-Za-z0-9_-]{43}$/.test(data.capability)) throw new Error('unbound bootstrap');
+      bootstrap = { path: source, kind: 'file', uid: st.uid, gid: st.gid, dev: st.dev, ino: st.ino, mode: 0o600,
+        contentHash: createHash('sha256').update(raw).digest('hex') };
+    } catch { throw new LaunchError('mailbox-bootstrap-unavailable', 'private mailbox bootstrap is missing or does not match the attempt'); }
+  }
+
+  if (client) {
+    try {
+      const mount = policy.sandbox.native_policy_mounts[client], source = posix.join(context, mount.source);
+      verifyReadOnlyDirectory(posix.dirname(source), facts, worker, control, contextParent);
+      const st = facts.lstat(source);
+      if (facts.realpath(source) !== source || !st.isFile() || st.isSymbolicLink() || st.uid !== control.uid
+        || st.gid !== worker.gid || (st.mode & 0o7777) !== 0o440 || st.size > 1_048_576) throw new Error('invalid native policy source');
+      nativePolicy = { path: source, target: mount.target, kind: 'file', uid: st.uid, gid: st.gid, dev: st.dev, ino: st.ino, mode: 0o440 };
+    } catch { throw new LaunchError('native-policy-unavailable', 'native policy must be private, immutable and control-owned'); }
+  }
+
   if (policy.sandbox.interactive_tty && policy.sandbox.require_legacy_tiocsti_disabled && facts.legacyTiocsti !== 0) {
     throw new LaunchError('host-tiocsti-enabled', 'dev.tty.legacy_tiocsti must be 0 for interactive worker sessions');
   }
@@ -300,7 +368,81 @@ export function resolveLaunchRequest(policy, request, facts) {
     scratch: posix.join(policy.paths.worker_root, request.worker, 'scratch'),
     env,
     command: request.command,
+    ...(mailbox ? { mailbox, bootstrap } : {}), ...(nativePolicy ? { nativePolicy, client } : {}),
   };
+}
+
+/** Read-only control preflight. Request validation is shared with the actual launch. */
+export function inspectLaunchRequest(policy, request, facts) {
+  const resolved = resolveLaunchRequest(policy, request, facts);
+  try {
+    const control = facts.lookupUser(policy.control_identity);
+    const installed = {};
+    for (const [key, file] of Object.entries({ policy: policy.paths.installed_policy,
+      launcher: policy.paths.installed_launcher, executable: request.command[0], egress: policy.paths.installed_egress_config })) {
+      const observed = facts.inspectFile(file);
+      if (!observed || observed.path !== file || observed.uid !== 0 || observed.gid !== 0
+        || !Number.isSafeInteger(observed.mode) || observed.mode < 0 || observed.mode > 0o7777 || (observed.mode & 0o022)
+        || key === 'executable' && !(observed.mode & 0o001)
+        || !Number.isSafeInteger(observed.size) || observed.size < 0 || !/^sha256:[a-f0-9]{64}$/.test(observed.sha256)
+        || typeof observed.realpath !== 'string' || !posix.isAbsolute(observed.realpath) || posix.normalize(observed.realpath) !== observed.realpath
+        || (key === 'executable' ? !policy.allowed_exec_prefixes.some(prefix => observed.realpath.startsWith(prefix)) : observed.realpath !== file)) {
+        throw new Error('untrusted installed file');
+      }
+      installed[key] = observed;
+    }
+    if (installed.policy.sha256 !== facts.policyFingerprint) throw new Error('policy changed during inspection');
+    const namespaces = Object.fromEntries(['mnt', 'user', 'net'].map(kind => {
+      const value = facts.namespace(kind);
+      if (typeof value !== 'string' || !new RegExp('^' + kind + ':\\[\\d+\\]$').test(value)) throw new Error('missing namespace');
+      return [kind, value];
+    }));
+    return {
+      schema: 'multi-agent-launch-preflight/v1',
+      worker: resolved.worker,
+      control: { uid: control.uid, gid: control.gid, mountNamespace: namespaces.mnt, userNamespace: namespaces.user },
+      roots: { home: resolved.home, scratch: resolved.scratch, tree: resolved.tree, context: resolved.context, framework: resolved.framework },
+      installed,
+      network: { hostNamespace: namespaces.net, profileFingerprint: installed.egress.sha256 },
+    };
+  } catch {
+    throw new LaunchError('preflight-unverified', 'Installed launch facts are missing, untrusted or changed');
+  }
+}
+
+/** Hash an opened root-owned file rather than a caller-supplied receipt or mutable pathname. */
+export function inspectInstalledFile(file) {
+  let fd;
+  try {
+    requireAbsolute(file, 'installedFile');
+    const real = realpathSync(file);
+    for (const source of [posix.dirname(file), posix.dirname(real)]) {
+      for (let parent = source; ; parent = posix.dirname(parent)) {
+        const st = lstatSync(parent);
+        if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== 0 || st.gid !== 0 || (st.mode & 0o022)) throw new Error('untrusted ancestry');
+        if (parent === posix.dirname(parent)) break;
+      }
+    }
+    fd = openSync(real, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_CLOEXEC);
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.uid !== 0 || st.gid !== 0 || (st.mode & 0o022) || st.size > 512 * 1024 * 1024) throw new Error('untrusted file');
+    const hash = createHash('sha256'), buffer = Buffer.alloc(64 * 1024);
+    let position = 0, count;
+    while ((count = readSync(fd, buffer, 0, buffer.length, position)) > 0) {
+      position += count;
+      if (position > st.size) throw new Error('growing file');
+      hash.update(buffer.subarray(0, count));
+    }
+    const after = fstatSync(fd);
+    if (position !== st.size || after.size !== st.size || after.mtimeMs !== st.mtimeMs || after.ctimeMs !== st.ctimeMs
+      || realpathSync(file) !== real || lstatSync(real).ino !== st.ino || lstatSync(real).dev !== st.dev) throw new Error('changed file');
+    return { path: file, realpath: real, uid: st.uid, gid: st.gid, mode: st.mode & 0o7777, size: st.size,
+      sha256: 'sha256:' + hash.digest('hex') };
+  } catch {
+    throw new LaunchError('preflight-unverified', 'Installed launch file is missing, untrusted or changed');
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 export function buildSandboxCommand(policy, resolved) {
@@ -339,6 +481,7 @@ export function buildSandboxCommand(policy, resolved) {
     USER: resolved.worker.name,
     TMPDIR: '/tmp',
     ...resolved.env,
+    ...(resolved.client ? { CODEX_HOME: s.home + "/.codex", CLAUDE_CONFIG_DIR: s.home + "/.claude", DISABLE_AUTOUPDATER: "1" } : {}),
     // Clients differ in which spelling they read, so both are set.
     HTTPS_PROXY: proxy,
     HTTP_PROXY: proxy,
@@ -369,8 +512,13 @@ export function buildSandboxCommand(policy, resolved) {
     '--tmpfs', '/run',
     // After the /run tmpfs, which would otherwise cover it.
     '--ro-bind', p.egress_socket_dir, p.egress_socket_dir,
+    ...(resolved.mailbox ? ['--tmpfs', posix.dirname(s.mailbox), '--ro-bind-fd', String(MOUNT_FD.mailbox), s.mailbox, '--remount-ro', posix.dirname(s.mailbox)] : []),
+    ...(resolved.nativePolicy ? ['--tmpfs', posix.dirname(resolved.nativePolicy.target), '--ro-bind-fd', String(MOUNT_FD.nativePolicy), resolved.nativePolicy.target,
+      '--remount-ro', posix.dirname(resolved.nativePolicy.target)] : []),
     '--dir', '/var/tmp',
     '--bind-fd', String(MOUNT_FD.home), s.home,
+    ...(resolved.bootstrap ? ['--perms', '0700', '--tmpfs', s.home + '/.multi-agent/mailbox', '--perms', '0400',
+      '--ro-bind-data', String(MOUNT_FD.bootstrap), s.home + '/.multi-agent/mailbox/bootstrap.json'] : []),
     '--bind-fd', String(MOUNT_FD.scratch), s.scratch,
     resolved.treeMode === 'rw' ? '--bind-fd' : '--ro-bind-fd', String(MOUNT_FD.tree), s.work,
     '--chdir', s.work,
@@ -399,6 +547,30 @@ function stdioKinds() {
       return 'closed';
     }
   });
+}
+
+/** Recheck the exact registered inode after opening, before the descriptor reaches the namespace. */
+export function openVerifiedSource(expected) {
+  let fd;
+  try {
+    // Linux O_PATH holds a Unix socket inode without connecting to its service.
+    fd = openSync(expected.path, (expected.kind === 'socket' ? 0x200000 : fsConstants.O_RDONLY)
+      | fsConstants.O_NOFOLLOW | fsConstants.O_CLOEXEC);
+    const st = fstatSync(fd);
+    if (readlinkSync('/proc/self/fd/' + fd) !== expected.path || st.dev !== expected.dev || st.ino !== expected.ino
+      || st.uid !== expected.uid || st.gid !== expected.gid || (st.mode & 0o7777) !== expected.mode
+      || !(expected.kind === 'socket' ? st.isSocket() : st.isFile())) throw new Error('changed mount source');
+    if (expected.contentHash) {
+      const bytes = Buffer.alloc(8_193), count = readSync(fd, bytes, 0, bytes.length, 0);
+      if (count > 8_192 || createHash('sha256').update(bytes.subarray(0, count)).digest('hex') !== expected.contentHash) {
+        throw new Error('changed private bootstrap bytes');
+      }
+    }
+    return fd;
+  } catch {
+    if (fd !== undefined) closeSync(fd);
+    throw new LaunchError('mount-source-changed', 'registered mailbox or native policy source changed during launch');
+  }
 }
 
 function openVerifiedDirectory(expected, allowedParent) {
@@ -452,6 +624,9 @@ function hostFacts(policy) {
     realpath: (p) => realpathSync(p),
     isDirectory: (p) => statSync(p).isDirectory(),
     lstat: (p) => lstatSync(p),
+    readFile: (p) => readFileSync(p, "utf8"),
+    inspectFile: inspectInstalledFile,
+    namespace: (kind) => readlinkSync('/proc/self/ns/' + kind),
     legacyTiocsti,
     egressSocket: (() => {
       try {
@@ -476,8 +651,16 @@ export function main(argv = process.argv.slice(2)) {
     if (typeof process.getuid !== 'function' || process.getuid() !== 0) throw new LaunchError('launcher-not-root', 'launcher must run as root via sudo');
     if (process.arch !== 'x64') throw new LaunchError('host-arch-unsupported', 'the seccomp program is defined for x86_64 only');
     assertSafeStdio(stdioKinds());
-    const policy = validatePolicy(JSON.parse(readFileSync(INSTALLED_POLICY, 'utf8')));
-    const resolved = resolveLaunchRequest(policy, parseLaunchArgs(argv), hostFacts(policy));
+    const policyBytes = readFileSync(INSTALLED_POLICY);
+    const policy = validatePolicy(JSON.parse(policyBytes.toString('utf8')));
+    const inspect = argv[0] === '--inspect';
+    const request = parseLaunchArgs(inspect ? argv.slice(1) : argv), facts = hostFacts(policy);
+    facts.policyFingerprint = 'sha256:' + createHash('sha256').update(policyBytes).digest('hex');
+    if (inspect) {
+      process.stdout.write(JSON.stringify(inspectLaunchRequest(policy, request, facts)) + '\n');
+      return;
+    }
+    const resolved = resolveLaunchRequest(policy, request, facts);
     const { file, args, mountSources } = buildSandboxCommand(policy, resolved);
     const workerDir = path.posix.join(policy.paths.worker_root, resolved.worker.name);
     const assignmentDir = path.posix.join(realpathSync(policy.paths.assignment_root), resolved.worker.name);
@@ -488,8 +671,11 @@ export function main(argv = process.argv.slice(2)) {
     fds[MOUNT_FD.context] = openVerifiedDirectory(mountSources.context, posix.join(policy.paths.context_root, resolved.worker.name));
     fds[MOUNT_FD.framework] = openVerifiedDirectory(mountSources.framework, posix.dirname(policy.paths.framework_dir));
     fds[SECCOMP_FD] = openSeccompProgram();
-    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', ...fds.slice(3)], env: {} });
-    for (const fd of fds.slice(3)) closeSync(fd);
+    if (resolved.mailbox) fds[MOUNT_FD.mailbox] = openVerifiedSource(resolved.mailbox);
+    if (resolved.nativePolicy) fds[MOUNT_FD.nativePolicy] = openVerifiedSource(resolved.nativePolicy);
+    if (resolved.bootstrap) fds[MOUNT_FD.bootstrap] = openVerifiedSource(resolved.bootstrap);
+    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', ...Array.from(fds.slice(3), fd => fd ?? 'ignore')], env: {} });
+    for (const fd of fds.slice(3)) if (fd !== undefined) closeSync(fd);
     for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT']) {
       process.on(signal, () => child.kill(signal));
     }
