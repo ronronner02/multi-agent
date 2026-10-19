@@ -45,7 +45,7 @@ These rules apply to every agent that implements tasks in this repository, atten
   - A task gets at most one scope amendment. A second needed amendment means the task is too large: stop and propose a split to the plan owner.
   - Review rounds count per task, not per slice. A slice-level review uses one of the task's rounds, so prefer one review of the task candidate over a review of every slice.
   - When the next slice would exceed a limit, stop before starting it. Record what is done and reviewed, then hand the remainder back as a split proposal.
-  - The budget applies from T037 and every task not yet started. T010's closeout follows the owner-decided terms in the plan's T010 owner split.
+  - The budget applies to T037, T038 and every task not yet started. T010's closeout follows the owner-decided terms in the plan's T010 owner split.
 - When a done signal depends on a production component, owner or composition path that does not exist yet and is not a named slice of the task, stop and report it as a plan question. Do not prepare a scope amendment to absorb it.
 - A resumed or compacted session reuses recorded evidence whose source hashes still match. It does not rerun those checks or re-review an unchanged candidate.
 - When running unattended, do not ask questions. Take the most conservative option these rules allow, record it, and continue.
@@ -60,7 +60,7 @@ These rules apply to every agent that implements tasks in this repository, atten
 These rules size review and verification to the change. They take precedence over a workflow skill's default review shape, and they never lower a task's done signal or required review gate.
 - **Reviewer roster (owner rule, 2026-10-19).** Every required review uses exactly two report-only reviewers on the same frozen candidate:
   - `gpt-6.1-sol`;
-  - `gpt-6-astra` (the owner's DeepSeek-backed mapping, written `ds/gpt-6-astra`).
+  - `ds/gpt-6-astra`, the owner's DeepSeek-backed mapping. The gateway requires the `ds/` prefix, so always pass the full ID.
 
   Each reviewer covers every lens the diff selects. This replaces both the earlier one-reviewer-per-lens dispatch and the `claude-opus-5-5` reviewer. Reach both models through the locally configured gateway, never persisting or printing keys. If either model is unavailable, the review gate stays open.
 - Pick review lenses from the diff. Correctness, testing and security always run. Adversarial runs when the diff touches authority, admission, isolation, credentials or the mailbox. Performance, reliability, maintainability, project standards, learnings, agent-native and the simplify passes run only when the diff touches what that lens checks. Record each skipped lens and the reason.
@@ -87,5 +87,5 @@ These rules size review and verification to the change. They take precedence ove
   - An inline fallback never closes a required review gate. If the session cannot spawn subagents, stop with `required_gate_eligible: false` and report the missing capability. Do not substitute the fallback for the gate.
   - The grant covers review dispatch only, not implementation subagents, live provider probes or delivery.
 - **T010 live reconnaissance authorization (owner grant, 2026-10-18).** The owner authorizes this round's installed Claude and Codex live reconnaissance, including the required resume checks, with a maximum budget of `$2` or equivalent provider tokens and a maximum runtime of 20 minutes. Record provider usage as unavailable when reliable metrics are not exposed. This grant covers T010's live probes only; it does not authorize broader live work, a budget increase, deployment, release, or changes to the Windows reference copy.
-  - **Moved to T037 (owner split, 2026-10-19).** T010's unused daemon-mediated allowance now belongs to T037, without reset: four native invocations, 150,000 reported tokens and 1,200 seconds. Its record is `live-allowance-before.json` in the `20261019T140631Z-t010-rev5-host-acceptance` run. T010 makes no further live calls.
+  - **Moved to T038 (owner splits, 2026-10-19 and 2026-10-20).** T010's unused daemon-mediated allowance now belongs to T038, the installed-client acceptance task, without reset: four native invocations, 150,000 reported tokens and 1,200 seconds. Its record is `live-allowance-before.json` in the `20261019T140631Z-t010-rev5-host-acceptance` run. T010 makes no further live calls.
 - Do not stash, reset or revert unless the owner explicitly asks. Commit messages carry no tool or AI attribution.
