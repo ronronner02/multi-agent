@@ -10,7 +10,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  closeSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, statSync, writeFileSync,
+  closeSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readlinkSync, readdirSync, readSync, realpathSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import path from 'node:path';
@@ -33,6 +33,7 @@ const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'ALL_PROXY'];
 export const EGRESS_SOCKET_NAME = 'proxy.sock';
 // Child descriptor number for the bubblewrap --seccomp program.
 export const SECCOMP_FD = 6;
+export const SANDBOX_STATUS_FD = 12;
 
 // KTD23: a network namespace does not cover AF_VSOCK, the Hyper-V channel to the
 // Windows host, and io_uring can create sockets without the socket() syscall.
@@ -243,13 +244,16 @@ function verifyReadOnlyDirectory(source, facts, worker, control, privateRoot = n
 // facts: { callerUid, lookupUser(name) -> {name, uid, gid, groups[]} | null,
 //          realpath(p) -> string, isDirectory(p) -> boolean, lstat(p) -> Stats, legacyTiocsti,
 //          egressSocket -> {dirUid, dirMode, isSocket} | null }
-export function resolveLaunchRequest(policy, request, facts) {
-  validatePolicy(policy);
-
+function assertLaunchCaller(policy, facts) {
   const callerUids = policy.launch_callers.map((name) => facts.lookupUser(name)?.uid).filter((uid) => uid !== undefined);
   if (!Number.isInteger(facts.callerUid) || !callerUids.includes(facts.callerUid)) {
     throw new LaunchError('caller-not-allowed', 'launcher may only be invoked by the control identity');
   }
+}
+
+export function resolveLaunchRequest(policy, request, facts) {
+  validatePolicy(policy);
+  assertLaunchCaller(policy, facts);
 
   if (!request.worker || !policy.worker_identities.includes(request.worker)) {
     throw new LaunchError('worker-not-allowed', 'worker identity is not in the policy allow-list');
@@ -445,7 +449,7 @@ export function inspectInstalledFile(file) {
   }
 }
 
-export function buildSandboxCommand(policy, resolved) {
+export function buildSandboxCommand(policy, resolved, supervised = false) {
   const s = policy.sandbox;
   const p = policy.paths;
   const args = [
@@ -472,6 +476,7 @@ export function buildSandboxCommand(policy, resolved) {
   ];
   // Without an interactive pane the session is detached from the caller tty.
   if (!s.interactive_tty) args.push('--new-session');
+  if (supervised) args.push('--info-fd', String(SANDBOX_STATUS_FD));
 
   args.push('--clearenv');
   const proxy = `http://127.0.0.1:${s.egress_port}`;
@@ -646,7 +651,337 @@ function reportError(err) {
   process.exit(126);
 }
 
-export function main(argv = process.argv.slice(2)) {
+function boundLifecycle(promise) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new LaunchError('sandbox-quiescence-unconfirmed', 'Sandbox lifecycle evidence is unconfirmed')), 10_000);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+async function quiesceNamespace(namespaceFd, running) {
+  if (running()) {
+    await boundLifecycle(new Promise((resolve, reject) => {
+      // The init can change user namespaces; derive ownership from the pinned PID namespace instead.
+      // nsenter requires --target even with explicit FDs; no namespace is selected from that PID.
+      const helper = spawn('/usr/bin/nsenter', ['--preserve-credentials', '--keep-caps',
+        `--target=${process.pid}`, '--user-parent', '--user=/proc/self/fd/3', '--pid=/proc/self/fd/3',
+        '--', process.execPath, '-e', 'process.kill(-1, "SIGKILL")'],
+      { stdio: ['ignore', 'ignore', 'ignore', namespaceFd], env: {} });
+      const timer = setTimeout(() => { helper.kill('SIGKILL'); reject(new Error()); }, 9_000);
+      helper.once('error', error => { clearTimeout(timer); reject(error); });
+      helper.once('exit', (code, signal) => {
+        clearTimeout(timer);
+        if (code === 0 || code === 137 || signal === 'SIGKILL') resolve();
+        else reject(new Error());
+      });
+    })).catch(error => {
+      // The namespace init may exit after the liveness check but before nsenter starts.
+      if (running()) throw error;
+    });
+    await boundLifecycle((async () => { while (running()) await new Promise(resolve => setTimeout(resolve, 10)); })());
+  }
+}
+
+/** Owns one command and its kernel namespace handles, never a caller-selected signal target. */
+export function startSandbox(input, stdio, workerUid) {
+  const command = Object.freeze({ file: input.file, args: Object.freeze([...input.args]) });
+  const commandDigest = 'sha256:' + createHash('sha256').update(JSON.stringify(command)).digest('hex');
+  const streams = [...stdio]; streams[SANDBOX_STATUS_FD] = 'pipe';
+  const child = spawn(command.file, command.args, { stdio: streams, env: {} });
+  const handles = [];
+  let closed = false, stopPromise, anchor, observed;
+  const fault = code => new LaunchError(code, 'Sandbox lifecycle evidence is unconfirmed');
+  const close = () => { closed = true; for (const fd of handles.splice(0)) closeSync(fd); };
+  const exited = new Promise(resolve => { child.once('exit', resolve); child.once('error', resolve); });
+  const stat = () => {
+    const raw = readFileSync(anchor + '/stat', 'utf8');
+    const fields = raw.slice(raw.lastIndexOf(')') + 2).trim().split(/\s+/);
+    if (fields.length < 20 || !/^\d+$/.test(fields[19])) throw new Error();
+    return { state: fields[0], parent: Number(fields[1]), start: fields[19] };
+  };
+  const running = () => {
+    if (closed || !observed) throw new Error();
+    try { const current = stat(); return current.start === observed.processStart && !['Z', 'X'].includes(current.state); }
+    catch (error) { if (['ENOENT', 'ESRCH'].includes(error.code)) return false; throw error; }
+  };
+  const captured = boundLifecycle(new Promise((resolve, reject) => {
+    let bytes = Buffer.alloc(0);
+    const pipe = child.stdio[SANDBOX_STATUS_FD];
+    pipe.on('data', chunk => {
+      if (bytes.length + chunk.length > 4096) { pipe.destroy(); reject(new Error()); }
+      else bytes = Buffer.concat([bytes, chunk]);
+    });
+    pipe.once('error', reject);
+    child.once('error', reject);
+    pipe.once('end', () => { try { resolve(JSON.parse(bytes.toString('utf8'))); } catch (error) { reject(error); } });
+  })).then(info => {
+    try {
+      const pid = info['child-pid'];
+      if (closed || !Number.isSafeInteger(pid) || pid <= 1 || !Number.isSafeInteger(workerUid) || workerUid < 0) throw new Error();
+      handles.push(openSync('/proc/' + pid, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW));
+      anchor = '/proc/self/fd/' + handles[0];
+      const current = stat(), status = readFileSync(anchor + '/status', 'utf8');
+      const field = name => status.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim().split(/\s+/).map(Number);
+      const uids = field('Uid'), pids = field('NSpid');
+      if (current.parent !== child.pid || !uids || uids.length !== 4 || uids.some(uid => uid !== workerUid)
+        || !pids || pids[0] !== pid || pids.length < 2 || pids.at(-1) !== 1) throw new Error();
+      handles.push(openSync(anchor + '/ns/pid', fsConstants.O_RDONLY));
+      const pidNamespace = readlinkSync('/proc/self/fd/' + handles[1]);
+      if (pidNamespace === readlinkSync('/proc/self/ns/pid') || !/^pid:\[\d+\]$/.test(pidNamespace)
+        || fstatSync(handles[1]).ino !== info['pid-namespace'] || stat().start !== current.start) throw new Error();
+      observed = Object.freeze({ commandDigest, sandboxPid: pid, parentProcessId: child.pid,
+        processStart: current.start, pidNamespace, uid: uids[0] });
+      return observed;
+    } catch { close(); throw fault('sandbox-observation-unverified'); }
+  }).catch(() => { throw fault('sandbox-observation-unverified'); });
+  // A normally completed short command may exit before /proc can be inspected; that is not readiness evidence.
+  captured.catch(() => {});
+  const observe = async () => {
+    try { const result = await captured; if (!running()) throw new Error(); return result; }
+    catch { throw fault('sandbox-observation-unverified'); }
+  };
+  const quiesce = () => stopPromise ??= (async () => {
+    try {
+      const observation = await captured;
+      await quiesceNamespace(handles[1], running);
+      // The trusted outer wrapper must also have exited; namespace death alone does not close its lifetime.
+      await boundLifecycle(exited);
+      if (running()) throw new Error();
+      return Object.freeze({ status: 'terminated', observation });
+    } catch { throw fault('sandbox-quiescence-unconfirmed'); }
+    finally { close(); }
+  })();
+  return Object.freeze({ child, observe, quiesce, close });
+}
+
+
+/** Pins the trusted supervisor and borrows only the namespace handles it already owns. */
+export function openSandboxControl(selector, rawArgv, workerUid) {
+  const handles = [];
+  let closed = false;
+  const fault = () => new LaunchError('sandbox-control-unverified', 'Sandbox control evidence is unconfirmed');
+  const close = () => { closed = true; for (const fd of handles.splice(0)) closeSync(fd); };
+  const open = (file, flags) => { const fd = openSync(file, flags | fsConstants.O_CLOEXEC); handles.push(fd); return '/proc/self/fd/' + fd; };
+  const stat = anchor => {
+    const raw = readFileSync(anchor + '/stat', 'utf8'), fields = raw.slice(raw.lastIndexOf(')') + 2).trim().split(/\s+/);
+    if (fields.length < 20 || !/^\d+$/.test(fields[19])) throw new Error();
+    return { state: fields[0], parent: Number(fields[1]), start: fields[19] };
+  };
+  const status = anchor => {
+    const raw = readFileSync(anchor + '/status', 'utf8');
+    const field = name => raw.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim().split(/\s+/).map(Number);
+    return { uids: field('Uid'), pids: field('NSpid') };
+  };
+  const uidMatches = (anchor, uid) => {
+    const uids = status(anchor).uids;
+    return uids?.length === 4 && uids.every(value => value === uid);
+  };
+  try {
+    if (!selector || Object.keys(selector).sort().join(',') !== 'processId,processStart'
+      || !Number.isSafeInteger(selector.processId) || selector.processId <= 1
+      || typeof selector.processStart !== 'string' || !/^(0|[1-9]\d{0,19})$/.test(selector.processStart)
+      || !Array.isArray(rawArgv) || rawArgv.length < 2 || rawArgv[0] !== process.execPath
+      || rawArgv.some(value => typeof value !== 'string' || value.includes('\0'))
+      || !Number.isSafeInteger(workerUid) || workerUid < 0) throw new Error();
+    const argv = Object.freeze([...rawArgv]), encoded = Buffer.from(argv.join('\0') + '\0');
+    const supervisor = Object.freeze({ ...selector });
+    const root = open('/proc/' + supervisor.processId, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+    const checkSupervisor = () => {
+      const current = stat(root);
+      if (closed || current.start !== supervisor.processStart || ['Z', 'X'].includes(current.state)
+        || !uidMatches(root, process.getuid()) || readlinkSync(root + '/exe') !== process.execPath
+        || !readFileSync(root + '/cmdline').equals(encoded)) throw new Error();
+    };
+    checkSupervisor();
+    const names = readdirSync(root + '/fd');
+    if (names.length > 256) throw new Error();
+    const entries = names.flatMap(name => {
+      const source = root + '/fd/' + name;
+      try { return [{ source, link: readlinkSync(source) }]; }
+      catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+    });
+    const processes = entries.filter(entry => /^\/proc\/[1-9]\d*$/.test(entry.link));
+    const namespaces = entries.filter(entry => /^pid:\[\d+\]$/.test(entry.link));
+    if (processes.length !== 1 || namespaces.length !== 1) throw new Error();
+    // These are kernel descriptor links, deliberately followed only through the pinned supervisor.
+    const sandbox = open(processes[0].source, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY);
+    const namespace = open(namespaces[0].source, fsConstants.O_RDONLY);
+    const sandboxPid = Number(processes[0].link.slice('/proc/'.length)), initial = stat(sandbox);
+    const pidNamespace = readlinkSync(namespace), pids = status(sandbox).pids;
+    if (readlinkSync(sandbox) !== processes[0].link || pidNamespace !== namespaces[0].link
+      || pidNamespace === readlinkSync('/proc/self/ns/pid') || readlinkSync(sandbox + '/ns/pid') !== pidNamespace
+      || !uidMatches(sandbox, workerUid) || !pids || pids[0] !== sandboxPid || pids.length < 2 || pids.at(-1) !== 1
+      || !Number.isSafeInteger(initial.parent) || initial.parent <= 1) throw new Error();
+    const parent = open('/proc/' + initial.parent, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+    const parentInitial = stat(parent);
+    if (parentInitial.parent !== supervisor.processId || !uidMatches(parent, workerUid)) throw new Error();
+    const observation = Object.freeze({ schema: 'multi-agent-sandbox-control/v1', supervisor,
+      commandDigest: 'sha256:' + createHash('sha256').update(JSON.stringify(argv)).digest('hex'),
+      sandboxPid, parentProcessId: initial.parent, processStart: initial.start, pidNamespace, uid: workerUid });
+    const observe = () => {
+      try {
+        checkSupervisor();
+        const current = stat(sandbox), outer = stat(parent);
+        if (current.start !== initial.start || current.parent !== initial.parent || ['Z', 'X'].includes(current.state)
+          || outer.start !== parentInitial.start || outer.parent !== supervisor.processId || ['Z', 'X'].includes(outer.state)
+          || !uidMatches(sandbox, workerUid) || !uidMatches(parent, workerUid)
+          || readlinkSync(sandbox + '/ns/pid') !== pidNamespace) throw new Error();
+        return observation;
+      } catch { throw fault(); }
+    };
+
+    const alive = (anchor, start) => {
+      if (closed) throw new Error();
+      try { const value = stat(anchor); return value.start === start && !['Z', 'X'].includes(value.state); }
+      catch (error) { if (['ENOENT', 'ESRCH'].includes(error.code)) return false; throw error; }
+    };
+    let stopping;
+    const quiesce = () => stopping ??= (async () => {
+      try {
+        if (closed) throw new Error();
+        await quiesceNamespace(Number(namespace.slice('/proc/self/fd/'.length)), () => alive(sandbox, initial.start));
+        await boundLifecycle((async () => {
+          while (alive(parent, parentInitial.start) || alive(root, supervisor.processStart)) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        })());
+        return Object.freeze({ status: 'terminated', observation });
+      } catch { throw new LaunchError('sandbox-quiescence-unconfirmed', 'Sandbox quiescence is unconfirmed'); }
+      finally { close(); }
+    })();
+
+    const snapshot = query => {
+      const transient = [];
+      const pin = (file, flags) => {
+        const fd = openSync(file, flags | fsConstants.O_CLOEXEC); transient.push(fd); return '/proc/self/fd/' + fd;
+      };
+      try {
+        observe();
+        if (!query || Object.keys(query).sort().join(',') !== 'discoveryRoots,files,native'
+          || !query.native || Object.keys(query.native).sort().join(',') !== 'processId,processStart'
+          || !Number.isSafeInteger(query.native.processId) || query.native.processId <= 1
+          || !/^(0|[1-9]\d{0,19})$/.test(query.native.processStart)
+          || !Array.isArray(query.files) || query.files.length > 256
+          || !Array.isArray(query.discoveryRoots) || query.discoveryRoots.length > 32) throw new Error();
+        const policyAliases = Object.values(NATIVE_POLICY_MOUNTS).map(mount => mount.target);
+        const allowed = value => typeof value === 'string' && value.length <= 4096 && !value.includes('\0')
+          && posix.normalize(value) === value && (value === '/context' || value.startsWith('/context/')
+            || value === '/framework' || value.startsWith('/framework/'));
+        if (new Set(query.files).size !== query.files.length || new Set(query.discoveryRoots).size !== query.discoveryRoots.length
+          || query.files.some(file => !allowed(file) && !policyAliases.includes(file))
+          || query.discoveryRoots.some(root => !allowed(root))) throw new Error();
+        const native = pin('/proc/' + query.native.processId, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+        const initialNative = stat(native);
+        if (initialNative.start !== query.native.processStart || ['Z', 'X'].includes(initialNative.state)
+          || !uidMatches(native, workerUid) || readlinkSync(native + '/ns/pid') !== pidNamespace) throw new Error();
+        const bounded = (file, limit) => {
+          const fd = openSync(file, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_CLOEXEC);
+          try {
+            const buffer = Buffer.alloc(limit + 1), length = readSync(fd, buffer, 0, buffer.length, 0);
+            if (length > limit) throw new Error();
+            return buffer.subarray(0, length);
+          } finally { closeSync(fd); }
+        };
+        // Pin each component so a pathname replacement cannot redirect a privileged read.
+        const rootPath = file => {
+          let current = pin(native + '/root', fsConstants.O_RDONLY | fsConstants.O_DIRECTORY);
+          const parts = file.slice(1).split('/');
+          for (const [index, part] of parts.entries()) {
+            current = pin(current + '/' + part, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK
+              | (index < parts.length - 1 ? fsConstants.O_DIRECTORY : 0));
+          }
+          return current;
+        };
+        const files = query.files.map(file => {
+          const source = rootPath(file), before = statSync(source);
+          if (!before.isFile() || before.size > 8 * 1024 * 1024) throw new Error();
+          const bytes = bounded(source, 8 * 1024 * 1024), after = statSync(source);
+          if (before.dev !== after.dev || before.ino !== after.ino || before.size !== bytes.length
+            || after.size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) throw new Error();
+          return { path: file, hash: 'sha256:' + createHash('sha256').update(bytes).digest('hex') };
+        });
+        const discoveryRoots = query.discoveryRoots.map(root => {
+          if (!statSync(rootPath(root)).isDirectory()) throw new Error();
+          return root;
+        });
+        const rawStatus = bounded(native + '/status', 65_536).toString('utf8');
+        const field = name => rawStatus.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim();
+        const numbers = name => (field(name) ?? '').split(/\s+/).filter(Boolean).map(Number);
+        const argvBytes = bounded(native + '/cmdline', 65_536);
+        if (!argvBytes.length || argvBytes.at(-1) !== 0) throw new Error();
+        const env = Object.fromEntries(bounded(native + '/environ', 65_536).toString('utf8').split('\0')
+          .filter(value => /^(HOME|CODEX_HOME|CLAUDE_CONFIG_DIR|DISABLE_AUTOUPDATER)=/.test(value))
+          .map(value => { const split = value.indexOf('='); return [value.slice(0, split), value.slice(split + 1)]; }));
+        const stdio = [0, 1, 2].map(fd => {
+          const source = native + '/fd/' + fd, st = statSync(source), link = readlinkSync(source);
+          const kind = st.isDirectory() ? 'directory' : st.isSocket() ? 'socket' : st.isFIFO() ? 'pipe'
+            : /^\/dev\/(?:pts\/|tty)/.test(link) ? 'tty' : 'file';
+          return { fd, kind };
+        });
+        const sessionIds = new Set();
+        for (const entry of readdirSync(native + '/fd')) {
+          if (!/^\d+$/.test(entry)) throw new Error();
+          let source;
+          try { source = readlinkSync(native + '/fd/' + entry); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+          if (!/^\/home\/worker\/\.codex\/sessions\/.*\.jsonl$/.test(source)) continue;
+          const fd = openSync(native + '/fd/' + entry, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_CLOEXEC);
+          try {
+            const pinned = '/proc/self/fd/' + fd;
+            if (readlinkSync(pinned) !== source || !statSync(pinned).isFile()) throw new Error();
+            const buffer = Buffer.alloc(65_536), length = readSync(fd, buffer, 0, buffer.length, 0);
+            const first = buffer.subarray(0, length).toString('utf8').split('\n')[0];
+            const record = JSON.parse(first);
+            if (record.type === 'session_meta' && typeof record.payload?.id === 'string'
+              && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(record.payload.id)) sessionIds.add(record.payload.id);
+          } finally { closeSync(fd); }
+        }
+        const rawStat = bounded(native + '/stat', 65_536).toString('utf8');
+        const fields = rawStat.slice(rawStat.lastIndexOf(')') + 2).trim().split(/\s+/);
+        const result = { process: { processId: query.native.processId, processStart: initialNative.start,
+          processGroupId: Number(fields[2]), namespacePids: numbers('NSpid'), uids: numbers('Uid'), groups: numbers('Groups'),
+          capabilities: field('CapEff'), noNewPrivileges: field('NoNewPrivs'), argv: argvBytes.toString('utf8').slice(0, -1).split('\0'),
+          executable: readlinkSync(native + '/exe'), cwd: readlinkSync(native + '/cwd'), environment: env,
+          mountNamespace: readlinkSync(native + '/ns/mnt'), userNamespace: readlinkSync(native + '/ns/user'),
+          networkNamespace: readlinkSync(native + '/ns/net'), pidNamespace },
+          mountInfo: bounded(native + '/mountinfo', 1_048_576).toString('utf8'), stdio, files, discoveryRoots,
+          nativeSessionIds: [...sessionIds] };
+        observe();
+        if (stat(native).start !== initialNative.start || !uidMatches(native, workerUid)
+          || readlinkSync(native + '/ns/pid') !== pidNamespace) throw new Error();
+        return Object.freeze(result);
+      } catch { throw fault(); }
+      finally { for (const fd of transient.reverse()) closeSync(fd); }
+    };
+
+    observe();
+    return Object.freeze({ observe, snapshot, quiesce, close });
+  } catch { close(); throw fault(); }
+}
+
+/** Control operations do not require still-mounted sources: cancellation must remain stoppable. */
+export async function controlSandbox(policy, argv, facts, snapshotQuery) {
+  validatePolicy(policy);
+  assertLaunchCaller(policy, facts);
+  let control;
+  try {
+    const selector = /^([1-9]\d{0,9}):(0|[1-9]\d{0,19})$/.exec(argv[1] ?? '');
+    if (!['--observe', '--quiesce'].includes(argv[0]) || !selector) throw new Error();
+    const request = parseLaunchArgs(argv.slice(2)), worker = facts.lookupUser(request.worker);
+    if (!policy.worker_identities.includes(request.worker) || !worker || worker.uid <= 0
+      || worker.uid === facts.lookupUser(policy.control_identity)?.uid) throw new Error();
+    control = openSandboxControl({ processId: Number(selector[1]), processStart: selector[2] },
+      [process.execPath, policy.paths.installed_launcher, '--supervise', ...argv.slice(2)], worker.uid);
+    if (argv[0] === '--quiesce') return await control.quiesce();
+    const observation = control.observe();
+    return snapshotQuery === undefined ? observation : { ...observation, snapshot: control.snapshot(snapshotQuery) };
+  } catch {
+    throw new LaunchError(argv[0] === '--quiesce' ? 'sandbox-quiescence-unconfirmed' : 'sandbox-control-unverified',
+      'Sandbox control evidence is unconfirmed');
+  }
+  finally { control?.close(); }
+}
+
+export async function main(argv = process.argv.slice(2)) {
   try {
     if (typeof process.getuid !== 'function' || process.getuid() !== 0) throw new LaunchError('launcher-not-root', 'launcher must run as root via sudo');
     if (process.arch !== 'x64') throw new LaunchError('host-arch-unsupported', 'the seccomp program is defined for x86_64 only');
@@ -654,14 +989,31 @@ export function main(argv = process.argv.slice(2)) {
     const policyBytes = readFileSync(INSTALLED_POLICY);
     const policy = validatePolicy(JSON.parse(policyBytes.toString('utf8')));
     const inspect = argv[0] === '--inspect';
-    const request = parseLaunchArgs(inspect ? argv.slice(1) : argv), facts = hostFacts(policy);
+    const supervised = argv[0] === '--supervise';
+    const facts = hostFacts(policy);
     facts.policyFingerprint = 'sha256:' + createHash('sha256').update(policyBytes).digest('hex');
+    if (argv[0] === '--observe' || argv[0] === '--quiesce') {
+      assertLaunchCaller(policy, facts);
+      let query;
+      if (argv[0] === '--observe' && !process.stdin.isTTY) {
+        const chunks = []; let length = 0;
+        for await (const chunk of process.stdin) {
+          length += chunk.length;
+          if (length > 65_536) throw new LaunchError('sandbox-control-unverified', 'Snapshot request exceeds its bound');
+          chunks.push(chunk);
+        }
+        if (length) query = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      }
+      process.stdout.write(JSON.stringify(await controlSandbox(policy, argv, facts, query)) + '\n');
+      return;
+    }
+    const request = parseLaunchArgs(inspect || supervised ? argv.slice(1) : argv);
     if (inspect) {
       process.stdout.write(JSON.stringify(inspectLaunchRequest(policy, request, facts)) + '\n');
       return;
     }
     const resolved = resolveLaunchRequest(policy, request, facts);
-    const { file, args, mountSources } = buildSandboxCommand(policy, resolved);
+    const { file, args, mountSources } = buildSandboxCommand(policy, resolved, supervised);
     const workerDir = path.posix.join(policy.paths.worker_root, resolved.worker.name);
     const assignmentDir = path.posix.join(realpathSync(policy.paths.assignment_root), resolved.worker.name);
     const fds = [];
@@ -674,13 +1026,25 @@ export function main(argv = process.argv.slice(2)) {
     if (resolved.mailbox) fds[MOUNT_FD.mailbox] = openVerifiedSource(resolved.mailbox);
     if (resolved.nativePolicy) fds[MOUNT_FD.nativePolicy] = openVerifiedSource(resolved.nativePolicy);
     if (resolved.bootstrap) fds[MOUNT_FD.bootstrap] = openVerifiedSource(resolved.bootstrap);
-    const child = spawn(file, args, { stdio: ['inherit', 'inherit', 'inherit', ...Array.from(fds.slice(3), fd => fd ?? 'ignore')], env: {} });
+    const stdio = ['inherit', 'inherit', 'inherit', ...Array.from(fds.slice(3), fd => fd ?? 'ignore')];
+    const lifecycle = supervised ? startSandbox({ file, args }, stdio, resolved.worker.uid) : null;
+    const child = lifecycle?.child ?? spawn(file, args, { stdio, env: {} });
     for (const fd of fds.slice(3)) if (fd !== undefined) closeSync(fd);
+    let quiescing = false;
     for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP', 'SIGQUIT']) {
-      process.on(signal, () => child.kill(signal));
+      process.on(signal, () => {
+        if (!lifecycle) { child.kill(signal); return; }
+        if (quiescing) return;
+        quiescing = true;
+        lifecycle.quiesce().then(() => process.exit(128 + osConstants.signals[signal]), reportError);
+      });
     }
     child.on('error', reportError);
-    child.on('exit', (code, signal) => process.exit(code ?? 128 + (osConstants.signals[signal] ?? 0)));
+    child.on('exit', (code, signal) => {
+      if (quiescing) return;
+      lifecycle?.close();
+      process.exit(code ?? 128 + (osConstants.signals[signal] ?? 0));
+    });
   } catch (err) {
     reportError(err);
   }

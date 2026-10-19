@@ -134,6 +134,14 @@ function nextProjection(f: ReturnType<typeof fixture>, attemptId = "attempt-2") 
 }
 
 describe.each(["claude-code", "codex"] as const)("%s restricted native session", client => {
+  it("preserves the revision-4 launcher entry without the new supervision flag", async () => {
+    const f = fixture(client);
+    expect(await f.launch()).toMatchObject({ ok: true });
+    const command = vi.mocked(f.control.start).mock.calls[0]![0];
+    expect(command.args.slice(0, 4)).toEqual(["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--worker"]);
+    expect(command.args).not.toContain("--supervise");
+  });
+
   it("confirms worker quiescence before reporting an initial boundary fault", async () => {
     const f = fixture(client);
     f.observation.boundary.uid = f.p.control.uid;
@@ -832,6 +840,35 @@ async function fixedPolicyFixture(client: WorkerClient) {
 }
 
 describe.each(["claude-code", "codex"] as const)("%s fixed policy launch boundary", client => {
+  it("uses the supervised launcher entry for a fresh revision-5 session", async () => {
+    const f = await fixedPolicyFixture(client);
+    expect(await f.launch()).toMatchObject({ ok: true });
+    const command = vi.mocked(f.control.start).mock.calls[0]![0];
+    expect(command.args.slice(0, 4)).toEqual(["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--supervise"]);
+    expect(command.args.filter(arg => arg === "--supervise")).toHaveLength(1);
+    expect(command.nativeArgv).not.toContain("--supervise");
+  });
+
+  it("keeps the supervised entry on exact resume after launcher reconstruction", async () => {
+    const f = await fixedPolicyFixture(client), first = await f.launch();
+    if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");
+    const previous = first.managedSession, attempt = { ...f.attempt, previous };
+    f.p.previous = previous; f.p.generation = 2;
+    f.observation.identity = { ...f.observation.identity, generation: 2, processId: 4200, processStart: "200" };
+    f.observation.processGroupId = 4200;
+    const launcher = new RestrictedWorkerLauncher(f.control, () => 1000);
+    const adapter = client === "codex" ? new CodexResumeAdapter(f.tmux, { workerLauncher: launcher })
+      : new ClaudeResumeAdapter(f.tmux, { workerLauncher: launcher });
+    const result = client === "codex"
+      ? await (adapter as CodexResumeAdapter).resume("session", "codex_id", "native-session", "/work", undefined, undefined, undefined, undefined, undefined, undefined, undefined, attempt)
+      : await (adapter as ClaudeResumeAdapter).resume("session", "claude_id", "native-session", "/work", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, attempt);
+    expect(result).toMatchObject({ ok: true, managedSession: { identity: { generation: 2, nativeSessionId: previous.identity.nativeSessionId } } });
+    const command = vi.mocked(f.control.start).mock.calls[1]![0];
+    expect(command.args.slice(0, 4)).toEqual(["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--supervise"]);
+    expect(command.args.filter(arg => arg === "--supervise")).toHaveLength(1);
+    expect(command.nativeArgv).not.toContain("--supervise");
+  });
+
   it("forwards only the registered descriptor identity and records verified effective native policy", async () => {
     const f = await fixedPolicyFixture(client);
     expect(await f.launch()).toMatchObject({ ok: true });

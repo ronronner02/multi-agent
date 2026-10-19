@@ -904,9 +904,12 @@ export class TmuxAdapter {
   async respawnPane(
     paneTarget: string,
     command?: string,
-    opts?: { cwd?: string; env?: Record<string, string> },
+    opts?: { cwd?: string; env?: Record<string, string>; beforeWrite?: () => void },
   ): Promise<TmuxResult> {
-    return this.guardedInput(paneTarget, (pane, beforeWrite) => this.respawnPaneUnchecked(pane, command, opts, beforeWrite));
+    return this.guardedInput(paneTarget, (pane, beforeWrite) => this.respawnPaneUnchecked(pane, command, opts, () => {
+      beforeWrite();
+      opts?.beforeWrite?.();
+    }));
   }
 
   private async respawnPaneUnchecked(paneTarget: string, command: string | undefined, opts: { cwd?: string; env?: Record<string, string> } | undefined, beforeWrite: () => void): Promise<TmuxResult> {

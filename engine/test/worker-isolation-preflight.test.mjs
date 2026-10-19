@@ -11,11 +11,12 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile, spawn, spawnSync } from 'node:child_process';
+import childProcess, { execFile, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, closeSync, existsSync, readdirSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net, { createConnection } from 'node:net';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -614,6 +615,365 @@ describe('offline: fixed native policy and mailbox mounts', () => {
     }
   });
 
+});
+
+
+describe('offline: supervisor control', { skip: process.platform !== 'linux' }, () => {
+  async function fixture(t, { capture = true, holdSupervisor = false, argvBytes, contextRoot, sessionRoot } = {}) {
+    assert.equal(typeof workerLaunch.openSandboxControl, 'function');
+    const command = { file: '/usr/bin/bwrap', args: ['--unshare-user', '--unshare-pid', '--die-with-parent',
+      '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib',
+      '--symlink', 'usr/lib64', '/lib64', '--proc', '/proc', '--dev', '/dev',
+      '--info-fd', String(workerLaunch.SANDBOX_STATUS_FD), ...(contextRoot ? ['--ro-bind', contextRoot, '/context'] : []),
+      ...(sessionRoot ? ['--ro-bind', sessionRoot, '/home/worker/.codex/sessions'] : []),
+      '--', '/bin/sh', '-c', (sessionRoot ? 'exec 8< /home/worker/.codex/sessions/rollout.jsonl; printf native-ready; ' : '')
+        + 'sleep 30 & setsid sleep 30 & wait'] };
+    const source = `
+      import { startSandbox, SANDBOX_STATUS_FD } from ${JSON.stringify(new URL('../config/isolation/worker-launch.mjs', import.meta.url).href)};
+      const stdio = Array(SANDBOX_STATUS_FD + 1).fill('ignore');
+      ${sessionRoot ? "stdio[1] = 'pipe';" : ''}
+      const lifecycle = startSandbox(${JSON.stringify(command)}, stdio, process.getuid());
+      ${sessionRoot ? "const nativeReady = new Promise(resolve => lifecycle.child.stdout.once('data', resolve));" : ''}
+      lifecycle.child.once('exit', () => { ${holdSupervisor ? '' : 'process.exit(0);'} });
+      ${holdSupervisor ? 'setInterval(() => {}, 1000);' : ''}
+      process.once('SIGTERM', () => lifecycle.quiesce().finally(() => process.exit(0)));
+      await lifecycle.observe();
+      ${sessionRoot ? 'await nativeReady;' : ''}
+      ${capture ? '' : 'lifecycle.close();'}
+      process.stdout.write('captured\\n');
+    `;
+    const args = ['--input-type=module', '-e', source];
+    if (argvBytes !== undefined) {
+      args.push(fileURLToPath(import.meta.url));
+      args.push('x'.repeat(argvBytes - Buffer.byteLength([process.execPath, ...args].join('\0') + '\0') - 1));
+    }
+    const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    t.after(async () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const exit = new Promise(resolve => child.once('exit', resolve));
+      const timer = setTimeout(() => child.kill('SIGKILL'), 3_000);
+      child.kill('SIGTERM'); await exit; clearTimeout(timer);
+    });
+    await new Promise((resolve, reject) => {
+      child.stdout.once('data', resolve); child.once('error', reject);
+      child.once('exit', () => reject(new Error('Supervisor fixture exited before capture')));
+    });
+    const raw = readFileSync('/proc/' + child.pid + '/stat', 'utf8');
+    const selector = { processId: child.pid, processStart: raw.slice(raw.lastIndexOf(')') + 2).trim().split(/\s+/)[19] };
+    return { child, selector, argv: [process.execPath, ...args] };
+  }
+
+  test('observes a separately supervised real namespace through retained descriptors', { timeout: 6_000 }, async t => {
+    const { selector, argv } = await fixture(t);
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const observation = control.observe();
+    assert.equal(observation.schema, 'multi-agent-sandbox-control/v1');
+    assert.deepEqual(observation.supervisor, selector);
+    assert.equal(observation.commandDigest, 'sha256:' + createHash('sha256').update(JSON.stringify(argv)).digest('hex'));
+    assert.equal(observation.uid, process.getuid());
+    assert.notEqual(observation.pidNamespace, readlinkSync('/proc/self/ns/pid'));
+    assert.equal(Object.isFrozen(observation.supervisor), true);
+    assert.deepEqual(control.observe(), observation);
+    control.close(); control.close();
+    assert.throws(() => control.observe(), { code: 'sandbox-control-unverified' });
+  });
+
+  test('snapshot reads kernel facts and bounded context bytes from the pinned namespace', { timeout: 6_000 }, async t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'sandbox-snapshot-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    writeFileSync(path.join(root, 'instructions'), 'immutable context bytes', { mode: 0o440 });
+    const { selector, argv } = await fixture(t, { contextRoot: root });
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const observed = control.observe();
+    const query = { native: { processId: observed.sandboxPid, processStart: observed.processStart },
+      files: ['/context/instructions'], discoveryRoots: ['/context'] };
+    const result = control.snapshot(query);
+    assert.equal(result.process.processId, observed.sandboxPid);
+    assert.equal(result.process.processStart, observed.processStart);
+    assert.deepEqual(result.process.uids, [process.getuid(), process.getuid(), process.getuid(), process.getuid()]);
+    assert.equal(result.process.pidNamespace, observed.pidNamespace);
+    assert.notEqual(result.process.mountNamespace, readlinkSync('/proc/self/ns/mnt'));
+    assert.notEqual(result.process.userNamespace, readlinkSync('/proc/self/ns/user'));
+    assert.ok(Array.isArray(result.process.argv) && result.process.argv.length > 0);
+    assert.ok(result.mountInfo.includes(' /context '));
+    assert.deepEqual(result.files, [{ path: '/context/instructions',
+      hash: 'sha256:' + createHash('sha256').update('immutable context bytes').digest('hex') }]);
+    assert.deepEqual(result.discoveryRoots, ['/context']);
+    assert.deepEqual(result.stdio.map(row => row.fd), [0, 1, 2]);
+    assert.equal(JSON.stringify(result).includes('authorization'), false);
+  });
+
+  test('authority opening ignores a descriptor that vanished after enumeration', { timeout: 6_000 }, async t => {
+    const { selector, argv } = await fixture(t);
+    const original = fs.readdirSync;
+    let injected = false;
+    fs.readdirSync = (file, ...args) => {
+      const result = original(file, ...args);
+      if (String(file).startsWith('/proc/self/fd/') && String(file).endsWith('/fd') && !injected) {
+        injected = true; return [...result, '2147483647'];
+      }
+      return result;
+    };
+    syncBuiltinESMExports();
+    try {
+      const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+      t.after(() => control.close());
+      assert.equal(injected, true);
+      assert.equal(control.observe().supervisor.processId, selector.processId);
+    } finally { fs.readdirSync = original; syncBuiltinESMExports(); }
+  });
+
+  test('snapshot releases descriptors after successful and rejected queries', { timeout: 6_000 }, async t => {
+    const { selector, argv } = await fixture(t);
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const observed = control.observe(), before = readdirSync('/proc/self/fd').length;
+    const query = { native: { processId: observed.sandboxPid, processStart: observed.processStart }, files: [], discoveryRoots: [] };
+    for (let index = 0; index < 20; index++) {
+      control.snapshot(query);
+      assert.throws(() => control.snapshot({ ...query, native: { ...query.native,
+        processStart: String(BigInt(query.native.processStart) + 1n) } }), { code: 'sandbox-control-unverified' });
+    }
+    assert.equal(readdirSync('/proc/self/fd').length, before);
+  });
+
+  test('snapshot rejects a rollout descriptor replaced between lookup and open', { timeout: 6_000 }, async t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'sandbox-rollout-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const content = JSON.stringify({ type: 'session_meta', payload: { id: 'fixture-native-session' } }) + '\n';
+    writeFileSync(path.join(root, 'rollout.jsonl'), content);
+    writeFileSync(path.join(root, 'foreign.jsonl'), content);
+    const { selector, argv } = await fixture(t, { sessionRoot: root });
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const observed = control.observe();
+    const nativePid = Number(readFileSync('/proc/' + observed.sandboxPid + '/task/' + observed.sandboxPid + '/children', 'utf8').trim().split(' ')[0]);
+    const nativeStat = readFileSync('/proc/' + nativePid + '/stat', 'utf8');
+    const query = { native: { processId: nativePid,
+      processStart: nativeStat.slice(nativeStat.lastIndexOf(')') + 2).trim().split(/\s+/)[19] }, files: [], discoveryRoots: [] };
+    assert.deepEqual(control.snapshot(query).nativeSessionIds, ['fixture-native-session']);
+    const original = fs.openSync;
+    let replaced = false;
+    fs.openSync = (file, ...args) => {
+      if (String(file).endsWith('/fd/8')) { replaced = true; return original(path.join(root, 'foreign.jsonl'), ...args); }
+      return original(file, ...args);
+    };
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => control.snapshot(query), { code: 'sandbox-control-unverified' });
+      assert.equal(replaced, true);
+    } finally { fs.openSync = original; syncBuiltinESMExports(); }
+  });
+
+  for (const field of ['foreign-process', 'stale-process', 'foreign-file', 'root-escape', 'duplicate-file', 'unknown-key']) {
+    test('snapshot rejects ' + field + ' without reading outside its namespace scope', { timeout: 6_000 }, async t => {
+      const { selector, argv } = await fixture(t);
+      const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+      t.after(() => control.close());
+      const observed = control.observe();
+      const query = { native: { processId: observed.sandboxPid, processStart: observed.processStart }, files: [], discoveryRoots: [] };
+      if (field === 'foreign-process') query.native.processId = process.pid;
+      else if (field === 'stale-process') query.native.processStart = String(BigInt(query.native.processStart) + 1n);
+      else if (field === 'foreign-file') query.files = ['/etc/shadow'];
+      else if (field === 'root-escape') query.files = ['/context/../etc/shadow'];
+      else if (field === 'duplicate-file') query.files = ['/context/file', '/context/file'];
+      else query.ready = true;
+      assert.throws(() => control.snapshot(query), { code: 'sandbox-control-unverified' });
+      assert.equal(process.kill(process.pid, 0), true);
+      assert.deepEqual(control.observe(), observed);
+    });
+  }
+
+  for (const argvBytes of [65_536, 65_537]) {
+    test(`observes and stops an admitted supervisor with ${argvBytes} argv bytes`, { timeout: 6_000 }, async t => {
+      const { child, selector, argv } = await fixture(t, { argvBytes });
+      assert.equal(Buffer.byteLength(argv.join('\0') + '\0'), argvBytes);
+      const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+      t.after(() => control.close());
+      const observed = control.observe(), exited = new Promise(resolve => child.once('exit', resolve));
+      assert.equal(observed.commandDigest, 'sha256:' + createHash('sha256').update(JSON.stringify(argv)).digest('hex'));
+      assert.deepEqual(await control.quiesce(), { status: 'terminated', observation: observed });
+      await exited;
+      assert.equal(existsSync('/proc/' + observed.sandboxPid + '/stat'), false);
+    });
+  }
+
+  for (const field of ['command', 'process-start', 'worker', 'selector']) {
+    test('rejects a mismatched ' + field + ' without signaling the supervisor', { timeout: 6_000 }, async t => {
+      const { child, selector, argv } = await fixture(t);
+      const changed = field === 'process-start' ? { ...selector, processStart: String(BigInt(selector.processStart) + 1n) }
+        : field === 'selector' ? { ...selector, processId: -1 } : selector;
+      assert.throws(() => workerLaunch.openSandboxControl(changed, field === 'command' ? [...argv, 'other-command'] : argv,
+        process.getuid() + (field === 'worker' ? 1 : 0)), { code: 'sandbox-control-unverified' });
+      assert.equal(process.kill(child.pid, 0), true);
+    });
+  }
+
+  test('rejects a supervisor without retained namespace authority', { timeout: 6_000 }, async t => {
+    const { child, selector, argv } = await fixture(t, { capture: false });
+    assert.throws(() => workerLaunch.openSandboxControl(selector, argv, process.getuid()), { code: 'sandbox-control-unverified' });
+    assert.equal(process.kill(child.pid, 0), true);
+  });
+
+
+  test('confirms external stop only after the namespace and supervisor stop, preserving unrelated work', { timeout: 6_000 }, async t => {
+    const { child, selector, argv } = await fixture(t);
+    const unrelated = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { stdio: 'ignore' });
+    t.after(() => unrelated.kill('SIGKILL'));
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid()), observed = control.observe();
+    t.after(() => control.close());
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    const pending = control.quiesce();
+    assert.equal(control.quiesce(), pending);
+    assert.deepEqual(await pending, { status: 'terminated', observation: observed });
+    await exited;
+    assert.equal(existsSync('/proc/' + observed.sandboxPid + '/stat'), false);
+    assert.equal(process.kill(unrelated.pid, 0), true);
+    assert.throws(() => control.observe(), { code: 'sandbox-control-unverified' });
+  });
+
+  test('never confirms external stop when the namespace helper fails while work is live', { timeout: 6_000 }, async t => {
+    const { child, selector, argv } = await fixture(t);
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid()), observed = control.observe();
+    t.after(() => control.close());
+    const realSpawn = spawn;
+    const mocked = t.mock.method(childProcess, 'spawn', (file, args, options) => file === '/usr/bin/nsenter'
+      ? realSpawn(process.execPath, ['-e', 'process.exit(1)'], options) : realSpawn(file, args, options));
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(control.quiesce(), { code: 'sandbox-quiescence-unconfirmed' });
+      assert.equal(process.kill(child.pid, 0), true);
+      assert.equal(process.kill(observed.sandboxPid, 0), true);
+    } finally { mocked.mock.restore(); syncBuiltinESMExports(); }
+  });
+
+  test('does not report stopped while the outer supervisor remains live', { timeout: 14_000 }, async t => {
+    const { child, selector, argv } = await fixture(t, { holdSupervisor: true });
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    await assert.rejects(control.quiesce(), { code: 'sandbox-quiescence-unconfirmed' });
+    assert.equal(process.kill(child.pid, 0), true);
+  });
+
+  test('authenticates the control caller before consulting process descriptors', async () => {
+    assert.equal(typeof workerLaunch.controlSandbox, 'function');
+    await assert.rejects(workerLaunch.controlSandbox(policy, ['--observe', 'invalid'],
+      fakeFacts({ callerUid: 1000 })), { code: 'caller-not-allowed' });
+  });
+});
+
+describe('offline: sandbox lifecycle', { skip: process.platform !== 'linux' }, () => {
+  function fixture(t, { fakeInfo, uid = process.getuid() } = {}) {
+    assert.equal(typeof workerLaunch.startSandbox, 'function');
+    const fd = workerLaunch.SANDBOX_STATUS_FD;
+    const command = fakeInfo === undefined ? {
+      file: '/usr/bin/bwrap', args: ['--unshare-user', '--unshare-pid', '--die-with-parent',
+        '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib',
+        '--symlink', 'usr/lib64', '/lib64', '--proc', '/proc', '--dev', '/dev', '--info-fd', String(fd), '--',
+        '/bin/sh', '-c', 'sleep 10 & setsid sleep 10 & wait'],
+    } : { file: process.execPath, args: ['-e',
+      `require('node:fs').writeSync(${fd}, ${JSON.stringify(fakeInfo)}); require('node:fs').closeSync(${fd}); setTimeout(() => {}, 10000)`] };
+    const stdio = Array(fd + 1).fill('ignore'); stdio[fd] = 'pipe';
+    const lifecycle = workerLaunch.startSandbox(command, stdio, uid);
+    t.after(() => { lifecycle.child.kill('SIGKILL'); lifecycle.close(); });
+    return { lifecycle, command };
+  }
+
+  test('observes the owned namespace init from a private descriptor and kernel facts', { timeout: 5_000 }, async t => {
+    const { lifecycle, command } = fixture(t);
+    const original = JSON.stringify(command); command.args.push('changed-after-start');
+    const observed = await lifecycle.observe();
+    assert.equal(observed.commandDigest, 'sha256:' + createHash('sha256').update(original).digest('hex'));
+    assert.equal(observed.parentProcessId, lifecycle.child.pid);
+    assert.equal(observed.uid, process.getuid());
+    assert.notEqual(observed.pidNamespace, readlinkSync('/proc/self/ns/pid'));
+    assert.equal(Object.isFrozen(observed), true);
+    const result = await lifecycle.quiesce();
+    assert.equal(result.status, 'terminated'); assert.deepEqual(result.observation, observed);
+  });
+
+  test('quiesces detached descendants without targeting an unrelated process', { timeout: 5_000 }, async t => {
+    const unrelated = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { stdio: 'ignore' });
+    t.after(() => unrelated.kill('SIGKILL'));
+    const { lifecycle } = fixture(t), observed = await lifecycle.observe();
+    const first = lifecycle.quiesce();
+    assert.equal(lifecycle.quiesce(), first);
+    await first;
+    assert.equal(existsSync(`/proc/${observed.sandboxPid}/stat`), false);
+    assert.equal(process.kill(unrelated.pid, 0), true);
+    await assert.rejects(lifecycle.observe(), { code: 'sandbox-observation-unverified' });
+  });
+
+  test('reconciles namespace exit between the liveness check and helper startup', { timeout: 5_000 }, async t => {
+    const { lifecycle } = fixture(t), observed = await lifecycle.observe();
+    const realSpawn = spawn;
+    let helperExitCode, helperCalls = 0;
+    const mockedSpawn = t.mock.method(childProcess, 'spawn', (file, args, options) => {
+      if (file !== '/usr/bin/nsenter') return realSpawn(file, args, options);
+      helperCalls++;
+      process.kill(observed.sandboxPid, 'SIGKILL');
+      // Hold helper creation until the real namespace init has been reaped.
+      const deadline = Date.now() + 2_000, pause = new Int32Array(new SharedArrayBuffer(4));
+      while (existsSync(`/proc/${observed.sandboxPid}/stat`)) {
+        assert.ok(Date.now() < deadline, 'sandbox init was not reaped');
+        Atomics.wait(pause, 0, 0, 1);
+      }
+      const helper = realSpawn(file, args, options);
+      helper.once('exit', code => { helperExitCode = code; });
+      return helper;
+    });
+    syncBuiltinESMExports();
+    try {
+      const result = await lifecycle.quiesce();
+      assert.equal(result.status, 'terminated');
+      assert.deepEqual(result.observation, observed);
+      assert.equal(helperCalls, 1);
+      assert.equal(helperExitCode, 1);
+      assert.equal(existsSync(`/proc/${observed.sandboxPid}/stat`), false);
+      assert.equal(existsSync(`/proc/${lifecycle.child.pid}/stat`), false);
+    } finally {
+      mockedSpawn.mock.restore();
+      syncBuiltinESMExports();
+    }
+  });
+
+  test('rejects helper failure while the owned namespace is still running', { timeout: 5_000 }, async t => {
+    const { lifecycle } = fixture(t), observed = await lifecycle.observe();
+    const realSpawn = spawn;
+    let helperCalls = 0;
+    const mockedSpawn = t.mock.method(childProcess, 'spawn', (file, args, options) => {
+      if (file !== '/usr/bin/nsenter') return realSpawn(file, args, options);
+      helperCalls++;
+      return realSpawn(process.execPath, ['-e', 'process.exit(1)'], options);
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(lifecycle.quiesce(), { code: 'sandbox-quiescence-unconfirmed' });
+      assert.equal(helperCalls, 1);
+      assert.equal(process.kill(observed.sandboxPid, 0), true);
+    } finally {
+      mockedSpawn.mock.restore();
+      syncBuiltinESMExports();
+    }
+  });
+
+  for (const [name, fakeInfo] of [['host process', JSON.stringify({ 'child-pid': process.pid })],
+    ['malformed status', '{'], ['oversized status', 'x'.repeat(4097)]]) {
+    test(`rejects ${name} without treating it as a shutdown target`, { timeout: 5_000 }, async t => {
+      const { lifecycle } = fixture(t, { fakeInfo });
+      await assert.rejects(lifecycle.observe(), { code: 'sandbox-observation-unverified' });
+      await assert.rejects(lifecycle.quiesce(), { code: 'sandbox-quiescence-unconfirmed' });
+      assert.equal(process.kill(process.pid, 0), true);
+    });
+  }
+
+  test('rejects a namespace owned by a different worker', { timeout: 5_000 }, async t => {
+    const { lifecycle } = fixture(t, { uid: process.getuid() + 1 });
+    await assert.rejects(lifecycle.observe(), { code: 'sandbox-observation-unverified' });
+    await assert.rejects(lifecycle.quiesce(), { code: 'sandbox-quiescence-unconfirmed' });
+  });
 });
 
 describe('offline: sandbox command construction', () => {
