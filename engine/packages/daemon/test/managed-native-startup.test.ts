@@ -1,19 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, readFileSync, readlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { RigRepository } from "../src/domain/rig-repository.js";
+import { SessionRegistry } from "../src/domain/session-registry.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { canonicalJson, type PlanBinding, type TeamTaskAuthority } from "../src/contracts/team-control.js";
 import type { TeamControlOptions } from "../src/routes/team-control.js";
-import { inspectManagedWorker, resolveManagedWorkerScope } from "../src/adapters/worker-launch-control.js";
+import { inspectManagedWorker, resolveManagedWorkerScope, resolveManagedWorkerSeat, startManagedWorkerCommand, startManagedWorkerInPane } from "../src/adapters/worker-launch-control.js";
+import { TmuxAdapter } from "../src/adapters/tmux.js";
 
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 import type { WorkerMailboxBridge } from "../src/adapters/worker-mailbox-bridge.js";
+import type { WorkerCommand, WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 
 const inspectionIo = vi.hoisted(() => ({ execFile: vi.fn(), readPolicy: vi.fn(), end: vi.fn() }));
 vi.mock("node:child_process", async importOriginal => ({
@@ -120,6 +125,236 @@ describe("managed launch governed scope resolution", () => {
     governance.transitionTask(command(task.qitemId, { expectedTaskVersion: task.entityVersion, actorSession: "builder@rig",
       state: "blocked", blockedOn: "owner-decision" }), binding);
     const before = counts(); expect(resolve).toThrow(); expect(counts()).toEqual(before);
+  });
+
+  describe("persisted managed seat resolution", () => {
+    let rigRepo: RigRepository, sessions: SessionRegistry, nodeId: string, tree: string;
+    const seat = () => resolveManagedWorkerSeat(context(), { db, queue, governance, options, rigRepo, sessions });
+    beforeEach(() => {
+      tree = mkdtempSync(join(tmpdir(), "managed-assigned-tree-"));
+      rigRepo = new RigRepository(db); sessions = new SessionRegistry(db);
+      nodeId = rigRepo.addNode("rig", "persisted-seat", { runtime: "claude-code", cwd: tree }).id;
+      sessions.registerSession(nodeId, "builder@rig");
+      sessions.updateBinding(nodeId, { tmuxSession: "builder@rig", tmuxPane: "%3" });
+    });
+    afterEach(() => rmSync(tree, { recursive: true, force: true }));
+
+    it("rejects two live nodes with the same governed destination name", () => {
+      const other = rigRepo.addNode("rig", "duplicate-seat", { runtime: "claude-code", cwd: tree });
+      sessions.registerSession(other.id, "builder@rig");
+      sessions.updateBinding(other.id, { tmuxSession: "builder@rig", tmuxPane: "%4" });
+      const before = counts();
+      expect(seat).toThrow("managed_launch_seat_unverified");
+      expect(counts()).toEqual(before);
+    });
+
+    it("uses the current session's node cwd and exact persisted pane without changing authority", () => {
+      const before = counts();
+      expect(seat()).toMatchObject({ nodeId, tree, pane: "%3", scope: { sessionId: "builder@rig" } });
+      expect(seat().sessionRecordId).toBe(sessions.findResumeContextByName("builder@rig")!.sessionId);
+      expect(counts()).toEqual(before);
+      expect(JSON.stringify(seat())).not.toMatch(/owner-fixture|worker-fixture/);
+    });
+
+    it.each(["missing-session", "stopped-session", "superseded-session", "runtime", "missing-tree",
+      "relative-tree", "missing-binding", "foreign-terminal", "invalid-pane"] as const)(
+      "rejects %s persisted seat state without an admission or effect", field => {
+        if (field === "missing-session") db.prepare("DELETE FROM sessions").run();
+        else if (field === "stopped-session") db.prepare("UPDATE sessions SET status = 'stopped'").run();
+        else if (field === "superseded-session") {
+          const newer = sessions.registerSession(nodeId, "builder@rig");
+          sessions.markSuperseded(newer.id);
+        } else if (field === "runtime") db.prepare("UPDATE nodes SET runtime = 'codex'").run();
+        else if (field === "missing-tree") db.prepare("UPDATE nodes SET cwd = NULL").run();
+        else if (field === "relative-tree") db.prepare("UPDATE nodes SET cwd = 'relative/tree'").run();
+        else if (field === "missing-binding") sessions.clearBinding(nodeId);
+        else if (field === "foreign-terminal") sessions.updateBinding(nodeId, { tmuxSession: "other@rig" });
+        else sessions.updateBinding(nodeId, { tmuxPane: "builder@rig:0.0" });
+        const before = counts();
+        expect(seat).toThrow("managed_launch_seat_unverified");
+        expect(counts()).toEqual(before);
+      });
+
+    it("rejects an alias rather than resolving it to a different assigned tree", () => {
+      const alias = tree + "-alias";
+      symlinkSync(tree, alias);
+      try {
+        db.prepare("UPDATE nodes SET cwd = ?").run(alias);
+        expect(seat).toThrow("managed_launch_seat_unverified");
+      } finally { rmSync(alias); }
+    });
+
+    it("re-reads the tree and pane after a persisted assignment change", () => {
+      expect(seat()).toMatchObject({ tree, pane: "%3" });
+      sessions.updateBinding(nodeId, { tmuxPane: "%9" });
+      expect(seat()).toMatchObject({ tree, pane: "%9" });
+      options.credentials.workers = [];
+      expect(seat).toThrow("managed_launch_seat_unverified");
+    });
+  });
+
+  describe("governed start sequencing", () => {
+    const launchInput = (): WorkerLaunchInput => ({ client: "claude-code", attempt: {
+      attemptId: "attempt", deadline: now + 30_000,
+      context: { ...context(), projection: { attemptId: "attempt" }, generatedHash: "sha256:" + "f".repeat(64) } as ContextManifest,
+    } });
+    const launchCommand = (): WorkerCommand => ({ file: "/usr/bin/sudo",
+      args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--supervise", "--worker", "ma-worker1",
+        "--role", "implementer", "--tree", "/assigned/tree", "--run", "run", "--attempt", "attempt", "--",
+        "/opt/multi-agent/toolchain/clients/bin/claude", "--session-id", "native-fixture"],
+      attemptId: "attempt", deadline: now + 30_000, contextHash: "sha256:" + "f".repeat(64), client: "claude-code",
+      nativeArgv: ["/opt/multi-agent/toolchain/clients/bin/claude", "--session-id", "native-fixture"],
+      network: { mode: "filtered-proxy", hostNamespace: "net:[1]", profileFingerprint: "sha256:" + "a".repeat(64), preflightRef: "evidence/preflight" } });
+    const start = <T>(input: WorkerLaunchInput, body: WorkerCommand, effect: (command: Readonly<WorkerCommand>) => Promise<T>) =>
+      startManagedWorkerCommand(input, body, { db, queue, governance, options, start: effect, now: () => now });
+
+    it("commits the exact immutable command before entering the start transport", async () => {
+      const input = launchInput(), body = launchCommand(), expected = structuredClone(body);
+      const effect = vi.fn(async (received: Readonly<WorkerCommand>) => {
+        expect(db.inTransaction).toBe(false);
+        expect(governance.getNativeLaunchIntent("run", "attempt")).toMatchObject({
+          state: "admitted", command: expected, commandDigest: hashBytes(canonicalJson(expected)), sessionId: "builder@rig" });
+        expect(governance.getAttempt("attempt")).toBeNull();
+        expect(Object.isFrozen(received.args)).toBe(true);
+        body.args.push("changed-after-admission");
+        expect(received).toEqual(expected);
+        return { transportAccepted: true };
+      });
+      await expect(start(input, body, effect)).resolves.toEqual({ transportAccepted: true });
+      expect(effect).toHaveBeenCalledTimes(1);
+      await expect(start(input, expected, effect)).rejects.toThrow("managed_start_admission_denied");
+      expect(effect).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["context", "deadline", "client", "attempt", "owner", "worker", "binding", "secret"])("blocks %s drift before any start effect", async field => {
+      const input = launchInput(), body = launchCommand(), effect = vi.fn();
+      if (field === "context") body.contextHash = "sha256:" + "e".repeat(64);
+      else if (field === "deadline") body.deadline = now;
+      else if (field === "client") body.client = "codex";
+      else if (field === "attempt") body.attemptId = "foreign";
+      else if (field === "owner") options.credentials.ownerToken = null;
+      else if (field === "worker") options.credentials.workers = [];
+      else if (field === "binding") options.resolveBinding = () => ({ ...binding, policyRevision: 6 });
+      else body.args.push("owner-fixture");
+      await expect(start(input, body, effect)).rejects.toThrow();
+      expect(effect).not.toHaveBeenCalled();
+      expect(governance.getNativeLaunchIntent("run", "attempt")).toBeNull();
+      expect(governance.getAttempt("attempt")).toBeNull();
+    });
+
+    it("does not start when durable admission fails", async () => {
+      db.exec(`CREATE TRIGGER fail_start_intent BEFORE INSERT ON events
+        WHEN json_extract(NEW.payload, '$.action') = 'attempt.launch-intent'
+        BEGIN SELECT RAISE(ABORT, 'fixture persistence failure'); END`);
+      const effect = vi.fn();
+      await expect(start(launchInput(), launchCommand(), effect)).rejects.toThrow("managed_start_admission_denied");
+      expect(effect).not.toHaveBeenCalled();
+      expect(governance.getNativeLaunchIntent("run", "attempt")).toBeNull();
+    });
+
+    it("preserves unresolved intent when the transport throws and never grants a replay", async () => {
+      const effect = vi.fn(async () => { throw new Error("transport error containing owner-fixture"); });
+      await expect(start(launchInput(), launchCommand(), effect)).rejects.toThrow("managed_start_unconfirmed");
+      expect(governance.getNativeLaunchIntent("run", "attempt")).toMatchObject({ state: "admitted", command: launchCommand() });
+      expect(governance.getAttempt("attempt")).toBeNull();
+      await expect(start(launchInput(), launchCommand(), effect)).rejects.toThrow("managed_start_admission_denied");
+      expect(effect).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects a concurrent start while the first transport is pending", async () => {
+      let finish!: () => void;
+      const effect = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+      const pending = start(launchInput(), launchCommand(), effect);
+      try {
+        await expect(start(launchInput(), launchCommand(), effect)).rejects.toThrow("managed_start_admission_denied");
+        expect(effect).toHaveBeenCalledTimes(1);
+      } finally { finish(); await pending; }
+    });
+
+    it("uses the terminal owner and exact quoted argv after admission without typing terminal input", async () => {
+      const body = launchCommand(); body.args.push("quoted ' value; $(sentinel)");
+      const effects: string[][] = [];
+      const tmux = new TmuxAdapter(async () => { throw new Error("unexpected shell transport"); }, undefined, async argv => {
+        if (argv[1] === "respawn-pane") {
+          expect(governance.getNativeLaunchIntent("run", "attempt")?.command).toEqual(body);
+          expect(db.inTransaction).toBe(false);
+        }
+        effects.push(argv); return "";
+      });
+      const resolvePane = vi.fn(async sessionId => { expect(sessionId).toBe("builder@rig"); return "%42"; });
+      await expect(startManagedWorkerInPane(launchInput(), body, { db, queue, governance, options, tmux,
+        resolvePane, now: () => now })).resolves.toEqual({ pane: "%42" });
+      const respawns = effects.filter(argv => argv[1] === "respawn-pane");
+      expect(respawns).toHaveLength(1);
+      expect(respawns[0]!.slice(0, 6)).toEqual(["tmux", "respawn-pane", "-t", "%42", "-c", "/"]);
+      const line = respawns[0]!.at(-1)!;
+      expect(line.startsWith("exec ")).toBe(true);
+      const parsed = spawnSync("/bin/sh", ["-c", "set -- " + line.slice(5) + "; printf '%s\\0' \"$@\""]);
+      expect(parsed.status).toBe(0);
+      expect(parsed.stdout.toString().split("\0").slice(0, -1)).toEqual([body.file, ...body.args]);
+      expect(effects.some(argv => ["send-keys", "load-buffer", "paste-buffer"].includes(argv[1]!))).toBe(false);
+    });
+
+    it("leaves a terminal transport failure unresolved and strips its diagnostics", async () => {
+      const tmux = { respawnPane: vi.fn(async () => ({ ok: false as const, code: "tmux_unavailable" as const, message: "owner-fixture" })) };
+      await expect(startManagedWorkerInPane(launchInput(), launchCommand(), { db, queue, governance, options,
+        tmux, resolvePane: async () => "%42", now: () => now })).rejects.toThrow(/^managed_start_unconfirmed$/);
+      expect(governance.getNativeLaunchIntent("run", "attempt")?.state).toBe("admitted");
+      expect(governance.getAttempt("attempt")).toBeNull();
+    });
+
+    it.each(["expiry", "owner-revocation", "worker-revocation", "run-cancellation", "task-block",
+      "session-reassignment", "binding-drift", "intent-digest", "intent-command"] as const)(
+      "blocks %s while the terminal owner awaits environment metadata", async field => {
+      const body = launchCommand(), effects: string[][] = [];
+      let entered!: () => void, release!: (value: string) => void;
+      const metadataPending = new Promise<void>(resolve => { entered = resolve; });
+      const tmux = new TmuxAdapter(async () => { throw new Error("unexpected shell transport"); }, undefined, async argv => {
+        effects.push(argv);
+        if (argv[1] === "show-environment") {
+          entered(); return new Promise<string>(resolve => { release = resolve; });
+        }
+        return "";
+      });
+      const pending = startManagedWorkerInPane(launchInput(), body, { db, queue, governance, options,
+        tmux, resolvePane: async () => "%42", now: () => now });
+      await metadataPending;
+      if (field === "expiry") now = body.deadline;
+      else if (field === "owner-revocation") options.credentials.ownerToken = null;
+      else if (field === "worker-revocation") options.credentials.workers = [];
+      else if (field === "run-cancellation") governance.cancelRun(command("cancel", { reason: "Owner cancellation fixture" }),
+        { kind: "owner", sessionId: "owner-control" });
+      // Persist external queue drift directly: worker transitions are intentionally denied while a launch is unresolved.
+      else if (field === "task-block") db.prepare("UPDATE queue_items SET state = 'blocked' WHERE qitem_id = ?").run(task.qitemId);
+      else if (field === "session-reassignment") {
+        options.credentials.workers!.push({ token: "replacement-fixture", sessionId: "replacement@rig", runId: "run" });
+        db.prepare("UPDATE queue_items SET destination_session = ? WHERE qitem_id = ?").run("replacement@rig", task.qitemId);
+      } else if (field === "binding-drift") options.resolveBinding = () => ({ ...binding, policyRevision: 6 });
+      else {
+        const intent = governance.getNativeLaunchIntent("run", "attempt")!;
+        const altered = field === "intent-digest" ? { ...intent, commandDigest: "sha256:" + "e".repeat(64) }
+          : { ...intent, command: { ...body, args: [...body.args, "changed-during-lookup"] } };
+        vi.spyOn(governance, "getNativeLaunchIntent").mockReturnValue(altered);
+      }
+      release("");
+      const outcome = await pending.then(value => ({ value }), error => ({ error: (error as Error).message }));
+      expect(effects.filter(argv => argv[1] === "respawn-pane")).toEqual([]);
+      expect(outcome).toEqual({ error: "managed_start_unconfirmed" });
+      expect(governance.getNativeLaunchIntent("run", "attempt")?.state).toBe("admitted");
+      expect(governance.getAttempt("attempt")).toBeNull();
+    });
+
+    it("snapshots the command before asynchronous terminal resolution", async () => {
+      const input = launchInput(), body = launchCommand(), expected = structuredClone(body);
+      let resolved!: (pane: string) => void;
+      const tmux = { respawnPane: vi.fn(async () => ({ ok: true as const })) };
+      const pending = startManagedWorkerInPane(input, body, { db, queue, governance, options, tmux,
+        resolvePane: () => new Promise(resolve => { resolved = resolve; }), now: () => now });
+      body.args.push("changed-while-resolving"); input.attempt.attemptId = "changed";
+      resolved("%42");
+      await expect(pending).resolves.toEqual({ pane: "%42" });
+      expect(governance.getNativeLaunchIntent("run", "attempt")?.command).toEqual(expected);
+    });
   });
 
   describe("owner-controlled native admission", () => {

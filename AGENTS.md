@@ -40,15 +40,29 @@ These rules apply to every agent that implements tasks in this repository, atten
 
 ### Bounded loops and stop conditions
 - Make at most two fix-and-rerun cycles per failing check. Each task gets two review rounds, under the plan's Review convergence rule; after round 2, P2/P3 findings become recorded residuals. Rounds 3 and 4 run only for open P0/P1 findings, and only while the progress gate holds: the open P0/P1 count is strictly lower than after the previous round, and no P0/P1 fixed earlier reappears. Those rounds fix only the open P0/P1 findings. When the gate fails, or a P0/P1 is still open after round 4, the task goes back to the plan owner. When the plan owner records a fix decision for that P0/P1, implement only the decided fix, refresh the candidate and rerun verification; the fix gets one further review round, and a P0/P1 that survives it goes back to the owner again.
+- **Task-level budget (owner rule, 2026-10-19).** The limits below apply to the whole task, summed over every slice, run and session. They never reset when a session resumes, compacts or restarts.
+  - A task gets at most 3 `spec-work` runs, 6 edit slices and about 1,200 changed lines.
+  - A task gets at most one scope amendment. A second needed amendment means the task is too large: stop and propose a split to the plan owner.
+  - Review rounds count per task, not per slice. A slice-level review uses one of the task's rounds, so prefer one review of the task candidate over a review of every slice.
+  - When the next slice would exceed a limit, stop before starting it. Record what is done and reviewed, then hand the remainder back as a split proposal.
+  - The budget applies from T037 and every task not yet started. T010's closeout follows the owner-decided terms in the plan's T010 owner split.
+- When a done signal depends on a production component, owner or composition path that does not exist yet and is not a named slice of the task, stop and report it as a plan question. Do not prepare a scope amendment to absorb it.
+- A resumed or compacted session reuses recorded evidence whose source hashes still match. It does not rerun those checks or re-review an unchanged candidate.
 - When running unattended, do not ask questions. Take the most conservative option these rules allow, record it, and continue.
 - Stop and report rather than improvise when:
   - the plan conflicts with the current source;
   - a fix needs an out-of-scope file that affects architecture or a contract;
   - a required tool or credential is missing;
-  - a P0/P1 finding fails the progress gate or survives round 4.
+  - a P0/P1 finding fails the progress gate or survives round 4;
+  - the task-level budget above is reached.
 
 ### Review and verification cost
 These rules size review and verification to the change. They take precedence over a workflow skill's default review shape, and they never lower a task's done signal or required review gate.
+- **Reviewer roster (owner rule, 2026-10-19).** Every required review uses exactly two report-only reviewers on the same frozen candidate:
+  - `gpt-6.1-sol`;
+  - `gpt-6-astra` (the owner's DeepSeek-backed mapping, written `ds/gpt-6-astra`).
+
+  Each reviewer covers every lens the diff selects. This replaces both the earlier one-reviewer-per-lens dispatch and the `claude-opus-5-5` reviewer. Reach both models through the locally configured gateway, never persisting or printing keys. If either model is unavailable, the review gate stays open.
 - Pick review lenses from the diff. Correctness, testing and security always run. Adversarial runs when the diff touches authority, admission, isolation, credentials or the mailbox. Performance, reliability, maintainability, project standards, learnings, agent-native and the simplify passes run only when the diff touches what that lens checks. Record each skipped lens and the reason.
 - From round 2 on, review only the fix delta against the previously reviewed candidate, with the lenses that raised findings plus correctness. Widen the round to more lenses only when the fix touches files outside the earlier findings.
 - Skip the separate final-branch review when the branch tree hash equals the reviewed candidate's; record the matching hashes. When they differ, review only the difference.
@@ -73,4 +87,5 @@ These rules size review and verification to the change. They take precedence ove
   - An inline fallback never closes a required review gate. If the session cannot spawn subagents, stop with `required_gate_eligible: false` and report the missing capability. Do not substitute the fallback for the gate.
   - The grant covers review dispatch only, not implementation subagents, live provider probes or delivery.
 - **T010 live reconnaissance authorization (owner grant, 2026-10-18).** The owner authorizes this round's installed Claude and Codex live reconnaissance, including the required resume checks, with a maximum budget of `$2` or equivalent provider tokens and a maximum runtime of 20 minutes. Record provider usage as unavailable when reliable metrics are not exposed. This grant covers T010's live probes only; it does not authorize broader live work, a budget increase, deployment, release, or changes to the Windows reference copy.
+  - **Moved to T037 (owner split, 2026-10-19).** T010's unused daemon-mediated allowance now belongs to T037, without reset: four native invocations, 150,000 reported tokens and 1,200 seconds. Its record is `live-allowance-before.json` in the `20261019T140631Z-t010-rev5-host-acceptance` run. T010 makes no further live calls.
 - Do not stash, reset or revert unless the owner explicitly asks. Commit messages carry no tool or AI attribution.

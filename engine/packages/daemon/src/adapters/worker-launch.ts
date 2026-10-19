@@ -274,6 +274,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
           ...(resumeToken ? ["resume", resumeToken] : [])];
       const command: WorkerCommand = state.command = immutable({
         file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
+          ...(policy.policy_revision >= 5 ? ["--supervise"] : []),
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
           "--run", attempt.context.runId, "--attempt", attempt.attemptId,
           ...(policy.policy_revision >= 5 ? ["--mailbox", `${preflight.mailbox!.dev}:${preflight.mailbox!.ino}`] : []), "--", ...nativeArgv],
