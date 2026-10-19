@@ -11,7 +11,7 @@ import { CodexResumeAdapter } from "../src/adapters/codex-resume.js";
 import type { TmuxAdapter } from "../src/adapters/tmux.js";
 import { isAttentionRequiredReadinessCode, type ManagedAttempt, type NodeBinding } from "../src/domain/runtime-adapter.js";
 import { hashBytes } from "../src/domain/plan-governance.js";
-import { createContextManifest, projectContext, roleConfiguration, type ContextInput } from "../src/integrations/framework/context-manifest.js";
+import { buildManagedNativePolicy, createContextManifest, projectContext, roleConfiguration, type ContextInput } from "../src/integrations/framework/context-manifest.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 
 const roots: string[] = [];
@@ -786,5 +786,97 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     const f = fixture(client);
     expect(await f.adapter.launchHarness(f.node, { name: "member", forkSource: { kind: "last" } })).toMatchObject({ ok: false });
     expect(f.control.start).not.toHaveBeenCalled();
+  });
+});
+
+async function fixedPolicyFixture(client: WorkerClient) {
+  const f = fixture(client), nativePolicy = await buildManagedNativePolicy(client, f.p.installedPolicy.paths.toolchain_dir);
+  const { generatedHash: _hash, protocolVersion: _protocol, workerDiscoveryRoots: _roots, ...input } = f.context;
+  const root = join(input.projection.policy.paths.context_root, input.projection.worker, input.runId, "native-attempt");
+  const files = input.files.map(({ workerPath: _worker, ...file }) => ({ ...file, path: join(root, file.kind) }));
+  const binding = { ...input.binding, policyRevision: 5 };
+  const context = projectContext({ ...input, binding, root, nativePolicy, files, discoveryRoots: [root],
+    projection: { ...input.projection, attemptId: "native-attempt", policy: { ...input.projection.policy, policy_revision: 5 } } },
+  new Map(files.map((file, index) => [file.path, readFileSync(input.files[index]!.path)])));
+  f.context = context; f.attempt.context = context; f.attempt.attemptId = "native-attempt"; f.observation.attemptId = "native-attempt";
+  f.p.assignment = { ...f.p.assignment, binding, currentBinding: binding, context,
+    observed: { discoveryRoots: context.workerDiscoveryRoots, files: context.files.map(file => ({ path: file.workerPath, hash: file.hash })) } };
+  f.observation.context = structuredClone(f.p.assignment.observed);
+  f.observation.boundary.mounts.find(m => m.target === "/context")!.source = root;
+  f.p.policyRevision = 5; f.p.installedPolicy.policy_revision = 5;
+  f.p.control.gid = process.getgid!();
+  f.p.installedPolicy.paths.control_state_dir = join(f.root, "control");
+  f.p.installedPolicy.paths.mailbox_root = join(f.root, "control", "mailboxes");
+  f.p.installedPolicy.sandbox.mailbox = "/run/multi-agent/mailbox.sock";
+  f.p.installedPolicy.sandbox.native_policy_mounts = {
+    "claude-code": { source: "native/claude/managed-settings.json", target: "/etc/claude-code/managed-settings.json" },
+    codex: { source: "native/codex/requirements.toml", target: "/etc/codex/requirements.toml" },
+  };
+  f.p.nativePolicy = nativePolicy;
+  f.p.mailbox = { path: join(f.p.installedPolicy.paths.mailbox_root, "ma-worker1", "run", "native-attempt", "mailbox.sock"),
+    uid: f.p.control.uid, gid: f.p.control.gid, dev: 1, ino: 42, generation: "endpoint-generation" };
+  f.observation.mailbox = { uid: f.p.mailbox.uid, gid: f.p.mailbox.gid, dev: f.p.mailbox.dev, ino: f.p.mailbox.ino };
+  f.observation.nativePolicy = { files: nativePolicy.files.map(file => ({ path: file.workerPath, hash: file.hash })),
+    aliases: nativePolicy.aliases.map(alias => ({ path: alias.target, hash: nativePolicy.files.find(file => file.workerPath === alias.source)!.hash })),
+    inventory: { selectedSource: nativePolicy.selectedSource, managedDropIns: "absent", remotePolicy: "absent",
+      platformPolicy: "not-applicable", nativeExceptions: "absent" } };
+  f.observation.boundary.mounts.push(
+    { source: f.p.mailbox.path, target: "/run/multi-agent/mailbox.sock", access: "ro" },
+    { source: "tmpfs", target: "/run/multi-agent", access: "ro" },
+    { source: "tmpfs", target: client === "codex" ? "/etc/codex" : "/etc/claude-code", access: "ro" },
+    { source: "tmpfs", target: "/home/worker/.multi-agent/mailbox", access: "rw" },
+    { source: "tmpfs", target: "/home/worker/.multi-agent/mailbox/bootstrap.json", access: "ro" },
+    ...nativePolicy.aliases.map(alias => ({ source: root + alias.source.slice("/context".length), target: alias.target, access: "ro" as const })),
+  );
+  return f;
+}
+
+describe.each(["claude-code", "codex"] as const)("%s fixed policy launch boundary", client => {
+  it("forwards only the registered descriptor identity and records verified effective native policy", async () => {
+    const f = await fixedPolicyFixture(client);
+    expect(await f.launch()).toMatchObject({ ok: true });
+    const command = vi.mocked(f.control.start).mock.calls[0]![0];
+    const index = command.args.indexOf("--mailbox");
+    expect(command.args.slice(index, index + 2)).toEqual(["--mailbox", "1:42"]);
+    expect(command.args).not.toContain(f.p.mailbox!.path);
+    expect(f.events.at(-1)?.nativePolicy).toEqual({ installedDigest: f.p.nativePolicy!.digest, observedDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/) });
+    expect(await f.adapter.checkReady(f.node)).toEqual({ ready: true });
+  });
+
+  it.each(["missing", "foreign-path", "owner", "generation", "inode"] as const)("blocks %s mailbox preflight before execution", async field => {
+    const f = await fixedPolicyFixture(client);
+    if (field === "missing") f.p.mailbox = undefined;
+    else if (field === "foreign-path") f.p.mailbox = { ...f.p.mailbox!, path: f.p.mailbox!.path.replace("ma-worker1", "ma-worker2") };
+    else if (field === "owner") f.p.mailbox = { ...f.p.mailbox!, uid: f.p.worker.uid };
+    else if (field === "generation") f.p.mailbox = { ...f.p.mailbox!, generation: "" };
+    else f.p.mailbox = { ...f.p.mailbox!, ino: Number.NaN };
+    expect(await f.launch()).toMatchObject({ ok: false });
+    expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  it.each(["missing", "context", "alias", "mailbox-target"] as const)("blocks %s native policy before execution", async field => {
+    const f = await fixedPolicyFixture(client);
+    if (field === "missing") f.p.nativePolicy = undefined;
+    else if (field === "context") f.p.nativePolicy = { ...f.p.nativePolicy!, digest: hashBytes("foreign policy") };
+    else if (field === "alias") f.p.installedPolicy.sandbox.native_policy_mounts![client].target = "/etc/foreign-policy";
+    else f.p.installedPolicy.sandbox.mailbox = "/run/control.sock";
+    expect(await f.launch()).toMatchObject({ ok: false });
+    expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  it.each(["socket", "native-policy", "policy-parent", "bootstrap", "inventory", "socket-owner", "missing-policy", "duplicate-alias"] as const)("quiesces a ready attempt after %s evidence drifts", async field => {
+    const f = await fixedPolicyFixture(client);
+    expect(await f.launch()).toMatchObject({ ok: true });
+    if (field === "socket") f.observation.mailbox = { ...f.observation.mailbox!, ino: f.observation.mailbox!.ino + 1 };
+    else if (field === "native-policy") f.observation.nativePolicy!.files[0]!.hash = hashBytes("changed handler");
+    else if (field === "policy-parent") f.observation.boundary.mounts.find(m => m.target === (client === "codex" ? "/etc/codex" : "/etc/claude-code"))!.access = "rw";
+    else if (field === "bootstrap") f.observation.boundary.mounts = f.observation.boundary.mounts.filter(m => !m.target.endsWith("/bootstrap.json"));
+    else if (field === "inventory") f.observation.nativePolicy!.inventory.remotePolicy = "unknown";
+    else if (field === "socket-owner") f.observation.mailbox = { ...f.observation.mailbox!, gid: f.observation.mailbox!.gid + 1 };
+    else if (field === "missing-policy") f.observation.nativePolicy = undefined;
+    else f.observation.boundary.mounts.push({ ...f.observation.boundary.mounts.at(-1)! });
+    expect(await f.adapter.checkReady(f.node)).toMatchObject({ ready: false });
+    expect(f.control.quiesce).toHaveBeenCalledTimes(1);
+    expect(f.events.at(-1)).toMatchObject({ phase: "blocked", quiescence: { status: "terminated" } });
   });
 });

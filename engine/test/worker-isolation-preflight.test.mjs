@@ -13,7 +13,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net, { createConnection } from 'node:net';
 import os from 'node:os';
@@ -32,6 +32,7 @@ import {
   SECCOMP_FD,
   buildSeccompFilter,
 } from '../config/isolation/worker-launch.mjs';
+import * as workerLaunch from '../config/isolation/worker-launch.mjs';
 import { createEgressServer, isDeniedAddress, parseTarget, validateEgressConfig } from '../config/isolation/egress.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,108 @@ function expectLaunchError(fn, code) {
 
 const TREE = '/var/lib/multi-agent/assignments/ma-worker1/task-1';
 const NODE = '/opt/multi-agent/toolchain/node/bin/node';
+
+describe('offline: control-owned launch preflight', () => {
+  const argv = ['--worker', 'ma-worker1', '--role', 'implementer', '--tree', TREE,
+    '--run', 'run-1', '--attempt', 'attempt-1', '--env', 'TERM=fixture-secret', '--', NODE, '-e', 'fixture-secret'];
+  const fileFact = (file) => ({ path: file, realpath: file, uid: 0, gid: 0, mode: 0o755,
+    size: 31, sha256: 'sha256:' + createHash('sha256').update(file).digest('hex') });
+  const facts = (overrides = {}) => fakeFacts({
+    inspectFile: fileFact,
+    policyFingerprint: fileFact(policy.paths.installed_policy).sha256,
+    namespace: (kind) => ({ mnt: 'mnt:[101]', user: 'user:[102]', net: 'net:[103]' })[kind],
+    ...overrides,
+  });
+  const inspect = (overrides = {}) => workerLaunch.inspectLaunchRequest(policy, parseLaunchArgs(argv), facts(overrides));
+
+  test('returns observed installed facts without exposing command or environment values', () => {
+    const result = inspect();
+    assert.equal(result.schema, 'multi-agent-launch-preflight/v1');
+    assert.deepEqual(result.worker, { name: 'ma-worker1', uid: 991, gid: 991 });
+    assert.deepEqual(result.control, { uid: 990, gid: 990, mountNamespace: 'mnt:[101]', userNamespace: 'user:[102]' });
+    assert.deepEqual(result.roots, { home: policy.paths.worker_root + '/ma-worker1/home',
+      scratch: policy.paths.worker_root + '/ma-worker1/scratch', tree: TREE,
+      context: policy.paths.context_root + '/ma-worker1/run-1/attempt-1', framework: policy.paths.framework_dir });
+    assert.deepEqual(result.installed.executable, fileFact(NODE));
+    assert.deepEqual(result.installed.policy, fileFact(policy.paths.installed_policy));
+    assert.equal(result.network.hostNamespace, 'net:[103]');
+    assert.equal(result.network.profileFingerprint, fileFact(policy.paths.installed_egress_config).sha256);
+    assert.equal(JSON.stringify(result).includes('fixture-secret'), false);
+    assert.equal(Object.hasOwn(result, 'command'), false);
+    assert.equal(Object.hasOwn(result, 'env'), false);
+  });
+
+  test('authenticates before reading privileged installed facts', () => {
+    let reads = 0;
+    expectLaunchError(() => inspect({ callerUid: 991, inspectFile: () => { reads += 1; throw new Error('not reached'); } }), 'caller-not-allowed');
+    assert.equal(reads, 0);
+  });
+
+  test('retains existing assignment, environment and worker-group denials', () => {
+    for (const [replace, expected] of [
+      [['--tree', '/var/lib/multi-agent/control'], 'tree-outside-assignment'],
+      [['--env', 'NODE_OPTIONS=fixture'], 'env-not-allowed'],
+      [['--worker', 'ma-worker2'], 'worker-privileged-group'],
+    ]) {
+      const invalid = [...argv]; invalid[invalid.indexOf(replace[0]) + 1] = replace[1];
+      expectLaunchError(() => workerLaunch.inspectLaunchRequest(policy, parseLaunchArgs(invalid), facts()), expected);
+    }
+  });
+
+  test('does not reuse a stale executable or network fingerprint', () => {
+    const first = inspect(), changed = 'sha256:' + 'f'.repeat(64);
+    const next = inspect({ inspectFile: (file) => ({ ...fileFact(file),
+      sha256: file === NODE || file === policy.paths.installed_egress_config ? changed : fileFact(file).sha256 }) });
+    assert.notEqual(next.installed.executable.sha256, first.installed.executable.sha256);
+    assert.equal(next.network.profileFingerprint, changed);
+  });
+
+  test('rejects missing or untrusted installed-file evidence', () => {
+    for (const change of [
+      { uid: 991 }, { gid: 991 }, { mode: 0o777 }, { mode: 0o644 }, { size: -1 }, { sha256: 'unverified' },
+      { path: '/unexpected' }, { realpath: '/home/worker/override' },
+    ]) {
+      expectLaunchError(() => inspect({ inspectFile: (file) => ({ ...fileFact(file), ...change }) }), 'preflight-unverified');
+    }
+    expectLaunchError(() => inspect({ inspectFile: () => { throw new Error('ENOENT'); } }), 'preflight-unverified');
+  });
+
+  test('rejects policy bytes changed after request validation', () => {
+    expectLaunchError(() => inspect({ policyFingerprint: 'sha256:' + 'b'.repeat(64) }), 'preflight-unverified');
+  });
+
+  test('hashes the actual opened root-owned executable', { skip: process.platform !== 'linux' }, () => {
+    const file = '/usr/bin/true', observed = workerLaunch.inspectInstalledFile(file);
+    assert.equal(observed.uid, 0); assert.equal(observed.gid, 0);
+    assert.equal(observed.size, readFileSync(file).length);
+    assert.equal(observed.sha256, 'sha256:' + createHash('sha256').update(readFileSync(file)).digest('hex'));
+  });
+
+  test('rejects files below mutable ancestry without disclosing their contents', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 't010-preflight-read-'));
+    try {
+      const file = path.join(dir, 'private.txt'); writeFileSync(file, 'private-fixture-content', { mode: 0o400 });
+      assert.throws(() => workerLaunch.inspectInstalledFile(file), error =>
+        error instanceof LaunchError && error.code === 'preflight-unverified' && !error.message.includes('private-fixture-content'));
+    } finally {
+      assert.equal(path.dirname(dir), path.resolve(os.tmpdir()));
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('the inspect entry retains the non-root execution gate', { skip: process.platform !== 'linux' || process.getuid?.() === 0 }, () => {
+    const result = spawnSync(process.execPath, [path.join(here, '../config/isolation/worker-launch.mjs'), '--inspect', ...argv],
+      { encoding: 'utf8', env: { PATH: process.env.PATH } });
+    assert.equal(result.status, 126); assert.equal(result.stdout, '');
+    assert.equal(JSON.parse(result.stderr).worker_launch_error, 'launcher-not-root');
+  });
+
+  test('rejects missing or malformed host namespace observations', () => {
+    for (const value of [null, '', 'expected', 'net:[unverified]']) {
+      expectLaunchError(() => inspect({ namespace: () => value }), 'preflight-unverified');
+    }
+  });
+});
 
 describe('offline: worker policy', () => {
   test('checked-in policy is valid', () => {
@@ -290,6 +393,227 @@ describe('offline: KTD24 mandatory private context mounts', () => {
       expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
     }
   });
+});
+
+
+describe('offline: fixed native policy and mailbox mounts', () => {
+  const socket = '/var/lib/multi-agent/control/mailboxes/ma-worker1/run-1/attempt-1/mailbox.sock';
+  const context = policy.paths.context_root + '/ma-worker1/run-1/attempt-1';
+  const nativePath = context + '/native/claude/managed-settings.json';
+  const bootstrapPath = path.dirname(socket) + '/bootstrap.json';
+  const bootstrap = { authorization: 'Bearer bootstrap-fixture-secret', sessionId: 'session', runId: 'run-1', attemptId: 'attempt-1',
+    generation: 'generation', taskId: 'task', capability: 'mailbox:' + 'a'.repeat(43) };
+  const executable = policy.paths.toolchain_dir + '/clients/bin/claude';
+  const argv = ['--worker', 'ma-worker1', '--role', 'implementer', '--tree', TREE,
+    '--run', 'run-1', '--attempt', 'attempt-1', '--mailbox', '9:22', '--', executable];
+  const facts = (change = {}) => {
+    const base = fakeFacts();
+    return { ...base, readFile: p => { assert.equal(p, bootstrapPath); return JSON.stringify(bootstrap); }, lstat: p => {
+      if (p === bootstrapPath) return { uid: 990, gid: 990, dev: 10, ino: 24, mode: 0o600, size: 256,
+        isFile: () => true, isSymbolicLink: () => false };
+      if (p === socket) return { uid: 990, gid: 990, dev: 9, ino: 22, mode: 0o666,
+        isSocket: () => true, isSymbolicLink: () => false, ...change };
+      if (p === policy.paths.control_state_dir || p.startsWith(policy.paths.control_state_dir + '/')) {
+        return { uid: 990, gid: 990, mode: 0o700, isDirectory: () => true, isSymbolicLink: () => false };
+      }
+      if (p === nativePath) return { uid: 990, gid: 991, dev: 10, ino: 23, mode: 0o440, size: 200,
+        isFile: () => true, isSymbolicLink: () => false };
+      return base.lstat(p);
+    } };
+  };
+
+  test('requires revision five and fixed mailbox-only paths', () => {
+    assert.equal(policy.policy_revision, 5);
+    assert.equal(policy.paths.mailbox_root, policy.paths.control_state_dir + '/mailboxes');
+    assert.equal(policy.sandbox.mailbox, '/run/multi-agent/mailbox.sock');
+    for (const change of [
+      p => { p.paths.mailbox_root = p.paths.worker_root; },
+      p => { p.sandbox.mailbox = '/run/control.sock'; },
+      p => { p.sandbox.native_policy_mounts.codex.target = '/etc/multi-agent/worker-policy.json'; },
+    ]) {
+      const bad = structuredClone(policy); change(bad);
+      expectLaunchError(() => validatePolicy(bad), 'policy-invalid');
+    }
+  });
+
+  test('binds only the registered socket and immutable native policy through held descriptors', () => {
+    const resolved = resolveLaunchRequest(policy, parseLaunchArgs(argv), facts());
+    assert.equal(resolved.mailbox.path, socket);
+    assert.equal(resolved.nativePolicy.path, nativePath);
+    const { args } = buildSandboxCommand(policy, resolved);
+    const mailboxIndex = args.indexOf('/run/multi-agent/mailbox.sock');
+    assert.deepEqual(args.slice(mailboxIndex - 2, mailboxIndex + 1), ['--ro-bind-fd', String(MOUNT_FD.mailbox), '/run/multi-agent/mailbox.sock']);
+    assert.ok(mailboxIndex > args.indexOf('/run'));
+    const nativeIndex = args.indexOf('/etc/claude-code/managed-settings.json');
+    assert.deepEqual(args.slice(nativeIndex - 2, nativeIndex + 1), ['--ro-bind-fd', String(MOUNT_FD.nativePolicy), '/etc/claude-code/managed-settings.json']);
+    assert.ok(!args.some(arg => arg.startsWith(policy.paths.control_state_dir)));
+    assert.ok(!args.includes(nativePath));
+    assert.ok(args.includes('--remount-ro'));
+    assert.ok(args.includes('/etc/claude-code'));
+  });
+
+  test('requires a registered mailbox before either native client starts', () => {
+    for (const client of ['claude', 'codex']) {
+      const request = parseLaunchArgs([...argv.slice(0, 10), '--', policy.paths.toolchain_dir + '/clients/bin/' + client]);
+      expectLaunchError(() => resolveLaunchRequest(policy, request, facts()), 'mailbox-unavailable');
+    }
+  });
+
+  test('rejects a missing, replaced, aliased, foreign-owned or publicly discoverable endpoint', () => {
+    for (const change of [{ uid: 991 }, { gid: 991 }, { ino: 99 }, { dev: 99 }, { mode: 0o777 }, { isSocket: () => false }]) {
+      expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), facts(change)), 'mailbox-unavailable');
+    }
+    const good = facts();
+    for (const changed of [
+      { lstat: p => { if (p === socket) throw new Error('ENOENT'); return good.lstat(p); } },
+      { realpath: p => p === socket ? socket + '-other' : p },
+      { lstat: p => p === path.dirname(socket) ? { ...good.lstat(p), mode: 0o755 } : good.lstat(p) },
+    ]) expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), { ...good, ...changed }), 'mailbox-unavailable');
+  });
+
+  test('rejects changed native policy ownership, write access, type and path before binding', () => {
+    const good = facts();
+    for (const change of [{ uid: 991 }, { gid: 992 }, { mode: 0o640 }, { isFile: () => false }, { isSymbolicLink: () => true }]) {
+      expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv),
+        { ...good, lstat: p => p === nativePath ? { ...good.lstat(p), ...change } : good.lstat(p) }), 'native-policy-unavailable');
+    }
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv),
+      { ...good, realpath: p => p === nativePath ? nativePath + '-other' : p }), 'native-policy-unavailable');
+  });
+
+  test('rejects non-canonical descriptor identities rather than accepting paths or generations', () => {
+    for (const value of ['../mailbox.sock', '01:22', '-1:22', '9:NaN', '9:22\n', '9:9007199254740992']) {
+      const args = [...argv]; args[args.indexOf('--mailbox') + 1] = value;
+      expectLaunchError(() => parseLaunchArgs(args), 'argument-invalid');
+    }
+  });
+
+  test('passes bootstrap bytes only through a private descriptor into ephemeral worker state', () => {
+    const resolved = resolveLaunchRequest(policy, parseLaunchArgs(argv), facts());
+    assert.equal(resolved.bootstrap.path, bootstrapPath);
+    assert.equal(resolved.bootstrap.mode, 0o600);
+    const { args } = buildSandboxCommand(policy, resolved);
+    const target = '/home/worker/.multi-agent/mailbox/bootstrap.json';
+    const i = args.indexOf(target);
+    assert.deepEqual(args.slice(i - 4, i + 1), ['--perms', '0400', '--ro-bind-data', String(MOUNT_FD.bootstrap), target]);
+    assert.ok(args.includes('/home/worker/.multi-agent/mailbox'));
+    assert.ok(!JSON.stringify(resolved).includes('bootstrap-fixture-secret'));
+    assert.ok(!args.join(' ').includes('bootstrap-fixture-secret'));
+    assert.ok(!args.includes(bootstrapPath));
+  });
+
+  test('rejects missing, exposed, replaced or unbound bootstrap material before launch', () => {
+    const good = facts();
+    for (const change of [
+      { lstat: p => { if (p === bootstrapPath) throw new Error('ENOENT'); return good.lstat(p); } },
+      ...[{ uid: 991 }, { gid: 991 }, { mode: 0o644 }, { size: 8193 }, { isFile: () => false }, { isSymbolicLink: () => true }]
+        .map(change => ({ lstat: p => p === bootstrapPath ? { ...good.lstat(p), ...change } : good.lstat(p) })),
+      { realpath: p => p === bootstrapPath ? bootstrapPath + '-other' : p },
+      { readFile: () => '{' },
+      ...[{ runId: 'other-run' }, { attemptId: 'other-attempt' }, { generation: '' }, { authorization: '' },
+        { capability: 'foreign' }, { readiness: 'ready' }].map(change => ({ readFile: () => JSON.stringify({ ...bootstrap, ...change }) })),
+    ]) expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), { ...good, ...change }), 'mailbox-bootstrap-unavailable');
+  });
+
+
+  test('copies private bootstrap data without leaking its descriptor or making consumer state read-only', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 't010-bootstrap-'));
+    const source = path.join(root, 'bootstrap.json');
+    let fd;
+    try {
+      const raw = JSON.stringify(bootstrap);
+      writeFileSync(source, raw, { mode: 0o600 });
+      const st = lstatSync(source);
+      const expected = { path: source, kind: 'file', uid: st.uid, gid: st.gid, dev: st.dev, ino: st.ino, mode: 0o600,
+        contentHash: createHash('sha256').update(raw).digest('hex') };
+      const target = '/home/worker/.multi-agent/mailbox';
+      const script = [
+        'const fs = require("node:fs"), root = "/home/worker/.multi-agent/mailbox";',
+        'const value = JSON.parse(fs.readFileSync(root + "/bootstrap.json", "utf8"));',
+        'const st = fs.statSync(root + "/bootstrap.json"); fs.writeFileSync(root + "/handouts.json", "{}");',
+        'const descriptorClosed = fs.readdirSync("/proc/self/fd").every(fd => { try { return !fs.readlinkSync("/proc/self/fd/" + fd).includes("/t010-bootstrap-"); } catch { return true; } });',
+        'let writeDenied = false; try { fs.writeFileSync(root + "/bootstrap.json", "{}"); } catch { writeDenied = true; }',
+        'process.stdout.write(JSON.stringify({ runId: value.runId, hasAuthorization: !!value.authorization,',
+        'mode: st.mode & 511, privateRoot: (fs.statSync(root).mode & 511) === 448, ownerMatches: st.uid === process.getuid(),',
+        'stateWritable: fs.readFileSync(root + "/handouts.json", "utf8") === "{}", writeDenied, descriptorClosed }));',
+      ].join('\n');
+      return import('../config/isolation/worker-launch.mjs').then(({ openVerifiedSource }) => {
+        fd = openVerifiedSource(expected);
+        const result = spawnSync('/usr/bin/bwrap', ['--unshare-all', '--die-with-parent', '--new-session', '--clearenv',
+          '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
+          '--ro-bind', policy.paths.toolchain_dir, policy.paths.toolchain_dir, '--proc', '/proc', '--dev', '/dev',
+          '--dir', '/home/worker/.multi-agent', '--perms', '0700', '--tmpfs', target,
+          '--perms', '0400', '--ro-bind-data', '3', target + '/bootstrap.json', '--', NODE, '-e', script],
+        { env: {}, stdio: ['ignore', 'pipe', 'pipe', fd], timeout: 3_000 });
+        assert.equal(result.status, 0, result.stderr?.toString());
+        assert.deepEqual(JSON.parse(result.stdout.toString()), { runId: 'run-1', hasAuthorization: true,
+          mode: 0o400, privateRoot: true, ownerMatches: true, stateWritable: true, writeDenied: true, descriptorClosed: true });
+        assert.ok(!result.stdout.toString().includes('bootstrap-fixture-secret'));
+        writeFileSync(source, raw.replace('run-1', 'run-2'));
+        expectLaunchError(() => openVerifiedSource(expected), 'mount-source-changed');
+      }).finally(() => { if (fd !== undefined) closeSync(fd); rmSync(root, { recursive: true, force: true }); });
+    } catch (error) {
+      if (fd !== undefined) closeSync(fd);
+      rmSync(root, { recursive: true, force: true }); throw error;
+    }
+  });
+
+  test('pins real file and socket descriptors and keeps both fixed parent directories read-only', { timeout: 5_000 }, async () => {
+    const { openVerifiedSource } = await import('../config/isolation/worker-launch.mjs');
+    const root = mkdtempSync(path.join(os.tmpdir(), 't010-descriptor-'));
+    const socketPath = path.join(root, 'mailbox.sock'), policyFile = path.join(root, 'managed-settings.json');
+    const server = net.createServer(connection => connection.end('mailbox-fixture'));
+    const fds = [];
+    try {
+      await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });
+      chmodSync(socketPath, 0o666); writeFileSync(policyFile, '{"allowManagedHooksOnly":true}'); chmodSync(policyFile, 0o440);
+      const expected = (p, kind) => {
+        const st = lstatSync(p);
+        return { path: p, kind, dev: st.dev, ino: st.ino, uid: st.uid, gid: st.gid, mode: st.mode & 0o7777 };
+      };
+      const socketIdentity = expected(socketPath, 'socket'), fileIdentity = expected(policyFile, 'file');
+      fds.push(openVerifiedSource(socketIdentity), openVerifiedSource(fileIdentity));
+      const script = [
+        'const fs = require("node:fs"), net = require("node:net");',
+        'const denied = p => { try { fs.mkdirSync(p); return false; } catch (e) { return e.code === "EROFS"; } };',
+        'const result = { socket: fs.statSync("/run/multi-agent/mailbox.sock").isSocket(),',
+        'policy: JSON.parse(fs.readFileSync("/etc/claude-code/managed-settings.json", "utf8")),',
+        'socketParentLocked: denied("/run/multi-agent/replacement"), policyParentLocked: denied("/etc/claude-code/managed-settings.d") };',
+        'const connection = net.createConnection("/run/multi-agent/mailbox.sock"); let reply = "";',
+        'connection.on("data", chunk => { reply += chunk; });',
+        'connection.on("end", () => process.stdout.write(JSON.stringify({ ...result, reply })));',
+      ].join('\n');
+      const args = ['--unshare-all', '--die-with-parent', '--new-session', '--clearenv',
+        '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
+        '--ro-bind', policy.paths.toolchain_dir, policy.paths.toolchain_dir, '--proc', '/proc', '--dev', '/dev',
+        '--dir', '/run', '--tmpfs', '/run/multi-agent', '--ro-bind-fd', '3', '/run/multi-agent/mailbox.sock', '--remount-ro', '/run/multi-agent',
+        '--tmpfs', '/etc/claude-code', '--ro-bind-fd', '4', '/etc/claude-code/managed-settings.json', '--remount-ro', '/etc/claude-code',
+        '--', NODE, '-e', script];
+      const result = await new Promise((resolve, reject) => {
+        const child = spawn('/usr/bin/bwrap', args, { env: {}, stdio: ['ignore', 'pipe', 'pipe', ...fds] });
+        let stdout = '', stderr = '';
+        const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('descriptor probe timed out')); }, 3_000);
+        child.once('error', error => { clearTimeout(timer); reject(error); });
+        child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; });
+        child.once('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+      });
+      assert.equal(result.code, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), { socket: true, policy: { allowManagedHooksOnly: true },
+        socketParentLocked: true, policyParentLocked: true, reply: 'mailbox-fixture' });
+      chmodSync(policyFile, 0o640);
+      expectLaunchError(() => openVerifiedSource(fileIdentity), 'mount-source-changed');
+      chmodSync(policyFile, 0o440);
+      renameSync(policyFile, policyFile + '.old'); writeFileSync(policyFile, '{}'); chmodSync(policyFile, 0o440);
+      expectLaunchError(() => openVerifiedSource(fileIdentity), 'mount-source-changed');
+      symlinkSync(socketPath, socketPath + '.link');
+      expectLaunchError(() => openVerifiedSource({ ...socketIdentity, path: socketPath + '.link' }), 'mount-source-changed');
+    } finally {
+      fds.forEach(fd => closeSync(fd));
+      await new Promise(resolve => server.close(resolve));
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
 });
 
 describe('offline: sandbox command construction', () => {

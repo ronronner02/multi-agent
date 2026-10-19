@@ -274,6 +274,34 @@ export type TeamControlEnv = {
   Variables: { controlActor: ControlActor; controlRunId: string | null };
 };
 
+export type TeamControlCredentialResolution =
+  | { ok: true; actor: ControlActor; runId: string | null }
+  | { ok: false; status: 401 | 503; code: "control_auth_required" | "control_credentials_conflict"; error: string };
+
+/** Resolve existing credentials without granting any transport admission. */
+export function resolveTeamControlCredential(
+  header: string | undefined,
+  { ownerToken, workers = [] }: TeamControlCredentials,
+  legacyTokens: readonly (string | null | undefined)[] = [],
+): TeamControlCredentialResolution {
+  const configured = [ownerToken, ...workers.map(worker => worker.token)].filter((value): value is string => !!value);
+  if (new Set(configured).size !== configured.length
+    || configured.some(token => legacyTokens.some(legacy => !!legacy && constantTimeEqual(token, legacy)))
+    || workers.some(worker => !worker.token.trim() || !worker.sessionId.trim() || !worker.runId.trim())) {
+    return { ok: false, status: 503, code: "control_credentials_conflict", error: "Control credentials must have distinct roles." };
+  }
+  const provided = header && /^Bearer ([^\s,]+)$/i.exec(header)?.[1];
+  if (!provided) return { ok: false, status: 401, code: "control_auth_required", error: "A dedicated control credential is required." };
+  const owner = !!ownerToken && constantTimeEqual(provided, ownerToken);
+  const worker = workers.find(candidate => constantTimeEqual(provided, candidate.token));
+  if (!owner && !worker) return { ok: false, status: 401, code: "control_auth_required", error: "A dedicated control credential is required." };
+  return {
+    ok: true,
+    actor: owner ? { kind: "owner", sessionId: "owner-control" } : { kind: "worker", sessionId: worker!.sessionId },
+    runId: owner ? null : worker!.runId,
+  };
+}
+
 /** Dedicated local control credentials; legacy, browser and worker tokens never imply owner authority. */
 export function teamControlAuthentication(
   readCredentials: () => TeamControlCredentials,
@@ -285,21 +313,10 @@ export function teamControlAuthentication(
     if (!peer || !isLoopbackBind(peer.replace(/^::ffff:/i, ""))) {
       return c.json({ code: "local_control_required", error: "A loopback control connection is required." }, 403);
     }
-    const { ownerToken, workers = [] } = readCredentials();
-    const configured = [ownerToken, ...workers.map(worker => worker.token)].filter((value): value is string => !!value);
-    if (new Set(configured).size !== configured.length
-      || configured.some(token => legacyTokens.some(legacy => !!legacy && constantTimeEqual(token, legacy)))
-      || workers.some(worker => !worker.token.trim() || !worker.sessionId.trim() || !worker.runId.trim())) {
-      return c.json({ code: "control_credentials_conflict", error: "Control credentials must have distinct roles." }, 503);
-    }
-    const header = c.req.header("Authorization");
-    const provided = header && /^Bearer ([^\s,]+)$/i.exec(header)?.[1];
-    if (!provided) return c.json({ code: "control_auth_required", error: "A dedicated control credential is required." }, 401);
-    const owner = !!ownerToken && constantTimeEqual(provided, ownerToken);
-    const worker = workers.find(candidate => constantTimeEqual(provided, candidate.token));
-    if (!owner && !worker) return c.json({ code: "control_auth_required", error: "A dedicated control credential is required." }, 401);
-    c.set("controlActor", owner ? { kind: "owner", sessionId: "owner-control" } : { kind: "worker", sessionId: worker!.sessionId });
-    c.set("controlRunId", owner ? null : worker!.runId);
+    const resolved = resolveTeamControlCredential(c.req.header("Authorization"), readCredentials(), legacyTokens);
+    if (!resolved.ok) return c.json({ code: resolved.code, error: resolved.error }, resolved.status);
+    c.set("controlActor", resolved.actor);
+    c.set("controlRunId", resolved.runId);
     c.header("Cache-Control", "no-store");
     await next();
   };

@@ -26,6 +26,25 @@ export interface ProviderPolicyCapability {
   verifiedProviders: readonly ("claude" | "codex")[];
 }
 
+
+export interface NativeLaunchIntent {
+  attemptId: string;
+  commandDigest: string;
+  /** Optional for digest-only callers; recovery of an executable command requires this bound snapshot. */
+  command?: JsonObject;
+  bindingDigest: string;
+  policyFingerprint: string;
+  qitemId: string;
+  taskVersion: number;
+  sessionId: string;
+  role: TeamAttempt["role"];
+  provider: TeamAttempt["provider"];
+  generation: number;
+  previous: { attemptId: string; identity: NonNullable<TeamAttempt["identity"]>; version: number } | null;
+  state: "admitted" | "running" | "stopped" | "not_started";
+  evidenceRef?: string;
+}
+
 export class ManagedControlError extends Error {
   readonly code = "managed_control_required";
   constructor() { super("Legacy operations are inactive while managed authority exists; managed dispatch remains disabled."); }
@@ -241,6 +260,19 @@ export class PlanGovernance {
     return { ...attempt, identity: identityJson === null ? null : parseAttemptIdentity(JSON.parse(identityJson)), usage: parseUsage(JSON.parse(usageJson)) };
   }
 
+
+  getNativeLaunchIntent(runId: string, attemptId: string): NativeLaunchIntent | null {
+    return this.nativeLaunchIntents(runId).find(intent => intent.attemptId === attemptId) ?? null;
+  }
+
+  private nativeLaunchIntents(runId: string): NativeLaunchIntent[] {
+    const rows = this.db.prepare(`SELECT payload FROM events WHERE seq IN (
+      SELECT MAX(seq) FROM events WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ?
+        AND json_extract(payload, '$.action') = 'attempt.launch-intent' GROUP BY json_extract(payload, '$.attemptId'))`)
+      .all(runId) as { payload: string }[];
+    return rows.map(row => JSON.parse(row.payload).payload as NativeLaunchIntent);
+  }
+
   getConsumption(approvalId: string): ApprovalConsumption | null {
     const row = this.db.prepare(`SELECT approval_id AS approvalId, run_id AS runId, attempt_id AS attemptId, state,
       receipt_json AS receiptJson FROM team_approval_consumptions WHERE approval_id = ?`).get(approvalId) as
@@ -379,7 +411,8 @@ export class PlanGovernance {
       if (integer(v.expectedAttemptVersion, "expectedAttemptVersion", 1) !== attempt.entityVersion) throw new Error("Attempt version conflict");
       if (attempt.state !== "stopped" || attempt.identity === null) return deny("Native termination has not been observed");
       const latest = this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid DESC LIMIT 1").get(task.qitemId) as { id: string };
-      if (latest.id !== attempt.id || this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(task.qitemId)) {
+      if (latest.id !== attempt.id || this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(task.qitemId)
+        || this.nativeLaunchIntents(ctx.run.id).some(intent => intent.qitemId === task.qitemId && intent.state === "admitted")) {
         return deny("All task attempts must be stopped and the outcome must belong to the latest attempt");
       }
       if (!Object.keys(object(v.evidence, "evidence")).length) throw new TeamContractError("evidence");
@@ -400,9 +433,28 @@ export class PlanGovernance {
   }
 
   recordAttempt(raw: ControlRequest<unknown>, currentBinding: unknown): ControlReceipt {
-    return this.command("attempt.recorded", raw, null, (ctx) => {
+    return this.recordAttemptCommand(raw, currentBinding, null);
+  }
+
+  /** Control-only admission. A durable intent is not a claimed native session. */
+  admitNativeAttempt(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    return this.recordAttemptCommand(raw, currentBinding, actorIdentity(actor, true));
+  }
+
+  private recordAttemptCommand(raw: ControlRequest<unknown>, currentBinding: unknown, owner: ControlActor | null): ControlReceipt {
+    return this.command(owner ? "attempt.admitted" : "attempt.recorded", raw, owner, (ctx) => {
       if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
-      const v = object(ctx.request.payload, "attempt");
+      // An intent keeps its original run owner even when no native row was created.
+      if (this.db.prepare(`SELECT seq FROM events WHERE type = 'team.control'
+        AND json_extract(payload, '$.action') = 'attempt.launch-intent' AND json_extract(payload, '$.attemptId') = ?
+        AND json_extract(payload, '$.runId') <> ? LIMIT 1`).get(ctx.request.actionId, ctx.run.id)) return deny("Native launch identity is already reserved");
+      const intent = owner ? this.prepareNativeLaunchIntent(ctx) : null;
+      if (typeof intent === "string") return deny(intent);
+      const unavailable = { value: null, reason: "Native usage has not been observed" };
+      const v = intent ? { role: intent.role, provider: intent.provider, qitemId: intent.qitemId, identity: null,
+        state: "unknown", unknownReason: "Native launch is unresolved",
+        usage: { activeMs: 0, inputTokens: unavailable, outputTokens: unavailable, costUsd: unavailable } }
+        : object(ctx.request.payload, "attempt");
       const state = attemptState(v.state);
       const role = text(v.role, "role");
       if (!ctx.run.binding.roles.some((allowed) => allowed === role)) return deny("Attempt role is outside the binding");
@@ -424,7 +476,7 @@ export class PlanGovernance {
         return { status: "denied", reason, value: { reportedUsage: usage } };
       }
       const live = this.liveAttemptCount(ctx.run.id);
-      if (state === "running" && live >= ctx.run.binding.limits.maxSessions) return deny("Live session limit reached");
+      if ((state === "running" || intent) && live >= ctx.run.binding.limits.maxSessions) return deny("Live session limit reached");
       const policy = new LeadWakePolicy(this.db, this.events);
       const wake = role === "lead" ? policy.check(ctx.run, qitemId, ctx.now) : null;
       if (wake?.reason) {
@@ -435,11 +487,116 @@ export class PlanGovernance {
       const reason = this.eligibility(ctx);
       if (reason) return deny(reason);
       if (wake) policy.record(ctx.run, qitemId, ctx.now, wake, ctx.register);
+      if (intent) {
+        // Persist before command() synchronizes the active clock; a later response alone is too late.
+        this.emit(ctx.run, ctx.register, "attempt.launch-intent", jsonValue(intent) as JsonObject, task!.assignment.taskId, intent.attemptId);
+        return { status: "pending-execution", effectMayStart: true, value: intent,
+          taskId: task!.assignment.taskId, attemptId: intent.attemptId, observedBy: owner!.sessionId };
+      }
       this.db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
         state, usage_json, active_ms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(ctx.request.actionId, ctx.run.id, qitemId, role, v.provider, identity === null ? null : canonicalJson(identity),
           unknownReason, state, canonicalJson(usage), usage.activeMs, ctx.now, ctx.now);
       return { status: "observed", value: this.getAttempt(ctx.request.actionId), attemptId: ctx.request.actionId };
+    });
+  }
+
+
+  private prepareNativeLaunchIntent(ctx: CommandContext): NativeLaunchIntent | string {
+    const v = object(ctx.request.payload, "nativeLaunch"), qitemId = text(v.qitemId, "qitemId", 256);
+    const task = this.getTask(qitemId), item = this.queue.getById(qitemId);
+    if (!task || task.runId !== ctx.run.id || !item) throw new Error("Task not found in this run");
+    if (integer(v.expectedTaskVersion, "expectedTaskVersion", 1) !== task.entityVersion) throw new Error("Task version conflict");
+    const sessionId = text(v.sessionId, "sessionId", 256), commandDigest = digest(v.commandDigest, "commandDigest");
+    const command = v.command === undefined ? undefined : jsonValue(object(v.command, "nativeLaunch.command")) as JsonObject;
+    if (command !== undefined) {
+      const bytes = canonicalJson(command);
+      if (Buffer.byteLength(bytes, "utf8") > 65_536 || hashBytes(bytes) !== commandDigest) throw new TeamContractError("nativeLaunch.command");
+    }
+    if (v.provider !== "claude" && v.provider !== "codex") throw new TeamContractError("provider");
+    if (sessionId !== item.destinationSession || !["pending", "in-progress"].includes(item.state)) return "Native launch task/session is not dispatchable";
+    if (this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(qitemId)) {
+      return "Task already has an unresolved native attempt";
+    }
+    const previousId = v.previousAttemptId === null ? null : text(v.previousAttemptId, "previousAttemptId", 256);
+    const previous = previousId === null ? null : this.getAttempt(previousId);
+    if (previousId !== null && (!previous || previous.runId !== ctx.run.id || previous.qitemId !== qitemId
+      || previous.role !== task.assignment.role || previous.provider !== v.provider || previous.state !== "stopped" || !previous.identity)) {
+      return "Exact resume requires an observed stopped attempt for this task and provider";
+    }
+    if (previous ? integer(v.expectedPreviousVersion, "expectedPreviousVersion", 1) !== previous.entityVersion : v.expectedPreviousVersion !== null) {
+      throw new Error("Previous attempt version conflict");
+    }
+    const prior = this.getNativeLaunchIntent(ctx.run.id, ctx.request.actionId);
+    const generation = previous?.identity ? integer(previous.identity.generation + 1, "generation", 1) : 1;
+    if ((this.getAttempt(ctx.request.actionId) || prior) && previous?.id !== ctx.request.actionId
+      || prior && (prior.state === "admitted" || prior.generation >= generation)) return "Native launch identity is already reserved";
+    return { attemptId: ctx.request.actionId, commandDigest, ...(command === undefined ? {} : { command }),
+      bindingDigest: ctx.run.bindingDigest, policyFingerprint: ctx.run.binding.policyFingerprint, qitemId,
+      taskVersion: task.entityVersion, sessionId, role: task.assignment.role, provider: v.provider, generation,
+      previous: previous?.identity ? { attemptId: previous.id, identity: previous.identity, version: previous.entityVersion } : null,
+      state: "admitted" };
+  }
+
+
+  /** Observations never mint another launch grant, including after cancellation. */
+  reconcileNativeAttempt(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("attempt.reconciled", raw, owner, ctx => {
+      const v = object(ctx.request.payload, "nativeObservation"), intent = this.getNativeLaunchIntent(ctx.run.id, ctx.request.actionId);
+      if (!intent || intent.commandDigest !== digest(v.commandDigest, "commandDigest")) return deny("Native observation has no matching command intent");
+      if (v.outcome !== "running" && v.outcome !== "stopped" && v.outcome !== "not_started") throw new TeamContractError("nativeObservation.outcome");
+      const evidenceRef = text(v.evidenceRef, "evidenceRef", 4096), attempt = this.getAttempt(intent.attemptId);
+      if (attempt ? integer(v.expectedAttemptVersion, "expectedAttemptVersion", 1) !== attempt.entityVersion : v.expectedAttemptVersion !== null) {
+        throw new Error("Attempt version conflict");
+      }
+      const sameAttemptResume = intent.previous?.attemptId === intent.attemptId;
+      if (attempt && (attempt.runId !== ctx.run.id || attempt.qitemId !== intent.qitemId
+        || attempt.role !== intent.role || attempt.provider !== intent.provider)) return deny("Native attempt scope differs from its intent");
+      if (intent.state === "admitted") {
+        if (sameAttemptResume ? !attempt || attempt.state !== "stopped"
+          || canonicalJson(attempt.identity) !== canonicalJson(intent.previous!.identity) : attempt !== null) {
+          return deny("The admitted native generation no longer matches its prior state");
+        }
+      } else if (!attempt || intent.state === "not_started") return deny("Native command intent is already closed");
+      const task = this.getTask(intent.qitemId), item = this.queue.getById(intent.qitemId);
+      if (!task || task.runId !== ctx.run.id) return deny("Native task scope is unavailable");
+      if (v.outcome === "not_started") {
+        if (intent.state !== "admitted" || v.identity !== null) return deny("No-start requires an unresolved command with no observed identity");
+      } else {
+        const identity = parseAttemptIdentity(v.identity);
+        if (identity.policyFingerprint !== intent.policyFingerprint || identity.generation !== intent.generation
+          || intent.previous && (identity.nativeSessionId !== intent.previous.identity.nativeSessionId
+            || identity.processId === intent.previous.identity.processId && identity.processStart === intent.previous.identity.processStart)) {
+          return deny("Observed native identity differs from the admitted generation");
+        }
+        if (intent.state !== "admitted" && canonicalJson(attempt!.identity) !== canonicalJson(identity)) return deny("Observed native identity changed");
+        if (v.outcome === "running") {
+          if (intent.state !== "admitted" && attempt!.state === "stopped") return deny("Continuation requires a newly admitted native generation");
+          const reason = this.boundEligibility(ctx, currentBinding, intent.attemptId);
+          if (reason) return deny(reason);
+          if (intent.bindingDigest !== ctx.run.bindingDigest || !item || item.destinationSession !== intent.sessionId
+            || !["pending", "in-progress"].includes(item.state) || task.assignment.role !== intent.role
+            || intent.state === "admitted" && task.entityVersion !== intent.taskVersion) return deny("Native task/session binding changed");
+          if (this.liveAttemptCount(ctx.run.id) > ctx.run.binding.limits.maxSessions) return deny("Live session limit reached");
+        }
+        if (attempt) {
+          this.db.prepare(`UPDATE team_attempts SET identity_json = ?, state = ?, unknown_reason = NULL,
+            entity_version = entity_version + 1, updated_at = ? WHERE id = ? AND entity_version = ?`)
+            .run(canonicalJson(identity), v.outcome, ctx.now, attempt.id, attempt.entityVersion);
+        } else {
+          const unavailable = { value: null, reason: "Native usage has not been observed" };
+          const usage = { activeMs: 0, inputTokens: unavailable, outputTokens: unavailable, costUsd: unavailable };
+          this.db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+            state, usage_json, active_ms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 0, ?, ?)`)
+            .run(intent.attemptId, ctx.run.id, intent.qitemId, intent.role, intent.provider, canonicalJson(identity), v.outcome,
+              canonicalJson(usage), ctx.now, ctx.now);
+        }
+      }
+      const observed: NativeLaunchIntent = { ...intent, state: v.outcome, evidenceRef };
+      this.emit(ctx.run, ctx.register, "attempt.launch-intent", jsonValue(observed) as JsonObject, task.assignment.taskId, intent.attemptId);
+      return { status: "observed", value: { intent: observed, attempt: this.getAttempt(intent.attemptId) },
+        taskId: task.assignment.taskId, attemptId: intent.attemptId, observedBy: owner.sessionId };
     });
   }
 
@@ -581,15 +738,16 @@ export class PlanGovernance {
     return false;
   }
 
-  private boundEligibility(ctx: CommandContext, currentBinding: unknown): string | null {
-    return this.reconcile(ctx, currentBinding) ? this.eligibility(ctx) : "Plan, repository or policy binding changed";
+  private boundEligibility(ctx: CommandContext, currentBinding: unknown, reconcilingAttemptId?: string): string | null {
+    return this.reconcile(ctx, currentBinding) ? this.eligibility(ctx, reconcilingAttemptId) : "Plan, repository or policy binding changed";
   }
 
-  private eligibility(ctx: CommandContext): string | null {
+  private eligibility(ctx: CommandContext, reconcilingAttemptId?: string): string | null {
     if (ctx.run.state !== "approved") return `Run is closed to dispatch (${ctx.run.state})`;
     if (!this.db.prepare(`SELECT id FROM team_approvals WHERE run_id = ? AND kind = 'orchestrator' AND action = 'implementation'
       AND binding_digest = ? AND state = 'approved' AND expires_at > ?`).get(ctx.run.id, ctx.run.bindingDigest, ctx.now)) return "Implementation approval is not active";
-    if (this.db.prepare("SELECT id FROM team_attempts WHERE run_id = ? AND state = 'unknown' LIMIT 1").get(ctx.run.id)) return "Native identity is unknown; reconciliation is required";
+    if (this.db.prepare("SELECT id FROM team_attempts WHERE run_id = ? AND state = 'unknown' AND id <> ? LIMIT 1").get(ctx.run.id, reconcilingAttemptId ?? "")) return "Native identity is unknown; reconciliation is required";
+    if (this.nativeLaunchIntents(ctx.run.id).some(intent => intent.state === "admitted" && intent.attemptId !== reconcilingAttemptId)) return "Native launch is unresolved; reconciliation is required";
     try {
       const capability = this.readPolicyCapability?.();
       if (!capability || capability.policyRevision !== ctx.run.binding.policyRevision
@@ -642,7 +800,7 @@ export class PlanGovernance {
 
   private liveAttemptCount(runId: string): number {
     return (this.db.prepare("SELECT count(*) AS count FROM team_attempts WHERE run_id = ? AND state IN ('running', 'unknown')")
-      .get(runId) as { count: number }).count;
+      .get(runId) as { count: number }).count + this.nativeLaunchIntents(runId).filter(intent => intent.state === "admitted").length;
   }
 
   private syncClock(ctx: CommandContext): void {

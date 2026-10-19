@@ -1,6 +1,6 @@
 {
   "schema": "multi-agent-worker-policy/v1",
-  "policy_revision": 4,
+  "policy_revision": 5,
   "control_identity": "ma-control",
   "egress_identity": "ma-egress",
   "launch_callers": [
@@ -35,7 +35,8 @@
     "installed_egress": "/opt/multi-agent/toolchain/egress/egress.mjs",
     "installed_egress_config": "/etc/multi-agent/egress.json",
     "egress_socket_dir": "/run/multi-agent-egress",
-    "context_root": "/var/lib/multi-agent/context"
+    "context_root": "/var/lib/multi-agent/context",
+    "mailbox_root": "/var/lib/multi-agent/control/mailboxes"
   },
   "sandbox": {
     "home": "/home/worker",
@@ -65,7 +66,12 @@
       "/etc/ld.so.conf",
       "/etc/ld.so.conf.d"
     ],
-    "context": "/context"
+    "context": "/context",
+    "mailbox": "/run/multi-agent/mailbox.sock",
+    "native_policy_mounts": {
+      "claude-code": { "source": "native/claude/managed-settings.json", "target": "/etc/claude-code/managed-settings.json" },
+      "codex": { "source": "native/codex/requirements.toml", "target": "/etc/codex/requirements.toml" }
+    }
   },
   "roles": {
     "implementer": {

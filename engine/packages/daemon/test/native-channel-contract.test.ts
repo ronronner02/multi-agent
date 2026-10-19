@@ -1,3 +1,4 @@
+import { buildManagedNativePolicy, verifyEffectiveNativePolicy } from "../src/integrations/framework/context-manifest.js";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { createHash } from "node:crypto";
 import { parse as parseToml } from "smol-toml";
@@ -320,5 +321,68 @@ describe("Codex channel configuration", () => {
     expect(() => upsertCodexNativeChannelHook("", "x\n[features]\nhooks = false\n#", KEY_SOURCE)).toThrow();
     expect(() => upsertCodexNativeChannelHook("", RELAY, "/home/\ud800/config.toml")).toThrow();
     expect(upsertCodexNativeChannelHook("not = [toml", RELAY, KEY_SOURCE)).toBe("not = [toml");
+  });
+});
+
+describe("immutable managed native policy", () => {
+  const observation = (policy: Awaited<ReturnType<typeof buildManagedNativePolicy>>) => ({
+    files: policy.files.map(f => ({ path: f.workerPath, hash: f.hash })),
+    aliases: policy.aliases.map(alias => ({ path: alias.target, hash: policy.files.find(f => f.workerPath === alias.source)!.hash })),
+    inventory: { selectedSource: policy.selectedSource, managedDropIns: "absent" as const,
+      remotePolicy: "absent" as const, platformPolicy: "not-applicable" as const, nativeExceptions: "absent" as const },
+  });
+
+  it.each(["claude-code", "codex"] as const)("builds %s policy from the existing installer and binds every effective file", async client => {
+    const policy = await buildManagedNativePolicy(client, "/opt/multi-agent/toolchain");
+    expect(policy.files.every(f => f.workerPath.startsWith("/context/native/"))).toBe(true);
+    expect(policy.files.every(f => f.hash === "sha256:" + createHash("sha256").update(f.content).digest("hex"))).toBe(true);
+    expect(policy.files.find(f => f.workerPath.endsWith("managed-native-channel-relay.cjs"))!.content)
+      .toContain('const SOCKET = "/run/multi-agent/mailbox.sock"');
+    expect(Object.isFrozen(policy.files[0])).toBe(true);
+    if (client === "claude-code") {
+      expect(policy.selectedSource).toBe("/etc/claude-code/managed-settings.json");
+      const settings = JSON.parse(policy.files.find(f => f.workerPath.endsWith("managed-settings.json"))!.content);
+      expect(settings.allowManagedHooksOnly).toBe(true);
+      expect(settings.disableAllHooks).toBe(false);
+      expect(settings.hooks.PostToolUse).toHaveLength(1);
+    } else {
+      expect(policy.selectedSource).toBe("/etc/codex/requirements.toml");
+      const requirements = parseToml(policy.files.find(f => f.workerPath.endsWith("requirements.toml"))!.content);
+      expect(requirements).toEqual({ allow_managed_hooks_only: true, features: { hooks: true },
+        hooks: { managed_dir: "/context/native/codex/hooks" } });
+      const hooks = JSON.parse(policy.files.find(f => f.workerPath.endsWith("hooks.json"))!.content);
+      expect(hooks.hooks.PostToolUse).toHaveLength(1);
+      expect(Object.keys(hooks.hooks)).toEqual(["PostToolUse"]);
+    }
+    expect(verifyEffectiveNativePolicy(policy, observation(policy))).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it.each(["claude-code", "codex"] as const)("rejects missing, changed, duplicated or extra %s effective bytes", async client => {
+    const policy = await buildManagedNativePolicy(client, "/opt/multi-agent/toolchain");
+    for (const kind of ["missing", "changed-handler", "duplicate", "extra", "alias"]) {
+      const observed = observation(policy);
+      if (kind === "missing") observed.files.pop();
+      if (kind === "changed-handler") observed.files.find(f => f.path.endsWith(".cjs"))!.hash = "sha256:" + "0".repeat(64);
+      if (kind === "duplicate") observed.files.push(observed.files[0]!);
+      if (kind === "extra") observed.files.push({ path: "/context/native/extra-hook.cjs", hash: "sha256:" + "1".repeat(64) });
+      if (kind === "alias") observed.aliases[0]!.hash = "sha256:" + "2".repeat(64);
+      expect(() => verifyEffectiveNativePolicy(policy, observed)).toThrow(/native policy/);
+    }
+  });
+
+  it.each(["selectedSource", "managedDropIns", "remotePolicy", "platformPolicy", "nativeExceptions"] as const)(
+    "blocks an altered or unobserved source-selection fact: %s", async field => {
+      const policy = await buildManagedNativePolicy("codex", "/opt/multi-agent/toolchain");
+      for (const value of [undefined, "unknown", "present", "/shadow/requirements.toml"]) {
+        const observed = observation(policy);
+        Object.assign(observed.inventory, { [field]: value });
+        expect(() => verifyEffectiveNativePolicy(policy, observed)).toThrow(/native policy/);
+      }
+    });
+
+  it("refuses a non-canonical or shell-interpreted toolchain path", async () => {
+    for (const root of ["relative", "/opt/../toolchain", "/opt/with space", '/opt/$HOME', "/opt/toolchain\n"]) {
+      await expect(buildManagedNativePolicy("codex", root)).rejects.toThrow(/toolchain/);
+    }
   });
 });
