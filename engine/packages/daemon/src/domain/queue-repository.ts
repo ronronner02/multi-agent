@@ -1,4 +1,4 @@
-import { assertGovernedQueueWrite, assertLegacyOperationAllowed } from "./plan-governance.js";
+import { assertGovernedQueueWrite, assertLegacyOperationAllowed, isManagedMode } from "./plan-governance.js";
 import { LeadWakePolicy } from "./lead-wake-policy.js";
 import { readWakeLadderBackstop } from "./queue-wake-ladder.js";
 import { TEAM_QUEUE_STATES as QUEUE_STATES } from "../contracts/team-control.js";
@@ -2983,6 +2983,40 @@ export class QueueRepository {
     (this.watchdogJobsRepo ?? new WatchdogJobsRepository(this.db)).markTerminal(armed.ref, reason);
   }
 
+  /**
+   * T011 — does this closed blocker SATISFY the dependents parked on it?
+   *
+   * KTD4's dependency promise is "a consumer starts once its prerequisite's
+   * result exists", and R18 says a completed process or exit code is not that
+   * result. In managed mode only an owner-observed `done` carrying validated
+   * evidence unlocks a consumer; every other ending keeps the consumer parked.
+   * Legacy mode keeps the historical terminal-unpark byte for byte, because the
+   * legacy queue carries no evidence to consult.
+   *
+   * `handed-off` is deliberately not success here. Handoff moves responsibility
+   * to a named successor; the successor's own validated completion is what
+   * satisfies the dependency, and `propagateBlockerCompletion` rebinds waiters to
+   * that successor rather than releasing them.
+   */
+  private blockerSatisfiesDependents(qitemId: string, terminalState: string): boolean {
+    if (!isManagedMode(this.db)) return true;
+    if (terminalState !== "done") return false;
+    // Only called from updateInTransactionalContext, which runs before the
+    // terminal state is written. A row that already reads as terminal is a
+    // re-entrant write, so its own done state is the truthful half here and the
+    // evidence was persisted by the transition that ended it.
+    const authority = this.db.prepare("SELECT evidence_json AS evidenceJson FROM team_queue_authority WHERE qitem_id = ?")
+      .get(qitemId) as { evidenceJson: string | null } | undefined;
+    if (!authority) return true;
+    if (authority.evidenceJson === null) return false;
+    try {
+      const evidence: unknown = JSON.parse(authority.evidenceJson);
+      return typeof evidence === "object" && evidence !== null && (evidence as { validated?: unknown }).validated === true;
+    } catch {
+      return false;
+    }
+  }
+
   private propagateBlockerCompletion(input: {
     qitemId: string;
     terminalState: string;
@@ -2991,6 +3025,7 @@ export class QueueRepository {
     ts: string;
   }): PersistedEvent[] {
     const dependentEvents: PersistedEvent[] = [];
+    const satisfied = this.blockerSatisfiesDependents(input.qitemId, input.terminalState);
     const blockedRows = this.db
       .prepare("SELECT qitem_id, destination_session FROM queue_items WHERE blocked_on = ? AND state = 'blocked'")
       .all(input.qitemId) as Array<{ qitem_id: string; destination_session: string }>;
@@ -3019,6 +3054,33 @@ export class QueueRepository {
           actorSession: input.actorSession, summary: this.getById(r.qitem_id)?.summary ?? null });
         this.eventBus.registerPersistedWithinActiveEnvelope(event);
         dependentEvents.push(event);
+        continue;
+      }
+      if (!satisfied) {
+        // T011 — WITHHOLD. The blocker ended without evidence-backed success, so
+        // the consumer stays parked on its own explicit gate rather than
+        // inheriting a promise that was never kept. The note is the owner's only
+        // signal that this row needs a decision, so it is written once per closed
+        // blocker rather than on every later propagation pass.
+        const note = `withheld: blocker ${input.qitemId} ended '${input.terminalState}' without validated success`;
+        const alreadyRecorded = this.db.prepare("SELECT 1 FROM queue_transitions WHERE qitem_id = ? AND transition_note = ?")
+          .get(r.qitem_id, note);
+        if (!alreadyRecorded) {
+          this.transitionLog.append({ qitemId: r.qitem_id, state: "blocked", actorSession: input.actorSession,
+            transitionNote: note, identityProvenance: input.identityProvenance });
+        }
+        const withheldEvent = this.eventBus.persistWithinTransaction({
+          type: "queue.updated",
+          qitemId: r.qitem_id,
+          fromState: "blocked",
+          toState: "blocked",
+          closureReason: null,
+          closureTarget: null,
+          actorSession: input.actorSession,
+          summary: this.getById(r.qitem_id)?.summary ?? null,
+        });
+        this.eventBus.registerPersistedWithinActiveEnvelope(withheldEvent);
+        dependentEvents.push(withheldEvent);
         continue;
       }
       this.db
