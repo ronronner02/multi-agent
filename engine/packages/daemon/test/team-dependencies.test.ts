@@ -185,9 +185,17 @@ describe("declared work graph", () => {
   it.each([
     ["identical", ["src/api", "src/api"]],
     ["nested", ["src", "src/api"]],
+    ["differently spelled", ["src/api", "./src/api/"]],
+    ["backslash spelled", ["src/api", "src\\api"]],
   ])("rejects %s overlapping write ownership", (_kind, [first, second]) => {
     expect(validateDependencyGraph([task("one", [], [first!]), task("two", [], [second!])]))
       .toMatchObject({ ok: false, reason: expect.stringContaining("overlaps") });
+  });
+
+  it("refuses a run that declares more tasks than the admission limit", () => {
+    const many = Array.from({ length: 101 }, (_, index) => task(`t${index}`, [], [`src/t${index}`]));
+    expect(validateDependencyGraph(many)).toMatchObject({ ok: false, reason: expect.stringContaining("100-task limit") });
+    expect(validateDependencyGraph(many.slice(0, 100))).toEqual({ ok: true });
   });
 });
 

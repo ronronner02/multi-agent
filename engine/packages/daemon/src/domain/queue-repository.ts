@@ -3007,7 +3007,10 @@ export class QueueRepository {
     // evidence was persisted by the transition that ended it.
     const authority = this.db.prepare("SELECT evidence_json AS evidenceJson FROM team_queue_authority WHERE qitem_id = ?")
       .get(qitemId) as { evidenceJson: string | null } | undefined;
-    if (!authority) return true;
+    // A managed `done` row with no authority record has no evidence to offer,
+    // so it satisfies nothing. Only legacy rows, which carry no evidence by
+    // design, reach the short-circuit above.
+    if (!authority) return false;
     if (authority.evidenceJson === null) return false;
     try {
       const evidence: unknown = JSON.parse(authority.evidenceJson);
