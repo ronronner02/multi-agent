@@ -66,6 +66,8 @@ These rules size review and verification to the change. They take precedence ove
   - **Reaching the reviewers:**
     - `gpt-6.1-sol` runs through `codex exec -s read-only`.
     - `ds/gpt-6-astra` supports the Responses API (owner confirmation, 2026-10-20), so it also runs through `codex exec -s read-only -m ds/gpt-6-astra`.
+    - `ds/claude-*` models run only through the Claude CLI (`claude -p --model ds/claude-...`), never through `/chat/completions`.
+    - **Temporary substitution (owner, 2026-10-21):** until the owner restores the DeepSeek gateway mapping, the second reviewer is `claude-sonnet-5-5`, run as a report-only subagent, in place of `ds/gpt-6-astra`. Revert to the roster above once the owner says the mapping works.
     - If that stream drops, call the gateway's `/chat/completions` endpoint directly with system and user roles only, a client `User-Agent` header and a streamed response. Set `reasoning_effort` to `low`, because the gateway ends any request at 300 seconds.
     - A read-only `codex exec` cannot read the WSL checkout. Give each reviewer frozen, read-only copies of the diff, the touched files and the contract excerpt.
     - A transport failure, such as HTTP 524 or a dropped stream, is not a review round. Retry it once.
