@@ -201,7 +201,16 @@ export interface GraphTask {
 }
 export type GraphVerdict = { ok: true } | { ok: false; reason: string; taskIds: string[] };
 
+/** The managed run's task ceiling, matching the admission limit `createTask` enforces. */
+const MANAGED_TASK_LIMIT = 100;
+
+/** One spelling per claimed path, so `./src/api`, `src/api/` and `src\api` cannot hide an overlap. */
+const normalizeClaim = (path: string): string => path.replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/\/+$/, "");
+
 export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdict {
+  // The 100-task admission limit bound the run, not one createTask call: a run
+  // that admits more than this cannot be prepared as one plan.
+  if (tasks.length > MANAGED_TASK_LIMIT) return { ok: false, reason: `run declares ${tasks.length} tasks, above the ${MANAGED_TASK_LIMIT}-task limit`, taskIds: [] };
   const byId = new Map<string, GraphTask>();
   for (const task of tasks) {
     if (byId.has(task.taskId)) return { ok: false, reason: `duplicate task ${task.taskId}`, taskIds: [task.taskId] };
@@ -238,7 +247,7 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
   for (const task of tasks) {
     if (task.role === "reviewer") continue;
     for (const path of task.paths) {
-      const normalized = path.replace(/\/+$/, "");
+      const normalized = normalizeClaim(path);
       for (const [owned, owner] of claimed) {
         if (owned === normalized || normalized.startsWith(`${owned}/`) || owned.startsWith(`${normalized}/`)) {
           return { ok: false, reason: `write path ${path} of ${task.taskId} overlaps ${owner}'s ${owned}`, taskIds: [task.taskId, owner] };

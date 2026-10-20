@@ -48,6 +48,9 @@ export interface CandidateWorkspace {
 
 const sha256 = (bytes: Buffer | string): string => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 
+/** The empty side of a `git diff --no-index` addition, on every platform git runs on. */
+const emptyFilePath = (): string => (process.platform === "win32" ? "NUL" : "/dev/null");
+
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
 }
@@ -70,9 +73,13 @@ function gitOrNull(cwd: string, args: readonly string[]): string | null {
  */
 export function candidatePath(root: string, path: string): string {
   if (isAbsolute(path) || path.split("/").includes("..")) throw new Error(`Candidate path escapes the repository: ${path}`);
+  // Compare against the physical root: `resolved` comes from realpath, so a
+  // root reached through a symlink would otherwise report every path as
+  // escaping its own repository.
+  const physicalRoot = realpathSync(root);
   // Realpath the deepest existing ancestor: a symlinked parent is followed
   // through the same containment rule as a symlinked leaf.
-  let existing = resolve(root, path);
+  let existing = resolve(physicalRoot, path);
   const suffix: string[] = [];
   let stats;
   while (true) {
@@ -86,7 +93,7 @@ export function candidatePath(root: string, path: string): string {
     }
   }
   const resolved = resolve(realpathSync(existing), ...suffix);
-  const escapes = relative(root, resolved) === ".." || relative(root, resolved).startsWith(`..${sep}`);
+  const escapes = relative(physicalRoot, resolved) === ".." || relative(physicalRoot, resolved).startsWith(`..${sep}`);
   if (escapes) throw new Error(`Candidate path escapes the repository through a symlink: ${path}`);
   if (suffix.length > 0) throw new Error(`Candidate path is missing: ${path}`);
   return resolved;
@@ -101,11 +108,17 @@ export function listFiles(root: string, trackedFromIndex: boolean): CandidateFil
   const tracked = trackedFromIndex ? git(root, ["ls-files", "-z"]).split("\0").filter(Boolean) : [];
   const trackedSet = new Set(tracked);
   const untracked = git(root, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
-  return [...new Set([...tracked, ...untracked])].sort().map(path => ({
-    path,
-    hash: sha256(readFileSync(candidatePath(root, path))),
-    tracked: trackedSet.has(path),
-  }));
+  return [...new Set([...tracked, ...untracked])].sort().flatMap(path => {
+    // A candidate that deletes a tracked file keeps it in the index until it is
+    // staged. The deletion is part of the patch; it is not a manifest entry, so
+    // a missing file is dropped rather than failing the whole manifest.
+    try {
+      return [{ path, hash: sha256(readFileSync(candidatePath(root, path))), tracked: trackedSet.has(path) }];
+    } catch (error) {
+      if ((error as Error).message.startsWith("Candidate path is missing")) return [];
+      throw error;
+    }
+  });
 }
 
 export function digestManifest(files: readonly CandidateFile[]): string {
@@ -188,7 +201,7 @@ export function createCandidateWorkspace(input: {
 function untrackedPatch(root: string, path: string): string {
   // `--no-index` reports a difference by exiting 1, which is the normal case
   // here, so the exit status cannot stand in for "failed": read stdout directly.
-  const result = spawnSync("git", ["-C", root, "diff", "--binary", "--no-index", "--", "/dev/null", path],
+  const result = spawnSync("git", ["-C", root, "diff", "--binary", "--no-index", "--", emptyFilePath(), path],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
   if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
   return (result.stdout ?? "").replace(/\s+$/, "");

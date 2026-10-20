@@ -100,6 +100,25 @@ describe("isolated candidate ownership", () => {
     expect(listFiles(root, true).some(file => file.path === "src/shared.ts")).toBe(true);
   });
 
+  it("represents a deleted tracked file in the patch without failing the manifest", () => {
+    const root = repository();
+    const base = resolveWorkspaceBase(root);
+    const workspace = createCandidateWorkspace({ root, base, workspaceRoot: candidateRoot(root), label: "T011" });
+    roots.push(workspace.root);
+    rmSync(join(workspace.root, "src", "base.ts"));
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files).toEqual([]);
+    expect(manifest.patch).toContain("deleted file mode");
+    removeCandidateWorkspace(workspace);
+  });
+
+  it("resolves paths through a root reached by symlink", () => {
+    const root = repository();
+    const link = join(tmpdir(), `candidate-link-${Date.now()}`); roots.push(link);
+    symlinkSync(root, link);
+    expect(readFileSync(candidatePath(link, "src/base.ts"), "utf8").trim()).toBe("export const base = 1;");
+  });
+
   it("refuses a candidate path that escapes through .. or an escaping symlink", () => {
     const root = repository();
     expect(() => candidatePath(root, "../outside.ts")).toThrow(/escapes the repository/);
