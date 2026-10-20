@@ -170,6 +170,19 @@ describe("isolated candidate ownership", () => {
     expect(verifySourceUnchanged(workspace)).toMatchObject({ unchanged: false });
   });
 
+  it("keeps meaningful trailing whitespace on a final changed line", () => {
+    const root = repository();
+    const base = resolveWorkspaceBase(root);
+    const workspace = createCandidateWorkspace({ root, base, workspaceRoot: candidateRoot(root), label: "T011" });
+    roots.push(workspace.root);
+    // Two significant trailing spaces: a patch that trims them describes other bytes.
+    writeFileSync(join(workspace.root, "src", "base.ts"), "export const base = 2;  ");
+    const manifest = candidateManifest(workspace);
+    expect(manifest.patch).toContain("export const base = 2;  ");
+    expect(manifest.patch.endsWith("\ No newline at end of file")).toBe(true);
+    removeCandidateWorkspace(workspace);
+  });
+
   it("refuses a candidate path that escapes through .. or an escaping symlink", () => {
     const root = repository();
     expect(() => candidatePath(root, "../outside.ts")).toThrow(/escapes the repository/);
