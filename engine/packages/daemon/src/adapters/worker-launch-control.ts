@@ -7,10 +7,11 @@ import { hashBinding, hashBytes, type PlanGovernance } from "../domain/plan-gove
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { SessionRegistry } from "../domain/session-registry.js";
 import type { QueueRepository } from "../domain/queue-repository.js";
+import { listNativeProcesses, type NativeProcessRow } from "../domain/native-process-lineage.js";
 import { immutable, within, type ContextManifest } from "../integrations/framework/context-manifest.js";
 import { resolveTeamControlCredential } from "../middleware/auth-bearer-token.js";
 import type { TeamControlOptions } from "../routes/team-control.js";
-import type { WorkerCommand, WorkerLaunchInput, WorkerLaunchPolicy } from "./worker-launch.js";
+import type { ClientLockObservation, WorkerCommand, WorkerLaunchInput, WorkerLaunchPolicy } from "./worker-launch.js";
 import type { WorkerMailboxBridge } from "./worker-mailbox-bridge.js";
 import type { TmuxAdapter } from "./tmux.js";
 
@@ -261,4 +262,128 @@ export async function inspectManagedWorker(
     // Never propagate subprocess output, installed bytes or credential resolver details.
     throw new Error("managed_inspection_unverified");
   }
+}
+
+type ProcessSelector = { processId: number; processStart: string };
+interface ManagedProcessSnapshot {
+  pane: ProcessSelector;
+  sandbox: { mountNamespace: string; userNamespace: string; networkNamespace: string };
+  lineage: (ProcessSelector & { executable: string })[];
+  process: ProcessSelector & { processGroupId: number; namespacePids: number[]; uids: number[]; groups: number[];
+    capabilities: string; noNewPrivileges: string; argv: string[]; executable: string; cwd: string;
+    environment: Record<string, string>; mountNamespace: string; userNamespace: string; networkNamespace: string; pidNamespace: string };
+  mountInfo: string; stdio: { fd: number; kind: "tty" | "pipe" | "file" | "directory" | "socket" }[];
+  files: { path: string; hash: string }[]; discoveryRoots: string[];
+  nativeSessions: { id: string; createdAfterStart: boolean; rollout: { device: number; inode: number } }[];
+}
+
+/** Start time in clock ticks since boot: the kernel's identity for one process instance. */
+function processStart(pid: number): string {
+  const raw = readFileSync("/proc/" + pid + "/stat", "utf8");
+  const value = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/)[19];
+  if (!value || !/^(0|[1-9]\d{0,19})$/.test(value)) throw new Error();
+  return value;
+}
+
+/**
+ * Pane and process rows only nominate the supervisor. The privileged helper selects the native process from
+ * kernel structure below the pinned sandbox init and authenticates every image against the client lock.
+ */
+export async function observeManagedWorkerProcess(
+  input: WorkerLaunchInput, command: Readonly<WorkerCommand>,
+  dependencies: ManagedWorkerScopeDependencies & {
+    rigRepo: Pick<RigRepository, "db" | "getRig">;
+    sessions: Pick<SessionRegistry, "db" | "findResumeContextByName" | "getLatestLiveSessions">;
+    tmux: Pick<TmuxAdapter, "getPanePid">;
+    clientLock: Pick<ClientLockObservation, "files">;
+    toolchainDir: string;
+    /**
+     * The session adopted by this attempt's first observation, which must precede any task input. Later
+     * observations must find that exact session and, for Codex, the same rollout file.
+     */
+    expectedSession?: { nativeSessionId: string; rollout?: { device: number; inode: number } };
+  },
+) {
+  try {
+    input = immutable(structuredClone(input)); command = immutable(structuredClone(command));
+    const same = (left: unknown, right: unknown) => canonicalJson(left) === canonicalJson(right);
+    const seat = resolveManagedWorkerSeat(input.attempt.context, dependencies);
+    const intent = dependencies.governance.getNativeLaunchIntent(seat.scope.run.id, command.attemptId);
+    const context = input.attempt.context, policy = context.nativePolicy, toolchain = dependencies.toolchainDir;
+    if (!intent || intent.state !== "admitted" && intent.state !== "running" || !policy
+      || canonicalJson(intent.command) !== canonicalJson(command) || intent.commandDigest !== hashBytes(canonicalJson(command))
+      || intent.sessionId !== seat.scope.sessionId || command.client !== input.client
+      || command.attemptId !== input.attempt.attemptId || command.contextHash !== context.generatedHash
+      || canonicalJson(command.args.slice(0, 4)) !== canonicalJson(["-n", "--", INSTALLED_LAUNCHER, "--supervise"])) throw new Error();
+    // The kernel reports resolved images, so each locked path is resolved before comparison.
+    const locked = dependencies.clientLock.files.map(file => realpathSync(posix.join(toolchain, file.path)));
+    const node = realpathSync(toolchain + "/node/bin/node");
+    if (!locked.length) throw new Error();
+    // The egress relay spawns the client; the Codex entry script is a Node program that spawns its native binary.
+    const chain = input.client === "codex" ? [node, node, locked.at(-1)!] : [node, locked[0]!];
+    const panePid = await dependencies.tmux.getPanePid(seat.pane);
+    if (!Number.isSafeInteger(panePid) || panePid! <= 1) throw new Error();
+    const pane = { processId: panePid!, processStart: processStart(panePid!) };
+    const supervisorArgv = [process.execPath, INSTALLED_LAUNCHER + ".mjs", "--supervise", ...command.args.slice(4)];
+    const rows = await listNativeProcesses();
+    const descends = (row: NativeProcessRow | undefined, depth: number): boolean => !!row && depth < 3
+      && (row.ppid === pane.processId || descends(rows.find(parent => parent.pid === row.ppid), depth + 1));
+    const supervisors = rows.filter(row => row.command.startsWith(supervisorArgv.slice(0, 3).join(" ") + " ") && descends(row, 0));
+    if (supervisors.length !== 1) throw new Error();
+    const supervisor = { processId: supervisors[0]!.pid, processStart: processStart(supervisors[0]!.pid) };
+    const expectedFiles = context.files.map(file => ({ path: file.workerPath, hash: file.hash }));
+    for (const alias of policy.aliases) expectedFiles.push({ path: alias.target, hash: expectedFiles.find(file => file.path === alias.source)?.hash ?? "" });
+    const query = { pane, files: [...new Set(expectedFiles.map(file => file.path))], discoveryRoots: [...context.workerDiscoveryRoots] };
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = execFile("/usr/bin/sudo", ["-n", "--", INSTALLED_LAUNCHER, "--observe", supervisor.processId + ":" + supervisor.processStart,
+        ...command.args.slice(4)], { cwd: "/", env: { PATH: "/usr/bin:/bin", LANG: "C" },
+        encoding: "utf8", timeout: 10_000, maxBuffer: 2 * 1024 * 1024 }, (error, output, stderr) => {
+        if (error || stderr.trim()) reject(new Error()); else resolve(output);
+      });
+      child.stdin?.end(JSON.stringify(query));
+    });
+    const result = JSON.parse(stdout) as { schema: string; supervisor: ProcessSelector; commandDigest: string;
+      pidNamespace: string; uid: number; snapshot: ManagedProcessSnapshot };
+    const snapshot = result.snapshot, facts = snapshot?.process, native = snapshot?.lineage?.at(-1);
+    const sorted = (files: { path: string; hash: string }[]) => [...files].sort((a, b) => a.path.localeCompare(b.path));
+    if (result.schema !== "multi-agent-sandbox-control/v1" || !same(result.supervisor, supervisor)
+      || result.commandDigest !== hashBytes(JSON.stringify(supervisorArgv)) || result.uid !== context.workerUid
+      || !facts || !native || !same(snapshot.pane, pane) || !same(snapshot.lineage.map(row => row.executable), chain)
+      || facts.processId !== native.processId || facts.processStart !== native.processStart || facts.executable !== chain.at(-1)
+      // argv is worker-writable after exec, so it confirms the admitted command but never selects the process.
+      || facts.argv[0] !== (input.client === "codex" ? chain.at(-1) : command.nativeArgv[0])
+      || !same(facts.argv.slice(1), command.nativeArgv.slice(1))
+      || facts.uids.length !== 4 || facts.uids.some(uid => uid !== context.workerUid) || facts.pidNamespace !== result.pidNamespace
+      || !same(snapshot.sandbox, { mountNamespace: facts.mountNamespace, userNamespace: facts.userNamespace, networkNamespace: facts.networkNamespace })
+      // The interactive client inherits the pane terminal on every standard stream.
+      || !same(snapshot.stdio, [0, 1, 2].map(fd => ({ fd, kind: "tty" })))
+      || facts.cwd !== "/work" || !Number.isSafeInteger(facts.processGroupId) || facts.processGroupId <= 0
+      || facts.environment.HOME !== "/home/worker" || facts.capabilities !== "0000000000000000" || facts.noNewPrivileges !== "1"
+      || !same(sorted(snapshot.files), sorted(expectedFiles))
+      || !same([...snapshot.discoveryRoots].sort(), [...context.workerDiscoveryRoots].sort())) throw new Error();
+    const token = input.client === "claude-code"
+      ? command.nativeArgv[command.nativeArgv.indexOf(input.resumeToken ? "--resume" : "--session-id") + 1] : input.resumeToken;
+    let nativeSessionId = token, rollout: { device: number; inode: number } | undefined;
+    if (input.client === "codex") {
+      const sessions = snapshot.nativeSessions, session = sessions?.[0];
+      // A fresh session must be a rollout created by this process, and never an ID another attempt holds.
+      // The worker can rename its own rollout once tools run, so later observations bind to this file identity.
+      if (!Array.isArray(sessions) || sessions.length !== 1 || !session
+        || !Number.isSafeInteger(session.rollout?.device) || session.rollout.device < 0
+        || !Number.isSafeInteger(session.rollout?.inode) || session.rollout.inode <= 0
+        || (token !== undefined ? session.id !== token : !session.createdAfterStart || dependencies.db.prepare(
+          "SELECT 1 FROM team_attempts WHERE json_extract(identity_json, '$.nativeSessionId') = ? AND id <> ? LIMIT 1")
+          .get(session.id, command.attemptId))) throw new Error();
+      nativeSessionId = session.id; rollout = { device: session.rollout.device, inode: session.rollout.inode };
+    }
+    const expected = dependencies.expectedSession;
+    // A respawned pane keeps its persisted identifier, so the live pane process is rechecked as well.
+    if (!nativeSessionId || expected && (expected.nativeSessionId !== nativeSessionId || !same(expected.rollout ?? null, rollout ?? null))
+      || await dependencies.tmux.getPanePid(seat.pane) !== pane.processId
+      || processStart(pane.processId) !== pane.processStart || processStart(supervisor.processId) !== supervisor.processStart
+      || processStart(native.processId) !== native.processStart
+      || canonicalJson(resolveManagedWorkerSeat(context, dependencies)) !== canonicalJson(seat)) throw new Error();
+    return immutable({ seat, pane, supervisor, native: { processId: native.processId, processStart: native.processStart },
+      nativeSessionId, ...(rollout ? { rollout } : {}), snapshot });
+  } catch { throw new Error("managed_process_observation_unverified"); }
 }

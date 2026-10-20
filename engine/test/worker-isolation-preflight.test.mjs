@@ -13,7 +13,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import childProcess, { execFile, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import fs, { chmodSync, closeSync, existsSync, readdirSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, closeSync, existsSync, readdirSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net, { createConnection } from 'node:net';
 import { syncBuiltinESMExports } from 'node:module';
@@ -489,6 +489,17 @@ describe('offline: fixed native policy and mailbox mounts', () => {
       { ...aliased, realpath: p => p === alias ? executable : aliased.realpath(p) }), 'client-entrypoint-required');
   });
 
+  test('KTD27: the observed native process chain comes from the installed lock, not the caller', { skip: !existsSync(NODE) }, () => {
+    const node = realpathSync(NODE), file = entry => policy.paths.toolchain_dir + '/' + entry.files.at(-1).path;
+    const request = command => parseLaunchArgs([...argv.slice(0, -1), ...command]);
+    assert.deepEqual(workerLaunch.nativeProcessChain(policy, request([executable]), clientLock), [node, file(lock.clients['claude-code'])]);
+    assert.deepEqual(workerLaunch.nativeProcessChain(policy, request([policy.paths.toolchain_dir + '/clients/bin/codex']), clientLock),
+      [node, node, file(lock.clients.codex)]);
+    for (const [command, installed] of [[[NODE], clientLock], [[executable], null], [[executable], { ...clientLock, sha256: 'sha256:' + '0'.repeat(64) }]]) {
+      assert.throws(() => workerLaunch.nativeProcessChain(policy, request(command), installed));
+    }
+  });
+
   test('requires a registered mailbox before either native client starts', () => {
     for (const client of ['claude', 'codex']) {
       const request = parseLaunchArgs([...argv.slice(0, 10), '--', policy.paths.toolchain_dir + '/clients/bin/' + client]);
@@ -655,15 +666,16 @@ describe('offline: fixed native policy and mailbox mounts', () => {
 
 
 describe('offline: supervisor control', { skip: process.platform !== 'linux' }, () => {
-  async function fixture(t, { capture = true, holdSupervisor = false, argvBytes, contextRoot, sessionRoot } = {}) {
+  async function fixture(t, { capture = true, holdSupervisor = false, argvBytes, contextRoot, sessionRoot, sessionOpen = '>>', sessionWrite = '',
+    script = 'sleep 30 & setsid sleep 30 & wait' } = {}) {
     assert.equal(typeof workerLaunch.openSandboxControl, 'function');
     const command = { file: '/usr/bin/bwrap', args: ['--unshare-user', '--unshare-pid', '--die-with-parent',
       '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib',
       '--symlink', 'usr/lib64', '/lib64', '--proc', '/proc', '--dev', '/dev',
       '--info-fd', String(workerLaunch.SANDBOX_STATUS_FD), ...(contextRoot ? ['--ro-bind', contextRoot, '/context'] : []),
-      ...(sessionRoot ? ['--ro-bind', sessionRoot, '/home/worker/.codex/sessions'] : []),
-      '--', '/bin/sh', '-c', (sessionRoot ? 'exec 8< /home/worker/.codex/sessions/rollout.jsonl; printf native-ready; ' : '')
-        + 'sleep 30 & setsid sleep 30 & wait'] };
+      ...(sessionRoot ? ['--bind', sessionRoot, '/home/worker/.codex/sessions'] : []),
+      '--', '/bin/sh', '-c', (sessionRoot ? `exec 8${sessionOpen} /home/worker/.codex/sessions/${ROLLOUT}; ${sessionWrite}printf native-ready; ` : '')
+        + script] };
     const source = `
       import { startSandbox, SANDBOX_STATUS_FD } from ${JSON.stringify(new URL('../config/isolation/worker-launch.mjs', import.meta.url).href)};
       const stdio = Array(SANDBOX_STATUS_FD + 1).fill('ignore');
@@ -694,10 +706,24 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
       child.stdout.once('data', resolve); child.once('error', reject);
       child.once('exit', () => reject(new Error('Supervisor fixture exited before capture')));
     });
-    const raw = readFileSync('/proc/' + child.pid + '/stat', 'utf8');
-    const selector = { processId: child.pid, processStart: raw.slice(raw.lastIndexOf(')') + 2).trim().split(/\s+/)[19] };
+    const selector = { processId: child.pid, processStart: startOf(child.pid) };
     return { child, selector, argv: [process.execPath, ...args] };
   }
+  const startOf = pid => { const raw = readFileSync('/proc/' + pid + '/stat', 'utf8'); return raw.slice(raw.lastIndexOf(')') + 2).trim().split(/\s+/)[19]; };
+  // The test process stands in for the terminal pane that runs each supervisor.
+  const pane = () => ({ processId: process.pid, processStart: startOf(process.pid) });
+  const SESSION = '01a154fe-b417-7933-b7a4-a8c840f721e9', ROLLOUT = `2026/10/20/rollout-2026-10-20T00-29-00-${SESSION}.jsonl`;
+  const SHELL = realpathSync('/bin/sh');
+  const query = (change = {}) => ({ pane: pane(), files: [], discoveryRoots: [], ...change });
+  const meta = id => JSON.stringify({ type: 'session_meta', payload: { id } });
+  const sessionFixture = (t, existing = true) => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'sandbox-rollout-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    mkdirSync(path.join(root, '2026/10/20'), { recursive: true });
+    const write = (file, id) => writeFileSync(path.join(root, file), meta(id) + '\n');
+    if (existing) write(ROLLOUT, SESSION);
+    return { root, write };
+  };
 
   test('observes a separately supervised real namespace through retained descriptors', { timeout: 6_000 }, async t => {
     const { selector, argv } = await fixture(t);
@@ -723,11 +749,16 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
     const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
     t.after(() => control.close());
     const observed = control.observe();
-    const query = { native: { processId: observed.sandboxPid, processStart: observed.processStart },
-      files: ['/context/instructions'], discoveryRoots: ['/context'] };
-    const result = control.snapshot(query);
-    assert.equal(result.process.processId, observed.sandboxPid);
-    assert.equal(result.process.processStart, observed.processStart);
+    const result = control.snapshot(query({ files: ['/context/instructions'], discoveryRoots: ['/context'] }), [SHELL]);
+    // The native is the sandbox init's namespace-PID-2 child, found from kernel links rather than a caller selector.
+    const nativePid = Number(readFileSync('/proc/' + observed.sandboxPid + '/task/' + observed.sandboxPid + '/children', 'utf8').trim().split(' ')[0]);
+    assert.deepEqual(result.lineage, [{ processId: nativePid, processStart: startOf(nativePid), executable: SHELL }]);
+    assert.deepEqual(result.pane, pane());
+    assert.equal(result.process.processId, nativePid);
+    assert.equal(result.process.processStart, startOf(nativePid));
+    assert.equal(result.process.executable, SHELL);
+    assert.deepEqual(result.sandbox, { mountNamespace: result.process.mountNamespace,
+      userNamespace: result.process.userNamespace, networkNamespace: result.process.networkNamespace });
     assert.deepEqual(result.process.uids, [process.getuid(), process.getuid(), process.getuid(), process.getuid()]);
     assert.equal(result.process.pidNamespace, observed.pidNamespace);
     assert.notEqual(result.process.mountNamespace, readlinkSync('/proc/self/ns/mnt'));
@@ -766,57 +797,90 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
     const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
     t.after(() => control.close());
     const observed = control.observe(), before = readdirSync('/proc/self/fd').length;
-    const query = { native: { processId: observed.sandboxPid, processStart: observed.processStart }, files: [], discoveryRoots: [] };
     for (let index = 0; index < 20; index++) {
-      control.snapshot(query);
-      assert.throws(() => control.snapshot({ ...query, native: { ...query.native,
-        processStart: String(BigInt(query.native.processStart) + 1n) } }), { code: 'sandbox-control-unverified' });
+      control.snapshot(query(), [SHELL]);
+      assert.throws(() => control.snapshot(query({ pane: { ...pane(), processStart: String(BigInt(pane().processStart) + 1n) } }), [SHELL]),
+        { code: 'sandbox-control-unverified' });
     }
     assert.equal(readdirSync('/proc/self/fd').length, before);
+    assert.deepEqual(control.observe(), observed);
   });
 
-  test('snapshot rejects a rollout descriptor replaced between lookup and open', { timeout: 6_000 }, async t => {
-    const root = mkdtempSync(path.join(os.tmpdir(), 'sandbox-rollout-'));
-    t.after(() => rmSync(root, { recursive: true, force: true }));
-    const content = JSON.stringify({ type: 'session_meta', payload: { id: 'fixture-native-session' } }) + '\n';
-    writeFileSync(path.join(root, 'rollout.jsonl'), content);
-    writeFileSync(path.join(root, 'foreign.jsonl'), content);
+  test('names a Codex session only from a rollout the native writes under its own UUID', { timeout: 6_000 }, async t => {
+    const { root } = sessionFixture(t);
     const { selector, argv } = await fixture(t, { sessionRoot: root });
     const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
     t.after(() => control.close());
-    const observed = control.observe();
-    const nativePid = Number(readFileSync('/proc/' + observed.sandboxPid + '/task/' + observed.sandboxPid + '/children', 'utf8').trim().split(' ')[0]);
-    const nativeStat = readFileSync('/proc/' + nativePid + '/stat', 'utf8');
-    const query = { native: { processId: nativePid,
-      processStart: nativeStat.slice(nativeStat.lastIndexOf(')') + 2).trim().split(/\s+/)[19] }, files: [], discoveryRoots: [] };
-    assert.deepEqual(control.snapshot(query).nativeSessionIds, ['fixture-native-session']);
+    // The file predates this native process, so it cannot prove a fresh session.
+    const file = statSync(path.join(root, ROLLOUT));
+    assert.deepEqual(control.snapshot(query(), [SHELL]).nativeSessions, [{ id: SESSION, createdAfterStart: false,
+      rollout: { device: file.dev, inode: file.ino } }]);
     const original = fs.openSync;
     let replaced = false;
     fs.openSync = (file, ...args) => {
-      if (String(file).endsWith('/fd/8')) { replaced = true; return original(path.join(root, 'foreign.jsonl'), ...args); }
+      if (String(file).endsWith('/fd/8')) { replaced = true; return original(path.join(root, '2026/10/20'), ...args); }
       return original(file, ...args);
     };
     syncBuiltinESMExports();
     try {
-      assert.throws(() => control.snapshot(query), { code: 'sandbox-control-unverified' });
+      assert.throws(() => control.snapshot(query(), [SHELL]), { code: 'sandbox-control-unverified' });
       assert.equal(replaced, true);
     } finally { fs.openSync = original; syncBuiltinESMExports(); }
   });
 
-  for (const field of ['foreign-process', 'stale-process', 'foreign-file', 'root-escape', 'duplicate-file', 'unknown-key']) {
+  test('descends a multi-level chain through the unique child at each level', { timeout: 6_000 }, async t => {
+    // Like the Codex entry script, the shell waits on exactly one child that runs another image.
+    const { selector, argv } = await fixture(t, { script: 'sleep 30; true' });
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const observed = control.observe(), sleep = realpathSync('/usr/bin/sleep');
+    const shellPid = Number(readFileSync('/proc/' + observed.sandboxPid + '/task/' + observed.sandboxPid + '/children', 'utf8').trim());
+    const sleepPid = Number(readFileSync('/proc/' + shellPid + '/task/' + shellPid + '/children', 'utf8').trim());
+    const result = control.snapshot(query(), [SHELL, sleep]);
+    assert.deepEqual(result.lineage, [{ processId: shellPid, processStart: startOf(shellPid), executable: SHELL },
+      { processId: sleepPid, processStart: startOf(sleepPid), executable: sleep }]);
+    assert.equal(result.process.processId, sleepPid);
+    assert.throws(() => control.snapshot(query(), [SHELL, SHELL]), { code: 'sandbox-control-unverified' });
+  });
+
+  test('marks a rollout the native created after its own start as fresh evidence', { timeout: 6_000 }, async t => {
+    const { root } = sessionFixture(t, false);
+    const { selector, argv } = await fixture(t, { sessionRoot: root, sessionWrite: `printf '%s\\n' '${meta(SESSION)}' >&8; ` });
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const [session] = control.snapshot(query(), [SHELL]).nativeSessions, file = statSync(path.join(root, ROLLOUT));
+    assert.deepEqual(session, { id: SESSION, createdAfterStart: true, rollout: { device: file.dev, inode: file.ino } });
+  });
+
+  for (const field of ['read-only', 'foreign-id']) {
+    test('ignores a ' + field + ' rollout descriptor as session evidence', { timeout: 6_000 }, async t => {
+      const { root, write } = sessionFixture(t);
+      if (field === 'foreign-id') write(ROLLOUT, 'f'.repeat(8) + SESSION.slice(8));
+      const { selector, argv } = await fixture(t, { sessionRoot: root, sessionOpen: field === 'read-only' ? '<' : '>>' });
+      const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+      t.after(() => control.close());
+      assert.deepEqual(control.snapshot(query(), [SHELL]).nativeSessions, []);
+    });
+  }
+
+  for (const field of ['foreign-pane', 'stale-pane', 'executable', 'depth', 'empty-chain', 'foreign-file', 'root-escape', 'duplicate-file', 'unknown-key']) {
     test('snapshot rejects ' + field + ' without reading outside its namespace scope', { timeout: 6_000 }, async t => {
       const { selector, argv } = await fixture(t);
       const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
       t.after(() => control.close());
-      const observed = control.observe();
-      const query = { native: { processId: observed.sandboxPid, processStart: observed.processStart }, files: [], discoveryRoots: [] };
-      if (field === 'foreign-process') query.native.processId = process.pid;
-      else if (field === 'stale-process') query.native.processStart = String(BigInt(query.native.processStart) + 1n);
-      else if (field === 'foreign-file') query.files = ['/etc/shadow'];
-      else if (field === 'root-escape') query.files = ['/context/../etc/shadow'];
-      else if (field === 'duplicate-file') query.files = ['/context/file', '/context/file'];
-      else query.ready = true;
-      assert.throws(() => control.snapshot(query), { code: 'sandbox-control-unverified' });
+      const observed = control.observe(), request = query();
+      let chain = [SHELL];
+      if (field === 'foreign-pane') request.pane = { processId: process.ppid, processStart: startOf(process.ppid) };
+      else if (field === 'stale-pane') request.pane.processStart = String(BigInt(request.pane.processStart) + 1n);
+      else if (field === 'executable') chain = [process.execPath];
+      // The fixture shell has two children, so no unique next level exists.
+      else if (field === 'depth') chain = [SHELL, SHELL];
+      else if (field === 'empty-chain') chain = [];
+      else if (field === 'foreign-file') request.files = ['/etc/shadow'];
+      else if (field === 'root-escape') request.files = ['/context/../etc/shadow'];
+      else if (field === 'duplicate-file') request.files = ['/context/file', '/context/file'];
+      else request.native = { processId: observed.sandboxPid, processStart: observed.processStart };
+      assert.throws(() => control.snapshot(request, chain), { code: 'sandbox-control-unverified' });
       assert.equal(process.kill(process.pid, 0), true);
       assert.deepEqual(control.observe(), observed);
     });
