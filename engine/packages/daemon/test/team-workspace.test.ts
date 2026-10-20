@@ -6,10 +6,20 @@ import { join } from "node:path";
 import { candidateManifest, candidatePath, createCandidateWorkspace, listFiles, removeCandidateWorkspace, resolveWorkspaceBase, sourceFingerprint, verifySourceUnchanged } from "../src/domain/team-workspace.js";
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const root of [...roots.splice(0), ...outsideRoots.splice(0)]) rmSync(root, { recursive: true, force: true });
+});
 const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-/** Worktrees live inside the repository tree: /tmp is a separate mount, and git refuses to cross it. */
-function candidateRoot(root: string): string { return join(root, ".candidate"); }
+/**
+ * Candidate trees live outside the repository. Placing one inside it would let
+ * git discovery find the parent repository and hide every snapshot-lane bug.
+ */
+const outsideRoots: string[] = [];
+function candidateRoot(_root: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "candidate-tree-"));
+  outsideRoots.push(dir);
+  return dir;
+}
 function repository(): string {
   const root = mkdtempSync(join(tmpdir(), "candidate-")); roots.push(root);
   git(root, "init", "--quiet", "--initial-branch=main");
@@ -117,6 +127,47 @@ describe("isolated candidate ownership", () => {
     const link = join(tmpdir(), `candidate-link-${Date.now()}`); roots.push(link);
     symlinkSync(root, link);
     expect(readFileSync(candidatePath(link, "src/base.ts"), "utf8").trim()).toBe("export const base = 1;");
+  });
+
+  it("builds a snapshot manifest for a copy that is not itself a repository", () => {
+    const root = unborn();
+    const base = resolveWorkspaceBase(root);
+    const workspace = createCandidateWorkspace({ root, base, workspaceRoot: candidateRoot(root), label: "T011" });
+    roots.push(workspace.root);
+    // The copy has no .git; asking git here would exit 128 and produce no manifest.
+    expect(() => readFileSync(join(workspace.root, ".git"))).toThrow();
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files.map(file => file.path)).toEqual(["src/seed.ts"]);
+  });
+
+  it("keeps file already staged in an unborn repository in the snapshot baseline", () => {
+    const root = unborn();
+    writeFileSync(join(root, "src", "staged.ts"), "export const staged = 1;\n");
+    git(root, "add", "src/staged.ts");
+    const base = resolveWorkspaceBase(root);
+    expect(base.kind).toBe("snapshot");
+    expect((base as { files: { path: string }[] }).files.map(file => file.path).sort()).toEqual(["src/seed.ts", "src/staged.ts"]);
+    const workspace = createCandidateWorkspace({ root, base, workspaceRoot: candidateRoot(root), label: "T011" });
+    roots.push(workspace.root);
+    expect(readFileSync(join(workspace.root, "src", "staged.ts"), "utf8")).toContain("staged");
+  });
+
+  it("refuses to materialize a snapshot whose baseline changed after it was resolved", () => {
+    const root = unborn();
+    const base = resolveWorkspaceBase(root);
+    writeFileSync(join(root, "src", "seed.ts"), "export const seed = 999;\n");
+    expect(() => createCandidateWorkspace({ root, base, workspaceRoot: candidateRoot(root), label: "T011" }))
+      .toThrow(/Snapshot baseline changed/);
+  });
+
+  it("reports an untracked owner file that changed after capture", () => {
+    const root = repository();
+    writeFileSync(join(root, "src", "draft.ts"), "draft one\n");
+    const base = resolveWorkspaceBase(root);
+    const workspace = createCandidateWorkspace({ root, base, workspaceRoot: candidateRoot(root), label: "T011" });
+    roots.push(workspace.root);
+    writeFileSync(join(root, "src", "draft.ts"), "draft two\n");
+    expect(verifySourceUnchanged(workspace)).toMatchObject({ unchanged: false });
   });
 
   it("refuses a candidate path that escapes through .. or an escaping symlink", () => {

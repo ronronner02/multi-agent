@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 /**
@@ -103,11 +103,16 @@ export function candidatePath(root: string, path: string): string {
  * Every file a candidate owns: tracked files from the index plus untracked,
  * non-ignored files. A manifest that omitted the untracked half would describe a
  * different candidate than the one a reviewer or an integration step receives.
+ *
+ * `root` need not itself be a repository: the snapshot lane copies the baseline
+ * into a plain directory, where `git ls-files` exits 128. Git is therefore asked
+ * only when asked to, and `tracked: false` says the caller is reading a copy whose
+ * baseline already recorded provenance.
  */
-export function listFiles(root: string, trackedFromIndex: boolean): CandidateFile[] {
-  const tracked = trackedFromIndex ? git(root, ["ls-files", "-z"]).split("\0").filter(Boolean) : [];
+export function listFiles(root: string, options: { index: boolean }): CandidateFile[] {
+  const tracked = options.index ? git(root, ["ls-files", "-z"]).split("\0").filter(Boolean) : [];
   const trackedSet = new Set(tracked);
-  const untracked = git(root, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean);
+  const untracked = options.index ? git(root, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean) : walkFiles(root);
   return [...new Set([...tracked, ...untracked])].sort().flatMap(path => {
     // A candidate that deletes a tracked file keeps it in the index until it is
     // staged. The deletion is part of the patch; it is not a manifest entry, so
@@ -121,6 +126,17 @@ export function listFiles(root: string, trackedFromIndex: boolean): CandidateFil
   });
 }
 
+/** Plain-directory enumeration for the snapshot lane, which has no index to ask. */
+function walkFiles(root: string, prefix = ""): string[] {
+  const entries: string[] = [];
+  for (const entry of readdirSync(join(root, prefix), { withFileTypes: true })) {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) entries.push(...walkFiles(root, path));
+    else if (entry.isFile()) entries.push(path);
+  }
+  return entries;
+}
+
 export function digestManifest(files: readonly CandidateFile[]): string {
   return sha256([...files]
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
@@ -132,14 +148,16 @@ export function digestManifest(files: readonly CandidateFile[]): string {
 export function resolveWorkspaceBase(root: string): WorkspaceBase {
   const repositoryRoot = realpathSync(root);
   const head = gitOrNull(repositoryRoot, ["rev-parse", "--verify", "HEAD^{commit}"])?.trim() ?? null;
-  if (head !== null) return { kind: "commit", commit: head, files: listFiles(repositoryRoot, true) };
+  // The index holds staged files even before the first commit, and a staged file
+  // is part of the baseline whether or not history exists yet.
+  if (head !== null) return { kind: "commit", commit: head, files: listFiles(repositoryRoot, { index: true }) };
   // No commit exists. KTD8 forbids manufacturing one to make the worktree lane
   // available, so the baseline is the hash of what the working tree holds now.
-  const files = listFiles(repositoryRoot, false);
+  const files = listFiles(repositoryRoot, { index: true });
   return { kind: "snapshot", baselineDigest: digestManifest(files), files };
 }
 
-/** HEAD, every ref, and the exact bytes of each dirty file. Any commit or merge changes it. */
+/** HEAD, every ref, and the exact bytes of each dirty or untracked file a change would move. */
 export function sourceFingerprint(root: string): SourceFingerprint {
   const head = gitOrNull(root, ["rev-parse", "--verify", "HEAD^{commit}"])?.trim() ?? null;
   const refs = gitOrNull(root, ["for-each-ref", "--format=%(refname) %(objectname)"])?.trim() ?? "";
@@ -148,7 +166,9 @@ export function sourceFingerprint(root: string): SourceFingerprint {
   for (const entry of status) {
     // Porcelain v1 spends two status columns before the path.
     const path = entry.slice(3);
-    if (!path || entry.startsWith("??")) continue;
+    if (!path) continue;
+    // Untracked files are fingerprinted too: an owner draft that changes while a
+    // candidate is staged is exactly the mutation this proof exists to catch.
     try {
       const target = join(root, path);
       if (statSync(target).isFile()) dirty.set(path, sha256(readFileSync(target)));
@@ -184,6 +204,13 @@ export function createCandidateWorkspace(input: {
   const source = sourceFingerprint(sourceRoot);
   const baseHead = input.base.kind === "commit" ? input.base.commit : null;
   if (source.head !== baseHead) throw new Error("Workspace base does not match the repository's current state");
+  if (input.base.kind === "snapshot") {
+    // The snapshot is copied from the working tree, so the tree must still be the
+    // baseline that was resolved. Otherwise the candidate would carry new bytes
+    // while advertising the old baseline digest.
+    const current = digestManifest(listFiles(sourceRoot, { index: true }));
+    if (current !== input.base.baselineDigest) throw new Error("Snapshot baseline changed since it was resolved");
+  }
   mkdirSync(dirname(input.workspaceRoot), { recursive: true });
   if (input.base.kind === "commit") {
     git(sourceRoot, ["worktree", "add", "--detach", "--force", input.workspaceRoot, input.base.commit]);
@@ -204,7 +231,7 @@ function untrackedPatch(root: string, path: string): string {
   const result = spawnSync("git", ["-C", root, "diff", "--binary", "--no-index", "--", emptyFilePath(), path],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
   if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
-  return (result.stdout ?? "").replace(/\s+$/, "");
+  return (result.stdout ?? "").trimEnd();
 }
 
 /**
@@ -223,9 +250,9 @@ export function candidateManifest(workspace: CandidateWorkspace): {
   patch: string;
 } {
   if (workspace.base.kind === "commit") {
-    const files = listFiles(workspace.root, true);
-    const trackedPatch = git(workspace.root, ["diff", "--binary", workspace.base.commit, "--"]).replace(/\s+$/, "");
-    const additions = files.filter(file => !file.tracked).map(file => untrackedPatch(workspace.root, file.path).replace(/\s+$/, "")).filter(Boolean);
+    const files = listFiles(workspace.root, { index: true });
+    const trackedPatch = git(workspace.root, ["diff", "--binary", workspace.base.commit, "--"]).trimEnd();
+    const additions = files.filter(file => !file.tracked).map(file => untrackedPatch(workspace.root, file.path)).filter(Boolean);
     return {
       base: "commit",
       baseIdentifier: workspace.base.commit,
@@ -235,8 +262,9 @@ export function candidateManifest(workspace: CandidateWorkspace): {
     };
   }
   // The snapshot lane has no history to diff against; the hashed manifest IS its
-  // identity, which is exactly what KTD8's "complete file manifest" allows.
-  const files = listFiles(workspace.root, false);
+  // identity, which is exactly what KTD8's "complete file manifest" allows. The
+  // copy is a plain directory with no Git metadata, so it is walked directly.
+  const files = listFiles(workspace.root, { index: false });
   return { base: "snapshot", baseIdentifier: workspace.base.baselineDigest, files, manifestDigest: digestManifest(files), patch: "" };
 }
 
@@ -250,7 +278,8 @@ export function verifySourceUnchanged(workspace: CandidateWorkspace): { unchange
   const sameDirty = Object.keys(workspace.source.dirtyHashes).length === Object.keys(current.dirtyHashes).length
     && Object.entries(workspace.source.dirtyHashes).every(([path, hash]) => current.dirtyHashes[path] === hash);
   return {
-    unchanged: current.head === workspace.source.head && current.refsDigest === workspace.source.refsDigest && sameDirty,
+    unchanged: current.head === workspace.source.head && current.refsDigest === workspace.source.refsDigest
+      && current.statusDigest === workspace.source.statusDigest && sameDirty,
     current,
   };
 }

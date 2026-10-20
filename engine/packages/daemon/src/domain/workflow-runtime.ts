@@ -205,7 +205,14 @@ export type GraphVerdict = { ok: true } | { ok: false; reason: string; taskIds: 
 const MANAGED_TASK_LIMIT = 100;
 
 /** One spelling per claimed path, so `./src/api`, `src/api/` and `src\api` cannot hide an overlap. */
-const normalizeClaim = (path: string): string => path.replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/\/+$/, "");
+const normalizeClaim = (path: string): string => path.replace(/\\/g, "/").split("/")
+  .reduce<string[]>((segments, segment) => {
+    // `.` and empty segments (from `src//api`) name the same path as their absence.
+    if (segment === "" || segment === ".") return segments;
+    if (segment === "..") segments.pop();
+    else segments.push(segment);
+    return segments;
+  }, []).join("/");
 
 export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdict {
   // The 100-task admission limit bound the run, not one createTask call: a run
