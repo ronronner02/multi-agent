@@ -27,6 +27,8 @@ const INSTALLED_CLIENT_LOCK = '/etc/multi-agent/client-lock.json';
 export const CLIENT_LOCK_SCHEMA = 'multi-agent-client-lock/v1';
 const CLIENT_ENTRYPOINTS = Object.freeze({ 'claude-code': 'clients/bin/claude', codex: 'clients/bin/codex' });
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+// Codex names each rollout after its session UUID; the first record must repeat it.
+const ROLLOUT_PATH = /^\/home\/worker\/\.codex\/sessions\/\d{4}\/\d{2}\/\d{2}\/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/;
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 // Child descriptor numbers for the bubblewrap --bind-fd sources.
 export const MOUNT_FD = Object.freeze({ home: 3, scratch: 4, tree: 5, context: 7, framework: 8, mailbox: 9, nativePolicy: 10, bootstrap: 11 });
@@ -947,19 +949,23 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
       finally { close(); }
     })();
 
-    const snapshot = query => {
+    // Kernel structure alone selects the native process; worker-settable names, argv and ps rows never do.
+    const snapshot = (query, chain) => {
       const transient = [];
       const pin = (file, flags) => {
         const fd = openSync(file, flags | fsConstants.O_CLOEXEC); transient.push(fd); return '/proc/self/fd/' + fd;
       };
+      const directory = fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW;
       try {
         observe();
-        if (!query || Object.keys(query).sort().join(',') !== 'discoveryRoots,files,native'
-          || !query.native || Object.keys(query.native).sort().join(',') !== 'processId,processStart'
-          || !Number.isSafeInteger(query.native.processId) || query.native.processId <= 1
-          || !/^(0|[1-9]\d{0,19})$/.test(query.native.processStart)
+        if (!query || Object.keys(query).sort().join(',') !== 'discoveryRoots,files,pane'
+          || !query.pane || Object.keys(query.pane).sort().join(',') !== 'processId,processStart'
+          || !Number.isSafeInteger(query.pane.processId) || query.pane.processId <= 1
+          || !/^(0|[1-9]\d{0,19})$/.test(query.pane.processStart)
           || !Array.isArray(query.files) || query.files.length > 256
-          || !Array.isArray(query.discoveryRoots) || query.discoveryRoots.length > 32) throw new Error();
+          || !Array.isArray(query.discoveryRoots) || query.discoveryRoots.length > 32
+          || !Array.isArray(chain) || chain.length < 1 || chain.length > 4
+          || chain.some(file => typeof file !== 'string' || !posix.isAbsolute(file) || posix.normalize(file) !== file)) throw new Error();
         const policyAliases = Object.values(NATIVE_POLICY_MOUNTS).map(mount => mount.target);
         const allowed = value => typeof value === 'string' && value.length <= 4096 && !value.includes('\0')
           && posix.normalize(value) === value && (value === '/context' || value.startsWith('/context/')
@@ -967,10 +973,52 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
         if (new Set(query.files).size !== query.files.length || new Set(query.discoveryRoots).size !== query.discoveryRoots.length
           || query.files.some(file => !allowed(file) && !policyAliases.includes(file))
           || query.discoveryRoots.some(root => !allowed(root))) throw new Error();
-        const native = pin('/proc/' + query.native.processId, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
-        const initialNative = stat(native);
-        if (initialNative.start !== query.native.processStart || ['Z', 'X'].includes(initialNative.state)
-          || !uidMatches(native, workerUid) || readlinkSync(native + '/ns/pid') !== pidNamespace) throw new Error();
+        // The supervisor descends from the live terminal pane, through at most two sudo processes.
+        let hop = stat(root).parent;
+        const ancestry = [];
+        for (let depth = 0; ancestry.at(-1)?.processId !== query.pane.processId; depth++) {
+          const anchor = pin('/proc/' + hop, directory), value = stat(anchor);
+          if (hop === query.pane.processId) {
+            if (value.start !== query.pane.processStart || ['Z', 'X'].includes(value.state)) throw new Error();
+          } else if (depth >= 2 || readlinkSync(anchor + '/exe') !== '/usr/bin/sudo') throw new Error();
+          ancestry.push({ anchor, processId: hop, processStart: value.start });
+          hop = value.parent;
+        }
+        const children = anchor => {
+          const tasks = readdirSync(anchor + '/task'), pids = new Set();
+          if (tasks.length > 1024) throw new Error();
+          for (const task of tasks) {
+            if (!/^[1-9]\d*$/.test(task)) throw new Error();
+            let raw;
+            try { raw = readFileSync(anchor + '/task/' + task + '/children', 'utf8'); }
+            catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+            for (const value of raw.trim().split(' ').filter(Boolean)) {
+              if (!/^[1-9]\d{0,9}$/.test(value)) throw new Error();
+              pids.add(Number(value));
+            }
+          }
+          if (pids.size > 64) throw new Error();
+          return [...pids];
+        };
+        // Init's first child (namespace PID 2) is the relay; each later level must be the only child.
+        const lineage = [];
+        let current = { anchor: sandbox, processId: sandboxPid, processStart: initial.start };
+        for (const [level, executable] of chain.entries()) {
+          const candidates = children(current.anchor).flatMap(pid => {
+            const anchor = pin('/proc/' + pid, directory), value = stat(anchor);
+            // The parent is pinned and still live, so a matching parent link names this exact child instance.
+            if (value.parent !== current.processId || ['Z', 'X'].includes(value.state)
+              || level === 0 && status(anchor).pids?.at(-1) !== 2) return [];
+            return [{ anchor, processId: pid, processStart: value.start }];
+          });
+          if (candidates.length !== 1 || !alive(current.anchor, current.processStart)) throw new Error();
+          current = candidates[0];
+          if (!uidMatches(current.anchor, workerUid) || readlinkSync(current.anchor + '/ns/pid') !== pidNamespace
+            || readlinkSync(current.anchor + '/exe') !== executable) throw new Error();
+          lineage.push(current);
+        }
+        const native = current.anchor, initialNative = stat(native);
+        if (initialNative.start !== current.processStart) throw new Error();
         const bounded = (file, limit) => {
           const fd = openSync(file, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_CLOEXEC);
           try {
@@ -1015,36 +1063,51 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
             : /^\/dev\/(?:pts\/|tty)/.test(link) ? 'tty' : 'file';
           return { fd, kind };
         });
-        const sessionIds = new Set();
+        const uptime = /^(\d+\.\d+) /.exec(readFileSync('/proc/uptime', 'utf8'));
+        if (!uptime) throw new Error();
+        // Start ticks count from boot at USER_HZ, fixed at 100 on Linux x86_64. Uptime truncation and coarse
+        // file timestamps each add up to about 10 ms, so a 20 ms margin still refuses any reused older rollout.
+        const startedMs = Date.now() - Number(uptime[1]) * 1000 + Number(initialNative.start) * 10 - 20;
+        const sessions = new Map();
         for (const entry of readdirSync(native + '/fd')) {
           if (!/^\d+$/.test(entry)) throw new Error();
-          let source;
-          try { source = readlinkSync(native + '/fd/' + entry); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-          if (!/^\/home\/worker\/\.codex\/sessions\/.*\.jsonl$/.test(source)) continue;
+          let source, info;
+          try { source = readlinkSync(native + '/fd/' + entry); info = readFileSync(native + '/fdinfo/' + entry, 'utf8'); }
+          catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+          const name = ROLLOUT_PATH.exec(source), flags = /^flags:\s*([0-7]+)$/m.exec(info);
+          // Only a rollout the native process holds open for writing names its session.
+          if (!name || !flags || (parseInt(flags[1], 8) & 3) === 0) continue;
           const fd = openSync(native + '/fd/' + entry, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_CLOEXEC);
           try {
-            const pinned = '/proc/self/fd/' + fd;
-            if (readlinkSync(pinned) !== source || !statSync(pinned).isFile()) throw new Error();
+            const pinned = '/proc/self/fd/' + fd, file = statSync(pinned);
+            if (readlinkSync(pinned) !== source || !file.isFile() || file.uid !== workerUid) throw new Error();
             const buffer = Buffer.alloc(65_536), length = readSync(fd, buffer, 0, buffer.length, 0);
-            const first = buffer.subarray(0, length).toString('utf8').split('\n')[0];
-            const record = JSON.parse(first);
-            if (record.type === 'session_meta' && typeof record.payload?.id === 'string'
-              && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(record.payload.id)) sessionIds.add(record.payload.id);
+            const record = JSON.parse(buffer.subarray(0, length).toString('utf8').split('\n')[0]);
+            if (record.type === 'session_meta' && record.payload?.id === name[1]) {
+              sessions.set(name[1], { id: name[1], createdAfterStart: file.birthtimeMs > 0 && file.birthtimeMs >= startedMs,
+                rollout: { device: file.dev, inode: file.ino } });
+            }
           } finally { closeSync(fd); }
         }
+        const namespaces = anchor => ({ mountNamespace: readlinkSync(anchor + '/ns/mnt'),
+          userNamespace: readlinkSync(anchor + '/ns/user'), networkNamespace: readlinkSync(anchor + '/ns/net') });
         const rawStat = bounded(native + '/stat', 65_536).toString('utf8');
         const fields = rawStat.slice(rawStat.lastIndexOf(')') + 2).trim().split(/\s+/);
-        const result = { process: { processId: query.native.processId, processStart: initialNative.start,
+        const result = { pane: { ...query.pane }, sandbox: namespaces(sandbox),
+          lineage: lineage.map(({ processId, processStart }, index) => ({ processId, processStart, executable: chain[index] })),
+          process: { processId: current.processId, processStart: initialNative.start,
           processGroupId: Number(fields[2]), namespacePids: numbers('NSpid'), uids: numbers('Uid'), groups: numbers('Groups'),
           capabilities: field('CapEff'), noNewPrivileges: field('NoNewPrivs'), argv: argvBytes.toString('utf8').slice(0, -1).split('\0'),
           executable: readlinkSync(native + '/exe'), cwd: readlinkSync(native + '/cwd'), environment: env,
           mountNamespace: readlinkSync(native + '/ns/mnt'), userNamespace: readlinkSync(native + '/ns/user'),
           networkNamespace: readlinkSync(native + '/ns/net'), pidNamespace },
           mountInfo: bounded(native + '/mountinfo', 1_048_576).toString('utf8'), stdio, files, discoveryRoots,
-          nativeSessionIds: [...sessionIds] };
+          nativeSessions: [...sessions.values()] };
         observe();
-        if (stat(native).start !== initialNative.start || !uidMatches(native, workerUid)
-          || readlinkSync(native + '/ns/pid') !== pidNamespace) throw new Error();
+        // Every pane hop and lineage member must be the same live instance at the end of the snapshot.
+        if ([...ancestry, ...lineage].some(node => !alive(node.anchor, node.processStart))
+          || !uidMatches(native, workerUid) || readlinkSync(native + '/ns/pid') !== pidNamespace
+          || readlinkSync(native + '/exe') !== chain.at(-1)) throw new Error();
         return Object.freeze(result);
       } catch { throw fault(); }
       finally { for (const fd of transient.reverse()) closeSync(fd); }
@@ -1053,6 +1116,18 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
     observe();
     return Object.freeze({ observe, snapshot, quiesce, close });
   } catch { close(); throw fault(); }
+}
+
+/** The exact process images a locked client runs as below the sandbox init, outermost first. */
+export function nativeProcessChain(policy, request, lockFile) {
+  const toolchain = policy.paths.toolchain_dir;
+  const client = Object.keys(CLIENT_ENTRYPOINTS).find(name => request.command[0] === posix.join(toolchain, CLIENT_ENTRYPOINTS[name]));
+  if (!client || !lockFile || request.clientLock !== lockFile.sha256) throw new Error();
+  // The kernel reports resolved images, so each locked path is resolved before comparison.
+  const files = validateClientLock(JSON.parse(lockFile.raw)).clients[client].files.map(file => realpathSync(posix.join(toolchain, file.path)));
+  const node = realpathSync(posix.join(toolchain, 'node/bin/node'));
+  // The egress relay spawns the client; the Codex entry script is a Node program that spawns its native binary.
+  return client === 'codex' ? [node, node, files.at(-1)] : [node, files[0]];
 }
 
 /** Control operations do not require still-mounted sources: cancellation must remain stoppable. */
@@ -1070,7 +1145,8 @@ export async function controlSandbox(policy, argv, facts, snapshotQuery) {
       [process.execPath, policy.paths.installed_launcher, '--supervise', ...argv.slice(2)], worker.uid);
     if (argv[0] === '--quiesce') return await control.quiesce();
     const observation = control.observe();
-    return snapshotQuery === undefined ? observation : { ...observation, snapshot: control.snapshot(snapshotQuery) };
+    return snapshotQuery === undefined ? observation
+      : { ...observation, snapshot: control.snapshot(snapshotQuery, nativeProcessChain(policy, request, facts.clientLock)) };
   } catch {
     throw new LaunchError(argv[0] === '--quiesce' ? 'sandbox-quiescence-unconfirmed' : 'sandbox-control-unverified',
       'Sandbox control evidence is unconfirmed');

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { canonicalJson, type PlanBinding, type TeamTaskAuthority } from "../src/contracts/team-control.js";
 import type { TeamControlOptions } from "../src/routes/team-control.js";
-import { inspectManagedWorker, resolveManagedWorkerScope, resolveManagedWorkerSeat, startManagedWorkerCommand, startManagedWorkerInPane } from "../src/adapters/worker-launch-control.js";
+import { inspectManagedWorker, observeManagedWorkerProcess, resolveManagedWorkerScope, resolveManagedWorkerSeat, startManagedWorkerCommand, startManagedWorkerInPane } from "../src/adapters/worker-launch-control.js";
 import { TmuxAdapter } from "../src/adapters/tmux.js";
 
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
@@ -21,13 +21,18 @@ import type { WorkerMailboxBridge } from "../src/adapters/worker-mailbox-bridge.
 import type { WorkerCommand, WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 
 const inspectionIo = vi.hoisted(() => ({ execFile: vi.fn(), readPolicy: vi.fn(), end: vi.fn() }));
+const processIo = vi.hoisted(() => ({ list: vi.fn(), stats: new Map<string, string>() }));
+vi.mock("../src/domain/native-process-lineage.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../src/domain/native-process-lineage.js")>(), listNativeProcesses: processIo.list,
+}));
 vi.mock("node:child_process", async importOriginal => ({
   ...await importOriginal<typeof import("node:child_process")>(), execFile: inspectionIo.execFile,
 }));
 vi.mock("node:fs", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, readFileSync: (...args: Parameters<typeof actual.readFileSync>) =>
-    args[0] === "/etc/multi-agent/worker-policy.json" ? inspectionIo.readPolicy() : actual.readFileSync(...args) };
+    processIo.stats.has(String(args[0])) ? processIo.stats.get(String(args[0]))
+      : args[0] === "/etc/multi-agent/worker-policy.json" ? inspectionIo.readPolicy() : actual.readFileSync(...args) };
 });
 
 const binding: PlanBinding = {
@@ -138,6 +143,152 @@ describe("managed launch governed scope resolution", () => {
       sessions.updateBinding(nodeId, { tmuxSession: "builder@rig", tmuxPane: "%3" });
     });
     afterEach(() => rmSync(tree, { recursive: true, force: true }));
+
+    describe("managed process observation", () => {
+      const PANE = 400, SUPERVISOR = 401, RELAY = 402, NATIVE = 403, CODEX_ENTRY = 404;
+      const SESSION = "01a154fe-b417-7933-b7a4-a8c840f721e9", ns = { mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]" };
+      const start = (pid: number) => String(12_000 + pid);
+      const hash = (digit: string) => "sha256:" + digit.repeat(64);
+      const managed = "/context/native/claude/managed-settings.json", alias = "/etc/claude-code/managed-settings.json";
+      let toolchain: string, node: string, input: WorkerLaunchInput, command: WorkerCommand, intent: Record<string, unknown>;
+      let result: any, panePids: number[], clientLock: { files: { path: string }[] }, getIntent: ReturnType<typeof vi.spyOn>;
+      const observe = (expectedSession?: { nativeSessionId: string; rollout?: { device: number; inode: number } }) =>
+        observeManagedWorkerProcess(input, command, { db, queue, governance, options, rigRepo, sessions,
+          tmux: { getPanePid: async () => panePids.shift() ?? PANE }, clientLock, toolchainDir: toolchain, expectedSession });
+      const setStart = (pid: number, value: string) => processIo.stats.set("/proc/" + pid + "/stat",
+        pid + " (fixture) S 1 " + Array(17).fill("0").join(" ") + " " + value);
+      const reply = (stderr = "", before = () => {}) => inspectionIo.execFile.mockImplementation((_file, _args, _options, callback) => {
+        before(); callback(null, JSON.stringify(result), stderr); return { stdin: { end: inspectionIo.end } };
+      });
+      const useClient = (client: "claude-code" | "codex", resumeToken?: string) => {
+        const exe = toolchain + (client === "codex" ? "/clients/lib/codex-native" : "/clients/lib/claude.exe");
+        const argv = client === "codex"
+          ? [toolchain + "/clients/bin/codex", "-a", "never", ...(resumeToken ? ["resume", resumeToken] : [])]
+          : [toolchain + "/clients/bin/claude", "--permission-mode", "bypassPermissions", ...(resumeToken ? ["--resume", resumeToken] : ["--session-id", "native-session"])];
+        db.prepare("UPDATE nodes SET runtime = ?").run(client);
+        clientLock = { files: client === "codex" ? [{ path: "clients/lib/codex.js" }, { path: "clients/lib/codex-native" }] : [{ path: "clients/lib/claude.exe" }] };
+        input = { client, ...(resumeToken ? { resumeToken } : {}), attempt: { attemptId: "process-attempt", deadline: now + 60_000,
+          context: { ...context(), client, generatedHash: hash("f"), workerUid: 992,
+            files: [{ workerPath: "/context/instructions", hash: hash("1") }, { workerPath: managed, hash: hash("2") }],
+            workerDiscoveryRoots: ["/context"], nativePolicy: { aliases: [{ source: managed, target: alias }] } } as unknown as ContextManifest } };
+        command = { file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--supervise",
+          "--worker", "ma-worker1", "--", ...argv], nativeArgv: argv, client, attemptId: input.attempt.attemptId,
+          deadline: input.attempt.deadline, contextHash: input.attempt.context.generatedHash,
+          network: { mode: "filtered-proxy", hostNamespace: "net:[1]", profileFingerprint: binding.policyFingerprint, preflightRef: "evidence.json" } };
+        intent = { state: "admitted", command: structuredClone(command), commandDigest: hashBytes(canonicalJson(command)), sessionId: "builder@rig" };
+        const supervisorArgv = [process.execPath, "/usr/local/libexec/multi-agent/worker-launch.mjs", "--supervise", ...command.args.slice(4)];
+        processIo.list.mockResolvedValue([{ pid: SUPERVISOR, ppid: PANE, command: supervisorArgv.join(" ") },
+          { pid: 499, ppid: 1, command: supervisorArgv.join(" ") }]);
+        const lineage = [{ processId: RELAY, processStart: start(RELAY), executable: node },
+          ...(client === "codex" ? [{ processId: CODEX_ENTRY, processStart: start(CODEX_ENTRY), executable: node }] : []),
+          { processId: NATIVE, processStart: start(NATIVE), executable: exe }];
+        result = { schema: "multi-agent-sandbox-control/v1", supervisor: { processId: SUPERVISOR, processStart: start(SUPERVISOR) },
+          commandDigest: hashBytes(JSON.stringify(supervisorArgv)), uid: 992, pidNamespace: "pid:[2]",
+          snapshot: { pane: { processId: PANE, processStart: start(PANE) }, sandbox: { ...ns }, lineage,
+            process: { processId: NATIVE, processStart: start(NATIVE), processGroupId: NATIVE, namespacePids: [NATIVE, 3],
+              uids: [992, 992, 992, 992], groups: [], capabilities: "0000000000000000", noNewPrivileges: "1",
+              argv: [client === "codex" ? exe : argv[0], ...argv.slice(1)], executable: exe, cwd: "/work",
+              environment: { HOME: "/home/worker" }, ...ns, pidNamespace: "pid:[2]" },
+            mountInfo: "", stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })), files: [{ path: "/context/instructions", hash: hash("1") }, { path: managed, hash: hash("2") },
+              { path: alias, hash: hash("2") }], discoveryRoots: ["/context"],
+            nativeSessions: client === "codex" ? [{ id: resumeToken ?? SESSION, createdAfterStart: !resumeToken,
+              rollout: { device: 2049, inode: 77 } }] : [] } };
+        reply();
+      };
+      beforeEach(() => {
+        toolchain = realpathSync(mkdtempSync(join(tmpdir(), "managed-toolchain-")));
+        for (const file of ["node/bin/node", "clients/lib/claude.exe", "clients/lib/codex.js", "clients/lib/codex-native"]) {
+          mkdirSync(join(toolchain, file, ".."), { recursive: true }); writeFileSync(join(toolchain, file), "");
+        }
+        node = join(toolchain, "node/bin/node"); panePids = [];
+        processIo.stats.clear(); processIo.list.mockReset(); inspectionIo.execFile.mockReset(); inspectionIo.end.mockReset();
+        for (const pid of [PANE, SUPERVISOR, NATIVE]) setStart(pid, start(pid));
+        getIntent = vi.spyOn(governance, "getNativeLaunchIntent").mockImplementation(() => intent as any);
+        useClient("claude-code");
+      });
+      afterEach(() => { getIntent.mockRestore(); processIo.stats.clear(); rmSync(toolchain, { recursive: true, force: true }); });
+
+      it("lets the privileged helper select the native process below the pane-bound supervisor", async () => {
+        const observed = await observe();
+        expect(observed).toMatchObject({ nativeSessionId: "native-session", pane: { processId: PANE, processStart: start(PANE) },
+          supervisor: { processId: SUPERVISOR, processStart: start(SUPERVISOR) }, native: { processId: NATIVE, processStart: start(NATIVE) } });
+        expect(inspectionIo.execFile.mock.calls[0]!.slice(0, 2)).toEqual(["/usr/bin/sudo", ["-n", "--",
+          "/usr/local/libexec/multi-agent/worker-launch", "--observe", SUPERVISOR + ":" + start(SUPERVISOR), ...command.args.slice(4)]]);
+        // The query names no process: worker-visible rows cannot select the native.
+        expect(JSON.parse(inspectionIo.end.mock.calls[0]![0])).toEqual({ pane: { processId: PANE, processStart: start(PANE) },
+          files: ["/context/instructions", managed, alias], discoveryRoots: ["/context"] });
+      });
+
+      it.each([undefined, "resumed-session"])("binds a Claude session to its control-chosen argv token (resume=%s)", async token => {
+        useClient("claude-code", token);
+        await expect(observe()).resolves.toMatchObject({ nativeSessionId: token ?? "native-session" });
+      });
+
+      it.each([undefined, SESSION])("adopts a Codex session only from its own fresh or exactly resumed rollout (resume=%s)", async token => {
+        useClient("codex", token);
+        await expect(observe()).resolves.toMatchObject({ nativeSessionId: token ?? SESSION, native: { processId: NATIVE },
+          rollout: { device: 2049, inode: 77 } });
+      });
+
+      it("keeps a later observation bound to the first session and rollout file", async () => {
+        useClient("codex");
+        const first = await observe();
+        await expect(observe({ nativeSessionId: first.nativeSessionId!, rollout: first.rollout })).resolves.toMatchObject({ nativeSessionId: SESSION });
+        // After tools run, the worker can rename its rollout to another UUID or swap in a different file.
+        result.snapshot.nativeSessions[0].id = "f".repeat(8) + SESSION.slice(8);
+        await expect(observe({ nativeSessionId: SESSION, rollout: first.rollout })).rejects.toThrow(/^managed_process_observation_unverified$/);
+        result.snapshot.nativeSessions[0] = { id: SESSION, createdAfterStart: true, rollout: { device: 2049, inode: 78 } };
+        await expect(observe({ nativeSessionId: SESSION, rollout: first.rollout })).rejects.toThrow(/^managed_process_observation_unverified$/);
+        useClient("claude-code");
+        await expect(observe({ nativeSessionId: "other-session" })).rejects.toThrow(/^managed_process_observation_unverified$/);
+      });
+
+      it.each(["none", "two", "reused-file", "held-elsewhere", "foreign-resume", "no-rollout"])("rejects a %s Codex session claim", async field => {
+        useClient("codex", field === "foreign-resume" ? SESSION : undefined);
+        const sessions = result.snapshot.nativeSessions;
+        if (field === "none") sessions.pop();
+        else if (field === "two") sessions.push({ id: "f".repeat(8) + SESSION.slice(8), createdAfterStart: true, rollout: { device: 2049, inode: 78 } });
+        else if (field === "no-rollout") delete sessions[0].rollout;
+        else if (field === "reused-file") sessions[0].createdAfterStart = false;
+        else if (field === "foreign-resume") sessions[0].id = "f".repeat(8) + SESSION.slice(8);
+        else db.prepare(`INSERT INTO team_attempts(id, run_id, role, provider, identity_json, state, usage_json, active_ms, created_at, updated_at)
+          VALUES ('earlier', 'run', 'implementer', 'codex', ?, 'stopped', '{}', 0, 'now', 'now')`).run(JSON.stringify({ nativeSessionId: SESSION }));
+        await expect(observe()).rejects.toThrow(/^managed_process_observation_unverified$/);
+      });
+
+      it.each(["intent", "command-digest", "supervisor", "no-supervisor", "supervisor-outside-pane", "pane", "lineage", "replaced-executable",
+        "argv0", "argv", "stdio", "uid", "capabilities", "cwd", "namespace", "file-hash", "alias-hash", "missing-file", "discovery", "stderr",
+        "pane-respawn", "native-restart", "seat-drift"])("rejects %s evidence without accepting worker assertions", async field => {
+        const snapshot = result.snapshot, facts = snapshot.process;
+        if (field === "intent") intent.commandDigest = hash("0");
+        else if (field === "command-digest") result.commandDigest = hash("0");
+        else if (field === "supervisor") result.supervisor.processStart = "0";
+        else if (field === "no-supervisor") processIo.list.mockResolvedValue([]);
+        else if (field === "supervisor-outside-pane") processIo.list.mockResolvedValue([{ ...(await processIo.list())[0], ppid: 1 }]);
+        else if (field === "pane") snapshot.pane.processStart = "0";
+        else if (field === "lineage") snapshot.lineage[0].executable = "/usr/bin/node";
+        // G1: an exec keeps the PID, start time and argv, but the kernel reports the replacement image.
+        else if (field === "replaced-executable") facts.executable = "/scratch/impostor";
+        else if (field === "argv0") facts.argv[0] = "/scratch/impostor";
+        else if (field === "argv") facts.argv.push("--resume", "foreign");
+        else if (field === "stdio") snapshot.stdio[1].kind = "pipe";
+        else if (field === "uid") facts.uids[2] = 0;
+        else if (field === "capabilities") facts.capabilities = "1";
+        else if (field === "cwd") facts.cwd = "/";
+        else if (field === "namespace") facts.mountNamespace = "mnt:[66]";
+        else if (field === "file-hash") snapshot.files[0].hash = hash("3");
+        else if (field === "alias-hash") snapshot.files[2].hash = hash("3");
+        else if (field === "missing-file") snapshot.files.pop();
+        else if (field === "discovery") snapshot.discoveryRoots = ["/"];
+        else if (field === "stderr") reply("owner-fixture");
+        // G3: the persisted pane identifier is unchanged while tmux reports a different live process.
+        else if (field === "pane-respawn") panePids = [PANE, 499];
+        // G2: the selected native exits and its PID is reused while the helper runs.
+        else if (field === "native-restart") reply("", () => setStart(NATIVE, "99999"));
+        else reply("", () => sessions.updateBinding(nodeId, { tmuxSession: "builder@rig", tmuxPane: "%9" }));
+        await expect(observe()).rejects.toThrow(/^managed_process_observation_unverified$/);
+      });
+    });
 
     it("rejects two live nodes with the same governed destination name", () => {
       const other = rigRepo.addNode("rig", "duplicate-seat", { runtime: "claude-code", cwd: tree });
