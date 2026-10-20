@@ -187,6 +187,8 @@ describe("declared work graph", () => {
     ["nested", ["src", "src/api"]],
     ["differently spelled", ["src/api", "./src/api/"]],
     ["backslash spelled", ["src/api", "src\\api"]],
+    ["duplicate separator", ["src/api", "src//api"]],
+    ["dot segment", ["src/api", "src/./api"]],
   ])("rejects %s overlapping write ownership", (_kind, [first, second]) => {
     expect(validateDependencyGraph([task("one", [], [first!]), task("two", [], [second!])]))
       .toMatchObject({ ok: false, reason: expect.stringContaining("overlaps") });
