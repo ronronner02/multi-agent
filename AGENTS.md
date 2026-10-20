@@ -65,8 +65,8 @@ These rules size review and verification to the change. They take precedence ove
   Each reviewer covers every lens the diff selects. This replaces both the earlier one-reviewer-per-lens dispatch and the `claude-opus-5-5` reviewer. Reach both models through the locally configured gateway, never persisting or printing keys. If either model is unavailable, the review gate stays open.
   - **Reaching the reviewers:**
     - `gpt-6.1-sol` runs through `codex exec -s read-only`.
-    - `codex exec` cannot reach `ds/gpt-6-astra`: the gateway rejects the `developer` message role that Codex sends. Call the gateway's `/chat/completions` endpoint directly with system and user roles only.
-    - For `ds/gpt-6-astra`, send a client `User-Agent` header and stream the response. Set `reasoning_effort` to `low`, because the gateway ends any request at 300 seconds.
+    - `ds/gpt-6-astra` supports the Responses API (owner confirmation, 2026-10-20), so it also runs through `codex exec -s read-only -m ds/gpt-6-astra`.
+    - If that stream drops, call the gateway's `/chat/completions` endpoint directly with system and user roles only, a client `User-Agent` header and a streamed response. Set `reasoning_effort` to `low`, because the gateway ends any request at 300 seconds.
     - A read-only `codex exec` cannot read the WSL checkout. Give each reviewer frozen, read-only copies of the diff, the touched files and the contract excerpt.
     - A transport failure, such as HTTP 524 or a dropped stream, is not a review round. Retry it once.
 - Pick review lenses from the diff. Correctness, testing and security always run. Adversarial runs when the diff touches authority, admission, isolation, credentials or the mailbox. Performance, reliability, maintainability, project standards, learnings, agent-native and the simplify passes run only when the diff touches what that lens checks. Record each skipped lens and the reason.
