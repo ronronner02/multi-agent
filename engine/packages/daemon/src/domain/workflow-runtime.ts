@@ -147,15 +147,157 @@ export interface InstantiateResult {
   replayed?: boolean;
 }
 
+/**
+ * T011 — does `taskId` satisfy a dependency, following handoff custody?
+ *
+ * A `done` task satisfies only with validated evidence: an exit code or a
+ * completed process is not a result (R18). A `handed-off` task satisfies
+ * nothing by itself — it names a successor, and the successor's own validated
+ * completion is what counts, followed hop by hop. The visited set is the cycle
+ * guard for a chain that closes on itself, which is unsatisfied rather than an
+ * infinite walk.
+ */
+export function dependencySatisfied(
+  db: Database.Database,
+  queueRepo: Pick<QueueRepository, "getById">,
+  validated: (qitemId: string) => boolean,
+  runId: string,
+  taskId: string,
+): boolean {
+  // Resolve the task to its queue row once; every hop after that is queue
+  // custody, because a handoff successor is a row, not necessarily a task.
+  const rows = db.prepare("SELECT qitem_id AS id FROM team_queue_authority WHERE run_id = ? AND task_id = ?").all(runId, taskId) as { id: string }[];
+  if (rows.length !== 1) return false;
+  const seen = new Set<string>();
+  let current: string | null = rows[0]!.id;
+  while (current !== null && !seen.has(current)) {
+    seen.add(current);
+    const item = queueRepo.getById(current);
+    if (!item) return false;
+    if (item.state === "done") return validated(item.qitemId);
+    if (item.state !== "handed-off" || !item.handedOffTo) return false;
+    const successor = db.prepare("SELECT qitem_id AS id FROM queue_items WHERE handed_off_from = ? AND destination_session = ?")
+      .all(item.qitemId, item.handedOffTo) as { id: string }[];
+    current = successor.length === 1 ? successor[0]!.id : null;
+  }
+  return false;
+}
+
+/**
+ * T011 — the run's declared work graph, checked before any task launches.
+ *
+ * Three rejections KTD4 needs up front, because each one otherwise surfaces as
+ * work that can never finish: an edge to a task the run does not contain, a
+ * dependency cycle, and two tasks that claim the same write path. Paths are
+ * directories or files in the binding, so a claim overlaps when it is the same
+ * path or when one contains the other; disjoint files under one directory do
+ * not conflict.
+ */
+export interface GraphTask {
+  taskId: string;
+  role: string;
+  paths: readonly string[];
+  dependencies: readonly string[];
+}
+export type GraphVerdict = { ok: true } | { ok: false; reason: string; taskIds: string[] };
+
+export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdict {
+  const byId = new Map<string, GraphTask>();
+  for (const task of tasks) {
+    if (byId.has(task.taskId)) return { ok: false, reason: `duplicate task ${task.taskId}`, taskIds: [task.taskId] };
+    byId.set(task.taskId, task);
+  }
+  for (const task of tasks) {
+    const missing = task.dependencies.filter(dependency => !byId.has(dependency));
+    if (missing.length) return { ok: false, reason: `${task.taskId} depends on unknown task(s) ${missing.join(", ")}`, taskIds: [task.taskId, ...missing] };
+  }
+  // Iterative DFS: a back edge to a node still on the stack is a cycle.
+  const state = new Map<string, "visiting" | "visited">();
+  for (const root of tasks) {
+    if (state.get(root.taskId) === "visited") continue;
+    const stack: Array<{ taskId: string; next: number }> = [{ taskId: root.taskId, next: 0 }];
+    while (stack.length) {
+      const frame = stack[stack.length - 1]!;
+      const task = byId.get(frame.taskId)!;
+      if (frame.next === 0) state.set(frame.taskId, "visiting");
+      if (frame.next === task.dependencies.length) {
+        state.set(frame.taskId, "visited");
+        stack.pop();
+        continue;
+      }
+      const dependency = task.dependencies[frame.next]!;
+      frame.next += 1;
+      if (state.get(dependency) === "visiting") {
+        const cycle = stack.slice(stack.findIndex(entry => entry.taskId === dependency)).map(entry => entry.taskId);
+        return { ok: false, reason: `dependency cycle ${[...cycle, dependency].join(" -> ")}`, taskIds: cycle };
+      }
+      if (state.get(dependency) !== "visited") stack.push({ taskId: dependency, next: 0 });
+    }
+  }
+  const claimed = new Map<string, string>();
+  for (const task of tasks) {
+    if (task.role === "reviewer") continue;
+    for (const path of task.paths) {
+      const normalized = path.replace(/\/+$/, "");
+      for (const [owned, owner] of claimed) {
+        if (owned === normalized || normalized.startsWith(`${owned}/`) || owned.startsWith(`${normalized}/`)) {
+          return { ok: false, reason: `write path ${path} of ${task.taskId} overlaps ${owner}'s ${owned}`, taskIds: [task.taskId, owner] };
+        }
+      }
+      claimed.set(normalized, task.taskId);
+    }
+  }
+  return { ok: true };
+}
+
 export class WorkflowRuntime {
   prepareTeamAssignment(runId: string, input: Omit<AssignmentInput, "binding" | "dependencySatisfied">) {
     const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo), run = governance.getRun(runId);
     if (run.state !== "approved" || input.context.runId !== runId || hashBinding(run.binding) !== hashBinding(input.currentBinding)) throw new Error("Run is not approved for this assignment");
-    const dependencySatisfied = (taskId: string) => {
-      const rows = this.db.prepare("SELECT qitem_id AS id FROM team_queue_authority WHERE run_id = ? AND task_id = ?").all(runId, taskId) as { id: string }[];
-      return rows.length === 1 && this.queueRepo.getById(rows[0]!.id)?.state === "done" && governance.getTask(rows[0]!.id)?.evidence?.validated === true;
-    };
+    const dependencySatisfied = (taskId: string) => this.dependencySatisfied(governance, runId, taskId);
     return prepareTeamAssignment({ ...input, binding: run.binding, dependencySatisfied });
+  }
+
+  /**
+   * T011 — admit a task onto the run's work graph.
+   *
+   * The caller declares what this task claims and depends on plus the claims of
+   * the run's other live tasks. The merged graph must hold before the task is
+   * prepared, so an unknown edge, a cycle, or a write path two tasks both claim
+   * is refused here rather than discovered as work that cannot finish.
+   *
+   * A caller that supplies no `graph` keeps the previous behavior; the graph is
+   * an addition to the launch boundary, not a new precondition on every caller.
+   */
+  async admitTeamAssignment(runId: string, input: Omit<AssignmentInput, "binding" | "dependencySatisfied" | "taskPack"> & {
+    taskPack?: AssignmentInput["taskPack"];
+    graph?: { claimedBy: readonly GraphTask[]; declared: { paths: readonly string[]; dependencies: readonly string[] } };
+  }) {
+    if (input.graph) {
+      const { declared, claimedBy } = input.graph;
+      const verdict = validateDependencyGraph([...claimedBy.filter(task => task.taskId !== input.assignment.taskId), {
+        taskId: input.assignment.taskId,
+        role: input.assignment.role,
+        paths: [...declared.paths],
+        dependencies: [...declared.dependencies],
+      }]);
+      if (!verdict.ok) throw new Error(`Dependency graph refused: ${verdict.reason}`);
+    }
+    return this.prepareTeamAssignment(runId, input);
+  }
+
+  /**
+   * T011 — a dependency is satisfied only by evidence-backed completion.
+   *
+   * `done` needs validated evidence, the same test the queue gate applies before
+   * it unparks a waiter. A `handed-off` task satisfies nothing by itself: it
+   * moves responsibility to the successor it names, and that successor's own
+   * validated completion is what counts, followed hop by hop. The visited set is
+   * the cycle guard, so a handoff chain that closes on itself is unsatisfied
+   * rather than an infinite walk.
+   */
+  private dependencySatisfied(governance: PlanGovernance, runId: string, taskId: string): boolean {
+    return dependencySatisfied(this.db, this.queueRepo, qitemId => governance.getTask(qitemId)?.evidence?.validated === true, runId, taskId);
   }
   async startLeadActivation(manifest: ContextManifest, observed: ContextObservation, currentBinding: AssignmentInput["currentBinding"]) {
     await this.prepareTeamAssignment(manifest.runId, { currentBinding, assignment: manifest.assignment, outputs: manifest.outputs, permissions: manifest.permissions, context: manifest, observed });

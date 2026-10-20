@@ -420,14 +420,16 @@ export class PlanGovernance {
     const optionalText = (key: string) => v[key] === undefined ? undefined : text(v[key], key);
     let transitionNote = optionalText("transitionNote");
     if (observedOutcome) transitionNote = `Owner observation of ${v.actorSession}${transitionNote ? `: ${transitionNote}` : ""}`;
-    const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({ qitemId: task.qitemId, actorSession: observedBy ?? text(v.actorSession, "actorSession"),
-      state: v.state as QueueState, transitionNote, closureReason: optionalText("closureReason"),
-      closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") }));
-    for (const event of updated.persistedEvents) ctx.register(event);
+    // The dependency gate inside the queue write reads this row's evidence in the
+    // same transaction, so outcome evidence must be durable BEFORE the state write.
     const evidence = v.evidence === undefined ? task.evidence : jsonValue(object(v.evidence, "evidence"));
     const changed = this.db.prepare(`UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ?
       WHERE qitem_id = ? AND entity_version = ?`).run(evidence === null ? null : canonicalJson(evidence), task.qitemId, task.entityVersion);
     if (changed.changes !== 1) throw new Error("Task version conflict");
+    const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({ qitemId: task.qitemId, actorSession: observedBy ?? text(v.actorSession, "actorSession"),
+      state: v.state as QueueState, transitionNote, closureReason: optionalText("closureReason"),
+      closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") }));
+    for (const event of updated.persistedEvents) ctx.register(event);
     return { status: observedOutcome ? "observed" : "accepted", value: this.getTask(task.qitemId), taskId: task.assignment.taskId,
       attemptId: observedOutcome ? v.attemptId as string : undefined, observedBy: observedBy ?? undefined };
   }
