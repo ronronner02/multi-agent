@@ -22,6 +22,10 @@ const NATIVE_POLICY_MOUNTS = Object.freeze({
   codex: { source: 'native/codex/requirements.toml', target: '/etc/codex/requirements.toml' },
 });
 const INSTALLED_POLICY = '/etc/multi-agent/worker-policy.json';
+// KTD27: client builds are pinned outside the worker policy, so a lock change never bumps policy_revision.
+const INSTALLED_CLIENT_LOCK = '/etc/multi-agent/client-lock.json';
+export const CLIENT_LOCK_SCHEMA = 'multi-agent-client-lock/v1';
+const CLIENT_ENTRYPOINTS = Object.freeze({ 'claude-code': 'clients/bin/claude', codex: 'clients/bin/codex' });
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ENV_KEY_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 // Child descriptor numbers for the bubblewrap --bind-fd sources.
@@ -189,8 +193,9 @@ export function validatePolicy(policy) {
 }
 
 export function parseLaunchArgs(argv) {
-  const request = { worker: null, role: null, tree: null, run: null, attempt: null, mailbox: null, env: [], command: [] };
-  const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--run': 'run', '--attempt': 'attempt', '--mailbox': 'mailbox' };
+  const request = { worker: null, role: null, tree: null, run: null, attempt: null, mailbox: null, clientLock: null, env: [], command: [] };
+  const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--run': 'run', '--attempt': 'attempt', '--mailbox': 'mailbox',
+    '--client-lock': 'clientLock' };
   let i = 0;
   for (; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -218,6 +223,9 @@ export function parseLaunchArgs(argv) {
     if (parts.length !== 2 || !parts.every(n => Number.isSafeInteger(n) && n >= 0) || parts.join(':') !== request.mailbox) {
       throw new LaunchError('argument-invalid', 'mailbox must be a canonical device:inode identity');
     }
+  }
+  if (request.clientLock !== null && !/^sha256:[a-f0-9]{64}$/.test(request.clientLock)) {
+    throw new LaunchError('argument-invalid', 'client lock must be a sha256 digest');
   }
   return request;
 }
@@ -361,6 +369,15 @@ export function resolveLaunchRequest(policy, request, facts) {
     throw new LaunchError('egress-unavailable', 'the worker egress filter is not running under the egress identity');
   }
 
+  // KTD27: client files are reachable only through their canonical entry point, which the lock gates.
+  const clientsDir = posix.join(policy.paths.toolchain_dir, 'clients') + '/';
+  let executableTarget = exe;
+  try { executableTarget = facts.realpath(exe); } catch { /* a missing executable fails at exec */ }
+  if (!client && (executableTarget.startsWith(clientsDir) || request.command.some(arg => arg.startsWith(clientsDir)))) {
+    throw new LaunchError('client-entrypoint-required', 'native clients start only through their canonical entry point');
+  }
+  const clientLock = checkClientLock(policy, facts.clientLock, request.command, facts.inspectFile, request.clientLock);
+
   return {
     worker: { name: worker.name, uid: worker.uid, gid: worker.gid },
     role: request.role,
@@ -373,7 +390,74 @@ export function resolveLaunchRequest(policy, request, facts) {
     env,
     command: request.command,
     ...(mailbox ? { mailbox, bootstrap } : {}), ...(nativePolicy ? { nativePolicy, client } : {}),
+    ...(clientLock ? { clientLock } : {}),
   };
+}
+
+const relativeLockPath = value => typeof value === 'string' && /^[A-Za-z0-9@._+-]+(?:\/[A-Za-z0-9@._+-]+)*$/.test(value)
+  && value.split('/').every(segment => segment !== '.' && segment !== '..');
+
+export function validateClientLock(lock) {
+  const fail = (message) => { throw new LaunchError('client-lock-invalid', message); };
+  if (!lock || typeof lock !== 'object' || Array.isArray(lock) || lock.schema !== CLIENT_LOCK_SCHEMA) fail(`client lock schema must be ${CLIENT_LOCK_SCHEMA}`);
+  const clients = lock.clients;
+  if (!clients || typeof clients !== 'object' || Array.isArray(clients)
+    || Object.keys(clients).sort().join() !== Object.keys(CLIENT_ENTRYPOINTS).sort().join()) fail('client lock must cover exactly claude-code and codex');
+  for (const [client, entry] of Object.entries(clients)) {
+    if (!entry || typeof entry !== 'object' || typeof entry.version !== 'string' || !/^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(entry.version)) {
+      fail(`${client} needs an exact version`);
+    }
+    if (!Array.isArray(entry.files) || entry.files.length === 0
+      || entry.files.some(file => !file || !relativeLockPath(file.path) || typeof file.sha256 !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(file.sha256))) {
+      fail(`${client} needs hashed executable files`);
+    }
+    // The adapter contract fixtures prove this exact version; a lock entry without them is unusable.
+    if (!Array.isArray(entry.fixtures) || entry.fixtures.length === 0 || entry.fixtures.some(fixture => !relativeLockPath(fixture))) {
+      fail(`${client} needs a fixture set for ${entry.version}`);
+    }
+  }
+  return lock;
+}
+
+/**
+ * KTD27: a native client runs only as its locked build, on fresh launch and resume alike. Each pinned
+ * file is hashed from its opened root-owned inode; the entry point must resolve to the first pinned file.
+ * There is no compatibility fallback. Returns null for a command that is not a native client.
+ */
+export function checkClientLock(policy, lockFile, command, inspectFile, expectedDigest) {
+  const client = Object.keys(CLIENT_ENTRYPOINTS).find(name => command[0] === posix.join(policy.paths.toolchain_dir, CLIENT_ENTRYPOINTS[name]));
+  if (!client) return null;
+  let entry;
+  try {
+    entry = validateClientLock(JSON.parse(lockFile.raw)).clients[client];
+  } catch {
+    throw new LaunchError('client-lock-unavailable', 'the installed client lock is missing or invalid');
+  }
+  // The caller's preflight digest is bound into the command, so the receipt names the lock enforced here.
+  if (expectedDigest !== lockFile.sha256) {
+    throw new LaunchError(expectedDigest ? 'client-lock-changed' : 'client-lock-unbound', 'the launch is not bound to the installed client lock');
+  }
+  if (client === 'codex') {
+    // Every override form counts, so a later override cannot re-enable self-update.
+    const overrides = command.flatMap((arg, i) => arg === '-c' || arg === '--config' ? [command[i + 1] ?? '']
+      : arg.startsWith('--config=') ? [arg.slice('--config='.length)] : arg.startsWith('-c') && arg.length > 2 ? [arg.slice(2).replace(/^=/, '')] : []);
+    const updates = overrides.filter(value => value.split('=')[0].trim() === 'check_for_update_on_startup');
+    if (updates.length === 0 || updates.some(value => value.replace(/\s/g, '') !== 'check_for_update_on_startup=false')) {
+      throw new LaunchError('client-self-update-enabled', 'codex must start with self-update disabled');
+    }
+  }
+  let observed;
+  try {
+    const entryPoint = inspectFile(command[0]);
+    observed = entry.files.map(file => inspectFile(posix.join(policy.paths.toolchain_dir, file.path)));
+    if (entryPoint.realpath !== observed[0].realpath) throw new Error('entry point resolves outside the lock');
+  } catch {
+    throw new LaunchError('unsupported-version', `${client} executable does not match the locked build`);
+  }
+  if (observed.some((file, i) => file.sha256 !== entry.files[i].sha256)) {
+    throw new LaunchError('unsupported-version', `${client} executable hash differs from the locked ${entry.version} build`);
+  }
+  return { client, version: entry.version, digest: lockFile.sha256, files: observed.map(({ path: file, sha256 }) => ({ path: file, sha256 })) };
 }
 
 /** Read-only control preflight. Request validation is shared with the actual launch. */
@@ -408,6 +492,7 @@ export function inspectLaunchRequest(policy, request, facts) {
       roots: { home: resolved.home, scratch: resolved.scratch, tree: resolved.tree, context: resolved.context, framework: resolved.framework },
       installed,
       network: { hostNamespace: namespaces.net, profileFingerprint: installed.egress.sha256 },
+      ...(resolved.clientLock ? { clientLock: resolved.clientLock } : {}),
     };
   } catch {
     throw new LaunchError('preflight-unverified', 'Installed launch facts are missing, untrusted or changed');
@@ -631,6 +716,7 @@ function hostFacts(policy) {
     lstat: (p) => lstatSync(p),
     readFile: (p) => readFileSync(p, "utf8"),
     inspectFile: inspectInstalledFile,
+    clientLock: readInstalledClientLock(),
     namespace: (kind) => readlinkSync('/proc/self/ns/' + kind),
     legacyTiocsti,
     egressSocket: (() => {
@@ -643,6 +729,17 @@ function hostFacts(policy) {
       }
     })(),
   };
+}
+
+function readInstalledClientLock() {
+  try {
+    const raw = readFileSync(INSTALLED_CLIENT_LOCK), installed = inspectInstalledFile(INSTALLED_CLIENT_LOCK);
+    const sha256 = 'sha256:' + createHash('sha256').update(raw).digest('hex');
+    if (installed.realpath !== INSTALLED_CLIENT_LOCK || installed.sha256 !== sha256) return null;
+    return { raw: raw.toString('utf8'), sha256 };
+  } catch {
+    return null;
+  }
 }
 
 function reportError(err) {

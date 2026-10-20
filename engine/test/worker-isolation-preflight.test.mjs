@@ -405,11 +405,25 @@ describe('offline: fixed native policy and mailbox mounts', () => {
   const bootstrap = { authorization: 'Bearer bootstrap-fixture-secret', sessionId: 'session', runId: 'run-1', attemptId: 'attempt-1',
     generation: 'generation', taskId: 'task', capability: 'mailbox:' + 'a'.repeat(43) };
   const executable = policy.paths.toolchain_dir + '/clients/bin/claude';
+  const lockRaw = readFileSync(path.join(here, '..', 'config', 'isolation', 'client-lock.json'), 'utf8');
+  const lock = JSON.parse(lockRaw);
+  const clientLock = { raw: lockRaw, sha256: 'sha256:' + createHash('sha256').update(lockRaw).digest('hex') };
+  // Installed clients as the KTD27 lock pins them: each entry point resolves to its first pinned file.
+  const lockedFile = (file) => {
+    for (const [client, entry] of Object.entries(lock.clients)) {
+      const pinned = entry.files.find(f => policy.paths.toolchain_dir + '/' + f.path === file);
+      if (pinned) return { path: file, realpath: file, sha256: pinned.sha256 };
+      if (file === policy.paths.toolchain_dir + '/clients/bin/' + (client === 'codex' ? 'codex' : 'claude')) {
+        return { path: file, realpath: policy.paths.toolchain_dir + '/' + entry.files[0].path, sha256: entry.files[0].sha256 };
+      }
+    }
+    throw new Error('not installed');
+  };
   const argv = ['--worker', 'ma-worker1', '--role', 'implementer', '--tree', TREE,
-    '--run', 'run-1', '--attempt', 'attempt-1', '--mailbox', '9:22', '--', executable];
+    '--run', 'run-1', '--attempt', 'attempt-1', '--mailbox', '9:22', '--client-lock', clientLock.sha256, '--', executable];
   const facts = (change = {}) => {
     const base = fakeFacts();
-    return { ...base, readFile: p => { assert.equal(p, bootstrapPath); return JSON.stringify(bootstrap); }, lstat: p => {
+    return { ...base, clientLock, inspectFile: lockedFile, readFile: p => { assert.equal(p, bootstrapPath); return JSON.stringify(bootstrap); }, lstat: p => {
       if (p === bootstrapPath) return { uid: 990, gid: 990, dev: 10, ino: 24, mode: 0o600, size: 256,
         isFile: () => true, isSymbolicLink: () => false };
       if (p === socket) return { uid: 990, gid: 990, dev: 9, ino: 22, mode: 0o666,
@@ -451,6 +465,28 @@ describe('offline: fixed native policy and mailbox mounts', () => {
     assert.ok(!args.includes(nativePath));
     assert.ok(args.includes('--remount-ro'));
     assert.ok(args.includes('/etc/claude-code'));
+  });
+
+  test('KTD27: the shared launch validator refuses a client build outside the lock, fresh and on resume', () => {
+    const good = facts();
+    const rebuilt = { ...good, inspectFile: file => ({ ...good.inspectFile(file), sha256: 'sha256:' + 'f'.repeat(64) }) };
+    for (const command of [[executable], [executable, '--resume', 'native-session']]) {
+      expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs([...argv.slice(0, -1), ...command]), rebuilt), 'unsupported-version');
+    }
+    assert.equal(resolveLaunchRequest(policy, parseLaunchArgs(argv), good).clientLock.digest, clientLock.sha256);
+  });
+
+  test('KTD27: a native launch is bound to the installed lock and reachable only through its entry point', () => {
+    const unbound = argv.filter((arg, i) => arg !== '--client-lock' && argv[i - 1] !== '--client-lock');
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(unbound), facts()), 'client-lock-unbound');
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), { ...facts(), clientLock: null }), 'client-lock-unavailable');
+    for (const command of [[policy.paths.toolchain_dir + '/' + lock.clients['claude-code'].files[0].path],
+      [NODE, policy.paths.toolchain_dir + '/' + lock.clients.codex.files[0].path]]) {
+      expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs([...argv.slice(0, -1), ...command]), facts()), 'client-entrypoint-required');
+    }
+    const alias = '/usr/bin/claude-alias', aliased = facts();
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs([...argv.slice(0, -1), alias]),
+      { ...aliased, realpath: p => p === alias ? executable : aliased.realpath(p) }), 'client-entrypoint-required');
   });
 
   test('requires a registered mailbox before either native client starts', () => {

@@ -57,9 +57,9 @@ It installs:
 
 - Host packages: `bubblewrap`, `tmux`, `util-linux`, `socat`, `acl`, `curl`, `xz-utils`, `ca-certificates`.
 - Node.js `v24.21.0` from the official tarball, verified against a pinned SHA-256, into `/opt/multi-agent/toolchain/node`.
-- `@anthropic-ai/claude-code@2.1.296` and `@openai/codex@0.160.0` into `/opt/multi-agent/toolchain/clients`. npm lifecycle scripts are disabled. The only shipped lifecycle script, Claude Code's `install.cjs`, was audited (it copies the bundled platform binary locally) and is run explicitly. Codex ships no lifecycle scripts.
+- The client builds named in `engine/config/isolation/client-lock.json` (currently `@anthropic-ai/claude-code@2.1.296` and `@openai/codex@0.160.0`) into `/opt/multi-agent/toolchain/clients`. Provisioning fails if any installed file's SHA-256 differs from the lock. npm lifecycle scripts are disabled. The only shipped lifecycle script, Claude Code's `install.cjs`, was audited (it copies the bundled platform binary locally) and is run explicitly. Codex ships no lifecycle scripts.
 - The `ma-control` and `ma-worker*` identities, and `/var/lib/multi-agent/{control,workers,assignments}` with the modes listed above. Assignment directories are `<worker>:ma-control 2770`, with default ACLs so control can stage trees that the worker can edit.
-- The launcher, its `/bin/sh` wrapper (which clears the environment except `SUDO_UID`) and the policy, all root-owned.
+- The launcher, its `/bin/sh` wrapper (which clears the environment except `SUDO_UID`), the policy and `/etc/multi-agent/client-lock.json`, all root-owned.
 - The worker egress filter: `/opt/multi-agent/toolchain/egress/egress.mjs` (root-owned, inside the toolchain the sandbox already mounts) and `/etc/multi-agent/egress.json` (root-owned, `0644`; it holds no credentials). They are run by `multi-agent-egress.service` as the `ma-egress` system identity. That identity is in `forbidden_worker_groups`, has no shell or home, and runs with `NoNewPrivileges`, an empty capability set and `ProtectSystem=strict`.
 - `/etc/sudoers.d/multi-agent-launcher`: `ma-control ALL=(root) NOPASSWD: /usr/local/libexec/multi-agent/worker-launch`.
 - With `--preflight-owner`: `/etc/sudoers.d/multi-agent-preflight`, which lets that login act as the control and worker identities without a password so the harness can stage control-owned sentinels. **Remove it after preflight:**
@@ -70,7 +70,30 @@ sudo rm /etc/sudoers.d/multi-agent-preflight
 
 Re-run provisioning after any change to `engine/config/isolation/`. The preflight compares installed hashes with the sources and fails on drift.
 
-The script does not auto-upgrade the clients. To change a pinned version, edit the script, re-run it, then re-run the preflight.
+The script does not auto-upgrade the clients.
+
+## Client Lock (KTD27)
+
+`engine/config/isolation/client-lock.json` pins each native client to:
+- an exact version;
+- the SHA-256 of every file in its exec chain (Claude Code's `claude.exe`; Codex's `codex.js` wrapper and the vendored native binary it spawns);
+- the adapter contract fixtures captured for that version.
+
+On every fresh launch and resume, the privileged launcher re-hashes the pinned files from the installed `/etc/multi-agent/client-lock.json` and checks that the entry point resolves to the first pinned file. Any mismatch refuses the launch:
+- the launcher returns `unsupported-version`;
+- the daemon returns `agent_error.unsupported_version`;
+- there is no retry and no compatibility fallback.
+
+The launcher also refuses a Codex command that does not disable self-update, and it sets `DISABLE_AUTOUPDATER=1` for Claude Code. Workers cannot write the toolchain. Each launch event records the lock digest and version.
+
+The lock is separate from `worker-policy.json`. Client versions are runtime dependencies, not security-boundary configuration, so changing the lock does not bump `policy_revision`.
+
+Changing a pinned client is an owner action:
+1. Set the new `version` in `client-lock.json`, then re-run provisioning to install that build. Provisioning stops at the hash check; that stop is expected.
+2. Capture the adapter contract fixtures with the new build: the native channel spike record and the screen captures the adapters parse. Each fixture must name the exact version.
+3. Record the new SHA-256 of every exec-chain file in `files`, and list the new fixtures in `fixtures`. `client-lock.test.ts` fails when an entry has no fixture set, or when a fixture does not name its version.
+4. Re-run the native adapter contract tests and the daemon package suite.
+5. Re-run provisioning, which now passes the hash check and installs the new lock, then run the full U1 host preflight.
 
 ## Isolation Preflight
 

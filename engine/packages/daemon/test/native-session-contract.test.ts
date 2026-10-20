@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RestrictedWorkerLauncher, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
+import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code-adapter.js";
 import { CodexRuntimeAdapter } from "../src/adapters/codex-runtime-adapter.js";
 import { ClaudeResumeAdapter } from "../src/adapters/claude-resume.js";
@@ -71,6 +71,8 @@ function fixture(client: WorkerClient, revision = 4, role: "implementer" | "revi
     control: { uid: process.getuid!(), mountNamespace: "mnt:control", userNamespace: "user:control" },
     executable: "/opt/multi-agent/toolchain/clients/bin/" + (client === "codex" ? "codex" : "claude"),
     executableVersion: "fixture-version", generation: 1, policyFingerprint, policyRevision: revision,
+    clientLock: { digest: hashBytes("client lock"), version: "fixture-version", files: [{ path: "clients/fixture", sha256: hashBytes("client") }],
+      observedFiles: [{ path: "/opt/multi-agent/toolchain/clients/fixture", sha256: hashBytes("client") }] },
     installedPolicy: {
       policy_revision: revision, worker_identities: ["ma-worker1", "ma-worker2", "ma-worker3"],
       paths: { ...contextPolicy.paths, toolchain_dir: "/opt/multi-agent/toolchain", egress_socket_dir: "/run/multi-agent-egress" }, sandbox: { ...contextPolicy.sandbox, network: "filtered-proxy", etc_ro_binds: ["/etc/hosts"], masked_paths: ["/usr/lib/wsl"] },
@@ -915,5 +917,35 @@ describe.each(["claude-code", "codex"] as const)("%s fixed policy launch boundar
     expect(await f.adapter.checkReady(f.node)).toMatchObject({ ready: false });
     expect(f.control.quiesce).toHaveBeenCalledTimes(1);
     expect(f.events.at(-1)).toMatchObject({ phase: "blocked", quiescence: { status: "terminated" } });
+  });
+});
+
+describe.each(["claude-code", "codex"] as const)("%s KTD27 client lock", client => {
+  it.each([
+    ["a different version", (f: ReturnType<typeof fixture>) => { f.p.executableVersion = "9.9.9"; }],
+    ["the locked version string with a different executable hash", (f: ReturnType<typeof fixture>) => {
+      f.p.clientLock.observedFiles[0]!.sha256 = hashBytes("rebuilt client"); }],
+    ["no observed lock", (f: ReturnType<typeof fixture>) => { delete (f.p as Partial<WorkerLaunchPreflight>).clientLock; }],
+  ])("refuses %s on fresh launch and resume, without retry or a native effect", async (_name, change) => {
+    for (const resumeToken of [undefined, "native-session"]) {
+      const f = fixture(client);
+      change(f);
+      const result = resumeToken ? await f.launcher.launch({ client, attempt: f.attempt, resumeToken }) : await f.launch();
+      expect(result).toMatchObject({ ok: false, recovery: "attention_required", error: expect.stringContaining(UNSUPPORTED_CLIENT_VERSION) });
+      expect(f.control.preflight).toHaveBeenCalledTimes(1);
+      expect(f.control.start).not.toHaveBeenCalled();
+      expect(f.control.quiesce).not.toHaveBeenCalled();
+      expect(f.events.at(-1)).toMatchObject({ phase: "blocked", code: UNSUPPORTED_CLIENT_VERSION });
+    }
+  });
+
+  it("accepts the client's raw --version output and records the lock digest on every launch receipt", async () => {
+    const f = fixture(client);
+    f.p.executableVersion = client === "codex" ? "codex-cli fixture-version" : "fixture-version (Claude Code)";
+    expect(await f.launch()).toMatchObject({ ok: true });
+    const args = vi.mocked(f.control.start).mock.calls[0]![0].args;
+    expect(args[args.indexOf("--client-lock") + 1]).toBe(f.p.clientLock.digest);
+    const lockReceipt = { digest: f.p.clientLock.digest, version: "fixture-version" };
+    expect(f.events.map(event => [event.phase, event.clientLock])).toEqual([["prepared", lockReceipt], ["observed", lockReceipt]]);
   });
 });
