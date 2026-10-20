@@ -69,6 +69,11 @@ export interface WorkerLaunchPreflight {
   control: { uid: number; gid?: number; mountNamespace: string; userNamespace: string };
   executable: string;
   executableVersion: string;
+  /**
+   * KTD27 lock entry for this client and the executable hashes the privileged launcher observed
+   * against it. `version` and `files` come from the installed lock; `observedFiles` from the inspected inodes.
+   */
+  clientLock: ClientLockObservation;
   generation: number;
   policyFingerprint: string;
   policyRevision: number;
@@ -82,6 +87,14 @@ export interface WorkerLaunchPreflight {
   /** Secret values are used only for output redaction, never copied to receipts or argv. */
   credentialValues: string[];
 }
+export interface ClientLockObservation {
+  digest: string;
+  version: string;
+  files: { path: string; sha256: string }[];
+  observedFiles: { path: string; sha256: string }[];
+}
+/** KTD20 treats this launch refusal as non-retryable; a mismatched client build never falls back. */
+export const UNSUPPORTED_CLIENT_VERSION = "agent_error.unsupported_version";
 export interface WorkerNetworkPolicy {
   mode: "isolated-allowlist" | "filtered-proxy" | "host-shared" | "unknown";
   hostNamespace: string;
@@ -138,6 +151,7 @@ export interface WorkerLaunchEvent {
   session?: ManagedSessionReceipt;
   network?: WorkerNetworkPolicy;
   nativePolicy?: { installedDigest: string; observedDigest: string };
+  clientLock?: { digest: string; version: string };
   output?: { text: string; truncated: boolean; evidenceRef: string };
 }
 /**
@@ -192,6 +206,12 @@ export interface WorkerLaunchPolicy extends ContextMountPolicy {
     mailbox?: string; native_policy_mounts?: Record<WorkerClient, { source: string; target: string }> };
 }
 const reference = (value: string) => /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,255}$/.test(value);
+/** Bare version from `--version` output, e.g. "2.1.296 (Claude Code)" or "codex-cli 0.160.0". */
+function reportedVersion(client: WorkerClient, raw: string): string {
+  const text = raw.trim();
+  const match = client === "codex" ? /^codex-cli (\S+)$/.exec(text) : /^(\S+) \(Claude Code\)$/.exec(text);
+  return match?.[1] ?? text;
+}
 
 function sharedOutput(output: WorkerObservation["output"], secrets: string[]): WorkerLaunchEvent["output"] {
   requireFact(reference(output.evidenceRef), "managed_evidence_invalid");
@@ -249,6 +269,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       }
       requireFact(preflight.executable === policy.paths.toolchain_dir + "/clients/bin/" + (client === "codex" ? "codex" : "claude")
         && preflight.executableVersion.trim(), "managed_executable_unsupported");
+      this.checkClientLock(client, preflight);
       for (const option of [input.model, input.effort]) requireFact(option === undefined
         || (option.length > 0 && option.length <= 256 && !option.startsWith("-") && !/[\x00-\x1f\x7f]/.test(option)), "managed_launch_option_invalid");
       requireFact(resumeToken === undefined || /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(resumeToken), "managed_resume_identity_mismatch");
@@ -276,7 +297,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
         file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
           ...(policy.policy_revision >= 5 ? ["--supervise"] : []),
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
-          "--run", attempt.context.runId, "--attempt", attempt.attemptId,
+          "--run", attempt.context.runId, "--attempt", attempt.attemptId, "--client-lock", preflight.clientLock.digest,
           ...(policy.policy_revision >= 5 ? ["--mailbox", `${preflight.mailbox!.dev}:${preflight.mailbox!.ino}`] : []), "--", ...nativeArgv],
         nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
       });
@@ -366,6 +387,14 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
 
   private checkDeadline(attempt: ManagedAttempt): void {
     requireFact(Number.isSafeInteger(attempt.deadline) && attempt.deadline > this.now(), "managed_deadline_expired");
+  }
+
+  private checkClientLock(client: WorkerClient, p: WorkerLaunchPreflight): void {
+    const lock = p.clientLock, toolchain = p.installedPolicy.paths.toolchain_dir;
+    requireFact(lock && /^sha256:[a-f0-9]{64}$/.test(lock.digest) && Array.isArray(lock.files) && lock.files.length > 0
+      && lock.version === reportedVersion(client, p.executableVersion)
+      && same(lock.observedFiles, lock.files.map(file => ({ path: toolchain + "/" + file.path, sha256: file.sha256 }))),
+    UNSUPPORTED_CLIENT_VERSION);
   }
 
   private checkContextProjection(attempt: ManagedAttempt, preflight: WorkerLaunchPreflight): void {
@@ -489,6 +518,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
   private async record(state: LaunchState, event: Pick<WorkerLaunchEvent, "phase" | "code" | "causeCode" | "quiescence" | "session" | "output">): Promise<void> {
     await this.control.record(this.context!.immutable({ ...event,
       ...(state.nativePolicy ? { nativePolicy: state.nativePolicy } : {}),
+      ...(state.preflight?.clientLock ? { clientLock: { digest: state.preflight.clientLock.digest, version: state.preflight.clientLock.version } } : {}),
       ...(state.command ? { network: state.command.network } : {}), attemptId: state.input.attempt.attemptId,
       deadline: state.input.attempt.deadline, contextHash: state.input.attempt.context?.generatedHash ?? "unverified" }));
   }

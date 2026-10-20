@@ -1,0 +1,38 @@
+{
+  "schema": "multi-agent-client-lock/v1",
+  "clients": {
+    "claude-code": {
+      "version": "2.1.296",
+      "package": "@anthropic-ai/claude-code",
+      "files": [
+        {
+          "path": "clients/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+          "sha256": "sha256:24972e3bc859fab2b46ed4c1e51f7d6130f06d3bd550811a114640de3370d0de"
+        }
+      ],
+      "fixtures": [
+        "docs/validation/native-channel-spike.md",
+        "engine/packages/daemon/test/native-channel-contract.test.ts"
+      ]
+    },
+    "codex": {
+      "version": "0.160.0",
+      "package": "@openai/codex",
+      "files": [
+        {
+          "path": "clients/lib/node_modules/@openai/codex/bin/codex.js",
+          "sha256": "sha256:61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70"
+        },
+        {
+          "path": "clients/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+          "sha256": "sha256:12eb3e81114588aca3b7998f4f19e8997b056aca08e57a7ca7c8a3ec8c652aad"
+        }
+      ],
+      "fixtures": [
+        "docs/validation/native-channel-spike.md",
+        "engine/packages/daemon/test/fixtures/codex-update-0.160.0.txt",
+        "engine/packages/daemon/test/native-channel-contract.test.ts"
+      ]
+    }
+  }
+}

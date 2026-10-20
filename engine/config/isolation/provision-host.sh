@@ -21,8 +21,6 @@ set -euo pipefail
 
 NODE_VERSION="v24.21.0"
 NODE_SHA256="fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
-CLAUDE_CODE_VERSION="2.1.296"
-CODEX_VERSION="0.160.0"
 
 CONTROL="ma-control"
 WORKERS=(ma-worker1 ma-worker2 ma-worker3)
@@ -60,7 +58,12 @@ die() { printf '[provision] ERROR %s\n' "$*" >&2; exit 1; }
 [ "$(id -u)" -eq 0 ] || die "run with sudo"
 grep -q '^ID=ubuntu' /etc/os-release || die "Ubuntu is required"
 grep -qi microsoft /proc/sys/kernel/osrelease || die "WSL2 kernel is required"
-[ -f "$SRC_DIR/worker-launch.mjs" ] && [ -f "$SRC_DIR/worker-policy.json" ] && [ -f "$SRC_DIR/egress.mjs" ] || die "launcher sources missing in $SRC_DIR"
+[ -f "$SRC_DIR/worker-launch.mjs" ] && [ -f "$SRC_DIR/worker-policy.json" ] && [ -f "$SRC_DIR/egress.mjs" ] \
+  && [ -f "$SRC_DIR/client-lock.json" ] || die "launcher sources missing in $SRC_DIR"
+# KTD27: client-lock.json is the single source of the pinned client versions.
+lock_version() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["clients"][sys.argv[2]]["version"])' "$SRC_DIR/client-lock.json" "$1"; }
+CLAUDE_CODE_VERSION="$(lock_version claude-code)" || die "client-lock.json has no claude-code version"
+CODEX_VERSION="$(lock_version codex)" || die "client-lock.json has no codex version"
 [ "$(ps -p 1 -o comm=)" = "systemd" ] || die "systemd is required to run the worker egress filter (set [boot] systemd=true in /etc/wsl.conf)"
 if [ -n "$PREFLIGHT_OWNER" ]; then
   id "$PREFLIGHT_OWNER" >/dev/null 2>&1 || die "preflight owner $PREFLIGHT_OWNER does not exist"
@@ -102,6 +105,19 @@ if [ "$(PATH="$CLIENT_PATH" claude --version 2>/dev/null || true)" != "$CLAUDE_C
   claude_pkg="$TOOLCHAIN/clients/lib/node_modules/@anthropic-ai/claude-code"
   (cd "$claude_pkg" && PATH="$TOOLCHAIN/node/bin:/usr/bin:/bin" "$NODE" install.cjs >/dev/null)
 fi
+# A rebuilt or re-published package with the same version string still fails here.
+python3 - "$SRC_DIR/client-lock.json" "$TOOLCHAIN" <<'PYLOCK' || die "installed clients differ from client-lock.json; capture fixtures and update the lock (docs/operations.md)"
+import hashlib, json, sys
+lock, toolchain = json.load(open(sys.argv[1])), sys.argv[2]
+for client, entry in lock["clients"].items():
+    for pinned in entry["files"]:
+        digest = hashlib.sha256()
+        with open(f"{toolchain}/{pinned['path']}", "rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+        if "sha256:" + digest.hexdigest() != pinned["sha256"]:
+            sys.exit(f"{client} {pinned['path']} does not match the lock")
+PYLOCK
 # Managed Codex launches read this catalog. It is the pinned client's bundled catalog with
 # use_responses_lite off: the lite request shape carries tools and instructions in an
 # `additional_tools` input item, which a relay gateway drops, leaving the model with no shell.
@@ -264,6 +280,7 @@ PYFRAMEWORK
 log "installing launcher and policy"
 install -d -o root -g root -m 0755 "$LIBEXEC" "$ETC_DIR"
 install -o root -g root -m 0644 "$SRC_DIR/worker-policy.json" "$ETC_DIR/worker-policy.json"
+install -o root -g root -m 0644 "$SRC_DIR/client-lock.json" "$ETC_DIR/client-lock.json"
 install -o root -g root -m 0644 "$SRC_DIR/worker-launch.mjs" "$LIBEXEC/worker-launch.mjs"
 cat > "$LIBEXEC/worker-launch.new" <<EOF
 #!/bin/sh
@@ -273,9 +290,10 @@ install -o root -g root -m 0755 "$LIBEXEC/worker-launch.new" "$LIBEXEC/worker-la
 rm -f "$LIBEXEC/worker-launch.new"
 "$NODE" --input-type=module -e "
   import { readFileSync } from 'node:fs';
-  const { validatePolicy } = await import('$LIBEXEC/worker-launch.mjs');
+  const { validatePolicy, validateClientLock } = await import('$LIBEXEC/worker-launch.mjs');
   validatePolicy(JSON.parse(readFileSync('$ETC_DIR/worker-policy.json', 'utf8')));
-" || die "installed policy failed validation"
+  validateClientLock(JSON.parse(readFileSync('$ETC_DIR/client-lock.json', 'utf8')));
+" || die "installed policy or client lock failed validation"
 
 log "installing the worker egress filter (KTD23)"
 # Machine-local: the owner's upstream proxy and gateway hosts stay out of the repository.
