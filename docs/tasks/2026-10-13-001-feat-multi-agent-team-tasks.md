@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:faba2b1af21665d061cdad51663665cd2504d8fae29cc07d1820f4afcdaced07"
+source_plan_hash: "sha256:07366cfd18d9ada6d295312f6646bdbe1619c5117f16637106c39f8f44fd5a4f"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -24,7 +24,7 @@ source_sections:
 
 ## Overview
 
-This derived execution index decomposes the active, implementation-ready source plan into **38 bounded tasks in 22 waves**, covering U1-U13. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
+This derived execution index decomposes the active, implementation-ready source plan into **39 bounded tasks in 22 waves**, covering U1-U13. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
 **Validation boundary:** T004 retains the plan-declared `engine/packages/daemon/src/middleware/auth-bearer-token.ts` source path. The validator contract must contain the audited exact-path allowance; broader credential-name denials remain in force. Validate this regenerated pack from the WSL artifact root before execution. Do not remove required source paths or treat a manual exception as a passing receipt.
 
@@ -77,7 +77,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | U2 | R1, R4, R5, R13, R19, R21, R22; AE1, AE4, AE6, AE11, AE13; KTD4-KTD6, KTD22 | T003-T004 | Transactional migration/governance, fixed daemon mode, admission invariants and owner-level managed-entry authority checks |
 | U3 | R1-R6, R11, R18, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6, KTD21 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness, effective-context manifests and the Lead operating protocol |
 | U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21, KTD23, KTD24, KTD27; PC7 | T008-T010, T031-T032, T034, T037-T038 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
-| U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD25 | T011-T012, T035 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework and KTD25 scope extensions |
+| U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD25 | T011-T012, T035, T039 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework and KTD25 scope extensions |
 | U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
 | U7 | R5, R9-R15, R18, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9, KTD20 | T017-T018, T033 | Owned-process cancel/deadlines, failure classification and retry eligibility, crash fault injection, no duplicate side effects and paired restore |
 | U9 | R12-R14, R19, R21, R22; AE6, AE13; KTD6, KTD14, KTD16, KTD18; PC1, PC4, PC5 | T013-T014 | Session/forgery/expiry gates, owner-host identity and audited read-only/take-over boundaries |
@@ -95,7 +95,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | Distinct native clients and direct addressed collaboration | T008-T010, T037-T038 | T027-T028 |
 | Structured native channels and Lead wake bounds | T007, T031-T032 | T038, T030 |
 | Rejection, PC7 launch mode, context and control isolation | T001-T002, T004, T007-T010, T013-T014, T037-T038 | T027-T028 |
-| Candidate integrity, independent review and integrated acceptance | T011-T012, T024-T026 | T027, T030 |
+| Candidate integrity, independent review and integrated acceptance | T011-T012, T039, T024-T026 | T027, T030 |
 | Cancellation, restart, ambiguous effects and cumulative limits | T017-T018, T033 | T027-T028 |
 | Reproducible source/build and database rollback | T001-T003, T018 | T030 |
 | TUI interaction, log visibility, replay timing and durable projection | T015-T016 | T027 |
@@ -151,6 +151,10 @@ flowchart TD
   T010 --> T037
   T034 --> T037
   T037 --> T038
+  T011 --> T039
+  T012 --> T039
+  T037 --> T039
+  T039 --> T038
   T038 --> T026
   T004 --> T036
   T036 --> T015
@@ -182,8 +186,8 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 9 | T010 | Managed-launch source contracts, the KTD24 projection and the Rev-5 host preflight |
 | 10 | T011, T013, T034 | Candidate/dependency isolation, browser owner sessions and the client version lock |
 | 11 | T012, T014, T036, T037 | Independent review, owner terminal/take-over gates and read-only health checks, and production launch composition |
-| 12 | T015, T019, T035, T038 | TUI projections, Web shell/data and KTD25 scope extensions, and installed-client two-client acceptance |
-| 13 | T016, T020 | Terminal owner controls and browser task/decision/session views |
+| 12 | T015, T019, T035, T039 | TUI projections, Web shell/data and KTD25 scope extensions, and production candidate isolation |
+| 13 | T016, T020, T038 | Terminal owner controls and browser task/decision/session views, and installed-client two-client acceptance |
 | 14 | T017, T021 | Cancellation/resource enforcement and responsive browser proof |
 | 15 | T022, T023, T033 | Scoped read views, bounded edits and failure classification |
 | 16 | T018 | Recovery/rollback through the shared classifier |
@@ -282,14 +286,15 @@ The following JSON is the single machine-readable task source. Human cards below
         "T015",
         "T019",
         "T035",
-        "T038"
+        "T039"
       ]
     },
     {
       "wave": 13,
       "tasks": [
         "T016",
-        "T020"
+        "T020",
+        "T038"
       ]
     },
     {
@@ -996,7 +1001,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Isolation requires changing unrelated work, manufacturing a base commit, treating a handed-off state as success or adding another scheduler.",
       "review_gate": "required",
       "review_focus": "Inspect ownership and handoff success semantics, including internal pickup/recovery paths and snapshot identity.",
-      "notes": "Resolve any additional existing pickup owner from T002 before mutation and regenerate concrete paths if needed. Local integration assembles a candidate, not Git merge.",
+      "notes": "Resolve any additional existing pickup owner from T002 before mutation and regenerate concrete paths if needed. Local integration assembles a candidate, not Git merge. Production launch wiring (lead activation and both launcher paths constructing a `CandidateWorkspace` through runtime eligibility) moved to T039 by owner decision on 2026-10-20; T011's done signal is proven at the module boundary.",
       "risk_note": "Untracked files, stale candidate digests and ambiguous handoffs can otherwise produce false independent-review or completion claims.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -2542,7 +2547,8 @@ The following JSON is the single machine-readable task source. Human cards below
       ],
       "goal": "Prove both installed clients preserve containment, provenance and safe messaging through daemon-mediated fresh launch, exact resume and daemon restart.",
       "dependencies": [
-        "T037"
+        "T037",
+        "T039"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
@@ -2558,13 +2564,64 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with `acceptance-readiness.json` in the `20261019T140631Z-t010-rev5-host-acceptance` run and T037's closeout report.",
       "test_focus": "Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. The KTD23 reachable set measured from inside a real managed session: provider and dependency endpoints succeed while Windows host loopback services, overlay-network peers and their MagicDNS names, the LAN and host abstract sockets are unreachable, on fresh launch and again after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart. Observe effective instruction and hook loading from the client or the OS, not from launch flags; observed in-worker discovery matches the KTD24 worker paths on fresh launch and resume. Use an actual daemon process restart with live sessions. Launch and resume refuse a client that differs from the T034 lock.",
       "done_signal": "Daemon-mediated probes for both installed clients, within the inherited allowance, produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts, the KTD23 reachable-set receipts and the spike record are bound to the same source, policy and client versions. A fresh full U1 host preflight passes on the installed policy before any live probe. Every U4 scenario 1-24 has its daemon-mediated or live evidence, including channel and prompt/readiness evidence, authenticated send/reply, endpoint revocation and real full resume and daemon restart. The source/policy/executable candidate is the same for final acceptance and independent review. Focused tests and daemon typecheck pass; one final daemon package run has no task-caused failure. Selector/parser checks alone do not close effective hook execution.",
-      "wave": 12,
+      "wave": 13,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment. Stop if authentication, model configuration or the inherited live allowance is absent or exhausted; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration; another `policy_revision` change is in flight; or a policy, provisioning or service change lacks its separate grant. Stop if the effective native policy source is shadowed or unobserved, or the mailbox exception exposes general control or network access. Keep Product Contract bytes and other task contracts unchanged. Stop if a live failure needs a source change; return it to the plan owner rather than editing T037's owners.",
       "review_gate": "required",
       "review_focus": "Reject false-green launch flags/mocks and enforce a failed live client contract as a blocker for all dependent managed work. Review the real production chain, shared authentication, socket lifecycle/cross-scope denials, control-owned prompt evidence, fixed immutable configuration aliases and complete effective source/digest binding.",
       "notes": "Split from T037 by owner decision on 2026-10-20. At most three live sessions including the lead. This is compatibility verification, not the full feature trial or the reverse-pairing acceptance task. The inherited allowance is four native invocations, 150,000 reported tokens and 1,200 seconds; count tokens only, not spending, and never reset it. No source change belongs to this task. The task-level budget in `AGENTS.md` applies from the first run.",
       "risk_note": "Real native subprocess and resume evidence is required; mocked permissions, terminal text and launch flags have lower proof authority. A ready-looking screen, worker hook payload, expected fixture metadata or writable-file digest never substitutes for control-owned observation and effective native source selection."
+    },
+    {
+      "task_id": "T039",
+      "source_unit": "U5",
+      "requirement_refs": [
+        "R4",
+        "R5",
+        "R10",
+        "R11",
+        "R16",
+        "R18",
+        "R21",
+        "AE2",
+        "AE3",
+        "AE4",
+        "AE9",
+        "AE13",
+        "KTD4",
+        "KTD8",
+        "KTD9"
+      ],
+      "goal": "Route every production launch through runtime eligibility and an isolated candidate workspace.",
+      "dependencies": [
+        "T011",
+        "T012",
+        "T037"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/domain/workflow-runtime.ts",
+        "engine/packages/daemon/src/adapters/worker-launch.ts",
+        "engine/packages/daemon/test/team-candidate-launch.test.ts"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
+      ],
+      "entry_hint": "Start with `plan-questions.md` and `review/round-01-findings.md` in the `20261020T013801Z-t011-dependency-eligibility` run, then the direct `prepareTeamAssignment` call sites in `workflow-runtime.ts` and `worker-launch.ts`.",
+      "test_focus": "Exercise the production entry points, not a directly constructed workspace. Lead activation and both the fresh and resume `RestrictedWorkerLauncher` paths reach `prepareTeamAssignment` only through `WorkflowRuntime`, so a prerequisite without validated evidence, a cyclic or over-limit graph and overlapping write claims each refuse the launch. An implementation assignment runs inside one `CandidateWorkspace` (a worktree when an approved base exists, a snapshot otherwise) whose manifest, including untracked files, is bound to the T012 review packet. The source checkout keeps its dirty-file hashes and no commit or merge is created. A failed `verifySourceUnchanged` blocks delivery. A resumed attempt reuses its recorded candidate instead of creating a second one. Everything runs offline; no provider session starts.",
+      "done_signal": "Focused tests for those cases pass through the production launch and activation paths; the daemon typecheck passes; one final daemon package run has no task-caused failure. No production path calls `prepareTeamAssignment` outside `WorkflowRuntime`, and every implementation launch constructs or resumes exactly one candidate workspace. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T039 claims no installed-client outcome; T038 observes the composed path live.",
+      "wave": 12,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment. Stop if isolation needs a `worker-launch.mjs` or policy change, a provider session or a live client. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.",
+      "review_gate": "required",
+      "review_focus": "Check that no launch path bypasses runtime eligibility or the candidate workspace, that the review packet binds the exact manifest, and that the source checkout is never written. Reject tests that construct a workspace directly in place of the production path.",
+      "notes": "Split from T011 by owner decision on 2026-10-20: T011's round-1 review returned a P0 (no production caller of `createCandidateWorkspace`) after its single scope amendment was spent. T039 also owns T011's plan question that the launcher bypasses runtime eligibility and graph admission. `worker-launch.ts` is shared with T017 and T037; serialize those changes. The task-level budget in `AGENTS.md` applies from the first run.",
+      "risk_note": "Module-level tests prove isolation only where a workspace is constructed. Without production composition a worker edits the source checkout and review never sees an exact candidate.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     },
     {
       "task_id": "T035",
@@ -2742,6 +2799,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Done signal:** Tests demonstrate that only evidence-backed completion, including a validated handoff successor, unlocks dependents. Candidate manifests include untracked files; original dirty files retain hashes and no commit/merge is created.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Isolation requires changing unrelated work, manufacturing a base commit, treating a handed-off state as success or adding another scheduler.
 - **Review intent:** required; Inspect ownership and handoff success semantics, including internal pickup/recovery paths and snapshot identity.
+- **Notes:** Production launch wiring (lead activation and both launcher paths constructing a `CandidateWorkspace` through runtime eligibility) moved to T039 by owner decision on 2026-10-20; T011's done signal is proven at the module boundary.
 
 ### T012. Bind independent review and bounded rework to the exact candidate.
 
@@ -3029,7 +3087,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T038. Prove both installed clients preserve containment, provenance and safe messaging through daemon-mediated fresh launch, exact resume and daemon restart.
 
 - **Source / requirements:** `U4`; `R6`, `R7`, `R8`, `R9`, `R12`, `R15`, `R16`, `R19`, `R21`, `AE3`, `AE5`, `AE6`, `AE8`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD7`, `KTD11`, `KTD19`, `KTD21`, `KTD23`, `KTD24`, `PC7`, `KTD27`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T037.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T037, T039.
 - **Files:** `engine/packages/daemon/test/worker-control-isolation.test.ts`; `engine/packages/daemon/test/managed-native-policy.test.ts`.
 - **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u4-adapt-native-sessions-and-persistent-peer-communication`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#commands-and-evidence-binding`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#t010-production-composition-and-bounded-sequence`.
 - **Test focus:** Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. The KTD23 reachable set measured from inside a real managed session: provider and dependency endpoints succeed while Windows host loopback services, overlay-network peers and their MagicDNS names, the LAN and host abstract sockets are unreachable, on fresh launch and again after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart. Observe effective instruction and hook loading from the client or the OS, not from launch flags; observed in-worker discovery matches the KTD24 worker paths on fresh launch and resume. Use an actual daemon process restart with live sessions. Launch and resume refuse a client that differs from the T034 lock.
@@ -3037,6 +3095,19 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment. Stop if authentication, model configuration or the inherited live allowance is absent or exhausted; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration; another `policy_revision` change is in flight; or a policy, provisioning or service change lacks its separate grant. Stop if the effective native policy source is shadowed or unobserved, or the mailbox exception exposes general control or network access. Keep Product Contract bytes and other task contracts unchanged. Stop if a live failure needs a source change; return it to the plan owner rather than editing T037's owners.
 - **Notes:** Split from T037 by owner decision on 2026-10-20. At most three live sessions including the lead. This is compatibility verification, not the full feature trial or the reverse-pairing acceptance task. The inherited allowance is four native invocations, 150,000 reported tokens and 1,200 seconds; count tokens only, not spending, and never reset it. No source change belongs to this task. The task-level budget in `AGENTS.md` applies from the first run.
 - **Review intent:** required; Reject false-green launch flags/mocks and enforce a failed live client contract as a blocker for all dependent managed work. Review the real production chain, shared authentication, socket lifecycle/cross-scope denials, control-owned prompt evidence, fixed immutable configuration aliases and complete effective source/digest binding.
+
+### T039. Route every production launch through runtime eligibility and an isolated candidate workspace.
+
+- **Source / requirements:** `U5`; `R4`, `R5`, `R10`, `R11`, `R16`, `R18`, `R21`, `AE2`, `AE3`, `AE4`, `AE9`, `AE13`, `KTD4`, `KTD8`, `KTD9`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T011, T012, T037.
+- **Files:** `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/adapters/worker-launch.ts`; `engine/packages/daemon/test/team-candidate-launch.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
+- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants`.
+- **Test focus:** Exercise the production entry points, not a directly constructed workspace. Lead activation and both the fresh and resume `RestrictedWorkerLauncher` paths reach `prepareTeamAssignment` only through `WorkflowRuntime`, so a prerequisite without validated evidence, a cyclic or over-limit graph and overlapping write claims each refuse the launch. An implementation assignment runs inside one `CandidateWorkspace` (a worktree when an approved base exists, a snapshot otherwise) whose manifest, including untracked files, is bound to the T012 review packet. The source checkout keeps its dirty-file hashes and no commit or merge is created. A failed `verifySourceUnchanged` blocks delivery. A resumed attempt reuses its recorded candidate instead of creating a second one. Everything runs offline; no provider session starts.
+- **Done signal:** Focused tests for those cases pass through the production launch and activation paths; the daemon typecheck passes; one final daemon package run has no task-caused failure. No production path calls `prepareTeamAssignment` outside `WorkflowRuntime`, and every implementation launch constructs or resumes exactly one candidate workspace. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T039 claims no installed-client outcome; T038 observes the composed path live.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment. Stop if isolation needs a `worker-launch.mjs` or policy change, a provider session or a live client. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.
+- **Notes:** Split from T011 by owner decision on 2026-10-20: T011's round-1 review returned a P0 (no production caller of `createCandidateWorkspace`) after its single scope amendment was spent. T039 also owns T011's plan question that the launcher bypasses runtime eligibility and graph admission. `worker-launch.ts` is shared with T017 and T037; serialize those changes. The task-level budget in `AGENTS.md` applies from the first run.
+- **Review intent:** required; Check that no launch path bypasses runtime eligibility or the candidate workspace, that the review packet binds the exact manifest, and that the source checkout is never written. Reject tests that construct a workspace directly in place of the production path.
 
 ## Orientation Evidence
 
@@ -3050,7 +3121,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ## Validation Notes
 
-- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:faba2b1af21665d061cdad51663665cd2504d8fae29cc07d1820f4afcdaced07` (at `origin/main` `6b5370c` plus the uncommitted 2026-10-20 T037/T038 split). Regeneration does not edit the source plan.
+- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:07366cfd18d9ada6d295312f6646bdbe1619c5117f16637106c39f8f44fd5a4f` (with the 2026-10-20 T011/T039 split). Regeneration does not edit the source plan.
 - **Exact filename exception:** the maintained validator contract allows only the audited middleware source path. Adjacent credential-like files, backups, prefixed copies and actual credentials retain their denials. Use the tested CLI, not a patched receipt or omitted source path.
 - **Commands:** run `spec-first tasks hash docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md --repo /home/leo/src/multi-agent --json` and `spec-first tasks validate docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md --repo /home/leo/src/multi-agent --json` from WSL; a Windows host may address the same root through its UNC path. Pin the current receipt and pack digest in run-local evidence.
 - **Validation scope:** identity, freshness and structure only. A deterministic pass is not semantic approval, implementation completion, runtime acceptance or spending/delivery authority.
@@ -3065,6 +3136,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **2026-10-17 T009 prompt-admission decision:** the final-branch review of T009 returned a P1 to the plan owner (consume trusted caller-supplied state and a process-local, last-writer-wins map). The owner chose to fix it inside T009 by reusing the daemon's existing prompt-state evidence. The plan's mailbox interface row, KTD11 and new U4 scenario 24 record the contract, and review convergence now grants one further round to an owner-decided P0/P1 fix. T009 gains scenario 24, a sharper review focus and a bounded `server.ts` side effect. No task identity, dependency, wave or product scope changes.- **2026-10-19 T010 split:** T010 ran across nine runs without reaching its live gate because production startup composition did not exist. The owner split it. T010 keeps its landed and reviewed source slices, adds the approved `tmux.ts` `beforeWrite` callback and records the R2-1 `egress.mjs` prerequisite. T010 also hands `startup.ts` and three untouched test files to the new T037, and its done signal is now source-level. T037 depends on T010 and T034, carries the full launch lifecycle, production startup composition and installed-client acceptance with the inherited live allowance, and gates T026. The plan's review convergence now counts rounds per task across slices, and `AGENTS.md` adds a task-level budget. The closeout review of the process-reader slice returned two P1s, so that slice moved to T037 as a saved patch. A separate owner rule sets the required-review roster to `gpt-6.1-sol` and `gpt-6-astra`. No product scope changed.
 - **2026-10-20 T037/T038 split:** T037's remaining work was unlikely to fit the 1,200-line task budget. The owner moved its installed-client acceptance, the absent `worker-control-isolation.test.ts`, `managed-native-policy.test.ts` and the inherited live allowance into the new T038, which depends on T037 and gates T026. T037 keeps the process-reader hardening, the full launch lifecycle, production startup composition and the offline fixture-daemon restart, with a source-level done signal. The reviewer roster ID is now `ds/gpt-6-astra`, as the gateway requires. No product scope changed.
+- **2026-10-20 T011/T039 split:** T011's round-1 review returned a P0: no production path constructs a `CandidateWorkspace`, and the launcher calls `prepareTeamAssignment` without runtime eligibility. T011's single scope amendment was already spent, so the owner moved the production wiring into the new T039 (wave 12), which depends on T011, T012 and T037. T038 now also depends on T039 and moves to wave 13, so live acceptance observes the final launch shape. T011 keeps its module-level done signal. No product scope changed.
 
 ## Regeneration Rules
 
