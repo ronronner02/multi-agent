@@ -63,6 +63,12 @@ These rules size review and verification to the change. They take precedence ove
   - `ds/gpt-6-astra`, the owner's DeepSeek-backed mapping. The gateway requires the `ds/` prefix, so always pass the full ID.
 
   Each reviewer covers every lens the diff selects. This replaces both the earlier one-reviewer-per-lens dispatch and the `claude-opus-5-5` reviewer. Reach both models through the locally configured gateway, never persisting or printing keys. If either model is unavailable, the review gate stays open.
+  - **Reaching the reviewers:**
+    - `gpt-6.1-sol` runs through `codex exec -s read-only`.
+    - `codex exec` cannot reach `ds/gpt-6-astra`: the gateway rejects the `developer` message role that Codex sends. Call the gateway's `/chat/completions` endpoint directly with system and user roles only.
+    - For `ds/gpt-6-astra`, send a client `User-Agent` header and stream the response. Set `reasoning_effort` to `low`, because the gateway ends any request at 300 seconds.
+    - A read-only `codex exec` cannot read the WSL checkout. Give each reviewer frozen, read-only copies of the diff, the touched files and the contract excerpt.
+    - A transport failure, such as HTTP 524 or a dropped stream, is not a review round. Retry it once.
 - Pick review lenses from the diff. Correctness, testing and security always run. Adversarial runs when the diff touches authority, admission, isolation, credentials or the mailbox. Performance, reliability, maintainability, project standards, learnings, agent-native and the simplify passes run only when the diff touches what that lens checks. Record each skipped lens and the reason.
 - From round 2 on, review only the fix delta against the previously reviewed candidate, with the lenses that raised findings plus correctness. Widen the round to more lenses only when the fix touches files outside the earlier findings.
 - Skip the separate final-branch review when the branch tree hash equals the reviewed candidate's; record the matching hashes. When they differ, review only the difference.
