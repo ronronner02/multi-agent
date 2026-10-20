@@ -231,7 +231,7 @@ function untrackedPatch(root: string, path: string): string {
   const result = spawnSync("git", ["-C", root, "diff", "--binary", "--no-index", "--", emptyFilePath(), path],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
   if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
-  return (result.stdout ?? "").trimEnd();
+  return (result.stdout ?? "").replace(/\n+$/, "");
 }
 
 /**
@@ -251,7 +251,7 @@ export function candidateManifest(workspace: CandidateWorkspace): {
 } {
   if (workspace.base.kind === "commit") {
     const files = listFiles(workspace.root, { index: true });
-    const trackedPatch = git(workspace.root, ["diff", "--binary", workspace.base.commit, "--"]).trimEnd();
+    const trackedPatch = git(workspace.root, ["diff", "--binary", workspace.base.commit, "--"]).replace(/\n+$/, "");
     const additions = files.filter(file => !file.tracked).map(file => untrackedPatch(workspace.root, file.path)).filter(Boolean);
     return {
       base: "commit",
