@@ -26,6 +26,8 @@ const INSTALLED_POLICY = '/etc/multi-agent/worker-policy.json';
 const INSTALLED_CLIENT_LOCK = '/etc/multi-agent/client-lock.json';
 export const CLIENT_LOCK_SCHEMA = 'multi-agent-client-lock/v1';
 const CLIENT_ENTRYPOINTS = Object.freeze({ 'claude-code': 'clients/bin/claude', codex: 'clients/bin/codex' });
+// Provider sign-in is evidenced by these files' metadata in the worker home; their bytes are never opened.
+const CREDENTIAL_FILES = Object.freeze({ 'claude-code': '.claude/.credentials.json', codex: '.codex/auth.json' });
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 // Codex names each rollout after its session UUID; the first record must repeat it.
 const ROLLOUT_PATH = /^\/home\/worker\/\.codex\/sessions\/\d{4}\/\d{2}\/\d{2}\/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/;
@@ -495,10 +497,58 @@ export function inspectLaunchRequest(policy, request, facts) {
       installed,
       network: { hostNamespace: namespaces.net, profileFingerprint: installed.egress.sha256 },
       ...(resolved.clientLock ? { clientLock: resolved.clientLock } : {}),
+      ...(resolved.client ? { provider: providerEvidence(resolved, facts) } : {}),
     };
   } catch {
     throw new LaunchError('preflight-unverified', 'Installed launch facts are missing, untrusted or changed');
   }
+}
+
+/** Stat-only: a private, non-empty, worker-owned credential file counts as signed in; anything else never does. */
+function providerEvidence(resolved, facts) {
+  const file = posix.join(resolved.home, CREDENTIAL_FILES[resolved.client]);
+  try {
+    for (const dir of [resolved.home, posix.dirname(file)]) {
+      const st = facts.lstat(dir);
+      if (!st.isDirectory() || st.isSymbolicLink()) return { client: resolved.client, status: 'unknown' };
+    }
+    const st = facts.lstat(file);
+    return { client: resolved.client, status: st.isFile() && !st.isSymbolicLink() && st.uid === resolved.worker.uid
+      && (st.mode & 0o077) === 0 && st.size > 0 ? 'signed_in' : 'unknown' };
+  } catch (error) {
+    return { client: resolved.client, status: error?.code === 'ENOENT' ? 'signed_out' : 'unknown' };
+  }
+}
+
+/**
+ * Inventory of the native policy sources the pinned clients read, observed in the native's own mount namespace.
+ * The fixed directory must hold only the selected file, so drop-ins, managed defaults and system config are absent.
+ * Exceptions are keys in the selected bytes that re-admit non-managed handlers.
+ */
+export function nativePolicyInventory(client, bytes, entries, remotePolicy) {
+  const target = NATIVE_POLICY_MOUNTS[client].target;
+  let nativeExceptions = 'unknown';
+  try {
+    if (client === 'claude-code') {
+      const value = JSON.parse(bytes);
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        nativeExceptions = Object.hasOwn(value, 'enabledPlugins') || Object.hasOwn(value, 'allowedHttpHookUrls')
+          || value.disableAllHooks === true ? 'present' : 'absent';
+      }
+    } else {
+      let table = '';
+      nativeExceptions = 'absent';
+      for (const line of bytes.split('\n').map(raw => raw.trim()).filter(line => line && !line.startsWith('#'))) {
+        const header = /^\[\[?\s*([^\]]+?)\s*\]\]?$/.exec(line);
+        // Quoted keys name the same tables as bare ones.
+        if (header) table = header[1].replace(/["'\s]/g, '');
+        if (header ? /^hooks\./.test(table) || line.startsWith('[[') && /^hooks\b/.test(table)
+          : table === '' ? /^["']?hooks["']?\s*[.=]/.test(line) : table === 'hooks' && !/^managed_dir\s*=/.test(line)) nativeExceptions = 'present';
+      }
+    }
+  } catch { nativeExceptions = 'unknown'; }
+  return { selectedSource: target, managedDropIns: entries.length === 1 && entries[0] === posix.basename(target) ? 'absent' : 'present',
+    remotePolicy, platformPolicy: process.platform === 'linux' ? 'not-applicable' : 'unknown', nativeExceptions };
 }
 
 /** Hash an opened root-owned file rather than a caller-supplied receipt or mutable pathname. */
@@ -950,7 +1000,7 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
     })();
 
     // Kernel structure alone selects the native process; worker-settable names, argv and ps rows never do.
-    const snapshot = (query, chain) => {
+    const snapshot = (query, chain, managed) => {
       const transient = [];
       const pin = (file, flags) => {
         const fd = openSync(file, flags | fsConstants.O_CLOEXEC); transient.push(fd); return '/proc/self/fd/' + fd;
@@ -1049,6 +1099,22 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
           if (!statSync(rootPath(root)).isDirectory()) throw new Error();
           return root;
         });
+        // Only the final component is looked up without being opened, so a socket or absent file is still pinned below its parent.
+        const entry = file => lstatSync(rootPath(posix.dirname(file)) + '/' + posix.basename(file));
+        let nativeEvidence = {};
+        if (managed) {
+          const target = NATIVE_POLICY_MOUNTS[managed.client]?.target, socket = entry(managed.mailbox);
+          const source = rootPath(target), selected = statSync(source);
+          if (!socket.isSocket() || !selected.isFile() || selected.size > 1_048_576) throw new Error();
+          let remotePolicy = 'unknown';
+          if (managed.remotePolicy) {
+            try { entry(managed.remotePolicy); remotePolicy = 'present'; }
+            catch (error) { if (error.code === 'ENOENT') remotePolicy = 'absent'; }
+          }
+          nativeEvidence = { mailbox: { uid: socket.uid, gid: socket.gid, dev: socket.dev, ino: socket.ino },
+            nativePolicy: { inventory: nativePolicyInventory(managed.client, bounded(source, 1_048_576).toString('utf8'),
+              readdirSync(rootPath(posix.dirname(target))), remotePolicy) } };
+        }
         const rawStatus = bounded(native + '/status', 65_536).toString('utf8');
         const field = name => rawStatus.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim();
         const numbers = name => (field(name) ?? '').split(/\s+/).filter(Boolean).map(Number);
@@ -1102,7 +1168,7 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
           mountNamespace: readlinkSync(native + '/ns/mnt'), userNamespace: readlinkSync(native + '/ns/user'),
           networkNamespace: readlinkSync(native + '/ns/net'), pidNamespace },
           mountInfo: bounded(native + '/mountinfo', 1_048_576).toString('utf8'), stdio, files, discoveryRoots,
-          nativeSessions: [...sessions.values()] };
+          nativeSessions: [...sessions.values()], ...nativeEvidence };
         observe();
         // Every pane hop and lineage member must be the same live instance at the end of the snapshot.
         if ([...ancestry, ...lineage].some(node => !alive(node.anchor, node.processStart))
@@ -1145,8 +1211,12 @@ export async function controlSandbox(policy, argv, facts, snapshotQuery) {
       [process.execPath, policy.paths.installed_launcher, '--supervise', ...argv.slice(2)], worker.uid);
     if (argv[0] === '--quiesce') return await control.quiesce();
     const observation = control.observe();
-    return snapshotQuery === undefined ? observation
-      : { ...observation, snapshot: control.snapshot(snapshotQuery, nativeProcessChain(policy, request, facts.clientLock)) };
+    if (snapshotQuery === undefined) return observation;
+    const client = Object.keys(CLIENT_ENTRYPOINTS).find(name => request.command[0] === posix.join(policy.paths.toolchain_dir, CLIENT_ENTRYPOINTS[name]));
+    // Claude caches organization policy in its config home; Codex fetches cloud requirements with no observable cache.
+    return { ...observation, snapshot: control.snapshot(snapshotQuery, nativeProcessChain(policy, request, facts.clientLock), {
+      client, mailbox: policy.sandbox.mailbox,
+      remotePolicy: client === 'claude-code' ? posix.join(policy.sandbox.home, '.claude/remote-settings.json') : null }) };
   } catch {
     throw new LaunchError(argv[0] === '--quiesce' ? 'sandbox-quiescence-unconfirmed' : 'sandbox-control-unverified',
       'Sandbox control evidence is unconfirmed');

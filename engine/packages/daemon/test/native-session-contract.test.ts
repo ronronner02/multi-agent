@@ -903,7 +903,8 @@ describe.each(["claude-code", "codex"] as const)("%s fixed policy launch boundar
     expect(f.control.start).not.toHaveBeenCalled();
   });
 
-  it.each(["socket", "native-policy", "policy-parent", "bootstrap", "inventory", "socket-owner", "missing-policy", "duplicate-alias"] as const)("quiesces a ready attempt after %s evidence drifts", async field => {
+  it.each(["socket", "native-policy", "policy-parent", "bootstrap", "inventory", "socket-owner", "missing-policy", "duplicate-alias",
+    "device-node", "read-only-devpts"] as const)("quiesces a ready attempt after %s evidence drifts", async field => {
     const f = await fixedPolicyFixture(client);
     expect(await f.launch()).toMatchObject({ ok: true });
     if (field === "socket") f.observation.mailbox = { ...f.observation.mailbox!, ino: f.observation.mailbox!.ino + 1 };
@@ -913,6 +914,9 @@ describe.each(["claude-code", "codex"] as const)("%s fixed policy launch boundar
     else if (field === "inventory") f.observation.nativePolicy!.inventory.remotePolicy = "unknown";
     else if (field === "socket-owner") f.observation.mailbox = { ...f.observation.mailbox!, gid: f.observation.mailbox!.gid + 1 };
     else if (field === "missing-policy") f.observation.nativePolicy = undefined;
+    // Only bubblewrap's fixed device nodes and terminal mount are admitted below /dev.
+    else if (field === "device-node") f.observation.boundary.mounts.push({ source: "devtmpfs", target: "/dev/sda", access: "rw" });
+    else if (field === "read-only-devpts") f.observation.boundary.mounts.push({ source: "devpts", target: "/dev/pts", access: "ro" });
     else f.observation.boundary.mounts.push({ ...f.observation.boundary.mounts.at(-1)! });
     expect(await f.adapter.checkReady(f.node)).toMatchObject({ ready: false });
     expect(f.control.quiesce).toHaveBeenCalledTimes(1);

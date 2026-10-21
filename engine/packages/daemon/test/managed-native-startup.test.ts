@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { chmodSync, chownSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDb } from "../src/db/connection.js";
@@ -13,12 +13,13 @@ import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { canonicalJson, type PlanBinding, type TeamTaskAuthority } from "../src/contracts/team-control.js";
 import type { TeamControlOptions } from "../src/routes/team-control.js";
-import { inspectManagedWorker, observeManagedWorkerProcess, resolveManagedWorkerScope, resolveManagedWorkerSeat, startManagedWorkerCommand, startManagedWorkerInPane } from "../src/adapters/worker-launch-control.js";
+import { createManagedLaunchControl, inspectManagedWorker, observeManagedWorkerProcess, resolveManagedWorkerScope, resolveManagedWorkerSeat, startManagedWorkerCommand, startManagedWorkerInPane } from "../src/adapters/worker-launch-control.js";
 import { TmuxAdapter } from "../src/adapters/tmux.js";
 
-import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { buildManagedNativePolicy, projectContext, roleConfiguration, type ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 import type { WorkerMailboxBridge } from "../src/adapters/worker-mailbox-bridge.js";
-import type { WorkerCommand, WorkerLaunchInput } from "../src/adapters/worker-launch.js";
+import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, type WorkerCommand, type WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 
 const inspectionIo = vi.hoisted(() => ({ execFile: vi.fn(), readPolicy: vi.fn(), end: vi.fn() }));
 const processIo = vi.hoisted(() => ({ list: vi.fn(), stats: new Map<string, string>() }));
@@ -879,12 +880,18 @@ describe("control-owned root inspection", () => {
   let db: ReturnType<typeof createDb>, queue: QueueRepository, governance: PlanGovernance, options: TeamControlOptions;
   let context: ContextManifest, policyBytes: Buffer, reply: Record<string, any>, duringInspection: () => void;
   let bridge: Pick<WorkerMailboxBridge, "binding" | "endpoint">, endpoint: ReturnType<WorkerMailboxBridge["endpoint"]>, assignedTree: string;
+  const LOCK = "/etc/multi-agent/client-lock.json";
+  const lock = JSON.stringify({ schema: "multi-agent-client-lock/v1", clients: {
+    "claude-code": { version: "2.1.296", files: [{ path: "clients/lib/claude.exe", sha256: "sha256:" + "1".repeat(64) }] },
+    codex: { version: "0.160.0", files: [{ path: "clients/lib/codex.js", sha256: "sha256:" + "2".repeat(64) },
+      { path: "clients/lib/codex-native", sha256: "sha256:" + "3".repeat(64) }] } } });
   const resolveAssignedTree = () => assignedTree;
   const inspect = () => inspectManagedWorker(context, bridge, { db, queue, governance, options, resolveAssignedTree });
   const counts = () => ["team_attempts", "team_control_requests", "chat_messages"].map(table =>
     db.prepare("SELECT count(*) AS count FROM " + table).get());
   beforeEach(() => {
     inspectionIo.execFile.mockReset(); inspectionIo.readPolicy.mockReset(); inspectionIo.end.mockReset();
+    processIo.stats.clear(); processIo.stats.set(LOCK, lock);
     const policy = JSON.parse(readFileSync(new URL("../../../config/isolation/worker-policy.json", import.meta.url), "utf8"));
     policyBytes = Buffer.from(JSON.stringify(policy));
     const current: PlanBinding = { ...binding, policyFingerprint: hashBytes(policyBytes) };
@@ -924,23 +931,28 @@ describe("control-owned root inspection", () => {
       installed: { policy: { ...fact(policy.paths.installed_policy, current.policyFingerprint), size: policyBytes.length },
         launcher: fact(policy.paths.installed_launcher), executable: fact(policy.paths.toolchain_dir + "/clients/bin/claude"),
         egress: fact(policy.paths.installed_egress_config) },
-      network: { hostNamespace: readlinkSync("/proc/self/ns/net"), profileFingerprint: "sha256:" + "a".repeat(64) } };
+      network: { hostNamespace: readlinkSync("/proc/self/ns/net"), profileFingerprint: "sha256:" + "a".repeat(64) },
+      clientLock: { client: "claude-code", version: "2.1.296", digest: hashBytes(lock),
+        files: [{ path: policy.paths.toolchain_dir + "/clients/lib/claude.exe", sha256: "sha256:" + "1".repeat(64) }] },
+      provider: { client: "claude-code", status: "signed_in" } };
     inspectionIo.readPolicy.mockImplementation(() => Buffer.from(policyBytes)); duringInspection = () => {};
     inspectionIo.execFile.mockImplementation((_file, _args, _options, callback) => {
       queueMicrotask(() => { duringInspection(); callback(null, JSON.stringify(reply), ""); });
       return { stdin: { end: inspectionIo.end } };
     });
   });
-  afterEach(() => db.close());
+  afterEach(() => { db.close(); processIo.stats.clear(); });
 
   it("binds observed facts through the fixed bounded inspect command without recording an admission", async () => {
     const before = counts(), result = await inspect();
-    expect(result).toMatchObject({ scope: { sessionId: "builder@rig" }, facts: reply, mailbox: endpoint });
+    expect(result).toMatchObject({ scope: { sessionId: "builder@rig" }, facts: reply, mailbox: endpoint, clientLock: {
+      digest: hashBytes(lock), version: "2.1.296", files: [{ path: "clients/lib/claude.exe", sha256: "sha256:" + "1".repeat(64) }],
+      observedFiles: reply.clientLock.files } });
     expect(Object.isFrozen(result.facts.installed)).toBe(true); expect(counts()).toEqual(before);
     expect(result.facts.roots.tree).not.toBe(context.binding.repository.root);
     expect(inspectionIo.execFile).toHaveBeenCalledExactlyOnceWith("/usr/bin/sudo", ["-n", "--",
       "/usr/local/libexec/multi-agent/worker-launch", "--inspect", "--worker", "ma-worker1", "--role", "implementer",
-      "--tree", assignedTree, "--run", "run", "--attempt", "attempt", "--mailbox", "1:23",
+      "--tree", assignedTree, "--run", "run", "--attempt", "attempt", "--mailbox", "1:23", "--client-lock", hashBytes(lock),
       "--", reply.installed.executable.path], expect.objectContaining({
       env: { PATH: "/usr/bin:/bin", LANG: "C" }, encoding: "utf8", timeout: 10_000, maxBuffer: 65_536 }), expect.any(Function));
     expect(inspectionIo.end).toHaveBeenCalledOnce();
@@ -961,7 +973,8 @@ describe("control-owned root inspection", () => {
     endpoint = { ...endpoint, path: endpoint.path.replace("ma-worker1", "ma-worker2").replace("/attempt/", "/attempt-2/"), ino: 24, generation: "generation-2" };
     bridge = { endpoint: bridge.endpoint, binding: { ...bridge.binding, socketPath: endpoint.path, attemptId: "attempt-2", taskId: "review-task", workerId: "reviewer", sessionId: "reviewer@rig" } };
     reply.installed.executable.path = reply.installed.executable.realpath = reply.installed.executable.path.replace("/claude", "/codex");
-    reply = { ...reply, worker: { name: "ma-worker2", uid: 61002, gid: 61002 },
+    reply = { ...reply, worker: { name: "ma-worker2", uid: 61002, gid: 61002 }, provider: { client: "codex", status: "signed_out" },
+      clientLock: { client: "codex", version: "0.160.0", digest: hashBytes(lock), files: [{ path: "a", sha256: "b" }, { path: "c", sha256: "d" }] },
       roots: { ...reply.roots, tree: assignedTree, context: context.root,
         home: reply.roots.home.replace("ma-worker1", "ma-worker2"), scratch: reply.roots.scratch.replace("ma-worker1", "ma-worker2") } };
     const second = await inspect();
@@ -982,7 +995,8 @@ describe("control-owned root inspection", () => {
     expect(inspectionIo.execFile).not.toHaveBeenCalled(); expect(counts()).toEqual(before);
   });
 
-  it.each(["schema", "worker", "control", "namespace", "tree", "executable", "file-owner", "file-mode", "policy-hash", "egress-hash"])(
+  it.each(["schema", "worker", "control", "namespace", "tree", "executable", "file-owner", "file-mode", "policy-hash", "egress-hash",
+    "lock-digest", "lock-version", "lock-client", "lock-files", "provider-client", "provider-status", "provider-extra", "no-provider"])(
     "rejects forged %s inspection evidence without admission", async field => {
       if (field === "schema") reply.schema = "untrusted";
       else if (field === "worker") reply.worker.uid++;
@@ -993,14 +1007,23 @@ describe("control-owned root inspection", () => {
       else if (field === "file-owner") reply.installed.launcher.uid = 61001;
       else if (field === "file-mode") reply.installed.launcher.mode = 0o777;
       else if (field === "policy-hash") reply.installed.policy.sha256 = "sha256:" + "e".repeat(64);
-      else reply.network.profileFingerprint = "sha256:" + "e".repeat(64);
+      else if (field === "egress-hash") reply.network.profileFingerprint = "sha256:" + "e".repeat(64);
+      else if (field === "lock-digest") reply.clientLock.digest = "sha256:" + "e".repeat(64);
+      else if (field === "lock-version") reply.clientLock.version = "9.9.9";
+      else if (field === "lock-client") reply.clientLock.client = "codex";
+      else if (field === "lock-files") reply.clientLock.files.push({ path: "extra", sha256: "sha256:" + "e".repeat(64) });
+      else if (field === "provider-client") reply.provider.client = "codex";
+      else if (field === "provider-status") reply.provider.status = "ready";
+      else if (field === "provider-extra") reply.provider.credential = "worker-fixture";
+      else delete reply.provider;
       const before = counts(); await expect(inspect()).rejects.toThrow("managed_inspection_unverified"); expect(counts()).toEqual(before);
       expect(inspectionIo.execFile).toHaveBeenCalledOnce();
     });
 
-  it.each(["policy", "mailbox", "assignment", "revocation", "cancellation"])("rechecks %s after asynchronous inspection", async field => {
+  it.each(["policy", "lock", "mailbox", "assignment", "revocation", "cancellation"])("rechecks %s after asynchronous inspection", async field => {
     duringInspection = () => {
       if (field === "policy") policyBytes = Buffer.concat([policyBytes, Buffer.from("\n")]);
+      else if (field === "lock") processIo.stats.set(LOCK, lock + "\n");
       else if (field === "mailbox") endpoint = { ...endpoint, generation: "replacement" };
       else if (field === "assignment") assignedTree += "/replacement";
       else if (field === "revocation") options.credentials.workers = [];
@@ -1021,5 +1044,356 @@ describe("control-owned root inspection", () => {
       callback(new Error("Bearer worker-fixture"), "", "owner-fixture"); return { stdin: { end: inspectionIo.end } };
     });
     await expect(inspect()).rejects.toThrow(/^managed_inspection_unverified$/);
+  });
+
+  it("maps only a launcher lock refusal to the non-retryable unsupported-version code (A-R3)", async () => {
+    const refuse = (stderr: string) => inspectionIo.execFile.mockImplementationOnce((_file, _args, _options, callback) => {
+      callback(Object.assign(new Error("exit 126"), { code: 126 }), "", stderr); return { stdin: { end: inspectionIo.end } };
+    });
+    refuse(JSON.stringify({ worker_launch_error: "unsupported-version", message: "claude-code executable hash differs" }) + "\n");
+    await expect(inspect()).rejects.toThrow(new RegExp("^" + UNSUPPORTED_CLIENT_VERSION + "$"));
+    for (const stderr of [JSON.stringify({ worker_launch_error: "client-lock-changed", message: "changed" }), "unsupported-version",
+      JSON.stringify({ worker_launch_error: ["unsupported-version"] })]) {
+      refuse(stderr);
+      await expect(inspect()).rejects.toThrow(/^managed_inspection_unverified$/);
+    }
+    expect(db.prepare("SELECT count(*) AS count FROM team_attempts").get()).toEqual({ count: 0 });
+  });
+});
+
+// Supplementary group of the test process: the projection must be group-owned by a worker group the control is not.
+const workerGroup = process.getgroups?.().find(gid => gid !== process.getgid!());
+
+describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
+  const PANE = 500, SUPERVISOR = 501, RELAY = 502, LOCK = "/etc/multi-agent/client-lock.json", EGRESS = "/etc/multi-agent/egress.json";
+  const SCREEN = "Claude Code vfixture\n❯", uid = process.getuid!(), gid = process.getgid!(), workerUid = uid + 100_000;
+  let root: string, toolchain: string, policy: any, policyBytes: Buffer, current: PlanBinding, now: number, native: number;
+  let db: ReturnType<typeof createDb>, queue: QueueRepository, governance: PlanGovernance, options: TeamControlOptions;
+  let rigRepo: RigRepository, sessions: SessionRegistry, context: ContextManifest, task: TeamTaskAuthority, tree: string;
+  let inspectReply: Record<string, any>, inspectError: { stderr: string } | null, observeError: boolean, quiesceError: boolean;
+  let respawn: ReturnType<typeof vi.fn>, quiesced: string[], started: boolean, snapshotChange: (snapshot: any) => void, screen: string | null;
+  let orphan: boolean;
+  let control: ReturnType<typeof createManagedLaunchControl>, launcher: RestrictedWorkerLauncher;
+  const lock = JSON.stringify({ schema: "multi-agent-client-lock/v1", clients: {
+    "claude-code": { version: "2.1.296", files: [{ path: "clients/lib/claude.exe", sha256: "sha256:" + "1".repeat(64) }] },
+    codex: { version: "0.160.0", files: [{ path: "clients/lib/codex.js", sha256: "sha256:" + "2".repeat(64) }] } } });
+  const setStart = (pid: number, value: string) => processIo.stats.set("/proc/" + pid + "/stat",
+    pid + " (fixture) S 1 " + Array(17).fill("0").join(" ") + " " + value);
+  const intent = (attemptId = "attempt") => governance.getNativeLaunchIntent("run", attemptId);
+  const supervisorArgv = (attemptId = "attempt") => [process.execPath, "/usr/local/libexec/multi-agent/worker-launch.mjs", "--supervise",
+    ...(intent(attemptId)!.command!.args as string[]).slice(4)];
+  const runningRef = (attemptId = "attempt") => (db.prepare(`SELECT json_extract(payload, '$.payload.evidenceRef') AS ref FROM events
+    WHERE json_extract(payload, '$.action') = 'attempt.launch-intent' AND json_extract(payload, '$.attemptId') = ? ORDER BY seq DESC LIMIT 1`)
+    .get(attemptId) as { ref: string }).ref;
+
+  const project = (attemptId: string) => {
+    const base = join(policy.paths.context_root, "ma-worker1", "run", attemptId);
+    const files = ([["framework", "pinned instructions"], ["plan", "approved plan\n"], ["role", JSON.stringify(roleConfiguration)]] as const)
+      .map(([kind, content]) => ({ path: join(base, kind), hash: hashBytes(content), kind, readOnly: true as const,
+        ...(kind === "framework" ? { source: join(policy.paths.framework_dir, "skill.md") } : {}) }));
+    return projectContext({ nativePolicy: nativePolicyFor, runId: "run", assignment: task.assignment, outputs: ["src/result.ts"],
+      permissions: ["write-assigned-tree"], role: "implementer", client: "claude-code", binding: current, root: base,
+      projection: { worker: "ma-worker1", attemptId, controlUid: uid, workerGid: workerGroup!, policy: { policy_revision: 5,
+        worker_identities: policy.worker_identities, paths: { context_root: policy.paths.context_root, framework_dir: policy.paths.framework_dir },
+        sandbox: { context: "/context", framework: "/framework" } } },
+      mutableStateRoot: join(policy.paths.worker_root, "ma-worker1", "home"), frameworkRoot: policy.paths.framework_dir,
+      frameworkRevision: FRAMEWORK_PIN.revision, workerUid, workerGroups: [], discoveryRoots: [base], files },
+    new Map(files.map(file => [file.path, file.kind === "framework" ? "pinned instructions" : file.kind === "plan" ? "approved plan\n" : JSON.stringify(roleConfiguration)])));
+  };
+  let nativePolicyFor: Awaited<ReturnType<typeof buildManagedNativePolicy>>;
+  const endpoint = (attemptId: string) => ({ path: join(policy.paths.mailbox_root, "ma-worker1", "run", attemptId, "mailbox.sock"),
+    dev: 1, ino: 23, uid, gid, generation: "generation-1" });
+  const bridgeFor = (input: Readonly<WorkerLaunchInput>) => ({ endpoint: () => Object.freeze(endpoint(input.attempt.attemptId)),
+    binding: { socketPath: endpoint(input.attempt.attemptId).path, workerId: "builder", sessionId: "builder@rig", runId: "run",
+      attemptId: input.attempt.attemptId, rigId: "rig", taskId: "task", recipients: [] } });
+  const mountInfo = (attempt: ContextManifest) => {
+    const host = (source: string, target: string, access = "ro") => `8:1 ${source} ${target} ${access},nosuid - ext4 /dev/sda rw`;
+    const managed = attempt.files.find(file => file.workerPath === "/context/native/claude/managed-settings.json")!.path;
+    // [parent row, mount]; the 9p drivers mount sits below the masked tmpfs, as on a WSL host.
+    const rows: [number, string][] = [[-1, "0:90 / / rw - tmpfs tmpfs rw"], [0, host("/usr", "/usr")], [1, "0:36 / /usr/lib/wsl/drivers ro - 9p drivers ro"],
+      [1, "0:91 / /usr/lib/wsl ro - tmpfs tmpfs rw"], [0, host("/etc/hosts", "/etc/hosts")], [0, host(toolchain, toolchain)],
+      [0, host(policy.paths.framework_dir, "/framework")], [0, host(attempt.root, "/context")], [0, "0:92 / /proc rw - proc proc rw"],
+      [0, "0:93 / /dev rw - tmpfs tmpfs rw"], [9, "0:6 /null /dev/null rw - devtmpfs none rw"], [9, "0:94 / /dev/pts rw - devpts devpts rw"],
+      [0, "0:95 / /tmp rw - tmpfs tmpfs rw"], [0, "0:96 / /run rw - tmpfs tmpfs rw"], [13, host(policy.paths.egress_socket_dir, policy.paths.egress_socket_dir)],
+      [13, "0:97 / /run/multi-agent ro - tmpfs tmpfs rw"], [15, host(endpoint(attempt.projection.attemptId).path, "/run/multi-agent/mailbox.sock")],
+      [0, "0:98 / /etc/claude-code ro - tmpfs tmpfs rw"], [17, host(managed, "/etc/claude-code/managed-settings.json")],
+      [0, host(join(policy.paths.worker_root, "ma-worker1/home"), "/home/worker", "rw")], [19, "0:99 / /home/worker/.multi-agent/mailbox rw - tmpfs tmpfs rw"],
+      [20, "0:90 /bindfile//deleted /home/worker/.multi-agent/mailbox/bootstrap.json ro - tmpfs tmpfs rw"],
+      [0, host(join(policy.paths.worker_root, "ma-worker1/scratch"), "/scratch", "rw")], [0, host(tree, "/work", "rw")]];
+    return rows.map(([parent, row], index) => `${200 + index} ${200 + parent} ${row}`).join("\n") + "\n";
+  };
+  const snapshot = (attemptId: string, attempt: ContextManifest) => {
+    const argv = intent(attemptId)!.command!.nativeArgv as string[];
+    const managed = attempt.files.find(file => file.workerPath === "/context/native/claude/managed-settings.json")!;
+    const value = { pane: { processId: PANE, processStart: String(30_000 + PANE) }, sandbox: { mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]" },
+      lineage: [{ processId: RELAY, processStart: String(30_000 + RELAY), executable: realpathSync(join(toolchain, "node/bin/node")) },
+        { processId: native, processStart: String(30_000 + native), executable: realpathSync(join(toolchain, "clients/lib/claude.exe")) }],
+      process: { processId: native, processStart: String(30_000 + native), processGroupId: native, namespacePids: [native, 3],
+        uids: [workerUid, workerUid, workerUid, workerUid], groups: [], capabilities: "0000000000000000", noNewPrivileges: "1", argv,
+        executable: realpathSync(join(toolchain, "clients/lib/claude.exe")), cwd: "/work",
+        environment: { HOME: "/home/worker", CLAUDE_CONFIG_DIR: "/home/worker/.claude" },
+        mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]", pidNamespace: "pid:[2]" },
+      mountInfo: mountInfo(attempt), stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })),
+      files: [...attempt.files.map(file => ({ path: file.workerPath, hash: file.hash })), { path: "/etc/claude-code/managed-settings.json", hash: managed.hash }],
+      discoveryRoots: [...attempt.workerDiscoveryRoots], nativeSessions: [], mailbox: { uid, gid, dev: 1, ino: 23 },
+      nativePolicy: { inventory: { selectedSource: "/etc/claude-code/managed-settings.json", managedDropIns: "absent", remotePolicy: "absent",
+        platformPolicy: "not-applicable", nativeExceptions: "absent" } } };
+    snapshotChange(value);
+    return value;
+  };
+  const launch = (attempt: ContextManifest = context, extra: Partial<WorkerLaunchInput> = {}, attemptId = "attempt") =>
+    launcher.launch({ client: "claude-code", attempt: { attemptId, deadline: now + 60_000, context: attempt }, ...extra });
+
+  beforeEach(async () => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), "managed-lifecycle-"))); chmodSync(root, 0o755);
+    toolchain = join(root, "toolchain");
+    for (const file of ["node/bin/node", "clients/lib/claude.exe"]) { mkdirSync(join(toolchain, file, ".."), { recursive: true }); writeFileSync(join(toolchain, file), ""); }
+    policy = JSON.parse(readFileSync(new URL("../../../config/isolation/worker-policy.json", import.meta.url), "utf8"));
+    Object.assign(policy.paths, { context_root: join(root, "context"), framework_dir: join(root, "framework"), toolchain_dir: toolchain,
+      worker_root: join(root, "workers"), assignment_root: join(root, "assignments"), control_state_dir: join(root, "control"),
+      mailbox_root: join(root, "control", "mailboxes") });
+    policy.allowed_exec_prefixes = [toolchain + "/"];
+    for (const dir of ["repo", "framework", "workers/ma-worker1/home", "workers/ma-worker1/scratch", "assignments/ma-worker1/project", "context"]) {
+      mkdirSync(join(root, dir), { recursive: true });
+    }
+    tree = join(root, "assignments/ma-worker1/project");
+    writeFileSync(join(root, "repo/plan.md"), "approved plan\n"); writeFileSync(join(root, "framework/skill.md"), "pinned instructions");
+    const workerRoot = join(root, "context", "ma-worker1");
+    mkdirSync(workerRoot); chownSync(workerRoot, uid, workerGroup!); chmodSync(workerRoot, 0o2750);
+    execFileSync("/usr/bin/setfacl", ["-b", "-k", workerRoot]);
+    policyBytes = Buffer.from(JSON.stringify(policy));
+    current = { ...binding, repository: { root: join(root, "repo"), identity: binding.repository.identity },
+      planDigest: hashBytes("approved plan\n"), policyFingerprint: hashBytes(policyBytes) };
+    now = Date.parse("2026-10-19T00:00:00Z"); native = 503;
+    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db.prepare("INSERT INTO rigs(id, name) VALUES ('rig', 'fixture')").run();
+    const events = new EventBus(db); queue = new QueueRepository(db, events);
+    options = { credentials: { ownerToken: "owner-fixture", workers: [{ token: "worker-fixture", sessionId: "builder@rig", runId: "run" }] },
+      resolveBinding: () => structuredClone(current),
+      readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: current.policyFingerprint, verifiedProviders: ["claude", "codex"] }) };
+    governance = new PlanGovernance(db, events, queue, () => new Date(now), options.readPolicyCapability);
+    governance.createRun({ id: "run", rigId: "rig", binding: current });
+    let serial = 0;
+    const command = (actionId: string, payload: unknown) => ({ protocolVersion: "1.0", runId: "run", actionId,
+      expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: actionId + ++serial, payload });
+    governance.requestApproval(command("approval", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(current) }, targetDigest: hashBinding(current), expiresAt: "2026-10-20T00:00:00.000Z" }),
+    { kind: "worker", sessionId: "builder@rig" });
+    governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), { kind: "owner", sessionId: "owner-control" }, current);
+    task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+      sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), current).value as TeamTaskAuthority;
+    rigRepo = new RigRepository(db); sessions = new SessionRegistry(db);
+    const nodeId = rigRepo.addNode("rig", "builder", { runtime: "claude-code", cwd: tree }).id;
+    sessions.registerSession(nodeId, "builder@rig"); sessions.updateBinding(nodeId, { tmuxSession: "builder@rig", tmuxPane: "%3" });
+    nativePolicyFor = await buildManagedNativePolicy("claude-code", toolchain);
+    context = project("attempt");
+    const fact = (path: string, sha256 = "sha256:" + "a".repeat(64)) => ({ path, realpath: path, uid: 0, gid: 0, mode: 0o755, size: 12, sha256 });
+    inspectReply = { schema: "multi-agent-launch-preflight/v1", worker: { name: "ma-worker1", uid: workerUid, gid: workerGroup },
+      control: { uid, gid, mountNamespace: readlinkSync("/proc/self/ns/mnt"), userNamespace: readlinkSync("/proc/self/ns/user") },
+      roots: { home: join(policy.paths.worker_root, "ma-worker1/home"), scratch: join(policy.paths.worker_root, "ma-worker1/scratch"),
+        tree, context: context.root, framework: policy.paths.framework_dir },
+      installed: { policy: { ...fact(policy.paths.installed_policy, current.policyFingerprint), size: policyBytes.length },
+        launcher: fact(policy.paths.installed_launcher), egress: fact(policy.paths.installed_egress_config, hashBytes("egress profile")),
+        executable: { ...fact(toolchain + "/clients/bin/claude"), realpath: toolchain + "/clients/lib/claude.exe" } },
+      network: { hostNamespace: readlinkSync("/proc/self/ns/net"), profileFingerprint: hashBytes("egress profile") },
+      clientLock: { client: "claude-code", version: "2.1.296", digest: hashBytes(lock),
+        files: [{ path: toolchain + "/clients/lib/claude.exe", sha256: "sha256:" + "1".repeat(64) }] },
+      provider: { client: "claude-code", status: "signed_in" } };
+    inspectError = null; observeError = false; quiesceError = false; quiesced = []; started = false; snapshotChange = () => {};
+    screen = SCREEN; orphan = false;
+    processIo.stats.clear(); processIo.stats.set(LOCK, lock); processIo.stats.set(EGRESS, "egress profile");
+    processIo.stats.set("/proc/self/mountinfo", "1 0 8:1 / / rw - ext4 /dev/sda rw\n");
+    for (const pid of [PANE, SUPERVISOR, native]) setStart(pid, String(30_000 + pid));
+    inspectionIo.execFile.mockReset(); inspectionIo.end.mockReset(); inspectionIo.readPolicy.mockReset();
+    inspectionIo.readPolicy.mockImplementation(() => Buffer.from(policyBytes));
+    processIo.list.mockReset();
+    processIo.list.mockImplementation(async () => started ? [{ pid: SUPERVISOR, ppid: PANE, command: supervisorArgv(runningAttempt()).join(" ") },
+      ...(orphan ? [{ pid: 777, ppid: 1, command: supervisorArgv(runningAttempt()).join(" ") }] : [])] : []);
+    inspectionIo.execFile.mockImplementation((_file, args: string[], _options, callback) => {
+      const mode = args[3], attemptId = args[args.indexOf("--attempt") + 1]!;
+      queueMicrotask(() => {
+        if (mode === "--inspect") return inspectError ? callback(Object.assign(new Error("exit 126"), { code: 126 }), "", inspectError.stderr)
+          : callback(null, JSON.stringify(inspectReply), "");
+        const observation = { schema: "multi-agent-sandbox-control/v1", supervisor: { processId: SUPERVISOR, processStart: String(30_000 + SUPERVISOR) },
+          commandDigest: hashBytes(JSON.stringify(supervisorArgv(attemptId))), uid: workerUid, pidNamespace: "pid:[2]" };
+        if (mode === "--quiesce") {
+          quiesced.push(args[4]!);
+          if (quiesceError) return callback(new Error("exit 126"), "", "{}");
+          started = false; setStart(native, "0");
+          return callback(null, JSON.stringify({ status: "terminated", observation }), "");
+        }
+        if (observeError) return callback(new Error("exit 126"), "", "{}");
+        callback(null, JSON.stringify({ ...observation, snapshot: snapshot(attemptId, attemptId === "attempt" ? context : resumed!) }), "");
+      });
+      return { stdin: { end: inspectionIo.end } };
+    });
+    respawn = vi.fn(async (_pane: string, _line: string, opts: { beforeWrite: () => void }) => { opts.beforeWrite(); started = true; return { ok: true }; });
+    restart();
+    resumed = undefined;
+  });
+  let resumed: ContextManifest | undefined;
+  /** A fresh control and launcher, as after a daemon restart; durable governance state is kept. */
+  const restart = () => {
+    control = createManagedLaunchControl({ db, queue, governance, options, rigRepo, sessions,
+      tmux: { respawnPane: respawn, getPanePid: async () => PANE, capturePaneScreen: async () => screen } as any,
+      resolvePane: async () => "%3", resolveAssignedTree: () => tree, mailbox: bridgeFor, dependencySatisfied: () => true,
+      tmuxServer: "/tmp/tmux-" + uid + "/default", now: () => now, sleep: async ms => { now += ms; } });
+    launcher = new RestrictedWorkerLauncher(control, () => now);
+  };
+  const runningAttempt = () => resumed && intent("attempt-2") ? "attempt-2" : "attempt";
+  afterEach(() => {
+    db.close(); processIo.stats.clear();
+    for (const dir of [join(root, "context")]) execFileSync("/usr/bin/chmod", ["-R", "u+rwx", dir]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("adopts the native session at its first control observation and records the verified receipt", async () => {
+    const result = await launch();
+    expect(result).toMatchObject({ ok: true, resumeType: "claude_id" });
+    if (!result.ok) throw new Error(result.error);
+    const receipt = result.managedSession!;
+    expect(receipt.identity).toMatchObject({ paneId: "%3", processId: native, processStart: String(30_000 + native), generation: 1,
+      tmuxServer: "/tmp/tmux-" + uid + "/default" });
+    // Governed start precedes every observation, and the start's own observation adopted the session.
+    const modes = inspectionIo.execFile.mock.calls.map(call => (call[1] as string[])[3]);
+    expect(modes).toEqual(["--inspect", "--observe", "--observe"]);
+    expect(respawn.mock.invocationCallOrder[0]).toBeLessThan(inspectionIo.execFile.mock.invocationCallOrder[1]!);
+    expect(inspectionIo.execFile.mock.calls[0]![1]).toContain("--client-lock");
+    expect(governance.getAttempt("attempt")).toMatchObject({ state: "running", identity: receipt.identity });
+    expect(runningRef()).toBe("managed-receipt:" + hashBytes(canonicalJson(receipt)));
+    expect(await launcher.checkReady({ attemptId: "attempt", deadline: now + 60_000, context })).toEqual({ ready: true });
+  });
+
+  it.each(["remote-policy", "drop-in", "foreign-mount", "host-tmpfs", "mailbox", "native-restart", "pane-process"])(
+    "quiesces and records a confirmed stop when %s drifts after readiness", async field => {
+      expect(await launch()).toMatchObject({ ok: true });
+      if (field === "remote-policy") snapshotChange = s => { s.nativePolicy.inventory.remotePolicy = "present"; };
+      else if (field === "drop-in") snapshotChange = s => { s.nativePolicy.inventory.managedDropIns = "present"; };
+      else if (field === "foreign-mount") snapshotChange = s => { s.mountInfo += "300 200 0:40 / /mnt/c rw - 9p drvfs rw\n"; };
+      // The sandbox /run tmpfs device turns out to be a host mount: a bind, not a private instance.
+      else if (field === "host-tmpfs") processIo.stats.set("/proc/self/mountinfo", "1 0 8:1 / / rw - ext4 /dev/sda rw\n2 1 0:96 / /run rw - tmpfs tmpfs rw\n");
+      else if (field === "mailbox") snapshotChange = s => { s.mailbox.ino = 24; };
+      else if (field === "native-restart") setStart(native, "99");
+      else snapshotChange = s => { s.pane.processStart = "1"; };
+      expect(await launcher.checkReady({ attemptId: "attempt", deadline: now + 60_000, context })).toMatchObject({ ready: false });
+      expect(quiesced).toEqual([SUPERVISOR + ":" + (30_000 + SUPERVISOR)]);
+      expect(governance.getAttempt("attempt")?.state).toBe("stopped");
+      expect(runningRef()).toMatch(/^managed-quiescence:sha256:[a-f0-9]{64}$/);
+    });
+
+  it("keeps the WSL modules hidden below a masked path out of the boundary, but refuses them once reachable", async () => {
+    snapshotChange = s => { s.mountInfo = s.mountInfo.split("\n").filter((line: string) => !line.includes(" /usr/lib/wsl ro ")).join("\n"); };
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
+    expect(governance.getAttempt("attempt")?.state).toBe("stopped");
+  });
+
+  it("resumes only from the exact receipt recorded for the stopped attempt", async () => {
+    const first = await launch();
+    if (!first.ok) throw new Error(first.error);
+    snapshotChange = s => { s.mailbox.ino = 24; };
+    await launcher.checkReady({ attemptId: "attempt", deadline: now + 60_000, context });
+    snapshotChange = () => {};
+    resumed = project("attempt-2"); native = 504; setStart(native, String(30_000 + native));
+    inspectReply.roots.context = resumed.root;
+    const previous = first.managedSession!, resume = { resumeToken: previous.identity.nativeSessionId };
+    const forged = await launch(resumed, { ...resume, attempt: { attemptId: "attempt-2", deadline: now + 60_000, context: resumed,
+      previous: { ...previous, processGroupId: previous.processGroupId + 1 } } }, "attempt-2");
+    expect(forged).toMatchObject({ ok: false });
+    expect(respawn).toHaveBeenCalledTimes(1);
+    launcher = new RestrictedWorkerLauncher(control, () => now);
+    const result = await launch(resumed, { ...resume, attempt: { attemptId: "attempt-2", deadline: now + 60_000, context: resumed, previous } }, "attempt-2");
+    expect(result).toMatchObject({ ok: true, managedSession: { identity: { generation: 2, nativeSessionId: previous.identity.nativeSessionId, processId: 504 } } });
+    expect(intent("attempt-2")!.command!.nativeArgv).toContain("--resume");
+  });
+
+  it.each([null, "", "Starting up..."])("never reports readiness from a %j pane screen", async value => {
+    screen = value;
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_readiness_unknown") });
+    expect(governance.getAttempt("attempt")?.state).toBe("stopped");
+    expect(runningRef()).toMatch(/^managed-quiescence:/);
+  });
+
+  it("refuses to start over an unresolved intent from an earlier control, without closing it", async () => {
+    observeError = true; quiesceError = true;
+    expect(await launch()).toMatchObject({ ok: false });
+    expect(intent()?.state).toBe("admitted");
+    restart(); observeError = false; quiesceError = false;
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_quiescence_unconfirmed") });
+    expect(respawn).toHaveBeenCalledTimes(1);
+    expect(intent()?.state).toBe("admitted");
+    expect(governance.getAttempt("attempt")).toBeNull();
+  });
+
+  it("never closes a concurrent start's intent after losing the admission race", async () => {
+    // Another control admits the same command first; this start's own admission is then refused.
+    const admit = governance.admitNativeAttempt.bind(governance);
+    vi.spyOn(governance, "admitNativeAttempt").mockImplementationOnce((request, actor, current) => {
+      admit(request, actor, current);
+      return admit(request, actor, current);
+    });
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_quiescence_unconfirmed") });
+    expect(respawn).not.toHaveBeenCalled();
+    expect(intent()?.state).toBe("admitted");
+    expect(governance.getAttempt("attempt")).toBeNull();
+  });
+
+  it("leaves an ambiguous start unresolved when nothing locates its command", async () => {
+    respawn.mockImplementationOnce(async () => ({ ok: false }));
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_quiescence_unconfirmed") });
+    expect(intent()?.state).toBe("admitted");
+    expect(governance.getAttempt("attempt")).toBeNull();
+    expect(quiesced).toEqual([]);
+  });
+
+  it("stops an ambiguous start located by its command but never invents its native identity", async () => {
+    observeError = true;
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_quiescence_unconfirmed") });
+    expect(quiesced).toEqual([SUPERVISOR + ":" + (30_000 + SUPERVISOR)]);
+    expect(intent()?.state).toBe("admitted");
+    expect(governance.getAttempt("attempt")).toBeNull();
+  });
+
+  it("closes a start refused before any terminal write as a confirmed no-start", async () => {
+    options.credentials.ownerToken = undefined;
+    const result = await launch();
+    expect(result).toMatchObject({ ok: false });
+    expect(respawn).not.toHaveBeenCalled();
+    expect(intent()).toBeNull();
+    expect(governance.getAttempt("attempt")).toBeNull();
+  });
+
+  it("stops a verified session whose receipt cannot be recorded, and keeps a failed stop unresolved", async () => {
+    const reconcile = vi.spyOn(governance, "reconcileNativeAttempt");
+    reconcile.mockImplementationOnce(() => { throw new Error("evidence store unavailable"); });
+    expect(await launch()).toMatchObject({ ok: false });
+    expect(quiesced).toHaveLength(1);
+    // The verified receipt was never recorded, so governance goes straight from the admitted intent to the observed stop.
+    expect(governance.getAttempt("attempt")?.state).toBe("stopped");
+    expect(reconcile.mock.calls.map(call => (call[0].payload as { outcome: string }).outcome)).toEqual(["running", "stopped"]);
+    reconcile.mockRestore();
+  });
+
+  it.each(["quiesce-error", "orphaned-supervisor"])("keeps a running attempt blocked rather than reporting an unconfirmed stop (%s)", async field => {
+    expect(await launch()).toMatchObject({ ok: true });
+    snapshotChange = s => { s.mailbox.ino = 24; };
+    if (field === "quiesce-error") quiesceError = true; else orphan = true;
+    expect(await launcher.checkReady({ attemptId: "attempt", deadline: now + 60_000, context }))
+      .toMatchObject({ ready: false, code: "managed_quiescence_unconfirmed" });
+    expect(governance.getAttempt("attempt")?.state).toBe("running");
+    expect(runningRef()).toMatch(/^managed-receipt:/);
+  });
+
+  it("reports a launcher lock refusal as a non-retryable unsupported version before any start (A-R3)", async () => {
+    inspectError = { stderr: JSON.stringify({ worker_launch_error: "unsupported-version", message: "hash differs" }) };
+    const result = await launch();
+    expect(result).toMatchObject({ ok: false, recovery: "attention_required", error: expect.stringContaining(UNSUPPORTED_CLIENT_VERSION) });
+    expect(respawn).not.toHaveBeenCalled();
+    expect(inspectionIo.execFile).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["signed_out", "unknown"])("blocks a %s provider before any start", async status => {
+    inspectReply.provider.status = status;
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_provider_signin_required") });
+    expect(respawn).not.toHaveBeenCalled();
   });
 });
