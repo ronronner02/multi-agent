@@ -476,6 +476,29 @@ describe('offline: fixed native policy and mailbox mounts', () => {
     assert.equal(resolveLaunchRequest(policy, parseLaunchArgs(argv), good).clientLock.digest, clientLock.sha256);
   });
 
+  test('inspection reports provider sign-in from credential metadata in the worker home, never its bytes', () => {
+    const home = policy.paths.worker_root + '/ma-worker1/home', credential = home + '/.claude/.credentials.json';
+    const installed = file => { let fact; try { fact = lockedFile(file); } catch { fact = { path: file, realpath: file,
+      sha256: 'sha256:' + createHash('sha256').update(file).digest('hex') }; } return { uid: 0, gid: 0, mode: 0o755, size: 1, ...fact }; };
+    const inspect = (credentialStat, symlinked = []) => {
+      const base = facts();
+      return workerLaunch.inspectLaunchRequest(policy, parseLaunchArgs(argv), { ...base, inspectFile: installed,
+        policyFingerprint: installed(policy.paths.installed_policy).sha256,
+        namespace: kind => ({ mnt: 'mnt:[101]', user: 'user:[102]', net: 'net:[103]' })[kind],
+        lstat: p => p === credential ? credentialStat() : p === home || p === home + '/.claude'
+          ? { isDirectory: () => !symlinked.includes(p), isSymbolicLink: () => symlinked.includes(p) } : base.lstat(p) });
+    };
+    const file = (change = {}) => () => ({ uid: 991, mode: 0o100600, size: 412, isFile: () => true, isSymbolicLink: () => false, ...change });
+    const failure = code => () => { throw Object.assign(new Error(code), { code }); };
+    const result = inspect(file());
+    assert.deepEqual(result.provider, { client: 'claude-code', status: 'signed_in' });
+    assert.equal(result.clientLock.digest, clientLock.sha256);
+    assert.equal(inspect(failure('ENOENT')).provider.status, 'signed_out');
+    for (const stat of [file({ uid: 990 }), file({ mode: 0o100640 }), file({ size: 0 }), file({ isFile: () => false }),
+      file({ isSymbolicLink: () => true }), failure('EACCES')]) assert.equal(inspect(stat).provider.status, 'unknown');
+    assert.equal(inspect(file(), [home + '/.claude']).provider.status, 'unknown');
+  });
+
   test('KTD27: a native launch is bound to the installed lock and reachable only through its entry point', () => {
     const unbound = argv.filter((arg, i) => arg !== '--client-lock' && argv[i - 1] !== '--client-lock');
     expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(unbound), facts()), 'client-lock-unbound');
@@ -667,13 +690,13 @@ describe('offline: fixed native policy and mailbox mounts', () => {
 
 describe('offline: supervisor control', { skip: process.platform !== 'linux' }, () => {
   async function fixture(t, { capture = true, holdSupervisor = false, argvBytes, contextRoot, sessionRoot, sessionOpen = '>>', sessionWrite = '',
-    script = 'sleep 30 & setsid sleep 30 & wait' } = {}) {
+    script = 'sleep 30 & setsid sleep 30 & wait', mounts = [] } = {}) {
     assert.equal(typeof workerLaunch.openSandboxControl, 'function');
     const command = { file: '/usr/bin/bwrap', args: ['--unshare-user', '--unshare-pid', '--die-with-parent',
       '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib',
       '--symlink', 'usr/lib64', '/lib64', '--proc', '/proc', '--dev', '/dev',
       '--info-fd', String(workerLaunch.SANDBOX_STATUS_FD), ...(contextRoot ? ['--ro-bind', contextRoot, '/context'] : []),
-      ...(sessionRoot ? ['--bind', sessionRoot, '/home/worker/.codex/sessions'] : []),
+      ...(sessionRoot ? ['--bind', sessionRoot, '/home/worker/.codex/sessions'] : []), ...mounts,
       '--', '/bin/sh', '-c', (sessionRoot ? `exec 8${sessionOpen} /home/worker/.codex/sessions/${ROLLOUT}; ${sessionWrite}printf native-ready; ` : '')
         + script] };
     const source = `
@@ -841,6 +864,57 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
       { processId: sleepPid, processStart: startOf(sleepPid), executable: sleep }]);
     assert.equal(result.process.processId, sleepPid);
     assert.throws(() => control.snapshot(query(), [SHELL, SHELL]), { code: 'sandbox-control-unverified' });
+  });
+
+  test('observes the mailbox socket and native policy sources inside the pinned namespace', { timeout: 6_000 }, async t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'sandbox-policy-')), sock = path.join(root, 'mailbox.sock');
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    writeFileSync(path.join(root, 'managed-settings.json'), '{"allowManagedHooksOnly":true}');
+    writeFileSync(path.join(root, 'requirements.toml'), 'allow_managed_hooks_only = true\n[hooks]\nmanaged_dir = "/context/native/codex/hooks"\n');
+    mkdirSync(path.join(root, 'home/.claude'), { recursive: true });
+    const server = net.createServer();
+    await new Promise(resolve => server.listen(sock, resolve));
+    t.after(() => server.close());
+    const { selector, argv } = await fixture(t, { mounts: ['--tmpfs', '/run', '--ro-bind', sock, '/run/multi-agent/mailbox.sock',
+      '--tmpfs', '/etc/claude-code', '--ro-bind', path.join(root, 'managed-settings.json'), '/etc/claude-code/managed-settings.json',
+      '--tmpfs', '/etc/codex', '--ro-bind', path.join(root, 'requirements.toml'), '/etc/codex/requirements.toml',
+      '--bind', path.join(root, 'home'), '/home/worker'] });
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const managed = (client, change = {}) => ({ client, mailbox: '/run/multi-agent/mailbox.sock',
+      remotePolicy: client === 'claude-code' ? '/home/worker/.claude/remote-settings.json' : null, ...change });
+    const socket = lstatSync(sock), claude = control.snapshot(query(), [SHELL], managed('claude-code'));
+    assert.deepEqual(claude.mailbox, { uid: socket.uid, gid: socket.gid, dev: socket.dev, ino: socket.ino });
+    assert.deepEqual(claude.nativePolicy.inventory, { selectedSource: '/etc/claude-code/managed-settings.json', managedDropIns: 'absent',
+      remotePolicy: 'absent', platformPolicy: 'not-applicable', nativeExceptions: 'absent' });
+    assert.deepEqual(control.snapshot(query(), [SHELL], managed('codex')).nativePolicy.inventory, { selectedSource: '/etc/codex/requirements.toml',
+      managedDropIns: 'absent', remotePolicy: 'unknown', platformPolicy: 'not-applicable', nativeExceptions: 'absent' });
+    // A later organization-policy cache is seen by the next observation of the same native.
+    writeFileSync(path.join(root, 'home/.claude/remote-settings.json'), '{}');
+    assert.equal(control.snapshot(query(), [SHELL], managed('claude-code')).nativePolicy.inventory.remotePolicy, 'present');
+    assert.equal(Object.hasOwn(control.snapshot(query(), [SHELL]), 'nativePolicy'), false);
+    for (const change of [{ mailbox: '/run/multi-agent/absent.sock' }, { mailbox: '/etc/claude-code/managed-settings.json' }, { client: 'unknown' }]) {
+      assert.throws(() => control.snapshot(query(), [SHELL], managed('claude-code', change)), { code: 'sandbox-control-unverified' });
+    }
+  });
+
+  test('classifies native drop-ins and exception keys from the selected source bytes', () => {
+    const inventory = (client, bytes, entries = [path.posix.basename(client === 'codex' ? '/etc/codex/requirements.toml'
+      : '/etc/claude-code/managed-settings.json')]) => workerLaunch.nativePolicyInventory(client, bytes, entries, 'absent');
+    const settings = '{"allowManagedHooksOnly":true,"disableAllHooks":false}', requirements = 'allow_managed_hooks_only = true\n'
+      + '# comment\n[features]\nhooks = true\n[hooks]\nmanaged_dir = "/context/native/codex/hooks"\n';
+    assert.equal(inventory('claude-code', settings).nativeExceptions, 'absent');
+    assert.equal(inventory('codex', requirements).nativeExceptions, 'absent');
+    assert.equal(inventory('claude-code', settings, ['managed-settings.json', 'managed-settings.d']).managedDropIns, 'present');
+    assert.equal(inventory('codex', requirements, ['requirements.toml', 'managed_config.toml']).managedDropIns, 'present');
+    for (const bytes of ['{"enabledPlugins":{}}', '{"allowedHttpHookUrls":[]}', '{"disableAllHooks":true}']) {
+      assert.equal(inventory('claude-code', bytes).nativeExceptions, 'present');
+    }
+    for (const bytes of [requirements + '[hooks.trust]\nx = 1\n', requirements + 'state = "trusted"\n', 'hooks.state = {}\n' + requirements,
+      requirements + '[[hooks.PostToolUse]]\n', 'hooks = { state = "trusted" }\n' + requirements, requirements + '[ "hooks" ]\nstate = 1\n'])
+      assert.equal(inventory('codex', bytes).nativeExceptions, 'present');
+    assert.equal(inventory('claude-code', '[1]').nativeExceptions, 'unknown');
+    assert.equal(inventory('claude-code', '{').nativeExceptions, 'unknown');
   });
 
   test('marks a rollout the native created after its own start as fresh evidence', { timeout: 6_000 }, async t => {

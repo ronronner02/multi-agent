@@ -313,7 +313,9 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       state.receipt = receipt;
       return { ok: true, managedSession: receipt, resumeToken: receipt.identity.nativeSessionId, resumeType: client === "codex" ? "codex_id" : "claude_id" };
     } catch (error) {
-      const code = error instanceof WorkerLaunchFault ? error.code : "managed_launch_unverified";
+      // A-R3: the control reports a launcher lock refusal with the same non-retryable code.
+      const code = error instanceof WorkerLaunchFault ? error.code
+        : error instanceof Error && error.message === UNSUPPORTED_CLIENT_VERSION ? UNSUPPORTED_CLIENT_VERSION : "managed_launch_unverified";
       await this.block(state, code);
       return { ok: false, error: "Managed launch blocked: " + state.blocked + "; " + this.blockReason(state), recovery: "attention_required" };
     }
@@ -480,7 +482,10 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
     requireFact(b.mounts.every(m => expected.some(e => same(e, m))
       || (m.access === "ro" && m.source === m.target && hostReadOnly.includes(m.target))
       || (m.access === "ro" && m.source === "tmpfs" && policy.sandbox.masked_paths.includes(m.target))
-      || (["/", "/tmp", "/run", "/dev", "/var/tmp", "/proc"].includes(m.target) && ["tmpfs", "devtmpfs", "proc"].includes(m.source))),
+      || (["/", "/tmp", "/run", "/dev", "/var/tmp", "/proc"].includes(m.target) && ["tmpfs", "devtmpfs", "proc"].includes(m.source))
+      // The fixed device nodes and terminal mount that bubblewrap's --dev creates.
+      || (m.access === "rw" && (m.source === "devtmpfs" && /^\/dev\/(?:null|zero|full|random|urandom|tty)$/.test(m.target)
+        || m.source === "devpts" && m.target === "/dev/pts"))),
     "managed_worker_mount_mismatch");
     requireFact(b.inheritedDescriptors.every(d => Number.isSafeInteger(d.fd) && d.fd >= 0 && d.fd <= 2
       && ["tty", "pipe", "file"].includes(d.kind)), "managed_descriptor_leak");
@@ -503,7 +508,8 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       && identity.nativeSessionId === (resumeToken ?? command.nativeArgv[command.nativeArgv.indexOf("--session-id") + 1]), "managed_launch_mode_mismatch");
     else requireFact(observed.effectiveMode.approvalPolicy === "never" && observed.effectiveMode.sandbox === "danger-full-access"
       && (!resumeToken || identity.nativeSessionId === resumeToken), "managed_launch_mode_mismatch");
-    const probe = assessNativeResumeProbe({ runtime: client, paneCommand: client === "codex" ? "codex" : "claude",
+    // No pane command is asserted: only the client's own interactive screen counts as ready.
+    const probe = assessNativeResumeProbe({ runtime: client, paneCommand: "",
       paneContent: observed.screen, claudeAutoIdentityVerified: true, claudeResumeIdentityVerified: true });
     requireFact(observed.readiness !== "prompt" && !/(?:gate|login|auth|selection_prompt)/.test(probe.code)
       && !/permission required|approve this|allow this (?:command|tool)|requires? approval/i.test(observed.screen), "managed_native_prompt");
