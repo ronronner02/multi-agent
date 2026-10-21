@@ -706,6 +706,24 @@ The table names execution checkpoints inside T010, not new tasks or a replacemen
 
 (owner decision 2026-10-20 - chosen over a second T011 scope amendment, which the task-level budget forbids, and over folding the wiring into T037, which was already split twice to fit that budget.)
 
+**Managed-attempt producer patch (owner decision, 2026-10-21).** T041's review found that no production path produces a managed attempt.
+- **What is missing:** no production code builds the KTD24 context projection (`projectContext` has no production caller), creates the per-attempt mailbox endpoint or its private `bootstrap.json`, registers that endpoint with the composed launch chain, or sets `NodeBinding.managedAttempt` on the seat before launch. Until something does, every managed launch is refused before any privileged call, so T038 cannot run a live launch.
+- **T039 now also owns the producer.** When `WorkflowRuntime` admits an assignment for launch, it:
+  - projects the attempt's context once under `<paths.context_root>/<worker>/<runId>/<attemptId>/`;
+  - creates and starts listening on that attempt's `WorkerMailboxBridge` in the control-private mailbox root;
+  - writes the bootstrap the launcher binds;
+  - registers the endpoint in `deps.managedLaunch.endpoints`;
+  - attaches the resulting `ManagedAttempt` to the seat's binding for the startup orchestrator's launch.
+
+  A resume reuses its recorded attempt's projection and endpoint shape and binds the exact previous receipt. Endpoint retirement, quiescence and daemon restart close the endpoint. The producer never creates an endpoint for an attempt that eligibility or graph admission refused.
+- **Additional T039 files:**
+  - `engine/packages/daemon/src/adapters/worker-mailbox-bridge.ts` (bootstrap and endpoint lifetime);
+  - `engine/packages/daemon/src/domain/startup-orchestrator.ts` (attaching the attempt to the binding);
+  - `engine/packages/daemon/src/startup.ts` (wiring the producer to the composed chain only);
+  - the new test `engine/packages/daemon/test/managed-attempt-producer.test.ts`.
+- **Budget:** the producer joins T039's existing budget; it is not a scope amendment. If the candidate-workspace work and the producer together would exceed the `AGENTS.md` task-level budget, T039 stops and proposes a split before starting the producer slice, and does not spend its amendment on it.
+- **Done signal addition:** an admitted managed assignment reaches the composed launch chain with a registered endpoint and an attached attempt, offline, with the privileged launcher faked only at `/usr/bin/sudo`. A refused assignment creates no projection, endpoint or attempt. The producer claims no installed-client outcome; that remains T038's.
+
 ### U6. Add observable team views and owner controls to the TUI
 
 - **Goal:** Make task state and essential intervention usable in the terminal without replacing the lead's native conversation, carrying the same information as the reference-benchmark Web UI.
