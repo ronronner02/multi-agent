@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { latestHookMovedOn, type AgentActivityStore } from "./agent-activity-store.js";
 import { makePromptStateReader } from "./queue-wake-ladder.js";
+import type { WorkerLaunchEvent } from "../adapters/worker-launch.js";
 import type { SeatActivityService } from "./seat-activity-service.js";
 import type {
   ChatRepository,
@@ -103,6 +104,51 @@ export interface NativeChannelSeatState {
   observedChannelDigest: string | null;
 }
 export type NativeChannelStateReader = (recipient: string) => NativeChannelSeatState | null;
+
+/**
+ * Managed seats' channel state, written only from the launch control's verified observations.
+ * A verified observation proves the effective native policy equals the installed one, so both
+ * digests are the installed policy digest. A blocked launch revokes it, and a restarted daemon
+ * starts empty until the next verified observation.
+ */
+export class ManagedNativeChannelEvidence {
+  private readonly seats = new Map<string, NativeChannelSeatState>();
+  private readonly attempts = new Map<string, string>();
+  readonly read: NativeChannelStateReader = (recipient) => this.seats.get(recipient) ?? null;
+
+  /** After the attempt's verified receipt was recorded. */
+  verified(attemptId: string, recipient: string, client: NativeChannelClient, clientVersion: string, installedDigest: string): void {
+    for (const [attempt, seat] of this.attempts) if (seat === recipient) this.attempts.delete(attempt);
+    this.attempts.set(attemptId, recipient);
+    this.seats.set(recipient, Object.freeze({ client, clientVersion,
+      installedChannelDigest: installedDigest, observedChannelDigest: installedDigest }));
+  }
+
+  /** Before the attempt's block is recorded, so a failed record still closes the channel. */
+  blocked(attemptId: string): void {
+    const recipient = this.attempts.get(attemptId);
+    if (recipient === undefined) return;
+    this.attempts.delete(attemptId);
+    this.seats.delete(recipient);
+  }
+
+  /**
+   * Wraps a launch control's evidence sink: a block closes the channel before it is recorded, and only a
+   * recorded, verified receipt with native-policy evidence opens it for the seat its governance intent names.
+   */
+  guard<T extends { record(event: Readonly<WorkerLaunchEvent>): Promise<void> }>(
+    control: T, recipientOf: (runId: string, attemptId: string) => string | undefined,
+  ): T {
+    return { ...control, record: async (event: Readonly<WorkerLaunchEvent>) => {
+      if (event.phase === "blocked") this.blocked(event.attemptId);
+      await control.record(event);
+      const recipient = event.session && recipientOf(event.session.runId, event.attemptId);
+      if (event.phase === "observed" && event.session && event.nativePolicy && event.clientLock && recipient) {
+        this.verified(event.attemptId, recipient, event.session.client, event.clientLock.version, event.nativePolicy.installedDigest);
+      }
+    } };
+  }
+}
 
 export interface NativeChannelDeliveryRequest extends MailboxScope {
   /** Supplied by the control-owned endpoint registration, never by hook input. */

@@ -1397,3 +1397,259 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     expect(respawn).not.toHaveBeenCalled();
   });
 });
+
+describe("production managed launch composition", () => {
+  const LOCK = "/etc/multi-agent/client-lock.json", owner = { kind: "owner" as const, sessionId: "owner-control" };
+  const lock = JSON.stringify({ schema: "multi-agent-client-lock/v1", clients: {
+    "claude-code": { version: "2.1.296", files: [{ path: "clients/lib/claude.exe", sha256: "sha256:" + "1".repeat(64) }] },
+    codex: { version: "0.160.0", files: [{ path: "clients/lib/codex.js", sha256: "sha256:" + "2".repeat(64) }] } } });
+  let scratch: string, policy: any, policyBytes: Buffer, current: PlanBinding, actualExecFile: typeof import("node:child_process").execFile;
+  const boot = async (mode: "legacy" | "managed", teamControl?: TeamControlOptions) => {
+    process.env.OPENRIG_HOME = join(scratch, mode);
+    process.env.OPENRIG_SLICES_ROOT = join(scratch, mode + "-missions");
+    mkdirSync(process.env.OPENRIG_SLICES_ROOT, { recursive: true });
+    const { createDaemon } = await import("../src/startup.js");
+    return createDaemon({ dbPath: join(scratch, mode + ".sqlite"), managedMode: mode === "managed", teamControl,
+      tmuxExec: async () => "", cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
+  };
+  beforeEach(async () => {
+    scratch = realpathSync(mkdtempSync(join(tmpdir(), "managed-composition-")));
+    policy = JSON.parse(readFileSync(new URL("../../../config/isolation/worker-policy.json", import.meta.url), "utf8"));
+    // The seat's assigned tree must be a real canonical directory before any privileged call.
+    policy.paths.assignment_root = join(scratch, "assignments");
+    mkdirSync(join(policy.paths.assignment_root, "ma-worker1", "project"), { recursive: true });
+    policyBytes = Buffer.from(JSON.stringify(policy));
+    current = { ...binding, policyFingerprint: hashBytes(policyBytes) };
+    actualExecFile = (await vi.importActual<typeof import("node:child_process")>("node:child_process")).execFile;
+    processIo.stats.clear(); processIo.stats.set(LOCK, lock);
+    inspectionIo.readPolicy.mockReset(); inspectionIo.readPolicy.mockImplementation(() => Buffer.from(policyBytes));
+    inspectionIo.execFile.mockReset(); inspectionIo.end.mockReset();
+    // Only the privileged launcher is faked: it refuses the client build, as the installed launcher does for a lock mismatch.
+    inspectionIo.execFile.mockImplementation((file: string, args: string[], options: unknown, callback: (...values: unknown[]) => void) => {
+      if (file !== "/usr/bin/sudo") return (actualExecFile as any)(file, args, options, callback);
+      queueMicrotask(() => callback(Object.assign(new Error("exit 126"), { code: 126 }), "",
+        JSON.stringify({ worker_launch_error: "unsupported-version", message: "claude-code executable hash differs" }) + "\n"));
+      return { stdin: { end: inspectionIo.end } };
+    });
+  });
+  afterEach(() => { processIo.stats.clear(); rmSync(scratch, { recursive: true, force: true }); });
+
+  it("injects one launch chain into both fresh and both resume adapters in a managed daemon only", async () => {
+    const legacy = await boot("legacy");
+    try {
+      expect(legacy.deps.managedLaunch).toBeUndefined();
+      expect((legacy.deps.runtimeAdapters!["claude-code"] as any).workerLauncher).toBeUndefined();
+    } finally { legacy.deps.proofSourceWatch?.close(); legacy.deps.modelDivergenceMonitor?.stop(); legacy.deps.gatewaySubsystem?.stop(); legacy.db.close(); }
+    const managed = await boot("managed");
+    try {
+      const launcher = managed.deps.managedLaunch!.launcher, restore = managed.deps.restoreOrchestrator as any;
+      expect(launcher).toBeInstanceOf(RestrictedWorkerLauncher);
+      expect([(managed.deps.runtimeAdapters!["claude-code"] as any).workerLauncher, (managed.deps.runtimeAdapters!.codex as any).workerLauncher,
+        restore.claudeResume.options.workerLauncher, restore.codexResume.options.workerLauncher]).toEqual([launcher, launcher, launcher, launcher]);
+      // The app's mailbox owner reads the launch chain's channel evidence, and the app shares its governance owner.
+      expect(managed.deps.nativeChannelState).toBe(managed.deps.managedLaunch!.channel.read);
+      expect(managed.deps.mailboxDelivery).toBeDefined();
+      expect(managed.deps.teamGovernance).toBeDefined();
+    } finally { managed.db.close(); }
+  }, 60_000);
+
+  it("refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)", async () => {
+    const options: TeamControlOptions = { credentials: { ownerToken: "owner-fixture",
+      workers: [{ token: "worker-fixture", sessionId: "builder@rig", runId: "run" }] },
+    resolveBinding: () => structuredClone(current),
+    readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: current.policyFingerprint, verifiedProviders: ["claude", "codex"] }) };
+    const daemon = await boot("managed", options);
+    try {
+      const { db } = daemon, governance = daemon.deps.teamGovernance!, launch = daemon.deps.managedLaunch!;
+      let serial = 0;
+      const command = (actionId: string, payload: unknown) => ({ protocolVersion: "1.0", runId: "run", actionId,
+        expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: actionId + ++serial, payload });
+      db.prepare("INSERT INTO rigs(id, name) VALUES ('rig', 'rig')").run();
+      governance.createRun({ id: "run", rigId: "rig", binding: current });
+      governance.requestApproval(command("approval", { kind: "orchestrator", action: "implementation",
+        payload: { bindingDigest: hashBinding(current) }, targetDigest: hashBinding(current), expiresAt: "2099-01-01T00:00:00.000Z" }),
+      { kind: "worker", sessionId: "builder@rig" });
+      governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), owner, current);
+      const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+        sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), current).value as TeamTaskAuthority;
+      const tree = policy.paths.assignment_root + "/ma-worker1/project";
+      const rigRepo = new RigRepository(db), sessions = new SessionRegistry(db);
+      const nodeId = rigRepo.addNode("rig", "builder", { runtime: "claude-code", cwd: tree }).id;
+      sessions.registerSession(nodeId, "builder@rig"); sessions.updateBinding(nodeId, { tmuxSession: "builder@rig", tmuxPane: "%3" });
+      const attempt = (client: "claude-code" | "codex", attemptId = "attempt") => ({ attemptId, deadline: Date.now() + 60_000, context: {
+        runId: "run", binding: current, assignment: task.assignment, role: "implementer", client,
+        projection: { worker: "ma-worker1", attemptId, controlUid: process.getuid!(), workerGid: 61001, policy },
+        root: policy.paths.context_root + "/ma-worker1/run/" + attemptId, mutableStateRoot: policy.paths.worker_root + "/ma-worker1/home",
+        frameworkRoot: policy.paths.framework_dir, frameworkRevision: "fixture", workerUid: 61001, workerGroups: [],
+        outputs: [], permissions: [], files: [], discoveryRoots: [], workerDiscoveryRoots: [], generatedHash: "sha256:" + "f".repeat(64),
+        protocolVersion: null } as unknown as ContextManifest });
+      const node = (client: "claude-code" | "codex", attemptId?: string) => ({ id: "binding", nodeId: "builder", cwd: tree, tmuxSession: "builder@rig",
+        managedAttempt: attempt(client, attemptId) }) as any;
+      const adapters = daemon.deps.runtimeAdapters!, restore = daemon.deps.restoreOrchestrator as any;
+      // Without a registered endpoint nothing reaches the privileged launcher.
+      expect(await adapters["claude-code"]!.launchHarness(node("claude-code"), { name: "builder" })).toMatchObject({ ok: false });
+      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(0);
+      // Each path is its own attempt: a refusal blocks that attempt in the shared launcher.
+      const register = (attemptId: string) => {
+        const endpoint = { path: policy.paths.mailbox_root + "/ma-worker1/run/" + attemptId + "/mailbox.sock", dev: 1, ino: 23,
+          uid: process.getuid!(), gid: process.getgid!(), generation: "generation-1" };
+        launch.endpoints.set(attemptId, { endpoint: () => Object.freeze({ ...endpoint }), binding: { socketPath: endpoint.path, workerId: "builder",
+          sessionId: "builder@rig", runId: "run", attemptId, rigId: "rig", taskId: "task", recipients: [] } });
+        return attemptId;
+      };
+      const results = [], digest = "sha256:" + "e".repeat(64);
+      // Each attempt's own block must close the channel through the production guard, which the launcher's record reaches.
+      const open = (attemptId: string, client: "claude-code" | "codex") => {
+        launch.channel.verified(attemptId, "builder@rig", client, client === "codex" ? "0.160.0" : "2.1.296", digest);
+        expect(launch.channel.read("builder@rig")).not.toBeNull();
+      };
+      for (const client of ["claude-code", "codex"] as const) {
+        open(register(client + "-fresh"), client);
+        results.push(await adapters[client]!.launchHarness(node(client, client + "-fresh"), { name: "builder" }));
+        expect(launch.channel.read("builder@rig")).toBeNull();
+        const resume = attempt(client, register(client + "-resume"));
+        open(client + "-resume", client);
+        results.push(client === "codex"
+          ? await restore.codexResume.resume("builder@rig", "codex_id", "native-session", tree, undefined, undefined, undefined, undefined, undefined, undefined, undefined, resume)
+          : await restore.claudeResume.resume("builder@rig", "claude_id", "native-session", tree, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, resume));
+        expect(launch.channel.read("builder@rig")).toBeNull();
+      }
+      for (const result of results) expect(JSON.stringify(result)).toContain(UNSUPPORTED_CLIENT_VERSION);
+      // Another attempt's block leaves the seat's verified channel open.
+      open("verified-elsewhere", "claude-code");
+      expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-other")), { name: "builder" })).toMatchObject({ ok: false });
+      expect(launch.channel.read("builder@rig")).not.toBeNull();
+      const inspections = inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo");
+      expect(inspections).toHaveLength(5);
+      for (const call of inspections) expect(call[1]).toEqual(expect.arrayContaining(["--inspect", "--client-lock", hashBytes(lock)]));
+      // A seat whose persisted terminal binding names another session never reaches the privileged launcher.
+      sessions.updateBinding(nodeId, { tmuxSession: "other@rig", tmuxPane: "%3" });
+      expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-rebound")), { name: "builder" }))
+        .toMatchObject({ ok: false });
+      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(5);
+      for (const id of ["claude-code-fresh", "claude-code-resume", "codex-fresh", "codex-resume", "claude-code-other"]) {
+        expect(governance.getNativeLaunchIntent("run", id)).toBeNull();
+      }
+    } finally { daemon.db.close(); }
+  }, 60_000);
+});
+
+describe("offline fixture-daemon restart", () => {
+  // Each phase is a separate daemon process on the same database file; nothing but durable state carries over.
+  const source = `
+    const { createDaemon } = await import(process.env.T041_STARTUP);
+    const { LeadWakePolicy } = await import(process.env.T041_WAKE);
+    const binding = JSON.parse(process.env.T041_BINDING), phase = process.env.T041_PHASE;
+    const teamControl = { credentials: { ownerToken: "owner-fixture", workers: [{ token: "worker-fixture", sessionId: "builder@rig", runId: "run" }] },
+      resolveBinding: () => structuredClone(binding),
+      readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: binding.policyFingerprint, verifiedProviders: ["claude", "codex"] }) };
+    // Every terminal command this daemon sends; a native start is a respawn-pane.
+    const tmuxCommands = [];
+    const daemon = await createDaemon({ dbPath: process.env.OPENRIG_DB, managedMode: true, teamControl,
+      tmuxExec: async command => { tmuxCommands.push(command); return ""; },
+      cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
+    const { db, deps } = daemon, governance = deps.teamGovernance, launch = deps.managedLaunch, owner = { kind: "owner", sessionId: "owner-control" };
+    let serial = 0;
+    const command = (actionId, payload) => ({ protocolVersion: "1.0", runId: "run", actionId,
+      expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: phase + actionId + ++serial, payload });
+    const scope = { rigId: "rig", recipient: "builder@rig", taskId: "task", runId: "run", capability: "mailbox:" + "c".repeat(43) };
+    const deliver = (acknowledgedMessageIds = []) => deps.mailboxDelivery.deliverToNativeChannel({ ...scope, consumedBy: "builder@rig", acknowledgedMessageIds });
+    const summary = result => ({ status: result.status, reason: result.reason, messageIds: result.messageIds,
+      rejected: result.rejectedMessageIds, receipts: result.receipts.length });
+    // The daemon's own activity evidence for this occupant, observed after this process started.
+    const promptClear = async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const nodeId = db.prepare("SELECT node_id AS nodeId FROM sessions WHERE session_name = 'builder@rig'").get().nodeId;
+      deps.agentActivityStore.recordHookEvent({ runtime: "claude-code", sessionName: "builder@rig", hookEvent: "Stop",
+        generation: deps.sessionRegistry.currentOccupantTenure(nodeId)?.generationUuid });
+    };
+    // Stands in for the launcher's verified receipt; the guard that applies it has its own contract tests.
+    const verify = () => launch.channel.verified("attempt", "builder@rig", "claude-code", "2.1.296", "sha256:" + "e".repeat(64));
+    const out = { injected: [deps.runtimeAdapters["claude-code"].workerLauncher, deps.runtimeAdapters.codex.workerLauncher,
+      deps.restoreOrchestrator.claudeResume.options.workerLauncher, deps.restoreOrchestrator.codexResume.options.workerLauncher]
+      .every(value => value === launch.launcher) };
+    if (phase === "first") {
+      db.prepare("INSERT INTO rigs(id, name) VALUES ('rig', 'rig')").run();
+      const nodeId = deps.rigRepo.addNode("rig", "builder", { runtime: "claude-code", cwd: "/work" }).id;
+      deps.sessionRegistry.registerSession(nodeId, "builder@rig");
+      governance.createRun({ id: "run", rigId: "rig", binding });
+      governance.requestApproval(command("approval", { kind: "orchestrator", action: "implementation",
+        payload: { bindingDigest: process.env.T041_BINDING_DIGEST }, targetDigest: process.env.T041_BINDING_DIGEST,
+        expiresAt: "2099-01-01T00:00:00.000Z" }), { kind: "worker", sessionId: "builder@rig" });
+      governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), owner, binding);
+      const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+        sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), binding).value;
+      deps.chatRepo.sendMailbox("rig", "lead@rig", { messageId: "durable-message", recipient: "builder@rig", taskId: "task", runId: "run",
+        body: "durable peer note", capability: scope.capability });
+      const run = governance.getRun("run");
+      deps.eventBus.withNotifyEnvelope(register => new LeadWakePolicy(db, deps.eventBus).save(run, { pending: {},
+        activations: Array.from({ length: 12 }, () => Date.now()), cycles: {}, grant: 0, cycleBlock: null }, register));
+      out.admitted = governance.admitNativeAttempt(command("attempt", { qitemId: task.qitemId, expectedTaskVersion: task.entityVersion,
+        sessionId: "builder@rig", provider: "claude", commandDigest: "sha256:" + "d".repeat(64), previousAttemptId: null,
+        expectedPreviousVersion: null }), owner, binding).effectMayStart;
+      out.unverified = summary(deliver());
+      launch.endpoints.set("attempt", { endpoint: () => ({}), binding: {} });
+      verify();
+      out.promptUnknown = summary(deliver());
+      await promptClear();
+      // A real handout: the message reaches this boundary but stays pending until a later boundary acknowledges it.
+      out.handedOut = summary(deliver());
+    } else {
+      out.endpoints = launch.endpoints.size;
+      out.channel = deps.nativeChannelState("builder@rig");
+      out.beforeObservation = summary(deliver(["durable-message"]));
+      verify();
+      // The first process's hook is still stored, but it predates this daemon, so the boundary is not observed.
+      out.priorPrompt = summary(deliver(["durable-message"]));
+      await promptClear();
+      // The handout from the earlier process is no consumption right: the ack is refused and the message is handed out again.
+      out.staleAck = summary(deliver(["durable-message"]));
+      out.freshAck = summary(deliver(["durable-message"]));
+      out.pending = deps.chatRepo.countPendingMailbox(scope);
+      out.wake = new LeadWakePolicy(db, deps.eventBus).check(governance.getRun("run"), null, new Date().toISOString()).reason;
+      // The admitted intent from the first process grants no start here: with no fresh endpoint registration and
+      // observation the production adapter refuses it before any terminal write.
+      const stale = await deps.runtimeAdapters["claude-code"].launchHarness({ id: "binding", nodeId: "builder", cwd: "/work",
+        tmuxSession: "builder@rig", managedAttempt: { attemptId: "attempt", deadline: Date.now() + 60_000,
+          context: { runId: "run", client: "claude-code" } } }, { name: "builder" });
+      out.staleLaunch = { ok: stale.ok, respawned: tmuxCommands.filter(command => command.includes("respawn-pane")).length,
+        attemptRow: governance.getAttempt("attempt") };
+      out.intent = governance.getNativeLaunchIntent("run", "attempt")?.state;
+    }
+    process.stdout.write("T041-RESULT " + JSON.stringify(out) + "\\n");
+    process.exit(0);
+  `;
+  let scratch: string;
+  beforeEach(() => { scratch = realpathSync(mkdtempSync(join(tmpdir(), "managed-restart-"))); });
+  afterEach(() => rmSync(scratch, { recursive: true, force: true }));
+  const run = (phase: "first" | "second") => {
+    const env: NodeJS.ProcessEnv = { ...process.env, T041_PHASE: phase, OPENRIG_HOME: join(scratch, "home"),
+      OPENRIG_DB: join(scratch, "daemon.sqlite"), OPENRIG_SLICES_ROOT: join(scratch, "missions"),
+      T041_STARTUP: new URL("../src/startup.ts", import.meta.url).href,
+      T041_WAKE: new URL("../src/domain/lead-wake-policy.ts", import.meta.url).href,
+      T041_BINDING: JSON.stringify(binding), T041_BINDING_DIGEST: hashBinding(binding) };
+    mkdirSync(env.OPENRIG_SLICES_ROOT!, { recursive: true });
+    const child = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", source],
+      { cwd: new URL("..", import.meta.url).pathname, env, encoding: "utf8", timeout: 90_000 });
+    const line = child.stdout.split("\n").find(row => row.startsWith("T041-RESULT "));
+    if (child.status !== 0 || !line) throw new Error("fixture daemon failed: " + child.stderr.slice(-2_000));
+    return JSON.parse(line.slice("T041-RESULT ".length));
+  };
+
+  it("keeps durable messages, wake limits and unresolved intents, but not admission or handout rights", () => {
+    const first = run("first");
+    const hold = (reason: string, rejected: string[] = []) => ({ status: "pending", reason, messageIds: [], rejected, receipts: 0 });
+    expect(first).toEqual({ injected: true, admitted: true, unverified: hold("channel_config_absent"),
+      // The composed reader admits the channel; the daemon's prompt evidence then decides the boundary.
+      promptUnknown: hold("prompt_not_clear"),
+      handedOut: { status: "delivered", reason: null, messageIds: ["durable-message"], rejected: [], receipts: 0 } });
+    const second = run("second");
+    expect(second).toEqual({ injected: true, endpoints: 0, channel: null,
+      beforeObservation: hold("channel_config_absent", ["durable-message"]),
+      priorPrompt: hold("prompt_not_clear", ["durable-message"]),
+      staleAck: { status: "delivered", reason: null, messageIds: ["durable-message"], rejected: ["durable-message"], receipts: 0 },
+      // Only a handout made by this process can be acknowledged, and then it is consumed once.
+      freshAck: { status: "empty", reason: null, messageIds: [], rejected: [], receipts: 1 },
+      pending: 0, wake: "lead-wake:hourly", staleLaunch: { ok: false, respawned: 0, attemptRow: null }, intent: "admitted" });
+  }, 180_000);
+});

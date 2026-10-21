@@ -1,5 +1,5 @@
 import { buildManagedNativePolicy, verifyEffectiveNativePolicy } from "../src/integrations/framework/context-manifest.js";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { parse as parseToml } from "smol-toml";
 import type Database from "better-sqlite3";
@@ -13,6 +13,7 @@ import { ChatRepository } from "../src/domain/chat-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import {
   MailboxDelivery,
+  ManagedNativeChannelEvidence,
   adoptedNativeChannel,
   NATIVE_CHANNEL_ADOPTION,
   type MailboxPromptState,
@@ -87,6 +88,69 @@ describe("KTD19 mailbox delivery through a native channel", () => {
     expect(JSON.stringify(result.hookOutput)).not.toMatch(/"decision"|permissionDecision|"behavior"/);
     // Handing text to a boundary is not consumption.
     expect(chatRepo.getMailbox({ ...scope(), messageId: "mail-1" }).receipt).toBeNull();
+  });
+
+  it("opens a managed channel only from a verified launch and closes it when that attempt blocks", () => {
+    const evidence = new ManagedNativeChannelEvidence(), managed = new MailboxDelivery(chatRepo, () => promptState, evidence.read);
+    send("mail-1", "peer note");
+    expect(managed.deliverToNativeChannel(boundary())).toMatchObject({ status: "pending", reason: "channel_config_absent" });
+    evidence.verified("attempt-1", "worker@team", "claude-code", "2.1.296", "sha256:" + "a".repeat(64));
+    expect(evidence.read("worker@team")).toEqual({ client: "claude-code", clientVersion: "2.1.296",
+      installedChannelDigest: "sha256:" + "a".repeat(64), observedChannelDigest: "sha256:" + "a".repeat(64) });
+    expect(managed.deliverToNativeChannel(boundary())).toMatchObject({ status: "delivered", messageIds: ["mail-1"] });
+    // A block of another attempt leaves this seat's channel; the verified attempt's own block closes it.
+    evidence.blocked("attempt-other");
+    expect(evidence.read("worker@team")).not.toBeNull();
+    evidence.blocked("attempt-1");
+    expect(managed.deliverToNativeChannel(boundary(["mail-1"]))).toMatchObject({ status: "pending", reason: "channel_config_absent", receipts: [] });
+    // A resumed attempt replaces the seat's evidence, so the earlier attempt's later block cannot close it.
+    evidence.verified("attempt-1", "worker@team", "claude-code", "2.1.296", "sha256:" + "a".repeat(64));
+    evidence.verified("attempt-2", "worker@team", "claude-code", "2.1.296", "sha256:" + "a".repeat(64));
+    evidence.blocked("attempt-1");
+    expect(evidence.read("worker@team")).not.toBeNull();
+    // An unadopted build stays on polling even with verified evidence.
+    evidence.verified("attempt-3", "worker@team", "claude-code", "2.1.302", "sha256:" + "a".repeat(64));
+    expect(managed.deliverToNativeChannel(boundary())).toMatchObject({ status: "pending", reason: "channel_not_adopted" });
+  });
+
+  describe("launch evidence guard", () => {
+    const digest = "sha256:" + "a".repeat(64);
+    const observed = (change: Record<string, unknown> = {}) => ({ phase: "observed" as const, attemptId: "attempt-1", deadline: 1, contextHash: digest,
+      session: { client: "claude-code", runId: "run-1" }, nativePolicy: { installedDigest: digest, observedDigest: "sha256:" + "b".repeat(64) },
+      clientLock: { digest, version: "2.1.296" }, ...change }) as any;
+    let evidence: ManagedNativeChannelEvidence, failing: boolean, openDuringRecord: unknown[];
+    const intents = new Map([["run-1/attempt-1", "worker@team"]]);
+    const guarded = () => evidence.guard({ record: vi.fn(async () => {
+      openDuringRecord.push(evidence.read("worker@team"));
+      if (failing) throw new Error("evidence store unavailable");
+    }) }, (runId, attemptId) => intents.get(runId + "/" + attemptId));
+    beforeEach(() => { evidence = new ManagedNativeChannelEvidence(); failing = false; openDuringRecord = []; });
+
+    it("opens the channel only after the verified receipt was recorded, for the seat its intent names", async () => {
+      await guarded().record(observed());
+      expect(openDuringRecord).toEqual([null]);
+      expect(evidence.read("worker@team")).toMatchObject({ client: "claude-code", clientVersion: "2.1.296", installedChannelDigest: digest });
+    });
+
+    it.each([
+      ["a failed record", () => { failing = true; }, observed()],
+      ["no governance intent", () => {}, observed({ attemptId: "attempt-unknown" })],
+      ["no native-policy evidence", () => {}, observed({ nativePolicy: undefined })],
+      ["a prepared event", () => {}, observed({ phase: "prepared" })],
+    ])("never opens the channel for %s", async (_name, arrange, event) => {
+      arrange();
+      await guarded().record(event).catch(() => {});
+      expect(evidence.read("worker@team")).toBeNull();
+    });
+
+    it("closes the channel before a block is recorded, even when recording the block fails", async () => {
+      const control = guarded();
+      await control.record(observed());
+      failing = true;
+      await expect(control.record({ phase: "blocked", attemptId: "attempt-1", deadline: 1, contextHash: digest } as any)).rejects.toThrow();
+      expect(openDuringRecord.at(-1)).toBeNull();
+      expect(evidence.read("worker@team")).toBeNull();
+    });
   });
 
   it("keeps a forged header inside the body of the message that carried it", () => {

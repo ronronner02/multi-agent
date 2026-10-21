@@ -124,7 +124,7 @@ import {
   findClaudeTranscriptByToken,
   recordManagedWidthReceipt,
 } from "./domain/continuity-policy-materializer.js";
-import { WorkflowRuntime } from "./domain/workflow-runtime.js";
+import { WorkflowRuntime, dependencySatisfied } from "./domain/workflow-runtime.js";
 import { resolveWorkflowHumanDestination } from "./domain/workflow-human-destination.js";
 import { makeWorkflowKeepalivePolicy } from "./domain/policies/workflow-keepalive.js";
 import { makeIdleGateQitemPolicy } from "./domain/policies/idle-gate-qitem.js";
@@ -145,7 +145,10 @@ import { SettingsStore as ContextPackSettingsStore } from "./domain/user-setting
 import { WhoamiService } from "./domain/whoami-service.js";
 import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
-import { fixDaemonMode } from "./domain/plan-governance.js";
+import { PlanGovernance, fixDaemonMode } from "./domain/plan-governance.js";
+import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
+import { RestrictedWorkerLauncher } from "./adapters/worker-launch.js";
+import { createManagedLaunchControl } from "./adapters/worker-launch-control.js";
 import { ProviderServiceImpl } from "./domain/provider/provider-service-impl.js";
 import { collectClaudeSignalsFromProviderUsageDirectory } from "./domain/provider/claude-usage-reader.js";
 import { legacyProviderUsageDirectory, providerUsageDirectory } from "./domain/telemetry-state-paths.js";
@@ -289,6 +292,50 @@ export function collectAllowlistedProviderAuthEnv(
     }
   }
   return out;
+}
+
+/**
+ * T041: the managed launch chain over T040's control. Seat facts come from the persisted session and node,
+ * and channel evidence only from the launcher's own verified observations, revoked before any blocked record.
+ */
+function composeManagedLaunch(dependencies: {
+  db: Database.Database; governance: PlanGovernance; queue: QueueRepository; options: NonNullable<AppDeps["teamControl"]>;
+  rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
+}) {
+  const { db, governance, queue, rigRepo, sessions } = dependencies;
+  const channel = new ManagedNativeChannelEvidence();
+  const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
+  // The persisted seat facts available from a session name, before any terminal write: one live session on its own
+  // node, a canonical tree and a bound tmux pane. The client-runtime match needs the attempt, so the control's first
+  // observation checks it.
+  const seat = (sessionId: string, rigId?: string) => {
+    const session = sessions.findResumeContextByName(sessionId);
+    const live = session ? sessions.getLatestLiveSessions(session.rigId).filter(row => row.sessionName === sessionId) : [];
+    const node = session ? rigRepo.getRig(session.rigId)?.nodes.find(row => row.id === session.nodeId) : undefined;
+    if (!session || (rigId !== undefined && session.rigId !== rigId) || live.length !== 1 || live[0]!.sessionId !== session.sessionId
+      || live[0]!.nodeId !== session.nodeId || !node?.cwd || session.runtime !== node.runtime
+      || nodePath.posix.resolve(node.cwd) !== node.cwd || fs.realpathSync(node.cwd) !== node.cwd
+      || node.binding?.attachmentType !== "tmux" || node.binding.tmuxSession !== sessionId
+      || !/^%[0-9]+$/.test(node.binding.tmuxPane ?? "")) throw new Error("managed_seat_unresolved");
+    return { tree: node.cwd, pane: node.binding.tmuxPane! };
+  };
+  // The daemon runs tmux without -L or -S, so its server is the one these flags name, or the default socket.
+  const server = tmuxServerArgs(process.env);
+  const control = createManagedLaunchControl({ ...dependencies,
+    resolvePane: async sessionId => seat(sessionId).pane,
+    resolveAssignedTree: scope => seat(scope.sessionId, scope.run.rigId).tree,
+    mailbox: input => {
+      const endpoint = endpoints.get(input.attempt.attemptId);
+      if (!endpoint) throw new Error("managed_mailbox_unregistered");
+      return endpoint;
+    },
+    dependencySatisfied: (runId, taskId) => dependencySatisfied(db, queue,
+      qitemId => governance.getTask(qitemId)?.evidence?.validated === true, runId, taskId),
+    tmuxServer: server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + process.getuid!(), server[1] ?? "default"),
+  });
+  const launcher = new RestrictedWorkerLauncher(channel.guard(control,
+    (runId, attemptId) => governance.getNativeLaunchIntent(runId, attemptId)?.sessionId));
+  return { launcher, channel, endpoints };
 }
 
 export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> {
@@ -632,13 +679,18 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const claudeManagedLaunch = new ClaudeManagedLaunch(db, { ...launchSessionEnv, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }, {
     OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN: process.env.OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN,
   });
-  const claudeResume = new ClaudeResumeAdapter(tmuxAdapter, { claudeManagedLaunch, seatLaunchEnvironment });
+  // KTD22: one governance owner serves the app and the managed launch chain, which only managed attempts reach.
+  const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, teamControl.readPolicyCapability);
+  const managedLaunch = managed ? composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
+    options: teamControl, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter }) : undefined;
+  const workerLauncher = managedLaunch ? { workerLauncher: managedLaunch.launcher } : {};
+  const claudeResume = new ClaudeResumeAdapter(tmuxAdapter, { claudeManagedLaunch, seatLaunchEnvironment, ...workerLauncher });
   // #275: one reader for both Codex launch adapters, with the PATH, HOME and CODEX_HOME a seat session gets.
   const readCodexNetworkDefault = codexNetworkDefaultReader({ launchPath: process.env.PATH, home: daemonHome, codexHome });
   const prepareTeamWorkspace = (sessionName: string) => prepareCodexTeamWorkspace(sessionName,
     new ContextPackSettingsStore().resolveConfig().workspaceRoot,
     process.env.OPENRIG_SHARED_DOCS_ROOT?.trim() || nodePath.join(daemonHome, ".openrig", "shared-docs"), daemonHome);
-  const codexResume = new CodexResumeAdapter(tmuxAdapter, { prepareTeamWorkspace, seatLaunchEnvironment, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault });
+  const codexResume = new CodexResumeAdapter(tmuxAdapter, { prepareTeamWorkspace, seatLaunchEnvironment, ...workerLauncher, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault });
   // OPR.0.4.6.PI1 — the Pi seat-state root + the compiled runner entry (daemon
   // dist). Shared by the Pi runtime adapter, the resume adapter, and the
   // resume-token capture sidecar reader.
@@ -793,8 +845,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
 
   const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter, readFile: (p: string) => fs.readFileSync(p, "utf-8") });
   const runtimeSettings = new ContextPackSettingsStore().resolveConfig();
-  const claudeAdapter = new ClaudeCodeAdapter({ tmux: tmuxAdapter, seatLaunchEnvironment, claudeManagedLaunch, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, readdir: (dir: string) => fs.readdirSync(dir), statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: os.homedir() }, stateDir: OPENRIG_HOME, collectorAssetPath: nodePath.resolve(import.meta.dirname, "../assets/claude-statusline-context.cjs"), autoDriveProviderPrompts: runtimeSettings.recoveryAutoDriveProviderPrompts, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs"), claudeHooksManifestPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/claude.json"), recordProjection: (targetPath: string, content: string) => projectionManifestStore.record({ targetPath, lastHash: hashContent(content), writtenAt: new Date().toISOString() }) });
-  const codexAdapter = new CodexRuntimeAdapter({ prepareTeamWorkspace, tmux: tmuxAdapter, seatLaunchEnvironment, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: daemonHome }, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs") });
+  const claudeAdapter = new ClaudeCodeAdapter({ tmux: tmuxAdapter, seatLaunchEnvironment, claudeManagedLaunch, ...workerLauncher, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, readdir: (dir: string) => fs.readdirSync(dir), statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: os.homedir() }, stateDir: OPENRIG_HOME, collectorAssetPath: nodePath.resolve(import.meta.dirname, "../assets/claude-statusline-context.cjs"), autoDriveProviderPrompts: runtimeSettings.recoveryAutoDriveProviderPrompts, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs"), claudeHooksManifestPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/claude.json"), recordProjection: (targetPath: string, content: string) => projectionManifestStore.record({ targetPath, lastHash: hashContent(content), writtenAt: new Date().toISOString() }) });
+  const codexAdapter = new CodexRuntimeAdapter({ prepareTeamWorkspace, tmux: tmuxAdapter, seatLaunchEnvironment, ...workerLauncher, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: daemonHome }, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs") });
   // OPR.0.4.6.PI1 — the RPC-first Pi adapter (runner-in-a-pane). Same fsOps
   // shape as the Codex adapter; seat isolation roots under piStateRoot.
   const piAdapter = new PiRuntimeAdapter({ tmux: tmuxAdapter, seatLaunchEnvironment, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m) }, stateRoot: piStateRoot, runnerEntryPath: piRunnerEntryPath });
@@ -1224,6 +1276,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
 
   const deps: AppDeps = {
     teamControl,
+    teamGovernance,
+    ...(managedLaunch ? { managedLaunch, nativeChannelState: managedLaunch.channel.read } : {}),
     rigRepo,
     sessionRegistry,
     daemonLifecycleStore,

@@ -87,7 +87,7 @@ import { agentImagesRoutes } from "./routes/agent-images.js";
 import type { SpecReviewService } from "./domain/spec-review-service.js";
 import type { SpecLibraryService } from "./domain/spec-library-service.js";
 import type { ChatRepository } from "./domain/chat-repository.js";
-import { MailboxDelivery, createMailboxPromptStateReader } from "./domain/mailbox-delivery.js";
+import { MailboxDelivery, createMailboxPromptStateReader, type ManagedNativeChannelEvidence, type NativeChannelStateReader } from "./domain/mailbox-delivery.js";
 import { whoamiRoutes } from "./routes/whoami.js";
 import { providerRoutes } from "./routes/provider.js";
 import type { ProviderService } from "./domain/provider/provider-service.js";
@@ -153,6 +153,19 @@ const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
 
 export interface AppDeps {
   teamControl?: TeamControlOptions;
+  /** The one governance owner, shared with the managed launch control when startup composes it. */
+  teamGovernance?: PlanGovernance;
+  /** KTD19 channel state from the launch control's own verified observations; absent means never adopted. */
+  nativeChannelState?: NativeChannelStateReader;
+  /** The single mailbox owner. Built by createApp when absent and published here for endpoint registration. */
+  mailboxDelivery?: MailboxDelivery;
+  /** The managed launch chain injected into both fresh and both resume adapters (managed mode only). */
+  managedLaunch?: {
+    launcher: import("./adapters/worker-launch.js").WorkerLauncher;
+    channel: ManagedNativeChannelEvidence;
+    /** Per-attempt mailbox endpoints; an unregistered attempt cannot launch. */
+    endpoints: Map<string, Pick<import("./adapters/worker-mailbox-bridge.js").WorkerMailboxBridge, "binding" | "endpoint">>;
+  };
   proofSourceWatch?: import("./domain/proof/source-watch.js").ProofSourceWatch;
   /** S20 — effective bind plan for the health surface (absent = legacy body). */
   bindPlan?: { mode: "explicit" | "default"; hosts: string[]; tailscaleDetected: boolean; ignoredRoutingHost?: string };
@@ -512,14 +525,15 @@ export function createApp(deps: AppDeps): Hono {
 
   // Inject dependencies into context for all routes
   // One mailbox owner per daemon, admitted only by the daemon's own seat evidence (KTD11).
-  const mailboxDelivery = deps.chatRepo
+  const mailboxDelivery = deps.mailboxDelivery ?? (deps.chatRepo
     ? new MailboxDelivery(deps.chatRepo, createMailboxPromptStateReader({
         db: deps.rigRepo.db,
         seatActivity: deps.seatActivityService,
         agentActivityStore: deps.agentActivityStore,
         observedSince: new Date().toISOString(),
-      }))
-    : undefined;
+      }), deps.nativeChannelState)
+    : undefined);
+  deps.mailboxDelivery = mailboxDelivery;
   app.use("*", async (c, next) => {
     c.set("rigRepo" as never, deps.rigRepo);
     c.set("sessionRegistry" as never, deps.sessionRegistry);
@@ -711,7 +725,7 @@ export function createApp(deps: AppDeps): Hono {
     }
     await next();
   });
-  const teamGovernance = new PlanGovernance(deps.rigRepo.db, deps.eventBus,
+  const teamGovernance = deps.teamGovernance ?? new PlanGovernance(deps.rigRepo.db, deps.eventBus,
     deps.queueRepo ?? new QueueRepository(deps.rigRepo.db, deps.eventBus), undefined, teamOptions.readPolicyCapability);
 
   // OPR.0.4.6.MH2 FR-2/FR-7 — the single-host READ-THROUGH edge (the read
