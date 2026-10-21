@@ -1353,6 +1353,14 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     expect(governance.getAttempt("attempt")).toBeNull();
   });
 
+  it("refuses a seat whose runtime differs from the attempt's client before any terminal write", async () => {
+    db.prepare("UPDATE nodes SET runtime = 'codex'").run();
+    expect(await launch()).toMatchObject({ ok: false });
+    expect(respawn).not.toHaveBeenCalled();
+    expect(intent()).toBeNull();
+    expect(governance.getAttempt("attempt")).toBeNull();
+  });
+
   it("closes a start refused before any terminal write as a confirmed no-start", async () => {
     options.credentials.ownerToken = undefined;
     const result = await launch();
@@ -1515,6 +1523,8 @@ describe("production managed launch composition", () => {
         expect(launch.channel.read("builder@rig")).toBeNull();
       }
       for (const result of results) expect(JSON.stringify(result)).toContain(UNSUPPORTED_CLIENT_VERSION);
+      // A blocked attempt's endpoint registration is dropped; it can never launch again.
+      for (const id of ["claude-code-fresh", "claude-code-resume", "codex-fresh", "codex-resume"]) expect(launch.endpoints.has(id)).toBe(false);
       // Another attempt's block leaves the seat's verified channel open.
       open("verified-elsewhere", "claude-code");
       expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-other")), { name: "builder" })).toMatchObject({ ok: false });
@@ -1522,6 +1532,14 @@ describe("production managed launch composition", () => {
       const inspections = inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo");
       expect(inspections).toHaveLength(5);
       for (const call of inspections) expect(call[1]).toEqual(expect.arrayContaining(["--inspect", "--client-lock", hashBytes(lock)]));
+      // A seat whose tree is an alias of its assigned directory never reaches the privileged launcher.
+      const alias = tree + "-alias";
+      symlinkSync(tree, alias);
+      db.prepare("UPDATE nodes SET cwd = ? WHERE id = ?").run(alias, nodeId);
+      expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-aliased")), { name: "builder" }))
+        .toMatchObject({ ok: false });
+      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(5);
+      db.prepare("UPDATE nodes SET cwd = ? WHERE id = ?").run(tree, nodeId);
       // A seat whose persisted terminal binding names another session never reaches the privileged launcher.
       sessions.updateBinding(nodeId, { tmuxSession: "other@rig", tmuxPane: "%3" });
       expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-rebound")), { name: "builder" }))

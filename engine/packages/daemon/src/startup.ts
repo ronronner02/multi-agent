@@ -26,7 +26,7 @@ import { EventBus } from "./domain/event-bus.js";
 import { NodeLauncher } from "./domain/node-launcher.js";
 import { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
 import { TmuxAdapter } from "./adapters/tmux.js";
-import { setDaemonTmuxServer, tmuxServerArgs } from "./adapters/tmux-server.js";
+import { daemonTmuxServerArgs, setDaemonTmuxServer, tmuxServerArgs } from "./adapters/tmux-server.js";
 import { CmuxAdapter } from "./adapters/cmux.js";
 import { execArgvCommand, execCommand } from "./adapters/tmux-exec.js";
 import { execPreflightCommand } from "./adapters/preflight-exec.js";
@@ -303,7 +303,13 @@ function composeManagedLaunch(dependencies: {
   rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
 }) {
   const { db, governance, queue, rigRepo, sessions } = dependencies;
-  const channel = new ManagedNativeChannelEvidence();
+  // The verified native is the same instance only while its start time is unchanged; a reused PID is another process.
+  const channel = new ManagedNativeChannelEvidence(native => {
+    try {
+      const raw = fs.readFileSync("/proc/" + native.processId + "/stat", "utf8"), fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
+      return fields[19] === native.processStart && !["Z", "X"].includes(fields[0]!);
+    } catch { return false; }
+  });
   const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
   // The persisted seat facts available from a session name, before any terminal write: one live session on its own
   // node, a canonical tree and a bound tmux pane. The client-runtime match needs the attempt, so the control's first
@@ -319,8 +325,11 @@ function composeManagedLaunch(dependencies: {
       || !/^%[0-9]+$/.test(node.binding.tmuxPane ?? "")) throw new Error("managed_seat_unresolved");
     return { tree: node.cwd, pane: node.binding.tmuxPane! };
   };
-  // The daemon runs tmux without -L or -S, so its server is the one these flags name, or the default socket.
-  const server = tmuxServerArgs(process.env);
+  // The daemon runs tmux without -L or -S, so its server is the one it recorded at startup, or the default socket.
+  const tmuxServer = () => {
+    const server = daemonTmuxServerArgs();
+    return server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + process.getuid!(), server[1] ?? "default");
+  };
   const control = createManagedLaunchControl({ ...dependencies,
     resolvePane: async sessionId => seat(sessionId).pane,
     resolveAssignedTree: scope => seat(scope.sessionId, scope.run.rigId).tree,
@@ -331,10 +340,14 @@ function composeManagedLaunch(dependencies: {
     },
     dependencySatisfied: (runId, taskId) => dependencySatisfied(db, queue,
       qitemId => governance.getTask(qitemId)?.evidence?.validated === true, runId, taskId),
-    tmuxServer: server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + process.getuid!(), server[1] ?? "default"),
+    // Read when each identity is built, after startup has recorded the daemon's server.
+    get tmuxServer() { return tmuxServer(); },
   });
-  const launcher = new RestrictedWorkerLauncher(channel.guard(control,
-    (runId, attemptId) => governance.getNativeLaunchIntent(runId, attemptId)?.sessionId));
+  const guarded = channel.guard(control, (runId, attemptId) => governance.getNativeLaunchIntent(runId, attemptId)?.sessionId);
+  // A blocked attempt never launches again, so its endpoint registration is dropped once the block is recorded.
+  const launcher = new RestrictedWorkerLauncher({ ...guarded, record: async event => {
+    try { await guarded.record(event); } finally { if (event.phase === "blocked") endpoints.delete(event.attemptId); }
+  } });
   return { launcher, channel, endpoints };
 }
 

@@ -110,6 +110,19 @@ describe("KTD19 mailbox delivery through a native channel", () => {
     expect(evidence.read("worker@team")).not.toBeNull();
     // An unadopted build stays on polling even with verified evidence.
     evidence.verified("attempt-3", "worker@team", "claude-code", "2.1.302", "sha256:" + "a".repeat(64));
+    // A verified native that exits without a blocked record closes its seat's channel at the next read.
+    let running = true;
+    const watched = new ManagedNativeChannelEvidence(native => running && native.processId === 4200);
+    watched.verified("attempt-4", "worker@team", "claude-code", "2.1.296", "sha256:" + "a".repeat(64), { processId: 4200, processStart: "77" });
+    expect(watched.read("worker@team")).not.toBeNull();
+    running = false;
+    expect(watched.read("worker@team")).toBeNull();
+    running = true;
+    expect(watched.read("worker@team")).toBeNull();
+    // A probe that cannot read process evidence also closes it.
+    const broken = new ManagedNativeChannelEvidence(() => { throw new Error("proc unavailable"); });
+    broken.verified("attempt-5", "worker@team", "claude-code", "2.1.296", "sha256:" + "a".repeat(64), { processId: 1, processStart: "1" });
+    expect(broken.read("worker@team")).toBeNull();
     expect(managed.deliverToNativeChannel(boundary())).toMatchObject({ status: "pending", reason: "channel_not_adopted" });
   });
 
