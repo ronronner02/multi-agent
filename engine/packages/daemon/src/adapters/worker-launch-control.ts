@@ -149,6 +149,9 @@ export async function startManagedWorkerInPane(
     tmux: Pick<TmuxAdapter, "respawnPane">;
     resolvePane: (sessionId: string) => Promise<string>;
     now?: () => number;
+    /** When present, the persisted seat must match the attempt's client and run before any terminal write. */
+    rigRepo?: Pick<RigRepository, "db" | "getRig">;
+    sessions?: Pick<SessionRegistry, "db" | "findResumeContextByName" | "getLatestLiveSessions">;
   },
 ): Promise<Readonly<{ pane: string }>> {
   let pane: string;
@@ -158,6 +161,8 @@ export async function startManagedWorkerInPane(
     pane = await dependencies.resolvePane(scope.sessionId);
     const current = resolveManagedWorkerScope(input.attempt.context, dependencies);
     if (!/^%[0-9]+$/.test(pane) || current.sessionId !== scope.sessionId || current.task.qitemId !== scope.task.qitemId) throw new Error();
+    const { rigRepo, sessions } = dependencies;
+    if (rigRepo && sessions && resolveManagedWorkerSeat(input.attempt.context, { ...dependencies, rigRepo, sessions }).pane !== pane) throw new Error();
   } catch { throw new Error("managed_start_terminal_unverified"); }
   return startManagedWorkerCommand(input, command, { ...dependencies, start: async (admitted, beforeWrite) => {
     const argv = [admitted.file, ...admitted.args];

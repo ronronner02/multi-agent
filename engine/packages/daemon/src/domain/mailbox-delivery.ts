@@ -114,12 +114,32 @@ export type NativeChannelStateReader = (recipient: string) => NativeChannelSeatS
 export class ManagedNativeChannelEvidence {
   private readonly seats = new Map<string, NativeChannelSeatState>();
   private readonly attempts = new Map<string, string>();
-  readonly read: NativeChannelStateReader = (recipient) => this.seats.get(recipient) ?? null;
+  private readonly natives = new Map<string, { processId: number; processStart: string }>();
 
-  /** After the attempt's verified receipt was recorded. */
-  verified(attemptId: string, recipient: string, client: NativeChannelClient, clientVersion: string, installedDigest: string): void {
+  /** `alive` re-checks the verified native at every read, so an exit without a blocked record closes the channel. */
+  constructor(private readonly alive?: (native: { processId: number; processStart: string }) => boolean) {}
+
+  readonly read: NativeChannelStateReader = (recipient) => {
+    const native = this.natives.get(recipient);
+    if (native && this.alive) {
+      let live = false;
+      try { live = this.alive(native); } catch { /* Missing process evidence closes the channel. */ }
+      if (!live) {
+        for (const [attempt, seat] of this.attempts) if (seat === recipient) this.attempts.delete(attempt);
+        this.seats.delete(recipient); this.natives.delete(recipient);
+        return null;
+      }
+    }
+    return this.seats.get(recipient) ?? null;
+  };
+
+  /** After the attempt's verified receipt was recorded; `native` is that receipt's process identity. */
+  verified(attemptId: string, recipient: string, client: NativeChannelClient, clientVersion: string, installedDigest: string,
+    native?: { processId: number; processStart: string }): void {
     for (const [attempt, seat] of this.attempts) if (seat === recipient) this.attempts.delete(attempt);
     this.attempts.set(attemptId, recipient);
+    if (native) this.natives.set(recipient, { processId: native.processId, processStart: native.processStart });
+    else this.natives.delete(recipient);
     this.seats.set(recipient, Object.freeze({ client, clientVersion,
       installedChannelDigest: installedDigest, observedChannelDigest: installedDigest }));
   }
@@ -130,6 +150,7 @@ export class ManagedNativeChannelEvidence {
     if (recipient === undefined) return;
     this.attempts.delete(attemptId);
     this.seats.delete(recipient);
+    this.natives.delete(recipient);
   }
 
   /**
@@ -144,7 +165,8 @@ export class ManagedNativeChannelEvidence {
       await control.record(event);
       const recipient = event.session && recipientOf(event.session.runId, event.attemptId);
       if (event.phase === "observed" && event.session && event.nativePolicy && event.clientLock && recipient) {
-        this.verified(event.attemptId, recipient, event.session.client, event.clientLock.version, event.nativePolicy.installedDigest);
+        this.verified(event.attemptId, recipient, event.session.client, event.clientLock.version, event.nativePolicy.installedDigest,
+          event.session.identity);
       }
     } };
   }

@@ -525,6 +525,7 @@ export function createApp(deps: AppDeps): Hono {
 
   // Inject dependencies into context for all routes
   // One mailbox owner per daemon, admitted only by the daemon's own seat evidence (KTD11).
+  if (deps.mailboxDelivery && deps.nativeChannelState) throw new Error("A supplied mailbox owner already fixes its channel reader");
   const mailboxDelivery = deps.mailboxDelivery ?? (deps.chatRepo
     ? new MailboxDelivery(deps.chatRepo, createMailboxPromptStateReader({
         db: deps.rigRepo.db,
