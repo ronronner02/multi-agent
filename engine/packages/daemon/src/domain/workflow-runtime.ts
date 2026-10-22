@@ -41,7 +41,7 @@ import {
 import { resolveExceptionRoute, type ExceptionRoute } from "./workflow-exception-router.js";
 import type { WorkflowHumanDestination } from "./workflow-human-destination.js";
 import { classifyGateTrip, workflowExceptionTags } from "./workflow-exception.js";
-import { newQitemId } from "./queue-repository.js";
+import { ACTIVE_QUEUE_STATES, newQitemId } from "./queue-repository.js";
 import type { WorkflowExceptionClass } from "./workflow-exception.js";
 import {
   WorkflowProjector,
@@ -115,8 +115,12 @@ export interface WorkflowRuntimeDeps {
    * repository would let git discovery in the snapshot lane find the parent repo
    * and hide an isolation bug. Supplied by startup; absent disables candidate
    * isolation, which the launch boundary then refuses.
+   *
+   * The worker is a parameter because the privileged launcher requires the tree to
+   * live under `assignment_root/<that attempt's worker>`. Hardcoding one identity
+   * would make every attempt projected onto another worker unlaunchable.
    */
-  candidateRoot?: (runId: string, taskId: string) => string;
+  candidateRoot?: (runId: string, taskId: string, worker: string) => string;
   /**
    * T039: the control-private root the kernel will mount as an assignment tree
    * (`paths.assignment_root` in the installed worker policy). A candidate is
@@ -124,6 +128,12 @@ export interface WorkflowRuntimeDeps {
    * A function so a re-installed policy is read at launch, not at boot.
    */
   assignmentRoot?: () => string;
+  /**
+   * T039: the worker whose assignment directory holds a candidate when the caller
+   * does not name one. Only the non-launch accessors (identity, packet, source
+   * check) fall back to it; the launch path always passes the attempt's own worker.
+   */
+  defaultWorker?: () => string;
 }
 
 export interface InstantiateInput {
@@ -307,20 +317,28 @@ export class WorkflowRuntime {
    * it and materializes the base elsewhere. Refusals are raised, never returned,
    * so a caller cannot proceed on a workspace it did not get.
    */
-  candidateFor(runId: string, taskId: string): CandidateWorkspace {
+  candidateFor(runId: string, taskId: string, worker?: string): CandidateWorkspace {
     const key = `${runId}\u0000${taskId}`;
     const existing = this.candidates.get(key);
     if (existing) {
+      // A candidate lives in one worker's assignment directory, and only that
+      // worker's launches can mount it. Handing it to another worker would produce
+      // a tree the kernel refuses, so the mismatch is refused here rather than at
+      // the privileged preflight. A caller that names no worker (packet, identity,
+      // source check) is asking about the task's one candidate, not a worker's.
+      const owner = this.candidateWorker.get(key);
+      if (worker !== undefined && owner !== undefined && worker !== owner)
+        throw new Error("Candidate belongs to a different worker");
       // T039: a candidate is only usable while the source checkout it was staged
       // from is unmoved. Handing one back after the owner's tree changed would
       // present a tree as evidence of work the source no longer supports, so this
       // refuses rather than returning it — and every packet, identity and delivery
       // path goes through here.
       if (!verifySourceUnchanged(existing).unchanged) {
-        // Released, not merely forgotten: an invalidated tree that stayed on disk
-        // would keep an owner-sized copy alive with nothing able to reclaim it.
+        // The tree is invalid, but it may still be owned by a live attempt. Drop the
+        // record so no new launch is admitted into it; the owners release the bytes.
         this.candidates.delete(key);
-        this.removeWorkspace(existing);
+        this.candidateWorker.delete(key);
         throw new Error("Source checkout changed while the candidate was staged");
       }
       return existing;
@@ -328,11 +346,13 @@ export class WorkflowRuntime {
     if (!this.candidateRoot || !this.assignmentRoot) throw new Error("Candidate isolation is not configured");
     const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
     if (run.state !== "approved") throw new Error("Run is not approved for this assignment");
-    const workspaceRoot = this.candidateRoot(runId, taskId);
+    const owner = worker ?? this.defaultWorkerName();
+    const workspaceRoot = this.candidateRoot(runId, taskId, owner);
     // A candidate outside the kernel's assignment root could never be mounted, so
     // refusing here is the difference between an isolated launch and a lost tree.
     if (!within(this.assignmentRoot(), workspaceRoot)) throw new Error("Candidate root is outside the assignment root");
     const workspace = createCandidateWorkspace({ root: run.binding.repository.root, base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
+    this.candidateWorker.set(key, owner);
     this.candidates.set(key, workspace);
     return workspace;
   }
@@ -367,13 +387,34 @@ export class WorkflowRuntime {
     return verifySourceUnchanged(this.candidateFor(runId, taskId));
   }
 
-  /** T039 — release one candidate tree. The source checkout is never restored because it was never written. */
-  releaseCandidate(runId: string, taskId: string): void {
-    const key = `${runId}\u0000${taskId}`;
+  /**
+   * T039 — release one candidate tree, but only when this caller still owns it.
+   *
+   * A candidate is shared by every attempt that launches into it: a resume reuses
+   * the recorded tree, and a second attempt for the same task must not delete work
+   * a live one owns. So release is reference-counted by attempt. `retain` is called
+   * once admission hands an attempt a candidate; `release` is called once that
+   * attempt is finished with it. The tree goes away only when the last owner does.
+   *
+   * An unretained release is a no-op rather than a guess: an attempt that never
+   * obtained the candidate has nothing to give back.
+   */
+  releaseCandidate(runId: string, taskId: string, attemptId: string): void {
+    const key = `${runId}\u0000${taskId}`, owners = this.candidateOwners.get(key);
+    if (!owners?.delete(attemptId) || owners.size > 0) return;
+    this.candidateOwners.delete(key);
     const workspace = this.candidates.get(key);
     if (!workspace) return;
     this.candidates.delete(key);
+    this.candidateWorker.delete(key);
     this.removeWorkspace(workspace);
+  }
+
+  /** T039 — record that this attempt holds the task's candidate. Idempotent per attempt. */
+  private retainCandidate(key: string, attemptId: string): void {
+    const owners = this.candidateOwners.get(key);
+    if (owners) owners.add(attemptId);
+    else this.candidateOwners.set(key, new Set([attemptId]));
   }
 
   /**
@@ -393,6 +434,9 @@ export class WorkflowRuntime {
    * real observation; this is not a substitute for it.
    */
   admitForLaunch(runId: string, input: {
+    attemptId: string;
+    /** The attempt's own worker: the candidate must sit in that worker's assignment directory. */
+    worker: string;
     assignment: AssignmentInput["assignment"];
     outputs: readonly string[];
     permissions: readonly string[];
@@ -413,8 +457,18 @@ export class WorkflowRuntime {
     // omitting an argument: the run is the only source of what its tasks claim.
     const verdict = validateDependencyGraph(this.runGraph(runId, assignment));
     if (!verdict.ok) throw new Error(`Dependency graph refused: ${verdict.reason}`);
-    const candidate = this.candidateFor(runId, assignment.taskId);
+    const candidate = this.candidateFor(runId, assignment.taskId, input.worker);
+    // Only an attempt that is actually handed the candidate owns it. Recording
+    // ownership here is what lets a later refusal tell "my tree" from "someone
+    // else's live tree" instead of guessing.
+    this.retainCandidate(`${runId}\u0000${assignment.taskId}`, input.attemptId);
     return { candidate: candidate.root, manifestDigest: candidateManifest(candidate).manifestDigest };
+  }
+
+  /** T039 — the worker a non-launch accessor falls back to when it has no attempt. */
+  private defaultWorkerName(): string {
+    if (!this.defaultWorker) throw new Error("Candidate isolation is not configured");
+    return this.defaultWorker();
   }
 
   /** T039 — release a workspace this runtime owns, whichever path handed it back. */
@@ -443,7 +497,10 @@ export class WorkflowRuntime {
        FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
        WHERE a.run_id = ?`)
       .all(runId) as { taskId: string; assignment: string; state: string }[];
-    const live = (state: string) => state === "pending" || state === "in-progress" || state === "handed-off";
+    // The repository already names this set: `blocked` is still in play (it can
+    // resume), while `handed-off` is terminal, so a local list would both miss a
+    // live claim and keep a finished one.
+    const live = (state: string) => (ACTIVE_QUEUE_STATES as readonly string[]).includes(state);
     const tasks = rows.map(row => {
       const assignment = JSON.parse(row.assignment) as { role?: string; paths?: string[]; dependencies?: string[] };
       return { taskId: row.taskId, role: assignment.role ?? admitted.role,
@@ -625,8 +682,13 @@ export class WorkflowRuntime {
   private readonly reviewEvidence: ReviewEvidenceLedger;
   /** T039: candidate trees this runtime materialized, keyed by run and task. */
   private readonly candidates = new Map<string, CandidateWorkspace>();
+  /** T039 — which attempts still hold each candidate; the tree survives until this is empty. */
+  private readonly candidateOwners = new Map<string, Set<string>>();
+  /** T039 — the worker whose assignment directory holds each candidate, so reuse cannot cross workers. */
+  private readonly candidateWorker = new Map<string, string>();
   private readonly candidateRoot?: WorkflowRuntimeDeps["candidateRoot"];
   private readonly assignmentRoot?: () => string;
+  private readonly defaultWorker?: () => string;
 
   constructor(deps: WorkflowRuntimeDeps) {
     this.guidanceLibrary = deps.guidanceLibrary;
@@ -639,6 +701,7 @@ export class WorkflowRuntime {
     this.events = deps.eventBus;
     this.candidateRoot = deps.candidateRoot;
     this.assignmentRoot = deps.assignmentRoot;
+    this.defaultWorker = deps.defaultWorker;
     this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,
       resolveAssignee: (runId, qitemId) => this.resolveAssignee(runId, qitemId),
       // The approved binding's limits and the run's own clock, read at write time.

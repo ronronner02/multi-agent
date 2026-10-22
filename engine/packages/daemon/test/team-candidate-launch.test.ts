@@ -46,7 +46,6 @@ describe("production launch runs through runtime eligibility and one candidate w
   let directory: string;
   let repo: string;
   let assignmentRoot: string;
-  let candidateRoot: string;
   let db: Database.Database;
   let bus: EventBus;
   let queue: QueueRepository;
@@ -54,13 +53,18 @@ describe("production launch runs through runtime eligibility and one candidate w
   let binding: AssignmentInput["binding"];
   let context: ContextManifest;
 
+  /** The candidate layout production uses: `<assignment_root>/<worker>/<runId>-<taskId>`. */
+  const candidateDir = (worker: string, runId = "run-1", taskId = "T039"): string =>
+    join(assignmentRoot, worker, `${runId}-${taskId}`);
+
   const open = () => {
     db = createDb(join(directory, "t039.db"));
     migrate(db, ALL_MIGRATIONS);
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus, { now: () => new Date("2026-10-22T00:00:00.000Z") } as never);
     runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
-      candidateRoot: (_runId, taskId) => join(candidateRoot, taskId), assignmentRoot: () => assignmentRoot });
+      candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId), assignmentRoot: () => assignmentRoot,
+      defaultWorker: () => "ma-worker1" });
   };
 
   /** The context the launcher reads: only the fields admission and admission-order depend on. */
@@ -70,12 +74,22 @@ describe("production launch runs through runtime eligibility and one candidate w
        outputs: ["src/result.ts"], permissions: ["write-assigned-tree"],
        ...overrides } as unknown as ContextManifest);
 
+  /** The attempt projection: admission reads the worker from it, and the launcher binds it per attempt. */
+  const projectionFor = (attemptId: string) => ({
+    worker: "ma-worker1", attemptId, controlUid: 1000, workerGid: 1001,
+    policy: { policy_revision: 5, worker_identities: ["ma-worker1"],
+      paths: { context_root: join(directory, "context"), framework_dir: join(directory, "framework") },
+      sandbox: { context: "/run/context", framework: "/opt/framework" } } });
+
   /** The attempt the launcher receives; the id is unique so launch state never collides across cases. */
   let attemptSeq = 0;
   /** Runtime-mediated preparations; reset per test so a count proves this launch, not an earlier one. */
   const prepareCalls = { count: 0 };
-  const attempt = (overrides: Partial<ContextManifest> = {}) =>
-    ({ attemptId: `attempt-${++attemptSeq}`, deadline: Date.now() + 60_000, context: contextFor(overrides) });
+  const attempt = (overrides: Partial<ContextManifest> = {}) => {
+    const attemptId = `attempt-${++attemptSeq}`;
+    return ({ attemptId, deadline: Date.now() + 60_000,
+      context: { ...contextFor(overrides), projection: projectionFor(attemptId) } });
+  };
 
   /** A launch input in the shape the production adapters send: client, attempt, no resume token. */
   const launchInput = (overrides: Partial<ContextManifest> = {}) =>
@@ -85,8 +99,7 @@ describe("production launch runs through runtime eligibility and one candidate w
     directory = mkdtempSync(join(tmpdir(), "t039-launch-"));
     repo = repository();
     assignmentRoot = join(directory, "assignments");
-    candidateRoot = join(assignmentRoot, "ma-worker1");
-    mkdirSync(candidateRoot, { recursive: true });
+    mkdirSync(join(assignmentRoot, "ma-worker1"), { recursive: true });
     binding = {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
       planRef: "plan.md", planDigest: hashBytes("approved plan"),
@@ -149,7 +162,7 @@ describe("production launch runs through runtime eligibility and one candidate w
         options.observe?.(input);
         // The control resolves the assigned tree from the installed policy; the
         // launcher must have admitted exactly that tree beforehand.
-        const tree = options.assignedTree ?? join(candidateRoot, input.attempt.context.assignment.taskId);
+        const tree = options.assignedTree ?? candidateDir(ma-worker1, run-1, input.attempt.context.assignment.taskId);
         return ({ assignment: { binding, currentBinding: binding, assignment: input.attempt.context.assignment,
           outputs: [...input.attempt.context.outputs], permissions: [...input.attempt.context.permissions],
           context: input.attempt.context, observed: { discoveryRoots: [], files: [] }, dependencySatisfied: () => true },
@@ -183,7 +196,7 @@ describe("production launch runs through runtime eligibility and one candidate w
     admitForLaunch: (runId, input) => runtime.admitForLaunch(runId, input),
     prepareAssignment: input => { prepareCalls.count += 1; return runtime.prepareLaunchAssignment(input); },
     candidateSourceUnchanged: (runId, taskId) => runtime.candidateSourceUnchanged(runId, taskId),
-    releaseCandidate: (runId, taskId) => runtime.releaseCandidate(runId, taskId),
+    releaseCandidate: (runId, taskId, attemptId) => runtime.releaseCandidate(runId, taskId, attemptId),
   };
 
   const launcher = (fake: WorkerLaunchControl) =>
@@ -211,7 +224,7 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(String(result.error)).toMatch(/Dependency lacks validated success/);
     // No preflight, so no candidate was even placed for the refused assignment.
     expect(calls.preflight).toBe(0);
-    expect(existsSync(join(candidateRoot, "T039"))).toBe(false);
+    expect(existsSync(candidateDir("ma-worker1"))).toBe(false);
   });
 
   it("refuses the launch when the run is no longer approved", async () => {
@@ -239,23 +252,46 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(String(result.error)).toMatch(/managed_candidate_mismatch/);
   });
 
+  it("admits a reviewer into the same candidate the implementer produced", async () => {
+    // A reviewer's assigned tree is the candidate, not the seat's working
+    // directory: the packet it receives is bound to that tree's manifest, so
+    // launching it anywhere else would review something the implementer never
+    // wrote. Admission returns the candidate for every role, so resolving the seat
+    // tree here would refuse every reviewer launch after its privileged preflight.
+    const implementer = runtime.admitForLaunch("run-1", { attemptId: "attempt-impl", worker: "ma-worker1",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    const reviewer = runtime.admitForLaunch("run-1", { attemptId: "attempt-review", worker: "ma-worker1",
+      assignment: { taskId: "T039", role: "reviewer", paths: ["src"], dependencies: ["T011"] },
+      outputs: [], permissions: ["submit-review"], context: contextFor({ role: "reviewer" }) });
+    expect(reviewer.candidate).toBe(implementer.candidate);
+    expect(reviewer.manifestDigest).toBe(implementer.manifestDigest);
+  });
+
+  it("refuses a candidate in another worker's assignment directory", async () => {
+    // The kernel mounts a tree only under `assignment_root/<that attempt's worker>`,
+    // so reusing a candidate across workers would hand a launch a tree the
+    // privileged launcher rejects. The mismatch is refused before any of that.
+    const first = runtime.candidateFor("run-1", "T039", "ma-worker1");
+    expect(() => runtime.candidateFor("run-1", "T039", "ma-worker2")).toThrow(/different worker/);
+    expect(runtime.candidateFor("run-1", "T039")).toBe(first);
+  });
+
   it("admits a resumed attempt into the same candidate it started from", async () => {
     // The tree a launch receives is decided by admission, so a resume must land on
     // the recorded candidate rather than a second one; otherwise a task's work
     // would be split across two trees that no single manifest describes.
-    const first = runtime.admitForLaunch("run-1", {
+    const admit = (attemptId: string) => runtime.admitForLaunch("run-1", {
+      attemptId, worker: "ma-worker1",
       assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
-    const resumed = runtime.admitForLaunch("run-1", {
-      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    const first = admit("attempt-resume-1");
+    const resumed = admit("attempt-resume-2");
     expect(resumed.candidate).toBe(first.candidate);
     expect(resumed.manifestDigest).toBe(first.manifestDigest);
     // Two launches through the production boundary also resolve one tree.
     const { fake } = control();
     await launcher(fake).launch(launchInput());
     await launcher(fake).launch(launchInput());
-    expect(runtime.admitForLaunch("run-1", {
-      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context }).candidate)
-      .toBe(first.candidate);
+    expect(admit("attempt-resume-3").candidate).toBe(first.candidate);
   });
 
   it("never prepares an assignment for a launch it refused", async () => {
@@ -286,7 +322,7 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(result.ok).toBe(false);
     expect(String(result.error)).toMatch(/Dependency graph refused: write path src of T039 overlaps T015/);
     expect(calls.preflight).toBe(0);
-    expect(existsSync(join(candidateRoot, "T039"))).toBe(false);
+    expect(existsSync(candidateDir("ma-worker1"))).toBe(false);
   });
 
   it("lets a later task claim a path a settled task already worked", async () => {
@@ -295,6 +331,7 @@ describe("production launch runs through runtime eligibility and one candidate w
     db.prepare("UPDATE team_queue_authority SET assignment_json = ? WHERE qitem_id = 'dep-item'")
       .run(JSON.stringify({ taskId: "T011", role: "implementer", paths: ["src"], dependencies: [] }));
     const admitted = runtime.admitForLaunch("run-1", {
+      attemptId: "attempt-settled", worker: "ma-worker1",
       assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
     expect(admitted.candidate).toContain("T039");
   });
@@ -321,6 +358,25 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(String(result.error)).not.toContain(repo);
   });
 
+  it("keeps a path-bearing workspace failure out of the caller-visible error", async () => {
+    // The refusal above is decided before any workspace work, so it proves nothing
+    // about a message that *does* quote a path. Occupying the candidate directory
+    // makes `git worktree add` fail from inside the workspace layer, whose message
+    // names that absolute path. That message must not reach the caller.
+    const occupied = candidateDir("ma-worker1");
+    mkdirSync(occupied, { recursive: true });
+    writeFileSync(join(occupied, "placeholder"), "occupied");
+    const { fake, calls } = control();
+    const result = await launcher(fake).launch(launchInput());
+    expect(result.ok).toBe(false);
+    // The clause is the stable one, so the caller can still classify the refusal.
+    expect(String(result.error)).toContain("admission refused");
+    expect(String(result.error)).not.toContain(candidateDir("ma-worker1"));
+    expect(String(result.error)).not.toContain(directory);
+    // And no privileged call happened for the refused assignment.
+    expect(calls.preflight).toBe(0);
+  });
+
   it("releases the candidate when a refusal happens after admission", async () => {
     // The tree mismatch is a post-admission refusal: the candidate existed, so it
     // must not outlive the refused launch.
@@ -328,7 +384,26 @@ describe("production launch runs through runtime eligibility and one candidate w
     const result = await launcher(fake).launch(launchInput());
     expect(result.ok).toBe(false);
     expect(String(result.error)).toMatch(/managed_candidate_mismatch/);
-    expect(existsSync(join(candidateRoot, "T039"))).toBe(false);
+    expect(existsSync(candidateDir("ma-worker1"))).toBe(false);
+  });
+
+  it("does not release a candidate a different, still-live attempt owns", async () => {
+    // A task's candidate is shared by every attempt that launches into it. Attempt A
+    // holds the tree and is still working in it. Attempt B is refused *after*
+    // admission — the one path that can delete an attempt's tree — and must release
+    // only its own claim, never A's work.
+    const tree = candidateDir("ma-worker1");
+    runtime.admitForLaunch("run-1", { attemptId: "attempt-live", worker: "ma-worker1",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    expect(existsSync(tree)).toBe(true);
+    const refused = await launcher(control({ assignedTree: repo }).fake).launch(launchInput());
+    expect(refused.ok).toBe(false);
+    expect(String(refused.error)).toMatch(/managed_candidate_mismatch/);
+    // B's release left A's claim — and therefore the tree — intact.
+    expect(existsSync(tree)).toBe(true);
+    // Only when the last owner lets go does the tree leave.
+    runtime.releaseCandidate("run-1", "T039", "attempt-live");
+    expect(existsSync(tree)).toBe(false);
   });
 
   it("reuses the recorded candidate instead of creating a second one, and blocks once the source moves", () => {
@@ -353,7 +428,8 @@ describe("production launch runs through runtime eligibility and one candidate w
 
   it("refuses a candidate root outside the kernel's assignment root", () => {
     const outside = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
-      candidateRoot: () => join(directory, "elsewhere", "T039"), assignmentRoot: () => assignmentRoot });
+      candidateRoot: () => join(directory, "elsewhere", "T039"), assignmentRoot: () => assignmentRoot,
+      defaultWorker: () => "ma-worker1" });
     expect(() => outside.candidateFor("run-1", "T039")).toThrow(/outside the assignment root/);
   });
 
