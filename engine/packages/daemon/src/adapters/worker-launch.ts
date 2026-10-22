@@ -185,6 +185,10 @@ export interface WorkerLaunchControl {
  */
 export interface WorkerLaunchAdmission {
   admitForLaunch(runId: string, input: {
+    /** The attempt that will own the returned candidate, so a later refusal releases only its own claim. */
+    attemptId: string;
+    /** The worker identity whose assignment directory must hold the tree; the launcher refuses any other. */
+    worker: string;
     assignment: AssignmentInput["assignment"];
     outputs: readonly string[];
     permissions: readonly string[];
@@ -201,7 +205,12 @@ export interface WorkerLaunchAdmission {
    */
   prepareAssignment(input: Omit<AssignmentInput, "binding" | "dependencySatisfied">): Promise<{ context: { generatedHash: string } }>;
   candidateSourceUnchanged(runId: string, taskId: string): { unchanged: boolean };
-  releaseCandidate(runId: string, taskId: string): void;
+  /**
+   * Release this attempt's claim on the task's candidate. A candidate is shared by
+   * every attempt that launches into it, so this only removes the tree once no
+   * attempt holds it; releasing an attempt that never obtained one is a no-op.
+   */
+  releaseCandidate(runId: string, taskId: string, attemptId: string): void;
 }
 type LaunchState = {
   input: WorkerLaunchInput;
@@ -238,7 +247,8 @@ function refusalCode(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
   const clauses = ["Run is not approved", "Assignment role is outside the approval",
     "Assignment or output expands the approved scope", "Dependency lacks validated success",
-    "Candidate isolation is not configured", "Candidate root is outside the assignment root"];
+    "Candidate isolation is not configured", "Candidate root is outside the assignment root",
+    "Candidate belongs to a different worker"];
   if (message.startsWith("Dependency graph refused")) return message;
   return clauses.find(prefix => message.startsWith(prefix)) ?? "admission refused";
 }
@@ -286,6 +296,9 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
 
   async launch(input: WorkerLaunchInput): Promise<HarnessLaunchResult> {
     let state: LaunchState;
+    // Declared outside the try so the refusal path can tell whether this attempt
+    // ever took a claim on the task's candidate.
+    let admitted: { candidate: string; manifestDigest: string } | undefined;
     try {
       this.context = await import("../integrations/framework/context-manifest.js");
       input = { ...input, attempt: this.context.immutable(structuredClone(input.attempt)) };
@@ -309,10 +322,10 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       // filesystem path or a workspace error, and this string reaches the caller, so
       // the detail stays out — the runtime's own refusals are classifiable by their
       // first sentence instead, which carries no path.
-      let admitted: { candidate: string; manifestDigest: string } | undefined;
       if (this.admission) {
         try {
           admitted = this.admission.admitForLaunch(attempt.context.runId, {
+            attemptId: attempt.attemptId, worker: attempt.context.projection.worker,
             assignment: attempt.context.assignment, outputs: attempt.context.outputs,
             permissions: attempt.context.permissions, context: attempt.context,
           });
@@ -389,11 +402,32 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       });
       await this.record(state, { phase: "prepared" });
       this.checkDeadline(attempt);
-      // Re-checked after the recorded preparation: the same runtime path, so the
-      // last word on eligibility before any start effect is not a direct module call.
-      await (this.admission
-        ? this.admission.prepareAssignment({ ...preflight.assignment, context: attempt.context })
-        : prepareTeamAssignment({ ...preflight.assignment, context: attempt.context }));
+      // Re-admitted after the recorded preparation: eligibility, the validated
+      // evidence, the candidate's own source check and the run graph are all
+      // re-read here, so the last word before any start effect reflects the run as
+      // it is now rather than as it was before preflight. Admission is idempotent
+      // for this attempt — it returns the recorded candidate and re-takes the same
+      // claim — so a second call cannot fork a tree or a count.
+      if (this.admission) {
+        let readmitted: { candidate: string; manifestDigest: string };
+        try {
+          readmitted = this.admission.admitForLaunch(attempt.context.runId, {
+            attemptId: attempt.attemptId, worker: attempt.context.projection.worker,
+            assignment: attempt.context.assignment, outputs: attempt.context.outputs,
+            permissions: attempt.context.permissions, context: attempt.context,
+          });
+        } catch (error) {
+          throw new WorkerLaunchFault("managed_assignment_refused", refusalCode(error));
+        }
+        requireFact(readmitted.candidate === preflight.worker.tree, "managed_candidate_mismatch");
+        // Nothing has run yet, so the tree must still be the one first admitted. A
+        // different digest means the candidate moved under this launch between
+        // admission and start, which is exactly the evidence T039 must not ship.
+        const first = admitted;
+        requireFact(first !== undefined && readmitted.manifestDigest === first.manifestDigest, "managed_candidate_moved");
+      } else {
+        await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
+      }
       this.checkDeadline(attempt);
       state.startRequested = true;
       state.identity = immutable(parseAttemptIdentity(await this.control.start(command)));
@@ -407,13 +441,16 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       const code = error instanceof WorkerLaunchFault ? error.code
         : error instanceof Error && error.message === UNSUPPORTED_CLIENT_VERSION ? UNSUPPORTED_CLIENT_VERSION : "managed_launch_unverified";
       await this.block(state, code);
-      // T039: an admission that succeeded and was then refused downstream — by
-      // preflight, by a tree mismatch or by context verification — must not leave its
-      // candidate on disk. Only a launch that already reached `startRequested` keeps
-      // its tree, because a live or ambiguous attempt still owns it.
-      if (this.admission && !state.startRequested) {
-        try { this.admission.releaseCandidate(state.input.attempt.context.runId, state.input.attempt.context.assignment.taskId); }
-        catch { /* Releasing is best-effort here; the block above is the refusal record. */ }
+      // T039: release only a claim this attempt actually took. `admitted` is the proof:
+      // a launch refused before admission, or whose admission was refused, holds
+      // nothing and must not disturb a candidate a live attempt owns. A started or
+      // ambiguously-started attempt also keeps its claim, because it still owns the
+      // tree it is working in.
+      if (this.admission && admitted && !state.startRequested) {
+        try {
+          this.admission.releaseCandidate(state.input.attempt.context.runId,
+            state.input.attempt.context.assignment.taskId, state.input.attempt.attemptId);
+        } catch { /* Releasing is best-effort; the block above is the refusal record. */ }
       }
       // The cause travels with the refusal, but never as raw error text: an
       // underlying message can carry a path, a command line or a credential, and

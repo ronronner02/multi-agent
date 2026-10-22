@@ -334,16 +334,17 @@ function composeManagedLaunch(dependencies: {
   };
   const control = createManagedLaunchControl({ ...dependencies,
     resolvePane: async sessionId => seat(sessionId).pane,
-    // T039: the tree an implementation launch gets is its own candidate, never the
-    // seat's working directory. The seat is still resolved first, because that is
-    // what refuses an aliased tree, a rebound terminal or a stale session before
-    // any privileged call — isolation changes where the worker works, not which
-    // seat is admitted. Reviewers only read a candidate, so they keep the seat tree.
-    resolveAssignedTree: (scope, worker) => {
-      const resolved = seat(scope.sessionId, scope.run.rigId);
-      return scope.task.assignment.role === "reviewer"
-        ? resolved.tree
-        : requireWorkflowRuntime().candidateFor(scope.run.id, scope.task.assignment.taskId).root;
+    // T039: every role launches into the task's own candidate, never the seat's
+    // working directory. Reviewers get the same candidate mounted read-only
+    // (`worker-launch.ts` decides access by role), so a reviewer reads the exact
+    // tree the implementer produced — which is the point of the packet binding.
+    // Admission returns the candidate unconditionally, so returning the seat tree
+    // here would refuse every reviewer launch after its privileged preflight.
+    // The seat is still resolved first, because that is what refuses an aliased
+    // tree, a rebound terminal or a stale session before any privileged call.
+    resolveAssignedTree: (scope) => {
+      seat(scope.sessionId, scope.run.rigId);
+      return requireWorkflowRuntime().candidateFor(scope.run.id, scope.task.assignment.taskId).root;
     },
     mailbox: input => {
       const endpoint = endpoints.get(input.attempt.attemptId);
@@ -364,7 +365,7 @@ function composeManagedLaunch(dependencies: {
     admitForLaunch: (runId, input) => requireWorkflowRuntime().admitForLaunch(runId, input),
     prepareAssignment: input => requireWorkflowRuntime().prepareLaunchAssignment(input),
     candidateSourceUnchanged: (runId, taskId) => requireWorkflowRuntime().candidateSourceUnchanged(runId, taskId),
-    releaseCandidate: (runId, taskId) => requireWorkflowRuntime().releaseCandidate(runId, taskId),
+    releaseCandidate: (runId, taskId, attemptId) => requireWorkflowRuntime().releaseCandidate(runId, taskId, attemptId),
   };
   /** A managed launch without an approved runtime would bypass eligibility, so it refuses instead. */
   const requireWorkflowRuntime = (): WorkflowRuntime => {
@@ -1653,8 +1654,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       queueRepo: queueRepoForWorkflow,
       ...(workerRoots ? {
         assignmentRoot: () => workerRoots.assignmentRoot,
-        candidateRoot: (runId: string, taskId: string) =>
-          managedCandidateRoot(workerRoots.assignmentRoot, workerRoots.worker, runId, taskId),
+        defaultWorker: () => workerRoots.worker,
+        candidateRoot: (runId: string, taskId: string, worker: string) =>
+          managedCandidateRoot(workerRoots.assignmentRoot, worker, runId, taskId),
       } : {}),
       // OPR.0.4.6.WF1 FR-3: instantiate/handoff auto-arm the
       // per-instance workflow-keepalive job in-txn; terminal disarms.
