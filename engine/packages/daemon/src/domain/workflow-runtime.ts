@@ -383,12 +383,9 @@ export class WorkflowRuntime {
     // belongs to. Recording `defaultWorker` for it would pin the task to that
     // worker and refuse the real launch on any other one.
     const adopted = this.adoptCandidate(runId, taskId, workspaceRoot);
-    if (adopted) {
-      if (worker !== undefined) this.candidateWorker.set(key, worker);
-      this.candidates.set(key, adopted);
-      return adopted;
-    }
-    const workspace = createCandidateWorkspace({ root: run.binding.repository.root, base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
+    const workspace = adopted ?? createCandidateWorkspace({ root: run.binding.repository.root,
+      base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
+    // Only a caller that named a worker tells us who owns the task's tree.
     if (worker !== undefined) this.candidateWorker.set(key, worker);
     this.candidates.set(key, workspace);
     return workspace;
