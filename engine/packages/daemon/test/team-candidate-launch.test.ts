@@ -109,16 +109,18 @@ describe("production launch runs through runtime eligibility and one candidate w
       .run(JSON.stringify(binding), hashBinding(binding));
     // T011's validated-evidence gate: a dependency is satisfied only by a queue row
     // that reached `done` AND carries validated evidence. Either half alone fails.
-    for (const [id, taskId, session, state, evidence] of [
-      ["impl-item", "T039", "implementer-session", "in-progress", null],
-      ["dep-item", "T011", "dep-session", "done", JSON.stringify({ validated: true })],
+    // Two live tasks cannot claim the same write path or one containing the other,
+// so the completed dependency claims a directory the admitted task does not.
+    for (const [id, taskId, session, state, evidence, paths] of [
+      ["impl-item", "T039", "implementer-session", "in-progress", null, ["src"]],
+      ["dep-item", "T011", "dep-session", "done", JSON.stringify({ validated: true }), ["test/dependency"]],
     ] as const) {
       db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
         VALUES (?, '2026-10-22T00:00:00.000Z', '2026-10-22T00:00:00.000Z', 'lead@rig-1', ?, ?, 'body')`)
         .run(id, session, state);
       db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json, evidence_json)
         VALUES (?, 'run-1', ?, ?, ?)`)
-        .run(id, taskId, JSON.stringify({ taskId, role: "implementer", paths: ["src"], dependencies: taskId === "T039" ? ["T011"] : [] }), evidence);
+        .run(id, taskId, JSON.stringify({ taskId, role: "implementer", paths: [...paths], dependencies: taskId === "T039" ? ["T011"] : [] }), evidence);
     }
     context = contextFor();
     prepareCalls.count = 0;
@@ -267,6 +269,66 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(String(result.error)).toMatch(/Run is not approved/);
     expect(prepareCalls.count).toBe(0);
     expect(calls.preflight).toBe(0);
+  });
+
+  it("refuses a launch whose run graph has overlapping write claims", async () => {
+    // T039's card requires overlapping write claims to refuse the launch. The graph
+    // comes from the run's own authority rows, so a caller cannot skip it by
+    // omitting an argument. The conflict comes from a *live* task, since a settled
+    // task's claim is history rather than contention.
+    db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
+      VALUES ('live-item', '2026-10-22T00:00:00.000Z', '2026-10-22T00:00:00.000Z', 'lead@rig-1', 'other-session', 'in-progress', 'body')`).run();
+    db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json)
+      VALUES ('live-item', 'run-1', 'T015', ?)`)
+      .run(JSON.stringify({ taskId: "T015", role: "implementer", paths: ["src"], dependencies: [] }));
+    const { fake, calls } = control();
+    const result = await launcher(fake).launch(launchInput());
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/Dependency graph refused: write path src of T039 overlaps T015/);
+    expect(calls.preflight).toBe(0);
+    expect(existsSync(join(candidateRoot, "T039"))).toBe(false);
+  });
+
+  it("lets a later task claim a path a settled task already worked", async () => {
+    // A finished task's claim is history, not contention: the admitted task may
+    // legitimately re-touch the same file. Only live tasks can conflict.
+    db.prepare("UPDATE team_queue_authority SET assignment_json = ? WHERE qitem_id = 'dep-item'")
+      .run(JSON.stringify({ taskId: "T011", role: "implementer", paths: ["src"], dependencies: [] }));
+    const admitted = runtime.admitForLaunch("run-1", {
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    expect(admitted.candidate).toContain("T039");
+  });
+
+  it("refuses a launch whose run graph is cyclic", async () => {
+    db.prepare("UPDATE team_queue_authority SET assignment_json = ? WHERE qitem_id = 'dep-item'")
+      .run(JSON.stringify({ taskId: "T011", role: "implementer", paths: ["test/dependency"], dependencies: ["T039"] }));
+    const { fake, calls } = control();
+    const result = await launcher(fake).launch(launchInput());
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/Dependency graph refused/);
+    expect(calls.preflight).toBe(0);
+  });
+
+  it("keeps an admission message out of the caller-visible error", async () => {
+    // Admission can reach workspace operations whose messages quote a path. Only the
+    // stable refusal clause may travel to the caller, never the raw message.
+    db.prepare("UPDATE team_runs SET state = 'blocked' WHERE id = 'run-1'").run();
+    const { fake } = control();
+    const result = await launcher(fake).launch(launchInput());
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain("Run is not approved");
+    expect(String(result.error)).not.toContain(directory);
+    expect(String(result.error)).not.toContain(repo);
+  });
+
+  it("releases the candidate when a refusal happens after admission", async () => {
+    // The tree mismatch is a post-admission refusal: the candidate existed, so it
+    // must not outlive the refused launch.
+    const { fake } = control({ assignedTree: repo });
+    const result = await launcher(fake).launch(launchInput());
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/managed_candidate_mismatch/);
+    expect(existsSync(join(candidateRoot, "T039"))).toBe(false);
   });
 
   it("reuses the recorded candidate instead of creating a second one, and blocks once the source moves", () => {

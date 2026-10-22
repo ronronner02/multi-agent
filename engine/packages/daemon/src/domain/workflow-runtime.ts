@@ -397,7 +397,6 @@ export class WorkflowRuntime {
     outputs: readonly string[];
     permissions: readonly string[];
     context: ContextManifest;
-    graph?: { claimedBy: readonly GraphTask[]; declared: { paths: readonly string[]; dependencies: readonly string[] } };
   }): { candidate: string; manifestDigest: string } {
     const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo), run = governance.getRun(runId);
     if (run.state !== "approved" || input.context.runId !== runId
@@ -408,14 +407,12 @@ export class WorkflowRuntime {
     const covered = (path: string) => allowed.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
     for (const path of [...assignment.paths, ...input.outputs]) if (!covered(path)) throw new Error("Assignment or output expands the approved scope");
     if (assignment.dependencies.some(id => !this.dependencySatisfied(governance, runId, id))) throw new Error("Dependency lacks validated success");
-    if (input.graph) {
-      const { declared, claimedBy } = input.graph;
-      const verdict = validateDependencyGraph([...claimedBy.filter(task => task.taskId !== assignment.taskId), {
-        taskId: assignment.taskId, role: assignment.role,
-        paths: [...new Set([...declared.paths, ...assignment.paths])], dependencies: [...new Set([...declared.dependencies, ...assignment.dependencies])],
-      }]);
-      if (!verdict.ok) throw new Error(`Dependency graph refused: ${verdict.reason}`);
-    }
+    // T039's done signal requires a cyclic or over-limit graph and overlapping write
+    // claims to refuse the launch, so the graph is derived from the run's own
+    // authority rows rather than taken from the caller. A caller cannot skip this by
+    // omitting an argument: the run is the only source of what its tasks claim.
+    const verdict = validateDependencyGraph(this.runGraph(runId, assignment));
+    if (!verdict.ok) throw new Error(`Dependency graph refused: ${verdict.reason}`);
     const candidate = this.candidateFor(runId, assignment.taskId);
     return { candidate: candidate.root, manifestDigest: candidateManifest(candidate).manifestDigest };
   }
@@ -423,6 +420,41 @@ export class WorkflowRuntime {
   /** T039 — release a workspace this runtime owns, whichever path handed it back. */
   private removeWorkspace(workspace: CandidateWorkspace): void {
     try { removeCandidateWorkspace(workspace); } catch { /* A removed tree is already released. */ }
+  }
+
+  /**
+   * T039 — the run's declared work graph, read from its own authority rows.
+   *
+   * The task being admitted contributes its approved assignment; every other task
+   * the run recorded contributes what its row says it claims. A run with more than
+   * the managed task limit therefore refuses at admission instead of being
+   * discovered unusable later.
+   *
+   * Only **live** tasks can conflict on a write path. A finished task's claim is
+   * history: the work is over, and a later task may legitimately re-touch the same
+   * file. Its row still contributes its dependency edges — cycle detection and the
+   * task limit are properties of the whole run, not of its live fringe — but it
+   * contributes no claim. This is the same "other live tasks" contract
+   * `admitTeamAssignment` states for its caller-supplied graph.
+   */
+  private runGraph(runId: string, admitted: AssignmentInput["assignment"]): GraphTask[] {
+    const rows = this.db.prepare(
+      `SELECT a.task_id AS taskId, a.assignment_json AS assignment, q.state AS state
+       FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+       WHERE a.run_id = ?`)
+      .all(runId) as { taskId: string; assignment: string; state: string }[];
+    const live = (state: string) => state === "pending" || state === "in-progress" || state === "handed-off";
+    const tasks = rows.map(row => {
+      const assignment = JSON.parse(row.assignment) as { role?: string; paths?: string[]; dependencies?: string[] };
+      return { taskId: row.taskId, role: assignment.role ?? admitted.role,
+        // A settled task keeps its edges but drops its claim.
+        paths: live(row.state) ? [...(assignment.paths ?? [])] : [],
+        dependencies: [...(assignment.dependencies ?? [])] };
+    });
+    // The admitted assignment wins over its stored row: a stale row would otherwise
+    // let an earlier, narrower claim stand in for the one about to launch.
+    return [...tasks.filter(task => task.taskId !== admitted.taskId),
+      { taskId: admitted.taskId, role: admitted.role, paths: [...admitted.paths], dependencies: [...admitted.dependencies] }];
   }
 
   /**
