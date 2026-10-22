@@ -1,11 +1,21 @@
 import { PlanGovernance, hashBinding } from "./plan-governance.js";
 import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
-import type { ContextManifest, ContextObservation } from "../integrations/framework/context-manifest.js";
+import { within, type ContextManifest, type ContextObservation } from "../integrations/framework/context-manifest.js";
 import { readWorkflowGuidance, type GuidanceInput } from "./workflow-guidance.js";
 import { exceptionConfigurationSource, inspectExceptionReadiness, type ExceptionReadiness } from "./workflow-exception-readiness.js";
 import { inspectGraph, recoverGraphOperation, reviseGraph } from "./workflow-reconciliation.js";
 import { lifecycleObligations, requiredLifecycleSteps, type LifecycleObligation } from "./lifecycle-obligations.js";
 import { ReviewEvidenceLedger, deliveryVerdict, evaluateProgressGate, type AssigneeFacts, type CandidateIdentity } from "./review-evidence.js";
+import {
+  candidateIdentity,
+  candidateManifest,
+  createCandidateWorkspace,
+  createReviewPacket,
+  removeCandidateWorkspace,
+  resolveWorkspaceBase,
+  verifySourceUnchanged,
+  type CandidateWorkspace,
+} from "./team-workspace.js";
 import type { TeamRole } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
 //
@@ -99,6 +109,21 @@ export interface WorkflowRuntimeDeps {
     hostDefault: () => "orchestrator" | "human_only" | null;
     humanFallbackSeat: WorkflowHumanDestination;
   };
+  /**
+   * T039 / KTD8: where a task's candidate tree is materialized. Must sit outside
+   * every repository the run can write to, because a candidate inside its own
+   * repository would let git discovery in the snapshot lane find the parent repo
+   * and hide an isolation bug. Supplied by startup; absent disables candidate
+   * isolation, which the launch boundary then refuses.
+   */
+  candidateRoot?: (runId: string, taskId: string) => string;
+  /**
+   * T039: the control-private root the kernel will mount as an assignment tree
+   * (`paths.assignment_root` in the installed worker policy). A candidate is
+   * only launchable from here; a candidate anywhere else is not admissible.
+   * A function so a re-installed policy is read at launch, not at boot.
+   */
+  assignmentRoot?: () => string;
 }
 
 export interface InstantiateInput {
@@ -269,6 +294,150 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
 }
 
 export class WorkflowRuntime {
+  /**
+   * T039 / KTD8 — one candidate tree per task, created or resumed exactly once.
+   *
+   * The candidate is resolved before the launch preflight, because the control
+   * reads the assigned tree out of the policy's `assignment_root` and refuses a
+   * tree anywhere else. A resumed attempt reuses the recorded workspace rather
+   * than creating a second one, so re-entering the launch cannot fork a task's
+   * work across two trees.
+   *
+   * The source repository is only read: `createCandidateWorkspace` fingerprints
+   * it and materializes the base elsewhere. Refusals are raised, never returned,
+   * so a caller cannot proceed on a workspace it did not get.
+   */
+  candidateFor(runId: string, taskId: string): CandidateWorkspace {
+    const key = `${runId}\u0000${taskId}`;
+    const existing = this.candidates.get(key);
+    if (existing) {
+      // T039: a candidate is only usable while the source checkout it was staged
+      // from is unmoved. Handing one back after the owner's tree changed would
+      // present a tree as evidence of work the source no longer supports, so this
+      // refuses rather than returning it — and every packet, identity and delivery
+      // path goes through here.
+      if (!verifySourceUnchanged(existing).unchanged) {
+        // Released, not merely forgotten: an invalidated tree that stayed on disk
+        // would keep an owner-sized copy alive with nothing able to reclaim it.
+        this.candidates.delete(key);
+        this.removeWorkspace(existing);
+        throw new Error("Source checkout changed while the candidate was staged");
+      }
+      return existing;
+    }
+    if (!this.candidateRoot || !this.assignmentRoot) throw new Error("Candidate isolation is not configured");
+    const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
+    if (run.state !== "approved") throw new Error("Run is not approved for this assignment");
+    const workspaceRoot = this.candidateRoot(runId, taskId);
+    // A candidate outside the kernel's assignment root could never be mounted, so
+    // refusing here is the difference between an isolated launch and a lost tree.
+    if (!within(this.assignmentRoot(), workspaceRoot)) throw new Error("Candidate root is outside the assignment root");
+    const workspace = createCandidateWorkspace({ root: run.binding.repository.root, base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
+    this.candidates.set(key, workspace);
+    return workspace;
+  }
+
+  /**
+   * T039 — the identity a candidate contributes to the T012 review packet.
+   *
+   * The candidate's own manifest is the identity; nothing about the launch can
+   * name a different tree afterward.
+   */
+  candidateIdentityFor(runId: string, taskId: string): CandidateIdentity {
+    return candidateIdentity(candidateManifest(this.candidateFor(runId, taskId)));
+  }
+
+  /**
+   * T039 — the read-only packet a reviewer receives for the exact candidate.
+   *
+   * `destination` must not overlap the candidate or the source checkout; the
+   * packet builder enforces that itself rather than trusting this call site.
+   */
+  reviewPacketFor(runId: string, taskId: string, destination: string) {
+    return createReviewPacket(this.candidateFor(runId, taskId), destination);
+  }
+
+  /**
+   * T039 — proof that staging the candidate did not move the owner's checkout.
+   *
+   * Called by the delivery boundary: a candidate whose source tree changed while
+   * the task ran is not evidence that the task's own work is complete.
+   */
+  candidateSourceUnchanged(runId: string, taskId: string) {
+    return verifySourceUnchanged(this.candidateFor(runId, taskId));
+  }
+
+  /** T039 — release one candidate tree. The source checkout is never restored because it was never written. */
+  releaseCandidate(runId: string, taskId: string): void {
+    const key = `${runId}\u0000${taskId}`;
+    const workspace = this.candidates.get(key);
+    if (!workspace) return;
+    this.candidates.delete(key);
+    this.removeWorkspace(workspace);
+  }
+
+  /**
+   * T039 — admit one assignment for launch and place its candidate.
+   *
+   * The launcher must know the assigned tree before the control preflights it,
+   * because the control reads that tree out of the policy's `assignment_root` and
+   * refuses a tree anywhere else. Doing that in the wrong order would either
+   * create a candidate for an assignment that is then refused, or launch into a
+   * tree the kernel will not mount.
+   *
+   * So every refusal is decided first — the run is approved, the binding still
+   * matches, the role and paths sit inside the approval, dependencies hold with
+   * validated evidence, and the graph admits the task — and only then is exactly
+   * one candidate materialized. An ineligible assignment therefore leaves no tree
+   * behind. The full `prepareTeamAssignment` still runs after preflight with the
+   * real observation; this is not a substitute for it.
+   */
+  admitForLaunch(runId: string, input: {
+    assignment: AssignmentInput["assignment"];
+    outputs: readonly string[];
+    permissions: readonly string[];
+    context: ContextManifest;
+    graph?: { claimedBy: readonly GraphTask[]; declared: { paths: readonly string[]; dependencies: readonly string[] } };
+  }): { candidate: string; manifestDigest: string } {
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo), run = governance.getRun(runId);
+    if (run.state !== "approved" || input.context.runId !== runId
+      || hashBinding(run.binding) !== hashBinding(input.context.binding)) throw new Error("Run is not approved for this assignment");
+    const binding = run.binding, assignment = input.assignment;
+    if (assignment.role !== input.context.role || !binding.roles.includes(assignment.role)) throw new Error("Assignment role is outside the approval");
+    const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
+    const covered = (path: string) => allowed.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+    for (const path of [...assignment.paths, ...input.outputs]) if (!covered(path)) throw new Error("Assignment or output expands the approved scope");
+    if (assignment.dependencies.some(id => !this.dependencySatisfied(governance, runId, id))) throw new Error("Dependency lacks validated success");
+    if (input.graph) {
+      const { declared, claimedBy } = input.graph;
+      const verdict = validateDependencyGraph([...claimedBy.filter(task => task.taskId !== assignment.taskId), {
+        taskId: assignment.taskId, role: assignment.role,
+        paths: [...new Set([...declared.paths, ...assignment.paths])], dependencies: [...new Set([...declared.dependencies, ...assignment.dependencies])],
+      }]);
+      if (!verdict.ok) throw new Error(`Dependency graph refused: ${verdict.reason}`);
+    }
+    const candidate = this.candidateFor(runId, assignment.taskId);
+    return { candidate: candidate.root, manifestDigest: candidateManifest(candidate).manifestDigest };
+  }
+
+  /** T039 — release a workspace this runtime owns, whichever path handed it back. */
+  private removeWorkspace(workspace: CandidateWorkspace): void {
+    try { removeCandidateWorkspace(workspace); } catch { /* A removed tree is already released. */ }
+  }
+
+  /**
+   * T039 — the launcher's full preparation path.
+   *
+   * The launcher holds the post-preflight assignment, but it must not call
+   * `prepareTeamAssignment` itself: the runtime is what supplies the approved
+   * binding and the validated-evidence dependency check. This is the same
+   * method the lead-activation path uses, so a managed launch cannot observe a
+   * different set of rules than any other production caller.
+   */
+  prepareLaunchAssignment(input: Omit<AssignmentInput, "binding" | "dependencySatisfied">) {
+    return this.prepareTeamAssignment(input.context.runId, input);
+  }
+
   prepareTeamAssignment(runId: string, input: Omit<AssignmentInput, "binding" | "dependencySatisfied">) {
     const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo), run = governance.getRun(runId);
     if (run.state !== "approved" || input.context.runId !== runId || hashBinding(run.binding) !== hashBinding(input.currentBinding)) throw new Error("Run is not approved for this assignment");
@@ -422,6 +591,10 @@ export class WorkflowRuntime {
   private readonly exceptionDial?: WorkflowRuntimeDeps["exceptionDial"];
   private readonly events: EventBus;
   private readonly reviewEvidence: ReviewEvidenceLedger;
+  /** T039: candidate trees this runtime materialized, keyed by run and task. */
+  private readonly candidates = new Map<string, CandidateWorkspace>();
+  private readonly candidateRoot?: WorkflowRuntimeDeps["candidateRoot"];
+  private readonly assignmentRoot?: () => string;
 
   constructor(deps: WorkflowRuntimeDeps) {
     this.guidanceLibrary = deps.guidanceLibrary;
@@ -432,6 +605,8 @@ export class WorkflowRuntime {
     this.watchdogJobsRepo = deps.watchdogJobsRepo;
     this.exceptionDial = deps.exceptionDial;
     this.events = deps.eventBus;
+    this.candidateRoot = deps.candidateRoot;
+    this.assignmentRoot = deps.assignmentRoot;
     this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,
       resolveAssignee: (runId, qitemId) => this.resolveAssignee(runId, qitemId),
       // The approved binding's limits and the run's own clock, read at write time.

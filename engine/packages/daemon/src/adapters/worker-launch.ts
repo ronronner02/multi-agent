@@ -174,6 +174,35 @@ export interface WorkerLaunchControl {
   quiesce(request: Readonly<WorkerQuiescenceRequest>): Promise<WorkerQuiescenceReceipt>;
   record(event: Readonly<WorkerLaunchEvent>): Promise<void>;
 }
+
+/**
+ * T039 — the runtime's launch-admission seam.
+ *
+ * The control decides the assigned tree inside its preflight, so the tree must
+ * already exist and be the task's own candidate when preflight runs. Admission
+ * therefore happens first and returns that exact path; anything else means the
+ * launch is refused before a privileged call.
+ */
+export interface WorkerLaunchAdmission {
+  admitForLaunch(runId: string, input: {
+    assignment: AssignmentInput["assignment"];
+    outputs: readonly string[];
+    permissions: readonly string[];
+    context: AssignmentInput["context"];
+  }): { candidate: string; manifestDigest: string };
+  /**
+   * The full assignment preparation over the real post-preflight observation.
+   *
+   * T039 requires that no production path call `prepareTeamAssignment` outside
+   * `WorkflowRuntime`, so the launcher reaches it through this seam even though it
+   * already holds the binding the runtime would supply. The runtime is what adds
+   * the approved binding and the validated-evidence dependency check; calling the
+   * module directly here would let a launch skip both.
+   */
+  prepareAssignment(input: Omit<AssignmentInput, "binding" | "dependencySatisfied">): Promise<{ context: { generatedHash: string } }>;
+  candidateSourceUnchanged(runId: string, taskId: string): { unchanged: boolean };
+  releaseCandidate(runId: string, taskId: string): void;
+}
 type LaunchState = {
   input: WorkerLaunchInput;
   preflight?: WorkerLaunchPreflight;
@@ -190,7 +219,7 @@ type LaunchState = {
   evidencePersistenceFailed?: boolean;
 };
 class WorkerLaunchFault extends Error {
-  constructor(readonly code: string) { super(code); }
+  constructor(readonly code: string, readonly detail?: string) { super(code); }
 }
 function requireFact(condition: unknown, code: string): asserts condition {
   if (!condition) throw new WorkerLaunchFault(code);
@@ -229,7 +258,13 @@ function sharedOutput(output: WorkerObservation["output"], secrets: string[]): W
 export class RestrictedWorkerLauncher implements WorkerLauncher {
   private states = new Map<string, LaunchState>();
   private context?: typeof import("../integrations/framework/context-manifest.js");
-  constructor(private control: WorkerLaunchControl, private now: () => number = Date.now, private sessionId: () => string = randomUUID) {}
+  constructor(private control: WorkerLaunchControl, private now: () => number = Date.now, private sessionId: () => string = randomUUID,
+    /**
+     * T039: the only production admission path. When supplied, the launcher asks
+     * the runtime to admit the assignment and place its candidate tree before the
+     * control preflights anything; a refusal never reaches a privileged call.
+     */
+    private admission?: WorkerLaunchAdmission) {}
 
   async launch(input: WorkerLaunchInput): Promise<HarnessLaunchResult> {
     let state: LaunchState;
@@ -247,16 +282,45 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       const { attempt, client, resumeToken } = input;
       this.checkDeadline(attempt);
       requireFact(attempt.context.client === client, "managed_client_mismatch");
+      // T039: eligibility and the candidate tree are settled before the control
+      // resolves the assigned tree, because that tree must already be this task's
+      // candidate. A refused assignment therefore creates no candidate and reaches
+      // no privileged call, including the read-only `--inspect` preflight.
+      const admitted = this.admission
+        ? (() => {
+            try {
+              return this.admission.admitForLaunch(attempt.context.runId, {
+                assignment: attempt.context.assignment, outputs: attempt.context.outputs,
+                permissions: attempt.context.permissions, context: attempt.context,
+              });
+            } catch (error) {
+              throw new WorkerLaunchFault("managed_assignment_refused", error instanceof Error ? error.message : undefined);
+            }
+          })()
+        : undefined;
+      requireFact(admitted === undefined || /^\/[^\0]{1,4095}$/.test(admitted.candidate), "managed_candidate_unavailable");
       const { assignment, ...metadata } = await this.control.preflight(input);
       const preflight = state.preflight = {
         ...immutable(structuredClone(metadata)),
         assignment: { ...assignment, observed: immutable(structuredClone(assignment.observed)) },
       };
+      // The control resolves the assigned tree from the installed policy; it must
+      // be the exact candidate this launch admitted, never a shared or source tree.
+      requireFact(admitted === undefined || preflight.worker.tree === admitted.candidate, "managed_candidate_mismatch");
       const policy = preflight.installedPolicy;
       const network = this.networkPolicy(preflight);
       this.checkContextProjection(attempt, preflight);
       await this.checkNativePreflight(attempt, preflight);
-      const prepared = await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
+      // Prepared through the runtime, never by calling the module directly: the
+      // runtime supplies the approved binding and the validated-evidence
+      // dependency check that a direct call would have to re-derive. The
+      // unmanaged branch exists only for module-level callers that construct this
+      // launcher without a runtime; production startup always supplies one, and
+      // `managed-native-startup.test.ts` proves the composed path reaches
+      // admission.
+      const prepared = this.admission
+        ? await this.admission.prepareAssignment({ ...preflight.assignment, context: attempt.context })
+        : await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
       requireFact(prepared.context.generatedHash === attempt.context.generatedHash, "managed_context_mismatch");
       requireFact(preflight.worker.uid !== preflight.control.uid && preflight.worker.uid > 0
         && preflight.worker.uid === attempt.context.workerUid && same(groups(preflight.worker.groups), groups(attempt.context.workerGroups)),
@@ -303,7 +367,11 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       });
       await this.record(state, { phase: "prepared" });
       this.checkDeadline(attempt);
-      await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
+      // Re-checked after the recorded preparation: the same runtime path, so the
+      // last word on eligibility before any start effect is not a direct module call.
+      await (this.admission
+        ? this.admission.prepareAssignment({ ...preflight.assignment, context: attempt.context })
+        : prepareTeamAssignment({ ...preflight.assignment, context: attempt.context }));
       this.checkDeadline(attempt);
       state.startRequested = true;
       state.identity = immutable(parseAttemptIdentity(await this.control.start(command)));
@@ -317,7 +385,13 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       const code = error instanceof WorkerLaunchFault ? error.code
         : error instanceof Error && error.message === UNSUPPORTED_CLIENT_VERSION ? UNSUPPORTED_CLIENT_VERSION : "managed_launch_unverified";
       await this.block(state, code);
-      return { ok: false, error: "Managed launch blocked: " + state.blocked + "; " + this.blockReason(state), recovery: "attention_required" };
+      // The cause travels with the refusal, but never as raw error text: an
+      // underlying message can carry a path, a command line or a credential, and
+      // this string reaches the caller. Only codes this launcher itself assigns
+      // are surfaced; anything else stays behind "managed_launch_unverified".
+      const detail = error instanceof WorkerLaunchFault ? error.detail : undefined;
+      return { ok: false, error: "Managed launch blocked: " + state.blocked + "; " + this.blockReason(state)
+        + (detail ? "; cause: " + detail : ""), recovery: "attention_required" };
     }
   }
 

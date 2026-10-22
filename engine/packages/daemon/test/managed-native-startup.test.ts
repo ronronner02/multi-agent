@@ -1427,7 +1427,17 @@ describe("production managed launch composition", () => {
     policy.paths.assignment_root = join(scratch, "assignments");
     mkdirSync(join(policy.paths.assignment_root, "ma-worker1", "project"), { recursive: true });
     policyBytes = Buffer.from(JSON.stringify(policy));
-    current = { ...binding, policyFingerprint: hashBytes(policyBytes) };
+    // T039: isolation stages the run's own repository rather than launching from the
+    // binding's declared path, so the fixture supplies a real one. The policy and the
+    // installed launcher are still faked exactly as before.
+    const repositoryRoot = join(scratch, "repo");
+    mkdirSync(join(repositoryRoot, "src"), { recursive: true });
+    writeFileSync(join(repositoryRoot, "plan.md"), "approved plan\n");
+    execFileSync("git", ["-C", repositoryRoot, "init", "--quiet", "--initial-branch=main"]);
+    execFileSync("git", ["-C", repositoryRoot, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "add", "."]);
+    execFileSync("git", ["-C", repositoryRoot, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "--quiet", "-m", "base"]);
+    current = { ...binding, repository: { root: repositoryRoot, identity: binding.repository.identity },
+      planDigest: hashBytes("approved plan\n"), policyFingerprint: hashBytes(policyBytes) };
     actualExecFile = (await vi.importActual<typeof import("node:child_process")>("node:child_process")).execFile;
     processIo.stats.clear(); processIo.stats.set(LOCK, lock);
     inspectionIo.readPolicy.mockReset(); inspectionIo.readPolicy.mockImplementation(() => Buffer.from(policyBytes));

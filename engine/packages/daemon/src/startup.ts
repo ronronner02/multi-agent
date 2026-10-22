@@ -147,13 +147,13 @@ import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode } from "./domain/plan-governance.js";
 import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
-import { RestrictedWorkerLauncher } from "./adapters/worker-launch.js";
+import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters/worker-launch.js";
 import { createManagedLaunchControl } from "./adapters/worker-launch-control.js";
 import { ProviderServiceImpl } from "./domain/provider/provider-service-impl.js";
 import { collectClaudeSignalsFromProviderUsageDirectory } from "./domain/provider/claude-usage-reader.js";
 import { legacyProviderUsageDirectory, providerUsageDirectory } from "./domain/telemetry-state-paths.js";
 import { execFile } from "node:child_process";
-import fs from "node:fs";
+import fs, { readFileSync as readFileSyncNamed } from "node:fs";
 import os from "node:os";
 import nodePath from "node:path";
 // Slice 11 (release-0.3.1 workflow-spec-folder-discovery) — adds
@@ -301,6 +301,8 @@ export function collectAllowlistedProviderAuthEnv(
 function composeManagedLaunch(dependencies: {
   db: Database.Database; governance: PlanGovernance; queue: QueueRepository; options: NonNullable<AppDeps["teamControl"]>;
   rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
+  /** T039: the workflow runtime a managed launch must be admitted through. Read at launch, not at composition. */
+  workflowRuntime: () => WorkflowRuntime | undefined;
 }) {
   const { db, governance, queue, rigRepo, sessions } = dependencies;
   // The verified native is the same instance only while its start time is unchanged; a reused PID is another process.
@@ -332,7 +334,17 @@ function composeManagedLaunch(dependencies: {
   };
   const control = createManagedLaunchControl({ ...dependencies,
     resolvePane: async sessionId => seat(sessionId).pane,
-    resolveAssignedTree: scope => seat(scope.sessionId, scope.run.rigId).tree,
+    // T039: the tree an implementation launch gets is its own candidate, never the
+    // seat's working directory. The seat is still resolved first, because that is
+    // what refuses an aliased tree, a rebound terminal or a stale session before
+    // any privileged call — isolation changes where the worker works, not which
+    // seat is admitted. Reviewers only read a candidate, so they keep the seat tree.
+    resolveAssignedTree: (scope, worker) => {
+      const resolved = seat(scope.sessionId, scope.run.rigId);
+      return scope.task.assignment.role === "reviewer"
+        ? resolved.tree
+        : requireWorkflowRuntime().candidateFor(scope.run.id, scope.task.assignment.taskId).root;
+    },
     mailbox: input => {
       const endpoint = endpoints.get(input.attempt.attemptId);
       if (!endpoint) throw new Error("managed_mailbox_unregistered");
@@ -344,11 +356,51 @@ function composeManagedLaunch(dependencies: {
     get tmuxServer() { return tmuxServer(); },
   });
   const guarded = channel.guard(control, (runId, attemptId) => governance.getNativeLaunchIntent(runId, attemptId)?.sessionId);
+  // T039: the launcher asks the workflow runtime to admit each assignment and place
+  // its candidate tree. The runtime is constructed later in startup, but no managed
+  // launch can run before startup completes, so the reference is read at launch time
+  // rather than captured here — the same late-read shape as `tmuxServer` above.
+  const admission: WorkerLaunchAdmission = {
+    admitForLaunch: (runId, input) => requireWorkflowRuntime().admitForLaunch(runId, input),
+    prepareAssignment: input => requireWorkflowRuntime().prepareLaunchAssignment(input),
+    candidateSourceUnchanged: (runId, taskId) => requireWorkflowRuntime().candidateSourceUnchanged(runId, taskId),
+    releaseCandidate: (runId, taskId) => requireWorkflowRuntime().releaseCandidate(runId, taskId),
+  };
+  /** A managed launch without an approved runtime would bypass eligibility, so it refuses instead. */
+  const requireWorkflowRuntime = (): WorkflowRuntime => {
+    const runtime = dependencies.workflowRuntime();
+    if (!runtime) throw new Error("managed_launch_runtime_unavailable");
+    return runtime;
+  };
   // A blocked attempt never launches again, so its endpoint registration is dropped once the block is recorded.
   const launcher = new RestrictedWorkerLauncher({ ...guarded, record: async event => {
     try { await guarded.record(event); } finally { if (event.phase === "blocked") endpoints.delete(event.attemptId); }
-  } });
+  } }, Date.now, randomUUID, admission);
   return { launcher, channel, endpoints };
+}
+
+/**
+ * T039: the roots the workflow runtime isolates candidates with.
+ *
+ * Both come from the installed worker policy — the same bytes the privileged
+ * launcher validates — so a candidate is created exactly where the kernel will
+ * mount it. Reading the same source is what keeps "created" and "mountable" from
+ * drifting apart. An unreadable or incomplete policy is a configuration failure,
+ * not a reason to launch without isolation.
+ */
+function managedWorkerRoots(): { assignmentRoot: string; worker: string } {
+  const policy = JSON.parse(readFileSyncNamed("/etc/multi-agent/worker-policy.json", "utf8")) as
+    { paths?: { assignment_root?: unknown }; worker_identities?: unknown };
+  const assignmentRoot = policy.paths?.assignment_root;
+  const workers = Array.isArray(policy.worker_identities) ? policy.worker_identities : [];
+  if (typeof assignmentRoot !== "string" || !nodePath.isAbsolute(assignmentRoot) || nodePath.resolve(assignmentRoot) !== assignmentRoot
+    || !workers.length || typeof workers[0] !== "string") throw new Error("managed_candidate_policy_unavailable");
+  return { assignmentRoot, worker: workers[0] };
+}
+
+/** One tree per task, under the policy's assignment root, addressed the way the launcher expects. */
+function managedCandidateRoot(assignmentRoot: string, worker: string, runId: string, taskId: string): string {
+  return nodePath.join(assignmentRoot, worker, `${runId}-${taskId}`);
 }
 
 export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> {
@@ -695,7 +747,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // KTD22: one governance owner serves the app and the managed launch chain, which only managed attempts reach.
   const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, teamControl.readPolicyCapability);
   const managedLaunch = managed ? composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
-    options: teamControl, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter }) : undefined;
+    options: teamControl, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
+    // Read when a launch is admitted, after startup has constructed the runtime.
+    workflowRuntime: () => workflowRuntime }) : undefined;
   const workerLauncher = managedLaunch ? { workerLauncher: managedLaunch.launcher } : {};
   const claudeResume = new ClaudeResumeAdapter(tmuxAdapter, { claudeManagedLaunch, seatLaunchEnvironment, ...workerLauncher });
   // #275: one reader for both Codex launch adapters, with the PATH, HOME and CODEX_HOME a seat session gets.
@@ -1586,11 +1640,22 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     | import("./domain/workflow-exception-escalation.js").EnsureStuckExceptionItem
     | undefined;
   if (queueRepoForWorkflow) {
+    // T039: in managed mode the runtime is the isolation owner, so it gets the roots
+    // the kernel mounts from. They are read once here from the installed policy — the
+    // same bytes the privileged launcher validates — so a candidate is created exactly
+    // where the launcher will look for it. An unreadable policy throws rather than
+    // silently launching without isolation.
+    const workerRoots = managed ? managedWorkerRoots() : undefined;
     workflowRuntime = new WorkflowRuntime({
       guidanceLibrary: contextPackLibrary,
       db,
       eventBus,
       queueRepo: queueRepoForWorkflow,
+      ...(workerRoots ? {
+        assignmentRoot: () => workerRoots.assignmentRoot,
+        candidateRoot: (runId: string, taskId: string) =>
+          managedCandidateRoot(workerRoots.assignmentRoot, workerRoots.worker, runId, taskId),
+      } : {}),
       // OPR.0.4.6.WF1 FR-3: instantiate/handoff auto-arm the
       // per-instance workflow-keepalive job in-txn; terminal disarms.
       watchdogJobsRepo: watchdogJobsRepoInstance,
