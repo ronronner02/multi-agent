@@ -77,7 +77,7 @@ describe("production launch runs through runtime eligibility and one candidate w
   /** The attempt projection: admission reads the worker from it, and the launcher binds it per attempt. */
   const projectionFor = (attemptId: string) => ({
     worker: "ma-worker1", attemptId, controlUid: 1000, workerGid: 1001,
-    policy: { policy_revision: 5, worker_identities: ["ma-worker1"],
+    policy: { policy_revision: 4, worker_identities: ["ma-worker1"],
       paths: { context_root: join(directory, "context"), framework_dir: join(directory, "framework") },
       sandbox: { context: "/run/context", framework: "/opt/framework" } } });
 
@@ -100,12 +100,15 @@ describe("production launch runs through runtime eligibility and one candidate w
     repo = repository();
     assignmentRoot = join(directory, "assignments");
     mkdirSync(join(assignmentRoot, "ma-worker1"), { recursive: true });
+    // The launcher requires the worker's home and scratch to be their own realpaths.
+    mkdirSync(join(directory, "worker", "home"), { recursive: true });
+    mkdirSync(join(directory, "worker", "scratch"), { recursive: true });
     binding = {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
       planRef: "plan.md", planDigest: hashBytes("approved plan"),
       repository: { root: repo, identity: "git:" + "a".repeat(40) },
       readPaths: ["src"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
-      policyRevision: 5, policyFingerprint: hashBytes("policy"),
+      policyRevision: 4, policyFingerprint: hashBytes("policy"),
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
     // The plan is committed so the checkout's only dirty entry is the owner's own
@@ -162,22 +165,35 @@ describe("production launch runs through runtime eligibility and one candidate w
         options.observe?.(input);
         // The control resolves the assigned tree from the installed policy; the
         // launcher must have admitted exactly that tree beforehand.
-        const tree = options.assignedTree ?? candidateDir(ma-worker1, run-1, input.attempt.context.assignment.taskId);
+        const tree = options.assignedTree ?? candidateDir("ma-worker1", "run-1", input.attempt.context.assignment.taskId);
         return ({ assignment: { binding, currentBinding: binding, assignment: input.attempt.context.assignment,
           outputs: [...input.attempt.context.outputs], permissions: [...input.attempt.context.permissions],
           context: input.attempt.context, observed: { discoveryRoots: [], files: [] }, dependencySatisfied: () => true },
-          worker: { name: "ma-worker1", uid: 1001, gid: 1001, groups: [], home: "/var/lib/multi-agent/workers/ma-worker1/home",
-            scratch: "/var/lib/multi-agent/workers/ma-worker1/scratch", tree },
+          // The launcher requires each of these to be its own realpath, so the
+          // fixture creates real directories instead of naming a host path.
+          worker: { name: "ma-worker1", uid: 1001, gid: 1001, groups: [],
+            home: join(directory, "worker", "home"), scratch: join(directory, "worker", "scratch"), tree },
           control: { uid: 1000, mountNamespace: "mnt:control", userNamespace: "user:control" },
           executable: "/opt/multi-agent/toolchain/clients/bin/claude", executableVersion: "fixture", generation: 1,
           policyFingerprint: binding.policyFingerprint, policyRevision: binding.policyRevision,
-          clientLock: { digest: hashBytes("lock"), version: "fixture", files: [], observedFiles: [] },
+          // A passing KTD27 lock: the launcher requires a sha256 digest, at least
+          // one locked file, and the observed hashes to be exactly the locked ones
+          // re-rooted at the toolchain directory.
+          clientLock: { digest: hashBytes("lock"), version: "fixture",
+            files: [{ path: "clients/fixture", sha256: hashBytes("client") }],
+            observedFiles: [{ path: "/opt/multi-agent/toolchain/clients/fixture", sha256: hashBytes("client") }] },
           installedPolicy: { policy_revision: binding.policyRevision, worker_identities: ["ma-worker1"],
             paths: { context_root: join(directory, "context"), framework_dir: join(directory, "framework"),
               toolchain_dir: "/opt/multi-agent/toolchain", egress_socket_dir: "/run/multi-agent-egress" },
-            sandbox: { network: "filtered-proxy", etc_ro_binds: [], masked_paths: [] } },
+            // The projection's own policy bytes are compared field by field against
+            // these, so the fixture has to carry the same context/framework targets
+            // that `projectionFor` supplies; otherwise the launch refuses at
+            // `managed_context_mount_policy_mismatch` and never reaches the code
+            // these tests exist to prove.
+            sandbox: { context: "/run/context", framework: "/opt/framework",
+              network: "filtered-proxy", etc_ro_binds: [], masked_paths: [] } },
           network: { mode: "filtered-proxy", hostNamespace: "net:[100]", profileFingerprint: hashBytes("egress"), preflightRef: "evidence" },
-          provider: { status: "signed_in", client: "claude-code", home: "/var/lib/multi-agent/workers/ma-worker1/home", evidenceRef: "evidence" },
+          provider: { status: "signed_in", client: "claude-code", home: join(directory, "worker", "home"), evidenceRef: "evidence" },
           credentialValues: [] } as never);
       },
       start: async () => { calls.start += 1; throw new Error("test stops before the privileged call"); },
@@ -204,12 +220,33 @@ describe("production launch runs through runtime eligibility and one candidate w
 
   it("creates exactly one candidate for the task before the control preflights", async () => {
     let treeSeenByControl: string | undefined;
-    const { fake, calls } = control({ observe: input => { treeSeenByControl = input.attempt.context.assignment.taskId; } });
+    // Captured *inside* preflight: the candidate must already exist by then, which
+    // is the ordering this test is named for. Checking afterwards proves nothing,
+    // because a refused launch releases the tree it never used.
+    let candidateExistedAtPreflight = false;
+    const { fake, calls } = control({ observe: input => {
+      treeSeenByControl = input.attempt.context.assignment.taskId;
+      candidateExistedAtPreflight = existsSync(candidateDir("ma-worker1", "run-1", input.attempt.context.assignment.taskId));
+    } });
     const result = await launcher(fake).launch(launchInput());
-    // The launch stops at the privileged boundary, which this test never crosses.
+    // This fixture reaches admission, the control preflight and the tree match, then
+    // stops where the runtime re-prepares the assignment: its context is shaped for
+    // admission, not a real `ContextManifest` with a verifiable `generatedHash`, so
+    // `prepareLaunchAssignment` refuses it. Running past that point is
+    // `native-session-contract.test.ts`'s fixture, which builds a real projection.
+    // What matters here is that the refusal is not one of the admission codes —
+    // those are all decided before preflight — so this proves the launch got past
+    // admission and the tree match rather than passing for the wrong reason.
     expect(result.ok).toBe(false);
+    expect(String(result.error)).not.toMatch(/Run is not approved|expands the approved scope|Dependency lacks validated success/);
+    expect(String(result.error)).toMatch(/managed_launch_unverified|managed_context_mismatch/);
+    expect(calls.start).toBe(0);
     expect(calls.preflight).toBeGreaterThan(0);
     expect(treeSeenByControl).toBe("T039");
+    expect(candidateExistedAtPreflight).toBe(true);
+    // The refused launch released the claim it took, so its tree is gone rather than
+    // left on disk for nothing to own.
+    expect(existsSync(candidateDir("ma-worker1", "run-1", "T039"))).toBe(false);
     const manifest = candidateManifest(runtime.candidateFor("run-1", "T039"));
     expect(manifest.base).toBe("commit");
     expect(manifest.files.map(file => file.path)).toContain("src/base.ts");
@@ -252,19 +289,23 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(String(result.error)).toMatch(/managed_candidate_mismatch/);
   });
 
-  it("admits a reviewer into the same candidate the implementer produced", async () => {
-    // A reviewer's assigned tree is the candidate, not the seat's working
-    // directory: the packet it receives is bound to that tree's manifest, so
-    // launching it anywhere else would review something the implementer never
-    // wrote. Admission returns the candidate for every role, so resolving the seat
-    // tree here would refuse every reviewer launch after its privileged preflight.
+  it("admits a reviewer into the reviewer's own candidate, mounted read-only", async () => {
+    // A reviewer is a separate task row with its own `taskId`
+    // (`team_queue_authority` is UNIQUE(run_id, task_id) with one role per row), so
+    // the reviewer's candidate is its own tree, not the implementer's. What this
+    // covers is that role does not decide *which* tree a launch gets and that
+    // admission does not refuse a read-only role; handing the reviewer the tree
+    // under review needs a field `ScopedAssignment` does not have, and is recorded
+    // as a plan question in the residuals rather than claimed here.
     const implementer = runtime.admitForLaunch("run-1", { attemptId: "attempt-impl", worker: "ma-worker1",
       assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    const reviewContext = { ...contextFor({ role: "reviewer" }),
+      assignment: { taskId: "review-1", role: "reviewer", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["submit-review"] } as unknown as ContextManifest;
     const reviewer = runtime.admitForLaunch("run-1", { attemptId: "attempt-review", worker: "ma-worker1",
-      assignment: { taskId: "T039", role: "reviewer", paths: ["src"], dependencies: ["T011"] },
-      outputs: [], permissions: ["submit-review"], context: contextFor({ role: "reviewer" }) });
-    expect(reviewer.candidate).toBe(implementer.candidate);
-    expect(reviewer.manifestDigest).toBe(implementer.manifestDigest);
+      assignment: reviewContext.assignment, outputs: [], permissions: ["submit-review"], context: reviewContext });
+    expect(reviewer.candidate).toBe(candidateDir("ma-worker1", "run-1", "review-1"));
+    expect(reviewer.candidate).not.toBe(implementer.candidate);
   });
 
   it("refuses a claimed candidate in another worker's assignment directory", async () => {
@@ -441,6 +482,27 @@ describe("production launch runs through runtime eligibility and one candidate w
       assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
     runtime.releaseCandidate("run-1", "T039", "attempt-after-refusal");
     expect(existsSync(candidateDir("ma-worker1"))).toBe(false);
+  });
+
+  it("releases a candidate invalidated by a moved source instead of stranding it", () => {
+    // A candidate whose source moved is refused at every reuse, but the tree is still
+    // on disk and its owners are the only ones who can release it. Dropping the
+    // record at refusal would leave the bytes with nothing able to remove them, and
+    // the next attempt's `git worktree add` would then fail on the occupied path,
+    // wedging the task until someone deleted the directory by hand.
+    const tree = candidateDir("ma-worker1");
+    const before = readFileSync(join(repo, "src", "base.ts"), "utf8");
+    runtime.admitForLaunch("run-1", { attemptId: "attempt-invalidated", worker: "ma-worker1",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    expect(existsSync(tree)).toBe(true);
+    writeFileSync(join(repo, "src", "base.ts"), "export const base = 9;\n");
+    expect(() => runtime.candidateFor("run-1", "T039")).toThrow(/Source checkout changed/);
+    // Refused again, not silently re-created.
+    expect(() => runtime.candidateFor("run-1", "T039")).toThrow(/Source checkout changed/);
+    // The owner can still release it, and the tree actually goes away.
+    runtime.releaseCandidate("run-1", "T039", "attempt-invalidated");
+    expect(existsSync(tree)).toBe(false);
+    writeFileSync(join(repo, "src", "base.ts"), before);
   });
 
   it("re-enters a candidate that is already on disk after a restart", () => {

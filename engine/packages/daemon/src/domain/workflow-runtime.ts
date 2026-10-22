@@ -322,6 +322,9 @@ export class WorkflowRuntime {
    */
   candidateFor(runId: string, taskId: string, worker?: string): CandidateWorkspace {
     const key = `${runId}\u0000${taskId}`;
+    // An invalidated candidate stays recorded so its owners can still release it,
+    // but no caller may enter it again.
+    if (this.invalidCandidates.has(key)) throw new Error("Source checkout changed while the candidate was staged");
     const existing = this.candidates.get(key);
     if (existing) {
       // A candidate lives in one worker's assignment directory, and only that
@@ -353,10 +356,11 @@ export class WorkflowRuntime {
         // refuses rather than returning it — and every packet, identity and delivery
         // path goes through here.
         if (!verifySourceUnchanged(existing).unchanged) {
-          // The tree is invalid, but it may still be owned by a live attempt. Drop the
-          // record so no new launch is admitted into it; the owners release the bytes.
-          this.candidates.delete(key);
-          this.candidateWorker.delete(key);
+          // The record is *kept*: the tree still exists on disk and the attempts that
+          // hold it are the only ones who can release it, so dropping it here would
+          // leave `releaseCandidate` with nothing to remove and strand the bytes.
+          // It is refused rather than returned, so no launch can enter it again.
+          this.invalidCandidates.add(key);
           throw new Error("Source checkout changed while the candidate was staged");
         }
         return existing;
@@ -455,6 +459,7 @@ export class WorkflowRuntime {
     const key = `${runId}\u0000${taskId}`, owners = this.candidateOwners.get(key);
     if (!owners?.delete(attemptId) || owners.size > 0) return;
     this.candidateOwners.delete(key);
+    this.invalidCandidates.delete(key);
     const workspace = this.candidates.get(key);
     if (!workspace) return;
     this.candidates.delete(key);
@@ -742,6 +747,8 @@ export class WorkflowRuntime {
   private readonly candidateOwners = new Map<string, Set<string>>();
   /** T039 — the worker whose assignment directory holds each candidate, so reuse cannot cross workers. */
   private readonly candidateWorker = new Map<string, string>();
+  /** T039 — candidates refused because the source moved; kept so their owners can still release them. */
+  private readonly invalidCandidates = new Set<string>();
   private readonly candidateRoot?: WorkflowRuntimeDeps["candidateRoot"];
   private readonly assignmentRoot?: () => string;
   private readonly defaultWorker?: () => string;

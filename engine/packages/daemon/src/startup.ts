@@ -335,13 +335,17 @@ function composeManagedLaunch(dependencies: {
   const control = createManagedLaunchControl({ ...dependencies,
     resolvePane: async sessionId => seat(sessionId).pane,
     // T039: every role launches into the task's own candidate, never the seat's
-    // working directory. Reviewers get the same candidate mounted read-only
-    // (`worker-launch.ts` decides access by role), so a reviewer reads the exact
-    // tree the implementer produced — which is the point of the packet binding.
-    // Admission returns the candidate unconditionally, so returning the seat tree
-    // here would refuse every reviewer launch after its privileged preflight.
-    // The seat is still resolved first, because that is what refuses an aliased
-    // tree, a rebound terminal or a stale session before any privileged call.
+    // working directory. The seat is still resolved first, because that is what
+    // refuses an aliased tree, a rebound terminal or a stale session before any
+    // privileged call — isolation changes where the worker works, not which seat is
+    // admitted.
+    //
+    // Note what this does *not* claim: a reviewer is a separate task row with its own
+    // `taskId` (`team_queue_authority` is UNIQUE(run_id, task_id), one role per row),
+    // so "the task's candidate" for a reviewer is the reviewer's own tree, not the
+    // implementer's. Handing a reviewer the tree under review needs a field naming
+    // that task, which `ScopedAssignment` does not have; that is a plan question
+    // recorded in the T039 residuals, not something this line can invent.
     resolveAssignedTree: (scope) => {
       seat(scope.sessionId, scope.run.rigId);
       return requireWorkflowRuntime().candidateFor(scope.run.id, scope.task.assignment.taskId).root;
