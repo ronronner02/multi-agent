@@ -326,25 +326,41 @@ export class WorkflowRuntime {
     if (existing) {
       // A candidate lives in one worker's assignment directory, and only that
       // worker's launches can mount it. Handing it to another worker would produce
-      // a tree the kernel refuses, so the mismatch is refused here rather than at
-      // the privileged preflight. A caller that names no worker (packet, identity,
-      // source check) is asking about the task's one candidate, not a worker's.
+      // a tree the kernel refuses, so the mismatch cannot be papered over.
+      //
+      // Which way it resolves depends on whether anybody is using the tree. A
+      // *claimed* candidate belongs to its attempts and a launch on another worker
+      // is refused: staging a second tree would fork one task's work across two,
+      // which is exactly what one-candidate-per-task forbids. An *unclaimed* one is
+      // only a path a reader guessed at, because the packet and identity accessors
+      // name no worker and fall back to the default; re-homing it is safe and is
+      // what keeps a reader from deciding where a later launch has to run.
       const owner = this.candidateWorker.get(key);
-      if (worker !== undefined && owner !== undefined && worker !== owner)
-        throw new Error("Candidate belongs to a different worker");
-      // T039: a candidate is only usable while the source checkout it was staged
-      // from is unmoved. Handing one back after the owner's tree changed would
-      // present a tree as evidence of work the source no longer supports, so this
-      // refuses rather than returning it — and every packet, identity and delivery
-      // path goes through here.
-      if (!verifySourceUnchanged(existing).unchanged) {
-        // The tree is invalid, but it may still be owned by a live attempt. Drop the
-        // record so no new launch is admitted into it; the owners release the bytes.
+      if (worker !== undefined && owner !== worker) {
+        // A record with no worker was staged by a reader that names none (packet,
+        // identity, source check) in the default worker's directory. It belongs to
+        // no attempt, so it is re-homed rather than allowed to decide where the
+        // real launch runs.
+        const claimed = (this.candidateOwners.get(key)?.size ?? 0) > 0;
+        if (claimed) throw new Error("Candidate belongs to a different worker");
         this.candidates.delete(key);
         this.candidateWorker.delete(key);
-        throw new Error("Source checkout changed while the candidate was staged");
+        this.removeWorkspace(existing);
+      } else {
+        // T039: a candidate is only usable while the source checkout it was staged
+        // from is unmoved. Handing one back after the owner's tree changed would
+        // present a tree as evidence of work the source no longer supports, so this
+        // refuses rather than returning it — and every packet, identity and delivery
+        // path goes through here.
+        if (!verifySourceUnchanged(existing).unchanged) {
+          // The tree is invalid, but it may still be owned by a live attempt. Drop the
+          // record so no new launch is admitted into it; the owners release the bytes.
+          this.candidates.delete(key);
+          this.candidateWorker.delete(key);
+          throw new Error("Source checkout changed while the candidate was staged");
+        }
+        return existing;
       }
-      return existing;
     }
     if (!this.candidateRoot || !this.assignmentRoot) throw new Error("Candidate isolation is not configured");
     const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
@@ -361,14 +377,19 @@ export class WorkflowRuntime {
     // stranded in a directory nothing can name. Adoption re-derives the same
     // workspace shape from the recorded base and re-fingerprints the source, so the
     // adopted tree is held to exactly the checks a created one is.
-    const adopted = this.adoptCandidate(runId, taskId, owner, workspaceRoot);
+    //
+    // A caller that names no worker is not adopting: it is only reading (packet,
+    // identity, source check), and it has no way to know which worker the task
+    // belongs to. Recording `defaultWorker` for it would pin the task to that
+    // worker and refuse the real launch on any other one.
+    const adopted = this.adoptCandidate(runId, taskId, workspaceRoot);
     if (adopted) {
-      this.candidateWorker.set(key, owner);
+      if (worker !== undefined) this.candidateWorker.set(key, worker);
       this.candidates.set(key, adopted);
       return adopted;
     }
     const workspace = createCandidateWorkspace({ root: run.binding.repository.root, base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
-    this.candidateWorker.set(key, owner);
+    if (worker !== undefined) this.candidateWorker.set(key, worker);
     this.candidates.set(key, workspace);
     return workspace;
   }
@@ -377,12 +398,12 @@ export class WorkflowRuntime {
    * T039 — re-enter a candidate this runtime already staged, before a restart.
    *
    * Adopted only when the path is already a directory. Anything else — a file, a
-   * symlink, a path outside the assignment root (checked by the caller) — is left
-   * to `createCandidateWorkspace`, which refuses it loudly rather than silently
-   * working in a tree of unknown provenance. The base is resolved from the current
-   * source, so the source-moved check downstream still applies to the adopted tree.
+   * symlink — is left to `createCandidateWorkspace`, which refuses it loudly rather
+   * than silently working in a tree of unknown provenance. The base is resolved
+   * from the current source, so the source-moved check downstream still applies to
+   * the adopted tree.
    */
-  private adoptCandidate(runId: string, taskId: string, worker: string, workspaceRoot: string): CandidateWorkspace | undefined {
+  private adoptCandidate(runId: string, taskId: string, workspaceRoot: string): CandidateWorkspace | undefined {
     let stats;
     try { stats = statSync(workspaceRoot); } catch { return undefined; }
     if (!stats.isDirectory()) return undefined;
@@ -494,9 +515,13 @@ export class WorkflowRuntime {
     const candidate = this.candidateFor(runId, assignment.taskId, input.worker);
     // Only an attempt that is actually handed the candidate owns it. Recording
     // ownership here is what lets a later refusal tell "my tree" from "someone
-    // else's live tree" instead of guessing.
+    // else's live tree" instead of guessing. The digest is read first on purpose: a
+    // manifest failure after the claim was taken would leave an owner that never
+    // received anything, and the reference count would then hold the tree forever
+    // because nothing knows to release it.
+    const manifestDigest = candidateManifest(candidate).manifestDigest;
     this.retainCandidate(`${runId}\u0000${assignment.taskId}`, input.attemptId);
-    return { candidate: candidate.root, manifestDigest: candidateManifest(candidate).manifestDigest };
+    return { candidate: candidate.root, manifestDigest };
   }
 
   /** T039 — the worker a non-launch accessor falls back to when it has no attempt. */
