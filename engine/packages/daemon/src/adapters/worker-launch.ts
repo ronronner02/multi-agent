@@ -224,6 +224,24 @@ class WorkerLaunchFault extends Error {
 function requireFact(condition: unknown, code: string): asserts condition {
   if (!condition) throw new WorkerLaunchFault(code);
 }
+/**
+ * T039 — the stable, path-free part of an admission refusal.
+ *
+ * The runtime's refusals all begin with a fixed clause. Only that clause is kept,
+ * because the rest of a message can name a repository path, a candidate directory
+ * or an underlying filesystem error, and this value reaches the caller. Graph
+ * refusals are the exception: their reason is built from task ids and
+ * repository-relative claims, both of which the caller already knows, and the
+ * distinction between a cycle and an overlapping claim is the actionable part.
+ */
+function refusalCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const clauses = ["Run is not approved", "Assignment role is outside the approval",
+    "Assignment or output expands the approved scope", "Dependency lacks validated success",
+    "Candidate isolation is not configured", "Candidate root is outside the assignment root"];
+  if (message.startsWith("Dependency graph refused")) return message;
+  return clauses.find(prefix => message.startsWith(prefix)) ?? "admission refused";
+}
 function same(a: unknown, b: unknown): boolean { return canonicalJson(a) === canonicalJson(b); }
 function groups(value: number[]): number[] { return [...value].sort((a, b) => a - b); }
 const configHome = (client: WorkerClient) => "/home/worker/" + (client === "codex" ? ".codex" : ".claude");
@@ -286,18 +304,22 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       // resolves the assigned tree, because that tree must already be this task's
       // candidate. A refused assignment therefore creates no candidate and reaches
       // no privileged call, including the read-only `--inspect` preflight.
-      const admitted = this.admission
-        ? (() => {
-            try {
-              return this.admission.admitForLaunch(attempt.context.runId, {
-                assignment: attempt.context.assignment, outputs: attempt.context.outputs,
-                permissions: attempt.context.permissions, context: attempt.context,
-              });
-            } catch (error) {
-              throw new WorkerLaunchFault("managed_assignment_refused", error instanceof Error ? error.message : undefined);
-            }
-          })()
-        : undefined;
+      //
+      // Only the refusal *code* travels onward. Admission's message can quote a
+      // filesystem path or a workspace error, and this string reaches the caller, so
+      // the detail stays out — the runtime's own refusals are classifiable by their
+      // first sentence instead, which carries no path.
+      let admitted: { candidate: string; manifestDigest: string } | undefined;
+      if (this.admission) {
+        try {
+          admitted = this.admission.admitForLaunch(attempt.context.runId, {
+            assignment: attempt.context.assignment, outputs: attempt.context.outputs,
+            permissions: attempt.context.permissions, context: attempt.context,
+          });
+        } catch (error) {
+          throw new WorkerLaunchFault("managed_assignment_refused", refusalCode(error));
+        }
+      }
       requireFact(admitted === undefined || /^\/[^\0]{1,4095}$/.test(admitted.candidate), "managed_candidate_unavailable");
       const { assignment, ...metadata } = await this.control.preflight(input);
       const preflight = state.preflight = {
@@ -385,6 +407,14 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       const code = error instanceof WorkerLaunchFault ? error.code
         : error instanceof Error && error.message === UNSUPPORTED_CLIENT_VERSION ? UNSUPPORTED_CLIENT_VERSION : "managed_launch_unverified";
       await this.block(state, code);
+      // T039: an admission that succeeded and was then refused downstream — by
+      // preflight, by a tree mismatch or by context verification — must not leave its
+      // candidate on disk. Only a launch that already reached `startRequested` keeps
+      // its tree, because a live or ambiguous attempt still owns it.
+      if (this.admission && !state.startRequested) {
+        try { this.admission.releaseCandidate(state.input.attempt.context.runId, state.input.attempt.context.assignment.taskId); }
+        catch { /* Releasing is best-effort here; the block above is the refusal record. */ }
+      }
       // The cause travels with the refusal, but never as raw error text: an
       // underlying message can carry a path, a command line or a credential, and
       // this string reaches the caller. Only codes this launcher itself assigns
