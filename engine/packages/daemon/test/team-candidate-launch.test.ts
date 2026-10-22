@@ -406,6 +406,28 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(existsSync(tree)).toBe(false);
   });
 
+  it("re-enters a candidate that is already on disk after a restart", () => {
+    // A restart forgets the in-memory record but not the tree. A resumed task whose
+    // candidate survived must adopt that tree: `git worktree add` refuses an
+    // existing path, so a fresh runtime that tried to stage a second one would make
+    // the task unlaunchable and strand its work in a directory nothing names.
+    const created = runtime.candidateFor("run-1", "T039");
+    // A second runtime over the same database: the same shape a restarted daemon has.
+    const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+      candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId), assignmentRoot: () => assignmentRoot,
+      defaultWorker: () => "ma-worker1" });
+    const adopted = restarted.candidateFor("run-1", "T039");
+    expect(adopted.root).toBe(created.root);
+    // The adopted tree is held to the same checks as a created one.
+    expect(restarted.candidateSourceUnchanged("run-1", "T039").unchanged).toBe(true);
+    expect(candidateManifest(adopted).files.map(file => file.path)).toContain("src/base.ts");
+    // And a moved source still refuses it, so adoption is not a way around the check.
+    const before = readFileSync(join(repo, "src", "base.ts"), "utf8");
+    writeFileSync(join(repo, "src", "base.ts"), "export const base = 3;\n");
+    expect(() => restarted.candidateFor("run-1", "T039")).toThrow(/Source checkout changed/);
+    writeFileSync(join(repo, "src", "base.ts"), before);
+  });
+
   it("reuses the recorded candidate instead of creating a second one, and blocks once the source moves", () => {
     const first = runtime.candidateFor("run-1", "T039");
     expect(runtime.candidateFor("run-1", "T039")).toBe(first);
