@@ -106,6 +106,8 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/integrations/framework/context-manifest.ts',
   'packages/daemon/src/domain/team-assignment.ts',
   'packages/daemon/src/domain/team-workspace.ts',
+  'packages/daemon/src/domain/review-evidence.ts',
+  'packages/daemon/test/team-review-cycle.test.ts',
   'packages/daemon/test/team-dependencies.test.ts',
   'packages/daemon/test/team-workspace.test.ts',
   'packages/daemon/src/domain/mailbox-delivery.ts',

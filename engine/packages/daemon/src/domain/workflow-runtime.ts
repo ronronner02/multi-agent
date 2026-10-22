@@ -5,6 +5,8 @@ import { readWorkflowGuidance, type GuidanceInput } from "./workflow-guidance.js
 import { exceptionConfigurationSource, inspectExceptionReadiness, type ExceptionReadiness } from "./workflow-exception-readiness.js";
 import { inspectGraph, recoverGraphOperation, reviseGraph } from "./workflow-reconciliation.js";
 import { lifecycleObligations, requiredLifecycleSteps, type LifecycleObligation } from "./lifecycle-obligations.js";
+import { ReviewEvidenceLedger, deliveryVerdict, evaluateProgressGate, type AssigneeFacts, type CandidateIdentity } from "./review-evidence.js";
+import type { TeamRole } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
 //
 // Coordinates spec cache + validator + instance store + projector +
@@ -315,6 +317,91 @@ export class WorkflowRuntime {
   private dependencySatisfied(governance: PlanGovernance, runId: string, taskId: string): boolean {
     return dependencySatisfied(this.db, this.queueRepo, qitemId => governance.getTask(qitemId)?.evidence?.validated === true, runId, taskId);
   }
+  /**
+   * T012 — who the run recorded for a queue item.
+   *
+   * Identity for review is read from the run's own rows, never from a caller's
+   * string. The role comes from the task's authority assignment and the session
+   * from the queue item's destination, so naming a different implementer cannot
+   * make a self-review look independent (R17).
+   */
+  private resolveAssignee(runId: string, qitemId: string): AssigneeFacts | null {
+    const row = this.db.prepare(`SELECT a.assignment_json AS assignment, q.destination_session AS session
+      FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+      WHERE a.run_id = ? AND a.qitem_id = ?`).get(runId, qitemId) as { assignment: string; session: string } | undefined;
+    if (!row) return null;
+    const assignment = JSON.parse(row.assignment) as { taskId?: unknown; role?: unknown };
+    if (typeof assignment.taskId !== "string") return null;
+    return { session: row.session, taskId: assignment.taskId, role: assignment.role as TeamRole };
+  }
+
+  /** T012 — the review record for a task, folded from the durable team log. */
+  reviewState(runId: string, taskId: string) {
+    return this.reviewEvidence.state(runId, taskId);
+  }
+
+  /** T012 — record the candidate the daemon issued; the only writer that moves the current candidate. */
+  issueReviewCandidate(runId: string, rigId: string, taskId: string, identity: CandidateIdentity) {
+    return this.events.withNotifyEnvelope(register => this.reviewEvidence.issue({ runId, rigId, taskId, identity, register }));
+  }
+
+  /**
+   * T012 — record a reviewer's findings.
+   *
+   * The reviewer is named by its queue item and resolved against the run's own
+   * authority rows. The write itself consults the progress gate, so a round the
+   * gate refuses is not recorded rather than merely advised against.
+   */
+  recordReviewEvidence(runId: string, rigId: string, input: Omit<Parameters<ReviewEvidenceLedger["record"]>[0], "runId" | "rigId" | "register">) {
+    // Limits and the run clock are read from run state by the ledger's own deps,
+    // so no clock figure reaches the write path from a request.
+    return this.events.withNotifyEnvelope(register => this.reviewEvidence.record({ ...input, runId, rigId, register }));
+  }
+
+  /** T012 — record integrated acceptance for the candidate the task currently holds. */
+  recordReviewAcceptance(runId: string, rigId: string, taskId: string, manifestDigest: string, passed: boolean, reason: string) {
+    return this.events.withNotifyEnvelope(register =>
+      this.reviewEvidence.accept({ runId, rigId, taskId, manifestDigest, passed, reason, register }));
+  }
+
+  /** T012 — record that the candidate moved, retiring every earlier review. */
+  recordReviewRework(runId: string, rigId: string, taskId: string, identity: CandidateIdentity) {
+    return this.events.withNotifyEnvelope(register => this.reviewEvidence.rework({ runId, rigId, taskId, identity, register }));
+  }
+
+  /** T012 — KTD9's single diagnosed recoverable retry, counted from durable state. */
+  recordReviewRetry(runId: string, rigId: string, taskId: string, reasonCode: string, resumeSafe: boolean) {
+    return this.events.withNotifyEnvelope(register => this.reviewEvidence.retry({ runId, rigId, taskId, reasonCode, resumeSafe, register }));
+  }
+
+  /**
+   * T012 — the two decisions a task's delivery depends on: may another review
+   * round start, and is the task deliverable at all. Both are computed here so a
+   * caller cannot take a lenient answer from one and cite the other.
+   *
+   * The remaining clock is read from the run's own binding rather than accepted
+   * from the caller, so the time check cannot be switched off by omission.
+   */
+  reviewProgress(runId: string, taskId: string) {
+    const state = this.reviewEvidence.state(runId, taskId);
+    return { state, gate: this.progressGate(runId, state), delivery: deliveryVerdict({ state }) };
+  }
+
+  /**
+   * T012 — the gate, with its clock derived from the run's own accounting.
+   *
+   * `active_ms` advances only when a control command runs, so the interval since
+   * the last accounting point must be deducted too; otherwise a live attempt
+   * would make the run look slower than it is and over-report the time left.
+   */
+  private progressGate(runId: string, state: ReturnType<ReviewEvidenceLedger["state"]>) {
+    const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
+    const live = run.accountedAt === null ? 0 : Math.max(0, this.now().getTime() - Date.parse(run.accountedAt));
+    const remainingActiveMs = Math.max(0, run.binding.limits.maxActiveMs - run.activeMs - live);
+    return evaluateProgressGate({ state, maxRounds: run.binding.limits.maxReviewRounds, remainingActiveMs,
+      longestRoundMs: state.longestRoundMs });
+  }
+
   async startLeadActivation(manifest: ContextManifest, observed: ContextObservation, currentBinding: AssignmentInput["currentBinding"]) {
     await this.prepareTeamAssignment(manifest.runId, { currentBinding, assignment: manifest.assignment, outputs: manifest.outputs, permissions: manifest.permissions, context: manifest, observed });
     return new LeadActivation(manifest, observed);
@@ -333,6 +420,8 @@ export class WorkflowRuntime {
   private readonly now: () => Date;
   private readonly watchdogJobsRepo: WatchdogJobsRepository | undefined;
   private readonly exceptionDial?: WorkflowRuntimeDeps["exceptionDial"];
+  private readonly events: EventBus;
+  private readonly reviewEvidence: ReviewEvidenceLedger;
 
   constructor(deps: WorkflowRuntimeDeps) {
     this.guidanceLibrary = deps.guidanceLibrary;
@@ -342,6 +431,19 @@ export class WorkflowRuntime {
     this.now = deps.now ?? (() => new Date());
     this.watchdogJobsRepo = deps.watchdogJobsRepo;
     this.exceptionDial = deps.exceptionDial;
+    this.events = deps.eventBus;
+    this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,
+      resolveAssignee: (runId, qitemId) => this.resolveAssignee(runId, qitemId),
+      // The approved binding's limits and the run's own clock, read at write time.
+      limits: runId => {
+        const run = new PlanGovernance(this.db, deps.eventBus, deps.queueRepo).getRun(runId);
+        return { maxRetries: run.binding.limits.maxRetries, maxReviewRounds: run.binding.limits.maxReviewRounds };
+      },
+      clock: runId => {
+        const run = new PlanGovernance(this.db, deps.eventBus, deps.queueRepo).getRun(runId);
+        const live = run.accountedAt === null ? 0 : Math.max(0, this.now().getTime() - Date.parse(run.accountedAt));
+        return { remainingActiveMs: Math.max(0, run.binding.limits.maxActiveMs - run.activeMs - live) };
+      } });
     this.specCache = new WorkflowSpecCache(this.db, this.now);
     this.instanceStore = new WorkflowInstanceStore(this.db, this.now);
     this.trailLog = new WorkflowStepTrailLog(this.db);

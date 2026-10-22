@@ -1,7 +1,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import type { CandidateIdentity } from "./review-evidence.js";
 
 /**
  * T011 / KTD8 — isolated candidate ownership.
@@ -124,6 +125,28 @@ export function listFiles(root: string, options: { index: boolean }): CandidateF
       throw error;
     }
   });
+}
+
+/**
+ * Enumerate every entry under a packet root, separating regular files from
+ * anything else. Symlinks and special files are reported rather than skipped:
+ * silently omitting them would make a tampered packet verify as unchanged.
+ */
+function listAllEntries(root: string, prefix = ""): { files: string[]; nonRegular: string[] } {
+  const files: string[] = [];
+  const nonRegular: string[] = [];
+  for (const entry of readdirSync(join(root, prefix), { withFileTypes: true })) {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    // `Dirent` never needs a stat call: a symlink is reported as a symlink, not
+    // as whatever it points at, which is exactly the distinction that matters.
+    if (entry.isDirectory()) {
+      const nested = listAllEntries(root, path);
+      files.push(...nested.files);
+      nonRegular.push(...nested.nonRegular);
+    } else if (entry.isFile()) files.push(path);
+    else nonRegular.push(path);
+  }
+  return { files, nonRegular };
 }
 
 /** Plain-directory enumeration for the snapshot lane, which has no index to ask. */
@@ -282,6 +305,176 @@ export function verifySourceUnchanged(workspace: CandidateWorkspace): { unchange
       && current.statusDigest === workspace.source.statusDigest && sameDirty,
     current,
   };
+}
+
+/**
+ * T012 / KTD8 — the read-only review packet.
+ *
+ * A reviewer must see the exact candidate — every tracked and untracked file
+ * with its bytes — and must not be able to change it (R17). The packet is
+ * therefore a *copy*, written read-only, beside an identity that binds it to the
+ * manifest digest the daemon holds. A reviewer reading a different tree than the
+ * one the manifest names is exactly the false-independence case T012 exists to
+ * prevent, so the two travel together.
+ */
+export interface ReviewPacket {
+  root: string;
+  identity: CandidateIdentity;
+  /** The complete manifest, hashes included, that the packet must still match. */
+  manifest: readonly CandidateFile[];
+}
+
+export function candidateIdentity(manifest: ReturnType<typeof candidateManifest>): CandidateIdentity {
+  return { manifestDigest: manifest.manifestDigest, base: manifest.base, baseIdentifier: manifest.baseIdentifier,
+    fileCount: manifest.files.length };
+}
+
+/**
+ * Materialize the packet for a reviewer.
+ *
+ * The copy is made file by file rather than by copying the candidate directory,
+ * because a candidate may carry `.git` metadata and a reviewer has no business
+ * reading repository internals. `.git` is excluded explicitly rather than relied
+ * on to be absent: the commit lane's `git ls-files` omits it, but the snapshot
+ * lane walks a plain directory where nothing would have excluded it.
+ *
+ * Directories are sealed `0o555` after their contents land. That blocks unlinking
+ * from inside them too, which is why `removeReviewPacket` restores write bits
+ * before removal. Mode bits are a second layer, not the independence guarantee:
+ * the real boundary is the reviewer running under a different OS identity with
+ * the packet mounted read-only (KTD24's worker policy).
+ */
+export function createReviewPacket(workspace: CandidateWorkspace, destination: string): ReviewPacket {
+  // One normalized path is used for the guard, the removal and every join below.
+  // Mixing the caller's string with `join`/`dirname` output leaves the ancestor
+  // walk unable to reach its own terminator (`./packet` never equals `packet`).
+  const root = resolve(destination);
+  // `rmSync` must never reach the tree the candidate or the source lives in. The
+  // comparison resolves through the deepest existing ancestor, because an alias
+  // directory or symlink pointing into either tree would otherwise pass a purely
+  // lexical check and then be deleted.
+  const physicalDest = physicalOfDeepest(root);
+  for (const protectedRoot of [workspace.root, workspace.sourceRoot]) {
+    const physical = realpathSync(protectedRoot);
+    if (contains(physical, physicalDest) || contains(physicalDest, physical)) {
+      throw new Error("Review packet destination overlaps the candidate or source tree");
+    }
+  }
+  const manifest = candidateManifest(workspace);
+  // Repository metadata is not part of a candidate. The commit lane's `git
+  // ls-files` already omits it, but the snapshot lane walks a plain directory, so
+  // a `.git` that appeared there would otherwise be copied and hashed into the
+  // packet. Refusing keeps the packet identity equal to the durable candidate.
+  const hidden = manifest.files.filter(file => file.path.split("/").includes(".git"));
+  if (hidden.length) throw new Error(`Candidate contains repository metadata: ${hidden.map(file => file.path).join(", ")}`);
+  const files = manifest.files;
+  rmSync(root, { recursive: true, force: true });
+  mkdirSync(root, { recursive: true });
+  const directories = new Set<string>([root]);
+  for (const file of files) {
+    const target = join(root, file.path);
+    const parent = dirname(target);
+    if (!directories.has(parent)) {
+      mkdirSync(parent, { recursive: true });
+      // Record each ancestor once so the final read-only pass reaches all of them.
+      for (let current = parent; current !== root; current = dirname(current)) directories.add(current);
+    }
+    copyFileSync(candidatePath(workspace.root, file.path), target);
+    // 0o444: the reviewer may read the bytes and nothing else.
+    chmodSync(target, 0o444);
+  }
+  // The identity the packet claims is the candidate's own digest, so a packet and
+  // the manifest it came from can be compared without trusting the caller.
+  const identity = candidateIdentity(manifest);
+  // Deepest first, so a parent is sealed only after its children exist.
+  for (const directory of [...directories].sort((left, right) => right.length - left.length)) {
+    chmodSync(directory, 0o555);
+  }
+  return { root, identity, manifest: files };
+}
+
+/** Resolve a path through its deepest existing ancestor, so an alias cannot hide a real target. */
+function physicalOfDeepest(path: string): string {
+  let existing = path;
+  const suffix: string[] = [];
+  while (true) {
+    try {
+      lstatSync(existing);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const parent = dirname(existing);
+      if (parent === existing) return path;
+      suffix.unshift(existing.slice(existing.lastIndexOf(sep) + 1));
+      existing = parent;
+    }
+  }
+  return resolve(realpathSync(existing), ...suffix);
+}
+
+/** Separator-aware containment; a bare prefix test would treat `/a/bc` as inside `/a/b`. */
+function contains(parent: string, child: string): boolean {
+  return child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+}
+
+/**
+ * Re-read the packet and prove it still describes the claimed candidate.
+ *
+ * A packet that was edited after the fact (or a candidate that moved on) is not
+ * evidence about the candidate, so the check is a hash of the packet's own bytes
+ * against the manifest, not a trust in the directory's existence.
+ */
+export function verifyReviewPacket(packet: ReviewPacket): { unchanged: boolean; identity: CandidateIdentity; reason: string | null } {
+  // Every entry type, not just directories and regular files: a symlink added to
+  // the packet would otherwise contribute no path and no bytes, and so read as
+  // "unchanged" while the reviewer's tree differs from the manifest.
+  let present: string[];
+  let nonRegular: string[];
+  try {
+    const listed = listAllEntries(packet.root);
+    present = listed.files;
+    nonRegular = listed.nonRegular;
+  } catch (error) {
+    return { unchanged: false, identity: packet.identity, reason: `Packet is unreadable: ${(error as Error).message}` };
+  }
+  if (nonRegular.length) {
+    return { unchanged: false, identity: packet.identity,
+      reason: `Packet holds non-regular entries: ${nonRegular.join(", ")}` };
+  }
+  const expected = packet.manifest.map(file => file.path);
+  const missing = expected.filter(path => !present.includes(path));
+  const extra = present.filter(path => !expected.includes(path));
+  if (missing.length || extra.length) {
+    return { unchanged: false, identity: packet.identity,
+      reason: `Packet contents differ from its manifest (missing ${missing.length}, extra ${extra.length})` };
+  }
+  // The packet is a flat copy, so the manifest's `tracked` flag says where the
+  // bytes came from, not whether this copy is a repository. Hash the actual bytes
+  // and keep the flag: that reconstructs the digest the candidate had.
+  try {
+    const actual: CandidateFile[] = packet.manifest.map((file: CandidateFile) => ({
+      path: file.path, tracked: file.tracked,
+      hash: sha256(readFileSync(candidatePath(packet.root, file.path))),
+    }));
+    const unchanged = digestManifest(actual) === packet.identity.manifestDigest;
+    return { unchanged, identity: { ...packet.identity, fileCount: actual.length },
+      reason: unchanged ? null : "Packet bytes differ from the manifest digest" };
+  } catch (error) {
+    // A vanished or unreadable file is a mismatch, not an exception to swallow.
+    return { unchanged: false, identity: packet.identity, reason: `Packet file is unreadable: ${(error as Error).message}` };
+  }
+}
+
+/** Remove a packet, restoring write permission first so the tree can be unlinked. */
+export function removeReviewPacket(packet: ReviewPacket): void {
+  const restore = (root: string): void => {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      const path = join(root, entry.name);
+      if (entry.isDirectory()) { chmodSync(path, 0o755); restore(path); } else chmodSync(path, 0o644);
+    }
+  };
+  if (lstatSync(packet.root, { throwIfNoEntry: false })) { chmodSync(packet.root, 0o755); restore(packet.root); }
+  rmSync(packet.root, { recursive: true, force: true });
 }
 
 /** Release the candidate tree. The source worktree was never written, so nothing restores it. */
