@@ -267,13 +267,34 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(reviewer.manifestDigest).toBe(implementer.manifestDigest);
   });
 
-  it("refuses a candidate in another worker's assignment directory", async () => {
+  it("refuses a claimed candidate in another worker's assignment directory", async () => {
     // The kernel mounts a tree only under `assignment_root/<that attempt's worker>`,
-    // so reusing a candidate across workers would hand a launch a tree the
-    // privileged launcher rejects. The mismatch is refused before any of that.
-    const first = runtime.candidateFor("run-1", "T039", "ma-worker1");
+    // so handing a *claimed* tree to another worker would both fork the task's work
+    // and give the launch a tree the privileged launcher rejects. An attempt holds
+    // it; the second worker is refused before any of that. (An unclaimed tree a
+    // reader staged is re-homed instead — see the reader test below.)
+    const admitted = runtime.admitForLaunch("run-1", { attemptId: "attempt-holder", worker: "ma-worker1",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    expect(admitted.candidate).toBe(candidateDir("ma-worker1"));
     expect(() => runtime.candidateFor("run-1", "T039", "ma-worker2")).toThrow(/different worker/);
-    expect(runtime.candidateFor("run-1", "T039")).toBe(first);
+    expect(runtime.candidateFor("run-1", "T039")).toBe(runtime.candidateFor("run-1", "T039", "ma-worker1"));
+  });
+
+  it("does not pin a task to a worker just because a reader named no worker", () => {
+    // The packet and identity accessors take no worker, so the runtime falls back to
+    // the default one to build a path. Recording that as the task's owner would fix
+    // the task to the default worker and refuse the real launch on any other, which
+    // is a refusal of a legitimate launch — worse than the mismatch it prevents.
+    runtime.candidateIdentityFor("run-1", "T039");
+    runtime.reviewPacketFor("run-1", "T039", join(directory, "packet-reader"));
+    const launched = runtime.admitForLaunch("run-1", { attemptId: "attempt-other-worker", worker: "ma-worker2",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    expect(launched.candidate).toBe(candidateDir("ma-worker2"));
+    // A second launch on yet another worker is still refused, because now an attempt
+    // does hold the tree.
+    expect(() => runtime.admitForLaunch("run-1", { attemptId: "attempt-third", worker: "ma-worker3",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context }))
+      .toThrow(/different worker/);
   });
 
   it("admits a resumed attempt into the same candidate it started from", async () => {
@@ -404,6 +425,22 @@ describe("production launch runs through runtime eligibility and one candidate w
     // Only when the last owner lets go does the tree leave.
     runtime.releaseCandidate("run-1", "T039", "attempt-live");
     expect(existsSync(tree)).toBe(false);
+  });
+
+  it("does not leave a refused attempt owning the candidate", async () => {
+    // A refusal that happens after the candidate exists but before it is handed
+    // out must not leave a claim behind: the reference count would then hold the
+    // tree forever, because no release ever names that attempt. Occupy the
+    // candidate path with a file so the workspace cannot be built, then check the
+    // task can still be admitted and released normally afterwards.
+    const occupied = candidateDir("ma-worker1");
+    writeFileSync(occupied, "not a directory");
+    expect(() => runtime.candidateFor("run-1", "T039", "ma-worker1")).toThrow();
+    rmSync(occupied, { force: true });
+    runtime.admitForLaunch("run-1", { attemptId: "attempt-after-refusal", worker: "ma-worker1",
+      assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+    runtime.releaseCandidate("run-1", "T039", "attempt-after-refusal");
+    expect(existsSync(candidateDir("ma-worker1"))).toBe(false);
   });
 
   it("re-enters a candidate that is already on disk after a restart", () => {
