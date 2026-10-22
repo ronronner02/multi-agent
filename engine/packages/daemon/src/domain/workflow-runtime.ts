@@ -13,9 +13,12 @@ import {
   createReviewPacket,
   removeCandidateWorkspace,
   resolveWorkspaceBase,
+  sourceFingerprint,
   verifySourceUnchanged,
   type CandidateWorkspace,
 } from "./team-workspace.js";
+import { statSync } from "node:fs";
+import { resolve } from "node:path";
 import type { TeamRole } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
 //
@@ -351,10 +354,41 @@ export class WorkflowRuntime {
     // A candidate outside the kernel's assignment root could never be mounted, so
     // refusing here is the difference between an isolated launch and a lost tree.
     if (!within(this.assignmentRoot(), workspaceRoot)) throw new Error("Candidate root is outside the assignment root");
+    // A restart forgets the in-memory record but not the tree. Re-entering a task
+    // whose candidate is already on disk must adopt that tree, not stage a second
+    // one over it: `git worktree add` refuses an existing path, so the alternative
+    // is that every resumed task is unlaunchable after a restart, and its work is
+    // stranded in a directory nothing can name. Adoption re-derives the same
+    // workspace shape from the recorded base and re-fingerprints the source, so the
+    // adopted tree is held to exactly the checks a created one is.
+    const adopted = this.adoptCandidate(runId, taskId, owner, workspaceRoot);
+    if (adopted) {
+      this.candidateWorker.set(key, owner);
+      this.candidates.set(key, adopted);
+      return adopted;
+    }
     const workspace = createCandidateWorkspace({ root: run.binding.repository.root, base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
     this.candidateWorker.set(key, owner);
     this.candidates.set(key, workspace);
     return workspace;
+  }
+
+  /**
+   * T039 — re-enter a candidate this runtime already staged, before a restart.
+   *
+   * Adopted only when the path is already a directory. Anything else — a file, a
+   * symlink, a path outside the assignment root (checked by the caller) — is left
+   * to `createCandidateWorkspace`, which refuses it loudly rather than silently
+   * working in a tree of unknown provenance. The base is resolved from the current
+   * source, so the source-moved check downstream still applies to the adopted tree.
+   */
+  private adoptCandidate(runId: string, taskId: string, worker: string, workspaceRoot: string): CandidateWorkspace | undefined {
+    let stats;
+    try { stats = statSync(workspaceRoot); } catch { return undefined; }
+    if (!stats.isDirectory()) return undefined;
+    const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
+    return { root: workspaceRoot, sourceRoot: resolve(run.binding.repository.root),
+      base: resolveWorkspaceBase(run.binding.repository.root), source: sourceFingerprint(run.binding.repository.root) };
   }
 
   /**
