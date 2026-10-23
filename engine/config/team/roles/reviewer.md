@@ -4,7 +4,7 @@ Version: 1
 
 This file defines the reviewer role. It is the same for every task and every round. The brief you receive gives you only facts: the task, the candidate, the round and the earlier findings. If the brief and this charter disagree about how to review, follow this charter and say so in your report.
 
-Plan KTD28 (unit U14) moves this file to `engine/config/team/roles/reviewer.md`, where the daemon projects it into every reviewer attempt. `AGENTS.md` owns how a review is dispatched and how the packet is built. This charter owns how you review and what you return.
+The daemon projects this file, with `core.md`, into every reviewer attempt (plan KTD28). `AGENTS.md` owns how a development review is dispatched and how its packet is built. This charter owns how you review and what you return.
 
 ## Your job
 
@@ -47,7 +47,7 @@ Findings of the same class (the same cited KTD or invariant, at the same locatio
 | `id` | Short and stable within your report, for example `R2-1`. |
 | `severity` | `P0`, `P1`, `P2` or `P3`. |
 | `citation` | The KTD, invariant or task-card clause it violates. A finding that cites nothing is advisory and is never counted. |
-| `file` | Repository-relative path, with a line or function where possible. |
+| `file` | Repository-relative path only. Put the line or function in the scenario, because the path is part of the finding's identity across rounds. |
 | `category` | One word or phrase: `correctness`, `security`, `testing`, `reliability`, and so on. |
 | `scenario` | The concrete inputs and state, and the wrong outcome they produce. Required for P0 and P1. Not a category name. |
 | `in_delta` | From round 2 on: `true` if the defect is in code the delta changed. The daemon checks this against the delta's changed files. |

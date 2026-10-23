@@ -16,7 +16,7 @@ import type { TeamControlOptions } from "../src/routes/team-control.js";
 import { createManagedLaunchControl, inspectManagedWorker, observeManagedWorkerProcess, resolveManagedWorkerScope, resolveManagedWorkerSeat, startManagedWorkerCommand, startManagedWorkerInPane } from "../src/adapters/worker-launch-control.js";
 import { TmuxAdapter } from "../src/adapters/tmux.js";
 
-import { buildManagedNativePolicy, projectContext, roleConfiguration, type ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { buildManagedNativePolicy, projectContext, roleConfiguration, roleInstructionEntries, type ContextManifest } from "../src/integrations/framework/context-manifest.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 import type { WorkerMailboxBridge } from "../src/adapters/worker-mailbox-bridge.js";
 import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, type WorkerCommand, type WorkerLaunchInput } from "../src/adapters/worker-launch.js";
@@ -1088,8 +1088,8 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
 
   const project = (attemptId: string) => {
     const base = join(policy.paths.context_root, "ma-worker1", "run", attemptId);
-    const files = ([["framework", "pinned instructions"], ["plan", "approved plan\n"], ["role", JSON.stringify(roleConfiguration)]] as const)
-      .map(([kind, content]) => ({ path: join(base, kind), hash: hashBytes(content), kind, readOnly: true as const,
+    const entries = [["framework", "pinned instructions"], ["plan", "approved plan\n"], ["role", JSON.stringify(roleConfiguration)], ...roleInstructionEntries("implementer")] as const;
+    const files = entries.map(([kind, content]) => ({ path: join(base, kind), hash: hashBytes(content), kind, readOnly: true as const,
         ...(kind === "framework" ? { source: join(policy.paths.framework_dir, "skill.md") } : {}) }));
     return projectContext({ nativePolicy: nativePolicyFor, runId: "run", assignment: task.assignment, outputs: ["src/result.ts"],
       permissions: ["write-assigned-tree"], role: "implementer", client: "claude-code", binding: current, root: base,
@@ -1098,7 +1098,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
         sandbox: { context: "/context", framework: "/framework" } } },
       mutableStateRoot: join(policy.paths.worker_root, "ma-worker1", "home"), frameworkRoot: policy.paths.framework_dir,
       frameworkRevision: FRAMEWORK_PIN.revision, workerUid, workerGroups: [], discoveryRoots: [base], files },
-    new Map(files.map(file => [file.path, file.kind === "framework" ? "pinned instructions" : file.kind === "plan" ? "approved plan\n" : JSON.stringify(roleConfiguration)])));
+    new Map(files.map((file, index) => [file.path, entries[index]![1]])));
   };
   let nativePolicyFor: Awaited<ReturnType<typeof buildManagedNativePolicy>>;
   const endpoint = (attemptId: string) => ({ path: join(policy.paths.mailbox_root, "ma-worker1", "run", attemptId, "mailbox.sock"),

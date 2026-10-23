@@ -95,6 +95,26 @@ Changing a pinned client is an owner action:
 4. Re-run the native adapter contract tests and the daemon package suite.
 5. Re-run provisioning, which now passes the hash check and installs the new lock, then run the full U1 host preflight.
 
+## Role Charters (KTD28)
+
+Every managed attempt's `/context` projection carries two instruction files besides its role, plan and framework entries:
+- `engine/config/team/core.md`, the conduct every role shares;
+- its role's charter: `engine/config/team/roles/implementer.md` or `engine/config/team/roles/reviewer.md`. The Lead's charter is `engine/config/team/lead-protocol.md`.
+
+Each file starts with a `Version:` line. The manifest records both versions and the file hashes. A missing, duplicate, changed or other-role file refuses the launch, and a version that differs at launch or resume refuses it too. A resume keeps its attempt's projection; a new attempt picks up the current files. Development reviews use the same reviewer charter (`AGENTS.md`, "Reviewer instructions live in one charter").
+
+The reviewer charter's report format is enforced when a review is recorded:
+- a P0 or P1 needs a failing scenario;
+- from round 2 on, every new finding needs a delta tag, and every earlier open P0/P1 needs a verdict (`CLOSED`, `STILL OPEN` or `REGRESSED`). A finding kept open but not re-raised is carried into the round, so it cannot close by omission;
+- the daemon decides delta membership from the retained packet's changed files. Until packet retention lands, every finding counts, as in a full review.
+
+A refused submission records nothing and does not use a round.
+
+Changing a charter or the core is an owner action:
+1. Edit the file and increase its `Version:`. For the Lead protocol, also update `LEAD_PROTOCOL_VERSION`.
+2. Run `role-charter.test.ts`, `framework-context-manifest.test.ts` and `team-review-cycle.test.ts`. The charter test parses the reviewer charter's JSON example through the ledger, so the documented format and the enforced one cannot drift apart.
+3. Under a separate owner live-spend grant (KTD9), give each role its planted-defect fixture under `engine/packages/daemon/test/fixtures/role-charters/` and record whether the expected outcome appeared. Do this whenever a charter, the core, a model profile or the KTD27 lock changes. The offline test only checks that the fixtures are well-formed and cite real plan decisions.
+
 ## Isolation Preflight
 
 Offline. It starts no model session and spends no provider quota.

@@ -11,7 +11,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import {
-  MAX_REVIEW_ROUNDS, ReviewEvidenceError, ReviewEvidenceLedger, deliveryVerdict, evaluateProgressGate,
+  MAX_REVIEW_ROUNDS, ReviewEvidenceError, ReviewEvidenceLedger, deliveryVerdict, evaluateProgressGate, findingKey,
   foldReviewState, recordReview, type AssigneeFacts, type CandidateIdentity, type ReviewFinding,
 } from "../src/domain/review-evidence.js";
 import {
@@ -29,7 +29,7 @@ const candidate = (seed: string): CandidateIdentity => ({
   manifestDigest: `sha256:${seed.repeat(64)}`, base: "commit", baseIdentifier: "a".repeat(40), fileCount: 3,
 });
 const finding = (id: string, severity: ReviewFinding["severity"], citation = "KTD8", file = "src/team-workspace.ts"): ReviewFinding =>
-  ({ id, severity, citation, category: "correctness", file });
+  ({ id, severity, citation, category: "correctness", file, scenario: `${id}: a second attempt's refusal deletes the live tree` });
 const implementer: AssigneeFacts = { session: "implementer-session", role: "implementer", taskId: "T012" };
 const reviewer: AssigneeFacts = { session: "reviewer-session", role: "reviewer", taskId: "review" };
 const otherReviewer: AssigneeFacts = { session: "reviewer-two", role: "reviewer", taskId: "review" };
@@ -41,13 +41,15 @@ describe("review bound to the exact candidate", () => {
   let ledger: ReviewEvidenceLedger;
   let assignees: Map<string, AssigneeFacts>;
   let clockMs = 0;
+  let deltaFiles: string[] | null = null;
 
   const open = () => {
     db = createDb(join(directory, "review.db")); migrate(db, ALL_MIGRATIONS); bus = new EventBus(db);
-    // Limits and the remaining run clock come from the ledger's own deps, so the
-    // fixture supplies them the way the runtime does rather than per request.
+    // Limits, the remaining run clock and the fix delta come from the ledger's own
+    // deps, so the fixture supplies them the way the runtime does rather than per request.
     ledger = new ReviewEvidenceLedger({ db, events: bus, resolveAssignee: (_runId, qitemId) => assignees.get(qitemId) ?? null,
       limits: () => ({ maxRetries: 1, maxReviewRounds: 2 }), clock: () => ({ remainingActiveMs: 600_000 }),
+      deltaFiles: () => deltaFiles,
       now: () => new Date(Date.parse("2026-10-21T00:00:00.000Z") + clockMs) });
   };
   beforeEach(() => {
@@ -55,6 +57,7 @@ describe("review bound to the exact candidate", () => {
     directory = mkdtempSync(join(tmpdir(), "t012-review-"));
     assignees = new Map([["review-item", reviewer], ["other-review-item", otherReviewer], ["impl-item", implementer]]);
     clockMs = 0;
+    deltaFiles = null;
     open();
     // The implementer's identity is read from the run's own authority row, so the
     // fixture must hold one rather than trusting a caller-supplied name. The
@@ -77,13 +80,32 @@ describe("review bound to the exact candidate", () => {
   const inTx = <T>(callback: Parameters<EventBus["withNotifyEnvelope"]>[0]): T => db.transaction(() => bus.withNotifyEnvelope(callback))();
   const issue = (identity: CandidateIdentity) => inTx(register => ledger.issue({ runId: "run-1", rigId: "rig-1", taskId: "T012", identity, register }));
   const rework = (identity: CandidateIdentity) => inTx(register => ledger.rework({ runId: "run-1", rigId: "rig-1", taskId: "T012", identity, register }));
-  const review = (options: { reviewer?: string; candidate?: CandidateIdentity; findings?: unknown; reportKey?: string } = {}) => {
+  // A charter-shaped report: from round 2 on it tags each new finding and gives a
+  // verdict on every earlier open P0/P1 — re-raised means still open, absent means closed.
+  const charterShaped = (findings: unknown, prior: unknown) => {
+    const latest = ledger.state("run-1", "T012").rounds.at(-1);
+    if (!latest || !Array.isArray(findings)) return { findings, prior };
+    const raised = new Set((findings as ReviewFinding[]).map(findingKey));
+    return {
+      findings: (findings as Array<Record<string, unknown>>).map(f => "in_delta" in f || "inDelta" in f ? f : { ...f, in_delta: true }),
+      prior: prior ?? latest.findings.filter(f => (f.severity === "P0" || f.severity === "P1") && findingKey(f))
+        .map(f => ({ id: f.id, status: raised.has(findingKey(f)) ? "STILL OPEN" : "CLOSED", evidence: "fixture" })),
+    };
+  };
+  const review = (options: { reviewer?: string; candidate?: CandidateIdentity; findings?: unknown; reportKey?: string; prior?: unknown } = {}) => {
     // Advancing the clock models real elapsed time, which is how the ledger now
     // derives each round's duration; a request can no longer supply one.
     clockMs += 5_000;
+    const shaped = charterShaped(options.findings ?? [], options.prior);
     return inTx(register => ledger.record({ runId: "run-1", rigId: "rig-1", taskId: "T012",
       reviewerQitemId: options.reviewer ?? "review-item", candidate: options.candidate ?? candidate("a"),
-      findings: options.findings ?? [], register, reportKey: options.reportKey }));
+      findings: shaped.findings, prior: shaped.prior, register, reportKey: options.reportKey }));
+  };
+  // Sends exactly what the test gives, with no charter shaping.
+  const rawReview = (options: { candidate?: CandidateIdentity; findings: unknown; prior?: unknown }) => {
+    clockMs += 5_000;
+    return inTx(register => ledger.record({ runId: "run-1", rigId: "rig-1", taskId: "T012", reviewerQitemId: "review-item",
+      candidate: options.candidate ?? candidate("a"), findings: options.findings, prior: options.prior, register }));
   };
   const retry = () => inTx(register => ledger.retry({ runId: "run-1", rigId: "rig-1", taskId: "T012",
     reasonCode: "agent_error.provider_network", resumeSafe: true, register }));
@@ -270,6 +292,140 @@ describe("review bound to the exact candidate", () => {
     expect(state.previousOpenP0P1).toBe(2);
     expect(evaluateProgressGate({ state, remainingActiveMs: 600_000, longestRoundMs: 1_000 }))
       .toMatchObject({ kind: "start", round: 3 });
+  });
+
+  // KTD28: the reviewer charter's output format is enforced when a review is recorded.
+  describe("reviewer charter output format", () => {
+    const code = (fn: () => unknown) => { try { fn(); } catch (error) { return (error as ReviewEvidenceError).code; } return null; };
+
+    it("refuses a P0/P1 without a failing scenario but keeps a P3 without one", () => {
+      issue(candidate("a"));
+      const bare: Partial<ReviewFinding> = finding("f1", "P1"), note: Partial<ReviewFinding> = finding("f2", "P3");
+      delete bare.scenario; delete note.scenario;
+      expect(code(() => rawReview({ findings: [bare] }))).toBe("invalid_finding");
+      expect(code(() => rawReview({ findings: [{ ...bare, scenario: "   " }] }))).toBe("invalid_finding");
+      expect(ledger.state("run-1", "T012").rounds).toHaveLength(0);
+      expect(rawReview({ findings: [note] }).findings).toHaveLength(1);
+    });
+
+    it("refuses a later round that gives no verdict on an open P0/P1, without spending the round", () => {
+      issue(candidate("a"));
+      review({ findings: [finding("f1", "P1")] });
+      rework(candidate("b"));
+      expect(code(() => rawReview({ candidate: candidate("b"), findings: [], prior: [] }))).toBe("invalid_finding");
+      expect(code(() => rawReview({ candidate: candidate("b"), findings: [],
+        prior: [{ id: "f1", status: "CLOSED", evidence: "fixed" }, { id: "nope", status: "CLOSED", evidence: "x" }] }))).toBe("invalid_finding");
+      expect(ledger.state("run-1", "T012").rounds).toHaveLength(1);
+      expect(rawReview({ candidate: candidate("b"), findings: [], prior: [{ id: "f1", status: "CLOSED", evidence: "fixed" }] }).round).toBe(2);
+    });
+
+    it("refuses a later-round finding with no delta tag", () => {
+      issue(candidate("a"));
+      review();
+      expect(code(() => rawReview({ findings: [finding("n1", "P2")] }))).toBe("invalid_finding");
+    });
+
+    it("records an out-of-delta P1 as an uncounted residual, but counts a reproduced out-of-delta P0", () => {
+      issue(candidate("a"));
+      review();
+      deltaFiles = ["src/changed.ts"];
+      const record = review({ findings: [
+        { ...finding("n1", "P1", "KTD24", "src/untouched.ts"), in_delta: false },
+        { ...finding("n2", "P0", "KTD24", "src/other.ts"), in_delta: false, reproduced: true },
+      ] });
+      expect(record.findings.map(f => [f.id, f.inDelta])).toEqual([["n1", false], ["n2", false]]);
+      // Only the reproduced P0 counts; the P1 stays on record as a residual.
+      expect(ledger.state("run-1", "T012").openP0P1).toBe(1);
+    });
+
+    it("decides delta membership itself rather than trusting the reviewer's tag", () => {
+      issue(candidate("a"));
+      review();
+      deltaFiles = ["src/changed.ts"];
+      const record = review({ findings: [
+        { ...finding("n1", "P1", "KTD24", "src/changed.ts"), in_delta: false },
+        { ...finding("n2", "P1", "KTD25", "./src/changed.ts:42"), in_delta: false },
+      ] });
+      expect(record.findings.map(f => [f.inDelta, f.reportedInDelta])).toEqual([[true, false], [true, false]]);
+      expect(ledger.state("run-1", "T012").openP0P1).toBe(2);
+    });
+
+    it("treats every finding as in the delta when no reviewed packet is retained", () => {
+      issue(candidate("a"));
+      review();
+      const record = review({ findings: [{ ...finding("n1", "P1", "KTD24", "src/anywhere.ts"), in_delta: false }] });
+      expect(record.findings[0]).toMatchObject({ inDelta: true, reportedInDelta: false });
+      expect(ledger.state("run-1", "T012").openP0P1).toBe(1);
+    });
+
+    it("carries a still-open finding the reviewer did not re-raise, so it cannot close by omission", () => {
+      issue(candidate("a"));
+      review({ findings: [finding("f1", "P1"), finding("f2", "P1", "KTD9", "src/other.ts")] });
+      rework(candidate("b"));
+      const record = rawReview({ candidate: candidate("b"), findings: [], prior: [
+        { id: "f1", status: "STILL OPEN", evidence: "same refusal path" }, { id: "f2", status: "CLOSED", evidence: "fixed" }] });
+      expect(record.findings.map(f => [f.id, f.carriedFrom])).toEqual([["f1", 1]]);
+      const state = ledger.state("run-1", "T012");
+      expect(state.openP0P1).toBe(1);
+      expect(state.closedP0P1).toEqual([findingKey(finding("f2", "P1", "KTD9", "src/other.ts"))]);
+    });
+
+    it("carries a kept-open P1 even when the round raises a lower-severity finding of the same class", () => {
+      issue(candidate("a"));
+      review({ findings: [finding("f1", "P1")] });
+      rework(candidate("b"));
+      accept({ passed: true, reason: "integrated check passed", manifestDigest: candidate("b").manifestDigest });
+      const record = rawReview({ candidate: candidate("b"), findings: [{ ...finding("n1", "P3"), in_delta: true }],
+        prior: [{ id: "f1", status: "STILL OPEN", evidence: "same refusal path" }] });
+      expect(record.findings.map(f => [f.id, f.severity, f.carriedFrom])).toEqual([["n1", "P3", undefined], ["f1", "P1", 1]]);
+      const state = ledger.state("run-1", "T012");
+      expect(state.openP0P1).toBe(1);
+      expect(deliveryVerdict({ state })).toMatchObject({ complete: false });
+    });
+
+    it("gives a carried finding an id no submitted finding uses", () => {
+      issue(candidate("a"));
+      review({ findings: [finding("f1", "P1")] });
+      rework(candidate("b"));
+      const record = rawReview({ candidate: candidate("b"), prior: [{ id: "f1", status: "STILL OPEN", evidence: "unchanged" }], findings: [
+        { ...finding("f1", "P1", "KTD9", "src/a.ts"), in_delta: true }, { ...finding("f1@r1", "P1", "KTD9", "src/b.ts"), in_delta: true }] });
+      const ids = record.findings.map(f => f.id);
+      expect(new Set(ids).size).toBe(3);
+      expect(record.findings.find(f => f.carriedFrom === 1)!.id).toBe("f1@r1-2");
+      expect(ledger.state("run-1", "T012").openP0P1).toBe(3);
+    });
+
+    it("accepts and records a verdict on an earlier P1 that was not counted open", () => {
+      issue(candidate("a"));
+      review({ findings: [{ ...finding("adv", "P1"), citation: "" }] });
+      const record = rawReview({ findings: [], prior: [{ id: "adv", status: "CLOSED", evidence: "advisory, resolved" }] });
+      expect(record.prior).toEqual([{ id: "adv", status: "CLOSED", evidence: "advisory, resolved" }]);
+    });
+
+    it.each(["/home/leo/src/multi-agent/src/changed.ts", "src/../src/changed.ts", "src/changed.ts#L42", "src/changed.ts:12:3"])(
+      "counts a finding at %s, a path the delta set cannot place", file => {
+        issue(candidate("a"));
+        review();
+        deltaFiles = ["src/changed.ts"];
+        const record = review({ findings: [{ ...finding("n1", "P1", "KTD24", file), in_delta: false }] });
+        expect(record.findings[0]!.inDelta).toBe(true);
+        expect(ledger.state("run-1", "T012").openP0P1).toBe(1);
+      });
+
+    it("keeps a multi-line scenario and truncates an overlong one instead of refusing the review", () => {
+      issue(candidate("a"));
+      const long = "x".repeat(5000);
+      const record = rawReview({ findings: [{ ...finding("f1", "P1"), scenario: "Attempt A admits.\n\tAttempt B is refused.\nA's tree is gone." },
+        { ...finding("f2", "P2"), scenario: long }] });
+      expect(record.findings[0]!.scenario).toContain("\n\tAttempt B");
+      expect(record.findings[1]!.scenario).toHaveLength(2048);
+      expect(code(() => rawReview({ findings: [{ ...finding("f3", "P1"), scenario: "bad \u001b[2J escape" }] }))).toBe("invalid_input");
+    });
+
+    it("refuses earlier-round verdicts on a first review", () => {
+      issue(candidate("a"));
+      expect(code(() => rawReview({ findings: [], prior: [{ id: "f1", status: "CLOSED", evidence: "x" }] }))).toBe("invalid_input");
+    });
   });
 });
 
