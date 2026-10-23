@@ -189,8 +189,24 @@ function gitWorkTreeDiff(workspace: CandidateWorkspace, commit: string): string 
 function listCandidateFiles(workspace: CandidateWorkspace, trackedSet: ReadonlySet<string>): CandidateFile[] {
   const untracked = untrackedInCandidate(workspace, trackedSet);
   const root = workspace.root;
+  const physical = realpathSync(root);
   return [...new Set([...trackedSet, ...untracked])].sort().flatMap(path => {
     try {
+      // T044: a symlink is refused rather than followed. `ls-files --others` lists the
+      // link by name, and reading through it would put the *target's* bytes into the
+      // manifest, the digest and the reviewer packet — so an ignored `.env` could be
+      // smuggled into review as an innocuously named link. A link's content is not the
+      // candidate's bytes.
+      //
+      // The check is `lstat` on the unresolved path: `candidatePath` realpaths by design,
+      // so asking it for the link would hand back the target and the link would be gone.
+      // A path that no longer exists is not a link: a candidate that deletes a tracked
+      // file keeps it in the index, and that deletion belongs to the patch, not here.
+      try {
+        if (lstatSync(resolve(physical, path)).isSymbolicLink()) return [];
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
       return [{ path, hash: sha256(readFileSync(candidatePath(root, path))), tracked: trackedSet.has(path) }];
     } catch (error) {
       if ((error as Error).message.startsWith("Candidate path is missing")) return [];

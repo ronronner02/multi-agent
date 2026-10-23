@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { candidateManifest, createCandidateWorkspace, isCandidateWorkTree, resolveWorkspaceBase } from "../src/domain/team-workspace.js";
@@ -168,6 +169,19 @@ describe("a candidate's manifest never executes what the worker wrote", () => {
 });
 
 describe("a candidate's manifest describes the candidate the repository defines", () => {
+  it("does not follow a symlink into ignored bytes", () => {
+    // `ls-files --others` lists a link by name; following it would put the target's bytes
+    // into the manifest, the digest and the reviewer packet, smuggling an ignored secret.
+    const source = repository({ "src/base.ts": "one\n", ".gitignore": ".env\n" });
+    const { workspace } = candidate(source);
+    writeFileSync(join(workspace.root, ".env"), "AWS_SECRET=leak\n");
+    symlinkSync(".env", join(workspace.root, "innocuous.txt"));
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files.map(file => file.path)).not.toContain("innocuous.txt");
+    const hashes = manifest.files.map(file => file.hash);
+    expect(hashes).not.toContain(`sha256:${createHash("sha256").update("AWS_SECRET=leak\n").digest("hex")}`);
+  }, 30_000);
+
   it("keeps ignored files out of the manifest, the digest and the patch", () => {
     // `ls-files --others --exclude-standard` honoured .gitignore. A blind walk does not,
     // and would put a worker's .env into the reviewer packet.

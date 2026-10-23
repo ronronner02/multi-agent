@@ -584,9 +584,20 @@ export class WorkflowRuntime {
     //
     // The guard is lane-aware: a snapshot-lane candidate is a plain directory with no git
     // metadata at all (KTD8, an unborn repository), so requiring a work tree would make
-    // every snapshot task unlaunchable after a restart.
+    // every snapshot task unlaunchable after a restart. It is still checked, just against
+    // what that lane can prove: the adopted tree's own manifest must hash to the baseline
+    // the candidate recorded. Otherwise a leftover or planted directory at the path would
+    // be adopted with no provenance at all and its bytes reported as the task's work.
     const base = resolveWorkspaceBase(run.binding.repository.root);
-    if (base.kind === "commit" && !isCandidateWorkTree(workspaceRoot, run.binding.repository.root)) return undefined;
+    if (base.kind === "commit") {
+      if (!isCandidateWorkTree(workspaceRoot, run.binding.repository.root)) return undefined;
+    } else {
+      const adopted = { root: workspaceRoot, sourceRoot: resolve(run.binding.repository.root),
+        base, source: sourceFingerprint(run.binding.repository.root) };
+      try {
+        if (candidateManifest(adopted).manifestDigest !== base.baselineDigest) return undefined;
+      } catch { return undefined; }
+    }
     return { root: workspaceRoot, sourceRoot: resolve(run.binding.repository.root),
       base, source: sourceFingerprint(run.binding.repository.root) };
   }
