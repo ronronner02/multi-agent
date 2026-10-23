@@ -1,6 +1,6 @@
 import { PlanGovernance, hashBinding, hashBytes } from "./plan-governance.js";
 import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
-import { createContextManifest, roleConfiguration, roleInstructionEntries, within,
+import { createContextManifest, recordedContextManifest, roleConfiguration, roleInstructionEntries, within,
   type ContextFile, type ContextInput, type ContextManifest, type ContextObservation } from "../integrations/framework/context-manifest.js";
 import { WorkerMailboxBridge } from "../adapters/worker-mailbox-bridge.js";
 import type { ManagedAttempt } from "./runtime-adapter.js";
@@ -23,8 +23,8 @@ import {
   verifySourceUnchanged,
   type CandidateWorkspace,
 } from "./team-workspace.js";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
 //
@@ -344,45 +344,92 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
   return { ok: true };
 }
 
+/** Read an existing projection's entries back as descriptors, for a resumed attempt. */
+function readProjectedDescriptors(root: string, frameworkFiles: readonly { path: string; source: string }[]): ContextFile[] {
+  // Each projected framework copy is matched back to the pinned source it came from by
+  // its projected name, so the rebuilt descriptor points at the source the manifest
+  // re-verifies rather than at the copy inside the attempt root.
+  const sourceOf = new Map(frameworkFiles.map(file => [`framework/${file.path.replace(/[^A-Za-z0-9._/-]/g, "_")}`, file.source]));
+  const files: ContextFile[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) { walk(path); continue; }
+      const relative = path.slice(root.length + 1);
+      const kind: ContextFile["kind"] | undefined = relative === "plan" ? "plan" : relative === "role" ? "role"
+        : relative === "core" ? "core" : relative === "charter" ? "charter"
+        : relative === "protocol" ? "protocol" : relative === "roster" ? "roster"
+        : relative === "run" ? "run" : sourceOf.has(relative) ? "framework" : undefined;
+      if (!kind) continue;
+      const source = sourceOf.get(relative);
+      files.push({ path, hash: hashBytes(readFileSync(path)), kind, readOnly: true, ...(source ? { source } : {}) });
+    }
+  };
+  walk(root);
+  return files;
+}
+
 /**
- * Create the part of a path this producer owns, from `anchor` down, with `mode`.
+ * Create the part of a path this producer owns, from `anchor` down, and check it.
  *
  * The anchor and everything above it belong to the installed control, which provisions
  * them for the worker; re-creating them here would invent a second owner for
  * directories the policy already describes. Only the segment below the anchor is ours.
+ *
+ * The group is a parameter because the two chains differ on purpose, and each difference
+ * is enforced by a validator on the other side of the boundary:
+ *
+ * - The **context** chain carries what the worker must read, so `privateProjection`
+ *   requires every directory from the attempt root up to the worker root to carry the
+ *   **worker's** gid. `<context_root>/<worker>` is installed setgid for exactly this, so
+ *   a child created beneath it inherits the worker group rather than the daemon's.
+ * - The **mailbox** chain is control-private, and the launcher's ancestry walk requires
+ *   the control's own gid.
+ *
+ * One predicate for both would make the context chain unsatisfiable on a real host: the
+ * setgid directory hands the child the worker group, and a check demanding the daemon's
+ * group would throw on every produce.
  */
-function ensureOwnedDirectory(path: string, anchor: string, mode: number): void {
+function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: number): void {
   if (!within(anchor, path)) throw new Error("Managed attempt directory is outside the policy root");
   mkdirSync(path, { recursive: true, mode });
+  // Under a setgid parent the child already carries the parent's group; the explicit
+  // chmod keeps the mode exact without touching that group.
   for (let p = path; p !== anchor; p = dirname(p)) chmodSync(p, mode);
   const stat = statSync(path);
-  // A directory that is not exactly the expected mode is refused rather than repaired:
+  // A directory that is not what was asked for is refused rather than repaired:
   // repairing it would be this code deciding what another owner's data should look like.
-  if (!stat.isDirectory() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
+  if (!stat.isDirectory() || stat.uid !== process.getuid!() || stat.gid !== gid
     || (stat.mode & 0o7777) !== mode) {
-    throw new Error("Managed attempt directory is not private and control-owned");
+    throw new Error("Managed attempt directory is not owned as the policy requires");
   }
 }
 
 /**
  * The projection root, created below the worker's own context directory.
  *
- * Group searchable for the worker because the manifest requires the worker to read
- * what it is supposed to follow; the root is sealed by the caller once its entries
- * exist, so nothing can be added to a projection after it was hashed.
+ * Group searchable for the worker and grouped to it, because the manifest requires both;
+ * the root is sealed by the caller once its entries exist, so nothing can be added to a
+ * projection after it was hashed.
  */
-function ensureAttemptRoot(path: string, roots: { contextRoot: string; worker: string }): void {
-  ensureOwnedDirectory(path, join(roots.contextRoot, roots.worker), 0o2750);
+function ensureAttemptRoot(path: string, roots: { contextRoot: string; worker: string; workerGid: number }): void {
+  ensureOwnedDirectory(path, join(roots.contextRoot, roots.worker), 0o2750, roots.workerGid);
 }
 
 /**
  * The mailbox directory, which is control-private rather than worker-readable.
  *
- * The bridge and the privileged launcher both re-check this 0700 shape, so it is
- * created to exactly that here instead of being loosened for the worker.
+ * The bridge and the privileged launcher both re-check this 0700, control-gid shape, so
+ * it is created to exactly that here instead of being loosened for the worker.
  */
-function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string }): void {
-  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700);
+function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string; controlStateDir: string }): void {
+  // The launcher anchors its ancestry walk on `control_state_dir` and requires the
+  // mailbox root to sit directly under it, so an inconsistent roots object is refused
+  // here rather than discovered as a launch refusal later.
+  if (roots.mailboxRoot !== join(roots.controlStateDir, "mailboxes")) {
+    throw new Error("Managed mailbox root is not beneath the control state directory");
+  }
+  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700, process.getgid!());
 }
 
 export class WorkflowRuntime {
@@ -678,28 +725,46 @@ export class WorkflowRuntime {
     const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
     const binding = governance.getRun(runId).binding;
     const root = resolve(roots.contextRoot, worker, runId, attemptId);
-    if (this.candidateFor(runId, input.assignment.taskId, worker).root !== input.candidate) {
-      // The projection names the tree the worker will work in, so a caller that names
-      // another tree would produce a context describing work that cannot happen.
-      throw new Error("Managed attempt candidate mismatch");
-    }
-    ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker });
-    const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
-      role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
-      permissions: [...input.permissions], context: input.context, workerGid: input.workerGid,
-      frameworkFiles: input.frameworkFiles });
+    try {
+      if (this.candidateFor(runId, input.assignment.taskId, worker).root !== input.candidate) {
+        // The projection names the tree the worker will work in, so a caller that names
+        // another tree would produce a context describing work that cannot happen.
+        throw new Error("Managed attempt candidate mismatch");
+      }
+      // Decided before the directory is created: `ensureAttemptRoot` would make its own
+      // path exist, and every produce would then look like a resume.
+      const resumed = existsSync(root);
+      // A projection already on disk belongs to the attempt that made it, so its root is
+      // left exactly as that produce sealed it. A new one is created and sealed below.
+      if (!resumed) ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker, workerGid: input.workerGid });
+      const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
+        role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
+        permissions: [...input.permissions], context: input.context, workerGid: input.workerGid,
+        frameworkFiles: input.frameworkFiles, resume: resumed });
 
-    const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
-    ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId), { mailboxRoot: roots.mailboxRoot, worker });
-    const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
-      runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients },
-    input.delivery, input.chat, input.readCredentials, input.isCurrent);
-    await bridge.listen();
-    const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
-      ...(input.previous ? { previous: input.previous } : {}) };
-    const produced = Object.freeze({ attempt, bridge, candidate: admitted.candidate, manifestDigest: admitted.manifestDigest });
-    this.managedAttempts.set(attemptId, produced);
-    return produced;
+      const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
+      ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId),
+        { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir });
+      // A socket left by a daemon that died is still a file; the bridge refuses to
+      // listen over one, so it is removed first. It can only ever be this attempt's,
+      // because the path is built from the attempt id.
+      if (existsSync(socketPath)) rmSync(socketPath);
+      const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
+        runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients },
+      input.delivery, input.chat, input.readCredentials, input.isCurrent);
+      await bridge.listen();
+      const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
+        ...(input.previous ? { previous: input.previous } : {}) };
+      const produced = Object.freeze({ attempt, bridge, candidate: admitted.candidate, manifestDigest: admitted.manifestDigest });
+      this.managedAttempts.set(attemptId, produced);
+      return produced;
+    } catch (error) {
+      // Admission retained the candidate claim when it handed this attempt its tree, so
+      // every later failure has to give it back: a claim nobody releases would hold the
+      // task's tree for the life of the daemon.
+      this.releaseCandidate(runId, input.assignment.taskId, attemptId);
+      throw error;
+    }
   }
 
   /**
@@ -741,6 +806,8 @@ export class WorkflowRuntime {
       | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision">;
     /** The pinned framework files this attempt loads, already resolved from the pin. */
     frameworkFiles: readonly { path: string; source: string }[];
+    /** True when the projection root already exists: rebuild from its own recorded bytes. */
+    resume: boolean;
   }): ContextManifest {
     const { roots, root, role, client } = input;
     const frameworkRoot = roots.frameworkRoot;
@@ -755,16 +822,43 @@ export class WorkflowRuntime {
       chmodSync(path, 0o440);
       return { path, hash: hashBytes(content), kind, readOnly: true as const, ...(source ? { source } : {}) };
     };
-    const files: ContextFile[] = [
-      ...input.frameworkFiles.map(file => write(`framework-${basename(file.path)}`, readFileSync(file.source, "utf8"), "framework", file.source)),
-      write("plan", readFileSync(join(input.binding.repository.root, input.binding.planRef), "utf8"), "plan"),
-      write("role", canonicalJson(roleConfiguration), "role"),
-      ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
-    ];
-    // Sealed only after the entries exist: the manifest refuses a projection root its
-    // own owner could still write to, which is what stops anything being added to a
-    // projection after it was hashed.
-    chmodSync(root, 0o550);
+    // The projected name keeps the framework entry's own relative path: the catalog is
+    // `skills/<name>/SKILL.md`, so a basename would map every entry onto one file.
+    const frameworkName = (path: string) => `framework/${path.replace(/[^A-Za-z0-9._/-]/g, "_")}`;
+    const frameworkEntries = () => input.frameworkFiles.flatMap(file => {
+      const name = frameworkName(file.path);
+      mkdirSync(dirname(join(root, name)), { recursive: true, mode: 0o750 });
+      return [write(name, readFileSync(file.source, "utf8"), "framework", file.source)];
+    });
+    let files: ContextFile[];
+    if (input.resume) {
+      // An existing projection is adopted as it stands. Rewriting it would fail: the
+      // root is sealed and every entry is 0440. Descriptors are rebuilt from the bytes
+      // that projection already recorded, and each framework entry keeps pointing at
+      // the pinned framework source it was copied from — the manifest re-verifies that
+      // source, so a projection copied into the attempt root could not stand in for it.
+      files = readProjectedDescriptors(root, input.frameworkFiles);
+    } else {
+      files = [
+        ...frameworkEntries(),
+        write("plan", readFileSync(join(input.binding.repository.root, input.binding.planRef), "utf8"), "plan"),
+        write("role", canonicalJson(roleConfiguration), "role"),
+        ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
+      ];
+      // Sealed only after the entries exist: the manifest refuses a projection root its
+      // own owner could still write to, which is what stops anything being added to a
+      // projection after it was hashed.
+      chmodSync(root, 0o550);
+    }
+    // A resumed attempt is held to the bytes its own projection recorded; a new one must
+    // also match today's pinned source. That difference is `recordedContextManifest`'s
+    // whole purpose, and it is what keeps a later charter edit from breaking a resume.
+    const build = input.resume ? recordedContextManifest : createContextManifest;
+    // Sorted so a resumed attempt, whose descriptors come back in directory order, hashes
+    // to the same manifest as the one that created it. The hash covers the file list, so
+    // an order that depended on how the entries were produced would make every resume
+    // look like a changed context.
+    files.sort((left, right) => left.path.localeCompare(right.path));
     const input_ = {
       ...input.context,
       runId: input.runId,
@@ -784,7 +878,7 @@ export class WorkflowRuntime {
           sandbox: { context: "/context", framework: "/framework" } } },
       files,
     } as ContextInput;
-    return createContextManifest(input_);
+    return build(input_);
   }
 
   /** T039 — release a workspace this runtime owns, whichever path handed it back. */
