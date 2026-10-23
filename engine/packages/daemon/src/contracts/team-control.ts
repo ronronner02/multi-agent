@@ -2,6 +2,28 @@ export const TEAM_CONTROL_VERSION = "1.0";
 export const TEAM_QUEUE_STATES = ["pending", "in-progress", "done", "blocked", "failed", "denied", "canceled", "handed-off"] as const;
 export type TeamQueueState = (typeof TEAM_QUEUE_STATES)[number];
 export type TeamRole = "lead" | "implementer" | "reviewer";
+
+export const TEAM_SYSTEM_HEALTH_VERSION = "1.0" as const;
+export const TEAM_HEALTH_STATES = ["ok", "degraded", "failed", "unknown"] as const;
+export type TeamHealthState = (typeof TEAM_HEALTH_STATES)[number];
+export const TEAM_HEALTH_LIGHTS = ["database", "queueMailbox", "controlTmux", "workerBoundary", "sandboxNetwork", "clients"] as const;
+export type TeamHealthLightName = (typeof TEAM_HEALTH_LIGHTS)[number];
+export interface TeamHealthLight { state: TeamHealthState; checkedAt: string; evidenceRef: string | null; reason: string | null; }
+export interface TeamAttemptHealth {
+  attemptId: string; runId: string; worker: string | null; client: "claude-code" | "codex" | null;
+  state: string; reasonCode: string | null; resumeSafe: boolean | null; checkedAt: string; evidenceRef: string | null;
+}
+export interface TeamSystemHealth {
+  schema: "multi-agent-system-health/v1"; protocolVersion: typeof TEAM_SYSTEM_HEALTH_VERSION; checkedAt: string; timeoutMs: number;
+  overall: TeamHealthState; lights: Record<TeamHealthLightName, TeamHealthLight>; latestAttempts: Record<string, TeamAttemptHealth>;
+}
+export interface ManagedWorkerHealthEvidence {
+  observedAt: string;
+  attempts: Array<{ attemptId: string; runId: string; worker: string; client: "claude-code" | "codex";
+    state: "preflight" | "starting" | "running" | "stopped" | "unknown"; provider: "signed_in" | "signed_out" | "unknown";
+    policyRevision: number; policyFingerprint: string; clientVersion: string; clientLockDigest: string;
+    networkMode: "isolated-allowlist" | "filtered-proxy" | "host-shared" | "unknown"; networkProfileFingerprint: string; evidenceRef: string; }>;
+}
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 export type ApprovalKind = "orchestrator" | "native";
