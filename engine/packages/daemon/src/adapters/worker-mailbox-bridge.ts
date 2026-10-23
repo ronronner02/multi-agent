@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { chmodSync, lstatSync, realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute } from "node:path";
+import { randomBytes, randomUUID } from "node:crypto";
+import { chmodSync, lstatSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { createServer, type Socket } from "node:net";
 import { object, text } from "../contracts/team-control.js";
 import { ChatRepository, ChatRepositoryError } from "../domain/chat-repository.js";
@@ -66,6 +66,7 @@ export class WorkerMailboxBridge {
       }
       this.socketIdentity = { dev: stat.dev, ino: stat.ino, uid: stat.uid, gid: stat.gid };
       this.endpoint();
+      this.writeBootstrap();
       this.delivery.invalidateNativeChannel({ rigId: this.binding.rigId, recipient: this.binding.sessionId,
         taskId: this.binding.taskId, runId: this.binding.runId });
     } catch (error) {
@@ -94,12 +95,47 @@ export class WorkerMailboxBridge {
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.closed = true;
+    this.removeBootstrap();
     this.delivery.invalidateNativeChannel({ rigId: this.binding.rigId, recipient: this.binding.sessionId,
       taskId: this.binding.taskId, runId: this.binding.runId });
     for (const socket of this.sockets) socket.destroy();
     this.sockets.clear();
     this.closing = this.server.listening ? new Promise<void>((resolve) => this.server.close(() => resolve())) : Promise.resolve();
     return this.closing;
+  }
+
+  /**
+   * T042 — the private bootstrap the privileged launcher binds into the attempt.
+   *
+   * The launcher will not mount a mailbox without it: `worker-launch.mjs` requires
+   * `bootstrap.json` beside the socket, mode 0600, at most 8192 bytes, carrying
+   * exactly these seven string fields, with the socket directory already proven
+   * control-owned and 0700. So the writer lives here, where that directory has just
+   * been checked, rather than in a second place that would have to re-derive it.
+   *
+   * The capability is minted per endpoint and is never derived from an attempt id:
+   * a worker reads this file as data, so a guessable or reused value would be a
+   * standing grant to another attempt's mailbox.
+   */
+  private writeBootstrap(): void {
+    const source = join(dirname(this.binding.socketPath), "bootstrap.json");
+    const body = JSON.stringify({ authorization: "worker-capability", sessionId: this.binding.sessionId,
+      runId: this.binding.runId, attemptId: this.binding.attemptId, generation: this.generation,
+      taskId: this.binding.taskId, capability: `mailbox:${randomBytes(32).toString("base64url")}` });
+    // Written 0600 from the start: a create-then-chmod would leave one window in
+    // which the file is readable by whatever shares this directory.
+    writeFileSync(source, body, { mode: 0o600, flag: "w" });
+    chmodSync(source, 0o600);
+    const stat = lstatSync(source);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
+      || (stat.mode & 0o7777) !== 0o600 || stat.size > 8_192) {
+      this.removeBootstrap();
+      throw new Error("mailbox_bootstrap_invalid");
+    }
+  }
+
+  private removeBootstrap(): void {
+    try { unlinkSync(join(dirname(this.binding.socketPath), "bootstrap.json")); } catch { /* Absent is already closed. */ }
   }
 
   private checkDirectory(): void {
