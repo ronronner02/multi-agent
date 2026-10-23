@@ -1,6 +1,12 @@
-import { PlanGovernance, hashBinding } from "./plan-governance.js";
+import { PlanGovernance, hashBinding, hashBytes } from "./plan-governance.js";
 import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
-import { within, type ContextManifest, type ContextObservation } from "../integrations/framework/context-manifest.js";
+import { createContextManifest, roleConfiguration, roleInstructionEntries, within,
+  type ContextFile, type ContextInput, type ContextManifest, type ContextObservation } from "../integrations/framework/context-manifest.js";
+import { WorkerMailboxBridge } from "../adapters/worker-mailbox-bridge.js";
+import type { ManagedAttempt } from "./runtime-adapter.js";
+import type { MailboxDelivery } from "./mailbox-delivery.js";
+import type { ChatRepository } from "./chat-repository.js";
+import type { TeamControlCredentials } from "../middleware/auth-bearer-token.js";
 import { readWorkflowGuidance, type GuidanceInput } from "./workflow-guidance.js";
 import { exceptionConfigurationSource, inspectExceptionReadiness, type ExceptionReadiness } from "./workflow-exception-readiness.js";
 import { inspectGraph, recoverGraphOperation, reviseGraph } from "./workflow-reconciliation.js";
@@ -17,9 +23,9 @@ import {
   verifySourceUnchanged,
   type CandidateWorkspace,
 } from "./team-workspace.js";
-import { statSync } from "node:fs";
-import { resolve } from "node:path";
-import type { TeamRole } from "../contracts/team-control.js";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
 //
 // Coordinates spec cache + validator + instance store + projector +
@@ -137,6 +143,38 @@ export interface WorkflowRuntimeDeps {
    * check) fall back to it; the launch path always passes the attempt's own worker.
    */
   defaultWorker?: () => string;
+  /**
+   * T042 — where the daemon may create an attempt's context projection and mailbox
+   * endpoint, read from the installed worker policy.
+   *
+   * Supplied as one object rather than three callbacks because all of it has to come
+   * from the same policy bytes: the projection root is where the control writes and
+   * where `inspectManagedWorker` reads, and the mailbox root is the one the launcher
+   * requires the endpoint's private ancestry to descend from. Reading them separately
+   * would let a re-installed policy split them. Absent disables the producer, which the
+   * managed launch boundary then refuses rather than launching without a projection.
+   */
+  managedAttemptRoots?: () => {
+    contextRoot: string;
+    mailboxRoot: string;
+    controlStateDir: string;
+    policyRevision: number;
+    workerIdentities: readonly string[];
+    frameworkRoot: string;
+    frameworkRevision: string;
+  };
+}
+
+/**
+ * T042 — what the producer hands back: the attempt object for the binding, the live
+ * endpoint, and the candidate the assignment will run in. Frozen so a caller cannot
+ * substitute a different attempt after it was registered.
+ */
+export interface ProducedManagedAttempt {
+  readonly attempt: ManagedAttempt;
+  readonly bridge: WorkerMailboxBridge;
+  readonly candidate: string;
+  readonly manifestDigest: string;
 }
 
 export interface InstantiateInput {
@@ -304,6 +342,47 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
     }
   }
   return { ok: true };
+}
+
+/**
+ * Create the part of a path this producer owns, from `anchor` down, with `mode`.
+ *
+ * The anchor and everything above it belong to the installed control, which provisions
+ * them for the worker; re-creating them here would invent a second owner for
+ * directories the policy already describes. Only the segment below the anchor is ours.
+ */
+function ensureOwnedDirectory(path: string, anchor: string, mode: number): void {
+  if (!within(anchor, path)) throw new Error("Managed attempt directory is outside the policy root");
+  mkdirSync(path, { recursive: true, mode });
+  for (let p = path; p !== anchor; p = dirname(p)) chmodSync(p, mode);
+  const stat = statSync(path);
+  // A directory that is not exactly the expected mode is refused rather than repaired:
+  // repairing it would be this code deciding what another owner's data should look like.
+  if (!stat.isDirectory() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
+    || (stat.mode & 0o7777) !== mode) {
+    throw new Error("Managed attempt directory is not private and control-owned");
+  }
+}
+
+/**
+ * The projection root, created below the worker's own context directory.
+ *
+ * Group searchable for the worker because the manifest requires the worker to read
+ * what it is supposed to follow; the root is sealed by the caller once its entries
+ * exist, so nothing can be added to a projection after it was hashed.
+ */
+function ensureAttemptRoot(path: string, roots: { contextRoot: string; worker: string }): void {
+  ensureOwnedDirectory(path, join(roots.contextRoot, roots.worker), 0o2750);
+}
+
+/**
+ * The mailbox directory, which is control-private rather than worker-readable.
+ *
+ * The bridge and the privileged launcher both re-check this 0700 shape, so it is
+ * created to exactly that here instead of being loosened for the worker.
+ */
+function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string }): void {
+  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700);
 }
 
 export class WorkflowRuntime {
@@ -532,6 +611,182 @@ export class WorkflowRuntime {
     return this.defaultWorker();
   }
 
+  /**
+   * T042 — produce the attempt an admitted assignment launches from.
+   *
+   * Composes the three things the composed launch chain expects but nothing produced:
+   * the KTD24 context projection under the policy's `context_root`, the per-attempt
+   * mailbox endpoint in the control-private `mailbox_root`, and the bootstrap the
+   * privileged launcher binds beside that socket. T047 attaches the result to a seat.
+   *
+   * Order matters for the same reason it does in `admitForLaunch`. Admission is the
+   * only thing that may say no, and it is asked first: a refused assignment must
+   * leave no projection, no endpoint and no attempt, because a projection on disk is
+   * evidence of work that never started and an endpoint is a channel a worker could
+   * be pointed at. Only after admission is the projection built, then the endpoint —
+   * the projection directory's private ancestry is what the bridge's own
+   * `checkDirectory` proves, so it has to exist first.
+   *
+   * One projection per attempt, not per task: an attempt id is the projection's final
+   * path component, so a resume asks for the attempt it recorded and gets the bytes
+   * that attempt was reviewed under, never today's source.
+   */
+  async produceManagedAttempt(runId: string, input: {
+    attemptId: string;
+    worker: string;
+    assignment: AssignmentInput["assignment"];
+    outputs: readonly string[];
+    permissions: readonly string[];
+    /** Everything about the attempt the projection needs; the producer derives the rest. */
+    context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
+      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision">;
+    /** The worker's own identity in the projection; the control side is this process. */
+    workerGid: number;
+    /** The pinned framework files this attempt loads. */
+    frameworkFiles: readonly { path: string; source: string }[];
+    role: TeamRole;
+    client: "claude-code" | "codex";
+    /** The workspace the assignment will actually run in, from T039's candidate. */
+    candidate: string;
+    /** The session whose capability the mailbox accepts, and the seat it belongs to. */
+    sessionId: string;
+    rigId: string;
+    taskId: string;
+    recipients: readonly string[];
+    delivery: MailboxDelivery;
+    chat: ChatRepository;
+    readCredentials: () => TeamControlCredentials;
+    /** The launcher's own liveness question for this attempt; false closes the generation. */
+    isCurrent: () => boolean;
+    deadline: number;
+    previous?: ManagedAttempt["previous"];
+  }): Promise<ProducedManagedAttempt> {
+    const roots = this.managedAttemptRoots?.();
+    if (!roots) throw new Error("Managed attempt production is not configured");
+    const { attemptId, worker } = input;
+    // An attempt id reaches a filesystem path, so it is validated before admission
+    // rather than trusted from whoever supplied it.
+    if (![worker, runId, attemptId].every(id => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))) {
+      throw new Error("Invalid managed attempt identity");
+    }
+    const existing = this.managedAttempts.get(attemptId);
+    if (existing) return existing;
+
+    const admitted = this.admitForLaunch(runId, { attemptId, worker, assignment: input.assignment,
+      outputs: input.outputs, permissions: input.permissions,
+      context: { binding: this.managedBinding(runId), runId, role: input.role } as ContextManifest });
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
+    const binding = governance.getRun(runId).binding;
+    const root = resolve(roots.contextRoot, worker, runId, attemptId);
+    if (this.candidateFor(runId, input.assignment.taskId, worker).root !== input.candidate) {
+      // The projection names the tree the worker will work in, so a caller that names
+      // another tree would produce a context describing work that cannot happen.
+      throw new Error("Managed attempt candidate mismatch");
+    }
+    ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker });
+    const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
+      role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
+      permissions: [...input.permissions], context: input.context, workerGid: input.workerGid,
+      frameworkFiles: input.frameworkFiles });
+
+    const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
+    ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId), { mailboxRoot: roots.mailboxRoot, worker });
+    const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
+      runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients },
+    input.delivery, input.chat, input.readCredentials, input.isCurrent);
+    await bridge.listen();
+    const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
+      ...(input.previous ? { previous: input.previous } : {}) };
+    const produced = Object.freeze({ attempt, bridge, candidate: admitted.candidate, manifestDigest: admitted.manifestDigest });
+    this.managedAttempts.set(attemptId, produced);
+    return produced;
+  }
+
+  /**
+   * T042 — retire a produced attempt: close its endpoint and forget the projection.
+   *
+   * Closing is what removes the bootstrap and unlinks the socket, so a retired
+   * attempt cannot be relaunched against a stale endpoint. The projection stays on
+   * disk as run evidence, exactly as `projectContext` documents for failed attempts.
+   */
+  async retireManagedAttempt(attemptId: string): Promise<void> {
+    const produced = this.managedAttempts.get(attemptId);
+    if (!produced) return;
+    this.managedAttempts.delete(attemptId);
+    await produced.bridge.close();
+  }
+
+  /** T042 — the attempt a seat's launch should attach, if this daemon produced one. */
+  managedAttemptFor(attemptId: string): ProducedManagedAttempt | undefined {
+    return this.managedAttempts.get(attemptId);
+  }
+
+  /** T042 — close every endpoint this daemon owns; a restart owns none of the old ones. */
+  async closeManagedAttempts(): Promise<void> {
+    await Promise.all([...this.managedAttempts.keys()].map(id => this.retireManagedAttempt(id)));
+  }
+
+  /** The approved binding, re-read so a producer call cannot be admitted against a stale one. */
+  private managedBinding(runId: string) {
+    return new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId).binding;
+  }
+
+  /** Build the attempt's manifest; every entry is written private, read-only and hash-pinned. */
+  private projectAttemptContext(input: {
+    runId: string; root: string; worker: string; attemptId: string; workerGid: number;
+    roots: NonNullable<ReturnType<NonNullable<WorkflowRuntimeDeps["managedAttemptRoots"]>>>;
+    binding: PlanBinding; role: TeamRole; client: "claude-code" | "codex";
+    assignment: AssignmentInput["assignment"]; outputs: string[]; permissions: string[];
+    context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
+      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision">;
+    /** The pinned framework files this attempt loads, already resolved from the pin. */
+    frameworkFiles: readonly { path: string; source: string }[];
+  }): ContextManifest {
+    const { roots, root, role, client } = input;
+    const frameworkRoot = roots.frameworkRoot;
+    // The projection holds more than instructions: the plan the approval bound, the
+    // role configuration, the pinned framework entries, and — KTD28 — the shared core
+    // and this role's own charter. `createContextManifest` refuses a projection missing
+    // any of them, which is the point: the producer cannot quietly omit what a worker
+    // is supposed to follow, or substitute today's bytes for the approved ones.
+    const write = (name: string, content: string, kind: ContextFile["kind"], source?: string): ContextFile => {
+      const path = join(root, name);
+      writeFileSync(path, content, { mode: 0o440 });
+      chmodSync(path, 0o440);
+      return { path, hash: hashBytes(content), kind, readOnly: true as const, ...(source ? { source } : {}) };
+    };
+    const files: ContextFile[] = [
+      ...input.frameworkFiles.map(file => write(`framework-${basename(file.path)}`, readFileSync(file.source, "utf8"), "framework", file.source)),
+      write("plan", readFileSync(join(input.binding.repository.root, input.binding.planRef), "utf8"), "plan"),
+      write("role", canonicalJson(roleConfiguration), "role"),
+      ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
+    ];
+    // Sealed only after the entries exist: the manifest refuses a projection root its
+    // own owner could still write to, which is what stops anything being added to a
+    // projection after it was hashed.
+    chmodSync(root, 0o550);
+    const input_ = {
+      ...input.context,
+      runId: input.runId,
+      role,
+      client,
+      binding: input.binding,
+      assignment: { ...input.assignment, role },
+      outputs: input.outputs,
+      permissions: input.permissions,
+      root,
+      frameworkRoot,
+      frameworkRevision: roots.frameworkRevision,
+      projection: { worker: input.worker, attemptId: input.attemptId, controlUid: process.getuid!(),
+        workerGid: input.workerGid,
+        policy: { policy_revision: roots.policyRevision, worker_identities: [...roots.workerIdentities],
+          paths: { context_root: roots.contextRoot, framework_dir: frameworkRoot },
+          sandbox: { context: "/context", framework: "/framework" } } },
+      files,
+    } as ContextInput;
+    return createContextManifest(input_);
+  }
+
   /** T039 — release a workspace this runtime owns, whichever path handed it back. */
   private removeWorkspace(workspace: CandidateWorkspace): void {
     try { removeCandidateWorkspace(workspace); } catch { /* A removed tree is already released. */ }
@@ -752,6 +1007,10 @@ export class WorkflowRuntime {
   private readonly candidateRoot?: WorkflowRuntimeDeps["candidateRoot"];
   private readonly assignmentRoot?: () => string;
   private readonly defaultWorker?: () => string;
+  /** T042 — the roots the producer writes into, read from the installed policy at call time. */
+  private readonly managedAttemptRoots?: WorkflowRuntimeDeps["managedAttemptRoots"];
+  /** T042 — attempt projections and endpoints this daemon produced, keyed by attempt id. */
+  private readonly managedAttempts = new Map<string, ProducedManagedAttempt>();
 
   constructor(deps: WorkflowRuntimeDeps) {
     this.guidanceLibrary = deps.guidanceLibrary;
@@ -765,6 +1024,7 @@ export class WorkflowRuntime {
     this.candidateRoot = deps.candidateRoot;
     this.assignmentRoot = deps.assignmentRoot;
     this.defaultWorker = deps.defaultWorker;
+    this.managedAttemptRoots = deps.managedAttemptRoots;
     this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,
       resolveAssignee: (runId, qitemId) => this.resolveAssignee(runId, qitemId),
       // The approved binding's limits and the run's own clock, read at write time.
