@@ -84,9 +84,13 @@ These rules size review and verification to the change. They take precedence ove
 - **Where the full daemon suite runs (2026-10-23).** Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of `packages/daemon` and `packages/cli`, never in a linked worktree whose `node_modules` are symlinked: daemon-spawn tests fail there. Start it with no controlling terminal (`setsid -w … < /dev/null`, inside `tmux` when the session may be reaped) and with `TMUX` and `TMUX_PANE` unset (`env -u TMUX -u TMUX_PANE`), or the hermetic scenario tests refuse to run. A test that opens an interactive shell otherwise takes the terminal, and the whole run stops with SIGTTIN/SIGTTOU while looking hung. Use `--maxWorkers=2 --testTimeout=60000`, and write a `.done` marker on exit.
 
 ### Parallel tracks (owner decision, 2026-10-23)
-Two sessions may execute tasks at once, each in its own clone and branch. Each owns its files outright; a task that needs a file the other track owns stops and reports it.
-- **Track A, managed launch:** T042, T047, T044, T043, T038 and T046, in that order. It owns `engine/packages/daemon/src/domain/workflow-runtime.ts`, `team-workspace.ts`, `team-assignment.ts`, `review-evidence.ts`, `engine/packages/daemon/src/adapters/worker-launch*.ts`, `worker-mailbox-bridge.ts`, `startup.ts`, `startup-orchestrator.ts`, `engine/packages/daemon/src/integrations/framework/`, and `engine/config/`.
-- **Track B, owner surfaces:** T036, T035, T013, T014, T015, T019, T016, T020, T021, T022 and T023, then T017, T033 and T018. It owns `engine/packages/ui/`, `engine/packages/tui/`, `engine/packages/i18n/`, and the daemon files its cards name outside Track A's list.
+Two sessions may execute tasks at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare in the task pack; directory patterns grant nothing. A task that needs a file its card does not declare stops and reports it, as any task would.
+- **Track A, managed launch:** T042, T044, T047, T043, T038 and T046, in that order. T044 comes before T047 because T035 waits on it.
+- **Track B, owner surfaces:** T036, T013, T014, T015, T019, T035, T016, T020, T021, T022 and T023, then T017, T033 and T018.
+- **Files both tracks declare are serialized:** the task that starts second waits until the other has landed, then starts from current `main`.
+  - T035 waits for T044 (`team-workspace.ts`).
+  - T017 waits for T043 (`worker-launch.ts`).
+  - T033 and T046 (`review-evidence.ts`): whichever starts second waits for the other.
 - **Shared files** (`tools/upstream-import.mjs`, `docs/tasks/…-tasks.md`, `docs/operations.md`, `docs/known-failures.md`, `AGENTS.md`, `engine/packages/daemon/src/contracts/team-control.ts`, `engine/packages/daemon/src/routes/team-control.ts`, `engine/packages/daemon/src/server.ts`): append-only edits, then rebase onto `main` before landing. On a conflict the later lander resolves it and reruns its focused tests; never force-push.
 - T024 and T025 start only after both tracks' prerequisites have landed.
 

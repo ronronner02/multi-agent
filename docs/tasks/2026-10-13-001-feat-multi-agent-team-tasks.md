@@ -203,7 +203,8 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 8 | T031, T032 | KTD19 channel spike and Lead wake guards |
 | 9 | T010 | Managed-launch source contracts, the KTD24 projection and the Rev-5 host preflight |
 | 10 | T011, T013, T034 | Candidate/dependency isolation, browser owner sessions and the client version lock |
-| 11 | T012, T014, T036, T037 | Independent review, owner terminal/take-over gates and read-only health checks, and production launch composition |
+| 11 | T012, T014, T037 | Independent review, owner terminal/take-over gates and production launch composition |
+| 11.5 | T036 | Read-only health checks; its own wave because it reads the launch-state owner T037 declared |
 | 12 | T015, T019, T035, T040 | TUI projections, Web shell/data and KTD25 scope extensions, and the managed launch lifecycle |
 | 13 | T016, T020, T041 | Terminal owner controls and browser task/decision/session views, and production launch composition |
 | 14 | T017, T021, T045 | Cancellation/resource enforcement, responsive browser proof and pinned role charters |
@@ -296,8 +297,13 @@ The following JSON is the single machine-readable task source. Human cards below
       "tasks": [
         "T012",
         "T014",
-        "T036",
         "T037"
+      ]
+    },
+    {
+      "wave": "11.5",
+      "tasks": [
+        "T036"
       ]
     },
     {
@@ -2463,6 +2469,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "target_repo": "ronronner02/multi-agent",
       "files": [
         "engine/packages/daemon/src/domain/system-health.ts",
+        "engine/packages/daemon/src/adapters/worker-launch-control.ts",
         "engine/packages/daemon/src/contracts/team-control.ts",
         "engine/packages/daemon/src/routes/team-control.ts",
         "engine/packages/daemon/test/system-health.test.ts",
@@ -2476,12 +2483,12 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with KTD26 and the imported `domain/health-*.ts` modules.",
       "test_focus": "Fixture faults turn exactly the matching light `failed` (database lock held, tmux socket missing, worker signed out, client version differing from the lock, policy fingerprint mismatch); a hung probe returns `unknown` within its timeout and `unknown` never renders as `ok`; a full check changes no database rows, files, sessions or host state and starts no provider session; an agent credential is refused; every `failed` state has a runbook entry.",
       "done_signal": "One owner-authenticated query returns every KTD26 light from the existing owners, and the before/after state comparison shows no mutation.",
-      "wave": 11,
+      "wave": "11.5",
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A check would repair, restart, upgrade or spend quota, or would need a probe that duplicates an existing owner.",
       "review_gate": "required",
       "review_focus": "Check for hidden writes, unbounded probes and any path where a hung component reads as `ok`.",
-      "notes": "Extend the imported health modules where they fit instead of building parallel probes.",
+      "notes": "Extend the imported health modules where they fit instead of building parallel probes. Owner decision 2026-10-23: worker-home sign-in and preflight evidence live in the launch-state map of `worker-launch-control.ts`, so T036 adds a read-only health-evidence accessor at that owner (U13: read the existing owners instead of adding probes beside them). It adds no probe, write path or lifecycle change there.",
       "risk_note": "A false `ok` during a hang is worse than no light.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -3495,14 +3502,14 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T036. Expose read-only KTD26 health checks as owner status lights.
 
 - **Source / requirements:** `U13`; `R12`, `R16`, `AE12`, `KTD20`, `KTD26`, `KTD27`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T004, T034.
-- **Files:** `engine/packages/daemon/src/domain/system-health.ts`; `engine/packages/daemon/src/contracts/team-control.ts`; `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/test/system-health.test.ts`; `docs/operations.md`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11.5; T004, T034.
+- **Files:** `engine/packages/daemon/src/domain/system-health.ts`; `engine/packages/daemon/src/adapters/worker-launch-control.ts`; `engine/packages/daemon/src/contracts/team-control.ts`; `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/test/system-health.test.ts`; `docs/operations.md`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner.
 - **Test focus:** Fixture faults turn exactly the matching light `failed` (database lock held, tmux socket missing, worker signed out, client version differing from the lock, policy fingerprint mismatch); a hung probe returns `unknown` within its timeout and `unknown` never renders as `ok`; a full check changes no database rows, files, sessions or host state and starts no provider session; an agent credential is refused; every `failed` state has a runbook entry.
 - **Done signal:** One owner-authenticated query returns every KTD26 light from the existing owners, and the before/after state comparison shows no mutation.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A check would repair, restart, upgrade or spend quota, or would need a probe that duplicates an existing owner.
 - **Review intent:** required; Check for hidden writes, unbounded probes and any path where a hung component reads as `ok`.
-- **Notes:** Extend the imported health modules where they fit instead of building parallel probes.
+- **Notes:** Extend the imported health modules where they fit instead of building parallel probes. Owner decision 2026-10-23: worker-home sign-in and preflight evidence live in the launch-state map of `worker-launch-control.ts`, so T036 adds a read-only health-evidence accessor at that owner (U13: read the existing owners instead of adding probes beside them). It adds no probe, write path or lifecycle change there.
 
 ### T037. Harden the command-bound process reader so the native process, its image and its session come only from privileged kernel evidence.
 
@@ -3680,6 +3687,8 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **2026-10-22 T039/T042 split:** the 2026-10-21 owner patch had added the managed-attempt producer to T039 with an explicit instruction to stop and propose a split if it would exceed the task-level budget. Source review at `e98fc56` confirmed the stop condition: `projectContext`, `createContextManifest` and the `WorkerMailboxBridge` constructor had no production callers, so the producer is new composition rather than wiring, and the candidate-workspace work plus the producer would exceed 6 slices and about 1,200 lines. The owner moved the producer into the new T042 (wave 16), which depends on T039 and T041; T039 keeps its own card at wave 15, and T038 depends on T042 and moves to wave 17 so live acceptance still observes the final launch shape. A follow-up correction the same day moved `startup.ts` from T042 to T039: T039's own done signal requires the launcher to reach `prepareTeamAssignment` only through `WorkflowRuntime` and each implementation launch to run in a `CandidateWorkspace`, and both production-path components live in that file. No product scope changed.
 
 - **2026-10-23 T043 contract decision:** the owner chose an optional `reviewOf` task id on `ScopedAssignment` over a shared `task_id` with a role column, which would need a `team_queue_authority` migration. The plan's U5 approach records it; only T043's notes and the source hash change.
+
+- **2026-10-23 track ownership:** Track B stopped T036 at `worker-launch-control.ts`, which holds the sign-in and preflight evidence but was not in T036's files. The owner added it to T036 for a read-only accessor only. `AGENTS.md` now assigns files by each track's declared task files and serializes the three shared ones.
 
 ## Regeneration Rules
 
