@@ -25,7 +25,8 @@ import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import { promises as dns } from "node:dns";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
+import type { OwnerSessions } from "../domain/owner-session.js";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { ControlActor } from "../contracts/team-control.js";
 
@@ -302,6 +303,29 @@ export function resolveTeamControlCredential(
   };
 }
 
+/** Cookie authority is derived from the control-owned store after the strict browser boundary. */
+export function resolvePairedOwnerCookie(c: Context, credentials: TeamControlCredentials,
+  legacyTokens: readonly (string | null | undefined)[] = []):
+  | { ok: true; actor: ControlActor; runId: null }
+  | { ok: false; status: 401 | 403 | 503; code: string; error: string } {
+  const config = resolveTeamControlCredential(undefined, credentials, legacyTokens);
+  if (!config.ok && config.code === "control_credentials_conflict") return config;
+  const cached = c.get("ownerCookieActor" as never) as ControlActor | undefined;
+  if (cached) return { ok: true, actor: cached, runId: null };
+  const store = c.get("ownerSessions" as never) as OwnerSessions | undefined;
+  const origin = c.get("ownerBrowserOrigin" as never) as string | undefined;
+  const cookie = c.get("ownerCookieHeader" as never) as string | undefined | null;
+  const csrf = c.get("ownerAntiForgery" as never) as string | undefined;
+  if (!store || !credentials.ownerToken || !origin) {
+    return { ok: false, status: 401, code: "owner_session_required", error: "A paired owner session is required." };
+  }
+  const result = store.authenticate(cookie, origin, csrf, true, credentials.ownerToken);
+  if (!result.ok) return { ...result, error: "A valid paired session and anti-forgery token are required." };
+  const actor: ControlActor = { kind: "owner", sessionId: result.session.id };
+  c.set("ownerCookieActor" as never, actor);
+  return { ok: true, actor, runId: null };
+}
+
 /** Dedicated local control credentials; legacy, browser and worker tokens never imply owner authority. */
 export function teamControlAuthentication(
   readCredentials: () => TeamControlCredentials,
@@ -313,7 +337,14 @@ export function teamControlAuthentication(
     if (!peer || !isLoopbackBind(peer.replace(/^::ffff:/i, ""))) {
       return c.json({ code: "local_control_required", error: "A loopback control connection is required." }, 403);
     }
-    const resolved = resolveTeamControlCredential(c.req.header("Authorization"), readCredentials(), legacyTokens);
+    const header = c.req.header("Authorization");
+    let resolved: ReturnType<typeof resolveTeamControlCredential> | ReturnType<typeof resolvePairedOwnerCookie>
+      = resolveTeamControlCredential(header, readCredentials(), legacyTokens);
+    // An explicitly supplied bearer never falls back to a cookie, including invalid and conflicting tokens.
+    if (!resolved.ok && resolved.code !== "control_credentials_conflict" && header === undefined
+      && c.get("ownerSessions" as never) && c.req.header("Cookie") !== undefined) {
+      resolved = resolvePairedOwnerCookie(c, readCredentials(), legacyTokens);
+    }
     if (!resolved.ok) return c.json({ code: resolved.code, error: resolved.error }, resolved.status);
     c.set("controlActor", resolved.actor);
     c.set("controlRunId", resolved.runId);

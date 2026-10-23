@@ -1136,6 +1136,7 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/src/domain/owner-session.ts",
         "engine/packages/daemon/src/server.ts",
         "engine/packages/daemon/src/middleware/browser-boundary.ts",
+        "engine/packages/daemon/src/middleware/auth-bearer-token.ts",
         "engine/packages/daemon/src/db/migrations/105_owner_sessions.ts",
         "engine/packages/daemon/src/db/all-migrations.ts",
         "engine/packages/daemon/test/owner-session.test.ts"
@@ -1146,14 +1147,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation.",
+      "test_focus": "Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation. Forged and expired cookies are denied; privileged control APIs reject cookies without anti-forgery; existing bearer owner, worker, invalid and conflicting credential paths are unchanged.",
       "done_signal": "Tests verify 30-minute idle and 12-hour absolute expiry, one-request revocation, no worker pairing/session-store access and no credential in query/log/event output. Windows browser pairing works through the verified WSL localhost path without non-local binding.",
       "wave": 10,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Remote Host exceptions, URL bearer tokens, worker pairing, duplicate session authority stores or relaxed Origin/anti-forgery checks are needed.",
       "review_gate": "required",
       "review_focus": "Inspect credential derivation, route ordering and all browser/upgrade paths for forgery and credential leaks.",
-      "notes": "webUiEnabled remains false until the complete U9 session/terminal gates pass; fixture success is not owner-host browser acceptance.",
+      "notes": "webUiEnabled remains false until the complete U9 session/terminal gates pass; fixture success is not owner-host browser acceptance. Owner-approved 2026-10-23: include middleware/auth-bearer-token.ts for the shared dual-support handoff. Preserve every existing bearer verification and transport admission check; paired browser sessions require KTD14 anti-forgery on privileged control APIs, mutations and WebSocket upgrades. Forged or expired cookies are denied. Existing bearer calls retain their behavior. No cookie-to-owner-bearer substitution or duplicate control handlers.",
       "risk_note": "Browser script execution can wield its session; terminal/owner identity separation and inert content remain required in addition to anti-forgery.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -3266,12 +3267,14 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 - **Source / requirements:** `U9`; `R12`, `R13`, `R14`, `R19`, `R21`, `R22`, `F4`, `AE6`, `AE13`, `KTD6`, `KTD14`, `KTD18`, `PC1`, `PC4`, `PC5`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 10; T010.
-- **Files:** `engine/packages/daemon/src/routes/owner-session.ts`; `engine/packages/daemon/src/domain/owner-session.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/src/db/migrations/105_owner_sessions.ts`; `engine/packages/daemon/src/db/all-migrations.ts`; `engine/packages/daemon/test/owner-session.test.ts`.
+- **Files:** `engine/packages/daemon/src/routes/owner-session.ts`; `engine/packages/daemon/src/domain/owner-session.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/middleware/browser-boundary.ts`; `engine/packages/daemon/src/middleware/auth-bearer-token.ts`; `engine/packages/daemon/src/db/migrations/105_owner_sessions.ts`; `engine/packages/daemon/src/db/all-migrations.ts`; `engine/packages/daemon/test/owner-session.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
 - **Test focus:** Single-use 60-second fragment pairing exchange; HttpOnly/SameSite=Strict/host-only cookie; anti-forgery on mutation and WebSocket upgrade; Origin/Host checks, rejected query tokens, idle/absolute expiry and revocation.
 - **Done signal:** Tests verify 30-minute idle and 12-hour absolute expiry, one-request revocation, no worker pairing/session-store access and no credential in query/log/event output. Windows browser pairing works through the verified WSL localhost path without non-local binding.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Remote Host exceptions, URL bearer tokens, worker pairing, duplicate session authority stores or relaxed Origin/anti-forgery checks are needed.
 - **Review intent:** required; Inspect credential derivation, route ordering and all browser/upgrade paths for forgery and credential leaks.
+
+- **Owner amendment (2026-10-23):** Dual-support at the shared authentication owner; preserve existing bearer verification and admission unchanged. Paired cookies require anti-forgery for privileged controls, mutations and WebSocket upgrades. Add forged/expired-cookie, cookie-only control-denial and bearer-compatibility regression coverage. This is T013's one scope amendment.
 
 ### T014. Implement the isolated owner terminal relay and audited per-session take-over.
 
