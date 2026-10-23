@@ -1,7 +1,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import type { CandidateIdentity } from "./review-evidence.js";
 
 /**
@@ -129,10 +130,21 @@ function trackedInCandidate(workspace: CandidateWorkspace): string[] {
 }
 
 /** Environment that keeps git from consulting configuration a caller could have written. */
-function gitReadOnlyEnv(): NodeJS.ProcessEnv {
+function gitReadOnlyEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
-    GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" };
+    GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0",
+    // Never discover a repository by walking up from a cwd this code did not choose.
+    GIT_CEILING_DIRECTORIES: "/", GIT_DISCOVERY_ACROSS_FILESYSTEM: "0", ...extra };
 }
+
+/**
+ * A cwd that is provably outside any repository, for git calls that must not discover one.
+ * The candidate's parent is worker-owned in production, so it can never serve as the cwd.
+ */
+function repositoryFreeDirectory(): string {
+  return mkdtempSync(join(tmpdir(), "candidate-git-"));
+}
+
 
 /**
  * T044 — the candidate's patch, rendered with the owner's gitdir and the candidate as a
@@ -144,10 +156,27 @@ function gitReadOnlyEnv(): NodeJS.ProcessEnv {
  * file or a planted `core.fsmonitor` run a worker-chosen program as the control.
  */
 function gitWorkTreeDiff(workspace: CandidateWorkspace, commit: string): string {
-  return execFileSync("git", ["-c", "core.fsmonitor=", "-c", "core.pager=cat",
-    `--git-dir=${join(workspace.sourceRoot, ".git")}`, `--work-tree=${workspace.root}`,
-    "diff", "--binary", commit, "--"],
-  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: gitReadOnlyEnv() });
+  const scratch = repositoryFreeDirectory();
+  const index = join(scratch, "index");
+  const env = gitReadOnlyEnv({ GIT_INDEX_FILE: index });
+  try {
+    const base = [`--git-dir=${join(workspace.sourceRoot, ".git")}`, `--work-tree=${workspace.root}`];
+    // `GIT_INDEX_FILE` is redirected because `--work-tree` alone also makes git compare
+    // against the SOURCE repository's index. Without it an owner `git rm --cached` adds a
+    // spurious deletion to a candidate that never touched the file, and a missing source
+    // index reports every tracked file deleted.
+    //
+    // The scratch index is then seeded from the base commit, so the diff is between the
+    // base tree and the candidate's bytes and nothing else. An index that does not exist
+    // would make every tracked file look new.
+    execFileSync("git", [...base, "read-tree", commit],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, cwd: scratch, env });
+    return execFileSync("git", ["-c", "core.fsmonitor=", "-c", "core.pager=cat", ...base,
+      "diff", "--binary", commit, "--"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, cwd: scratch, env });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -157,8 +186,9 @@ function gitWorkTreeDiff(workspace: CandidateWorkspace, commit: string): string 
  * answer, so the candidate itself is only ever read. `.git` is excluded the way
  * `ls-files --others` excludes it: it is repository metadata, not a candidate file.
  */
-function listCandidateFiles(root: string, trackedSet: ReadonlySet<string>): CandidateFile[] {
-  const untracked = walkFiles(root).filter(path => path !== ".git" && !path.startsWith(".git/"));
+function listCandidateFiles(workspace: CandidateWorkspace, trackedSet: ReadonlySet<string>): CandidateFile[] {
+  const untracked = untrackedInCandidate(workspace, trackedSet);
+  const root = workspace.root;
   return [...new Set([...trackedSet, ...untracked])].sort().flatMap(path => {
     try {
       return [{ path, hash: sha256(readFileSync(candidatePath(root, path))), tracked: trackedSet.has(path) }];
@@ -167,6 +197,31 @@ function listCandidateFiles(root: string, trackedSet: ReadonlySet<string>): Cand
       throw error;
     }
   });
+}
+
+/**
+ * T044 — the files a candidate adds that the repository does not ignore.
+ *
+ * A blind tree walk does not honour `.gitignore`, so a worker's `.env`, logs and
+ * `node_modules` would enter the manifest, the digest, the patch and the reviewer packet.
+ * The answer is taken from the source's control-owned configuration, with an explicit cwd
+ * outside any repository and an empty index, so nothing in the candidate is consulted.
+ */
+function untrackedInCandidate(workspace: CandidateWorkspace, trackedSet: ReadonlySet<string>): string[] {
+  const scratch = repositoryFreeDirectory();
+  // A path that does not exist, NOT an empty file: git refuses a zero-byte index with
+  // "index file smaller than expected", but treats a missing one as empty.
+  const emptyIndex = join(scratch, "index");
+  try {
+    const output = execFileSync("git", ["-c", "core.fsmonitor=",
+      "--git-dir=" + join(workspace.sourceRoot, ".git"), "--work-tree=" + workspace.root,
+      "ls-files", "--others", "--exclude-standard", "-z"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000,
+      cwd: scratch, env: gitReadOnlyEnv({ GIT_INDEX_FILE: emptyIndex }) });
+    return output.split("\0").filter(Boolean).filter(path => !trackedSet.has(path));
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -189,10 +244,18 @@ export function isCandidateWorkTree(candidateRoot: string, sourceRoot: string): 
     const match = /^gitdir: (.+)$/m.exec(readFileSync(dotGit, "utf8"));
     if (!match) return false;
     const recorded = resolve(candidateRoot, match[1]!.trim());
-    const worktrees = resolve(sourceRoot, ".git", "worktrees");
+    const source = realpathSync(sourceRoot);
+    const worktrees = join(source, ".git", "worktrees");
     const inside = relative(worktrees, recorded);
-    return inside !== "" && inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside)
-      && realpathSync(recorded) === recorded;
+    if (inside === "" || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) return false;
+    if (realpathSync(recorded) !== recorded) return false;
+    // The gitdir's own back-reference names the worktree. It is a bare path ending in the
+    // candidate's `.git`, not a `gitdir:` line like the candidate's own file. Without this
+    // check a directory that merely copies another worktree's `.git` file passes, and the
+    // guard does not do what it claims: refusing a directory that only occupies the path.
+    const back = readFileSync(join(recorded, "gitdir"), "utf8").trim();
+    if (!back) return false;
+    return resolve(recorded, back) === join(realpathSync(candidateRoot), ".git");
   } catch { return false; }
 }
 
@@ -335,15 +398,24 @@ export function createCandidateWorkspace(input: {
 
 /** A patch that adds one untracked file, as `git diff` would render it once tracked. */
 function untrackedPatch(root: string, path: string): string {
-  // T044: `--no-index` needs no repository, so it runs from a fixed directory with no
-  // repository discovery and no configuration lookup — the candidate's `.git` is never
-  // consulted, and only the one file's bytes are read.
+  // T044: `--no-index` compares two paths and needs no repository, but two things about
+  // how it is invoked still matter.
+  //
+  // The cwd is the candidate root, and the ceiling stops repository discovery there, so
+  // no ancestor is ever consulted. The previous cwd was `dirname(root)` — the candidate's
+  // parent, which is worker-owned in production — where a planted repository could answer
+  // for this call.
+  //
+  // `path` is repository-relative, so the rendered headers are `a/<path>` / `b/<path>` and
+  // the patch applies at a repository root. Passing an absolute path named a host location
+  // instead.
   //
   // `--no-index` reports a difference by exiting 1, which is the normal case here, so the
   // exit status cannot stand in for "failed": read stdout directly.
   const result = spawnSync("git", ["-c", "core.fsmonitor=", "diff", "--binary", "--no-index", "--",
-    emptyFilePath(), join(root, path)],
-  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, cwd: dirname(root), env: gitReadOnlyEnv() });
+    emptyFilePath(), path],
+  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, cwd: root,
+    env: gitReadOnlyEnv({ GIT_CEILING_DIRECTORIES: root }) });
   if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
   return (result.stdout ?? "").replace(/\n+$/, "");
 }
@@ -368,7 +440,7 @@ export function candidateManifest(workspace: CandidateWorkspace): {
     // from `git ls-files` inside the candidate, and the patch is rendered with the
     // owner's gitdir and the candidate as a plain work tree.
     const tracked = trackedInCandidate(workspace);
-    const files = listCandidateFiles(workspace.root, new Set(tracked));
+    const files = listCandidateFiles(workspace, new Set(tracked));
     const trackedPatch = gitWorkTreeDiff(workspace, workspace.base.commit).replace(/\n+$/, "");
     const additions = files.filter(file => !file.tracked).map(file => untrackedPatch(workspace.root, file.path)).filter(Boolean);
     return {

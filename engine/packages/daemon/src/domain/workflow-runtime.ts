@@ -580,11 +580,15 @@ export class WorkflowRuntime {
     // T044: an existing directory is only this candidate if it is a work tree of the
     // repository at the recorded base. Without this, any directory that happened to
     // occupy the path — an owner's file, a leftover, a planted tree — would be adopted
-    // as the task's candidate and its bytes reported as the task's work. The check reads
-    // the source's own metadata and never runs `git` inside the candidate.
-    if (!isCandidateWorkTree(workspaceRoot, run.binding.repository.root)) return undefined;
+    // as the task's candidate and its bytes reported as the task's work.
+    //
+    // The guard is lane-aware: a snapshot-lane candidate is a plain directory with no git
+    // metadata at all (KTD8, an unborn repository), so requiring a work tree would make
+    // every snapshot task unlaunchable after a restart.
+    const base = resolveWorkspaceBase(run.binding.repository.root);
+    if (base.kind === "commit" && !isCandidateWorkTree(workspaceRoot, run.binding.repository.root)) return undefined;
     return { root: workspaceRoot, sourceRoot: resolve(run.binding.repository.root),
-      base: resolveWorkspaceBase(run.binding.repository.root), source: sourceFingerprint(run.binding.repository.root) };
+      base, source: sourceFingerprint(run.binding.repository.root) };
   }
 
   /**
