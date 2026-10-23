@@ -163,6 +163,7 @@ flowchart TD
   T039 --> T044
   T041 --> T042
   T042 --> T047
+  T036 --> T047
   T041 --> T047
   T047 --> T038
   T038 --> T026
@@ -2481,17 +2482,18 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#interface-contracts"
       ],
       "entry_hint": "Start with KTD26 and the imported `domain/health-*.ts` modules.",
-      "test_focus": "Fixture faults turn exactly the matching light `failed` (database lock held, tmux socket missing, worker signed out, client version differing from the lock, policy fingerprint mismatch); a hung probe returns `unknown` within its timeout and `unknown` never renders as `ok`; a full check changes no database rows, files, sessions or host state and starts no provider session; an agent credential is refused; every `failed` state has a runbook entry.",
-      "done_signal": "One owner-authenticated query returns every KTD26 light from the existing owners, and the before/after state comparison shows no mutation.",
+      "test_focus": "At the T036 source and route boundary, supplied probe results preserve each matching light and evidence; a hung probe returns unknown within five seconds, a hung aggregate reader within thirty seconds, and unknown never renders as ok; malformed results and unavailable attempt evidence remain unknown; stopped evidence is preserved; owner access succeeds and an agent credential is refused; every failed light has runbook guidance. Real-owner fault fixtures and the full database/files/sessions/provider-state no-mutation comparison are the T047-H1 integration sub-task.",
+      "done_signal": "The health contracts, read-only evidence accessor and owner-authenticated route pass focused tests and daemon typecheck; the final daemon suite has no task-caused failure. Accept and merge T036 with the label Pending T047 wiring. Production reader injection and real-owner integration/no-mutation acceptance belong to T047-H1; unavailable sources remain unknown until that wiring lands.",
       "wave": "11.5",
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A check would repair, restart, upgrade or spend quota, or would need a probe that duplicates an existing owner.",
       "review_gate": "required",
       "review_focus": "Check for hidden writes, unbounded probes and any path where a hung component reads as `ok`.",
-      "notes": "Extend the imported health modules where they fit instead of building parallel probes. Owner decision 2026-10-23: worker-home sign-in and preflight evidence live in the launch-state map of `worker-launch-control.ts`, so T036 adds a read-only health-evidence accessor at that owner (U13: read the existing owners instead of adding probes beside them). It adds no probe, write path or lifecycle change there.",
+      "notes": "Extend the imported health modules where they fit instead of building parallel probes. Owner decision 2026-10-23: worker-home sign-in and preflight evidence live in the launch-state map of `worker-launch-control.ts`, so T036 adds a read-only health-evidence accessor at that owner (U13: read the existing owners instead of adding probes beside them). It adds no probe, write path or lifecycle change there. Owner delivery decision 2026-10-23: freeze and commit the current T036 implementation and accept it as Pending T047 wiring. Track B does not modify startup.ts or its rules. T047-H1, owned by Track A, injects the health reader through the production startup composition. KTD26 remains five seconds per probe and thirty seconds overall; a five-second routing limit is rejected. Remaining stopped-state test coverage and the missing original first-round review report are bounded P2 residuals after valid blocking findings are resolved.",
       "risk_note": "A false `ok` during a hang is worse than no light.",
       "expected_side_effects": [
-        "tools/upstream-import.mjs"
+        "tools/upstream-import.mjs",
+        "docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md"
       ]
     },
     {
@@ -3077,12 +3079,19 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD4",
         "KTD8",
         "KTD9",
-        "KTD24"
+        "KTD24",
+        "R12",
+        "AE12",
+        "KTD20",
+        "KTD23",
+        "KTD26",
+        "KTD27"
       ],
       "goal": "Attach a produced managed attempt to the seat's binding and register its mailbox endpoint in the composed launch chain, so an admitted assignment can actually reach the privileged launch.",
       "dependencies": [
         "T042",
-        "T041"
+        "T041",
+        "T036"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
@@ -3094,17 +3103,18 @@ The following JSON is the single machine-readable task source. Human cards below
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review",
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer"
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u13-add-read-only-system-health-checks"
       ],
       "entry_hint": "Start with `composeManagedLaunch`'s endpoint map and the `mailbox` seam in `startup.ts`, then the three places a `NodeBinding` is built before `startNode`.",
-      "test_focus": "Exercise the composed launch chain, not a hand-built binding. A launch for a seat whose queue task resolves to an admitted assignment receives a binding carrying the produced attempt, and its endpoint is registered before the launcher reaches `mailbox`. The endpoint is keyed by the attempt the producer returned, never by the queue row or the session. A launch whose task is not admitted receives a binding with no managed attempt and no registration. The privileged launcher is faked only at `/usr/bin/sudo`; no provider session starts.",
-      "done_signal": "Focused tests pass through the composed chain; the daemon typecheck passes; one final daemon package run has no task-caused failure. A fresh launch, a resume restore and a rig-instantiated seat each reach the launcher with the produced attempt attached and its endpoint registered, offline. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T047 claims no installed-client outcome; T038 observes the composed path live.",
+      "test_focus": "Exercise the composed launch chain, not a hand-built binding. A launch for a seat whose queue task resolves to an admitted assignment receives a binding carrying the produced attempt, and its endpoint is registered before the launcher reaches `mailbox`. The endpoint is keyed by the attempt the producer returned, never by the queue row or the session. A launch whose task is not admitted receives a binding with no managed attempt and no registration. The privileged launcher is faked only at `/usr/bin/sudo`; no provider session starts. Sub-task T047-H1 exercises the normal owner-authenticated health query through startup composition, with the existing health reader injected from its existing owners. Cover database-lock, missing-tmux-socket, worker-sign-out, client-lock version/hash and policy-fingerprint faults, five-second probe/thirty-second overall timeouts, agent denial, and the full database/files/sessions/provider-state no-mutation comparison without starting a provider session.",
+      "done_signal": "Focused tests pass through the composed chain; the daemon typecheck passes; one final daemon package run has no task-caused failure. A fresh launch, a resume restore and a rig-instantiated seat each reach the launcher with the produced attempt attached and its endpoint registered, offline. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T047 claims no installed-client outcome; T038 observes the composed path live. T047-H1 supplies the production readSystemHealth reader through startup.ts and proves the KTD26 query from existing owners; once its real-owner fault and no-mutation acceptance passes, the Pending T047 wiring label on T036 can be cleared.",
       "wave": 17,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if attaching the attempt would let a personal (non-managed) launch reach the managed chain, or would register an endpoint for an attempt the producer did not return. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.",
       "review_gate": "required",
       "review_focus": "Check that no non-managed launch can receive an attached attempt, that the registered key is the produced attempt rather than a queue or session identifier, that a refused assignment leaves neither a binding field nor a registration, and that the endpoint is closed on the same retirement paths T042 proves.",
-      "notes": "Split out of T042 by owner decision on 2026-10-23 under T042's own `stop_if`: the endpoint map lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is built at three sites in files no task owned. `startup.ts` and `seat-lifecycle-service.ts` are shared owners, so this task serializes against T039 and T041.",
+      "notes": "Split out of T042 by owner decision on 2026-10-23 under T042's own `stop_if`: the endpoint map lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is built at three sites in files no task owned. `startup.ts` and `seat-lifecycle-service.ts` are shared owners, so this task serializes against T039 and T041. Owner delivery decision 2026-10-23: sub-task T047-H1 (Track A) owns injecting the T036 health reader into startup.ts, composing existing owner evidence and proving the production health query. This sub-task retains the existing read-only and no-provider-session constraints and the five-second per-probe/thirty-second whole-check limits. Track B lands the T036 source/route/contracts independently as Pending T047 wiring; it does not edit startup.ts.",
       "risk_note": "An attempt attached to the wrong binding, or an endpoint registered under a key the launcher never asks for, yields a launch that either fails closed for every attempt or hands a worker a channel its assignment never authorized.",
       "expected_side_effects": []
     }
@@ -3504,12 +3514,12 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Source / requirements:** `U13`; `R12`, `R16`, `AE12`, `KTD20`, `KTD26`, `KTD27`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11.5; T004, T034.
 - **Files:** `engine/packages/daemon/src/domain/system-health.ts`; `engine/packages/daemon/src/adapters/worker-launch-control.ts`; `engine/packages/daemon/src/contracts/team-control.ts`; `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/test/system-health.test.ts`; `docs/operations.md`.
-- **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner.
-- **Test focus:** Fixture faults turn exactly the matching light `failed` (database lock held, tmux socket missing, worker signed out, client version differing from the lock, policy fingerprint mismatch); a hung probe returns `unknown` within its timeout and `unknown` never renders as `ok`; a full check changes no database rows, files, sessions or host state and starts no provider session; an agent credential is refused; every `failed` state has a runbook entry.
-- **Done signal:** One owner-authenticated query returns every KTD26 light from the existing owners, and the before/after state comparison shows no mutation.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to exact task-owned `PIN.adapted` and local-file registrations; serialize this shared owner. The owner also authorizes this task-pack amendment for T036/T047.
+- **Test focus:** At the T036 source and route boundary, supplied probe results preserve each matching light and evidence; a hung probe returns unknown within five seconds, a hung aggregate reader within thirty seconds, and unknown never renders as ok; malformed results and unavailable attempt evidence remain unknown; stopped evidence is preserved; owner access succeeds and an agent credential is refused; every failed light has runbook guidance. Real-owner fault fixtures and the full database/files/sessions/provider-state no-mutation comparison are the T047-H1 integration sub-task.
+- **Done signal:** The health contracts, read-only evidence accessor and owner-authenticated route pass focused tests and daemon typecheck; the final daemon suite has no task-caused failure. Accept and merge T036 with the label Pending T047 wiring. Production reader injection and real-owner integration/no-mutation acceptance belong to T047-H1; unavailable sources remain unknown until that wiring lands.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A check would repair, restart, upgrade or spend quota, or would need a probe that duplicates an existing owner.
 - **Review intent:** required; Check for hidden writes, unbounded probes and any path where a hung component reads as `ok`.
-- **Notes:** Extend the imported health modules where they fit instead of building parallel probes. Owner decision 2026-10-23: worker-home sign-in and preflight evidence live in the launch-state map of `worker-launch-control.ts`, so T036 adds a read-only health-evidence accessor at that owner (U13: read the existing owners instead of adding probes beside them). It adds no probe, write path or lifecycle change there.
+- **Notes:** Extend the imported health modules where they fit instead of building parallel probes. Owner decision 2026-10-23: worker-home sign-in and preflight evidence live in the launch-state map of `worker-launch-control.ts`, so T036 adds a read-only health-evidence accessor at that owner (U13: read the existing owners instead of adding probes beside them). It adds no probe, write path or lifecycle change there. Owner delivery decision 2026-10-23: freeze and commit the current T036 implementation and accept it as Pending T047 wiring. Track B does not modify startup.ts or its rules. T047-H1, owned by Track A, injects the health reader through the production startup composition. KTD26 remains five seconds per probe and thirty seconds overall; a five-second routing limit is rejected. Remaining stopped-state test coverage and the missing original first-round review report are bounded P2 residuals after valid blocking findings are resolved.
 
 ### T037. Harden the command-bound process reader so the native process, its image and its session come only from privileged kernel evidence.
 
@@ -3641,15 +3651,15 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T047. Attach a produced managed attempt to the seat's binding and register its mailbox endpoint.
 
-- **Source / requirements:** `U5`; `R4`, `R5`, `R10`, `R16`, `R21`, `R22`, `AE2`, `AE3`, `AE4`, `AE9`, `AE13`, `KTD4`, `KTD8`, `KTD9`, `KTD24`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 17; T042, T041.
+- **Source / requirements:** `U5`; `R4`, `R5`, `R10`, `R16`, `R21`, `R22`, `AE2`, `AE3`, `AE4`, `AE9`, `AE13`, `KTD4`, `KTD8`, `KTD9`, `KTD24`, `R12`, `AE12`, `KTD20`, `KTD23`, `KTD26`, `KTD27`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 17; T042, T041, T036.
 - **Files:** `engine/packages/daemon/src/startup.ts`; `engine/packages/daemon/src/domain/seat-lifecycle-service.ts`; `engine/packages/daemon/src/domain/rigspec-instantiator.ts`; `engine/packages/daemon/src/domain/restore-orchestrator.ts`; `engine/packages/daemon/test/managed-attempt-attachment.test.ts`.
 - **Expected side effects:** none.
-- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`
-- **Test focus:** Exercise the composed launch chain, not a hand-built binding. A launch for a seat whose queue task resolves to an admitted assignment receives a binding carrying the produced attempt, and its endpoint is registered before the launcher reaches `mailbox`. The endpoint is keyed by the attempt the producer returned, never by the queue row or the session. A launch whose task is not admitted receives a binding with no managed attempt and no registration. The privileged launcher is faked only at `/usr/bin/sudo`; no provider session starts.
-- **Done signal:** Focused tests pass through the composed chain; the daemon typecheck passes; one final daemon package run has no task-caused failure. A fresh launch, a resume restore and a rig-instantiated seat each reach the launcher with the produced attempt attached and its endpoint registered, offline. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T047 claims no installed-client outcome; T038 observes the composed path live.
+- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u13-add-read-only-system-health-checks`
+- **Test focus:** Exercise the composed launch chain, not a hand-built binding. A launch for a seat whose queue task resolves to an admitted assignment receives a binding carrying the produced attempt, and its endpoint is registered before the launcher reaches `mailbox`. The endpoint is keyed by the attempt the producer returned, never by the queue row or the session. A launch whose task is not admitted receives a binding with no managed attempt and no registration. The privileged launcher is faked only at `/usr/bin/sudo`; no provider session starts. Sub-task T047-H1 exercises the normal owner-authenticated health query through startup composition, with the existing health reader injected from its existing owners. Cover database-lock, missing-tmux-socket, worker-sign-out, client-lock version/hash and policy-fingerprint faults, five-second probe/thirty-second overall timeouts, agent denial, and the full database/files/sessions/provider-state no-mutation comparison without starting a provider session.
+- **Done signal:** Focused tests pass through the composed chain; the daemon typecheck passes; one final daemon package run has no task-caused failure. A fresh launch, a resume restore and a rig-instantiated seat each reach the launcher with the produced attempt attached and its endpoint registered, offline. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T047 claims no installed-client outcome; T038 observes the composed path live. T047-H1 supplies the production readSystemHealth reader through startup.ts and proves the KTD26 query from existing owners; once its real-owner fault and no-mutation acceptance passes, the Pending T047 wiring label on T036 can be cleared.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if attaching the attempt would let a personal (non-managed) launch reach the managed chain, or would register an endpoint for an attempt the producer did not return. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.
-- **Notes:** Split out of T042 by owner decision on 2026-10-23 under T042's own `stop_if`: the endpoint map lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is built at three sites in files no task owned. `startup.ts` and `seat-lifecycle-service.ts` are shared owners, so this task serializes against T039 and T041.
+- **Notes:** Split out of T042 by owner decision on 2026-10-23 under T042's own `stop_if`: the endpoint map lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is built at three sites in files no task owned. `startup.ts` and `seat-lifecycle-service.ts` are shared owners, so this task serializes against T039 and T041. Owner delivery decision 2026-10-23: sub-task T047-H1 (Track A) owns injecting the T036 health reader into startup.ts, composing existing owner evidence and proving the production health query. This sub-task retains the existing read-only and no-provider-session constraints and the five-second per-probe/thirty-second whole-check limits. Track B lands the T036 source/route/contracts independently as Pending T047 wiring; it does not edit startup.ts.
 - **Review intent:** required; Check that no non-managed launch can receive an attached attempt, that the registered key is the produced attempt rather than a queue or session identifier, that a refused assignment leaves neither a binding field nor a registration, and that the endpoint is closed on the same retirement paths T042 proves.
 
 ## Orientation Evidence
@@ -3701,3 +3711,5 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 7. Preserve user-owned files, generated runtime mirrors, unrelated work and evidence. Do not manufacture an initial commit, reset a worktree, overwrite an existing checkout or remove history to obtain a passing check.
 8. Before any downstream dispatch, pin the current deterministic receipt, task-pack file digest and source-plan hash, replay readiness and scope, and require the relevant execution/setup/live-run grants. A review recommendation or validated task pack grants none of those actions.
 
+
+- **2026-10-23 T036 delivery boundary:** The owner accepts the current T036 source/route/contracts as Pending T047 wiring and assigns production reader injection to Track A sub-task T047-H1. The source plan and Track B rules stay unchanged. Real-owner fault and no-mutation integration acceptance stays with T047-H1. KTD26 requires five seconds per probe and thirty seconds overall.
