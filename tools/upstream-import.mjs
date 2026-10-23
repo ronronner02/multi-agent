@@ -77,6 +77,8 @@ export const PIN = Object.freeze({
     'packages/daemon/test/seat-activity-retirement.test.ts',
     'packages/daemon/test/tmux-pane-cwd-native.test.ts',
     'packages/daemon/test/tmux-parent-env-hook-native.test.ts',
+    // T041 passes the shared worker launcher into the resume adapter, so the startup assertion follows it.
+    'packages/daemon/test/s03-bound-launch.test.ts',
     'packages/tui/package.json',
     'packages/ui/package.json',
   ],
