@@ -24,7 +24,7 @@ source_sections:
 
 ## Overview
 
-This derived execution index decomposes the active, implementation-ready source plan into **46 bounded tasks in 23 waves**, covering U1-U14. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-23 revision applies KTD28/U14: it adds T045 (the offline slice: the pinned core and role charters in every manifest, and the reviewer report format enforced when a review is recorded; wave 14) and T046 (facts-only briefs, retained review packets and observed charter discovery; wave 18, after T039, T042 and T038). T026 now depends on T046 so the primary live run uses charters, and T026-T030 move to waves 19-23. U14 takes T045 and T046 because the 2026-10-22 closeout split already holds T043 and T044. The 2026-10-22 closeout revision splits two T039 claims whose fixes lie outside its declared files into the new T043 (a reviewer launching into the reviewed candidate, which needs an assignment field naming that task) and T044 (a candidate manifest that cannot be forged by the worker through `core.fsmonitor`); both depend on T039. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
+This derived execution index decomposes the active, implementation-ready source plan into **47 bounded tasks in 24 waves**, covering U1-U14. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-23 T042 stop revision adds T047 (attaching a produced managed attempt to the seat's binding and registering its endpoint in the composed chain) at wave 17, because T042's own `stop_if` found that the endpoint map lives only in `startup.ts` and the binding is built at three sites no task owned; T042 keeps the producer, T038 now depends on T047 and moves to wave 18, T046 follows to wave 19, and T026-T030 move to waves 20-24. The 2026-10-23 revision applies KTD28/U14: it adds T045 (the offline slice: the pinned core and role charters in every manifest, and the reviewer report format enforced when a review is recorded; wave 14) and T046 (facts-only briefs, retained review packets and observed charter discovery; wave 18, after T039, T042 and T038). T026 now depends on T046 so the primary live run uses charters, and T026-T030 move to waves 19-23. U14 takes T045 and T046 because the 2026-10-22 closeout split already holds T043 and T044. The 2026-10-22 closeout revision splits two T039 claims whose fixes lie outside its declared files into the new T043 (a reviewer launching into the reviewed candidate, which needs an assignment field naming that task) and T044 (a candidate manifest that cannot be forged by the worker through `core.fsmonitor`); both depend on T039. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
 **Validation boundary:** T004 retains the plan-declared `engine/packages/daemon/src/middleware/auth-bearer-token.ts` source path. The validator contract must contain the audited exact-path allowance; broader credential-name denials remain in force. Validate this regenerated pack from the WSL artifact root before execution. Do not remove required source paths or treat a manual exception as a passing receipt.
 
@@ -77,7 +77,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | U2 | R1, R4, R5, R13, R19, R21, R22; AE1, AE4, AE6, AE11, AE13; KTD4-KTD6, KTD22 | T003-T004 | Transactional migration/governance, fixed daemon mode, admission invariants and owner-level managed-entry authority checks |
 | U3 | R1-R6, R11, R18, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6, KTD21 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness, effective-context manifests and the Lead operating protocol |
 | U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21, KTD23, KTD24, KTD27; PC7 | T008-T010, T031-T032, T034, T037-T042, T040-T041 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
-| U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD24, KTD25 | T011-T012, T035, T039, T042-T044 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework, the managed-attempt producer and KTD25 scope extensions |
+| U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD24, KTD25 | T011-T012, T035, T039, T042-T044, T047 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework, the managed-attempt producer and KTD25 scope extensions |
 | U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
 | U7 | R5, R9-R15, R18, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9, KTD20 | T017-T018, T033 | Owned-process cancel/deadlines, failure classification and retry eligibility, crash fault injection, no duplicate side effects and paired restore |
 | U9 | R12-R14, R19, R21, R22; AE6, AE13; KTD6, KTD14, KTD16, KTD18; PC1, PC4, PC5 | T013-T014 | Session/forgery/expiry gates, owner-host identity and audited read-only/take-over boundaries |
@@ -96,7 +96,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | Distinct native clients and direct addressed collaboration | T008-T010, T037-T042, T040-T041 | T027-T028 |
 | Structured native channels and Lead wake bounds | T007, T031-T032 | T038, T030 |
 | Rejection, PC7 launch mode, context and control isolation | T001-T002, T004, T007-T010, T013-T014, T037-T042, T040-T041 | T027-T028 |
-| Candidate integrity, independent review and integrated acceptance | T011-T012, T039, T042-T044, T024-T026 | T027, T030 |
+| Candidate integrity, independent review and integrated acceptance | T011-T012, T039, T042-T044, T047, T024-T026 | T027, T030 |
 | Cancellation, restart, ambiguous effects and cumulative limits | T017-T018, T033 | T027-T028 |
 | Reproducible source/build and database rollback | T001-T003, T018 | T030 |
 | TUI interaction, log visibility, replay timing and durable projection | T015-T016 | T027 |
@@ -162,7 +162,9 @@ flowchart TD
   T039 --> T043
   T039 --> T044
   T041 --> T042
-  T042 --> T038
+  T042 --> T047
+  T041 --> T047
+  T047 --> T038
   T038 --> T026
   T007 --> T045
   T010 --> T045
@@ -207,13 +209,14 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 14 | T017, T021, T045 | Cancellation/resource enforcement, responsive browser proof and pinned role charters |
 | 15 | T022, T023, T033, T039 | Scoped read views, bounded edits and failure classification, and production candidate isolation |
 | 16 | T018, T042, T044 | Recovery/rollback through the shared classifier, the managed-attempt producer, and a candidate manifest the worker cannot forge |
-| 17 | T038, T024, T025, T043 | Installed-client two-client acceptance, control-side harness, the separately owned frozen demo seed, and reviewer access to the reviewed candidate |
-| 18 | T046 | Facts-only role briefs, retained review packets and observed charter discovery |
-| 19 | T026 | Approved primary demo implementation/review |
-| 20 | T027 | Primary live owner-flow and adversarial evidence |
-| 21 | T028 | Separately authorized reverse-pairing contracts |
-| 22 | T029 | Separately authorized same-frozen-task comparison |
-| 23 | T030 | Final source-bound proof reconciliation and local closeout |
+| 17 | T024, T025, T043, T047 | Control-side harness, the separately owned frozen demo seed, reviewer access to the reviewed candidate, and the managed-attempt attachment |
+| 18 | T038 | Installed-client two-client acceptance |
+| 19 | T046 | Facts-only role briefs, retained review packets and observed charter discovery |
+| 20 | T026 | Approved primary demo implementation/review |
+| 21 | T027 | Primary live owner-flow and adversarial evidence |
+| 22 | T028 | Separately authorized reverse-pairing contracts |
+| 23 | T029 | Separately authorized same-frozen-task comparison |
+| 24 | T030 | Final source-bound proof reconciliation and local closeout |
 
 ## Task Pack Contract
 
@@ -342,44 +345,50 @@ The following JSON is the single machine-readable task source. Human cards below
     {
       "wave": 17,
       "tasks": [
-        "T038",
         "T024",
         "T025",
-        "T043"
+        "T043",
+        "T047"
       ]
     },
     {
       "wave": 18,
       "tasks": [
-        "T046"
+        "T038"
       ]
     },
     {
       "wave": 19,
       "tasks": [
-        "T026"
+        "T046"
       ]
     },
     {
       "wave": 20,
       "tasks": [
-        "T027"
+        "T026"
       ]
     },
     {
       "wave": 21,
       "tasks": [
-        "T028"
+        "T027"
       ]
     },
     {
       "wave": 22,
       "tasks": [
-        "T029"
+        "T028"
       ]
     },
     {
       "wave": 23,
+      "tasks": [
+        "T029"
+      ]
+    },
+    {
+      "wave": 24,
       "tasks": [
         "T030"
       ]
@@ -1952,7 +1961,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Approved demo feature plan before dispatch; primary implementer/reviewer pairing; GET /items status=open|done, PATCH /items/:id status update, 400 invalid input, 404 missing item, browser interactions and restart persistence; planted-defect bounded repair; server and client import the typed schema in `src/contract.ts`, and integration verification passes only with executed HTTP and browser evidence bound to the integrated candidate digest.",
       "done_signal": "A separately authorized primary run produces an isolated candidate, independent read-only review of its exact digest and passing demo API/client checks with receipts. The seed and control harness remain unchanged; owner-visible acceptance is still required in T027.",
-      "wave": 19,
+      "wave": 20,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Feature work precedes plan approval, provider budget/auth is missing, workers see orchestrator/control source, comparison seed is altered, or required review/rework/budget gates fail.",
       "review_gate": "required",
@@ -2045,7 +2054,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Primary candidate API/UI filtering, completion and restart; real drift/control-access/prompt/rejection/cancellation/restart cases; Web at 1440/1024/390 in both languages and TUI at two sizes in both languages; pairing, decision, Lead take-over, workspace diff and re-approval edit.",
       "done_signal": "The report links exact source/seed/candidate/plan/run/task/attempt/version receipts, independent review, user-flow outcomes and before/after preservation evidence. Required missing/skipped/failed outcomes remain incomplete; integrated failure overrides agent/process completion.",
-      "wave": 20,
+      "wave": 21,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Evidence is not from the final candidate, a fresh run is needed without a new grant, owner interaction is missing, or drills would exceed the primary run's cumulative remaining budget.",
       "review_gate": "required",
@@ -2102,7 +2111,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Codex implementation-role and Claude review-role permitted/denied actions, read-only reviewer scope, prompt-active mailbox delivery, instruction provenance and resume.",
       "done_signal": "A separately authorized bounded reverse-contract run yields observed receipts for each named contract and preserves lead independence, configured limits and source identity. It is not reported as a second complete feature task.",
-      "wave": 21,
+      "wave": 22,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Reverse checks need an unapproved extra feature trial, fail isolation/provenance, or merely reuse the primary pairing's receipts.",
       "review_gate": "required",
@@ -2150,7 +2159,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Selected engine and pinned ReevesAgents 39ce3ace2dd2f2df451e943c432d505fb61d5946 attempt the identical frozen seed/task with matching protections, available models/roles, acceptance checks and separately granted caps.",
       "done_signal": "A comparative report contains observed attempts or evidenced blocked scenarios per candidate, configuration differences, adaptation/glue effort, interventions, failures, recovery and reliable elapsed/usage metrics. Unknown cost is unknown; an unattempted comparison or manual baseline does not satisfy this gate.",
-      "wave": 22,
+      "wave": 23,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The comparison changes the selected production engine, weakens isolation, reuses a mutated seed, lacks another required run grant or substitutes source inspection for an attempted scenario.",
       "review_gate": "required",
@@ -2246,7 +2255,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Final adapted build/lint/unit/UI regressions on the authoritative WSL revision; proof-intent reconciliation; paired rollback, source transfer/export, provenance/licenses, unavailable metrics and delivery permission boundaries.",
       "done_signal": "Every required proof intent links a current actual outcome and owner; final source matches accepted/reviewed candidates, no unresolved delivery-blocking P0/P1 defects remain, preservation checks pass and the owner receives local results with limitations and the next delivery decision. Missing evidence prevents verified completion.",
-      "wave": 23,
+      "wave": 24,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A required proof is stale/missing/ambiguous, tests lack an actual manifest script, final edits invalidate acceptance, source authority diverges or a publication action lacks its separate grant.",
       "review_gate": "required",
@@ -2569,6 +2578,7 @@ The following JSON is the single machine-readable task source. Human cards below
       ],
       "goal": "Prove both installed clients preserve containment, provenance and safe messaging through daemon-mediated fresh launch, exact resume and daemon restart.",
       "dependencies": [
+        "T047",
         "T042",
         "T041"
       ],
@@ -2586,7 +2596,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with `acceptance-readiness.json` in the `20261019T140631Z-t010-rev5-host-acceptance` run and T037's closeout report.",
       "test_focus": "Actual shell/test subprocess attempts against owner tokens, database/WAL/shared memory, supervisor sockets and owner-pane input; allowed scratch edit; PC7 sessions run a shell command, a file edit and a network package install with no prompt while every denial holds; worker-home provider sign-in; expected context; prompt-active mailbox text safely consumed later; repeat after resume. The KTD23 reachable set measured from inside a real managed session: provider and dependency endpoints succeed while Windows host loopback services, overlay-network peers and their MagicDNS names, the LAN and host abstract sockets are unreachable, on fresh launch and again after resume. Passing-channel delivery receipts and failing-client fallback match the KTD19 spike record; Lead wake guards hold across a real restart. Observe effective instruction and hook loading from the client or the OS, not from launch flags; observed in-worker discovery matches the KTD24 worker paths on fresh launch and resume. Use an actual daemon process restart with live sessions. Launch and resume refuse a client that differs from the T034 lock.",
       "done_signal": "Daemon-mediated probes for both installed clients, within the inherited allowance, produce source/policy/version-bound observed receipts for every required denial plus allowed edit, readiness, prompt race, safe consumption and resume case. Provider usage without reliable metrics is recorded unavailable. PC7 launch-mode receipts, the KTD23 reachable-set receipts and the spike record are bound to the same source, policy and client versions. A fresh full U1 host preflight passes on the installed policy before any live probe. Every U4 scenario 1-24 has its daemon-mediated or live evidence, including channel and prompt/readiness evidence, authenticated send/reply, endpoint revocation and real full resume and daemon restart. The source/policy/executable candidate is the same for final acceptance and independent review. Focused tests and daemon typecheck pass; one final daemon package run has no task-caused failure. Selector/parser checks alone do not close effective hook execution.",
-      "wave": 17,
+      "wave": 18,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment. Stop if authentication, model configuration or the inherited live allowance is absent or exhausted; a containment/provenance proof fails or is ambiguous; a probe needs broader worker-boundary access or changes personal configuration; another `policy_revision` change is in flight; or a policy, provisioning or service change lacks its separate grant. Stop if the effective native policy source is shadowed or unobserved, or the mailbox exception exposes general control or network access. Keep Product Contract bytes and other task contracts unchanged. Stop if a live failure needs a source change; return it to the plan owner rather than editing T037's owners.",
       "review_gate": "required",
@@ -2666,7 +2676,7 @@ The following JSON is the single machine-readable task source. Human cards below
         "KTD9",
         "KTD24"
       ],
-      "goal": "Produce the managed attempt for an admitted assignment: KTD24 context projection, per-attempt mailbox endpoint and bootstrap, endpoint registration, and attachment to the seat's binding.",
+      "goal": "Produce the managed attempt for an admitted assignment: the KTD24 context projection, the per-attempt mailbox endpoint and its bootstrap, and the attempt object T047 attaches.",
       "dependencies": [
         "T039",
         "T041"
@@ -2684,14 +2694,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
       ],
       "entry_hint": "Start with the 20261021T024815Z-t041-launch-composition report, then `composeManagedLaunch` in `startup.ts` and `inspectManagedWorker` in `worker-launch-control.ts`.",
-      "test_focus": "Exercise the production producer through `WorkflowRuntime`, not a directly constructed workspace. For an admitted assignment `WorkflowRuntime` projects the KTD24 context once under `<paths.context_root>/<worker>/<runId>/<attemptId>/`, creates and starts listening on the attempt's `WorkerMailboxBridge` in the control-private mailbox root, writes the bootstrap the launcher binds, registers the endpoint in `deps.managedLaunch.endpoints` and attaches the resulting `ManagedAttempt` to the seat's binding for the startup orchestrator's launch. A refused assignment creates no projection, endpoint or attempt. A resume reuses its recorded attempt's projection and endpoint shape and binds the exact previous receipt. Retirement, quiescence and daemon restart close the endpoint. Everything runs offline; no provider session starts, with the privileged launcher faked only at `/usr/bin/sudo`.",
-      "done_signal": "Focused tests for those cases pass through the production launch and activation paths; the daemon typecheck passes; one final daemon package run has no task-caused failure. An admitted managed assignment reaches the composed launch chain with a registered endpoint and an attached attempt, offline, with the privileged launcher faked only at `/usr/bin/sudo`. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T042 claims no installed-client outcome; T038 observes the composed path live.",
+      "test_focus": "Exercise the production producer through `WorkflowRuntime`, not a directly constructed workspace. For an admitted assignment `WorkflowRuntime` projects the KTD24 context once under `<paths.context_root>/<worker>/<runId>/<attemptId>/`, creates and starts listening on the attempt's `WorkerMailboxBridge` in the control-private mailbox root, and writes the bootstrap the launcher binds. A refused assignment creates no projection, endpoint or attempt. A resume reuses its recorded attempt's projection and endpoint shape and binds the exact previous receipt. Retirement, quiescence and daemon restart close the endpoint. Everything runs offline; no provider session starts, with the privileged launcher faked only at `/usr/bin/sudo`.",
+      "done_signal": "Focused tests for those cases pass through the production activation path; the daemon typecheck passes; one final daemon package run has no task-caused failure. An admitted managed assignment yields a projected context, a listening endpoint with its bootstrap, and an attempt object, offline, with the privileged launcher faked only at `/usr/bin/sudo`. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T042 does not attach the attempt to a seat binding or register the endpoint in the composed chain; T047 owns both. T042 claims no installed-client outcome.",
       "wave": 16,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment. Stop if isolation needs a `worker-launch.mjs` or policy change, a provider session or a live client. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a done-signal component has no owner among the listed files, and return it as a plan question rather than a scope amendment; the endpoint registration and the binding attachment were returned that way on 2026-10-23 and became T047. Stop if isolation needs a `worker-launch.mjs` or policy change, a provider session or a live client. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.",
       "review_gate": "required",
       "review_focus": "Check that the producer never creates an endpoint, projection or attempt for an assignment that admission refused, that the projected context is the exact one the launcher verifies, and that endpoint lifetime closes on retirement, quiescence and restart. Reject tests that construct a bridge or attempt directly in place of the production path.",
-      "notes": "Split out of T039 by owner decision on 2026-10-22. T039's card requires stopping and proposing a split when the candidate-workspace work and the producer together would exceed the task-level budget, and source review at e98fc56 confirmed it: `projectContext`, `createContextManifest` and the `WorkerMailboxBridge` constructor had no production callers, so the producer is new composition rather than wiring. T038 now depends on this task instead of T039, so live acceptance still observes the final launch shape. `workflow-runtime.ts` is shared with T011, T012, T039 and T033, and `startup.ts` with T041; serialize those changes. The task-level budget in `AGENTS.md` applies from the first run. On 2026-10-22 the owner moved `startup.ts` to T039, which owns the launch wiring that file carries; this task keeps its producer registration through `deps.managedLaunch.endpoints` and the orchestrator attachment.",
+      "notes": "Split out of T039 by owner decision on 2026-10-22. T039's card requires stopping and proposing a split when the candidate-workspace work and the producer together would exceed the task-level budget, and source review at e98fc56 confirmed it: `projectContext`, `createContextManifest` and the `WorkerMailboxBridge` constructor had no production callers, so the producer is new composition rather than wiring. T038 now depends on this task instead of T039, so live acceptance still observes the final launch shape. `workflow-runtime.ts` is shared with T011, T012, T039 and T033, and `startup.ts` with T041; serialize those changes. The task-level budget in `AGENTS.md` applies from the first run. On 2026-10-22 the owner moved `startup.ts` to T039, which owns the launch wiring that file carries; this task keeps its producer registration through `deps.managedLaunch.endpoints` and the orchestrator attachment. On 2026-10-23 the attachment and endpoint registration moved to T047 under this card's own `stop_if`: the endpoint map lives only in `startup.ts` (T039/T041's owner) and the binding is built in three files this card does not list.",
       "risk_note": "A producer that builds an attempt the composed chain cannot verify yields a refused launch, not a running one; and an endpoint registered for an attempt that admission refused would hand a worker a channel its assignment never authorized.",
       "expected_side_effects": []
     },
@@ -3035,12 +3045,61 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with T042's managed-attempt producer and T039's `reviewPacketFor`, then the `deltaFiles` seam on `ReviewEvidenceLedger`.",
       "test_focus": "The generated brief equals its template rendered from structured records and contains no role prose; a Lead note is bounded, quoted data and refused with control characters or over its size bound. After an in-place rework, round 2's changed-file set comes from the retained round-1 packet; a missing packet yields a full-review brief with a recorded reason. The production producer projects `roleInstructionEntries` for the attempt's role, and observed discovery missing the core or charter refuses the session.",
       "done_signal": "Focused tests pass through the production producer and ledger; the daemon typecheck passes; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. The live planted-defect run is separate owner-granted evidence.",
-      "wave": 18,
+      "wave": 19,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged. Stop if observed-discovery proof needs a live client beyond T038's recorded evidence, a policy change or a provider session.",
       "review_gate": "required",
       "review_focus": "Check that no persona text reaches a brief, that the delta base is the exact bytes reviewed, and that a client whose discovery lacks its charter cannot start.",
       "notes": "Split from U14 by owner decision on 2026-10-22. T026 depends on it so the primary live run uses charters. Renumbered from T044 to T046 on 2026-10-23 because the merged T039 closeout split already holds T043 and T044."
+    },
+    {
+      "task_id": "T047",
+      "source_unit": "U5",
+      "requirement_refs": [
+        "R4",
+        "R5",
+        "R10",
+        "R16",
+        "R21",
+        "R22",
+        "AE2",
+        "AE3",
+        "AE4",
+        "AE9",
+        "AE13",
+        "KTD4",
+        "KTD8",
+        "KTD9",
+        "KTD24"
+      ],
+      "goal": "Attach a produced managed attempt to the seat's binding and register its mailbox endpoint in the composed launch chain, so an admitted assignment can actually reach the privileged launch.",
+      "dependencies": [
+        "T042",
+        "T041"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/startup.ts",
+        "engine/packages/daemon/src/domain/seat-lifecycle-service.ts",
+        "engine/packages/daemon/src/domain/rigspec-instantiator.ts",
+        "engine/packages/daemon/src/domain/restore-orchestrator.ts",
+        "engine/packages/daemon/test/managed-attempt-attachment.test.ts"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer"
+      ],
+      "entry_hint": "Start with `composeManagedLaunch`'s endpoint map and the `mailbox` seam in `startup.ts`, then the three places a `NodeBinding` is built before `startNode`.",
+      "test_focus": "Exercise the composed launch chain, not a hand-built binding. A launch for a seat whose queue task resolves to an admitted assignment receives a binding carrying the produced attempt, and its endpoint is registered before the launcher reaches `mailbox`. The endpoint is keyed by the attempt the producer returned, never by the queue row or the session. A launch whose task is not admitted receives a binding with no managed attempt and no registration. The privileged launcher is faked only at `/usr/bin/sudo`; no provider session starts.",
+      "done_signal": "Focused tests pass through the composed chain; the daemon typecheck passes; one final daemon package run has no task-caused failure. A fresh launch, a resume restore and a rig-instantiated seat each reach the launcher with the produced attempt attached and its endpoint registered, offline. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T047 claims no installed-client outcome; T038 observes the composed path live.",
+      "wave": 17,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if attaching the attempt would let a personal (non-managed) launch reach the managed chain, or would register an endpoint for an attempt the producer did not return. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.",
+      "review_gate": "required",
+      "review_focus": "Check that no non-managed launch can receive an attached attempt, that the registered key is the produced attempt rather than a queue or session identifier, that a refused assignment leaves neither a binding field nor a registration, and that the endpoint is closed on the same retirement paths T042 proves.",
+      "notes": "Split out of T042 by owner decision on 2026-10-23 under T042's own `stop_if`: the endpoint map lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is built at three sites in files no task owned. `startup.ts` and `seat-lifecycle-service.ts` are shared owners, so this task serializes against T039 and T041.",
+      "risk_note": "An attempt attached to the wrong binding, or an endpoint registered under a key the launcher never asks for, yields a launch that either fails closed for every attempt or hands a worker a channel its assignment never authorized.",
+      "expected_side_effects": []
     }
   ]
 }
@@ -3572,8 +3631,23 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Notes:** Split from U14 by owner decision on 2026-10-22. T026 depends on it so the primary live run uses charters. Renumbered from T044 to T046 on 2026-10-23 because the merged T039 closeout split already holds T043 and T044.
 - **Review intent:** required; Check that no persona text reaches a brief, that the delta base is the exact bytes reviewed, and that a client whose discovery lacks its charter cannot start.
 
+
+### T047. Attach a produced managed attempt to the seat's binding and register its mailbox endpoint.
+
+- **Source / requirements:** `U5`; `R4`, `R5`, `R10`, `R16`, `R21`, `R22`, `AE2`, `AE3`, `AE4`, `AE9`, `AE13`, `KTD4`, `KTD8`, `KTD9`, `KTD24`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 17; T042, T041.
+- **Files:** `engine/packages/daemon/src/startup.ts`; `engine/packages/daemon/src/domain/seat-lifecycle-service.ts`; `engine/packages/daemon/src/domain/rigspec-instantiator.ts`; `engine/packages/daemon/src/domain/restore-orchestrator.ts`; `engine/packages/daemon/test/managed-attempt-attachment.test.ts`.
+- **Expected side effects:** none.
+- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`
+- **Test focus:** Exercise the composed launch chain, not a hand-built binding. A launch for a seat whose queue task resolves to an admitted assignment receives a binding carrying the produced attempt, and its endpoint is registered before the launcher reaches `mailbox`. The endpoint is keyed by the attempt the producer returned, never by the queue row or the session. A launch whose task is not admitted receives a binding with no managed attempt and no registration. The privileged launcher is faked only at `/usr/bin/sudo`; no provider session starts.
+- **Done signal:** Focused tests pass through the composed chain; the daemon typecheck passes; one final daemon package run has no task-caused failure. A fresh launch, a resume restore and a rig-instantiated seat each reach the launcher with the produced attempt attached and its endpoint registered, offline. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T047 claims no installed-client outcome; T038 observes the composed path live.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if attaching the attempt would let a personal (non-managed) launch reach the managed chain, or would register an endpoint for an attempt the producer did not return. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged.
+- **Notes:** Split out of T042 by owner decision on 2026-10-23 under T042's own `stop_if`: the endpoint map lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is built at three sites in files no task owned. `startup.ts` and `seat-lifecycle-service.ts` are shared owners, so this task serializes against T039 and T041.
+- **Review intent:** required; Check that no non-managed launch can receive an attached attempt, that the registered key is the produced attempt rather than a queue or session identifier, that a refused assignment leaves neither a binding field nor a registration, and that the endpoint is closed on the same retirement paths T042 proves.
+
 ## Orientation Evidence
 
+- **2026-10-23 T042 stop revision:** T042 executed to its first slice and then stopped under its own `stop_if`, which returns an unowned done-signal component as a plan question. Two components had no owner among its four files: the endpoint registry lives only in `startup.ts` (shared with T039 and T041), and `NodeBinding.managedAttempt` is constructed at three sites (`seat-lifecycle-service.ts`, `rigspec-instantiator.ts` twice) that no task declared. T047 owns both; T042 keeps the context projection, the mailbox endpoint and its bootstrap. T038 now depends on T047 so live acceptance still observes the composed chain, so it moves to wave 18 and T046 follows to wave 19. No product scope changed.
 - **2026-10-23 U14 regeneration:** bounded reads of the plan's new U14 section and KTD28, the current task-pack contract, and the staged U14 drafts in the `ma-u14` worktree. U14 has no task in the previous pack, so the plan's canonical body hash no longer matched. U14 becomes T045 and T046 with the next free IDs, because the merged T039 closeout split already holds T043 and T044; T026 gains a dependency on T046 so the primary live run executes with charters in place. `source_plan_hash` moves to `sha256:0667095e…`. No product scope changed.
 - **Provider / posture:** direct bounded reads of the source plan, the imported owners, the root instructions and current Git state.
 - **Artifact / mutation root:** `/home/leo/src/multi-agent`. The preserved Windows workspace is not an execution source.
