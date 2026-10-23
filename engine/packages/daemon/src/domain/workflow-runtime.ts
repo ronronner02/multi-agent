@@ -1,6 +1,6 @@
 import { PlanGovernance, hashBinding, hashBytes } from "./plan-governance.js";
 import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
-import { createContextManifest, recordedContextManifest, roleConfiguration, roleInstructionEntries, within,
+import { buildManagedNativePolicy, createContextManifest, recordedContextManifest, roleConfiguration, roleInstructionEntries, within,
   type ContextFile, type ContextInput, type ContextManifest, type ContextObservation } from "../integrations/framework/context-manifest.js";
 import { WorkerMailboxBridge } from "../adapters/worker-mailbox-bridge.js";
 import type { ManagedAttempt } from "./runtime-adapter.js";
@@ -23,8 +23,8 @@ import {
   verifySourceUnchanged,
   type CandidateWorkspace,
 } from "./team-workspace.js";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
 //
@@ -162,6 +162,8 @@ export interface WorkflowRuntimeDeps {
     workerIdentities: readonly string[];
     frameworkRoot: string;
     frameworkRevision: string;
+    /** Where the pinned clients and their native policy live; the projection reads both. */
+    toolchainDir: string;
   };
 }
 
@@ -391,7 +393,16 @@ function readProjectedDescriptors(root: string, frameworkFiles: readonly { path:
  * group would throw on every produce.
  */
 function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: number): void {
-  if (!within(anchor, path)) throw new Error("Managed attempt directory is outside the policy root");
+  // Both ends must be canonical absolute paths before anything walks between them. A
+  // relative anchor would pass `within` yet never be reached by the loop below, which
+  // would then chmod its way to `/` and spin there — a write primitive and a hang from
+  // one malformed policy field.
+  for (const candidate of [anchor, path]) {
+    if (!isAbsolute(candidate) || resolve(candidate) !== candidate) {
+      throw new Error("Managed attempt directory must be a canonical absolute path");
+    }
+  }
+  if (!within(anchor, path) || path === anchor) throw new Error("Managed attempt directory is outside the policy root");
   mkdirSync(path, { recursive: true, mode });
   // Under a setgid parent the child already carries the parent's group; the explicit
   // chmod keeps the mode exact without touching that group.
@@ -403,6 +414,20 @@ function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: n
     || (stat.mode & 0o7777) !== mode) {
     throw new Error("Managed attempt directory is not owned as the policy requires");
   }
+}
+
+/** Remove a projection this producer created and failed to finish, so the attempt id is reusable. */
+function removeAttemptRoot(root: string): void {
+  try {
+    const writable = (path: string): void => {
+      chmodSync(path, 0o700);
+      for (const entry of readdirSync(path, { withFileTypes: true })) {
+        const child = join(path, entry.name);
+        if (entry.isDirectory()) writable(child); else chmodSync(child, 0o600);
+      }
+    };
+    if (existsSync(root)) { writable(root); rmSync(root, { recursive: true, force: true }); }
+  } catch { /* A projection that cannot be removed is evidence, not a second failure. */ }
 }
 
 /**
@@ -686,11 +711,7 @@ export class WorkflowRuntime {
     permissions: readonly string[];
     /** Everything about the attempt the projection needs; the producer derives the rest. */
     context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
-      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision">;
-    /** The worker's own identity in the projection; the control side is this process. */
-    workerGid: number;
-    /** The pinned framework files this attempt loads. */
-    frameworkFiles: readonly { path: string; source: string }[];
+      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision" | "nativePolicy">;
     role: TeamRole;
     client: "claude-code" | "codex";
     /** The workspace the assignment will actually run in, from T039's candidate. */
@@ -700,13 +721,20 @@ export class WorkflowRuntime {
     rigId: string;
     taskId: string;
     recipients: readonly string[];
+    /** The recipient's own mailbox capability: the secret its poll and consume are scoped by. */
+    mailboxCapability: string;
+    /** The worker's own gid in the projection; the control side is this process. */
+    workerGid: number;
     delivery: MailboxDelivery;
     chat: ChatRepository;
+    /** The credentials this attempt's endpoint authenticates against. */
     readCredentials: () => TeamControlCredentials;
     /** The launcher's own liveness question for this attempt; false closes the generation. */
     isCurrent: () => boolean;
     deadline: number;
     previous?: ManagedAttempt["previous"];
+    /** The pinned framework files this attempt loads. */
+    frameworkFiles: readonly { path: string; source: string }[];
   }): Promise<ProducedManagedAttempt> {
     const roots = this.managedAttemptRoots?.();
     if (!roots) throw new Error("Managed attempt production is not configured");
@@ -716,8 +744,16 @@ export class WorkflowRuntime {
     if (![worker, runId, attemptId].every(id => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))) {
       throw new Error("Invalid managed attempt identity");
     }
+    if (!/^mailbox:[A-Za-z0-9_-]{43}$/.test(input.mailboxCapability)) {
+      throw new Error("Invalid mailbox capability");
+    }
     const existing = this.managedAttempts.get(attemptId);
     if (existing) return existing;
+    // The pinned native policy is part of the projection from revision 5 on, and a
+    // provisioned host ships revision 5. It is built before admission so a host missing
+    // the pinned clients refuses without leaving a claimed candidate behind.
+    const nativePolicy = roots.policyRevision >= 5
+      ? await buildManagedNativePolicy(input.client, roots.toolchainDir) : undefined;
 
     const admitted = this.admitForLaunch(runId, { attemptId, worker, assignment: input.assignment,
       outputs: input.outputs, permissions: input.permissions,
@@ -725,22 +761,23 @@ export class WorkflowRuntime {
     const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
     const binding = governance.getRun(runId).binding;
     const root = resolve(roots.contextRoot, worker, runId, attemptId);
+    // Declared outside the try because the failure path needs it: only a projection this
+    // call created may be removed.
+    let resumed = false;
     try {
       if (this.candidateFor(runId, input.assignment.taskId, worker).root !== input.candidate) {
         // The projection names the tree the worker will work in, so a caller that names
         // another tree would produce a context describing work that cannot happen.
         throw new Error("Managed attempt candidate mismatch");
       }
-      // Decided before the directory is created: `ensureAttemptRoot` would make its own
-      // path exist, and every produce would then look like a resume.
-      const resumed = existsSync(root);
-      // A projection already on disk belongs to the attempt that made it, so its root is
-      // left exactly as that produce sealed it. A new one is created and sealed below.
+      // A projection already on disk belongs to the attempt that made it, so it is used
+      // as it stands. A new one is created and sealed below.
+      resumed = existsSync(root);
       if (!resumed) ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker, workerGid: input.workerGid });
       const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
         role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
-        permissions: [...input.permissions], context: input.context, workerGid: input.workerGid,
-        frameworkFiles: input.frameworkFiles, resume: resumed });
+        permissions: [...input.permissions], context: input.context,
+        nativePolicy, workerGid: input.workerGid, frameworkFiles: input.frameworkFiles, resume: resumed });
 
       const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
       ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId),
@@ -750,7 +787,8 @@ export class WorkflowRuntime {
       // because the path is built from the attempt id.
       if (existsSync(socketPath)) rmSync(socketPath);
       const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
-        runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients },
+        runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
+        capability: input.mailboxCapability },
       input.delivery, input.chat, input.readCredentials, input.isCurrent);
       await bridge.listen();
       const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
@@ -763,6 +801,11 @@ export class WorkflowRuntime {
       // every later failure has to give it back: a claim nobody releases would hold the
       // task's tree for the life of the daemon.
       this.releaseCandidate(runId, input.assignment.taskId, attemptId);
+      // A half-written projection would also wedge the attempt id for good: the next
+      // produce would find the directory, treat it as a resume, and be refused for an
+      // owner-writable root. Only a projection this call created is removed; one that
+      // was already there belongs to an earlier attempt and is left as evidence.
+      if (!resumed) removeAttemptRoot(root);
       throw error;
     }
   }
@@ -803,7 +846,9 @@ export class WorkflowRuntime {
     binding: PlanBinding; role: TeamRole; client: "claude-code" | "codex";
     assignment: AssignmentInput["assignment"]; outputs: string[]; permissions: string[];
     context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
-      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision">;
+      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision" | "nativePolicy">;
+    /** The pinned native policy, present from policy revision 5 on. */
+    nativePolicy?: ContextInput["nativePolicy"];
     /** The pinned framework files this attempt loads, already resolved from the pin. */
     frameworkFiles: readonly { path: string; source: string }[];
     /** True when the projection root already exists: rebuild from its own recorded bytes. */
@@ -823,9 +868,20 @@ export class WorkflowRuntime {
       return { path, hash: hashBytes(content), kind, readOnly: true as const, ...(source ? { source } : {}) };
     };
     // The projected name keeps the framework entry's own relative path: the catalog is
-    // `skills/<name>/SKILL.md`, so a basename would map every entry onto one file.
-    const frameworkName = (path: string) => `framework/${path.replace(/[^A-Za-z0-9._/-]/g, "_")}`;
+    // `skills/<name>/SKILL.md`, so a basename would map every entry onto one file. The
+    // name is confined to the attempt root, and the source to the pinned framework tree:
+    // a caller-named path would otherwise be a write primitive into the boundary this
+    // projection sits inside.
+    const frameworkName = (path: string) => {
+      const normalized = normalize(path).replace(/\\/g, "/").replace(/^\.\//, "");
+      if (normalized !== path || normalized.startsWith("../") || isAbsolute(normalized)
+        || !/^[A-Za-z0-9._/-]+$/.test(normalized)) throw new Error("Invalid pinned framework entry path");
+      return `framework/${normalized}`;
+    };
     const frameworkEntries = () => input.frameworkFiles.flatMap(file => {
+      if (!within(frameworkRoot, file.source) || realpathSync(file.source) !== resolve(file.source)) {
+        throw new Error("Framework source is outside the pinned framework tree");
+      }
       const name = frameworkName(file.path);
       mkdirSync(dirname(join(root, name)), { recursive: true, mode: 0o750 });
       return [write(name, readFileSync(file.source, "utf8"), "framework", file.source)];
@@ -838,9 +894,26 @@ export class WorkflowRuntime {
       // the pinned framework source it was copied from — the manifest re-verifies that
       // source, so a projection copied into the attempt root could not stand in for it.
       files = readProjectedDescriptors(root, input.frameworkFiles);
+      // The native policy's expected paths and hashes come from the policy itself, so a
+      // resumed projection supplies the same descriptors the creating produce did.
+      for (const file of input.nativePolicy?.files ?? []) {
+        const path = resolve(root, relative("/context", file.workerPath));
+        files.push({ path, hash: file.hash, kind: "native-policy", readOnly: true });
+      }
     } else {
+      // The pinned native policy is projected like any other entry from revision 5 on:
+      // the manifest re-derives the expected paths and hashes from `nativePolicy` and
+      // refuses a projection that does not carry exactly those descriptors.
+      const nativeEntries = (input.nativePolicy?.files ?? []).map(file => {
+        const path = resolve(root, relative("/context", file.workerPath));
+        mkdirSync(dirname(path), { recursive: true, mode: 0o750 });
+        writeFileSync(path, file.content, { mode: 0o440 });
+        chmodSync(path, 0o440);
+        return { path, hash: file.hash, kind: "native-policy" as const, readOnly: true as const };
+      });
       files = [
         ...frameworkEntries(),
+        ...nativeEntries,
         write("plan", readFileSync(join(input.binding.repository.root, input.binding.planRef), "utf8"), "plan"),
         write("role", canonicalJson(roleConfiguration), "role"),
         ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
@@ -861,6 +934,9 @@ export class WorkflowRuntime {
     files.sort((left, right) => left.path.localeCompare(right.path));
     const input_ = {
       ...input.context,
+      // Revision 5 and later requires the pinned native policy, and the manifest also
+      // checks that its files are actually projected, so the producer supplies both.
+      ...(input.nativePolicy ? { nativePolicy: input.nativePolicy } : {}),
       runId: input.runId,
       role,
       client,

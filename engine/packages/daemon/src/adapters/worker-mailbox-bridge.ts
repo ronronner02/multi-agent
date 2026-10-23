@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { chmodSync, lstatSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { createServer, type Socket } from "node:net";
@@ -16,6 +16,13 @@ export interface WorkerMailboxBinding {
   rigId: string;
   taskId: string;
   recipients: readonly string[];
+  /**
+   * The recipient's own mailbox capability — the secret its poll and consume are scoped
+   * by, not a per-endpoint nonce. `poll` matches on `message.capability === scope.capability`,
+   * and a message's capability is whatever its sender chose, so minting a fresh one here
+   * would leave the worker's mailbox permanently unreadable.
+   */
+  capability: string;
 }
 
 const MAX_FRAME_BYTES = 65_536;
@@ -108,20 +115,24 @@ export class WorkerMailboxBridge {
    * T042 — the private bootstrap the privileged launcher binds into the attempt.
    *
    * The launcher will not mount a mailbox without it: `worker-launch.mjs` requires
-   * `bootstrap.json` beside the socket, mode 0600, at most 8192 bytes, carrying
-   * exactly these seven string fields, with the socket directory already proven
-   * control-owned and 0700. So the writer lives here, where that directory has just
-   * been checked, rather than in a second place that would have to re-derive it.
+   * `bootstrap.json` beside the socket, mode 0600, at most 8192 bytes, carrying exactly
+   * these seven string fields, with the socket directory already proven control-owned and
+   * 0700. So the writer lives here, where that directory has just been checked.
    *
-   * The capability is minted per endpoint and is never derived from an attempt id:
-   * a worker reads this file as data, so a guessable or reused value would be a
-   * standing grant to another attempt's mailbox.
+   * `authorization` is the worker credential the endpoint authenticates with, not a
+   * placeholder: the relay copies it verbatim into the request and `dispatch` hands it to
+   * `resolveTeamControlCredential`, which accepts only `Bearer <token>` for a token this
+   * daemon was configured with. The plan requires transport bootstrap material to use the
+   * existing worker-credential authority, so the value comes from the caller's own
+   * credential source and never from a constant this file chooses.
    */
   private writeBootstrap(): void {
     const source = join(dirname(this.binding.socketPath), "bootstrap.json");
-    const body = JSON.stringify({ authorization: "worker-capability", sessionId: this.binding.sessionId,
+    const token = this.workerToken();
+    if (!token) throw new Error("mailbox_bootstrap_credential_unavailable");
+    const body = JSON.stringify({ authorization: `Bearer ${token}`, sessionId: this.binding.sessionId,
       runId: this.binding.runId, attemptId: this.binding.attemptId, generation: this.generation,
-      taskId: this.binding.taskId, capability: `mailbox:${randomBytes(32).toString("base64url")}` });
+      taskId: this.binding.taskId, capability: this.binding.capability });
     // Written 0600 from the start: a create-then-chmod would leave one window in
     // which the file is readable by whatever shares this directory.
     writeFileSync(source, body, { mode: 0o600, flag: "w" });
@@ -132,6 +143,15 @@ export class WorkerMailboxBridge {
       this.removeBootstrap();
       throw new Error("mailbox_bootstrap_invalid");
     }
+  }
+
+  /** The credential this attempt's seat is registered with, if the daemon has one. */
+  private workerToken(): string | null {
+    try {
+      const worker = this.readCredentials().workers?.find(candidate =>
+        candidate.sessionId === this.binding.sessionId && candidate.runId === this.binding.runId);
+      return worker?.token?.trim() ? worker.token : null;
+    } catch { return null; }
   }
 
   private removeBootstrap(): void {
