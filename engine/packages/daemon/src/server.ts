@@ -143,16 +143,21 @@ import type { RigLifecycleService } from "./domain/rig-lifecycle-service.js";
 import { seatRoutes } from "./routes/seat.js";
 import { createRouteTimingMiddleware } from "./domain/route-timing-recorder.js";
 import { browserBoundary, type BrowserBoundaryOptions } from "./middleware/browser-boundary.js";
-import { teamControlAuthentication } from "./middleware/auth-bearer-token.js";
+import { teamControlAuthentication, resolvePairedOwnerCookie } from "./middleware/auth-bearer-token.js";
 import { transportSenderSession } from "./routes/require-sender-identity.js";
 import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
+
+import { OwnerSessions } from "./domain/owner-session.js";
+import { ownerSessionRoutes } from "./routes/owner-session.js";
+import { isIP } from "node:net";
 
 /** KTD22: the only `/api` paths a managed-mode daemon serves. */
 const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
 
 export interface AppDeps {
   teamControl?: TeamControlOptions;
+  ownerSessions?: OwnerSessions;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
   /** KTD19 channel state from the launch control's own verified observations; absent means never adopted. */
@@ -515,7 +520,17 @@ export function createApp(deps: AppDeps): Hono {
     throw new Error("createApp: podInstantiator must share the same db handle");
   }
 
+  const pairedOwners = daemonModeOf(deps.rigRepo.db) === "managed";
+  const teamOptions: TeamControlOptions = deps.teamControl ?? { credentials: { ownerToken: null } };
+  if (pairedOwners && deps.bindPlan?.hosts.some(host => !(host === "localhost" || host === "::1"
+    || (isIP(host) === 4 && host.startsWith("127."))))) {
+    throw new Error("Managed owner surfaces require a loopback-only listener.");
+  }
+  const ownerSessions = pairedOwners ? deps.ownerSessions ?? new OwnerSessions(deps.rigRepo.db) : undefined;
+  if (ownerSessions && ownerSessions.db !== deps.rigRepo.db) throw new Error("Owner sessions must use the control database.");
+  deps.ownerSessions = ownerSessions;
   const app = new Hono();
+  if (ownerSessions) app.use("/api/*", async (c, next) => { c.set("ownerSessions" as never, ownerSessions); await next(); });
   if (deps.requestPhaseObserver) app.use("*", deps.requestPhaseObserver.middleware());
   // A malformed request body is a 400, not the default 500.
   app.use("*", trackJsonBodyParseErrors);
@@ -680,6 +695,11 @@ export function createApp(deps: AppDeps): Hono {
   // (WebSocket upgrades included), before the remote read-through and every route.
   app.use("/api/*", browserBoundary({
     webUiEnabled: deps.webUiEnabled === true,
+    pairedOwnerBoundary: pairedOwners,
+    authenticateOwnerCookie: c => {
+      const resolved = resolvePairedOwnerCookie(c, teamOptions.credentials, [deps.missionControlBearerToken, deps.terminalBearerToken]);
+      return resolved.ok ? null : c.json({ code: resolved.code, error: resolved.error }, resolved.status);
+    },
     bearerTokens: [deps.terminalBearerToken, deps.missionControlBearerToken],
     allowedOrigins: process.env.OPENRIG_ALLOWED_ORIGINS,
     allowedHosts: process.env.OPENRIG_ALLOWED_HOSTS,
@@ -687,7 +707,6 @@ export function createApp(deps: AppDeps): Hono {
     onDecision: deps.browserBoundaryObserver,
   }));
 
-  const teamOptions: TeamControlOptions = deps.teamControl ?? { credentials: { ownerToken: null } };
   const managedMailboxAuthentication = teamControlAuthentication(
     () => teamOptions.credentials,
     [deps.missionControlBearerToken, deps.terminalBearerToken],
@@ -736,6 +755,8 @@ export function createApp(deps: AppDeps): Hono {
   // error, never forwarding them. Absent/local host param falls through to
   // the existing handlers untouched (the FR-2 zero-regression negative).
   app.use("/api/*", hostReadThrough());
+  if (ownerSessions) app.route("/api/team-control/owner-session", ownerSessionRoutes(ownerSessions, () => teamOptions.credentials,
+    [deps.missionControlBearerToken, deps.terminalBearerToken]));
   app.route("/api/team-control", teamControlRoutes(teamGovernance, teamOptions,
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
 

@@ -2,6 +2,7 @@ import { promises as dnsPromises } from "node:dns";
 import { isIP } from "node:net";
 import { hostname as osHostname } from "node:os";
 import type { Context, MiddlewareHandler } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { constantTimeEqual, detectTailscaleInterface } from "./auth-bearer-token.js";
 
 /**
@@ -23,6 +24,9 @@ import { constantTimeEqual, detectTailscaleInterface } from "./auth-bearer-token
 
 export interface BrowserBoundaryOptions {
   webUiEnabled: boolean;
+  /** Managed owner sessions never accept remote names, Origin exceptions or browser bearer shortcuts. */
+  pairedOwnerBoundary?: boolean;
+  authenticateOwnerCookie?: (c: Context) => Response | null;
   /** Configured bearer tokens; a matching Authorization header waives only the target-name check. */
   bearerTokens: Array<string | null | undefined>;
   /** OPENRIG_ALLOWED_ORIGINS: browser origins only. */
@@ -184,7 +188,7 @@ function shown(value: string): string {
  * drop empty values. Returns `undefined` when absent and `null` when duplicated (ambiguous).
  * Without a Node request (tests, other adapters) it falls back to the Request headers.
  */
-export function rawHeader(c: Context, name: "host" | "origin"): string | undefined | null {
+export function rawHeader(c: Context, name: "host" | "origin" | "cookie" | "x-multi-agent-csrf" | "sec-websocket-protocol"): string | undefined | null {
   const raw = (c.env as { incoming?: { rawHeaders?: unknown } } | undefined)?.incoming?.rawHeaders;
   if (!Array.isArray(raw)) return c.req.header(name);
   const values: string[] = [];
@@ -283,6 +287,59 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
   };
 
   return async (c, next) => {
+    const rawOrigin = rawHeader(c, "origin");
+    const cookie = rawHeader(c, "cookie");
+    const browser = rawOrigin !== undefined || cookie !== undefined || c.req.header("Sec-Fetch-Site") !== undefined
+      || (c.req.header("Upgrade")?.toLowerCase() === "websocket" && c.req.header("Authorization") === undefined);
+    // Native bearer clients retain the existing Host boundary and all downstream token/peer checks.
+    if (options.pairedOwnerBoundary && browser) {
+      const deny = (code: string, status: 401 | 403 = 403) => {
+        options.onDecision?.({ outcome: "refuse", code: "browser_origin_refused" });
+        return c.json({ code }, status);
+      };
+      const rawHost = rawHeader(c, "host");
+      const host = typeof rawHost === "string" ? parseHostHeader(rawHost) : { kind: "malformed" as const };
+      if (host.kind !== "ok" || !(host.hostname === "localhost" || host.hostname === "::1"
+        || (isIP(host.hostname) === 4 && host.hostname.startsWith("127.")))) return deny("untrusted_host");
+      if ([...new URL(c.req.url).searchParams.keys()].some(k => /^(token|code|access_token|session_token|csrf)$/i.test(k))) {
+        return deny("owner_query_credentials_refused", c.req.path.startsWith("/api/team-control/") ? 401 : 403);
+      }
+      if (browser) {
+        let peer: string | undefined;
+        try { peer = getConnInfo(c).remote.address?.replace(/^::ffff:/i, ""); } catch { /* Missing peer identity fails closed. */ }
+        if (!peer || !(peer === "::1" || (isIP(peer) === 4 && peer.startsWith("127.")))) return deny("local_control_required");
+        const requestOrigin = new URL(c.req.url).origin;
+        // Browsers omit Origin on same-origin GET/HEAD. Fetch Metadata is browser-controlled;
+        // mutation and upgrade admission still require an explicit matching Origin.
+        const metadataRead = rawOrigin === undefined && ["GET", "HEAD"].includes(c.req.method)
+          && c.req.header("Upgrade")?.toLowerCase() !== "websocket"
+          && c.req.header("Sec-Fetch-Site") === "same-origin";
+        const presentedOrigin = metadataRead ? requestOrigin : rawOrigin;
+        const origin = typeof presentedOrigin === "string" ? parseOrigin(presentedOrigin) : { kind: "malformed" as const };
+        if (origin.kind !== "ok" || origin.scheme + ":" !== new URL(c.req.url).protocol
+          || origin.hostname !== host.hostname || origin.port !== host.port
+          || ![undefined, "same-origin", "none"].includes(c.req.header("Sec-Fetch-Site"))) return deny("browser_origin_refused");
+        c.set("ownerBrowserOrigin" as never, new URL(presentedOrigin!).origin);
+        c.set("ownerCookieHeader" as never, cookie);
+        const header = rawHeader(c, "x-multi-agent-csrf");
+        const protocols = rawHeader(c, "sec-websocket-protocol");
+        const offered = typeof protocols === "string" ? protocols.split(",").map(p => p.trim())
+          .filter(p => p.startsWith("multi-agent-csrf.")).map(p => p.slice("multi-agent-csrf.".length)) : [];
+        if (header === null || protocols === null || offered.length > 1
+          || (header !== undefined && offered.length === 1 && header !== offered[0])) return deny("owner_anti_forgery_required");
+        c.set("ownerAntiForgery" as never, header ?? offered[0]);
+        if (c.req.path !== "/api/team-control/owner-session/exchange") {
+          if (c.req.header("Authorization") !== undefined) return deny("owner_browser_bearer_refused");
+          const refusal = options.authenticateOwnerCookie?.(c);
+          if (!options.authenticateOwnerCookie) return deny("owner_session_required");
+          if (refusal) return refusal;
+        }
+      }
+      options.onDecision?.({ outcome: "allow" });
+      c.header("Cache-Control", "no-store");
+      await next();
+      return;
+    }
     // Paired browser sessions are a separate boundary; this bearer control surface is not a pairing shortcut.
     if ((c.req.path === "/api/team-control" || c.req.path.startsWith("/api/team-control/"))
       && (rawHeader(c, "origin") !== undefined || c.req.header("Cookie") !== undefined
@@ -311,7 +368,6 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
       }
     }
 
-    const rawOrigin = rawHeader(c, "origin");
     // A duplicated Origin is malformed; an explicitly empty one is present and fails parsing.
     const originHeader = rawOrigin === null ? "(duplicate Origin)" : rawOrigin;
     if (originHeader !== undefined) {
