@@ -2,17 +2,19 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
   TEAM_CONTROL_VERSION, TeamContractError, parseControlRequest, parseProtocolVersion,
-  type TeamRun,
+  type TeamRun, type TeamSystemHealth,
 } from "../contracts/team-control.js";
 import type { PlanGovernance, ProviderPolicyCapability } from "../domain/plan-governance.js";
 import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
 } from "../middleware/auth-bearer-token.js";
+import { readSystemHealthBounded } from "../domain/system-health.js";
 
 export interface TeamControlOptions {
   credentials: TeamControlCredentials;
   resolveBinding?: (run: TeamRun) => unknown;
   readPolicyCapability?: () => ProviderPolicyCapability | null;
+  readSystemHealth?: () => TeamSystemHealth | Promise<TeamSystemHealth>;
 }
 
 export function teamControlRoutes(
@@ -34,6 +36,12 @@ export function teamControlRoutes(
       return c.json({ code: "owner_control_required", error: "An authenticated owner decision is required." }, 403);
     }
     await next();
+  });
+  app.get("/health", async (c) => {
+    if (c.get("controlActor").kind !== "owner") return c.json({ code: "owner_control_required" }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    const health = await readSystemHealthBounded(options.readSystemHealth);
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, health });
   });
   app.get("/runs/:runId", (c) => {
     if (c.get("controlActor").kind !== "owner") return c.json({ code: "owner_control_required" }, 403);

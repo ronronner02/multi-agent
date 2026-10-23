@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import { readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { posix } from "node:path";
 import type Database from "better-sqlite3";
-import { canonicalJson, parseAttemptIdentity, parsePlanBinding, type NativeAttemptIdentity } from "../contracts/team-control.js";
+import { canonicalJson, parseAttemptIdentity, parsePlanBinding, type ManagedWorkerHealthEvidence,
+  type NativeAttemptIdentity } from "../contracts/team-control.js";
 import { hashBinding, hashBytes, type PlanGovernance } from "../domain/plan-governance.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { SessionRegistry } from "../domain/session-registry.js";
@@ -496,7 +497,7 @@ export function createManagedLaunchControl(dependencies: ManagedWorkerScopeDepen
   tmuxServer: string;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
-}): WorkerLaunchControl {
+}): WorkerLaunchControl & { readHealthEvidence: () => ManagedWorkerHealthEvidence } {
   const attempts = new Map<string, ControlledAttempt>();
   const { db, governance, options, legacyTokens = [] } = dependencies, now = dependencies.now ?? Date.now;
   const sleep = dependencies.sleep ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)));
@@ -532,7 +533,29 @@ export function createManagedLaunchControl(dependencies: ManagedWorkerScopeDepen
     if (receipt.status !== "observed") throw new Error("managed_evidence_unrecorded");
   };
 
+  const readHealthEvidence = (): ManagedWorkerHealthEvidence => ({
+    observedAt: new Date(now()).toISOString(),
+    attempts: [...attempts.entries()].map(([attemptId, state]) => {
+      const recorded = governance.getAttempt(attemptId);
+      const intent = governance.getNativeLaunchIntent(state.input.attempt.context.runId, attemptId);
+      const phase = recorded?.state
+        ?? (intent?.state === "stopped" || intent?.state === "not_started" || state.start === "none" ? "stopped"
+          : state.start === "ambiguous" ? "unknown" : state.command ? "starting" : "preflight");
+      return {
+        attemptId, runId: state.input.attempt.context.runId, worker: state.preflight.worker.name,
+        client: state.input.client, state: phase,
+        provider: state.preflight.provider.status, policyRevision: state.preflight.policyRevision,
+        policyFingerprint: state.preflight.policyFingerprint, clientVersion: state.preflight.clientLock.version,
+        clientLockDigest: state.preflight.clientLock.digest, networkMode: state.preflight.network.mode,
+        networkProfileFingerprint: state.preflight.network.profileFingerprint,
+        evidenceRef: "managed-preflight:" + hashBytes(canonicalJson(state.preflight)),
+      };
+    }),
+  });
+
   return {
+    readHealthEvidence,
+
     async preflight(rawInput) {
       const input = immutable(structuredClone(rawInput)), context = input.attempt.context;
       // Only a stopped attempt's own exact resume may replace its control state.

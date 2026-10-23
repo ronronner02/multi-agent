@@ -225,3 +225,15 @@ sudo rm -rf /var/lib/multi-agent
 ```
 
 The Windows workspace, `/etc/wsl.conf` and the owner account are never modified by provisioning.
+
+## System health lights (KTD26)
+
+The owner-only GET /api/team-control/health query is read-only. It reports ok, degraded, failed, or unknown for the database, queue/mailbox, control tmux, worker boundary, sandbox network, and locked clients. A probe is bounded by five seconds; a timeout is unknown and never ok. The response carries the check time and an evidence reference for each light.
+
+- database: failed: preserve the database and WAL, stop managed dispatch, and check that the writer lock can be acquired and rolled back before restarting the daemon.
+- queueMailbox: failed: preserve pending rows and receipts, stop new dispatch, and inspect the queue and mailbox repositories for a blocked or corrupt record.
+- controlTmux: failed: leave recorded worker processes untouched, verify the control tmux socket and owned sessions, then reconcile each attempt before retrying.
+- workerBoundary: failed: stop managed launch, preserve the preflight evidence, and verify the installed policy revision, fingerprint, worker identities, and per-worker sign-in evidence.
+- sandboxNetwork: failed: stop managed launch, preserve the reachable-set receipt, and rerun the owner-approved network preflight after verifying the installed egress profile.
+- clients: failed: do not update a worker in place; compare the installed executable hashes and versions with client-lock.json, then perform the owner-approved lock update and preflight.
+- unknown: treat the component as unverified. Do not render it as healthy or start a managed attempt until the bounded check completes with an observed result.
