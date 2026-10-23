@@ -14,7 +14,6 @@ import { hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { MailboxDelivery } from "../src/domain/mailbox-delivery.js";
 import type { AssignmentInput } from "../src/domain/team-assignment.js";
-import { createContextManifest } from "../src/integrations/framework/context-manifest.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 
 // T042: the attempt an admitted assignment launches from is produced by the runtime,
@@ -40,9 +39,9 @@ function repository(): string {
   return root;
 }
 
-/** Every directory the fixture creates is chmod'ed back before removal. */
+/** Every directory the fixture seals is chmod'ed back before removal. */
 function writable(path: string): void {
-  chmodSync(path, 0o755);
+  try { chmodSync(path, 0o755); } catch { return; }
   for (const entry of readdirSync(path, { withFileTypes: true })) {
     const child = join(path, entry.name);
     try { if (entry.isDirectory()) writable(child); else chmodSync(child, 0o644); } catch { /* already gone */ }
@@ -51,15 +50,17 @@ function writable(path: string): void {
 
 describe("the managed attempt a seat launches from", () => {
   let directory: string, repo: string, assignmentRoot: string, contextRoot: string, mailboxRoot: string;
-  let frameworkRoot: string;
+  let frameworkRoot: string, controlStateDir: string;
   let db: Database.Database, bus: EventBus, queue: QueueRepository, runtime: WorkflowRuntime;
   let binding: AssignmentInput["binding"];
+  let workerGid: number;
 
   const candidateDir = (worker: string, runId = "run-1", taskId = "T042") =>
     join(assignmentRoot, worker, `${runId}-${taskId}`);
-  /** The projection layout the manifest requires: one per attempt, under the worker's context root. */
   const projectionDir = (attemptId: string, worker = "ma-worker1", runId = "run-1") =>
     join(contextRoot, worker, runId, attemptId);
+  const mailboxDir = (attemptId: string, worker = "ma-worker1", runId = "run-1") =>
+    join(mailboxRoot, worker, runId, attemptId);
 
   const open = () => {
     db = createDb(join(directory, "t042.db"));
@@ -69,25 +70,22 @@ describe("the managed attempt a seat launches from", () => {
     runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
       candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
       assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
-      managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir: join(directory, "control"),
+      managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
         policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
         frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
   };
 
-  /** The pinned framework file the projection carries; a real file under the framework root. */
-  const frameworkFiles = () => {
-    const source = join(frameworkRoot, "skill.md");
-    writeFileSync(source, "pinned instructions\n", { mode: 0o644 });
-    return [{ path: "skill.md", source }];
-  };
+  /** A real pinned framework file, in the layout the catalog uses. Fixed bytes: a resumed
+   * attempt must be compared against what it recorded, so this must not change per call. */
+  let frameworkSource = "";
+  const frameworkFiles = () => [{ path: "skills/autoresearch/SKILL.md", source: frameworkSource }];
 
-  /** Everything the producer takes besides the attempt identity. */
   const produceInput = (overrides: Record<string, unknown> = {}) => ({
     attemptId: "attempt-1", worker: "ma-worker1",
     assignment: { taskId: "T042", role: "implementer" as const, paths: ["src"], dependencies: ["T011"] },
     outputs: ["src/result.ts"], permissions: ["write-assigned-tree"], role: "implementer" as const,
     client: "claude-code" as const, candidate: candidateDir("ma-worker1"), sessionId: "implementer-session",
-    rigId: "rig-1", taskId: "T042", recipients: ["lead@rig-1"], workerGid: process.getgid!(),
+    rigId: "rig-1", taskId: "T042", recipients: ["lead@rig-1"], workerGid,
     deadline: Date.now() + 60_000, isCurrent: () => true,
     delivery: new MailboxDelivery(), chat: new ChatRepository(db),
     readCredentials: () => ({ ownerToken: null }),
@@ -103,20 +101,34 @@ describe("the managed attempt a seat launches from", () => {
     repo = repository();
     assignmentRoot = join(directory, "assignments");
     contextRoot = join(directory, "context");
-    mailboxRoot = join(directory, "control", "mailboxes");
+    controlStateDir = join(directory, "control");
+    mailboxRoot = join(controlStateDir, "mailboxes");
     frameworkRoot = join(directory, "framework");
-    for (const path of [join(assignmentRoot, "ma-worker1"), frameworkRoot, join(directory, "control"),
-      join(directory, "state")]) mkdirSync(path, { recursive: true, mode: 0o700 });
-    // The installed control provisions these roots: the context ancestry group-searchable
-    // for the worker (the manifest requires the worker to read what it follows) and the
-    // mailbox root control-private. The producer creates only the per-attempt leaf.
-    for (const path of [join(contextRoot, "ma-worker1"), join(mailboxRoot, "ma-worker1"), frameworkRoot]) {
-      mkdirSync(path, { recursive: true });
-    }
+    // The control's own directories, then the roots it provisions for the worker.
+    for (const path of [join(assignmentRoot, "ma-worker1"), frameworkRoot, controlStateDir,
+      mailboxRoot, join(directory, "state")]) mkdirSync(path, { recursive: true, mode: 0o700 });
+    // The context root is root-owned 0755 on a provisioned host, not control 0700.
+    mkdirSync(contextRoot, { recursive: true, mode: 0o755 });
+    chmodSync(contextRoot, 0o755);
+    // The worker's own group on a provisioned host is the group of `<context_root>/<worker>`,
+    // which `provision-host.sh` installs setgid, so a directory created beneath it inherits
+    // that group rather than the daemon's. The anchor's group is read back rather than
+    // assumed, so the fixture cannot silently make the two ownership rules agree.
+    const anchors = [join(contextRoot, "ma-worker1"), join(mailboxRoot, "ma-worker1")];
+    for (const anchor of anchors) mkdirSync(anchor, { recursive: true });
     chmodSync(join(contextRoot, "ma-worker1"), 0o2750);
     chmodSync(join(mailboxRoot, "ma-worker1"), 0o700);
-    // The pinned framework tree is read by the worker through the same group.
+    // The pinned framework tree is control-owned and worker-readable through the worker
+    // group, exactly as provisioning installs it.
     chmodSync(frameworkRoot, 0o2750);
+    // The pinned framework bytes, written once per test so a resumed attempt is compared
+    // against exactly what it recorded.
+    frameworkSource = join(frameworkRoot, "skills", "autoresearch", "SKILL.md");
+    mkdirSync(join(frameworkRoot, "skills", "autoresearch"), { recursive: true });
+    writeFileSync(frameworkSource, "pinned instructions\n", { mode: 0o644 });
+    chmodSync(join(frameworkRoot, "skills"), 0o2750);
+    chmodSync(join(frameworkRoot, "skills", "autoresearch"), 0o2750);
+    workerGid = lstatSync(join(contextRoot, "ma-worker1")).gid;
     binding = {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
       planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
@@ -130,8 +142,6 @@ describe("the managed attempt a seat launches from", () => {
     db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
       VALUES ('run-1', 'rig-1', ?, ?, 'approved', '2026-10-23T00:00:00.000Z', '2026-10-23T00:00:00.000Z')`)
       .run(JSON.stringify(binding), hashBinding(binding));
-    // The dependency is satisfied only by a done row carrying validated evidence, and
-    // its claim sits outside this task's paths so the two do not overlap.
     db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
       VALUES ('dep-item', '2026-10-23T00:00:00.000Z', '2026-10-23T00:00:00.000Z', 'lead@rig-1', 'dep-session', 'done', 'body')`).run();
     db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json, evidence_json)
@@ -151,90 +161,147 @@ describe("the managed attempt a seat launches from", () => {
     const root = projectionDir("attempt-1");
     expect(produced.attempt.context.root).toBe(root);
     expect(produced.candidate).toBe(candidateDir("ma-worker1"));
-    // KTD28 (T045): the projection carries the shared core and this role's charter, and
-    // the manifest records their versions rather than trusting today's bytes.
     const kinds = produced.attempt.context.files.map(file => file.kind);
     expect(kinds).toContain("core");
     expect(kinds).toContain("charter");
     expect(produced.attempt.context.instructionVersions.core).not.toBe("");
     expect(produced.attempt.context.instructionVersions.charter).not.toBe("");
-    // Every projected file is private to the worker and read-only to it.
-    for (const file of produced.attempt.context.files) {
-      const stat = lstatSync(file.path);
-      if (file.kind === "framework") continue;
-      expect(stat.mode & 0o7777).toBe(0o440);
-    }
+    // The root carries the worker's group, which is what a setgid anchor produces; a
+    // control-gid check here would throw on a real host. It is sealed to 0550 once its
+    // entries exist, because the manifest refuses a root its owner could still write to.
+    expect(lstatSync(root).gid).toBe(workerGid);
+    expect(lstatSync(root).mode & 0o7777).toBe(0o550);
     await runtime.retireManagedAttempt("attempt-1");
   }, 30_000);
 
-  it("refuses a projection without the pinned instructions", () => {
-    // The producer is the only writer, so the check is that its own manifest builder
-    // rejects the omission rather than that a caller remembered to include them.
-    const root = projectionDir("attempt-no-charter");
-    mkdirSync(root, { recursive: true, mode: 0o700 });
-    writeFileSync(join(root, "plan"), "approved plan\n", { mode: 0o440 });
-    writeFileSync(join(root, "role"), "{}", { mode: 0o440 });
-    expect(() => createContextManifest({ runId: "run-1", role: "implementer", client: "claude-code",
-      binding, assignment: { taskId: "T042", role: "implementer", paths: ["src"], dependencies: [] },
-      outputs: [], permissions: ["write-assigned-tree"], root, frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision,
-      mutableStateRoot: join(directory, "state"), workerUid: 60000, workerGroups: [], discoveryRoots: [],
-      files: [], projection: { worker: "ma-worker1", attemptId: "attempt-no-charter", controlUid: process.getuid!(),
-        workerGid: process.getgid!(), policy: { policy_revision: 4, worker_identities: ["ma-worker1"],
-          paths: { context_root: contextRoot, framework_dir: frameworkRoot }, sandbox: { context: "/context", framework: "/framework" } } },
-    } as never)).toThrow();
+  it("refuses a projection missing the core or the role charter", async () => {
+    // Drive the production producer and remove one instruction entry from what it
+    // projected, then resume. The manifest must refuse rather than adopt a projection
+    // that is missing what it is supposed to carry. A fresh runtime is used because the
+    // in-memory map would otherwise return the first attempt without re-reading disk.
+    await runtime.produceManagedAttempt("run-1", produceInput());
+    const root = projectionDir("attempt-1");
+    await runtime.retireManagedAttempt("attempt-1");
+    chmodSync(root, 0o755);
+    chmodSync(join(root, "charter"), 0o644);
+    rmSync(join(root, "charter"));
+    const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+      candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
+      assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
+      managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
+        policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
+    await expect(restarted.produceManagedAttempt("run-1", produceInput())).rejects.toThrow();
   }, 30_000);
 
   it("listens on a private endpoint and writes the bootstrap the launcher binds", async () => {
     const produced = await runtime.produceManagedAttempt("run-1", produceInput());
-    const socket = join(mailboxRoot, "ma-worker1", "run-1", "attempt-1", "mailbox.sock");
-    const bootstrap = join(mailboxRoot, "ma-worker1", "run-1", "attempt-1", "bootstrap.json");
+    const socket = join(mailboxDir("attempt-1"), "mailbox.sock");
+    const bootstrap = join(mailboxDir("attempt-1"), "bootstrap.json");
     expect(produced.bridge.binding.socketPath).toBe(socket);
     expect(lstatSync(socket).isSocket()).toBe(true);
     const stat = lstatSync(bootstrap);
     expect(stat.mode & 0o7777).toBe(0o600);
     const body = JSON.parse(readFileSync(bootstrap, "utf8"));
-    // The launcher requires exactly these seven string fields, an unguessable
-    // capability, and the attempt identity it was asked to launch.
     expect(Object.keys(body).sort()).toEqual(["attemptId", "authorization", "capability", "generation", "runId", "sessionId", "taskId"]);
     expect(body.attemptId).toBe("attempt-1");
     expect(body.runId).toBe("run-1");
     expect(body.capability).toMatch(/^mailbox:[A-Za-z0-9_-]{43}$/);
     await runtime.retireManagedAttempt("attempt-1");
-    // Retirement removes the bootstrap and unlinks the socket, so a stale endpoint
-    // cannot be relaunched against.
     expect(existsSync(bootstrap)).toBe(false);
   }, 30_000);
 
+  it("admits an actual request on the produced endpoint rather than only existing", async () => {
+    // "Listening" has to mean admission, not a socket file. The frame is refused for a
+    // credential reason, which proves the server read and dispatched it.
+    const produced = await runtime.produceManagedAttempt("run-1", produceInput());
+    const body = JSON.parse(readFileSync(join(mailboxDir("attempt-1"), "bootstrap.json"), "utf8"));
+    const socketPath = produced.bridge.binding.socketPath;
+    const response = await new Promise<string>((resolve, reject) => {
+      const socket = require("node:net").createConnection(socketPath, () => {
+        socket.write(JSON.stringify({ authorization: body.authorization, sessionId: body.sessionId,
+          runId: body.runId, attemptId: body.attemptId, generation: body.generation,
+          operation: "poll", taskId: body.taskId, capability: body.capability }) + "\n");
+      });
+      let data = "";
+      socket.on("data", chunk => { data += chunk; });
+      socket.on("end", () => resolve(data));
+      socket.on("error", reject);
+      setTimeout(() => { socket.destroy(); resolve(data); }, 2_000);
+    });
+    const parsed = JSON.parse(response.trim());
+    // It answered: the endpoint dispatched the frame rather than dropping it.
+    expect(typeof parsed.ok).toBe("boolean");
+    expect(parsed.ok === false ? parsed.code : "admitted").toBeTruthy();
+    await runtime.retireManagedAttempt("attempt-1");
+  }, 30_000);
+
   it("creates no projection, endpoint or attempt for an assignment admission refuses", async () => {
-    // An output outside the approved write scope is refused before anything is written.
     await expect(runtime.produceManagedAttempt("run-1", produceInput({ outputs: ["outside/escape.ts"] })))
       .rejects.toThrow();
     expect(existsSync(projectionDir("attempt-1"))).toBe(false);
-    expect(existsSync(join(mailboxRoot, "ma-worker1", "run-1", "attempt-1"))).toBe(false);
+    expect(existsSync(mailboxDir("attempt-1"))).toBe(false);
     expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
+  }, 30_000);
+
+  it("releases the candidate claim when production fails after admission", async () => {
+    // Admission retains the claim; a later refusal must give it back, or the task's tree
+    // stays claimed for the life of the daemon.
+    await expect(runtime.produceManagedAttempt("run-1", produceInput({ candidate: join(directory, "elsewhere") })))
+      .rejects.toThrow("Managed attempt candidate mismatch");
+    // With the claim released, the same attempt can be produced against the real tree.
+    const produced = await runtime.produceManagedAttempt("run-1", produceInput());
+    expect(produced.candidate).toBe(candidateDir("ma-worker1"));
+    await runtime.retireManagedAttempt("attempt-1");
   }, 30_000);
 
   it("returns the attempt it already produced for the same attempt id", async () => {
     const first = await runtime.produceManagedAttempt("run-1", produceInput());
     const second = await runtime.produceManagedAttempt("run-1", produceInput());
-    // A second projection over one attempt would fork the reviewed bytes.
     expect(second).toBe(first);
-    expect(runtime.managedAttemptFor("attempt-1")).toBe(first);
+    await runtime.retireManagedAttempt("attempt-1");
+  }, 30_000);
+
+  it("adopts an existing projection on resume instead of rewriting a sealed root", async () => {
+    // A restart empties the in-memory map, so the resumed attempt re-enters produce with
+    // its projection still on disk. Rewriting it would fail EACCES on the sealed root.
+    const first = await runtime.produceManagedAttempt("run-1", produceInput());
+    const before = first.attempt.context.generatedHash;
+    await runtime.retireManagedAttempt("attempt-1");
+    // A second runtime over the same database is the state a restarted daemon has.
+    runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+      candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
+      assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
+      managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
+        policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
+    const resumed = await runtime.produceManagedAttempt("run-1", produceInput());
+    expect(resumed.attempt.context.root).toBe(projectionDir("attempt-1"));
+    // The recorded bytes are what a resume is held to, and they are the same bytes.
+    expect(resumed.attempt.context.generatedHash).toBe(before);
     await runtime.retireManagedAttempt("attempt-1");
   }, 30_000);
 
   it("refuses a candidate that is not the task's own", async () => {
-    // The projection names the tree the worker will work in; another tree would
-    // describe work that cannot happen.
     await expect(runtime.produceManagedAttempt("run-1", produceInput({ candidate: join(directory, "elsewhere") })))
       .rejects.toThrow("Managed attempt candidate mismatch");
     expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
   }, 30_000);
 
+  it("refuses a mailbox root that is not beneath the control state directory", async () => {
+    runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+      candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
+      assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
+      managedAttemptRoots: () => ({ contextRoot, mailboxRoot: join(directory, "elsewhere-mailboxes"), controlStateDir,
+        policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
+    await expect(runtime.produceManagedAttempt("run-1", produceInput())).rejects.toThrow();
+    expect(existsSync(join(directory, "elsewhere-mailboxes"))).toBe(false);
+  }, 30_000);
+
   it("closes every endpoint this daemon owns", async () => {
     await runtime.produceManagedAttempt("run-1", produceInput());
-    const second = await runtime.produceManagedAttempt("run-1", produceInput({ attemptId: "attempt-2",
-      assignment: { taskId: "T042", role: "implementer", paths: ["src"], dependencies: ["T011"] } }));
+    const second = await runtime.produceManagedAttempt("run-1", produceInput({ attemptId: "attempt-2" }));
     expect(existsSync(second.bridge.binding.socketPath)).toBe(true);
     await runtime.closeManagedAttempts();
     expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
