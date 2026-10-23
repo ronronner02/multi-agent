@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
+import { createConnection } from "node:net";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,7 +51,7 @@ function writable(path: string): void {
 
 describe("the managed attempt a seat launches from", () => {
   let directory: string, repo: string, assignmentRoot: string, contextRoot: string, mailboxRoot: string;
-  let frameworkRoot: string, controlStateDir: string;
+  let frameworkRoot: string, controlStateDir: string, toolchainDir: string;
   let db: Database.Database, bus: EventBus, queue: QueueRepository, runtime: WorkflowRuntime;
   let binding: AssignmentInput["binding"];
   let workerGid: number;
@@ -72,7 +73,7 @@ describe("the managed attempt a seat launches from", () => {
       assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
       managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
         policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
-        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir }) });
   };
 
   /** A real pinned framework file, in the layout the catalog uses. Fixed bytes: a resumed
@@ -86,9 +87,15 @@ describe("the managed attempt a seat launches from", () => {
     outputs: ["src/result.ts"], permissions: ["write-assigned-tree"], role: "implementer" as const,
     client: "claude-code" as const, candidate: candidateDir("ma-worker1"), sessionId: "implementer-session",
     rigId: "rig-1", taskId: "T042", recipients: ["lead@rig-1"], workerGid,
+    // The recipient's own capability: poll matches on it, so the endpoint must carry this
+    // value rather than mint a fresh one, or the worker's mailbox reads empty.
+    mailboxCapability: "mailbox:" + "c".repeat(43),
     deadline: Date.now() + 60_000, isCurrent: () => true,
-    delivery: new MailboxDelivery(), chat: new ChatRepository(db),
-    readCredentials: () => ({ ownerToken: null }),
+    delivery: new MailboxDelivery(new ChatRepository(db)), chat: new ChatRepository(db),
+    // A real worker credential: the bootstrap carries it as `Bearer`, and the endpoint
+    // authenticates with it. A constant here would make every request 401.
+    readCredentials: () => ({ ownerToken: "owner-fixture",
+      workers: [{ token: "worker-fixture-token", sessionId: "implementer-session", runId: "run-1" }] }),
     context: { frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, workerUid: 60000, workerGroups: [],
       discoveryRoots: [], mutableStateRoot: join(directory, "state") },
     frameworkFiles: frameworkFiles(),
@@ -104,9 +111,11 @@ describe("the managed attempt a seat launches from", () => {
     controlStateDir = join(directory, "control");
     mailboxRoot = join(controlStateDir, "mailboxes");
     frameworkRoot = join(directory, "framework");
+    // The pinned toolchain the native policy is built against; only its shape is read.
+    toolchainDir = join(directory, "toolchain");
     // The control's own directories, then the roots it provisions for the worker.
     for (const path of [join(assignmentRoot, "ma-worker1"), frameworkRoot, controlStateDir,
-      mailboxRoot, join(directory, "state")]) mkdirSync(path, { recursive: true, mode: 0o700 });
+      mailboxRoot, join(directory, "state"), toolchainDir]) mkdirSync(path, { recursive: true, mode: 0o700 });
     // The context root is root-owned 0755 on a provisioned host, not control 0700.
     mkdirSync(contextRoot, { recursive: true, mode: 0o755 });
     chmodSync(contextRoot, 0o755);
@@ -134,7 +143,10 @@ describe("the managed attempt a seat launches from", () => {
       planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
       repository: { root: repo, identity: "git:" + "a".repeat(40) },
       readPaths: ["src"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
-      policyRevision: 4, policyFingerprint: hashBytes("policy"),
+      // Revision 5 is what a provisioned host ships and the launcher refuses anything below
+      // it, so exercising any other revision would test a configuration production cannot
+      // have. It also means the projection must carry the pinned native policy.
+      policyRevision: 5, policyFingerprint: hashBytes("policy"),
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
     open();
@@ -175,23 +187,25 @@ describe("the managed attempt a seat launches from", () => {
   }, 30_000);
 
   it("refuses a projection missing the core or the role charter", async () => {
-    // Drive the production producer and remove one instruction entry from what it
-    // projected, then resume. The manifest must refuse rather than adopt a projection
-    // that is missing what it is supposed to carry. A fresh runtime is used because the
-    // in-memory map would otherwise return the first attempt without re-reading disk.
+    // Drive the production producer, remove one instruction entry from what it projected,
+    // then resume. The root is left sealed at 0550 so the refusal cannot be the earlier
+    // "not private and control-owned" check — the assertion below is on the reason, so a
+    // test that failed for the wrong one could not pass.
     await runtime.produceManagedAttempt("run-1", produceInput());
     const root = projectionDir("attempt-1");
     await runtime.retireManagedAttempt("attempt-1");
     chmodSync(root, 0o755);
     chmodSync(join(root, "charter"), 0o644);
     rmSync(join(root, "charter"));
+    chmodSync(root, 0o550);
     const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
       candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
       assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
       managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
         policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
-        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
-    await expect(restarted.produceManagedAttempt("run-1", produceInput())).rejects.toThrow();
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir }) });
+    await expect(restarted.produceManagedAttempt("run-1", produceInput()))
+      .rejects.toThrow(/role charter|core instructions/);
   }, 30_000);
 
   it("listens on a private endpoint and writes the bootstrap the launcher binds", async () => {
@@ -212,27 +226,37 @@ describe("the managed attempt a seat launches from", () => {
   }, 30_000);
 
   it("admits an actual request on the produced endpoint rather than only existing", async () => {
-    // "Listening" has to mean admission, not a socket file. The frame is refused for a
-    // credential reason, which proves the server read and dispatched it.
+    // "Listening" has to mean admission, not a socket file. The request carries the
+    // bootstrap's own authorization, so this fails if that value is not a credential
+    // the endpoint accepts — which is exactly the defect a socket-existence check hides.
     const produced = await runtime.produceManagedAttempt("run-1", produceInput());
     const body = JSON.parse(readFileSync(join(mailboxDir("attempt-1"), "bootstrap.json"), "utf8"));
-    const socketPath = produced.bridge.binding.socketPath;
-    const response = await new Promise<string>((resolve, reject) => {
-      const socket = require("node:net").createConnection(socketPath, () => {
-        socket.write(JSON.stringify({ authorization: body.authorization, sessionId: body.sessionId,
-          runId: body.runId, attemptId: body.attemptId, generation: body.generation,
-          operation: "poll", taskId: body.taskId, capability: body.capability }) + "\n");
+    const ask = async (authorization: string) => {
+      const socketPath = produced.bridge.binding.socketPath;
+      const response = await new Promise<string>((resolve, reject) => {
+        const socket = createConnection(socketPath, () => {
+          socket.write(JSON.stringify({ authorization, sessionId: body.sessionId,
+            runId: body.runId, attemptId: body.attemptId, generation: body.generation,
+            operation: "poll", taskId: body.taskId, capability: body.capability }) + "\n");
+        });
+        let data = "";
+        socket.on("data", chunk => { data += chunk; });
+        socket.on("end", () => resolve(data));
+        socket.on("error", reject);
+        setTimeout(() => { socket.destroy(); resolve(data); }, 2_000);
       });
-      let data = "";
-      socket.on("data", chunk => { data += chunk; });
-      socket.on("end", () => resolve(data));
-      socket.on("error", reject);
-      setTimeout(() => { socket.destroy(); resolve(data); }, 2_000);
-    });
-    const parsed = JSON.parse(response.trim());
-    // It answered: the endpoint dispatched the frame rather than dropping it.
-    expect(typeof parsed.ok).toBe("boolean");
-    expect(parsed.ok === false ? parsed.code : "admitted").toBeTruthy();
+      return JSON.parse(response.trim());
+    };
+    // The bootstrap's authorization must be accepted: this is the assertion the earlier
+    // version lacked, so a constant placeholder could not pass it.
+    const admitted = await ask(body.authorization);
+    if (!admitted.ok) throw new Error("endpoint refused the bootstrap credential: " + JSON.stringify(admitted));
+    expect(admitted.ok).toBe(true);
+    // And a wrong credential is refused, so the endpoint is authenticating rather than
+    // admitting everything.
+    const refused = await ask("Bearer not-the-worker-token");
+    expect(refused.ok).toBe(false);
+    expect(refused.code).toBe("control_auth_required");
     await runtime.retireManagedAttempt("attempt-1");
   }, 30_000);
 
@@ -274,7 +298,7 @@ describe("the managed attempt a seat launches from", () => {
       assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
       managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
         policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
-        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir }) });
     const resumed = await runtime.produceManagedAttempt("run-1", produceInput());
     expect(resumed.attempt.context.root).toBe(projectionDir("attempt-1"));
     // The recorded bytes are what a resume is held to, and they are the same bytes.
