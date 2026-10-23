@@ -11,7 +11,7 @@ import { CodexResumeAdapter } from "../src/adapters/codex-resume.js";
 import type { TmuxAdapter } from "../src/adapters/tmux.js";
 import { isAttentionRequiredReadinessCode, type ManagedAttempt, type NodeBinding } from "../src/domain/runtime-adapter.js";
 import { hashBytes } from "../src/domain/plan-governance.js";
-import { buildManagedNativePolicy, createContextManifest, projectContext, roleConfiguration, type ContextInput } from "../src/integrations/framework/context-manifest.js";
+import { buildManagedNativePolicy, createContextManifest, projectContext, roleConfiguration, roleInstructionEntries, type ContextInput } from "../src/integrations/framework/context-manifest.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 
 const roots: string[] = [];
@@ -48,7 +48,7 @@ function fixture(client: WorkerClient, revision = 4, role: "implementer" | "revi
   writeFileSync(join(root, "repo", "plan.md"), plan);
   const source = join(root, "framework", "skill.md");
   writeFileSync(source, "pinned instructions");
-  const files = ([["framework", "pinned instructions"], ["plan", plan], ["role", JSON.stringify(roleConfiguration)]] as const).map(([kind, content]) => {
+  const files = ([["framework", "pinned instructions"], ["plan", plan], ["role", JSON.stringify(roleConfiguration)], ...roleInstructionEntries(role)] as const).map(([kind, content]) => {
     const path = join(contextRoot, kind);
     writeFileSync(path, content, { mode: 0o440 });
     return { path, hash: hashBytes(content), kind, readOnly: true as const, ...(kind === "framework" ? { source } : {}) };

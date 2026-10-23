@@ -1,0 +1,17 @@
+{
+  "role": "reviewer",
+  "title": "A refused attempt deletes a candidate tree another attempt still uses",
+  "brief": {
+    "task": "T-fixture: release a task's candidate workspace when its launch is refused.",
+    "cited": ["KTD8"],
+    "round": 1,
+    "lenses": ["correctness", "testing", "security"]
+  },
+  "candidate": {
+    "src/candidate-release.ts": "const owners = new Map<string, string>();\n\nexport function admit(taskId: string, attemptId: string, tree: string): string {\n  owners.set(taskId, attemptId);\n  return tree;\n}\n\nexport function releaseOnRefusal(taskId: string, tree: string, remove: (path: string) => void): void {\n  // Any refused attempt removes the task's tree, even when another attempt admitted it and is still running.\n  owners.delete(taskId);\n  remove(tree);\n}\n",
+    "test/candidate-release.test.ts": "import { expect, it, vi } from \"vitest\";\nimport { admit, releaseOnRefusal } from \"../src/candidate-release.js\";\n\nit(\"removes the tree after a refusal\", () => {\n  const remove = vi.fn();\n  admit(\"T1\", \"a1\", \"/trees/T1\");\n  releaseOnRefusal(\"T1\", \"/trees/T1\", remove);\n  expect(remove).toHaveBeenCalledWith(\"/trees/T1\");\n});\n"
+  },
+  "expected": [
+    { "severity": "P1", "citation": "KTD8", "file": "src/candidate-release.ts", "category": "correctness" }
+  ]
+}

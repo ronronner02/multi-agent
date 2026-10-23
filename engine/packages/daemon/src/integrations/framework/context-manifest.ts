@@ -4,7 +4,7 @@ import { canonicalJson, parseAssignment, parsePlanBinding, text, type PlanBindin
 import { hashBinding, hashBytes } from "../../domain/plan-governance.js";
 import { FRAMEWORK_PIN } from "./catalog.js";
 
-export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy"; readOnly: true; source?: string }
+export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy" | "core" | "charter"; readOnly: true; source?: string }
 export interface ContextMountPolicy {
   policy_revision: number; worker_identities: string[];
   paths: { context_root: string; framework_dir: string };
@@ -18,11 +18,38 @@ export interface ContextInput {
   workerUid: number; workerGroups: number[]; discoveryRoots: string[]; files: ContextFile[];
   lead?: { activationId: string; roster: { member: string; role: TeamRole; mailbox: string }[]; instructions: string };
 }
-export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (ContextFile & { workerPath: string })[]; workerDiscoveryRoots: string[]; generatedHash: string; protocolVersion: string | null }>;
+export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (ContextFile & { workerPath: string })[]; workerDiscoveryRoots: string[]; generatedHash: string; protocolVersion: string | null; instructionVersions: InstructionVersions }>;
+export interface InstructionVersions { core: string; charter: string }
 export interface ContextObservation { discoveryRoots: string[]; files: { path: string; hash: string }[] }
 export const roleConfiguration = immutable(JSON.parse(readFileSync(new URL("../../../../../config/team/roles.json", import.meta.url), "utf8"))) as Record<TeamRole, { client: ContextInput["client"]; permissions: string[] }>;
 export const leadProtocol = readFileSync(new URL("../../../../../config/team/lead-protocol.md", import.meta.url), "utf8");
 export const LEAD_PROTOCOL_VERSION = "1";
+/** An instruction file without a `Version:` line cannot be projected. */
+export function instructionVersion(content: string): string {
+  const version = /^Version: (\S+)$/m.exec(content)?.[1];
+  if (!version) throw new Error("Instruction file has no version");
+  return version;
+}
+/**
+ * KTD28: conduct shared by every role, and one charter per role. The Lead's charter is its protocol.
+ * Read on every call, so a new attempt picks up a charter edit without a daemon restart; an
+ * existing attempt keeps the bytes its projection recorded.
+ */
+export function loadRoleInstructions(role: TeamRole): { core: string; charter: string } {
+  const read = (path: string) => readFileSync(new URL(`../../../../../config/team/${path}`, import.meta.url), "utf8");
+  return { core: read("core.md"), charter: role === "lead" ? leadProtocol : read(`roles/${role}.md`) };
+}
+/** Load-time snapshots, for callers and tests that need the bytes without a projection. */
+export const coreInstructions = loadRoleInstructions("implementer").core;
+export const roleCharters: Readonly<Record<TeamRole, string>> = Object.freeze({ lead: leadProtocol,
+  implementer: loadRoleInstructions("implementer").charter, reviewer: loadRoleInstructions("reviewer").charter });
+for (const content of [coreInstructions, ...Object.values(roleCharters)]) instructionVersion(content);
+if (instructionVersion(leadProtocol) !== LEAD_PROTOCOL_VERSION) throw new Error("Lead protocol version mismatch");
+/** The instruction entries a new attempt's projection carries for its role: the core, then the role's charter. */
+export function roleInstructionEntries(role: TeamRole): [["core", string], ["protocol" | "charter", string]] {
+  const current = loadRoleInstructions(role);
+  return [["core", current.core], [role === "lead" ? "protocol" : "charter", current.charter]];
+}
 export function immutable<T>(value: T): T {
   if (value !== null && typeof value === "object") { Object.values(value).forEach(immutable); Object.freeze(value); }
   return value;
@@ -160,7 +187,15 @@ function locked(path: string, input: ContextInput): void {
     if (p === dirname(p)) break;
   }
 }
-export function createContextManifest(input: ContextInput): ContextManifest {
+/** Build the manifest for a new attempt: its core and charter must be the current pinned source. */
+export function createContextManifest(input: ContextInput): ContextManifest { return buildContextManifest(input, "create"); }
+/**
+ * Rebuild an existing attempt's manifest from its own projection. The core and charter are held to
+ * the hashes that projection recorded, not to today's source, so a later charter edit never breaks
+ * the attempt's resume.
+ */
+export function recordedContextManifest(input: ContextInput): ContextManifest { return buildContextManifest(input, "recorded"); }
+function buildContextManifest(input: ContextInput, mode: "create" | "recorded"): ContextManifest {
   const spec = structuredClone(input); spec.binding = parsePlanBinding(spec.binding); spec.assignment = parseAssignment(spec.assignment);
   const nativeFiles = nativePolicyContextFiles(spec);
   const sortedNative = (files: ContextFile[]) => files.map(f => ({ path: f.path, hash: f.hash })).sort((a, b) => a.path.localeCompare(b.path));
@@ -180,7 +215,7 @@ export function createContextManifest(input: ContextInput): ContextManifest {
   const kinds = spec.files.map(f => f.kind);
   if (!["framework", "role", "plan"].every(k => kinds.includes(k as ContextFile["kind"])) || new Set(spec.files.map(f => f.path)).size !== spec.files.length) throw new Error("Missing or duplicate context files");
   for (const f of spec.files) {
-    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
+    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
     workerContextPath(spec.projection.policy, spec.root, f.path);
     if (within(spec.root, f.path)) {
       const s = lstatSync(f.path);
@@ -193,6 +228,20 @@ export function createContextManifest(input: ContextInput): ContextManifest {
     if (f.kind === "plan" && f.hash !== spec.binding.planDigest) throw new Error("Projected plan differs from the approval");
     if (f.kind === "role" && canonicalJson(JSON.parse(readFileSync(f.path, "utf8"))) !== canonicalJson(roleConfiguration)) throw new Error("Role configuration changed");
   }
+  const single = (kind: ContextFile["kind"]) => spec.files.filter(f => f.kind === kind);
+  // Each file's bytes already match its recorded hash above; a new attempt must also match today's source.
+  const current = mode === "create" ? loadRoleInstructions(spec.role) : null;
+  const cores = single("core");
+  if (cores.length !== 1 || (current && readFileSync(cores[0]!.path, "utf8") !== current.core)) throw new Error("Missing, duplicate or changed core instructions");
+  const charters = single("charter");
+  if (spec.role === "lead" ? charters.length !== 0
+    : charters.length !== 1 || (current && readFileSync(charters[0]!.path, "utf8") !== current.charter)) throw new Error("Missing, duplicate, changed or foreign role charter");
+  if (spec.role !== "lead" && spec.files.some(f => f.kind === "protocol" || f.kind === "roster" || f.kind === "run")) {
+    throw new Error("Lead-only context in a member manifest");
+  }
+  const charterFile = spec.role === "lead" ? single("protocol")[0] : charters[0];
+  const instructionVersions: InstructionVersions = { core: instructionVersion(readFileSync(cores[0]!.path, "utf8")),
+    charter: charterFile ? instructionVersion(readFileSync(charterFile.path, "utf8")) : "" };
   if (spec.role === "lead") {
     if (!spec.lead || !["protocol", "roster", "run"].every(k => kinds.filter(v => v === k).length === 1)) throw new Error("Lead activation context is incomplete");
     text(spec.lead.activationId, "activationId"); text(spec.lead.instructions, "runInstructions");
@@ -203,13 +252,15 @@ export function createContextManifest(input: ContextInput): ContextManifest {
   } else if (spec.lead) throw new Error("Lead and member configuration must be separate");
   const mapped = { ...spec, files: spec.files.map(f => ({ ...f, workerPath: workerContextPath(spec.projection.policy, spec.root, f.path) })),
     workerDiscoveryRoots: spec.discoveryRoots.map(p => workerContextPath(spec.projection.policy, spec.root, p)),
-    protocolVersion: spec.role === "lead" ? LEAD_PROTOCOL_VERSION : null };
+    protocolVersion: spec.role === "lead" ? LEAD_PROTOCOL_VERSION : null, instructionVersions };
   return immutable({ ...mapped, generatedHash: hashBytes(canonicalJson({ ...mapped, bindingDigest: hashBinding(spec.binding) })) });
 }
 export function verifyEffectiveContext(manifest: ContextManifest, observed: ContextObservation): string {
-  const { generatedHash, protocolVersion, ...input } = manifest;
+  const { generatedHash, protocolVersion, instructionVersions: recorded, ...input } = manifest;
   if (protocolVersion !== (input.role === "lead" ? LEAD_PROTOCOL_VERSION : null)) throw new Error("Protocol version changed");
-  if (createContextManifest(input).generatedHash !== generatedHash) throw new Error("Context changed before launch or resume");
+  const rebuilt = recordedContextManifest(input);
+  if (canonicalJson(recorded) !== canonicalJson(rebuilt.instructionVersions)) throw new Error("Role instruction version changed");
+  if (rebuilt.generatedHash !== generatedHash) throw new Error("Context changed before launch or resume");
   const files = (items: ContextObservation["files"]) => [...items].sort((a, b) => a.path.localeCompare(b.path));
   if (canonicalJson([...observed.discoveryRoots].sort()) !== canonicalJson([...manifest.workerDiscoveryRoots].sort()) || canonicalJson(files(observed.files)) !== canonicalJson(files(manifest.files.map(({ workerPath, hash }) => ({ path: workerPath, hash }))))) throw new Error("Unexpected or unobserved instruction source");
   return hashBytes(canonicalJson(observed));
