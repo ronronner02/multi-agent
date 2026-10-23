@@ -350,8 +350,11 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
 function readProjectedDescriptors(root: string, frameworkFiles: readonly { path: string; source: string }[]): ContextFile[] {
   // Each projected framework copy is matched back to the pinned source it came from by
   // its projected name, so the rebuilt descriptor points at the source the manifest
-  // re-verifies rather than at the copy inside the attempt root.
-  const sourceOf = new Map(frameworkFiles.map(file => [`framework/${file.path.replace(/[^A-Za-z0-9._/-]/g, "_")}`, file.source]));
+  // re-verifies rather than at the copy inside the attempt root. The rule must be the
+  // same one `frameworkName` applies when creating, or a resume would map a path the
+  // create path refuses onto a sanitized name.
+  const projectedName = (path: string) => `framework/${path}`;
+  const sourceOf = new Map(frameworkFiles.map(file => [projectedName(file.path), file.source]));
   const files: ContextFile[] = [];
   const walk = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -414,6 +417,19 @@ function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: n
     || (stat.mode & 0o7777) !== mode) {
     throw new Error("Managed attempt directory is not owned as the policy requires");
   }
+}
+
+/** Seal every directory in a projection: the launcher refuses any its owner could write. */
+function sealProjectionTree(root: string): void {
+  const seal = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) seal(join(directory, entry.name));
+    }
+    // 0550, not 0700: the worker reads this tree through its group, and the launcher
+    // rejects any directory below the worker root that still carries an owner write bit.
+    chmodSync(directory, 0o550);
+  };
+  seal(root);
 }
 
 /** Remove a projection this producer created and failed to finish, so the attempt id is reusable. */
@@ -765,6 +781,11 @@ export class WorkflowRuntime {
     // call created may be removed.
     let resumed = false;
     try {
+      // Read before anything else can throw. The failure path below removes only a
+      // projection this call created, and an earlier attempt's projection is run
+      // evidence that must survive a later refusal — including one decided before the
+      // projection work starts, such as a candidate mismatch.
+      resumed = existsSync(root);
       if (this.candidateFor(runId, input.assignment.taskId, worker).root !== input.candidate) {
         // The projection names the tree the worker will work in, so a caller that names
         // another tree would produce a context describing work that cannot happen.
@@ -772,7 +793,6 @@ export class WorkflowRuntime {
       }
       // A projection already on disk belongs to the attempt that made it, so it is used
       // as it stands. A new one is created and sealed below.
-      resumed = existsSync(root);
       if (!resumed) ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker, workerGid: input.workerGid });
       const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
         role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
@@ -923,6 +943,12 @@ export class WorkflowRuntime {
       // projection after it was hashed.
       chmodSync(root, 0o550);
     }
+    // The launcher re-checks the whole projection read-only, and it refuses any directory
+    // below the worker root that its owner can still write. Sealing only the attempt root
+    // would leave every subdirectory (`framework/`, `native/`, …) writable, and the launch
+    // would be refused as an unverified context source at the only policy revision a
+    // provisioned host carries. So the seal covers everything this producer created.
+    sealProjectionTree(root);
     // A resumed attempt is held to the bytes its own projection recorded; a new one must
     // also match today's pinned source. That difference is `recordedContextManifest`'s
     // whole purpose, and it is what keeps a later charter edit from breaking a resume.
