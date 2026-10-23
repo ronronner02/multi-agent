@@ -37,7 +37,8 @@ export const PIN = Object.freeze({
   // the shared language catalog workspace and its consumer dependency declarations;
   // the KTD22 startup daemon mode, team-control wiring and owner-level managed checks.
   // Five inherited daemon fixtures account for WSL socket-close readiness,
-  // private tmux server lifetime and child chdir/exec timing before assertions.
+  // private tmux server lifetime and child chdir/exec timing before assertions;
+  // T041's startup assertion pins the worker launcher argument it now passes.
   adapted: [
     'package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json',
     'packages/cli/src/commands/release.ts',
