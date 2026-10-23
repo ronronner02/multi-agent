@@ -17,6 +17,7 @@ import {
   candidateManifest,
   createCandidateWorkspace,
   createReviewPacket,
+  isCandidateWorkTree,
   removeCandidateWorkspace,
   resolveWorkspaceBase,
   sourceFingerprint,
@@ -576,6 +577,12 @@ export class WorkflowRuntime {
     try { stats = statSync(workspaceRoot); } catch { return undefined; }
     if (!stats.isDirectory()) return undefined;
     const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
+    // T044: an existing directory is only this candidate if it is a work tree of the
+    // repository at the recorded base. Without this, any directory that happened to
+    // occupy the path — an owner's file, a leftover, a planted tree — would be adopted
+    // as the task's candidate and its bytes reported as the task's work. The check reads
+    // the source's own metadata and never runs `git` inside the candidate.
+    if (!isCandidateWorkTree(workspaceRoot, run.binding.repository.root)) return undefined;
     return { root: workspaceRoot, sourceRoot: resolve(run.binding.repository.root),
       base: resolveWorkspaceBase(run.binding.repository.root), source: sourceFingerprint(run.binding.repository.root) };
   }

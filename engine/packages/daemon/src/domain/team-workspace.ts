@@ -110,6 +110,92 @@ export function candidatePath(root: string, path: string): string {
  * only when asked to, and `tracked: false` says the caller is reading a copy whose
  * baseline already recorded provenance.
  */
+/**
+ * T044 — the tracked set of a candidate, taken from the repository the control trusts.
+ *
+ * A candidate is worker-writable by design, so `git` run *inside* it executes whatever
+ * the worker put there: replacing the candidate's `.git` gitdir file with a repository
+ * of its own and planting `core.fsmonitor` makes `git ls-files` run a worker-chosen
+ * program as the control. That was reproduced before this was written.
+ *
+ * `git worktree add` writes a candidate's index as a copy of the base commit's, so the
+ * source repository's own answer at that commit is the candidate's tracked set. Nothing
+ * is executed from the candidate to obtain it.
+ */
+function trackedInCandidate(workspace: CandidateWorkspace): string[] {
+  if (workspace.base.kind !== "commit") return [];
+  return git(workspace.sourceRoot, ["ls-tree", "-r", "--name-only", "-z", workspace.base.commit])
+    .split("\0").filter(Boolean);
+}
+
+/** Environment that keeps git from consulting configuration a caller could have written. */
+function gitReadOnlyEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" };
+}
+
+/**
+ * T044 — the candidate's patch, rendered with the owner's gitdir and the candidate as a
+ * plain work tree.
+ *
+ * `--git-dir <source>/.git --work-tree <candidate>` is what makes this safe: git reads
+ * configuration, hooks and objects from the owner's repository and treats the candidate
+ * as bytes. Pointing `-C` at the candidate instead would let a replaced `.git` gitdir
+ * file or a planted `core.fsmonitor` run a worker-chosen program as the control.
+ */
+function gitWorkTreeDiff(workspace: CandidateWorkspace, commit: string): string {
+  return execFileSync("git", ["-c", "core.fsmonitor=", "-c", "core.pager=cat",
+    `--git-dir=${join(workspace.sourceRoot, ".git")}`, `--work-tree=${workspace.root}`,
+    "diff", "--binary", commit, "--"],
+  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: gitReadOnlyEnv() });
+}
+
+/**
+ * T044 — list a candidate's files from a tracked set supplied by the caller.
+ *
+ * Same contract as `listFiles`, but the tracked half is an input rather than a `git`
+ * answer, so the candidate itself is only ever read. `.git` is excluded the way
+ * `ls-files --others` excludes it: it is repository metadata, not a candidate file.
+ */
+function listCandidateFiles(root: string, trackedSet: ReadonlySet<string>): CandidateFile[] {
+  const untracked = walkFiles(root).filter(path => path !== ".git" && !path.startsWith(".git/"));
+  return [...new Set([...trackedSet, ...untracked])].sort().flatMap(path => {
+    try {
+      return [{ path, hash: sha256(readFileSync(candidatePath(root, path))), tracked: trackedSet.has(path) }];
+    } catch (error) {
+      if ((error as Error).message.startsWith("Candidate path is missing")) return [];
+      throw error;
+    }
+  });
+}
+
+/**
+ * T044 — is this directory a work tree of `sourceRoot`, and not something that merely
+ * occupies the path?
+ *
+ * A candidate that `git worktree add` created holds a `.git` *file* naming its gitdir
+ * under the source's `.git/worktrees/<name>`. That is read here as text and compared,
+ * so no program is executed and nothing inside the directory is trusted beyond the one
+ * path it names. A plain directory, a directory with no `.git`, or one naming somebody
+ * else's gitdir is not this task's candidate.
+ */
+export function isCandidateWorkTree(candidateRoot: string, sourceRoot: string): boolean {
+  try {
+    const dotGit = join(candidateRoot, ".git");
+    const stat = lstatSync(dotGit);
+    // A real `.git` directory would be a repository of the candidate's own, which a
+    // candidate never is.
+    if (!stat.isFile() || stat.isSymbolicLink()) return false;
+    const match = /^gitdir: (.+)$/m.exec(readFileSync(dotGit, "utf8"));
+    if (!match) return false;
+    const recorded = resolve(candidateRoot, match[1]!.trim());
+    const worktrees = resolve(sourceRoot, ".git", "worktrees");
+    const inside = relative(worktrees, recorded);
+    return inside !== "" && inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside)
+      && realpathSync(recorded) === recorded;
+  } catch { return false; }
+}
+
 export function listFiles(root: string, options: { index: boolean }): CandidateFile[] {
   const tracked = options.index ? git(root, ["ls-files", "-z"]).split("\0").filter(Boolean) : [];
   const trackedSet = new Set(tracked);
@@ -249,10 +335,15 @@ export function createCandidateWorkspace(input: {
 
 /** A patch that adds one untracked file, as `git diff` would render it once tracked. */
 function untrackedPatch(root: string, path: string): string {
-  // `--no-index` reports a difference by exiting 1, which is the normal case
-  // here, so the exit status cannot stand in for "failed": read stdout directly.
-  const result = spawnSync("git", ["-C", root, "diff", "--binary", "--no-index", "--", emptyFilePath(), path],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
+  // T044: `--no-index` needs no repository, so it runs from a fixed directory with no
+  // repository discovery and no configuration lookup — the candidate's `.git` is never
+  // consulted, and only the one file's bytes are read.
+  //
+  // `--no-index` reports a difference by exiting 1, which is the normal case here, so the
+  // exit status cannot stand in for "failed": read stdout directly.
+  const result = spawnSync("git", ["-c", "core.fsmonitor=", "diff", "--binary", "--no-index", "--",
+    emptyFilePath(), join(root, path)],
+  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, cwd: dirname(root), env: gitReadOnlyEnv() });
   if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
   return (result.stdout ?? "").replace(/\n+$/, "");
 }
@@ -273,8 +364,12 @@ export function candidateManifest(workspace: CandidateWorkspace): {
   patch: string;
 } {
   if (workspace.base.kind === "commit") {
-    const files = listFiles(workspace.root, { index: true });
-    const trackedPatch = git(workspace.root, ["diff", "--binary", workspace.base.commit, "--"]).replace(/\n+$/, "");
+    // T044: the tracked set comes from the source repository at the base commit, never
+    // from `git ls-files` inside the candidate, and the patch is rendered with the
+    // owner's gitdir and the candidate as a plain work tree.
+    const tracked = trackedInCandidate(workspace);
+    const files = listCandidateFiles(workspace.root, new Set(tracked));
+    const trackedPatch = gitWorkTreeDiff(workspace, workspace.base.commit).replace(/\n+$/, "");
     const additions = files.filter(file => !file.tracked).map(file => untrackedPatch(workspace.root, file.path)).filter(Boolean);
     return {
       base: "commit",
