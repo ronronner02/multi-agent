@@ -689,8 +689,48 @@ describe('offline: fixed native policy and mailbox mounts', () => {
 
 
 describe('offline: supervisor control', { skip: process.platform !== 'linux' }, () => {
+  // The supervisor reports the namespace before its init forks the entry shell, so a
+  // test that snapshots immediately can see an empty level 0 and fail closed.
+  const childPids = pid => {
+    try {
+      const pids = new Set();
+      for (const task of readdirSync('/proc/' + pid + '/task')) {
+        try {
+          for (const value of readFileSync('/proc/' + pid + '/task/' + task + '/children', 'utf8').trim().split(' ')) {
+            if (/^[1-9]\d*$/.test(value)) pids.add(Number(value));
+          }
+        } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      return [...pids];
+    } catch (error) { if (['ENOENT', 'ESRCH'].includes(error.code)) return []; throw error; }
+  };
+  // Observed through /proc rather than a control handle, so a half-started namespace is retried, not failed.
+  // A zombie throws ENOENT on /proc/<pid>/exe, which the caller treats as "not ready yet".
+  const liveExe = pid => readlinkSync('/proc/' + pid + '/exe');
+  // walk is the executable snapshot() will expect at each level, the entry shell first.
+  const chainReady = (supervisorPid, walk) => {
+    // supervisor -> the bwrap wrapper -> the namespace init; the walk starts at the init's child.
+    const wrapper = childPids(supervisorPid), init = wrapper.length === 1 ? childPids(wrapper[0]) : [];
+    let level = init.length === 1 ? childPids(init[0]) : [];
+    for (const executable of walk) {
+      if (level.length !== 1 || liveExe(level[0]) !== executable) return false;
+      level = childPids(level[0]);
+    }
+    return true;
+  };
+  const waitForNative = async (child, walk) => {
+    const deadline = Date.now() + 5_000;
+    while (child.exitCode === null && child.signalCode === null) {
+      try { if (chainReady(child.pid, walk)) return; }
+      // Only a vanished process means "not ready yet"; any other error is a real fixture defect.
+      catch (error) { if (!['ENOENT', 'ESRCH'].includes(error.code)) throw error; }
+      if (Date.now() > deadline) break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error('sandbox native did not start within 5 s' + (child.exitCode === null ? '' : ` (supervisor exited ${child.exitCode})`));
+  };
   async function fixture(t, { capture = true, holdSupervisor = false, argvBytes, contextRoot, sessionRoot, sessionOpen = '>>', sessionWrite = '',
-    script = 'sleep 30 & setsid sleep 30 & wait', mounts = [] } = {}) {
+    script = 'sleep 30 & setsid sleep 30 & wait', mounts = [], readyChain = [SHELL] } = {}) {
     assert.equal(typeof workerLaunch.openSandboxControl, 'function');
     const command = { file: '/usr/bin/bwrap', args: ['--unshare-user', '--unshare-pid', '--die-with-parent',
       '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib',
@@ -729,8 +769,10 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
       child.stdout.once('data', resolve); child.once('error', reject);
       child.once('exit', () => reject(new Error('Supervisor fixture exited before capture')));
     });
-    const selector = { processId: child.pid, processStart: startOf(child.pid) };
-    return { child, selector, argv: [process.execPath, ...args] };
+    const selector = { processId: child.pid, processStart: startOf(child.pid) }, argv = [process.execPath, ...args];
+    // A retained-descriptor supervisor is the only one a later snapshot can descend.
+    if (capture) await waitForNative(child, readyChain);
+    return { child, selector, argv };
   }
   const startOf = pid => { const raw = readFileSync('/proc/' + pid + '/stat', 'utf8'); return raw.slice(raw.lastIndexOf(')') + 2).trim().split(/\s+/)[19]; };
   // The test process stands in for the terminal pane that runs each supervisor.
@@ -853,7 +895,7 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
 
   test('descends a multi-level chain through the unique child at each level', { timeout: 6_000 }, async t => {
     // Like the Codex entry script, the shell waits on exactly one child that runs another image.
-    const { selector, argv } = await fixture(t, { script: 'sleep 30; true' });
+    const { selector, argv } = await fixture(t, { script: 'sleep 30; true', readyChain: [SHELL, realpathSync('/usr/bin/sleep')] });
     const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
     t.after(() => control.close());
     const observed = control.observe(), sleep = realpathSync('/usr/bin/sleep');
@@ -937,9 +979,12 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
     });
   }
 
+  // Both children stay shells for the life of the fixture, so a second level is never unique. A plain
+  // background job would briefly fork before its exec, so each child waits in its own nested shell.
+  const depthScript = '/bin/sh -c "sleep 30; true" & /bin/sh -c "sleep 30; true" & wait';
   for (const field of ['foreign-pane', 'stale-pane', 'executable', 'depth', 'empty-chain', 'foreign-file', 'root-escape', 'duplicate-file', 'unknown-key']) {
     test('snapshot rejects ' + field + ' without reading outside its namespace scope', { timeout: 6_000 }, async t => {
-      const { selector, argv } = await fixture(t);
+      const { selector, argv } = await fixture(t, field === 'depth' ? { script: depthScript } : {});
       const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
       t.after(() => control.close());
       const observed = control.observe(), request = query();
@@ -947,7 +992,7 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
       if (field === 'foreign-pane') request.pane = { processId: process.ppid, processStart: startOf(process.ppid) };
       else if (field === 'stale-pane') request.pane.processStart = String(BigInt(request.pane.processStart) + 1n);
       else if (field === 'executable') chain = [process.execPath];
-      // The fixture shell has two children, so no unique next level exists.
+      // This shell always holds two live shells below it, so no unique next level exists at any instant.
       else if (field === 'depth') chain = [SHELL, SHELL];
       else if (field === 'empty-chain') chain = [];
       else if (field === 'foreign-file') request.files = ['/etc/shadow'];
@@ -1023,7 +1068,8 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
     } finally { mocked.mock.restore(); syncBuiltinESMExports(); }
   });
 
-  test('does not report stopped while the outer supervisor remains live', { timeout: 14_000 }, async t => {
+  // quiesce() itself spends a fixed 10 s before it can reject, and the fixture may add 5 s of startup.
+  test('does not report stopped while the outer supervisor remains live', { timeout: 20_000 }, async t => {
     const { child, selector, argv } = await fixture(t, { holdSupervisor: true });
     const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
     t.after(() => control.close());
