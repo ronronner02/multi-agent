@@ -318,9 +318,53 @@ describe("the managed attempt a seat launches from", () => {
       assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
       managedAttemptRoots: () => ({ contextRoot, mailboxRoot: join(directory, "elsewhere-mailboxes"), controlStateDir,
         policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
-        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision }) });
-    await expect(runtime.produceManagedAttempt("run-1", produceInput())).rejects.toThrow();
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir }) });
+    // Assert the reason, not just that something threw: without toolchainDir this case
+    // would pass on the native-policy builder's own argument error instead.
+    await expect(runtime.produceManagedAttempt("run-1", produceInput()))
+      .rejects.toThrow(/mailbox root is not beneath the control state directory/);
     expect(existsSync(join(directory, "elsewhere-mailboxes"))).toBe(false);
+  }, 30_000);
+
+  it("seals the whole projection, not just its root, because the launcher re-checks every directory", async () => {
+    // The launcher refuses any directory below the worker root that its owner can still
+    // write, so sealing only the attempt root leaves `framework/` and `native/` writable
+    // and the launch is refused as an unverified context source. This is asserted on
+    // every directory in the tree, not just the root.
+    const produced = await runtime.produceManagedAttempt("run-1", produceInput());
+    const root = produced.attempt.context.root;
+    const writable: string[] = [];
+    const walk = (directory: string): void => {
+      if ((lstatSync(directory).mode & 0o222) !== 0) writable.push(directory);
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.isDirectory()) walk(join(directory, entry.name));
+      }
+    };
+    walk(root);
+    expect(writable).toEqual([]);
+    // The subdirectories exist, so this is not vacuous.
+    expect(existsSync(join(root, "framework"))).toBe(true);
+    expect(existsSync(join(root, "native"))).toBe(true);
+    await runtime.retireManagedAttempt("attempt-1");
+  }, 30_000);
+
+  it("keeps an earlier attempt's projection when a later produce is refused", async () => {
+    // A refused produce must not delete run evidence. The projection belongs to the
+    // attempt that made it, and KTD24 retains projections with the run evidence.
+    await runtime.produceManagedAttempt("run-1", produceInput());
+    const root = projectionDir("attempt-1");
+    await runtime.retireManagedAttempt("attempt-1");
+    const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+      candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
+      assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
+      managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
+        policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
+        frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir }) });
+    await expect(restarted.produceManagedAttempt("run-1", produceInput({ candidate: join(directory, "elsewhere") })))
+      .rejects.toThrow("Managed attempt candidate mismatch");
+    // Still there, still sealed, still the recorded bytes.
+    expect(existsSync(root)).toBe(true);
+    expect(existsSync(join(root, "charter"))).toBe(true);
   }, 30_000);
 
   it("closes every endpoint this daemon owns", async () => {
