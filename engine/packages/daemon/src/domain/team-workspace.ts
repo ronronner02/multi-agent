@@ -398,24 +398,28 @@ export function createCandidateWorkspace(input: {
 
 /** A patch that adds one untracked file, as `git diff` would render it once tracked. */
 function untrackedPatch(root: string, path: string): string {
-  // T044: `--no-index` compares two paths and needs no repository, but two things about
-  // how it is invoked still matter.
+  // T044: `--no-index` skips the *index*, not repository discovery or repository config.
+  // With the candidate as the cwd, git discovers a `.git` the worker wrote there and reads
+  // its configuration, and every configuration key that names a program then runs it as
+  // the control. `-c core.fsmonitor=` clears one key; `diff.external`, `diff.<drv>.command`
+  // and `diff.<drv>.textconv` are others, and a reviewer reproduced all three.
   //
-  // The cwd is the candidate root, and the ceiling stops repository discovery there, so
-  // no ancestor is ever consulted. The previous cwd was `dirname(root)` — the candidate's
-  // parent, which is worker-owned in production — where a planted repository could answer
-  // for this call.
+  // `--no-ext-diff` and `--no-textconv` are the switch that covers the whole class: both
+  // must sit AFTER `diff`, or git rejects them as unknown options. Verified against a
+  // worker-planted `diff.external`: the program does not run, and the addition is still
+  // rendered correctly.
   //
-  // `path` is repository-relative, so the rendered headers are `a/<path>` / `b/<path>` and
-  // the patch applies at a repository root. Passing an absolute path named a host location
-  // instead.
+  // `path` is repository-relative and the cwd is the candidate root, so the headers are
+  // `a/<path>` / `b/<path>` and the patch applies at a repository root. The cwd stays the
+  // candidate — needed for a relative path — and the discovery ceiling keeps the walk above
+  // it from being consulted.
   //
   // `--no-index` reports a difference by exiting 1, which is the normal case here, so the
   // exit status cannot stand in for "failed": read stdout directly.
-  const result = spawnSync("git", ["-c", "core.fsmonitor=", "diff", "--binary", "--no-index", "--",
-    emptyFilePath(), path],
+  const result = spawnSync("git", ["-c", "core.fsmonitor=", "diff", "--no-ext-diff", "--no-textconv",
+    "--binary", "--no-index", "--", emptyFilePath(), path],
   { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, cwd: root,
-    env: gitReadOnlyEnv({ GIT_CEILING_DIRECTORIES: root }) });
+    env: gitReadOnlyEnv({ GIT_CEILING_DIRECTORIES: dirname(root) }) });
   if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
   return (result.stdout ?? "").replace(/\n+$/, "");
 }

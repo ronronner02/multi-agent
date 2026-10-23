@@ -49,16 +49,36 @@ function candidate(source = repository()) {
 
 /** Replace the candidate's `.git` file with a repository of the worker's own. */
 function plant(candidateRoot: string, outside: string, marker: string): void {
-  rmSync(join(candidateRoot, ".git"));
+  rmSync(join(candidateRoot, ".git"), { recursive: true, force: true });
   const workerGit = join(outside, "worker-git");
   git(candidateRoot, "init", "--quiet", "--separate-git-dir", workerGit, candidateRoot);
   git(candidateRoot, "config", "user.email", "worker@example.invalid");
   git(candidateRoot, "config", "user.name", "worker");
   git(candidateRoot, "add", ".");
   git(candidateRoot, "commit", "--quiet", "-m", "worker");
-  writeFileSync(join(outside, "planted.sh"), `#!/bin/sh\necho ran >> ${marker}\nexit 1\n`);
+  writeFileSync(join(outside, "planted.sh"), `#!/bin/sh\necho ran >> ${marker}\nexit 0\n`);
   chmodSync(join(outside, "planted.sh"), 0o755);
   git(candidateRoot, "config", "core.fsmonitor", join(outside, "planted.sh"));
+}
+
+/**
+ * Every configuration key that makes git invoke a program, armed at once.
+ *
+ * `core.fsmonitor` is only one of them. `--no-index` still discovers a repository and reads
+ * its config, so a fix proved against one key proves nothing about the class: both
+ * reviewers found `diff.external` executing after a `core.fsmonitor`-only test passed.
+ */
+function plantEveryKey(candidateRoot: string, outside: string, marker: string): void {
+  rmSync(join(candidateRoot, ".git"), { recursive: true, force: true });
+  git(candidateRoot, "init", "--quiet");
+  writeFileSync(join(outside, "planted.sh"), `#!/bin/sh\necho ran >> ${marker}\nexit 0\n`);
+  chmodSync(join(outside, "planted.sh"), 0o755);
+  const program = join(outside, "planted.sh");
+  git(candidateRoot, "config", "core.fsmonitor", program);
+  git(candidateRoot, "config", "core.pager", program);
+  git(candidateRoot, "config", "diff.external", program);
+  git(candidateRoot, "config", "diff.planted.command", program);
+  writeFileSync(join(candidateRoot, ".gitattributes"), "* diff=planted\n");
 }
 
 /** A repository planted one level above a directory, with every program hook armed. */
@@ -89,9 +109,27 @@ describe("a candidate's manifest never executes what the worker wrote", () => {
 
   it("executes nothing the worker wrote, even with a planted core.fsmonitor", () => {
     const { workspace, marker, outside } = candidate();
+    // An UNTRACKED file is what makes this case reach `untrackedPatch`. Without one the
+    // faulting call never runs, which is how the previous version of this test passed
+    // while a worker-controlled `diff.external` was executing.
+    writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const d = 1;\n");
     plant(workspace.root, outside, marker);
-    expect(candidateManifest(workspace).manifestDigest).toMatch(/^sha256:/);
+    const manifest = candidateManifest(workspace);
+    expect(manifest.manifestDigest).toMatch(/^sha256:/);
     expect(existsSync(marker)).toBe(false);
+    // And the addition must still be described, so blocking execution did not cost bytes.
+    expect(manifest.patch).toContain("src/deliverable.ts");
+  }, 30_000);
+
+  it("executes nothing for any configuration key that names a program, not just core.fsmonitor", () => {
+    // A fix proved against one key proves nothing about the class. Both reviewers found a
+    // worker `diff.external` executing after a core.fsmonitor-only test passed.
+    const { workspace, marker, outside } = candidate();
+    writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const d = 1;\n");
+    plantEveryKey(workspace.root, outside, marker);
+    const manifest = candidateManifest(workspace);
+    expect(existsSync(marker)).toBe(false);
+    expect(manifest.patch).toContain("src/deliverable.ts");
   }, 30_000);
 
   it("does not let a repository planted in the candidate's parent capture the untracked patch", () => {
