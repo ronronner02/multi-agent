@@ -47,6 +47,30 @@ export interface ReviewFinding {
   citation: string;
   category: string;
   file: string;
+  /** KTD28: the concrete failing scenario. Required for a P0/P1; absent on records made before the charter. */
+  scenario?: string;
+  /**
+   * From round 2 on, whether the finding sits in the fix delta. The daemon decides
+   * it from the delta's changed files; the reviewer's own tag is kept beside it.
+   * Absent on round-1 and older records, which always count.
+   */
+  inDelta?: boolean;
+  reportedInDelta?: boolean | null;
+  reproduced?: boolean;
+  /** The round an earlier still-open finding was carried from, because this round did not re-raise it. */
+  carriedFrom?: number;
+}
+
+/** A later round's verdict on one earlier open P0/P1, named by that finding's id. */
+export const PRIOR_STATUSES = ["CLOSED", "STILL OPEN", "REGRESSED"] as const;
+export interface PriorVerdict { id: string; status: (typeof PRIOR_STATUSES)[number]; evidence: string }
+
+/**
+ * Review convergence (KTD28): from round 2 on, a new finding outside the fix
+ * delta is a recorded residual, unless it is a P0 the reviewer reproduced.
+ */
+export function countsTowardGate(finding: ReviewFinding): boolean {
+  return finding.inDelta !== false || (finding.severity === "P0" && finding.reproduced === true);
 }
 
 /**
@@ -85,6 +109,8 @@ export interface ReviewRecord {
   implementerSession: string;
   candidate: CandidateIdentity;
   findings: ReviewFinding[];
+  /** From round 2 on, the verdict on every earlier open P0/P1. */
+  prior?: PriorVerdict[];
   recordedAt: string;
   /**
    * Identity of the delivered report, so a redelivery is recognized as the same
@@ -204,11 +230,12 @@ function cleanText(value: unknown, field: string, max = 256): string {
  * says an uncited finding is advisory, so refusing the whole review over one
  * would discard the cited defects alongside it.
  */
-export function parseFindings(value: unknown): ReviewFinding[] {
+export function parseFindings(value: unknown, delta?: { round: number; files: ReadonlySet<string> | null }): ReviewFinding[] {
   if (!Array.isArray(value)) throw new ReviewEvidenceError("invalid_finding", "Review findings must be an array");
   const ids = new Set<string>();
+  const later = (delta?.round ?? 1) > 1;
   return value.map(entry => {
-    const finding = (entry ?? {}) as Partial<ReviewFinding>;
+    const finding = (entry ?? {}) as Partial<ReviewFinding> & { in_delta?: unknown };
     const id = cleanText(finding.id, "finding.id");
     if (ids.has(id)) throw new ReviewEvidenceError("invalid_finding", `Duplicate finding id ${id}`);
     ids.add(id);
@@ -221,14 +248,97 @@ export function parseFindings(value: unknown): ReviewFinding[] {
     if (CONTROL_CHARS.test(citation)) {
       throw new ReviewEvidenceError("invalid_input", `Finding ${id} citation contains control characters`);
     }
-    return {
+    // KTD28: a P0/P1 names the inputs and state that produce the wrong outcome.
+    const blocking = finding.severity === "P0" || finding.severity === "P1";
+    const hasScenario = typeof finding.scenario === "string" && finding.scenario.trim() !== "";
+    if (blocking && !hasScenario) throw new ReviewEvidenceError("invalid_finding", `Finding ${id} is ${finding.severity} and has no failing scenario`);
+    const file = typeof finding.file === "string" && !CONTROL_CHARS.test(finding.file) ? finding.file.slice(0, 512) : "unspecified";
+    const parsed: ReviewFinding = {
       id, severity: finding.severity,
       // An empty citation marks the advisory case rather than failing the review.
       citation: citation.trim().slice(0, 256),
       category: typeof finding.category === "string" && !CONTROL_CHARS.test(finding.category) ? finding.category.slice(0, 128) : "unspecified",
-      file: typeof finding.file === "string" && !CONTROL_CHARS.test(finding.file) ? finding.file.slice(0, 512) : "unspecified",
+      file,
     };
+    if (hasScenario) parsed.scenario = cleanScenario(finding.scenario as string, id);
+    if (finding.reproduced === true) parsed.reproduced = true;
+    if (later) {
+      const reported = finding.in_delta ?? finding.inDelta;
+      if (typeof reported !== "boolean") throw new ReviewEvidenceError("invalid_finding", `Finding ${id} has no delta tag`);
+      parsed.reportedInDelta = reported;
+      parsed.inDelta = inDelta(file, delta!.files);
+    }
+    return parsed;
   });
+}
+
+/**
+ * A scenario is prose, so line breaks and tabs are kept; any other control
+ * character is refused, and an overlong scenario is cut rather than costing the
+ * whole review.
+ */
+function cleanScenario(value: string, id: string): string {
+  const trimmed = value.trim();
+  if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(trimmed)) {
+    throw new ReviewEvidenceError("invalid_input", `Finding ${id} scenario contains control characters`);
+  }
+  return trimmed.slice(0, 2048);
+}
+
+/**
+ * Delta membership is the daemon's call. Without a retained packet for the
+ * previous round there is no delta, so the round is a full review and every
+ * finding counts; a path the reviewer could not place also counts.
+ */
+function inDelta(file: string, changed: ReadonlySet<string> | null): boolean {
+  if (changed === null || file === "unspecified") return true;
+  const path = file.replace(/\\/g, "/").replace(/(?::\d+(?::\d+)?|#L\d+(?:-L?\d+)?)$/, "");
+  // An absolute or parent-relative path cannot be placed against repository-relative
+  // delta paths, so it counts rather than silently becoming a residual.
+  if (/^(?:\/|[A-Za-z]:\/)/.test(path) || path.split("/").includes("..")) return true;
+  return changed.has(normalizeLocation(path));
+}
+
+/**
+ * The verdicts a later round must give: one per earlier open P0/P1, each named by
+ * id. A verdict that keeps a finding open carries it into this round when the
+ * reviewer did not re-raise it, so an omission can never read as a fix.
+ */
+function applyPriorVerdicts(round: number, previous: ReadonlyArray<ReviewFinding> | null, value: unknown, findings: ReviewFinding[]): PriorVerdict[] {
+  const entries = value === undefined || value === null ? [] : value;
+  if (!Array.isArray(entries)) throw new ReviewEvidenceError("invalid_finding", "Earlier-finding verdicts must be an array");
+  if (round === 1) {
+    if (entries.length) throw new ReviewEvidenceError("invalid_input", "A first review has no earlier findings to judge");
+    return [];
+  }
+  const blocking = (previous ?? []).filter(f => f.severity === "P0" || f.severity === "P1");
+  // Only counted P0/P1 need a verdict; one on an uncited or residual P0/P1 is recorded, not refused.
+  const open = new Map(blocking.filter(f => findingKey(f) && countsTowardGate(f)).map(f => [f.id, f]));
+  const known = new Set(blocking.map(f => f.id));
+  const verdicts = entries.map((entry): PriorVerdict => {
+    const verdict = (entry ?? {}) as Partial<PriorVerdict>;
+    const id = cleanText(verdict.id, "prior.id");
+    if (!known.has(id)) throw new ReviewEvidenceError("invalid_finding", `Verdict names ${id}, which is not a P0/P1 from round ${round - 1}`);
+    if (!verdict.status || !PRIOR_STATUSES.includes(verdict.status)) throw new ReviewEvidenceError("invalid_finding", `Verdict on ${id} has no valid status`);
+    return { id, status: verdict.status, evidence: cleanText(verdict.evidence, `Verdict on ${id} evidence`, 1024) };
+  });
+  const judged = new Set(verdicts.map(v => v.id));
+  if (judged.size !== verdicts.length) throw new ReviewEvidenceError("invalid_finding", "Duplicate earlier-finding verdict");
+  const missing = [...open.keys()].filter(id => !judged.has(id));
+  if (missing.length) throw new ReviewEvidenceError("invalid_finding", `No verdict on open P0/P1 from round ${round - 1}: ${missing.join(", ")}`);
+  // Only a counted P0/P1 of the same class stands in for the earlier finding; a
+  // P2/P3 at that location would otherwise let the blocking class close by omission.
+  const raised = new Set(findings.filter(f => (f.severity === "P0" || f.severity === "P1") && countsTowardGate(f)).map(findingKey));
+  const ids = new Set(findings.map(f => f.id));
+  for (const verdict of verdicts) {
+    const earlier = open.get(verdict.id);
+    if (!earlier || verdict.status === "CLOSED" || raised.has(findingKey(earlier))) continue;
+    let id = earlier.id;
+    for (let n = 1; ids.has(id); n += 1) id = `${earlier.id}@r${round - 1}${n > 1 ? `-${n}` : ""}`;
+    ids.add(id);
+    findings.push({ ...earlier, id, inDelta: true, carriedFrom: round - 1 });
+  }
+  return verdicts;
 }
 
 /** Distinct counted P0/P1 classes; same class counts once. */
@@ -236,6 +346,7 @@ function openClasses(findings: readonly ReviewFinding[]): string[] {
   const keys = new Set<string>();
   for (const finding of findings) {
     if (finding.severity !== "P0" && finding.severity !== "P1") continue;
+    if (!countsTowardGate(finding)) continue;
     const key = findingKey(finding);
     // An advisory P0 is still uncited: it cannot be counted or closed.
     if (key) keys.add(key);
@@ -258,6 +369,11 @@ export function recordReview(input: {
   findings: unknown;
   recordedAt: string;
   reportDigest: string | null;
+  /** The previous round's recorded findings, which this round's verdicts must cover. */
+  previous?: ReadonlyArray<ReviewFinding> | null;
+  prior?: unknown;
+  /** The daemon's changed-file set for the fix delta; `null` when no reviewed packet was retained. */
+  deltaFiles?: ReadonlyArray<string> | null;
 }): ReviewRecord {
   if (!input.reviewer || input.reviewer.role !== "reviewer") {
     throw new ReviewEvidenceError("not_a_reviewer", "The recording assignee does not hold the reviewer role in this run");
@@ -273,9 +389,12 @@ export function recordReview(input: {
   if (candidate.manifestDigest !== input.currentDigest) {
     throw new ReviewEvidenceError("stale_candidate", "Review is bound to a candidate the task no longer holds");
   }
+  const changed = input.deltaFiles ? new Set(input.deltaFiles.map(normalizeLocation)) : null;
+  const findings = parseFindings(input.findings, { round: input.round, files: changed });
+  const prior = applyPriorVerdicts(input.round, input.previous ?? null, input.prior, findings);
   return { runId: input.runId, taskId: input.taskId, round: input.round,
     reviewerSession: input.reviewer.session, implementerSession: input.implementer.session,
-    candidate, findings: parseFindings(input.findings), recordedAt: input.recordedAt,
+    candidate, findings, ...(input.round > 1 ? { prior } : {}), recordedAt: input.recordedAt,
     reportDigest: input.reportDigest };
 }
 
@@ -430,6 +549,12 @@ export class ReviewEvidenceLedger {
      * function so the ledger cannot be handed a favourable clock by a request.
      */
     clock?: (runId: string) => { remainingActiveMs: number };
+    /**
+     * The files the fix delta changed since the task's previously reviewed
+     * candidate, from the daemon's retained packet. Absent or `null` means no
+     * retained packet, so the round counts as a full review.
+     */
+    deltaFiles?: (runId: string, taskId: string) => ReadonlyArray<string> | null;
     now?: () => Date;
   }) {}
 
@@ -475,6 +600,8 @@ export class ReviewEvidenceLedger {
     candidate: CandidateIdentity; findings: unknown; register: NotifyRegister;
     /** Optional submitter key identifying the delivered report; enables redelivery dedup. */
     reportKey?: string;
+    /** From round 2 on, the reviewer's verdict on each earlier open P0/P1 (KTD28). */
+    prior?: unknown;
   }): ReviewRecord {
     const current = this.state(input.runId, input.taskId);
     // A redelivered report is the same round, not a new one. Review convergence
@@ -492,7 +619,10 @@ export class ReviewEvidenceLedger {
       reviewer: this.deps.resolveAssignee(input.runId, input.reviewerQitemId),
       implementer: this.taskAssignee(input.runId, input.taskId),
       candidate: input.candidate, currentDigest: current.currentManifestDigest,
-      findings: input.findings, recordedAt: this.clock(), reportDigest });
+      findings: input.findings, recordedAt: this.clock(), reportDigest,
+      previous: current.rounds.at(-1)?.findings ?? null, prior: input.prior,
+      // The delta comes from the daemon's own record of what was reviewed, never from the request.
+      deltaFiles: this.deps.deltaFiles?.(input.runId, input.taskId) ?? null });
     // The limit is the approved binding's, not a constant, and the clock comes
     // from run state rather than from the request: a caller cannot grant itself
     // another round by claiming there is time for one.
@@ -511,7 +641,8 @@ export class ReviewEvidenceLedger {
       throw new ReviewEvidenceError("round_out_of_order", `Review round ${record.round} does not follow round ${current.rounds.length}`);
     }
     this.append(input.runId, input.rigId, input.taskId, "review.recorded",
-      { ...record, candidate: { ...record.candidate }, findings: record.findings.map(finding => ({ ...finding })) } as unknown as JsonObject,
+      { ...record, candidate: { ...record.candidate }, findings: record.findings.map(finding => ({ ...finding })),
+        ...(record.prior ? { prior: record.prior.map(verdict => ({ ...verdict })) } : {}) } as unknown as JsonObject,
       input.register);
     return record;
   }

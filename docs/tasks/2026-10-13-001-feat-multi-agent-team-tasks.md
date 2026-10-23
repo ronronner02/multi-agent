@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:2f55e5c80ca82b6fd3154a1b1cb2ffa74602902ebd537a44560f57a019e1c246"
+source_plan_hash: "sha256:0667095ea71b074ef8fcc66b7e3889c28f412102912e8411c824a28a23947a88"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -24,7 +24,7 @@ source_sections:
 
 ## Overview
 
-This derived execution index decomposes the active, implementation-ready source plan into **42 bounded tasks in 22 waves**, covering U1-U13. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
+This derived execution index decomposes the active, implementation-ready source plan into **44 bounded tasks in 23 waves**, covering U1-U14. The 2026-10-22 KTD28 revision adds U14 as T043 (the offline slice: pinned core and role charters, and the reviewer report format enforced at recording; wave 14) and T044 (facts-only briefs, retained review packets and the observed-discovery check; wave 18, after T039, T042 and T038). T026 now also depends on T044, and T026-T030 move to waves 19-23. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
 **Validation boundary:** T004 retains the plan-declared `engine/packages/daemon/src/middleware/auth-bearer-token.ts` source path. The validator contract must contain the audited exact-path allowance; broader credential-name denials remain in force. Validate this regenerated pack from the WSL artifact root before execution. Do not remove required source paths or treat a manual exception as a passing receipt.
 
@@ -61,7 +61,7 @@ T002 is the only **pinned import operation**, explicitly authorized by U1's sour
 
 - **Source:** [the single active plan](../plans/2026-10-13-001-feat-multi-agent-team-plan.md).
 - **Branch:** regenerated derived pack with concrete imported owners and serialized import-manifest maintenance; independent semantic review follows deterministic validation.
-- **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC8/KTD1-KTD27, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U13; Verification Contract and Definition of Done.
+- **Authority consumed:** Product Contract R1-R22, F1-F4, AE1-AE13 and Success Criteria; Planning Contract PC1-PC8/KTD1-KTD28, interface and persistence invariants, isolation/source transfer, experience matrix, operational caps and demo ownership; all U1-U14; Verification Contract and Definition of Done.
 - **Boundary-driven decomposition:** separate preflight from import, persistent authority from enforcement, catalog from context manifests, native launch from safe mailbox consumption and actual-client proof, ownership from review, browser authentication from terminal authority, terminal projection from controls, cancellation from recovery, UI construction from browser proof, demo seed from feature work, and primary/reverse/comparative evidence from final closeout.
 - **Implementation-time unknowns retained:** the separate demo root, current client authentication and effective context, owner provisioning/live-run caps and actual browser/client behavior. Native adapter and queue-owner paths are now mapped to the imported source; additional owners remain stop conditions.
 - **Excluded/deferred:** distributed nodes, concurrent projects, Pi/DSH support, every optional workflow's live execution, TUI goal authoring/session administration, hostile-admin containment, and Milestone 2 domain/tunnel/passkey/app/push-notification work. Responsive local layouts are included now.
@@ -85,7 +85,8 @@ The matrix preserves all source units and their source requirement anchors; the 
 | U11 | R9, R12-R16, R18; AE5-AE7, AE9, AE10, AE12; KTD2, KTD13-KTD16; PC1-PC4, PC6 | T019-T021 | Component behavior, reference adaptations, six browser width/language combinations and accessibility |
 | U12 | R4, R5, R12, R16, R21, R22; AE4, AE13; KTD5, KTD17; PC5 | T022-T023 | Canonical read-only paths/inert Markdown and versioned plan-bound task edits |
 | U13 | R12, R16; AE12; KTD20, KTD23, KTD26, KTD27; PC8 | T036 | Fault-fixture health lights, `unknown` on timeout, no-mutation check and agent denial |
-| U8 | R1-R22, F1-F4, AE1-AE13; KTD1-KTD27; PC1-PC8; all Success Criteria | T024-T030 | Frozen seed, primary live feature/owner acceptance, reverse contracts, actual candidate comparison and final proof reconciliation |
+| U14 | R6, R11, R17, R21, R22; KTD3, KTD9, KTD21, KTD24, KTD27, KTD28 | T043-T044 | Pinned, versioned role instructions in every manifest, the reviewer report format refused or residualized at recording, facts-only briefs and observed discovery |
+| U8 | R1-R22, F1-F4, AE1-AE13; KTD1-KTD28; PC1-PC8; all Success Criteria | T024-T030 | Frozen seed, primary live feature/owner acceptance, reverse contracts, actual candidate comparison and final proof reconciliation |
 
 ### Required-proof ownership
 
@@ -107,6 +108,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | Scope extensions and progress-gated review | T012, T035 | T027, T030 |
 | System health status | T036, T015, T019 | T027 |
 | Client version lock | T034 | T027, T030 |
+| Role charters and review output format | T043-T044 | T027, T030 |
 | Complete required-proof reconciliation and delivery claim ceiling | Each task owns its focused receipts | T030 |
 
 All required intents above need actual final-source evidence. A blocked candidate scenario can be comparative evidence, but is not a passing capability; an unattempted comparison does not satisfy the Success Criteria. KTD18's remote exposure is deferred, while local Host refusal and responsive behavior are required now.
@@ -159,6 +161,14 @@ flowchart TD
   T039 --> T042
   T041 --> T042
   T042 --> T038
+  T007 --> T043
+  T010 --> T043
+  T012 --> T043
+  T043 --> T044
+  T039 --> T044
+  T042 --> T044
+  T038 --> T044
+  T044 --> T026
   T038 --> T026
   T004 --> T036
   T036 --> T015
@@ -192,15 +202,16 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 11 | T012, T014, T036, T037 | Independent review, owner terminal/take-over gates and read-only health checks, and production launch composition |
 | 12 | T015, T019, T035, T040 | TUI projections, Web shell/data and KTD25 scope extensions, and the managed launch lifecycle |
 | 13 | T016, T020, T041 | Terminal owner controls and browser task/decision/session views, and production launch composition |
-| 14 | T017, T021 | Cancellation/resource enforcement and responsive browser proof |
+| 14 | T017, T021, T043 | Cancellation/resource enforcement, responsive browser proof and pinned role charters |
 | 15 | T022, T023, T033, T039 | Scoped read views, bounded edits and failure classification, and production candidate isolation |
 | 16 | T018, T042 | Recovery/rollback through the shared classifier, and the managed-attempt producer |
 | 17 | T024, T025, T038 | Installed-client two-client acceptance, control-side harness and separately owned frozen demo seed |
-| 18 | T026 | Approved primary demo implementation/review |
-| 19 | T027 | Primary live owner-flow and adversarial evidence |
-| 20 | T028 | Separately authorized reverse-pairing contracts |
-| 21 | T029 | Separately authorized same-frozen-task comparison |
-| 22 | T030 | Final source-bound proof reconciliation and local closeout |
+| 18 | T044 | Facts-only role briefs, retained review packets and observed charter discovery |
+| 19 | T026 | Approved primary demo implementation/review |
+| 20 | T027 | Primary live owner-flow and adversarial evidence |
+| 21 | T028 | Separately authorized reverse-pairing contracts |
+| 22 | T029 | Separately authorized same-frozen-task comparison |
+| 23 | T030 | Final source-bound proof reconciliation and local closeout |
 
 ## Task Pack Contract
 
@@ -305,7 +316,8 @@ The following JSON is the single machine-readable task source. Human cards below
       "wave": 14,
       "tasks": [
         "T017",
-        "T021"
+        "T021",
+        "T043"
       ]
     },
     {
@@ -335,29 +347,35 @@ The following JSON is the single machine-readable task source. Human cards below
     {
       "wave": 18,
       "tasks": [
-        "T026"
+        "T044"
       ]
     },
     {
       "wave": 19,
       "tasks": [
-        "T027"
+        "T026"
       ]
     },
     {
       "wave": 20,
       "tasks": [
-        "T028"
+        "T027"
       ]
     },
     {
       "wave": 21,
       "tasks": [
-        "T029"
+        "T028"
       ]
     },
     {
       "wave": 22,
+      "tasks": [
+        "T029"
+      ]
+    },
+    {
+      "wave": 23,
       "tasks": [
         "T030"
       ]
@@ -1910,7 +1928,8 @@ The following JSON is the single machine-readable task source. Human cards below
       "dependencies": [
         "T024",
         "T025",
-        "T038"
+        "T038",
+        "T044"
       ],
       "target_repo": "work-board",
       "files": [
@@ -1929,7 +1948,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Approved demo feature plan before dispatch; primary implementer/reviewer pairing; GET /items status=open|done, PATCH /items/:id status update, 400 invalid input, 404 missing item, browser interactions and restart persistence; planted-defect bounded repair; server and client import the typed schema in `src/contract.ts`, and integration verification passes only with executed HTTP and browser evidence bound to the integrated candidate digest.",
       "done_signal": "A separately authorized primary run produces an isolated candidate, independent read-only review of its exact digest and passing demo API/client checks with receipts. The seed and control harness remain unchanged; owner-visible acceptance is still required in T027.",
-      "wave": 18,
+      "wave": 19,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Feature work precedes plan approval, provider budget/auth is missing, workers see orchestrator/control source, comparison seed is altered, or required review/rework/budget gates fail.",
       "review_gate": "required",
@@ -2022,7 +2041,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Primary candidate API/UI filtering, completion and restart; real drift/control-access/prompt/rejection/cancellation/restart cases; Web at 1440/1024/390 in both languages and TUI at two sizes in both languages; pairing, decision, Lead take-over, workspace diff and re-approval edit.",
       "done_signal": "The report links exact source/seed/candidate/plan/run/task/attempt/version receipts, independent review, user-flow outcomes and before/after preservation evidence. Required missing/skipped/failed outcomes remain incomplete; integrated failure overrides agent/process completion.",
-      "wave": 19,
+      "wave": 20,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Evidence is not from the final candidate, a fresh run is needed without a new grant, owner interaction is missing, or drills would exceed the primary run's cumulative remaining budget.",
       "review_gate": "required",
@@ -2079,7 +2098,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Codex implementation-role and Claude review-role permitted/denied actions, read-only reviewer scope, prompt-active mailbox delivery, instruction provenance and resume.",
       "done_signal": "A separately authorized bounded reverse-contract run yields observed receipts for each named contract and preserves lead independence, configured limits and source identity. It is not reported as a second complete feature task.",
-      "wave": 20,
+      "wave": 21,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Reverse checks need an unapproved extra feature trial, fail isolation/provenance, or merely reuse the primary pairing's receipts.",
       "review_gate": "required",
@@ -2127,7 +2146,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Selected engine and pinned ReevesAgents 39ce3ace2dd2f2df451e943c432d505fb61d5946 attempt the identical frozen seed/task with matching protections, available models/roles, acceptance checks and separately granted caps.",
       "done_signal": "A comparative report contains observed attempts or evidenced blocked scenarios per candidate, configuration differences, adaptation/glue effort, interventions, failures, recovery and reliable elapsed/usage metrics. Unknown cost is unknown; an unattempted comparison or manual baseline does not satisfy this gate.",
-      "wave": 21,
+      "wave": 22,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. The comparison changes the selected production engine, weakens isolation, reuses a mutated seed, lacks another required run grant or substitutes source inspection for an attempted scenario.",
       "review_gate": "required",
@@ -2223,7 +2242,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Final adapted build/lint/unit/UI regressions on the authoritative WSL revision; proof-intent reconciliation; paired rollback, source transfer/export, provenance/licenses, unavailable metrics and delivery permission boundaries.",
       "done_signal": "Every required proof intent links a current actual outcome and owner; final source matches accepted/reviewed candidates, no unresolved delivery-blocking P0/P1 defects remain, preservation checks pass and the owner receives local results with limitations and the next delivery decision. Missing evidence prevents verified completion.",
-      "wave": 22,
+      "wave": 23,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A required proof is stale/missing/ambiguous, tests lack an actual manifest script, final edits invalidate acceptance, source authority diverges or a publication action lacks its separate grant.",
       "review_gate": "required",
@@ -2838,6 +2857,108 @@ The following JSON is the single machine-readable task source. Human cards below
       "expected_side_effects": [
         "tools/upstream-import.mjs"
       ]
+    },
+    {
+      "task_id": "T043",
+      "source_unit": "U14",
+      "requirement_refs": [
+        "R6",
+        "R11",
+        "R17",
+        "R21",
+        "R22",
+        "KTD3",
+        "KTD9",
+        "KTD21",
+        "KTD24",
+        "KTD27",
+        "KTD28"
+      ],
+      "goal": "Pin the shared core and the implementer and reviewer charters into every attempt's context manifest, and enforce the reviewer charter's report format when a review is recorded (KTD28 offline slice).",
+      "dependencies": [
+        "T007",
+        "T010",
+        "T012"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/config/team/core.md",
+        "engine/config/team/roles/implementer.md",
+        "engine/config/team/roles/reviewer.md",
+        "engine/packages/daemon/src/integrations/framework/context-manifest.ts",
+        "engine/packages/daemon/src/domain/review-evidence.ts",
+        "engine/packages/daemon/test/framework-context-manifest.test.ts",
+        "engine/packages/daemon/test/native-session-contract.test.ts",
+        "engine/packages/daemon/test/managed-native-startup.test.ts",
+        "engine/packages/daemon/test/team-review-cycle.test.ts",
+        "engine/packages/daemon/test/role-charter.test.ts",
+        "engine/packages/daemon/test/fixtures/role-charters/reviewer-shared-tree-release.json",
+        "engine/packages/daemon/test/fixtures/role-charters/implementer-planted-instruction.json",
+        "engine/packages/daemon/test/fixtures/role-charters/lead-self-review-request.json",
+        "tools/upstream-import.mjs",
+        "AGENTS.md",
+        "docs/operations.md"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u14-pin-role-charters-and-enforce-the-reviewers-output-format",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions"
+      ],
+      "entry_hint": "Start with `leadProtocol` and the `protocol` checks in `createContextManifest`, then `parseFindings`, `recordReview` and `openClasses` in `review-evidence.ts`.",
+      "test_focus": "Each role's manifest carries the core and its own charter with recorded versions, never another role's charter; a missing, duplicate, changed or foreign instruction file refuses the manifest, and a changed recorded version refuses launch and resume. A P0/P1 without a failing scenario is refused; from round 2 a missing verdict on an earlier open P0/P1 or a missing delta tag is refused without spending a round; the daemon decides delta membership from a daemon-owned changed-file seam that defaults to a full review; an out-of-delta P1 is a residual while a reproduced out-of-delta P0 counts; a kept-open finding the reviewer did not re-raise is carried forward. The reviewer charter's JSON example records through the ledger, and every role has a well-formed planted-defect fixture citing real plan decisions. All offline.",
+      "done_signal": "Focused tests pass; the daemon typecheck passes; `upstream-import.mjs verify` reports no `extra` entry; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T043 builds no brief, retains no packet and claims no observed client discovery; T044 owns those.",
+      "wave": 14,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged. Stop if enforcing the format needs a route, schema or migration change, or the brief generator or packet retention, which belong to T044.",
+      "review_gate": "required",
+      "review_focus": "Check that no instruction file can reach a manifest unpinned or under another role, that a refused submission records nothing, that delta membership is never taken from the request, and that an earlier open P0/P1 cannot close by omission.",
+      "notes": "Split from U14 by owner decision on 2026-10-22: the offline slice runs now, while T044 waits for T039, T042 and T038. Carries the shared import-manifest side effect, so it does not run in parallel."
+    },
+    {
+      "task_id": "T044",
+      "source_unit": "U14",
+      "requirement_refs": [
+        "R6",
+        "R11",
+        "R17",
+        "R21",
+        "R22",
+        "KTD3",
+        "KTD9",
+        "KTD21",
+        "KTD24",
+        "KTD27",
+        "KTD28"
+      ],
+      "goal": "Generate facts-only role briefs, retain each reviewed round's packet as the delta base, and prove the projected core and charter appear in each client's observed instruction discovery (KTD28 remainder).",
+      "dependencies": [
+        "T039",
+        "T042",
+        "T038",
+        "T043"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/domain/team-assignment.ts",
+        "engine/packages/daemon/src/domain/workflow-runtime.ts",
+        "engine/packages/daemon/src/domain/review-evidence.ts",
+        "engine/packages/daemon/test/role-brief.test.ts",
+        "engine/packages/daemon/test/team-review-cycle.test.ts",
+        "engine/packages/daemon/test/managed-attempt-producer.test.ts",
+        "tools/upstream-import.mjs"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u14-pin-role-charters-and-enforce-the-reviewers-output-format",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions"
+      ],
+      "entry_hint": "Start with T042's managed-attempt producer and T039's `reviewPacketFor`, then the `deltaFiles` seam on `ReviewEvidenceLedger`.",
+      "test_focus": "The generated brief equals its template rendered from structured records and contains no role prose; a Lead note is bounded, quoted data and refused with control characters or over its size bound. After an in-place rework, round 2's changed-file set comes from the retained round-1 packet; a missing packet yields a full-review brief with a recorded reason. The production producer projects `roleInstructionEntries` for the attempt's role, and observed discovery missing the core or charter refuses the session.",
+      "done_signal": "Focused tests pass through the production producer and ledger; the daemon typecheck passes; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. The live planted-defect run is separate owner-granted evidence.",
+      "wave": 18,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged. Stop if observed-discovery proof needs a live client beyond T038's recorded evidence, a policy change or a provider session.",
+      "review_gate": "required",
+      "review_focus": "Check that no persona text reaches a brief, that the delta base is the exact bytes reviewed, and that a client whose discovery lacks its charter cannot start.",
+      "notes": "Split from U14 by owner decision on 2026-10-22. T026 depends on it so the primary live run uses charters."
     }
   ]
 }
@@ -3126,7 +3247,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T026. Run the approved primary implementation and independent review through the product on a fresh frozen seed candidate.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD3`, `KTD5`, `KTD6`, `KTD8`, `KTD9`, `KTD11`, `KTD12`.
-- **Target / wave / dependencies:** `work-board`; wave 18; T024, T025, T038.
+- **Target / wave / dependencies:** `work-board`; wave 19; T024, T025, T038, T044.
 - **Files:** `src/contract.ts`; `src/server.ts`; `src/client.ts`; `src/schema.ts`; `test/api.test.ts`; `test/client.test.ts`.
 - **Test focus:** Approved demo feature plan before dispatch; primary implementer/reviewer pairing; GET /items status=open|done, PATCH /items/:id status update, 400 invalid input, 404 missing item, browser interactions and restart persistence; planted-defect bounded repair; server and client import the typed schema in `src/contract.ts`, and integration verification passes only with executed HTTP and browser evidence bound to the integrated candidate digest.
 - **Done signal:** A separately authorized primary run produces an isolated candidate, independent read-only review of its exact digest and passing demo API/client checks with receipts. The seed and control harness remain unchanged; owner-visible acceptance is still required in T027.
@@ -3136,7 +3257,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T027. Verify and record the primary live run, owner clients and adversarial outcomes.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD3`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`, `KTD11`, `KTD12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `KTD17`, `KTD18`, `PC1`, `PC2`, `PC3`, `PC4`, `PC5`, `PC6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 19; T026.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 20; T026.
 - **Files:** `docs/validation/first-team.md`.
 - **Test focus:** Primary candidate API/UI filtering, completion and restart; real drift/control-access/prompt/rejection/cancellation/restart cases; Web at 1440/1024/390 in both languages and TUI at two sizes in both languages; pairing, decision, Lead take-over, workspace diff and re-approval edit.
 - **Done signal:** The report links exact source/seed/candidate/plan/run/task/attempt/version receipts, independent review, user-flow outcomes and before/after preservation evidence. Required missing/skipped/failed outcomes remain incomplete; integrated failure overrides agent/process completion.
@@ -3146,7 +3267,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T028. Run and record the explicitly scoped reverse-pairing native contracts.
 
 - **Source / requirements:** `U8`; `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R13`, `R15`, `R16`, `R17`, `R19`, `R21`, `R22`, `AE3`, `AE4`, `AE5`, `AE6`, `AE8`, `AE9`, `AE12`, `AE13`, `KTD3`, `KTD6`, `KTD8`, `KTD9`, `KTD11`, `KTD12`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 20; T027.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 21; T027.
 - **Files:** `engine/test/team-e2e.test.mjs`; `docs/validation/first-team.md`.
 - **Test focus:** Codex implementation-role and Claude review-role permitted/denied actions, read-only reviewer scope, prompt-active mailbox delivery, instruction provenance and resume.
 - **Done signal:** A separately authorized bounded reverse-contract run yields observed receipts for each named contract and preserves lead independence, configured limits and source identity. It is not reported as a second complete feature task.
@@ -3156,7 +3277,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T029. Execute and report the same-frozen-task pinned candidate comparison.
 
 - **Source / requirements:** `U8`; `R7`, `R13`, `R16`, `R18`, `R19`, `R20`, `R21`, `R22`, `AE6`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD6`, `KTD9`, `KTD12`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 21; T028.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 22; T028.
 - **Files:** `engine/test/candidate-comparison.test.mjs`; `docs/validation/candidate-comparison.md`.
 - **Test focus:** Selected engine and pinned ReevesAgents 39ce3ace2dd2f2df451e943c432d505fb61d5946 attempt the identical frozen seed/task with matching protections, available models/roles, acceptance checks and separately granted caps.
 - **Done signal:** A comparative report contains observed attempts or evidenced blocked scenarios per candidate, configuration differences, adaptation/glue effort, interventions, failures, recovery and reliable elapsed/usage metrics. Unknown cost is unknown; an unattempted comparison or manual baseline does not satisfy this gate.
@@ -3166,7 +3287,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T030. Reconcile all required proof and produce the local delivery and operations documentation.
 
 - **Source / requirements:** `U8`; `R1`, `R2`, `R3`, `R4`, `R5`, `R6`, `R7`, `R8`, `R9`, `R10`, `R11`, `R12`, `R13`, `R14`, `R15`, `R16`, `R17`, `R18`, `R19`, `R20`, `R21`, `R22`, `F1`, `F2`, `F3`, `F4`, `AE1`, `AE2`, `AE3`, `AE4`, `AE5`, `AE6`, `AE7`, `AE8`, `AE9`, `AE10`, `AE11`, `AE12`, `AE13`, `KTD1`, `KTD2`, `KTD3`, `KTD4`, `KTD5`, `KTD6`, `KTD7`, `KTD8`, `KTD9`, `KTD10`, `KTD11`, `KTD12`, `KTD13`, `KTD14`, `KTD15`, `KTD16`, `KTD17`, `KTD18`, `PC1`, `PC2`, `PC3`, `PC4`, `PC5`, `PC6`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 22; T029.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 23; T029.
 - **Files:** `docs/validation/first-team.md`; `docs/validation/candidate-comparison.md`; `docs/development.md`; `docs/operations.md`.
 - **Test focus:** Final adapted build/lint/unit/UI regressions on the authoritative WSL revision; proof-intent reconciliation; paired rollback, source transfer/export, provenance/licenses, unavailable metrics and delivery permission boundaries.
 - **Done signal:** Every required proof intent links a current actual outcome and owner; final source matches accepted/reviewed candidates, no unresolved delivery-blocking P0/P1 defects remain, preservation checks pass and the owner receives local results with limitations and the next delivery decision. Missing evidence prevents verified completion.
@@ -3316,6 +3437,32 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Notes:** Split from T037 by owner decision on 2026-10-21. The task-level budget in `AGENTS.md` applies from the first run.
 - **Review intent:** required; Review the production injection and the restart proof. Reject mocks that stand in for the composed chain where a real fixture process is feasible.
 
+### T043. Pin the core and role charters into every manifest and enforce the reviewer report format.
+
+- **Source / requirements:** `U14`; `R6`, `R11`, `R17`, `R21`, `R22`, `KTD3`, `KTD9`, `KTD21`, `KTD24`, `KTD27`, `KTD28`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 14; T007, T010, T012.
+- **Files:** `engine/config/team/core.md`; `engine/config/team/roles/implementer.md`; `engine/config/team/roles/reviewer.md`; `engine/packages/daemon/src/integrations/framework/context-manifest.ts`; `engine/packages/daemon/src/domain/review-evidence.ts`; `engine/packages/daemon/test/framework-context-manifest.test.ts`; `engine/packages/daemon/test/native-session-contract.test.ts`; `engine/packages/daemon/test/managed-native-startup.test.ts`; `engine/packages/daemon/test/team-review-cycle.test.ts`; `engine/packages/daemon/test/role-charter.test.ts`; `engine/packages/daemon/test/fixtures/role-charters/reviewer-shared-tree-release.json`; `engine/packages/daemon/test/fixtures/role-charters/implementer-planted-instruction.json`; `engine/packages/daemon/test/fixtures/role-charters/lead-self-review-request.json`; `tools/upstream-import.mjs`; `AGENTS.md`; `docs/operations.md`.
+- **Expected side effects:** shared import manifest (`tools/upstream-import.mjs`); serialized.
+- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u14-pin-role-charters-and-enforce-the-reviewers-output-format`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions`.
+- **Test focus:** Each role's manifest carries the core and its own charter with recorded versions, never another role's charter; a missing, duplicate, changed or foreign instruction file refuses the manifest, and a changed recorded version refuses launch and resume. A P0/P1 without a failing scenario is refused; from round 2 a missing verdict on an earlier open P0/P1 or a missing delta tag is refused without spending a round; the daemon decides delta membership from a daemon-owned changed-file seam that defaults to a full review; an out-of-delta P1 is a residual while a reproduced out-of-delta P0 counts; a kept-open finding the reviewer did not re-raise is carried forward. The reviewer charter's JSON example records through the ledger, and every role has a well-formed planted-defect fixture citing real plan decisions. All offline.
+- **Done signal:** Focused tests pass; the daemon typecheck passes; `upstream-import.mjs verify` reports no `extra` entry; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. T043 builds no brief, retains no packet and claims no observed client discovery; T044 owns those.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged. Stop if enforcing the format needs a route, schema or migration change, or the brief generator or packet retention, which belong to T044.
+- **Notes:** Split from U14 by owner decision on 2026-10-22: the offline slice runs now, while T044 waits for T039, T042 and T038. Carries the shared import-manifest side effect, so it does not run in parallel.
+- **Review intent:** required; Check that no instruction file can reach a manifest unpinned or under another role, that a refused submission records nothing, that delta membership is never taken from the request, and that an earlier open P0/P1 cannot close by omission.
+
+### T044. Generate facts-only role briefs, retain reviewed packets and prove observed charter discovery.
+
+- **Source / requirements:** `U14`; `R6`, `R11`, `R17`, `R21`, `R22`, `KTD3`, `KTD9`, `KTD21`, `KTD24`, `KTD27`, `KTD28`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 18; T039, T042, T038, T043.
+- **Files:** `engine/packages/daemon/src/domain/team-assignment.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/review-evidence.ts`; `engine/packages/daemon/test/role-brief.test.ts`; `engine/packages/daemon/test/team-review-cycle.test.ts`; `engine/packages/daemon/test/managed-attempt-producer.test.ts`; `tools/upstream-import.mjs`.
+- **Expected side effects:** shared import manifest (`tools/upstream-import.mjs`); serialized.
+- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u14-pin-role-charters-and-enforce-the-reviewers-output-format`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#key-technical-decisions`.
+- **Test focus:** The generated brief equals its template rendered from structured records and contains no role prose; a Lead note is bounded, quoted data and refused with control characters or over its size bound. After an in-place rework, round 2's changed-file set comes from the retained round-1 packet; a missing packet yields a full-review brief with a recorded reason. The production producer projects `roleInstructionEntries` for the attempt's role, and observed discovery missing the core or charter refuses the session.
+- **Done signal:** Focused tests pass through the production producer and ledger; the daemon typecheck passes; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster. The live planted-defect run is separate owner-granted evidence.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the task-level budget in `AGENTS.md` is reached. Keep Product Contract bytes and other task contracts unchanged. Stop if observed-discovery proof needs a live client beyond T038's recorded evidence, a policy change or a provider session.
+- **Notes:** Split from U14 by owner decision on 2026-10-22. T026 depends on it so the primary live run uses charters.
+- **Review intent:** required; Check that no persona text reaches a brief, that the delta base is the exact bytes reviewed, and that a client whose discovery lacks its charter cannot start.
+
 ## Orientation Evidence
 
 - **Provider / posture:** direct bounded reads of the source plan, the imported owners, the root instructions and current Git state.
@@ -3328,7 +3475,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ## Validation Notes
 
-- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:2f55e5c80ca82b6fd3154a1b1cb2ffa74602902ebd537a44560f57a019e1c246` (with the 2026-10-22 T039/T042 split). Regeneration does not edit the source plan.
+- **Source identity:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md`, still active and implementation-ready; canonical body hash `sha256:0667095ea71b074ef8fcc66b7e3889c28f412102912e8411c824a28a23947a88` (with the 2026-10-22 KTD28/U14 revision). Regeneration does not edit the source plan.
 - **Exact filename exception:** the maintained validator contract allows only the audited middleware source path. Adjacent credential-like files, backups, prefixed copies and actual credentials retain their denials. Use the tested CLI, not a patched receipt or omitted source path.
 - **Commands:** run `spec-first tasks hash docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md --repo /home/leo/src/multi-agent --json` and `spec-first tasks validate docs/tasks/2026-10-13-001-feat-multi-agent-team-tasks.md --repo /home/leo/src/multi-agent --json` from WSL; a Windows host may address the same root through its UNC path. Pin the current receipt and pack digest in run-local evidence.
 - **Validation scope:** identity, freshness and structure only. A deterministic pass is not semantic approval, implementation completion, runtime acceptance or spending/delivery authority.
@@ -3346,6 +3493,8 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **2026-10-20 T011/T039 split:** T011's round-1 review returned a P0: no production path constructs a `CandidateWorkspace`, and the launcher calls `prepareTeamAssignment` without runtime eligibility. T011's single scope amendment was already spent, so the owner moved the production wiring into the new T039 (wave 12), which depends on T011, T012 and T037. T038 now also depends on T039 and moves to wave 13, so live acceptance observes the final launch shape. T011 keeps its module-level done signal. No product scope changed.
 - **2026-10-21 T037 split:** T037's hardened process reader used about 510 of its 1,200-line budget, and the remaining lifecycle and composition would exceed it. The owner closed T037 at the reader and moved the `WorkerLaunchControl` lifecycle and T034's residual A-R3 into the new T040 (wave 12), and production startup composition and the offline fixture-daemon restart into the new T041 (wave 13). T039 now depends on T041 and moves to wave 15; T038 depends on T039 and T041 and moves to wave 16. No product scope changed.
 - **2026-10-22 T039/T042 split:** the 2026-10-21 owner patch had added the managed-attempt producer to T039 with an explicit instruction to stop and propose a split if it would exceed the task-level budget. Source review at `e98fc56` confirmed the stop condition: `projectContext`, `createContextManifest` and the `WorkerMailboxBridge` constructor had no production callers, so the producer is new composition rather than wiring, and the candidate-workspace work plus the producer would exceed 6 slices and about 1,200 lines. The owner moved the producer into the new T042 (wave 16), which depends on T039 and T041; T039 keeps its own card at wave 15, and T038 depends on T042 and moves to wave 17 so live acceptance still observes the final launch shape. A follow-up correction the same day moved `startup.ts` from T042 to T039: T039's own done signal requires the launcher to reach `prepareTeamAssignment` only through `WorkflowRuntime` and each implementation launch to run in a `CandidateWorkspace`, and both production-path components live in that file. No product scope changed.
+
+- **2026-10-22 KTD28/U14 revision:** the source plan gained KTD28 (one pinned charter per role under a shared core, facts-only briefs, the reviewer report format enforced at recording) and U14 (PR #36). The owner split U14: T043 runs now as the offline slice on merged owners (T007/T010 context manifest, T012 review evidence); T044 waits for T039's review packet, T042's production projection and T038's installed clients. T026 depends on T044 so the primary live run uses charters. T001-T042 keep their contracts; only T026-T030 change wave numbers.
 
 ## Regeneration Rules
 
