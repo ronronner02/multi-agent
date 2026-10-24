@@ -86,7 +86,7 @@ These rules size review and verification to the change. They take precedence ove
 ### Parallel tracks (owner decision, 2026-10-23)
 Two sessions may execute tasks at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare in the task pack; directory patterns grant nothing. A task that needs a file its card does not declare stops and reports it, as any task would.
 - **Track A, managed launch:** T042, T044, T047, T043, T048, T049, T038 and T046, in that order. T044 comes before T047 because T035 waits on it.
-- **Track B, owner surfaces:** T036, T013, T014, T015, T019, T035, T016, T020, T021, T022 and T023, then T017, T033 and T018.
+- **Track B, owner surfaces:** T036, T013, T014, T050, T015, T019, T035, T016, T020, T021, T022 and T023, then T017, T033 and T018.
 - **Files both tracks declare are serialized:** the task that starts second waits until the other has landed, then starts from current `main`.
   - T035 waits for T044 and T048 (`team-workspace.ts`).
   - T017 waits for T043 (`worker-launch.ts`).
