@@ -1,7 +1,8 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import type { CandidateIdentity } from "./review-evidence.js";
 
 /**
@@ -48,9 +49,6 @@ export interface CandidateWorkspace {
 }
 
 const sha256 = (bytes: Buffer | string): string => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-
-/** The empty side of a `git diff --no-index` addition, on every platform git runs on. */
-const emptyFilePath = (): string => (process.platform === "win32" ? "NUL" : "/dev/null");
 
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
@@ -160,6 +158,320 @@ function walkFiles(root: string, prefix = ""): string[] {
   return entries;
 }
 
+/**
+ * T044 — the commit lane computes the manifest without running git in the candidate.
+ *
+ * A candidate is worker-writable by design, so any git command that treats it as a
+ * working directory, a work tree or a repository reads configuration the worker wrote.
+ * Git has more program hooks than an argument can enumerate: T044's review rounds
+ * closed `core.fsmonitor`, then `diff.external`, then `filter.<drv>.clean`, and each
+ * one ran a worker-chosen program as the control. The same filter could also rewrite
+ * content between hashing and diffing, so the patch a reviewer read could disagree
+ * with the bytes the manifest recorded.
+ *
+ * The commit lane therefore stops asking git anything about the candidate:
+ *
+ * - the candidate's bytes are enumerated and read directly;
+ * - the tracked set comes from the base commit in the source repository;
+ * - the ignore rules are the ones the base commit recorded, plus the source's
+ *   `info/exclude`, applied by git to a control-owned rules tree;
+ * - the patch is rendered in a control-owned scratch object store, from the exact
+ *   bytes the manifest hashed.
+ *
+ * Git still runs, but only against the source repository, the rules tree and the
+ * scratch store. None of those is writable by the worker, so no hook is reachable.
+ */
+
+/** One entry of the base commit's tree: its git mode and the blob it names. */
+interface BaseEntry {
+  mode: string;
+  objectId: string;
+}
+
+/**
+ * Environment for every git call the commit lane makes.
+ *
+ * Ambient `GIT_DIR`, `GIT_WORK_TREE`, `GIT_CONFIG_*` and the discovery ceilings are
+ * dropped rather than inherited: they can redirect git at a worker-writable path just as
+ * a repository hook can, and the daemon's own environment is not this module's to trust.
+ * Each caller then supplies only the location it means to use.
+ */
+function controlGitEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  return { ...env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", ...extra };
+}
+
+/** The base commit's tree, as the source repository records it. */
+function readBaseTree(sourceRoot: string, commit: string): Map<string, BaseEntry> {
+  const output = controlGit(["ls-tree", "-r", "-z", "--full-tree", commit], sourceRoot);
+  const entries = new Map<string, BaseEntry>();
+  for (const record of output.split("\0")) {
+    if (!record) continue;
+    const tab = record.indexOf("\t");
+    if (tab < 0) continue;
+    const [mode, type, objectId] = record.slice(0, tab).split(" ");
+    // Only blobs are files. A gitlink (`160000`) names another repository's commit and
+    // has no bytes here, so it is not a manifest entry — the same answer `ls-files`
+    // gave, which also does not descend into a submodule.
+    if (type !== "blob" || !mode || !objectId) continue;
+    entries.set(record.slice(tab + 1), { mode, objectId });
+  }
+  return entries;
+}
+
+/**
+ * Run git against the source repository with configuration the worker cannot write.
+ * `-C` is fixed here so no caller can point it at a candidate by accident.
+ */
+function controlGit(args: readonly string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): string {
+  return execFileSync("git", ["-C", cwd, ...args],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(extraEnv) });
+}
+
+/** Read one object's exact bytes from the source repository. */
+function readBaseObject(sourceRoot: string, objectId: string): Buffer {
+  return execFileSync("git", ["-C", sourceRoot, "cat-file", "blob", objectId],
+    { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
+}
+
+/**
+ * A git directory whose ignore rules are the control's, not the candidate's.
+ *
+ * `check-ignore` resolves ignore rules against the work tree it is given and the
+ * repository it is given, so pointing both at control-owned trees is what makes the
+ * answer independent of the candidate. The base commit's `.gitignore` files are
+ * materialized at their own paths; the source's `info/exclude` is copied as the
+ * repository-level rules. A candidate that deletes its `.gitignore` therefore cannot
+ * admit ignored owner files, and one that writes `*` cannot hide its deliverable.
+ *
+ * `--no-index` is required: the rules tree is not a checkout, so no rule can be
+ * decided by the index. Without it git reports nothing for a path that is not staged.
+ */
+function controlIgnoreStore(sourceRoot: string, commit: string, base: Map<string, BaseEntry>, scratch: string):
+  { gitDir: string; rulesRoot: string } {
+  const gitDir = join(scratch, "ignore.git");
+  const rulesRoot = join(scratch, "ignore-tree");
+  mkdirSync(rulesRoot, { recursive: true });
+  execFileSync("git", ["init", "--quiet", "--bare", gitDir],
+    { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
+  for (const [path, entry] of base) {
+    if (path.split("/").pop() !== ".gitignore") continue;
+    const destination = join(rulesRoot, path);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, readBaseObject(sourceRoot, entry.objectId));
+  }
+  // The source's repository-level exclude file is control-owned configuration: the
+  // worker cannot write the source, so it is a legitimate authority the candidate has
+  // no say in. A missing file simply contributes no rules.
+  const excludePath = controlGit(["rev-parse", "--git-path", "info/exclude"], sourceRoot).trim();
+  const physical = isAbsolute(excludePath) ? excludePath : join(sourceRoot, excludePath);
+  if (lstatSync(physical, { throwIfNoEntry: false })?.isFile()) {
+    mkdirSync(join(gitDir, "info"), { recursive: true });
+    writeFileSync(join(gitDir, "info", "exclude"), readFileSync(physical));
+  }
+  return { gitDir, rulesRoot };
+}
+
+/** The subset of `paths` the control's ignore rules exclude. */
+function ignoredByControl(gitDir: string, rulesRoot: string, paths: readonly string[]): Set<string> {
+  if (paths.length === 0) return new Set();
+  // `check-ignore --stdin -z` reports only the matches. It exits 1 when nothing
+  // matched, which is an answer rather than a failure, so the status is read rather
+  // than raised. A non-zero status with no output means no path was ignored.
+  let output: string;
+  try {
+    output = execFileSync("git", [`--git-dir=${gitDir}`, `--work-tree=${rulesRoot}`,
+      "check-ignore", "--stdin", "-z", "--no-index"],
+    { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(),
+      input: paths.map(path => `${path}\0`).join("") });
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string };
+    if (failure.status !== 1) throw error;
+    output = failure.stdout ?? "";
+  }
+  return new Set(output.split("\0").filter(Boolean));
+}
+
+/**
+ * Every path under `root` that the candidate holds and the base commit does not, as the
+ * `ls-files --others` answer described it: repository metadata and directories reached
+ * through a symlink are not descended, and a symlink is a leaf.
+ *
+ * `walkFiles` cannot be used here. It descends a symlinked directory and follows it out
+ * of the tree, and it lists `.git`, so it would both leak bytes and enumerate metadata.
+ */
+function untrackedCandidates(root: string, tracked: ReadonlySet<string>): string[] {
+  const found: string[] = [];
+  const visit = (relativeDir: string): void => {
+    for (const entry of readdirSync(join(root, relativeDir), { withFileTypes: true })) {
+      const path = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      // Repository metadata is not a candidate file at any depth.
+      if (entry.name === ".git") continue;
+      if (entry.isSymbolicLink()) {
+        // A link is a leaf. A link to a directory is exactly the smuggling case: walking
+        // through it would read bytes from outside the candidate.
+        if (!tracked.has(path)) found.push(path);
+        continue;
+      }
+      if (entry.isDirectory()) { visit(path); continue; }
+      if (entry.isFile() && !tracked.has(path)) found.push(path);
+    }
+  };
+  visit("");
+  return found.sort();
+}
+
+/**
+ * The bytes and git mode of one candidate path, without leaving the candidate.
+ *
+ * A symlink is never followed to read bytes from outside the tree. Its *link text* is
+ * what git stores and what the patch must carry, so that is what this returns; the
+ * manifest decides separately whether the link counts as an entry (`resolveLinkTarget`).
+ * A path reached through a symlinked ancestor is refused rather than resolved: the walk
+ * skips symlinked directories, so such a path can only be a tracked one the worker
+ * replaced with a link, which would otherwise read an ignored vault's bytes.
+ */
+function readCandidateEntry(root: string, path: string): { mode: string; bytes: Buffer; linkText: string | null } {
+  const segments = path.split("/");
+  let current = root;
+  for (const segment of segments.slice(0, -1)) {
+    current = join(current, segment);
+    if (lstatSync(current).isSymbolicLink()) throw new Error(`Candidate path is reached through a symlink: ${path}`);
+  }
+  const full = join(root, path);
+  if (lstatSync(full).isSymbolicLink()) return { mode: "120000", bytes: Buffer.alloc(0), linkText: readlinkSync(full) };
+  const stats = lstatSync(full);
+  return { mode: stats.mode & 0o111 ? "100755" : "100644", bytes: readFileSync(full), linkText: null };
+}
+
+/**
+ * The in-root regular file a candidate symlink names, or `null`.
+ *
+ * A link counts only when its target stays inside the candidate and is a regular file.
+ * Following one that leaves the tree is exactly how an ignored owner secret would reach
+ * the manifest, the digest and the reviewer packet under an innocuous name.
+ */
+function resolveLinkTarget(root: string, path: string, linkText: string): string | null {
+  if (isAbsolute(linkText)) return null;
+  const target = relative(resolve(root), resolve(root, dirname(path), linkText));
+  if (target === "" || target === ".." || target.startsWith(`..${sep}`) || isAbsolute(target)) return null;
+  return target.split(sep).join("/");
+}
+
+/**
+ * Render the patch between the base commit and a tree built from the manifest's bytes.
+ *
+ * The tree is written to a control-owned scratch object store that borrows the source's
+ * objects read-only. The bytes written are the ones `candidateManifest` already hashed,
+ * so a filter cannot make the patch disagree with the manifest, and git never reads a
+ * candidate path — only the scratch store and the source repository.
+ */
+function renderPatch(
+  sourceRoot: string,
+  commit: string,
+  entries: readonly { path: string; mode: string; bytes: Buffer }[],
+  scratch: string,
+): string {
+  const store = join(scratch, "patch.git");
+  execFileSync("git", ["init", "--quiet", "--bare", store],
+    { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
+  // The scratch store borrows the source's objects read-only, so the base commit and
+  // every blob the patch quotes resolve without copying a repository.
+  const objectPath = controlGit(["rev-parse", "--git-path", "objects"], sourceRoot).trim();
+  const sourceObjects = realpathSync(isAbsolute(objectPath) ? objectPath : join(sourceRoot, objectPath));
+  const env = controlGitEnv({
+    GIT_DIR: store,
+    GIT_OBJECT_DIRECTORY: join(realpathSync(store), "objects"),
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: sourceObjects,
+  });
+  // A single commit carrying the whole candidate: `deleteall` means the tree is exactly
+  // the entries listed, so a deleted tracked file needs no separate instruction.
+  const stream: Buffer[] = [];
+  stream.push(Buffer.from("commit refs/t044-manifest\ncommitter manifest <manifest@invalid> 0 +0000\ndata 2\nx\ndeleteall\n"));
+  for (const entry of entries) {
+    stream.push(Buffer.from(`M ${entry.mode} inline ${entry.path}\n`));
+    stream.push(Buffer.from(`data ${entry.bytes.byteLength}\n`));
+    // `inline` data is length-delimited, so the newline git consumes before the next
+    // command is not part of the file it writes. A trailing LF is required.
+    stream.push(entry.bytes);
+    stream.push(Buffer.from("\n"));
+  }
+  stream.push(Buffer.from("\n"));
+  try {
+    execFileSync("git", ["fast-import", "--quiet"], {
+      input: Buffer.concat(stream), stdio: ["pipe", "pipe", "pipe"], timeout: 120_000, env,
+    });
+    const patch = execFileSync("git", ["diff", "--binary", commit, "refs/t044-manifest"], {
+      stdio: ["ignore", "pipe", "pipe"], timeout: 120_000, env,
+    });
+    return patch.toString("utf8").replace(/\n+$/, "");
+  } catch (error) {
+    const stderr = (error as { stderr?: Buffer }).stderr;
+    throw new Error(`Could not render the candidate patch: ${stderr?.toString("utf8") ?? (error as Error).message}`);
+  }
+}
+
+/**
+ * The commit lane's manifest and patch.
+ *
+ * Each candidate file is read exactly once; those same bytes are hashed into the
+ * manifest and written into the tree the patch is diffed from. There is therefore no
+ * second reading in which a filter could change what the patch says, which is what the
+ * round-3 reproduction exploited.
+ */
+function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "commit"; commit: string } }):
+  { files: CandidateFile[]; patch: string } {
+  const base = readBaseTree(workspace.sourceRoot, workspace.base.commit);
+  const tracked = new Set(base.keys());
+  const scratch = mkdtempSync(join(tmpdir(), "candidate-manifest-"));
+  try {
+    const ignore = controlIgnoreStore(workspace.sourceRoot, workspace.base.commit, base, scratch);
+    const untracked = untrackedCandidates(workspace.root, tracked);
+    const ignored = ignoredByControl(ignore.gitDir, ignore.rulesRoot, untracked);
+    const paths = [...tracked, ...untracked.filter(path => !ignored.has(path))].sort();
+    const files: CandidateFile[] = [];
+    const staged: { path: string; mode: string; bytes: Buffer }[] = [];
+    // Links whose in-root target is a manifest entry are hashed through that target, so
+    // an unmodified candidate's manifest keeps the bytes the base commit recorded. The
+    // patch still carries the link text, because that is what git stores.
+    const pending: { path: string; entry: ReturnType<typeof readCandidateEntry>; target: string | null }[] = [];
+    for (const path of paths) {
+      // A tracked file the candidate deleted is part of the patch, not of the manifest.
+      // The deletion is expressed by its absence from the staged tree.
+      try {
+        const entry = readCandidateEntry(workspace.root, path);
+        pending.push({ path, entry, target: entry.linkText === null ? null : resolveLinkTarget(workspace.root, path, entry.linkText) });
+      } catch (error) {
+        if (tracked.has(path) && (error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
+    }
+    const readable = new Set(pending.map(item => item.path));
+    const hashed = new Map<string, string>();
+    for (const item of pending) {
+      if (item.entry.linkText === null) { hashed.set(item.path, sha256(item.entry.bytes)); continue; }
+      // A link is an entry only when it names a regular file that is itself an entry.
+      const target = item.target !== null && readable.has(item.target) ? pending.find(candidate => candidate.path === item.target) : undefined;
+      if (!target || target.entry.linkText !== null) continue;
+      hashed.set(item.path, sha256(target.entry.bytes));
+    }
+    for (const path of paths) {
+      const digest = hashed.get(path);
+      if (digest === undefined) continue;
+      const item = pending.find(candidate => candidate.path === path)!;
+      files.push({ path, hash: digest, tracked: tracked.has(path) });
+      staged.push({ path, mode: item.entry.mode, bytes: item.entry.linkText === null ? item.entry.bytes : Buffer.from(item.entry.linkText, "utf8") });
+    }
+    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, staged, scratch) };
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 export function digestManifest(files: readonly CandidateFile[]): string {
   return sha256([...files]
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
@@ -247,16 +559,6 @@ export function createCandidateWorkspace(input: {
   return { root: input.workspaceRoot, sourceRoot, base: input.base, source };
 }
 
-/** A patch that adds one untracked file, as `git diff` would render it once tracked. */
-function untrackedPatch(root: string, path: string): string {
-  // `--no-index` reports a difference by exiting 1, which is the normal case
-  // here, so the exit status cannot stand in for "failed": read stdout directly.
-  const result = spawnSync("git", ["-C", root, "diff", "--binary", "--no-index", "--", emptyFilePath(), path],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
-  if (result.status !== 0 && result.status !== 1) throw new Error(`git diff failed for ${path}: ${result.stderr}`);
-  return (result.stdout ?? "").replace(/\n+$/, "");
-}
-
 /**
  * The exact candidate: base identifier, every file it owns with its hash, a
  * complete manifest digest, and a patch against the base.
@@ -273,15 +575,13 @@ export function candidateManifest(workspace: CandidateWorkspace): {
   patch: string;
 } {
   if (workspace.base.kind === "commit") {
-    const files = listFiles(workspace.root, { index: true });
-    const trackedPatch = git(workspace.root, ["diff", "--binary", workspace.base.commit, "--"]).replace(/\n+$/, "");
-    const additions = files.filter(file => !file.tracked).map(file => untrackedPatch(workspace.root, file.path)).filter(Boolean);
+    const lane = commitLaneManifest(workspace as CandidateWorkspace & { base: { kind: "commit"; commit: string } });
     return {
       base: "commit",
       baseIdentifier: workspace.base.commit,
-      files,
-      manifestDigest: digestManifest(files),
-      patch: [trackedPatch, ...additions].filter(Boolean).join("\n"),
+      files: lane.files,
+      manifestDigest: digestManifest(lane.files),
+      patch: lane.patch,
     };
   }
   // The snapshot lane has no history to diff against; the hashed manifest IS its
