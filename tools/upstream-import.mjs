@@ -138,6 +138,7 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/test/native-session-contract.test.ts',
   'packages/daemon/test/native-channel-contract.test.ts',
   'packages/daemon/test/team-candidate-launch.test.ts',
+  'packages/daemon/test/managed-attempt-producer.test.ts',
   'packages/daemon/test/client-lock.test.ts',
   'packages/daemon/test/team-messaging.test.ts',
   'config/team/lead-protocol.md',
