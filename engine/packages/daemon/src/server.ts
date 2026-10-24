@@ -151,6 +151,8 @@ import { teamControlRoutes, type TeamControlOptions } from "./routes/team-contro
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
 import { isIP } from "node:net";
+import { TerminalTakeoverManager } from "./domain/terminal-takeover.js";
+import type { OwnerTerminalRelay } from "./terminal/owner-terminal-host.js";
 
 /** KTD22: the only `/api` paths a managed-mode daemon serves. */
 const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
@@ -158,6 +160,10 @@ const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
 export interface AppDeps {
   teamControl?: TeamControlOptions;
   ownerSessions?: OwnerSessions;
+  /** Owner-account terminal relay; absent means the owner terminal is honestly unavailable. */
+  ownerTerminalHost?: OwnerTerminalRelay;
+  /** Injectable takeover authority for the owner terminal/session relay tests. */
+  terminalTakeover?: TerminalTakeoverManager;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
   /** KTD19 channel state from the launch control's own verified observations; absent means never adopted. */
@@ -529,6 +535,15 @@ export function createApp(deps: AppDeps): Hono {
   const ownerSessions = pairedOwners ? deps.ownerSessions ?? new OwnerSessions(deps.rigRepo.db) : undefined;
   if (ownerSessions && ownerSessions.db !== deps.rigRepo.db) throw new Error("Owner sessions must use the control database.");
   deps.ownerSessions = ownerSessions;
+  const terminalTakeover = deps.terminalTakeover ?? new TerminalTakeoverManager({
+    eventBus: deps.eventBus,
+    isOwnerSessionActive: ownerSessions
+      ? (sessionId, at) => ownerSessions.list().some(session => session.id === sessionId
+        && session.revoked_at === null
+        && session.expires_at > at
+        && session.last_seen_at > at - 30 * 60_000)
+      : undefined,
+  });
   const app = new Hono();
   if (ownerSessions) app.use("/api/*", async (c, next) => { c.set("ownerSessions" as never, ownerSessions); await next(); });
   if (deps.requestPhaseObserver) app.use("*", deps.requestPhaseObserver.middleware());
@@ -715,7 +730,12 @@ export function createApp(deps: AppDeps): Hono {
   // KTD22: in managed mode this is the only route gate. Each managed route a later unit adds
   // joins this allowlist with its own authenticated managed-control check.
   app.use("/api/*", async (c, next) => {
-    if (daemonModeOf(deps.rigRepo.db) === "managed" && !MANAGED_ROUTE_PREFIXES.some(prefix => c.req.path === prefix || c.req.path.startsWith(prefix + "/"))) {
+    const managedTerminalWebSocket = c.req.method === "GET"
+      && c.req.path.startsWith("/api/terminal/")
+      && c.req.header("Upgrade")?.toLowerCase() === "websocket";
+    if (daemonModeOf(deps.rigRepo.db) === "managed"
+      && !MANAGED_ROUTE_PREFIXES.some(prefix => c.req.path === prefix || c.req.path.startsWith(prefix + "/"))
+      && !managedTerminalWebSocket) {
       const poll = c.req.method === "GET" && /^\/api\/rigs\/[^/]+\/chat\/mailbox(?:\/poll)?$/.test(c.req.path);
       const consume = c.req.method === "POST" && /^\/api\/rigs\/[^/]+\/chat\/mailbox\/[^/]+\/consume$/.test(c.req.path);
       const body: unknown = consume ? await c.req.json().catch(() => null) : null;
@@ -856,9 +876,16 @@ export function createApp(deps: AppDeps): Hono {
     const ws = createNodeWebSocket({ app });
     injectWebSocket = ws.injectWebSocket as never;
     _lastInjectWebSocket = injectWebSocket;
-    registerTerminalWs(app, ws.upgradeWebSocket as never, { bearerToken: deps.terminalBearerToken ?? null });
+    registerTerminalWs(app, ws.upgradeWebSocket as never, {
+      bearerToken: deps.terminalBearerToken ?? null,
+      managed: pairedOwners,
+      credentials: teamOptions.credentials,
+      allowPairedOwner: pairedOwners,
+      takeoverManager: terminalTakeover,
+      ownerTerminalHost: deps.ownerTerminalHost,
+    });
   } else if (deps.enableNodeWebSocket) {
-    registerTerminalAuthOnly(app, { bearerToken: deps.terminalBearerToken ?? null });
+    registerTerminalAuthOnly(app, { bearerToken: deps.terminalBearerToken ?? null, managed: pairedOwners, credentials: teamOptions.credentials, allowPairedOwner: pairedOwners });
   }
   app.route("/api/activity", activityRoutes);
   app.route("/api/ask", askRoutes);
