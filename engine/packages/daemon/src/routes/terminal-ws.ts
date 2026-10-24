@@ -7,29 +7,78 @@ import {
   type TerminalSessionBroker,
   type TerminalSubscriber,
 } from "../terminal/TerminalSessionBroker.js";
+import type { TeamControlCredentials } from "../middleware/auth-bearer-token.js";
+import { TerminalTakeoverManager } from "../domain/terminal-takeover.js";
+import type { OwnerTerminalRelay, OwnerTerminalAttachment } from "../terminal/owner-terminal-host.js";
 
 const MAX_EARLY_TERMINAL_FRAMES = 32;
 const MAX_EARLY_TERMINAL_FRAME_BYTES = 256 * 1024;
 
 /** Terminal bearer authentication; server.ts applies the shared browser boundary before this route. */
-export function terminalAuthMiddleware(opts: { bearerToken: string | null }) {
-  return async (c: { req: { header(name: string): string | undefined; query(name: string): string | undefined }; json(data: unknown, status: number): unknown }, next: () => Promise<void>) => {
+export interface TerminalActor {
+  kind: "owner" | "worker" | "terminal";
+  sessionId: string;
+  runId?: string | null;
+}
+
+export interface TerminalAuthOptions {
+  bearerToken: string | null;
+  managed?: boolean;
+  credentials?: TeamControlCredentials;
+  allowPairedOwner?: boolean;
+}
+
+function contextActor(c: { get?: (key: string) => unknown }): TerminalActor | null {
+  const actor = c.get?.("ownerCookieActor") as { kind?: string; sessionId?: string } | undefined;
+  return actor?.kind === "owner" && actor.sessionId ? { kind: "owner", sessionId: actor.sessionId } : null;
+}
+
+function bearerActor(token: string, opts: TerminalAuthOptions): TerminalActor | null {
+  if (opts.bearerToken && constantTimeEqual(token, opts.bearerToken)) return { kind: "terminal", sessionId: "terminal-bearer" };
+  const credentials = opts.credentials;
+  if (!credentials) return null;
+  if (credentials.ownerToken && constantTimeEqual(token, credentials.ownerToken)) return { kind: "owner", sessionId: "owner-control" };
+  const worker = credentials.workers?.find(candidate => constantTimeEqual(token, candidate.token));
+  return worker ? { kind: "worker", sessionId: worker.sessionId, runId: worker.runId } : null;
+}
+
+export function terminalAuthMiddleware(opts: TerminalAuthOptions) {
+  return async (c: { get?: (key: string) => unknown; set?: (key: string, value: unknown) => void; req: { header(name: string): string | undefined; query(name: string): string | undefined }; json(data: unknown, status: number): unknown }, next: () => Promise<void>) => {
     const token = opts.bearerToken;
-    if (!token) { await next(); return; }
+    if (opts.allowPairedOwner) {
+      const paired = contextActor(c);
+      if (paired) {
+        c.set?.("terminalActor", paired);
+        await next();
+        return;
+      }
+    }
     const header = c.req.header("Authorization") ?? c.req.header("authorization");
     if (header) {
       const match = /^Bearer\s+(.+)$/i.exec(header);
-      if (match && constantTimeEqual(match[1]!.trim(), token)) { await next(); return; }
+      const actor = match ? bearerActor(match[1]!.trim(), opts) : null;
+      if (actor) {
+        c.set?.("terminalActor", actor);
+        await next();
+        return;
+      }
+      return c.json({ error: "unauthorized" }, 401);
     }
     const queryToken = c.req.query("token");
-    if (queryToken && constantTimeEqual(queryToken.trim(), token)) { await next(); return; }
-    return c.json({ error: "unauthorized", hint: "Pass terminal token via Authorization header or ?token= query" }, 401);
+    if (!opts.managed && queryToken && token && constantTimeEqual(queryToken.trim(), token)) {
+      c.set?.("terminalActor", { kind: "terminal", sessionId: "terminal-bearer" });
+      await next();
+      return;
+    }
+    const hasDedicatedCredentials = !!opts.credentials?.ownerToken || (opts.credentials?.workers?.length ?? 0) > 0;
+    if (!opts.managed && !token && !hasDedicatedCredentials) { await next(); return; }
+    return c.json({ error: "unauthorized", hint: "Pass terminal token via Authorization header" }, 401);
   };
 }
 
 /** With the web UI off the WebSocket is not registered, but this same guard still runs in front of the HTTP
  *  terminal routes it matched before (GET /api/terminal/views, /preview, /status), so their behaviour is unchanged. */
-export function registerTerminalAuthOnly(app: Hono, opts: { bearerToken: string | null }): void {
+export function registerTerminalAuthOnly(app: Hono, opts: TerminalAuthOptions): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (app as any).get("/api/terminal/:sessionName", terminalAuthMiddleware(opts));
 }
@@ -37,14 +86,23 @@ export function registerTerminalAuthOnly(app: Hono, opts: { bearerToken: string 
 export function registerTerminalWs(
   app: Hono,
   upgradeWebSocket: Parameters<typeof import("@hono/node-ws").createNodeWebSocket>[0] extends { app: infer _A } ? never : never,
-  opts: { bearerToken: string | null },
+  opts: TerminalAuthOptions & {
+    livenessIntervalMs?: number;
+    takeoverManager?: TerminalTakeoverManager;
+    ownerTerminalHost?: OwnerTerminalRelay;
+  },
 ): void;
 export function registerTerminalWs(
   app: Hono,
   upgradeWebSocket: (createHandler: (c: unknown) => unknown) => unknown,
-  opts: { bearerToken: string | null; livenessIntervalMs?: number },
+  opts: TerminalAuthOptions & {
+    livenessIntervalMs?: number;
+    takeoverManager?: TerminalTakeoverManager;
+    ownerTerminalHost?: OwnerTerminalRelay;
+  },
 ): void {
   const terminalAuth = terminalAuthMiddleware(opts);
+  const takeovers = opts.takeoverManager ?? new TerminalTakeoverManager();
 
   // One daemon-owned broker registry shared across every WebSocket connection,
   // created lazily from the first connection's tmux adapter (a daemon
@@ -58,12 +116,56 @@ export function registerTerminalWs(
     return registry;
   };
 
+  const createOwnerTerminalHandler = (c: any) => {
+    let attachment: OwnerTerminalAttachment | null = null;
+    let closed = false;
+    return {
+      async onOpen(_evt: unknown, ws: { send(data: string): void; close(code: number, reason: string): void }) {
+        const actor = c.get("terminalActor") as TerminalActor | undefined;
+        if (actor?.kind !== "owner") { ws.close(1008, "owner control required"); return; }
+        const host = opts.ownerTerminalHost;
+        if (!host || !(await host.isAvailable())) {
+          try { ws.send(JSON.stringify({ type: "status", status: "unavailable" })); } catch { /* closed */ }
+          ws.close(1013, "owner terminal unavailable");
+          return;
+        }
+        const subscriber: TerminalSubscriber = {
+          send: data => { try { ws.send(JSON.stringify({ type: "output", data })); } catch { /* closed */ } },
+          close: (code, reason) => { try { ws.close(code, reason); } catch { /* closed */ } },
+        };
+        try {
+          attachment = await host.attach(subscriber);
+          if (!closed) ws.send(JSON.stringify({ type: "status", status: "ready" }));
+        } catch {
+          ws.close(1013, "owner terminal unavailable");
+        }
+      },
+      async onMessage(evt: { data: unknown }, ws: { close(code: number, reason: string): void }) {
+        if (closed || !attachment) return;
+        const raw = typeof evt.data === "string" ? evt.data : "";
+        try {
+          const frame = JSON.parse(raw) as Record<string, unknown>;
+          if (frame.type === "input" && typeof frame.data === "string") await attachment.sendInput(frame.data);
+        } catch { ws.close(1003, "invalid owner terminal frame"); }
+      },
+      async onClose() {
+        closed = true;
+        await attachment?.close().catch(() => {});
+        attachment = null;
+      },
+    };
+  };
+
+  // Owner terminal is a separate private relay. It never uses the broker and
+  // therefore cannot accidentally become a daemon-spawned fallback shell.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (app as any).get(
-    "/api/terminal/:sessionName",
+    "/api/terminal/owner",
     terminalAuth,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (upgradeWebSocket as any)((c: any) => {
+    (upgradeWebSocket as any)(createOwnerTerminalHandler),
+  );
+
+  const createAgentHandler = (c: any) => {
       const sessionName = c.req.param("sessionName")!;
       let broker: TerminalSessionBroker | null = null;
       let subscriber: TerminalSubscriber | null = null;
@@ -80,14 +182,35 @@ export function registerTerminalWs(
       const earlyFrames: string[] = [];
       let earlyFrameBytes = 0;
 
-      const handleFrame = async (data: string): Promise<void> => {
+      const handleFrame = async (data: string, ws?: { send(data: string): void }): Promise<void> => {
         if (!broker) return;
         try {
           const msg = JSON.parse(data) as Record<string, unknown>;
-          if (msg.type === "keys" && Array.isArray(msg.keys)) {
+          const actor = c.get("terminalActor") as TerminalActor | undefined;
+          if (msg.type === "takeover") {
+            if (!actor || actor.kind === "worker" || actor.kind === "terminal") {
+              takeovers.authorizeInput(actor?.sessionId ?? "unknown", sessionName);
+              ws?.send(JSON.stringify({ type: "error", code: "owner_control_required" }));
+              return;
+            }
+            const result = takeovers.begin(actor.sessionId, sessionName);
+            ws?.send(JSON.stringify(result.ok
+              ? { type: "takeover", status: "active", session: sessionName }
+              : { type: "error", code: result.code }));
+          } else if (msg.type === "release") {
+            if (actor?.kind !== "owner") { ws?.send(JSON.stringify({ type: "error", code: "owner_control_required" })); return; }
+            const released = takeovers.release(actor.sessionId, sessionName);
+            ws?.send(JSON.stringify({ type: "takeover", status: released ? "released" : "inactive", session: sessionName }));
+          } else if ((msg.type === "keys" && Array.isArray(msg.keys)) || (msg.type === "text" && typeof msg.text === "string")) {
+            if (opts.managed && (actor?.kind !== "owner" || !takeovers.authorizeInput(actor.sessionId, sessionName))) {
+              ws?.send(JSON.stringify({ type: "error", code: "takeover_required" }));
+              return;
+            }
+            if (msg.type === "keys") {
             await broker.input({ type: "keys", keys: msg.keys as string[] });
-          } else if (msg.type === "text" && typeof msg.text === "string") {
-            await broker.input({ type: "text", text: msg.text });
+            } else {
+              await broker.input({ type: "text", text: msg.text as string });
+            }
           } else if (msg.type === "scroll" && typeof msg.offset === "number") {
             // OPR.0.4.0.39: per-subscriber scroll-back (tmux capture-pane window).
             // offset = lines above the live bottom; 0 = live. Per-connection so each
@@ -132,11 +255,11 @@ export function registerTerminalWs(
           while (earlyFrames.length > 0 && !closed) {
             const next = earlyFrames.shift()!;
             earlyFrameBytes -= Buffer.byteLength(next, "utf8");
-            await handleFrame(next);
+            await handleFrame(next, ws);
           }
         },
 
-        async onMessage(evt: { data: unknown }, ws: { close(code: number, reason: string): void }) {
+        async onMessage(evt: { data: unknown }, ws: { close(code: number, reason: string): void; send(data: string): void }) {
           if (closed) return;
           const data = typeof evt.data === "string" ? evt.data : "";
           if (!data) return;
@@ -154,16 +277,26 @@ export function registerTerminalWs(
             earlyFrameBytes += bytes;
             return;
           }
-          await handleFrame(data);
+          await handleFrame(data, ws);
         },
 
         async onClose() {
           closed = true;
+          const actor = c.get("terminalActor") as TerminalActor | undefined;
+          if (actor?.kind === "owner") {
+            try { takeovers.disconnect(actor.sessionId); } catch { /* closure audit still blocks readmission */ }
+          }
           if (broker && subscriber) {
             broker.detach(subscriber);
           }
         },
       };
-    }),
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (app as any).get(
+    "/api/terminal/:sessionName",
+    terminalAuth,
+    (upgradeWebSocket as any)(createAgentHandler),
   );
 }
