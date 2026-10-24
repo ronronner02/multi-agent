@@ -440,13 +440,15 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
     // patch still carries the link text, because that is what git stores.
     const pending: { path: string; entry: ReturnType<typeof readCandidateEntry>; target: string | null }[] = [];
     for (const path of paths) {
-      // A tracked file the candidate deleted is part of the patch, not of the manifest.
-      // The deletion is expressed by its absence from the staged tree.
+      // A path that vanished while the candidate was being read is not an entry. A
+      // tracked file the candidate deleted is the normal case: the index keeps listing
+      // it until the deletion is staged, and the deletion belongs to the patch (it is
+      // absent from the staged tree) rather than to the manifest.
       try {
         const entry = readCandidateEntry(workspace.root, path);
         pending.push({ path, entry, target: entry.linkText === null ? null : resolveLinkTarget(workspace.root, path, entry.linkText) });
       } catch (error) {
-        if (tracked.has(path) && (error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
         throw error;
       }
     }
