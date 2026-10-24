@@ -563,16 +563,38 @@ function readBaseBlobs(sourceRoot: string, objectIds: readonly string[]): Map<st
  *
  * A checkout applies `text`, `eol` and `filter` rules on the way out, so a worktree file
  * can differ from the recorded blob while the candidate has changed nothing. Staging the
- * worktree bytes verbatim would then produce a patch that rewrites an untouched file —
- * and, for `eol=crlf`, one that also disagrees with the blob the manifest hashed.
+ * worktree bytes verbatim would then produce a patch that rewrites an untouched file.
  * `GIT_ATTR_SOURCE` makes `check-attr` and `hash-object` read attributes from the base
  * commit rather than from anything the worker can write.
+ *
+ * KNOWN LIMITATIONS (the file-attribute patch renderer, carried by T051). Cleaning is a
+ * partial mechanism, and three shapes are known to disagree with the manifest:
+ *
+ * - **Edited attribute-shaped files.** A file the base marks `text` or with an `eol` is
+ *   staged *cleaned*, while the manifest hashes the candidate's raw worktree bytes. When
+ *   a candidate edits such a file the emitted patch can therefore write content that
+ *   differs from the hash `candidateManifest` recorded — silently, because the patch
+ *   still applies. This is the case the manifest and the patch must reconcile by hashing
+ *   the cleaned bytes, and it is why this renderer is scheduled to move.
+ * - **Non-ASCII names.** The `check-attr -z` output below is decoded as `latin1` while
+ *   the input paths were UTF-8, so a path such as `café.txt` never matches and is treated
+ *   as un-shaped. An *unmodified* candidate holding one gets a spurious patch under
+ *   `eol=crlf`.
+ * - **A base `filter` driver.** Cleaning runs through the base commit's attributes, so a
+ *   driver the base declares would run here. The scratch store carries no filter
+ *   configuration, so in practice it is a no-op; a candidate-visible filter is exactly
+ *   what this module exists to keep out, and it must stay that way.
+ *
+ * None of these weakens the no-git-on-candidate guarantee, which does not depend on this
+ * function.
  */
 function cleanedPaths(sourceRoot: string, commit: string, paths: readonly string[]): Set<string> {
   if (paths.length === 0) return new Set();
   const attributes = execFileSync("git", ["-C", sourceRoot, "check-attr", "-z", "--stdin", "text", "eol", "crlf", "filter"],
     { input: paths.map(path => `${path}\0`).join(""), stdio: ["pipe", "pipe", "pipe"], timeout: 60_000,
       env: controlGitEnv({ GIT_ATTR_SOURCE: commit, GIT_LITERAL_PATHSPECS: "1" }), maxBuffer: GIT_OUTPUT_LIMIT });
+  // Latin-1 keeps every byte distinct, but it also means a non-ASCII path cannot equal the
+  // UTF-8 `entry.path` the caller compares against. See the limitation above.
   const fields = attributes.toString("latin1").split("\0");
   const cleaned = new Set<string>();
   // The output is `<path>\0<attribute>\0<value>\0` repeated. `unspecified` means the base
@@ -600,6 +622,12 @@ function cleanedPaths(sourceRoot: string, commit: string, paths: readonly string
  *   at all, then binary paths under a single `* -diff` rule that names no path.
  * - **Lossless output.** A `GIT binary patch` section is base85 over the raw bytes, so
  *   the concatenated patch is pure ASCII and no decode can rewrite it.
+ *
+ * KNOWN LIMITATION (carried by T051). A path the base commit marks `text` or gives an
+ * `eol` is staged *cleaned*, while the manifest hashes the candidate's raw bytes; an
+ * edited such file can therefore yield a patch whose content differs from the recorded
+ * hash. `cleanedPaths` documents the full set of open shapes. The guarantee this function
+ * does own is that git never runs against a candidate path.
  */
 function renderPatch(
   sourceRoot: string,
