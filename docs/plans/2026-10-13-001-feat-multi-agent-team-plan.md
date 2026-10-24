@@ -742,6 +742,13 @@ The table names execution checkpoints inside T010, not new tasks or a replacemen
 
 (owner decision 2026-10-24 - chosen over a fifth denylist hardening, and over narrowing T044's claim to the hooks enumerated so far.)
 
+**T044 split into correctness and proof (owner decision, 2026-10-24).** T044's first execution under the decision above closed the execution class and reproduced what three earlier rounds predicted: the review of the new implementation found two further correctness defects — a tracked symlink *chain* was hashed as no entry at all, which changed the manifest for an unmodified candidate, and several symlink shapes were dropped silently where the card requires a refusal — plus one reliability set (a non-regular file wedging the manifest, `fast-import` paths needing quoting, non-UTF-8 bytes corrupted by the patch decoder, and a `maxBuffer` ceiling) and the absence of the proof the card had always declared. The work needed to close those and the full reproduction matrix that already existed in the card would have taken the task to about 1,425 changed lines against a ~1,200 budget, measured after 672 were already spent.
+- **T044 keeps the production correctness:** chain resolution, symlink refusal, the ignore-authority pin, C-quoted patch paths, byte-exact patch rendering, the non-regular-file and buffer guards, and the tests that prove those behaviours.
+- **The new T049 owns the proof matrix:** the spawn audit and the complete reproduction set across every fixture type, in its own declared file. The done-signal clause "and the spawn-audit test proves it" moves there with it; T044's claim becomes the traced call graph plus the planted-program matrix, which is what its own declared file can evidence.
+- **Nothing changes about the design, the acceptance examples or the requirements.** Adoption stays as on `main`; the `team-candidate-launch` behaviour that a non-repository candidate no longer makes the manifest throw is a T048 question.
+
+(owner decision 2026-10-24 - chosen over raising the budget to ~1,600 lines for one review, and over stopping with the class closed but unlanded.)
+
 ### U6. Add observable team views and owner controls to the TUI
 
 - **Goal:** Make task state and essential intervention usable in the terminal without replacing the lead's native conversation, carrying the same information as the reference-benchmark Web UI.
