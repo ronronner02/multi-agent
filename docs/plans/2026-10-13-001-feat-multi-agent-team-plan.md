@@ -732,6 +732,16 @@ The table names execution checkpoints inside T010, not new tasks or a replacemen
 - **T039 keeps its own card.** T039 closes at runtime eligibility plus one `CandidateWorkspace` per implementation launch, which is the P0 T011's review returned. It stays at wave 15 and is unchanged in scope.
 - **T038 depends on T042.** Installed-client acceptance moves from T039 to T042 and to wave 17, so the live observation still sees the produced attempt as well as the composed chain. No product scope, acceptance example or requirement changed.
 
+**Commit-lane manifest without a worker-controlled git (owner decision, 2026-10-24).** T044 failed review three times. Each fix blocked one git program hook (`core.fsmonitor`, then `diff.external`), and the next review found another (`filter.<drv>.clean`). Any git command that runs with the candidate as its working directory, work tree or repository can be subverted through configuration the worker writes. The same filter can also make the patch a reviewer reads disagree with the bytes the manifest hashed. The commit lane therefore stops asking git anything about the candidate:
+- **Candidate bytes:** the control enumerates and reads the candidate directly, without git. A directory symlink is never descended, and a path with a symlinked ancestor refuses the manifest. A symlink leaf counts only when its in-root target is a regular file that is itself a manifest entry; it is hashed through that target, as today.
+- **Tracked set and base bytes:** taken from the base commit in the source repository (`ls-tree`, `cat-file`), never from the candidate's index or `.git`.
+- **Ignore authority:** the `.gitignore` files in the base commit plus the source's `info/exclude`. The candidate's own `.gitignore` is ordinary content. Deleting it does not admit ignored owner files, and writing `*` does not hide the deliverable. User-global excludes do not apply.
+- **Patch format:** a standard git binary patch with repository-relative paths, from the base tree to a tree built in a control-owned scratch object store. That tree is built from the exact bytes the manifest hashed, written with filters disabled; a symlink entry is written as its link text, as git records it. The patch and the manifest therefore cannot disagree. Git runs only against that scratch store and the source repository.
+- **Unchanged:** the manifest's bytes for an unmodified candidate, `digestManifest`, the snapshot lane and candidate adoption. The `tracked` flag now means "in the base commit"; that matches the old index-based meaning unless the control stages files.
+- **Candidate lifecycle:** verifying a resumed candidate's provenance (both lanes) and removing a candidate without passing its path to git move to the new task T048, which depends on T044.
+
+(owner decision 2026-10-24 - chosen over a fifth denylist hardening, and over narrowing T044's claim to the hooks enumerated so far.)
+
 ### U6. Add observable team views and owner controls to the TUI
 
 - **Goal:** Make task state and essential intervention usable in the terminal without replacing the lead's native conversation, carrying the same information as the reference-benchmark Web UI.
