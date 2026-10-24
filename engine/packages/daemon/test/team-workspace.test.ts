@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { candidateManifest, candidatePath, createCandidateWorkspace, listFiles, removeCandidateWorkspace, resolveWorkspaceBase, sourceFingerprint, verifySourceUnchanged } from "../src/domain/team-workspace.js";
@@ -573,6 +573,29 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
       if (savedXdg === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = savedXdg;
       if (savedHome === undefined) delete process.env.HOME; else process.env.HOME = savedHome;
     }
+  });
+
+  it("writes a symlink into the patch as a link, so applying it yields a link and not a file", () => {
+    // The manifest hashes a link through its target, but the patch must carry the link's
+    // own text: a patch that wrote the target's bytes would turn every link into a file.
+    const root = richRepository();
+    symlinkSync("link.md", join(root, "src", "link2.md"));
+    git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "chain");
+    const workspace = candidateOf(root);
+    writeFileSync(join(workspace.root, "docs", "target.md"), "the symlink target, edited\n");
+    rmSync(join(workspace.root, "src", "link2.md"));
+    symlinkSync("../docs/target.md", join(workspace.root, "src", "link2.md"));
+    const manifest = candidateManifest(workspace);
+    expect(patchSection(manifest.patch, "src/link2.md")).toContain("120000");
+
+    const checkout = candidateRoot(root);
+    git(tmpdir(), "clone", "--quiet", root, checkout);
+    git(checkout, "checkout", "--quiet", (workspace.base as { commit: string }).commit);
+    const patchFile = join(checkout, "..", `${Date.now()}-link.patch`);
+    writeFileSync(patchFile, manifest.patch);
+    execFileSync("git", ["-C", checkout, "apply", "--binary", patchFile], { stdio: ["ignore", "pipe", "pipe"] });
+    expect(lstatSync(join(checkout, "src", "link2.md")).isSymbolicLink(), "an applied link is still a link").toBe(true);
+    expect(readlinkSync(join(checkout, "src", "link2.md"))).toBe("../docs/target.md");
   });
 
   it("applies the patch at a base checkout and reproduces the hashed bytes", () => {
