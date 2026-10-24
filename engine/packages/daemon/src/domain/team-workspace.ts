@@ -120,7 +120,16 @@ export function listFiles(root: string, options: { index: boolean }): CandidateF
   const tracked = options.index ? git(root, ["ls-files", "-z"]).split("\0").filter(Boolean) : [];
   const trackedSet = new Set(tracked);
   const untracked = options.index ? git(root, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean) : walkFiles(root);
+  // A submodule is a directory in the worktree and a `160000` entry in the index. It has
+  // no bytes of its own, so reading it is an EISDIR rather than a manifest entry, and a
+  // base that tracks one must not fail the baseline.
+  const gitlinks = new Set(options.index
+    ? git(root, ["ls-files", "--stage", "-z"]).split("\0").filter(Boolean)
+      .filter(entry => entry.startsWith(`${GITLINK_MODE} `))
+      .map(entry => entry.slice(entry.indexOf("\t") + 1))
+    : []);
   return [...new Set([...tracked, ...untracked])].sort().flatMap(path => {
+    if (gitlinks.has(path)) return [];
     // A candidate that deletes a tracked file keeps it in the index until it is
     // staged. The deletion is part of the patch; it is not a manifest entry, so
     // a missing file is dropped rather than failing the whole manifest.
@@ -213,19 +222,40 @@ function controlGitEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", ...extra };
 }
 
+/** A submodule's recorded commit: stored in the tree, but with no bytes of its own. */
+const GITLINK_MODE = "160000";
+
+/**
+ * Decode bytes that must be UTF-8, refusing instead of substituting U+FFFD.
+ *
+ * Every name this module handles becomes a path in the patch and in the manifest, so a
+ * lossy decode would describe a path the candidate does not have — and, worse, a patch
+ * that deletes the real one. Refusing keeps the manifest honest about what it could not
+ * represent.
+ */
+function strictUtf8(bytes: Buffer, what: string): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(`${what} is not valid UTF-8`);
+  }
+}
+
 /** The base commit's tree, as the source repository records it. */
 function readBaseTree(sourceRoot: string, commit: string): Map<string, BaseEntry> {
-  const output = controlGit(["ls-tree", "-r", "-z", "--full-tree", commit], sourceRoot);
+  // Raw bytes, because a name that is not UTF-8 must be refused rather than replaced.
+  const output = execFileSync("git", ["-C", sourceRoot, "ls-tree", "-r", "-z", "--full-tree", commit],
+    { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(), maxBuffer: GIT_OUTPUT_LIMIT });
   const entries = new Map<string, BaseEntry>();
-  for (const record of output.split("\0")) {
+  for (const record of strictUtf8(output, "A base tree entry").split("\0")) {
     if (!record) continue;
     const tab = record.indexOf("\t");
     if (tab < 0) continue;
     const [mode, type, objectId] = record.slice(0, tab).split(" ");
-    // Only blobs are files. A gitlink (`160000`) names another repository's commit and
-    // has no bytes here, so it is not a manifest entry — the same answer `ls-files`
-    // gave, which also does not descend into a submodule.
-    if (type !== "blob" || !mode || !objectId) continue;
+    if (!mode || !objectId || (type !== "blob" && mode !== GITLINK_MODE)) continue;
+    // A gitlink is kept. `ls-tree` types it `commit`, so filtering on `blob` alone
+    // dropped it and made an unmodified candidate's patch delete the owner's submodule.
+    // It carries no bytes here: it travels by object id.
     entries.set(record.slice(tab + 1), { mode, objectId });
   }
   return entries;
@@ -319,13 +349,20 @@ function ignoredByControl(gitDir: string, rulesRoot: string, paths: readonly str
  * `walkFiles` cannot be used here. It descends a symlinked directory and follows it out
  * of the tree, and it lists `.git`, so it would both leak bytes and enumerate metadata.
  */
-function untrackedCandidates(root: string, tracked: ReadonlySet<string>): string[] {
+function untrackedCandidates(root: string, tracked: ReadonlySet<string>, skip: ReadonlySet<string>): string[] {
   const found: string[] = [];
   const visit = (relativeDir: string): void => {
-    for (const entry of readdirSync(join(root, relativeDir), { withFileTypes: true })) {
-      const path = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    // Names arrive as raw bytes: a directory entry that is not valid UTF-8 would
+    // otherwise be decoded to U+FFFD here and silently dropped from the manifest.
+    for (const entry of readdirSync(join(root, relativeDir), { withFileTypes: true, encoding: "buffer" })) {
+      const name = strictUtf8(entry.name as unknown as Buffer, "A candidate file name");
+      const path = relativeDir ? `${relativeDir}/${name}` : name;
       // Repository metadata is not a candidate file at any depth.
-      if (entry.name === ".git") continue;
+      if (name === ".git") continue;
+      // A submodule's own files belong to its repository, not to this candidate. Git
+      // reports a gitlink as one entry and does not descend it; walking in would put the
+      // submodule's bytes in the manifest and its paths in the patch.
+      if (skip.has(path)) continue;
       if (entry.isSymbolicLink()) {
         // A link is a leaf. A link to a directory is exactly the smuggling case: walking
         // through it would read bytes from outside the candidate.
@@ -390,6 +427,37 @@ function readCandidateEntry(root: string, path: string): { mode: string; bytes: 
 const MAX_LINK_HOPS = 40;
 
 /**
+ * Whether a link target climbs out of the candidate through a symlinked directory.
+ *
+ * `jump/../victim` is the shape: resolved lexically it names `victim` beside the link,
+ * but the kernel resolves `jump` first, so `..` is that link's *parent directory* and the
+ * path names a file outside the candidate. Hashing one file while the applied link names
+ * another is exactly the disagreement this module exists to prevent. A `..` with no
+ * symlinked component before it is ordinary `../sibling` and stays allowed.
+ */
+function climbsThroughLink(current: string, text: string): boolean {
+  let prefix = current;
+  let passedLink = false;
+  for (const segment of text.split("/")) {
+    if (segment === "..") {
+      // Only a `..` that follows a symlinked component can leave the tree this way.
+      if (passedLink) return true;
+      prefix = dirname(prefix);
+      continue;
+    }
+    if (segment === "" || segment === ".") continue;
+    prefix = prefix ? `${prefix}/${segment}` : segment;
+    try {
+      if (lstatSync(prefix).isSymbolicLink()) passedLink = true;
+    } catch {
+      // A missing component decides nothing here; the caller reports it as dangling.
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
  * The regular file a candidate symlink finally names, or `null` when it names none.
  *
  * A chain is followed to its end, as `git ls-tree` and `readFile` through the path always
@@ -407,6 +475,8 @@ function resolveLinkChain(root: string, path: string, linkText: string): string 
   let text = linkText;
   for (let hop = 0; hop <= MAX_LINK_HOPS; hop += 1) {
     if (isAbsolute(text)) return null;
+    // `current` is already repository-relative, so the check runs against the physical root.
+    if (climbsThroughLink(join(physical, current), text)) return null;
     const target = relative(physical, resolve(physical, current, text));
     if (target === "" || target === ".." || target.startsWith(`..${sep}`) || isAbsolute(target)) return null;
     const targetPath = target.split(sep).join("/");
@@ -450,7 +520,10 @@ function quoteStreamPath(path: string): string {
   return out.join("");
 }
 
-/** Whether bytes need git's binary rendering; anything that is not plain UTF-8 text. */
+/**
+ * Whether bytes need git's binary rendering. Anything that is not plain UTF-8 text — a
+ * NUL, or a sequence no UTF-8 decoder accepts — is rendered as a binary hunk.
+ */
 function isBinaryContent(bytes: Buffer): boolean {
   if (bytes.includes(0)) return true;
   try {
@@ -461,25 +534,78 @@ function isBinaryContent(bytes: Buffer): boolean {
   }
 }
 
+/** A base blob's bytes, by object id, for paths the candidate changed or deleted. */
+function readBaseBlobs(sourceRoot: string, objectIds: readonly string[]): Map<string, Buffer> {
+  const blobs = new Map<string, Buffer>();
+  if (objectIds.length === 0) return blobs;
+  // One `cat-file --batch` for the whole set: a per-object call is a process per file.
+  const output = execFileSync("git", ["-C", sourceRoot, "cat-file", "--batch"],
+    { input: `${objectIds.join("\n")}\n`, stdio: ["pipe", "pipe", "pipe"], timeout: 120_000, env: controlGitEnv(),
+      maxBuffer: GIT_OUTPUT_LIMIT });
+  let offset = 0;
+  for (const objectId of objectIds) {
+    const newline = output.indexOf(0x0a, offset);
+    if (newline < 0) break;
+    const header = output.slice(offset, newline).toString("latin1").split(" ");
+    const size = Number(header[2]);
+    // A missing object is reported as `<id> missing`: it contributes no bytes, and the
+    // caller treats the path as having no base side.
+    if (!Number.isFinite(size)) { offset = newline + 1; continue; }
+    blobs.set(objectId, output.slice(newline + 1, newline + 1 + size));
+    offset = newline + 1 + size + 1;
+  }
+  return blobs;
+}
+
+/**
+ * The paths whose candidate bytes must be cleaned before they enter the staged tree,
+ * because the base commit's attributes say the working tree differs from the blob.
+ *
+ * A checkout applies `text`, `eol` and `filter` rules on the way out, so a worktree file
+ * can differ from the recorded blob while the candidate has changed nothing. Staging the
+ * worktree bytes verbatim would then produce a patch that rewrites an untouched file —
+ * and, for `eol=crlf`, one that also disagrees with the blob the manifest hashed.
+ * `GIT_ATTR_SOURCE` makes `check-attr` and `hash-object` read attributes from the base
+ * commit rather than from anything the worker can write.
+ */
+function cleanedPaths(sourceRoot: string, commit: string, paths: readonly string[]): Set<string> {
+  if (paths.length === 0) return new Set();
+  const attributes = execFileSync("git", ["-C", sourceRoot, "check-attr", "-z", "--stdin", "text", "eol", "crlf", "filter"],
+    { input: paths.map(path => `${path}\0`).join(""), stdio: ["pipe", "pipe", "pipe"], timeout: 60_000,
+      env: controlGitEnv({ GIT_ATTR_SOURCE: commit, GIT_LITERAL_PATHSPECS: "1" }), maxBuffer: GIT_OUTPUT_LIMIT });
+  const fields = attributes.toString("latin1").split("\0");
+  const cleaned = new Set<string>();
+  // The output is `<path>\0<attribute>\0<value>\0` repeated. `unspecified` means the base
+  // commit says nothing about the path, so its bytes are already the blob's bytes.
+  for (let index = 0; index + 2 < fields.length; index += 3) {
+    const path = fields[index];
+    if (path && fields[index + 2] !== "unspecified") cleaned.add(path);
+  }
+  return cleaned;
+}
+
 /**
  * Render the patch between the base commit and a tree built from the manifest's bytes.
  *
  * The tree is written to a control-owned scratch object store that borrows the source's
- * objects read-only. The bytes written are the ones `candidateManifest` already hashed,
- * so a filter cannot make the patch disagree with the manifest, and git never reads a
- * candidate path — only the scratch store and the source repository.
+ * objects read-only, so git never reads a candidate path — only the scratch store and
+ * the source repository.
  *
- * An entry whose bytes are not UTF-8 text is marked `-diff` in the store's
- * `info/attributes`, which makes git emit a `GIT binary patch` block. Without that git
- * would render a text diff and the consumer would have to decode bytes to a string,
- * which silently replaces every invalid sequence with U+FFFD and so cannot reproduce
- * what the manifest hashed.
+ * Two properties are decided per entry from the bytes rather than from a path pattern:
+ *
+ * - **Binary rendering.** A path pattern has to survive git's attribute syntax, which
+ *   splits on whitespace and treats `*`, `?`, `[` and a leading `#` as significant, so
+ *   a file named `my file.dat` or `[x].dat` silently lost its `-diff` rule. The diff is
+ *   therefore rendered in two passes over the same store: text paths with no attributes
+ *   at all, then binary paths under a single `* -diff` rule that names no path.
+ * - **Lossless output.** A `GIT binary patch` section is base85 over the raw bytes, so
+ *   the concatenated patch is pure ASCII and no decode can rewrite it.
  */
 function renderPatch(
   sourceRoot: string,
   commit: string,
-  entries: readonly { path: string; mode: string; bytes: Buffer }[],
-  gitlinks: readonly { path: string; objectId: string }[],
+  base: ReadonlyMap<string, BaseEntry>,
+  entries: readonly { path: string; mode: string; bytes: Buffer; linkText: string | null }[],
   scratch: string,
 ): string {
   const store = join(scratch, "patch.git");
@@ -494,41 +620,94 @@ function renderPatch(
     GIT_OBJECT_DIRECTORY: join(realpathSync(store), "objects"),
     GIT_ALTERNATE_OBJECT_DIRECTORIES: sourceObjects,
   });
-  // A single commit carrying the whole candidate: `deleteall` means the tree is exactly
-  // the entries listed, so a deleted tracked file needs no separate instruction.
+
+  // Gitlinks travel by object id: they name another repository's commit and have no
+  // bytes here. Everything else is written inline, or cleaned and hashed first.
+  const regular = entries.filter(entry => entry.linkText === null);
+  const cleaned = cleanedPaths(sourceRoot, commit, regular.map(entry => entry.path));
+
   const stream: Buffer[] = [];
   stream.push(Buffer.from("commit refs/t044-manifest\ncommitter manifest <manifest@invalid> 0 +0000\ndata 2\nx\ndeleteall\n"));
-  // A gitlink names another repository's commit. It has no bytes here, so it is copied
-  // through by object id; dropping it would make the patch delete the owner's submodule.
-  for (const link of gitlinks) stream.push(Buffer.from(`M 160000 ${link.objectId} ${quoteStreamPath(link.path)}\n`));
+  for (const [path, entry] of base) {
+    if (entry.mode === GITLINK_MODE) stream.push(Buffer.from(`M ${GITLINK_MODE} ${entry.objectId} ${quoteStreamPath(path)}\n`));
+  }
   for (const entry of entries) {
-    stream.push(Buffer.from(`M ${entry.mode} inline ${quoteStreamPath(entry.path)}\n`));
-    stream.push(Buffer.from(`data ${entry.bytes.byteLength}\n`));
+    if (entry.linkText !== null) {
+      // A link is stored as its own text, so applying the patch yields a link.
+      const text = Buffer.from(entry.linkText, "utf8");
+      stream.push(Buffer.from(`M ${entry.mode} inline ${quoteStreamPath(entry.path)}\ndata ${text.byteLength}\n`));
+      stream.push(text, Buffer.from("\n"));
+      continue;
+    }
+    if (cleaned.has(entry.path)) {
+      // The base commit's own attributes decide what the blob is. Hashing the worktree
+      // bytes through them reproduces the base blob id when the file is unmodified,
+      // which is what makes an untouched candidate's patch empty under `eol=crlf`.
+      const objectId = execFileSync("git", ["-C", store, "hash-object", "-w", "--stdin", `--path=${entry.path}`],
+        { input: entry.bytes, stdio: ["pipe", "pipe", "pipe"], timeout: 60_000,
+          env: controlGitEnv({ ...env, GIT_ATTR_SOURCE: commit }) });
+      stream.push(Buffer.from(`M ${entry.mode} ${objectId.toString("utf8").trim()} ${quoteStreamPath(entry.path)}\n`));
+      continue;
+    }
+    stream.push(Buffer.from(`M ${entry.mode} inline ${quoteStreamPath(entry.path)}\ndata ${entry.bytes.byteLength}\n`));
     // `inline` data is length-delimited, so the newline git consumes before the next
     // command is not part of the file it writes. A trailing LF is required.
-    stream.push(entry.bytes);
-    stream.push(Buffer.from("\n"));
+    stream.push(entry.bytes, Buffer.from("\n"));
   }
   stream.push(Buffer.from("\n"));
-  const binary = entries.filter(entry => entry.mode !== "120000" && isBinaryContent(entry.bytes));
-  if (binary.length) {
-    mkdirSync(join(store, "info"), { recursive: true });
-    writeFileSync(join(store, "info", "attributes"),
-      binary.map(entry => `${quoteStreamPath(entry.path).replace(/^"|"$/g, "")} -diff\n`).join(""));
+
+  // A base side that is not UTF-8 needs binary rendering too, or `git diff` writes the
+  // old bytes into a text hunk and the patch cannot be applied at all.
+  const baseBlobs = readBaseBlobs(sourceRoot, [...base]
+    .filter(([, entry]) => entry.mode !== GITLINK_MODE)
+    .map(([, entry]) => entry.objectId));
+  const binary: string[] = [];
+  const text: string[] = [];
+  for (const [path, entry] of base) {
+    const candidate = entries.find(candidate => candidate.path === path);
+    if (entry.mode === GITLINK_MODE) { text.push(path); continue; }
+    if (!candidate) {
+      // Deleted in the candidate: only the base side exists, so its bytes decide.
+      (isBinaryContent(baseBlobs.get(entry.objectId) ?? Buffer.alloc(0)) ? binary : text).push(path);
+      continue;
+    }
+    if (candidate.linkText !== null) { text.push(path); continue; }
+    const baseBytes = baseBlobs.get(entry.objectId);
+    ((isBinaryContent(candidate.bytes) || (baseBytes !== undefined && isBinaryContent(baseBytes))) ? binary : text).push(path);
   }
+  for (const entry of entries) {
+    if (base.has(entry.path)) continue;
+    // Added in the candidate: there is no base side, so its own bytes decide.
+    (entry.linkText === null && isBinaryContent(entry.bytes) ? binary : text).push(entry.path);
+  }
+
+  const attributesPath = join(store, "info", "attributes");
   try {
-    execFileSync("git", ["fast-import", "--quiet"], {
+    execFileSync("git", ["fast-import", "--quiet", "--force"], {
       input: Buffer.concat(stream), stdio: ["pipe", "pipe", "pipe"], timeout: 120_000, env, maxBuffer: GIT_OUTPUT_LIMIT,
     });
-    const patch = execFileSync("git", ["diff", "--binary", commit, "refs/t044-manifest"], {
-      stdio: ["ignore", "pipe", "pipe"], timeout: 120_000, env, maxBuffer: GIT_OUTPUT_LIMIT,
-    });
-    // One trailing newline, because `git apply` reads a patch as text and reports a
-    // corrupt patch when the last hunk's line is unterminated. Git already ends its
-    // output with one, so this only normalizes; an empty diff stays empty.
-    const text = patch.toString("utf8").replace(/\n+$/, "");
-    return text === "" ? "" : `${text}\n`;
+    const diff = (paths: readonly string[]): Buffer => {
+      if (paths.length === 0) return Buffer.alloc(0);
+      // `GIT_LITERAL_PATHSPECS` matters: a name containing `*`, `?` or `[` is a literal
+      // path here, and a leading `:` must not be read as a pathspec magic prefix.
+      return execFileSync("git", ["-C", store, "diff", "--binary", "--no-renames", commit, "refs/t044-manifest", "--", ...paths],
+        { stdio: ["ignore", "pipe", "pipe"], timeout: 120_000,
+          env: controlGitEnv({ ...env, GIT_LITERAL_PATHSPECS: "1" }), maxBuffer: GIT_OUTPUT_LIMIT });
+    };
+    const textPart = diff(text);
+    // One `* -diff` rule, in a store file that is removed afterwards, so no path pattern
+    // is ever parsed and no name can lose its rule.
+    mkdirSync(join(store, "info"), { recursive: true });
+    writeFileSync(attributesPath, "* -diff\n");
+    const binaryPart = diff(binary);
+    rmSync(attributesPath, { force: true });
+    // Git's own bytes are kept exactly. A binary hunk ends with a blank line, and
+    // collapsing trailing newlines there makes `git apply` drop the last binary section
+    // without reporting an error — a silently incomplete patch. Both sections are ASCII
+    // by construction: base85 for binary, UTF-8 text for the rest.
+    return Buffer.concat([textPart, binaryPart]).toString("utf8");
   } catch (error) {
+    rmSync(attributesPath, { force: true });
     const stderr = (error as { stderr?: Buffer }).stderr;
     throw new Error(`Could not render the candidate patch: ${stderr?.toString("utf8") ?? (error as Error).message}`);
   }
@@ -545,11 +724,15 @@ function renderPatch(
 function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "commit"; commit: string } }):
   { files: CandidateFile[]; patch: string } {
   const base = readBaseTree(workspace.sourceRoot, workspace.base.commit);
-  const tracked = new Set(base.keys());
+  // A gitlink names a submodule directory: it is part of the tree the patch must
+  // reproduce, but it holds no candidate bytes, so it is never a manifest path and the
+  // candidate walk must not descend it.
+  const gitlinks = new Set([...base].filter(([, entry]) => entry.mode === GITLINK_MODE).map(([path]) => path));
+  const tracked = new Set([...base.keys()].filter(path => !gitlinks.has(path)));
   const scratch = mkdtempSync(join(tmpdir(), "candidate-manifest-"));
   try {
     const ignore = controlIgnoreStore(workspace.sourceRoot, workspace.base.commit, base, scratch);
-    const untracked = untrackedCandidates(workspace.root, tracked);
+    const untracked = untrackedCandidates(workspace.root, tracked, gitlinks);
     const ignored = ignoredByControl(ignore.gitDir, ignore.rulesRoot, untracked);
     const paths = [...tracked, ...untracked.filter(path => !ignored.has(path))].sort();
 
@@ -576,13 +759,13 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
     // does not own, and the reader would otherwise copy them into the packet.
     const regular = new Set([...entries].filter(([, entry]) => entry.linkText === null).map(([path]) => path));
     const files: CandidateFile[] = [];
-    const staged: { path: string; mode: string; bytes: Buffer }[] = [];
+    const staged: { path: string; mode: string; bytes: Buffer; linkText: string | null }[] = [];
     for (const path of paths) {
       const entry = entries.get(path);
       if (!entry) continue;
       if (entry.linkText === null) {
         files.push({ path, hash: sha256(entry.bytes), tracked: tracked.has(path) });
-        staged.push({ path, mode: entry.mode, bytes: entry.bytes });
+        staged.push({ path, mode: entry.mode, bytes: entry.bytes, linkText: null });
         continue;
       }
       if (entry.linkTarget === null || !regular.has(entry.linkTarget)) {
@@ -592,12 +775,10 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
       const target = entries.get(entry.linkTarget)!;
       files.push({ path, hash: sha256(target.bytes), tracked: tracked.has(path) });
       // Staged as the link's own text, because that is what the repository stores.
-      staged.push({ path, mode: entry.mode, bytes: Buffer.from(entry.linkText, "utf8") });
+      staged.push({ path, mode: entry.mode, bytes: Buffer.alloc(0), linkText: entry.linkText });
     }
 
-    const gitlinks = [...base].filter(([, entry]) => entry.mode === "160000")
-      .map(([path, entry]) => ({ path, objectId: entry.objectId }));
-    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, staged, gitlinks, scratch) };
+    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, base, staged, scratch) };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
