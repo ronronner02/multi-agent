@@ -759,6 +759,21 @@ The table names execution checkpoints inside T010, not new tasks or a replacemen
 - **Test scenarios:** (1) approve/reject binds the displayed version and only an owner control credential; (2) double input, reconnect and lost acknowledgements do not duplicate actions; (3) resize and mixed Chinese/English text keep columns aligned and the selection intact; (4) stale data disables misleading controls; (5) unknown usage is not zero; (6) a failing native command appears with its task/attempt, stderr and exit outcome; (7) redacted/truncated logs and reconnect gaps are visible without executing control sequences; (8) 1,000 events produce the correct final projection within the local visibility target; (9) worker-side tmux access cannot reach or type into the owner TUI; (10) the language switch changes labels immediately and keeps state codes, identifiers and agent text unchanged; (11) a pairing code expires after 60 seconds and works once; (12) session view input is ignored until take-over, and take-over start and end are audited.
 - **Verification:** TUI unit/projection tests, input transcripts, and a real terminal acceptance run at two window sizes in both languages. Screenshots or recordings supplement daemon receipts rather than replace them.
 
+**Approved TUI design (owner decision, 2026-10-24).** The owner approved the terminal design in `docs/design/t015-tui-design.md`; it is the design proposal that T015 and T016 wait for. The Web UI still needs its own proposal. The design restates `docs/Rendering.png` as a terminal grid in the ink-wash palette. The owner's rulings:
+- **Language:** both languages stay, and Chinese is the default (KTD15).
+- **Console input:** system commands from a fixed allowlist only; no chat with the Lead or any agent (PC4). The navigation has no Chat entry.
+- **Agents:** every agent shows its process state and its task state together.
+- **Finalize:** reads "awaiting decision" until the owner records a decision.
+- **Terminal-native output:** no images, rounded corners or shadows; whitespace separates regions.
+- **Icons:** Nerd Font glyphs, used only when `NERD_FONT=1`; otherwise plain-text labels. A terminal can't report its font, so the default is text, and text mode never emits a Private Use Area code point.
+- **Palette:** the 24-bit tokens in the design, with 256- and 16-color fallbacks. Legacy views keep their existing tokens and must render unchanged.
+- **Breakpoints:** wide at 140 columns or more, medium at 100–139, narrow below 100 columns or below 24 rows.
+- **No flicker:** frames are coalesced, written as row diffs inside synchronized output (DEC mode 2026), and never clear the whole screen per frame.
+
+The rendering foundation is a new task, T050. It owns the palette tokens in `engine/packages/tui/src/theme.ts`, the icon map and detection in a new `engine/packages/tui/src/icons.ts`, the frame writer in `engine/packages/tui/src/main.ts`, and their test. T015 depends on T050 and lays out the regions; T016 owns the command allowlist and the approve (`a`) and reject (`x`) bindings.
+
+(owner decision 2026-10-24 - chosen over an English-only interface and a chat input, both of which the brief proposed and the rulings rejected.)
+
 ### U7. Make cancellation, restart, and data rollback reliable
 
 - **Goal:** Recover durable coordination without duplicate work or false termination claims.

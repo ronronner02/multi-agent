@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:15363a50904491b882dd5192f3e8e9ffa3518b988320fdf98f84954db064e9cf"
+source_plan_hash: "sha256:a9b742ec42d59f3e3b7b1abc459b7c358747bae047ae358e0c84273f9ec65630"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -24,7 +24,7 @@ source_sections:
 
 ## Overview
 
-This derived execution index decomposes the active, implementation-ready source plan into **49 bounded tasks in 24 waves**, covering U1-U14. The 2026-10-24 split revision divides T044 again after its first execution under the re-plan: T044 keeps the production correctness (tracked symlink chains, symlink refusal, ignore authority, patch rendering) and the tests in its own file, and the new T049 (wave 17, after T044) owns the spawn audit, the full execution-vector matrix and the per-fixture byte-identity pins in a separate test-only card, because closing both would have taken T044 to about 1,425 changed lines against a ~1,200 budget. The 2026-10-24 revision re-plans T044 after three failed review rounds: the commit-lane manifest and patch are computed without running git on the candidate (plan U5), and candidate adoption and removal move to the new T048 (wave 18), which depends on T044. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-23 T042 stop revision adds T047 (attaching a produced managed attempt to the seat's binding and registering its endpoint in the composed chain) at wave 17, because T042's own `stop_if` found that the endpoint map lives only in `startup.ts` and the binding is built at three sites no task owned; T042 keeps the producer, T038 now depends on T047 and moves to wave 18, T046 follows to wave 19, and T026-T030 move to waves 20-24. The 2026-10-23 revision applies KTD28/U14: it adds T045 (the offline slice: the pinned core and role charters in every manifest, and the reviewer report format enforced when a review is recorded; wave 14) and T046 (facts-only briefs, retained review packets and observed charter discovery; wave 18, after T039, T042 and T038). T026 now depends on T046 so the primary live run uses charters, and T026-T030 move to waves 19-23. U14 takes T045 and T046 because the 2026-10-22 closeout split already holds T043 and T044. The 2026-10-22 closeout revision splits two T039 claims whose fixes lie outside its declared files into the new T043 (a reviewer launching into the reviewed candidate, which needs an assignment field naming that task) and T044 (a candidate manifest that cannot be forged by the worker through `core.fsmonitor`); both depend on T039. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
+This derived execution index decomposes the active, implementation-ready source plan into **50 bounded tasks in 24 waves**, covering U1-U14. The 2026-10-24 TUI design revision records the owner's approval of `docs/design/t015-tui-design.md` and adds T050 (wave 11), which gives the TUI the ink-wash palette, Nerd Font icons with a plain-text fallback and a flicker-free frame writer; T015 depends on it. The 2026-10-24 split revision divides T044 again after its first execution under the re-plan: T044 keeps the production correctness (tracked symlink chains, symlink refusal, ignore authority, patch rendering) and the tests in its own file, and the new T049 (wave 17, after T044) owns the spawn audit, the full execution-vector matrix and the per-fixture byte-identity pins in a separate test-only card, because closing both would have taken T044 to about 1,425 changed lines against a ~1,200 budget. The 2026-10-24 revision re-plans T044 after three failed review rounds: the commit-lane manifest and patch are computed without running git on the candidate (plan U5), and candidate adoption and removal move to the new T048 (wave 18), which depends on T044. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-23 T042 stop revision adds T047 (attaching a produced managed attempt to the seat's binding and registering its endpoint in the composed chain) at wave 17, because T042's own `stop_if` found that the endpoint map lives only in `startup.ts` and the binding is built at three sites no task owned; T042 keeps the producer, T038 now depends on T047 and moves to wave 18, T046 follows to wave 19, and T026-T030 move to waves 20-24. The 2026-10-23 revision applies KTD28/U14: it adds T045 (the offline slice: the pinned core and role charters in every manifest, and the reviewer report format enforced when a review is recorded; wave 14) and T046 (facts-only briefs, retained review packets and observed charter discovery; wave 18, after T039, T042 and T038). T026 now depends on T046 so the primary live run uses charters, and T026-T030 move to waves 19-23. U14 takes T045 and T046 because the 2026-10-22 closeout split already holds T043 and T044. The 2026-10-22 closeout revision splits two T039 claims whose fixes lie outside its declared files into the new T043 (a reviewer launching into the reviewed candidate, which needs an assignment field naming that task) and T044 (a candidate manifest that cannot be forged by the worker through `core.fsmonitor`); both depend on T039. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
 **Validation boundary:** T004 retains the plan-declared `engine/packages/daemon/src/middleware/auth-bearer-token.ts` source path. The validator contract must contain the audited exact-path allowance; broader credential-name denials remain in force. Validate this regenerated pack from the WSL artifact root before execution. Do not remove required source paths or treat a manual exception as a passing receipt.
 
@@ -78,7 +78,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | U3 | R1-R6, R11, R18, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6, KTD21 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness, effective-context manifests and the Lead operating protocol |
 | U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21, KTD23, KTD24, KTD27; PC7 | T008-T010, T031-T032, T034, T037-T042, T040-T041 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
 | U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD24, KTD25 | T011-T012, T035, T039, T042-T044, T047-T049 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework, the managed-attempt producer and KTD25 scope extensions |
-| U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
+| U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016, T050 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
 | U7 | R5, R9-R15, R18, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9, KTD20 | T017-T018, T033 | Owned-process cancel/deadlines, failure classification and retry eligibility, crash fault injection, no duplicate side effects and paired restore |
 | U9 | R12-R14, R19, R21, R22; AE6, AE13; KTD6, KTD14, KTD16, KTD18; PC1, PC4, PC5 | T013-T014 | Session/forgery/expiry gates, owner-host identity and audited read-only/take-over boundaries |
 | U10 | R12; KTD15; PC2 | T005 | Shared catalog/interpolation parity, fallback and display-width tests |
@@ -133,6 +133,7 @@ flowchart TD
   T010 --> T013 --> T014
   T012 --> T015
   T014 --> T015
+  T005 --> T050 --> T015
   T005 --> T015
   T015 --> T016 --> T017 --> T033 --> T018
   T012 --> T019
@@ -206,7 +207,7 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 8 | T031, T032 | KTD19 channel spike and Lead wake guards |
 | 9 | T010 | Managed-launch source contracts, the KTD24 projection and the Rev-5 host preflight |
 | 10 | T011, T013, T034 | Candidate/dependency isolation, browser owner sessions and the client version lock |
-| 11 | T012, T014, T037 | Independent review, owner terminal/take-over gates and production launch composition |
+| 11 | T012, T014, T037, T050 | Independent review, owner terminal/take-over gates, production launch composition, and the TUI rendering foundation |
 | 11.5 | T036 | Read-only health checks; its own wave because it reads the launch-state owner T037 declared |
 | 12 | T015, T019, T035, T040 | TUI projections, Web shell/data and KTD25 scope extensions, and the managed launch lifecycle |
 | 13 | T016, T020, T041 | Terminal owner controls and browser task/decision/session views, and production launch composition |
@@ -300,7 +301,8 @@ The following JSON is the single machine-readable task source. Human cards below
       "tasks": [
         "T012",
         "T014",
-        "T037"
+        "T037",
+        "T050"
       ]
     },
     {
@@ -1247,7 +1249,8 @@ The following JSON is the single machine-readable task source. Human cards below
         "T012",
         "T014",
         "T005",
-        "T036"
+        "T036",
+        "T050"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
@@ -1257,22 +1260,24 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/tui/src/render.ts",
         "engine/packages/tui/src/attention/attention-model.ts",
         "engine/packages/tui/test/team-projection.test.ts",
-        "engine/packages/tui/test/team-language.test.ts"
+        "engine/packages/tui/test/team-language.test.ts",
+        "engine/packages/tui/test/team-layout.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u6-add-observable-team-views-and-owner-controls-to-the-tui",
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#web-ui-and-tui-experience",
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#resource-data-and-operational-boundaries"
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#resource-data-and-operational-boundaries",
+        "docs/design/t015-tui-design.md"
       ],
-      "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters; the system status card renders the KTD26 lights from the U13 query, and `unknown` never renders as `ok`.",
-      "done_signal": "Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned.",
+      "entry_hint": "Start with docs/design/t015-tui-design.md (sections 1, 5 and 6), the layout reference docs/design/mockups/06-tui-ink-wash.html, and the team views in render.ts.",
+      "test_focus": "All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters; the system status card renders the KTD26 lights from the U13 query, and `unknown` never renders as `ok`. Layout: wide, medium and narrow modes chosen from both columns and rows (160x46, 120x36, 90x30, 150x22); the medium rail and narrow views; long titles and log lines truncate by display width without breaking columns in both languages. Agents show process state and task state together; Finalize reads awaiting decision; a missing or crashed review reads unavailable in the review gate. Chinese is the default language.",
+      "done_signal": "Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned. The layout tests cover the four sizes in both languages, and the regions match the approved design.",
       "wave": 12,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. The owner has not approved the UI/TUI design proposal for this task.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. Stop if the implementation departs from the approved design in docs/design/t015-tui-design.md, and return the difference as a design question.",
       "review_gate": "required",
       "review_focus": "Inspect projection authority, false success/zero-cost displays and shared-contract consumption.",
-      "notes": "Use the shared catalog; any missing key requires a serialized, scoped catalog update rather than parallel client-local tables.",
+      "notes": "Use the shared catalog; any missing key requires a serialized, scoped catalog update rather than parallel client-local tables. Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md); colors, icons and frame output come from T050's owners, and this task paints only through them.",
       "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -1326,13 +1331,14 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry.",
-      "done_signal": "Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI.",
+      "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry. The console input accepts only the allowlisted commands in the approved design (retry, pause, resume, open, help) and refuses free text with a message naming them; no message reaches an agent. Approve is `a` and reject is `x`; `r` refreshes.",
+      "done_signal": "Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI. The real-terminal runs use Windows Terminal once with a Nerd Font and NERD_FONT=1 and once with NERD_FONT=0.",
       "wave": 13,
       "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. The owner has not approved the UI/TUI design proposal for this task.",
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. Stop if the implementation departs from the approved design in docs/design/t015-tui-design.md, and return the difference as a design question.",
       "review_gate": "required",
       "review_focus": "Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.",
+      "notes": "Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md). The console input is commands only (PC4); there is no chat and no agent picker.",
       "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -3198,6 +3204,45 @@ The following JSON is the single machine-readable task source. Human cards below
       "notes": "Split out of T044 by owner decision on 2026-10-24. T044's first execution under the 2026-10-24 re-plan closed the execution class, but the review found further correctness defects and the card's full reproduction matrix was unimplemented; closing both would have taken the task to about 1,425 changed lines against a ~1,200 budget. T044 keeps production correctness and the tests in its own file; this task owns the proof that its done signal previously carried. The file is test-only, so it shares no production owner; it declares the same test file T044 declared before the split, which T044 no longer declares. It follows T044 because every assertion here is about the code T044 produces.",
       "risk_note": "A spawn audit that cannot fail, or byte-identity values regenerated from the code under test, would report proof the task does not have — the failure this matrix exists to prevent.",
       "expected_side_effects": []
+    },
+    {
+      "task_id": "T050",
+      "source_unit": "U6",
+      "requirement_refs": [
+        "R9",
+        "R16",
+        "KTD15",
+        "PC3",
+        "PC4"
+      ],
+      "goal": "Give the TUI the approved ink-wash palette, Nerd Font icons with a plain-text fallback, and a frame writer that does not flicker.",
+      "dependencies": [
+        "T005"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/tui/src/theme.ts",
+        "engine/packages/tui/src/icons.ts",
+        "engine/packages/tui/src/main.ts",
+        "engine/packages/tui/test/terminal-render.test.ts"
+      ],
+      "context_refs": [
+        "docs/design/t015-tui-design.md",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u6-add-observable-team-views-and-owner-controls-to-the-tui"
+      ],
+      "entry_hint": "Start with docs/design/t015-tui-design.md sections 3, 4 and 9, then detectColorMode and createStyle in theme.ts and the frame write in main.ts (the stylizeLines repaint).",
+      "test_focus": "(1) Palette: each ink-wash token renders its truecolor, 256 and 16-color value, and under NO_COLOR no color SGR is emitted at all. (2) Icons: NERD_FONT=1 selects the Nerd Font map; NERD_FONT=0, TERM=dumb and an unset NERD_FONT select the text labels; text mode never emits a code point in U+E000-U+F8FF or U+F0000 and above. (3) Width: displayWidth from @openrig/i18n measures CJK as two cells and a Nerd Font glyph as one, and pad/truncate helpers use it. (4) Frame writer: an identical frame writes nothing; a frame with one changed row writes only that row; every frame is wrapped in DEC mode 2026; no frame clears the whole screen; 1,000 log events within one second produce a bounded number of frames (at most one per 33 ms); exit and Ctrl+C restore the screen and the cursor. (5) Legacy: a legacy (non-team) view renders the same bytes as before the change.",
+      "done_signal": "Focused tests pass; the tui package typecheck and build pass; one final tui package run has no task-caused failure. Legacy views render unchanged. Required review closes on the final candidate with the AGENTS.md reviewer roster.",
+      "wave": 11,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a legacy view's output would change, if the work needs a new dependency, or if Nerd Font detection would have to guess the font, and return it as a design question. Stop if the task-level budget in AGENTS.md is reached.",
+      "review_gate": "required",
+      "review_focus": "Check that text mode can never print a Private Use Area glyph, that NO_COLOR output carries no color SGR, that the frame writer writes nothing for an unchanged frame and cannot leave the terminal in the alternate screen or with a hidden cursor, and that legacy views are byte-identical. Require a reproduction, not an argument.",
+      "notes": "Split out of T015 by owner decision on 2026-10-24, when the owner approved the TUI design (docs/design/t015-tui-design.md). theme.ts, icons.ts and main.ts had no owning task. theme.ts already detects truecolor, 256, 16 and none; add the ink-wash tokens beside the existing ones and leave the legacy tokens unchanged. icons.ts is a new local file: register it in tools/upstream-import.mjs LOCAL_ENGINE_PATHS (the missing registration of a new test file failed upstream-import verify from 23284b8 until PR #54). theme.ts and main.ts are imported files, so their changes go in PIN.adapted.",
+      "risk_note": "A Nerd Font glyph printed on a terminal without the font shows tofu, and a full repaint per log line flickers; both make the owner's main tool unreadable.",
+      "expected_side_effects": [
+        "tools/upstream-import.mjs"
+      ]
     }
   ]
 }
@@ -3370,12 +3415,14 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T015. Project durable team state, inert logs and shared language labels into the TUI.
 
 - **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T012, T014, T005, T036.
-- **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/live-events.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/test/team-projection.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 12; T012, T014, T005, T036, T050.
+- **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/live-events.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/test/team-projection.test.ts`; `engine/packages/tui/test/team-language.test.ts`; `engine/packages/tui/test/team-layout.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters; the system status card renders the KTD26 lights from the U13 query, and `unknown` never renders as `ok`.
-- **Done signal:** Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. The owner has not approved the UI/TUI design proposal for this task.
+- **Context:** the plan's U6 and Web UI and TUI Experience sections; `docs/design/t015-tui-design.md` (sections 1, 5 and 6); the layout reference `docs/design/mockups/06-tui-ink-wash.html`.
+- **Test focus:** All queue states/reference information regions, verified-criteria progress, deduplicated durable replay, task/attempt stderr/exit identity, redaction/truncation/gaps, unknown metrics and inert terminal control characters; the system status card renders the KTD26 lights from the U13 query, and `unknown` never renders as `ok`. Layout: wide, medium and narrow modes chosen from both columns and rows (160x46, 120x36, 90x30, 150x22); the medium rail and narrow views; long titles and log lines truncate by display width without breaking columns in both languages. Agents show process state and task state together; Finalize reads awaiting decision; a missing or crashed review reads unavailable in the review gate. Chinese is the default language.
+- **Done signal:** Projection tests recover the exact final state from 1,000 events within two seconds; stale/disconnected states disable misleading controls; language switches preserve codes/text/selection and mixed-width layout stays aligned. The layout tests cover the four sizes in both languages, and the regions match the approved design.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Agent percentages become progress, logs execute terminal escapes, raw terminal data is stored, or a second locale/state schema is introduced. Stop if the implementation departs from the approved design in docs/design/t015-tui-design.md, and return the difference as a design question.
+- **Notes:** Use the shared catalog; any missing key requires a serialized, scoped catalog update rather than parallel client-local tables. Owner decision 2026-10-24: the TUI design is approved; colors, icons and frame output come from T050's owners, and this task paints only through them.
 - **Review intent:** required; Inspect projection authority, false success/zero-cost displays and shared-contract consumption.
 
 ### T016. Connect TUI owner decisions, browser pairing and terminal take-over with real-terminal acceptance.
@@ -3384,9 +3431,10 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 13; T015, T035.
 - **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/input.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/src/terminals/terminal-model.ts`; `engine/packages/tui/test/team-controls.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry.
-- **Done signal:** Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. The owner has not approved the UI/TUI design proposal for this task.
+- **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry. The console input accepts only the allowlisted commands in the approved design (retry, pause, resume, open, help) and refuses free text with a message naming them; no message reaches an agent. Approve is `a` and reject is `x`; `r` refreshes.
+- **Done signal:** Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI. The real-terminal runs use Windows Terminal once with a Nerd Font and NERD_FONT=1 and once with NERD_FONT=0.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. Stop if the implementation departs from the approved design in docs/design/t015-tui-design.md, and return the difference as a design question.
+- **Notes:** Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md). The console input is commands only (PC4); there is no chat and no agent picker.
 - **Review intent:** required; Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.
 
 ### T017. Persist cancellation and enforce cumulative budgets outside controller-only timers.
@@ -3780,7 +3828,27 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Notes:** Split out of T044 by owner decision on 2026-10-24. T044's first execution under the 2026-10-24 re-plan closed the execution class, but the review found further correctness defects and the card's full reproduction matrix was unimplemented; closing both would have taken the task to about 1,425 changed lines against a ~1,200 budget. T044 keeps production correctness and the tests in its own file; this task owns the proof that its done signal previously carried. The file is test-only, so it shares no production owner; it declares the same test file T044 declared before the split, which T044 no longer declares. It follows T044 because every assertion here is about the code T044 produces.
 - **Review intent:** required; Check that the spawn audit actually records the processes (a shim that git never resolves, or an assertion list that no spawn can fail, does not prove anything), that each execution vector reaches the faulting call on the pre-T044 code, and that the pinned byte-identity values were captured from `23284b8` and not regenerated from the code under test. Require a reproduction, not an argument.
 
+### T050. Give the TUI the approved ink-wash palette, Nerd Font icons with a plain-text fallback, and a frame writer that does not flicker.
+
+- **Source / requirements:** `U6`; `R9`, `R16`, `KTD15`, `PC3`, `PC4`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 11; T005.
+- **Files:** `engine/packages/tui/src/theme.ts`; `engine/packages/tui/src/icons.ts`; `engine/packages/tui/src/main.ts`; `engine/packages/tui/test/terminal-render.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`: `PIN.adapted` entries for `theme.ts` and `main.ts`, and a `LOCAL_ENGINE_PATHS` entry for the new `icons.ts`; serialize this shared owner.
+- **Context:** `docs/design/t015-tui-design.md` (sections 3, 4 and 9); the plan's U6 owner decision of 2026-10-24.
+- **Test focus:**
+  1. Palette: each ink-wash token renders its truecolor, 256 and 16-color value; under `NO_COLOR` no color SGR is emitted.
+  2. Icons: `NERD_FONT=1` selects the Nerd Font map; `NERD_FONT=0`, `TERM=dumb` and an unset `NERD_FONT` select the text labels; text mode never emits a Private Use Area code point.
+  3. Width: `displayWidth` measures CJK as two cells and a Nerd Font glyph as one, and pad/truncate use it.
+  4. Frame writer: an identical frame writes nothing; one changed row writes only that row; every frame is wrapped in DEC mode 2026; no frame clears the whole screen; 1,000 log events within one second produce at most one frame per 33 ms; exit and Ctrl+C restore the screen and the cursor.
+  5. Legacy: a legacy view renders the same bytes as before.
+- **Done signal:** Focused tests pass; the tui package typecheck and build pass; one final tui package run has no task-caused failure. Legacy views render unchanged. Required review closes on the final candidate with the `AGENTS.md` reviewer roster.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a legacy view's output would change, if the work needs a new dependency, or if Nerd Font detection would have to guess the font, and return it as a design question. Stop if the task-level budget in `AGENTS.md` is reached.
+- **Notes:** Split out of T015 by owner decision on 2026-10-24, when the owner approved the TUI design. `theme.ts`, `icons.ts` and `main.ts` had no owning task. Add the ink-wash tokens beside the existing ones and leave legacy tokens unchanged. Register the new `icons.ts` as a local engine path; a missing registration of a new file failed `upstream-import verify` from `23284b8` until PR #54.
+- **Review intent:** required; Check that text mode can never print a Private Use Area glyph, that `NO_COLOR` output carries no color SGR, that an unchanged frame writes nothing and the terminal is always restored, and that legacy views are byte-identical. Require a reproduction, not an argument.
+
 ## Orientation Evidence
+
+- **2026-10-24 TUI design approval:** bounded reads of `engine/packages/tui` on `main` (`ee0174e`): `theme.ts` already maps tokens across truecolor, 256, 16 and none; `main.ts` repaints every line each frame (`\x1b[H` plus `\x1b[2K` per line); `@openrig/i18n` defaults to `zh-CN` and exports `displayWidth`. The owner approved `docs/design/t015-tui-design.md` with four rulings. T050 takes the rendering foundation, whose files no task owned; T015 depends on it, and T015 and T016 now stop on a departure from the approved design rather than on a missing approval. No product scope changed.
 
 - **2026-10-24 T044 split:** bounded reads of T044's round-1 records in `20261024T021939Z-t044-manifest-without-candidate-git`, the implementation on `feat/t044-manifest-without-candidate-git`, and the measured diff size (672 changed lines, of ~1,200). Two reviewers independently reproduced a tracked symlink chain hashed as no entry and symlink shapes dropped instead of refused; the orchestrator reproduced both plus a non-regular-file wedge and a command injection through an unquoted `fast-import` path. T044 keeps production correctness and the tests in its own file; the new T049, at wave 17 after T044, owns the spawn audit, the full execution-vector matrix and the per-fixture byte-identity pins in the test-only file T044 declared before the split. The plan's U5 records the decision. No product scope changed.
 

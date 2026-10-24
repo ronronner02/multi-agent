@@ -1,0 +1,653 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ink-Wash Team TUI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Layout: the shuimo-danqing still fills the page under the skin's scrim; one glass frame holds the TUI, scaled so its cell grid always fits. */
+:root {
+  color-scheme: dark;
+  /* page = the web skin (shuimo-danqing) */
+  --page: #171a20;
+  --glass: rgba(34, 39, 48, .72);
+  --glass-line: rgba(77, 101, 118, .45);
+  --paper: #e8e3d2;
+  --paper-dim: #a2b4b8;
+  --brand: #7d9aaa;
+  --seal: #d84b3a;
+  /* terminal = design.md section 3.1 */
+  --t-canvas: #0d1117;
+  --t-text: #c9d1d9;
+  --font-term: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--page); color: var(--paper); font: 15px/1.55 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 22px 40px;
+}
+.backdrop { position: fixed; inset: 0; z-index: -1; background:
+  linear-gradient(180deg, rgba(23,26,32,.35) 0%, rgba(23,26,32,.37) 30%, rgba(23,26,32,.46) 62%, rgba(23,26,32,.58) 100%),
+  linear-gradient(90deg, rgba(23,26,32,.08) 0%, rgba(23,26,32,.3) 13%, rgba(23,26,32,.55) 30%, rgba(23,26,32,.56) 100%),
+  var(--page); }
+.wrap { max-width: 1680px; margin: 0 auto; display: grid; gap: 16px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1.5px solid var(--seal); color: var(--seal); font: 500 15px var(--font-display); }
+h1 { margin: 0; font: 500 clamp(19px, 2.4vw, 24px)/1.2 var(--font-display); letter-spacing: .04em; text-wrap: balance; }
+.sub { color: var(--paper-dim); font-size: 13.5px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 999px; padding: 3px; backdrop-filter: blur(6px); }
+.seg .lab { font: 11px var(--font-term); letter-spacing: .1em; text-transform: uppercase; color: var(--paper-dim); padding: 5px 10px 5px 12px; }
+.seg button { font: 500 13px var(--font-body); color: var(--paper-dim); background: transparent; border: 0; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: rgba(125,154,170,.22); color: var(--paper); }
+.seg button:focus-visible, #screen:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.frame { background: rgba(13,17,23,.94); border: 1px solid var(--glass-line); border-radius: 10px; box-shadow: 0 24px 70px rgba(0,0,0,.5); overflow: hidden; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font: 12px var(--font-term); color: var(--paper-dim); border-bottom: 1px solid rgba(48,54,61,.9); }
+.bar i { width: 10px; height: 10px; border-radius: 50%; background: #2b3138; }
+.bar .dims { margin-left: auto; font-variant-numeric: tabular-nums; }
+.fit { padding: 10px; display: flex; justify-content: center; }
+#screen { margin: 0; font-family: var(--font-term); color: var(--t-text); background: var(--t-canvas); white-space: pre; cursor: default; }
+#screen > div { height: var(--lh); }
+#screen i { display: inline-block; width: 1ch; font-style: normal; text-align: center; overflow: hidden; vertical-align: top; }
+#screen .b { font-weight: 600; }
+#probe { position: absolute; visibility: hidden; font: 100px var(--font-term); white-space: pre; }
+details.notes { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 10px; padding: 12px 18px; backdrop-filter: blur(6px); }
+details.notes summary { cursor: pointer; font: 500 15px var(--font-display); letter-spacing: .03em; }
+.cols { display: grid; gap: 14px 28px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 12px; }
+.cols h2 { font: 500 14px var(--font-body); color: var(--paper); margin: 0 0 6px; }
+.cols ul, .cols ol { margin: 0; padding-left: 18px; color: var(--paper-dim); font-size: 13.5px; display: grid; gap: 5px; }
+.cols code { font: 12.5px var(--font-term); color: var(--paper); }
+.ask h2 { color: #e0b15a; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="backdrop" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="top">
+    <div class="mark" aria-hidden="true">墨</div>
+    <div>
+      <h1>Team TUI · Ink Wash</h1>
+      <div class="sub">Layout reference for docs/design/t015-tui-design.md · sample data · the spec's rulings win where this differs</div>
+    </div>
+  </div>
+
+  <div class="controls" role="group" aria-label="Mockup controls">
+    <div class="seg" id="g-size"><span class="lab">Terminal</span>
+      <button type="button" id="s-wide" data-v="160x46" aria-pressed="true">Wide 160×46</button>
+      <button type="button" id="s-med" data-v="120x36" aria-pressed="false">Medium 120×36</button>
+      <button type="button" id="s-nar" data-v="90x30" aria-pressed="false">Narrow 90×30</button>
+      <button type="button" id="s-short" data-v="150x22" aria-pressed="false">Short 150×22</button>
+      <button type="button" id="s-fit" data-v="fit" aria-pressed="false">Fit this window</button>
+    </div>
+    <div class="seg" id="g-conn"><span class="lab">Daemon</span>
+      <button type="button" id="c-live" data-v="live" aria-pressed="true">Live</button>
+      <button type="button" id="c-stale" data-v="stale" aria-pressed="false">Stale</button>
+      <button type="button" id="c-down" data-v="down" aria-pressed="false">Disconnected</button>
+    </div>
+    <div class="seg" id="g-color"><span class="lab">Color</span>
+      <button type="button" id="k-true" data-v="true" aria-pressed="true">Truecolor</button>
+      <button type="button" id="k-none" data-v="none" aria-pressed="false">NO_COLOR</button>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="bar"><i></i><i></i><i></i><span>multi-agent tui — work-board</span><span class="dims" id="dims"></span></div>
+    <div class="fit" id="fit"><pre id="screen" tabindex="0" aria-label="TUI mockup. Arrow keys select, Tab moves focus, brackets switch tabs, 1 to 5 switch views, c toggles the console, question mark opens help."></pre></div>
+  </div>
+
+  <details class="notes">
+    <summary>Design notes and decisions for you</summary>
+    <div class="cols">
+      <div>
+        <h2>What changed from the first draft</h2>
+        <ul>
+          <li>Panels are separated by whitespace on a lifted surface, not boxes. Borders appear only on the help overlay.</li>
+          <li>One amber accent, used like a seal: the focus mark, the selected row's edge, the active tab and actions waiting on you.</li>
+          <li>The TUI is drawn on an exact cell grid, so nothing overlaps at any size, and the frame scales to fit the page instead of overflowing.</li>
+          <li>Layout switches on columns and rows: wide (≥140 cols), medium (100–139), narrow (&lt;100 cols or &lt;24 rows).</li>
+          <li>Ink wash lives in the palette inside the terminal (design.md §3). The painting is the web skin's still frame, behind the page.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Kept from the plan</h2>
+        <ul>
+          <li>Progress is verified acceptance criteria (▰▰▱ 2/3), never a percentage.</li>
+          <li>The review gate says whether a change may be committed; a missing or crashed review is "Unavailable", never a pass.</li>
+          <li>Decisions waiting on you sit at the top of the right column; a native prompt offers "open session", never approve.</li>
+          <li>Unknown values read Unknown. Remote workers aren't configured, so they aren't shown.</li>
+          <li>Stale or disconnected data shows a banner and disables approve and reject.</li>
+        </ul>
+      </div>
+      <div class="ask">
+        <h2>Ruled on 2026-10-24</h2>
+        <ol>
+          <li>Chinese is the default and the language switch stays; this reference shows English labels only.</li>
+          <li>The console input takes allowlisted commands only; there is no chat.</li>
+          <li>Agents show process state and task state together.</li>
+          <li>Finalize reads "awaiting decision" until the owner decides.</li>
+          <li>The implementation uses Nerd Font glyphs with text fallbacks, not the Unicode glyphs drawn here. See docs/design/t015-tui-design.md.</li>
+        </ol>
+      </div>
+    </div>
+  </details>
+</div>
+<span id="probe">MMMMMMMMMM</span>
+
+<script>
+(() => {
+  // design.md section 3.1 palette
+  const P = { canvas: "#0D1117", surface: "#161B22", text: "#C9D1D9", dim: "#8B949E", accent: "#D29922", ok: "#3FB950", err: "#F85149", line: "#30363D", sel: "#264F78", mute: "#6E7681" };
+  const S = { size: "160x46", conn: "live", color: "true", sel: 1, tab: 0, focus: 0, view: 0, console: false, ctab: 1, help: false, follow: true };
+
+  const TASKS = [
+    { id: "TASK-001", t: "Define the items API contract", a: "Claude Code", s: "completed", c: [4, 4], p: "P0", l: "api" },
+    { id: "TASK-002", t: "Implement the status filter endpoint", a: "Claude Code", s: "changes", c: [2, 3], p: "P0", l: "api" },
+    { id: "TASK-003", t: "Persist status toggles to the store", a: "Claude Code", s: "progress", c: [1, 4], p: "P1", l: "db" },
+    { id: "TASK-004", t: "Frontend filter interaction", a: "—", s: "blocked", c: [0, 3], p: "P1", l: "ui", dep: "003" },
+    { id: "TASK-005", t: "Integration acceptance tests", a: "Pi", s: "ready", c: [0, 3], p: "P1", l: "e2e" },
+    { id: "TASK-006", t: "Install dependencies", a: "Codex", s: "failed", c: [0, 1], p: "P2", l: "build" },
+    { id: "TASK-007", t: "Migrate legacy filter query parameters", a: "Pi", s: "testing", c: [1, 2], p: "P2", l: "api" },
+    { id: "TASK-008", t: "Update the API reference", a: "—", s: "pending", c: [0, 2], p: "P2", l: "docs" },
+    { id: "TASK-009", t: "Remove the debug endpoint", a: "—", s: "cancelled", c: [0, 1], p: "P2", l: "api" }
+  ];
+  const ST = {
+    pending: ["○", "Pending", "dim"], ready: ["◇", "Ready", "text"], progress: ["◐", "In Progress", "text"],
+    testing: ["◑", "Testing", "text"], review: ["◆", "In Review", "text"], changes: ["!", "Changes Requested", "err"],
+    blocked: ["■", "Blocked", "err"], completed: ["✓", "Completed", "ok"], failed: ["✗", "Failed", "err"], cancelled: ["–", "Cancelled", "dim"]
+  };
+  const NAV = [["◇", "Dashboard", "1"], ["≡", "Tasks", "2", "9"], ["▢", "Workspaces", ""], ["◎", "Agents", "3", "1"], ["◆", "Reviews", "4", "1"], ["»", "Chat", ""], ["∴", "Knowledge", ""], ["¶", "Logs", "5"], ["∗", "Settings", ""]];
+  const PHASES = ["Initialize", "Read Spec", "Plan & Split", "Execute Tasks", "Review", "Integration", "Finalize"];
+
+  // ---- cell screen ----
+  let W, H, cells, hits;
+  const chars = s => Array.from(String(s));
+  const clip = (s, n) => { const a = chars(s); return n <= 0 ? "" : a.length <= n ? a.join("") : a.slice(0, Math.max(0, n - 1)).join("") + "…"; };
+  const pad = (s, n) => { const c = clip(s, n); return c + " ".repeat(Math.max(0, n - chars(c).length)); };
+  const rpad = (s, n) => { const c = clip(s, n); return " ".repeat(Math.max(0, n - chars(c).length)) + c; };
+  function reset() { cells = []; hits = []; for (let y = 0; y < H; y++) { const r = []; for (let x = 0; x < W; x++) r.push({ c: " ", f: P.text, g: P.canvas, b: 0 }); cells.push(r); } }
+  function fill(x, y, w, h, g) { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (cells[j] && cells[j][i]) { cells[j][i] = { c: " ", f: P.text, g, b: 0 }; } }
+  function put(x, y, s, f = P.text, o = {}) {
+    if (y < 0 || y >= H) return 0;
+    let i = 0;
+    for (const ch of chars(s)) { const cx = x + i; if (cx >= 0 && cx < W) { const cell = cells[y][cx]; cells[y][cx] = { c: ch, f, g: o.g || cell.g, b: o.b ? 1 : 0 }; } i++; }
+    return i;
+  }
+  function seg(x, y, parts, max) { // parts: [text, color, opts]
+    let used = 0;
+    for (const [t, f, o] of parts) { const room = max - used; if (room <= 0) break; used += put(x + used, y, clip(t, room), f, o); }
+    return used;
+  }
+  function serialize() {
+    const nc = S.color === "none";
+    const esc = c => c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c;
+    let out = "";
+    for (const row of cells) {
+      let line = "", cur = null, buf = "";
+      const flush = () => { if (buf) line += `<span style="${cur}">${buf}</span>`; buf = ""; };
+      for (const cell of row) {
+        let f = cell.f, g = cell.g;
+        if (nc) { const inv = g === P.sel; f = inv ? P.canvas : P.text; g = inv ? P.text : P.canvas; }
+        const st = `color:${f};background:${g}${cell.b ? ";font-weight:600" : ""}`;
+        if (st !== cur) { flush(); cur = st; }
+        const c = cell.c;
+        buf += c.charCodeAt(0) < 128 ? esc(c) : `<i>${c}</i>`;
+      }
+      flush(); out += `<div>${line}</div>`;
+    }
+    return out;
+  }
+
+  // ---- shared pieces ----
+  const off = () => S.conn !== "live";
+  const stat = s => { const [g, n, k] = ST[s]; return [g, n, P[k]]; };
+  const bar = ([a, b], n = 3) => { const f = b ? Math.round(a / b * n) : 0; return ["▰".repeat(f), "▱".repeat(n - f), `${a}/${b}`]; };
+
+  function panel(x, y, w, h, title, idx, right) {
+    if (w < 6 || h < 2) return null;
+    fill(x, y, w, h, P.surface);
+    const focused = S.focus === idx;
+    if (focused) put(x, y, "▌", P.accent, { g: P.surface });
+    put(x + 2, y, clip(title.toUpperCase(), w - 4), focused ? P.text : P.dim, { b: focused });
+    if (right) { const r = clip(right, Math.max(0, w - chars(title).length - 8)); put(x + w - 2 - chars(r).length, y, r, P.dim); }
+    return { x: x + 2, y: y + 1, w: w - 4, h: h - 1 };
+  }
+
+  function header(y) {
+    fill(0, y, W, 1, P.canvas);
+    const conn = { live: ["●", "live · 2s", P.ok], stale: ["◐", "stale · 7s", P.accent], down: ["✗", "disconnected", P.err] }[S.conn];
+    const left = [["◆ ", P.accent], ["Multi-Agent Engineering Team", P.text, { b: 1 }], ["   work-board", P.text], ["  ⎇ main", P.dim], ["   WSL2 · Ubuntu 22.04", P.dim]];
+    const phase = [["   Phase ", P.dim], ["4/7 Execute Tasks", P.text]];
+    const rightParts = [["! 2 need you", P.accent], ["   ", P.dim], [conn[0] + " " + conn[1], conn[2]], ["   SAMPLE DATA", P.mute], ["   21:04:12", P.dim]];
+    const rw = rightParts.reduce((n, p) => n + chars(p[0]).length, 0);
+    const used = seg(1, y, W >= 120 ? left.concat(phase) : W >= 90 ? [left[0], left[1], left[2]] : [left[0], ["MAET", P.text, { b: 1 }], left[2]], W - rw - 3);
+    let parts = rightParts;
+    if (W < 120) parts = [rightParts[0], rightParts[1], rightParts[2]];
+    const w2 = parts.reduce((n, p) => n + chars(p[0]).length, 0);
+    if (used + w2 + 3 <= W) seg(W - w2 - 1, y, parts, w2);
+  }
+
+  function banner(y) {
+    if (!off()) return 0;
+    const t = S.conn === "stale" ? "! Data is stale: no heartbeat for 7s. Approve and reject are disabled until the daemon answers." : "✗ Can't reach the daemon. Every control is disabled; retrying every 2s (attempt 4).";
+    fill(0, y, W, 1, P.canvas);
+    put(1, y, clip(t, W - 2), S.conn === "stale" ? P.accent : P.err, { b: 1 });
+    return 1;
+  }
+
+  function footer() {
+    const y = H - 1; fill(0, y, W, 1, P.canvas);
+    const keys = W < 100
+      ? [["↑↓", "select"], ["1-5", "views"], ["Enter", "open"], ["c", "console"], ["?", "help"], ["q", "quit"]]
+      : [["↑↓", "select"], ["Enter", "open"], ["Tab", "focus"], ["[ ]", "tabs"], ["/", "search"], ["a", "approve"], ["x", "reject"], ["r", "refresh"], ["c", "command"], ["?", "help"], ["q", "quit"]];
+    let x = 1;
+    for (const [k, n] of keys) {
+      const dis = off() && (k === "a" || k === "x");
+      const need = chars(k).length + chars(n).length + 3;
+      if (x + need > W - 1) break;
+      put(x, y, k, dis ? P.mute : P.accent, { b: !dis }); x += chars(k).length + 1;
+      put(x, y, n, dis ? P.mute : P.dim); x += chars(n).length + 2;
+    }
+  }
+
+  function nav(x, y, w, h, icons) {
+    const r = panel(x, y, w, h, icons ? "" : "Navigate", 9);
+    if (!r) return;
+    NAV.forEach(([g, n, k, badge], i) => {
+      const yy = r.y + i; if (yy >= r.y + r.h) return;
+      const on = i === [1, 1, 3, 4, 7][S.view];
+      if (on) { fill(x, yy, w, 1, P.sel); put(x, yy, "▌", P.accent, { g: P.sel }); }
+      if (icons) { put(x + 2, yy, g, on ? P.text : P.dim); if (badge) put(x + 3, yy, badge, P.accent); return; }
+      put(r.x, yy, g, on ? P.accent : P.dim);
+      const lw = put(r.x + 2, yy, clip(n, r.w - 8), on ? P.text : P.dim, { b: on });
+      // the count follows its label; the shortcut key keeps the right edge
+      if (badge) put(r.x + 3 + lw, yy, badge, i === 3 || i === 4 ? P.accent : P.dim);
+      if (k) put(r.x + r.w - 1, yy, k, P.mute);
+    });
+  }
+
+  function planCard(x, y, w, h) {
+    const r = panel(x, y, w, h, "Current plan", 10);
+    if (!r || r.h < 4) return;
+    put(r.x, r.y, clip("Work-board status filter", r.w), P.text);
+    const rows = [["digest", "3f9a..c21e"], ["state", "✓ approved"], ["since", "10-13 10:24"]];
+    rows.forEach(([k, v], i) => { if (r.y + 1 + i < r.y + r.h) { put(r.x, r.y + 1 + i, k, P.dim); put(r.x + r.w - chars(v).length, r.y + 1 + i, v, i === 1 ? P.ok : P.text); } });
+  }
+
+  function workflow(x, y, w, h) {
+    const r = panel(x, y, w, h, "Workflow", 11, "4 of 7");
+    if (!r) return;
+    const mark = i => i < 3 ? ["✓", P.ok] : i === 3 ? ["◐", P.accent] : ["○", P.dim];
+    const full = PHASES.map((p, i) => mark(i)[0] + " " + p + (i === 6 ? " (awaiting decision)" : "")).join(" ── ");
+    if (chars(full).length <= r.w) {
+      let cx = r.x;
+      PHASES.forEach((p, i) => {
+        const [g, c] = mark(i);
+        cx += put(cx, r.y, g + " ", c);
+        cx += put(cx, r.y, p, i === 3 ? P.text : i < 3 ? P.dim : P.mute, { b: i === 3 });
+        if (i === 6) cx += put(cx, r.y, " (awaiting decision)", P.mute);
+        if (i < 6) cx += put(cx, r.y, " ── ", i < 3 ? P.ok : P.line);
+      });
+    } else {
+      let cx = r.x;
+      PHASES.forEach((p, i) => { const [g, c] = mark(i); cx += put(cx, r.y, g, c); });
+      put(cx + 2, r.y, clip("Execute Tasks · next: Review · Finalize awaits your decision", r.w - 9), P.text);
+    }
+  }
+
+  function taskList(x, y, w, h) {
+    const r = panel(x, y, w, h, "Tasks", 0, "/ search   sort: priority");
+    if (!r) return;
+    const filt = [["All", 9], ["Ready", 1], ["In Progress", 2], ["In Review", 1], ["Blocked", 1], ["Completed", 1]];
+    let cx = r.x;
+    filt.forEach(([n, c], i) => { if (cx < r.x + r.w - 6) { cx += put(cx, r.y, clip(`${n} ${c}`, r.x + r.w - cx), i === 0 ? P.accent : P.dim, { b: i === 0 }) + 3; } });
+    const wide = r.w >= 84, mid = r.w >= 60;
+    const cA = wide ? 12 : 0, cS = mid ? 20 : 3, cP = 9, cPr = 3, cL = r.w >= 100 ? 6 : 0;
+    // id + title + agent + status + progress + priority + labels, with 3 cells of slack so a row never crosses the panel edge
+    const cT = r.w - 9 - cA - cS - cP - cPr - cL - 3;
+    TASKS.forEach((t, i) => {
+      const yy = r.y + 2 + i; if (yy >= r.y + r.h) return;
+      const sel = i === S.sel;
+      if (sel) { fill(x, yy, w, 1, P.sel); put(x, yy, "▌", P.accent, { g: P.sel }); }
+      const [g, n, c] = stat(t.s); const [f, e, frac] = bar(t.c);
+      let cx = r.x;
+      cx += put(cx, yy, pad(t.id, 9), sel ? P.text : P.dim);
+      cx += put(cx, yy, pad(t.t + (t.dep ? `  ↳ ${t.dep}` : ""), cT), P.text, { b: sel }) + 1;
+      if (cA) cx += put(cx, yy, pad(t.a, cA), P.dim);
+      cx += put(cx, yy, g + " ", c);
+      if (mid) cx += put(cx, yy, pad(n, cS - 2), c); else cx += 1;
+      cx += put(cx, yy, f, P.ok) + put(cx + chars(f).length, yy, e, P.line);
+      put(cx + 1, yy, pad(frac, cP - 4), P.dim); cx += cP - 3;
+      cx += put(cx, yy, t.p, t.p === "P0" ? P.accent : P.dim) + 2;
+      if (cL) put(cx, yy, clip(t.l, cL), P.mute);
+      hits.push({ x, y: yy, w, h: 1, act: () => { S.sel = i; S.focus = 0; } });
+    });
+  }
+
+  const DTABS = ["Details", "Diff", "Tests", "Reviews", "Commits", "Discussion"];
+  function details(x, y, w, h) {
+    const t = TASKS[S.sel];
+    const r = panel(x, y, w, h, t.id + "  " + t.t, 1);
+    if (!r) return;
+    let cx = r.x;
+    DTABS.forEach((n, i) => {
+      if (cx + chars(n).length > r.x + r.w) return;
+      put(cx, r.y, n, i === S.tab ? P.text : P.dim, { b: i === S.tab });
+      if (i === S.tab) put(cx, r.y + 1, "─".repeat(chars(n).length), P.accent);
+      hits.push({ x: cx, y: r.y, w: chars(n).length, h: 1, act: () => { S.tab = i; S.focus = 1; } });
+      cx += chars(n).length + 3;
+    });
+    const y0 = r.y + 2, hh = r.h - 2;
+    if (t.id !== "TASK-002") {
+      const [g, n, c] = stat(t.s);
+      seg(r.x, y0, [["Status   ", P.dim], [g + " " + n, c]], r.w);
+      seg(r.x, y0 + 1, [["Agent    ", P.dim], [t.a, P.text]], r.w);
+      seg(r.x, y0 + 2, [["Criteria ", P.dim], [bar(t.c).join(""), P.text]], r.w);
+      put(r.x, y0 + 4, clip("Sample data: other tasks follow TASK-002's layout.", r.w), P.mute);
+      return;
+    }
+    const two = r.w >= 74;
+    const lw = two ? Math.floor(r.w * 0.56) : r.w, rx = two ? r.x + lw + 3 : r.x, rw = two ? r.w - lw - 3 : r.w;
+    const L = [], R = [];
+    if (S.tab === 0) {
+      L.push([["Add a status query parameter to GET /items that filters by open or done.", P.text]]);
+      L.push([]);
+      L.push([["ACCEPTANCE  ", P.dim], ["2 of 3 verified", P.text]]);
+      L.push([["✓ ", P.ok], ["GET /items?status=open|done returns matching items", P.text]]);
+      L.push([["✓ ", P.ok], ["Invalid status returns 400", P.text]]);
+      L.push([["✗ ", P.err], ["Unknown item id returns 404", P.text], ["  failed in review", P.err]]);
+      L.push([]);
+      L.push([["FILES  ", P.dim], ["src/routes/items.ts  src/filters/status.ts", P.text]]);
+      L.push([["       ", P.dim], ["test/items.filter.test.ts  +86 −12", P.dim]]);
+      R.push([["Status    ", P.dim], ["! Changes Requested", P.err]]);
+      R.push([["Priority  ", P.dim], ["P0", P.accent]]);
+      R.push([["Agent     ", P.dim], ["Claude Code · attempt 1", P.text]]);
+      R.push([["Depends   ", P.dim], ["✓ TASK-001", P.ok]]);
+      R.push([["Tests     ", P.dim], ["12 passed · ", P.text], ["1 failed", P.err]]);
+      R.push([["Candidate ", P.dim], ["7c2e..a91 · not committed", P.text]]);
+      R.push([]);
+      R.push([["REVIEW GATE", P.dim]]);
+      R.push([["✓ ", P.ok], ["Claude Review   passed", P.text]]);
+      R.push([["! ", P.err], ["Codex Review    1 blocking", P.text]]);
+      R.push([["Commit eligible  ", P.dim], ["No · re-review required", P.err, { b: 1 }]]);
+    } else if (S.tab === 1) {
+      ["src/routes/items.ts          +41  −6", "src/filters/status.ts        +28", "test/items.filter.test.ts    +17", "src/types.ts                      −6"].forEach(s => L.push([[s, P.text]]));
+      L.push([]); L.push([["@@ items.ts:52 @@", P.dim]]);
+      L.push([["+  const status = parseStatus(req.query.status)", P.ok]]);
+      L.push([["+  if (!status) return res.status(400).end()", P.ok]]);
+      L.push([["-  return res.json(items)", P.err]]);
+    } else if (S.tab === 2) {
+      L.push([["✓ PASS ", P.ok], ["test/items.filter.test.ts   12 tests   0.84s", P.text]]);
+      L.push([["✗ FAIL ", P.err], ["test/items.missing.test.ts   1 test", P.text]]);
+      L.push([["       expected 404, received 200", P.dim]]);
+      L.push([]); L.push([["Evidence bound to candidate 7c2e..a91, attempt 1.", P.dim]]);
+    } else if (S.tab === 3) {
+      L.push([["Codex Review  ", P.text, { b: 1 }], ["! Changes Required", P.err], ["   21:02", P.dim]]);
+      L.push([["  1 blocking · 0 warnings · src/routes/items.ts:58", P.text]]);
+      L.push([["  Unknown id returns 200 with an empty array; expected 404.", P.dim]]);
+      L.push([]);
+      L.push([["Claude Review ", P.text, { b: 1 }], ["✓ Passed", P.ok], ["   20:58", P.dim]]);
+      L.push([["  0 blocking · 1 warning · naming in status.ts:12", P.dim]]);
+      L.push([]); L.push([["Policy: both reviewers pass on the same candidate. Re-review required.", P.dim]]);
+    } else if (S.tab === 4) {
+      L.push([["No commits yet. The candidate commits after the review gate passes.", P.dim]]);
+    } else {
+      L.push([["20:41 Lead → Claude Code   Add the 404 branch before submitting.", P.text]]);
+      L.push([["20:55 Claude Code → Lead   Submitted 7c2e..a91; 404 still pending.", P.text]]);
+      L.push([["21:02 Codex → Lead         Returned: missing 404 for unknown ids.", P.text]]);
+      L.push([]); L.push([["Read-only. Agents' messages are shown as written.", P.mute]]);
+    }
+    L.forEach((p, i) => { if (i < hh) seg(r.x, y0 + i, p, lw); });
+    const off2 = two ? 0 : L.length + 1;
+    R.forEach((p, i) => { if (off2 + i < hh) seg(rx, y0 + off2 + i, p, rw); });
+  }
+
+  function attention(x, y, w, h) {
+    const r = panel(x, y, w, h, "Needs you · 2", 2);
+    if (!r) return;
+    const dis = off();
+    const rows = [
+      [["◆ ", P.accent], ["Scope extension · TASK-003", P.text, { b: 1 }]],
+      [["  + src/filters/status-store.ts  create", P.dim]],
+      [["  ", P.dim], ["a", dis ? P.mute : P.accent, { b: !dis }], [" approve   ", dis ? P.mute : P.dim], ["x", dis ? P.mute : P.accent, { b: !dis }], [" reject", dis ? P.mute : P.dim]],
+      [["◆ ", P.accent], ["Native prompt · Codex · TASK-002", P.text, { b: 1 }]],
+      [["  ", P.dim], ["o", P.accent, { b: 1 }], [" open session (answer it there)", P.dim]]
+    ];
+    rows.forEach((p, i) => { if (i < r.h) seg(r.x, r.y + i, p, r.w); });
+  }
+
+  function agents(x, y, w, h) {
+    const r = panel(x, y, w, h, "Agents", 3);
+    if (!r) return;
+    const A = [
+      ["●", P.ok, "Lead", "opus-5.5", "Busy", "planning TASK-005", "1h 12m"],
+      ["◐", P.text, "Claude Code", "claude cli", "Busy", "TASK-003 · running tests", "12m"],
+      ["!", P.accent, "Codex", "codex cli", "Needs attention", "TASK-002 · native prompt", "3m"],
+      ["○", P.dim, "Pi", "pi cli", "Online", "idle · last: TASK-007 tests", "—"]
+    ];
+    A.forEach(([g, c, n, m, s, act, el], i) => {
+      const yy = r.y + i * 2; if (yy >= r.y + r.h) return;
+      put(r.x, yy, g, c);
+      put(r.x + 2, yy, clip(n, 12), P.text, { b: 1 });
+      const sx = r.x + r.w - chars(s).length; put(sx, yy, s, c === P.dim ? P.dim : c);
+      if (r.w > 34) put(r.x + 15, yy, clip(m, sx - r.x - 17), P.mute);
+      if (yy + 1 < r.y + r.h) { put(r.x + 2, yy + 1, clip(act, r.w - 9), P.dim); put(r.x + r.w - chars(el).length, yy + 1, el, P.mute); }
+    });
+  }
+
+  function system(x, y, w, h) {
+    const r = panel(x, y, w, h, "System", 4);
+    if (!r) return;
+    const down = S.conn === "down";
+    const R = [["Git repository", "⎇ main", "Healthy"], ["Worktrees", "3 active", "Healthy"], ["Task storage", "SQLite", "Healthy"], ["Spec-first", "plan 3f9a", "Healthy"], ["Agent runtime", "4 sessions", "Running"], ["Test runner", "TASK-003", "Running"], ["Event stream", "2s", S.conn === "stale" ? "Degraded" : "Healthy"], ["Control tmux", "probe timed out", "Unknown"]];
+    R.forEach(([n, d, s], i) => {
+      if (i >= r.h) return;
+      const st = down ? "Unknown" : s;
+      const [g, c] = { Healthy: ["●", P.ok], Running: ["◐", P.text], Degraded: ["!", P.accent], Unknown: ["?", P.dim] }[st];
+      put(r.x, r.y + i, g, c);
+      put(r.x + 2, r.y + i, clip(n, 15), P.text);
+      if (r.w > 36) put(r.x + 18, r.y + i, clip(d, r.w - 29), P.mute);
+      put(r.x + r.w - chars(st).length, r.y + i, st, c);
+    });
+  }
+
+  function activity(x, y, w, h) {
+    const r = panel(x, y, w, h, "Recent activity", 5);
+    if (!r) return;
+    const E = [["21:04:12", "Codex requested changes on TASK-002"], ["21:03:40", "TASK-003 attempt 2 started"], ["21:02:05", "TASK-006 failed · exit 1 · retryable"], ["20:58:31", "Claude Review passed TASK-002"], ["20:55:10", "Claude Code submitted 7c2e..a91"], ["20:41:02", "TASK-005 ready: dependencies met"]];
+    E.forEach(([t, e], i) => { if (i < r.h) { put(r.x, r.y + i, t, P.mute); put(r.x + 10, r.y + i, clip(e, r.w - 10), P.text); } });
+  }
+
+  const CTABS = ["Terminal", "Logs", "Reviews", "Messages"];
+  function consolePane(x, y, w, h) {
+    const r = panel(x, y, w, h, "Console", 6, S.follow ? "● following · p pause" : "‖ paused · p follow");
+    if (!r) return;
+    let cx = r.x + 10;
+    CTABS.forEach((n, i) => {
+      if (cx + chars(n).length > r.x + r.w - 26) return;
+      put(cx, r.y - 1, n, i === S.ctab ? P.text : P.dim, { b: i === S.ctab, g: P.surface });
+      hits.push({ x: cx, y: r.y - 1, w: chars(n).length, h: 1, act: () => { S.ctab = i; S.focus = 6; } });
+      cx += chars(n).length + 3;
+    });
+    const lines = S.ctab === 0
+      ? [[["claude-code@TASK-003 · read-only session view", P.mute]], [["$ ", P.dim], ["npm test -- items.status", P.text]], [["  ✓ toggles open → done (14 ms)", P.ok]], [["  … 3 more running", P.dim]], [["Input is ignored here. t takes over (audited).", P.accent]]]
+      : S.ctab === 1
+      ? [[["21:04:12 ", P.mute], ["INFO  ", P.text], ["out ", P.mute], ["npm test — 12 passed, 1 failed", P.text]],
+         [["21:04:12 ", P.mute], ["ERROR ", P.err], ["err ", P.err], ["expected 404, received 200  items.missing.test.ts:9", P.text]],
+         [["21:04:13 ", P.mute], ["DEBUG ", P.dim], ["out ", P.mute], ["DATABASE_URL=‹redacted›", P.dim]],
+         [["21:04:13 ", P.mute], ["WARN  ", P.accent], ["sys ", P.mute], ["‹truncated 2.1 KB› · reconnect gap 21:03:05–21:03:09, backfilled", P.accent]],
+         [["21:04:15 ", P.mute], ["PASS  ", P.ok], ["out ", P.mute], ["test/items.filter.test.ts  12/12", P.text]]]
+      : S.ctab === 2
+      ? [[["21:02 ", P.mute], ["Codex  ", P.text], ["CHANGES REQUIRED ", P.err], ["TASK-002  src/routes/items.ts:58", P.text]], [["20:58 ", P.mute], ["Claude ", P.text], ["PASSED ", P.ok], ["TASK-002  1 warning", P.text]]]
+      : [[["20:55 ", P.mute], ["Claude Code → Lead  ", P.dim], ["Submitted 7c2e..a91; 404 still pending.", P.text]], [["21:02 ", P.mute], ["Codex → Lead        ", P.dim], ["Returned: missing 404 for unknown ids.", P.text]]];
+    const body = r.h - 1;
+    lines.slice(-Math.max(0, body)).forEach((p, i) => seg(r.x, r.y + i, p, r.w));
+    const iy = r.y + r.h - 1;
+    if (iy > r.y) {
+      fill(r.x - 1, iy, r.w + 2, 1, P.canvas);
+      put(r.x, iy, "›", P.accent, { b: 1, g: P.canvas });
+      put(r.x + 2, iy, clip(off() ? "Commands are unavailable while the daemon is unreachable." : "Type a supported command: retry, pause, resume, open, help", r.w - 16), P.mute, { g: P.canvas });
+      const k = "c command"; put(r.x + r.w - chars(k).length, iy, k, P.mute, { g: P.canvas });
+    }
+  }
+
+  function helpOverlay() {
+    const w = Math.min(58, W - 4), h = Math.min(17, H - 4), x = Math.floor((W - w) / 2), y = Math.floor((H - h) / 2);
+    fill(x, y, w, h, P.surface);
+    put(x, y, "┌" + "─".repeat(w - 2) + "┐", P.line); put(x, y + h - 1, "└" + "─".repeat(w - 2) + "┘", P.line);
+    for (let j = y + 1; j < y + h - 1; j++) { put(x, j, "│", P.line); put(x + w - 1, j, "│", P.line); }
+    put(x + 3, y, " KEYBOARD ", P.accent, { b: 1 });
+    const K = [["1-5", "Tasks · Details · Agents · Reviews · Logs"], ["Tab / Shift+Tab", "move focus between panels"], ["↑ ↓", "move in the focused list"], ["Enter", "open the selection"], ["[ ]", "previous / next detail tab"], ["/", "search tasks"], ["a / x", "approve / reject the focused decision"], ["o", "open the agent's native session"], ["r", "refresh the current view"], ["c", "open the command input"], ["p", "pause or follow console output"], ["Esc", "close this overlay"], ["q", "quit (asks first while work runs)"]];
+    K.forEach(([k, n], i) => { if (y + 2 + i < y + h - 1) { put(x + 3, y + 2 + i, pad(k, 16), P.accent); put(x + 20, y + 2 + i, clip(n, w - 23), P.text); } });
+  }
+
+  // ---- layouts by columns and rows (design.md section 5) ----
+  function layout() {
+    reset();
+    const narrow = W < 100 || H < 24, medium = !narrow && W < 140;
+    header(0);
+    let y = 1 + banner(1);
+    if (H >= 30) y += 1;
+    footer();
+    const bottom = H - 1;
+
+    if (narrow) {
+      // master-detail: one view at a time, everything collapsible
+      const views = ["Tasks", "Details", "Agents", "Reviews", "Logs"];
+      let cx = 1;
+      views.forEach((v, i) => {
+        const on = i === S.view;
+        const label = `${i + 1} ${v}`;
+        put(cx, y, label, on ? P.text : P.dim, { b: on });
+        if (on) put(cx, y + 1, "─".repeat(chars(label).length), P.accent);
+        hits.push({ x: cx, y, w: chars(label).length, h: 1, act: () => { S.view = i; } });
+        cx += chars(label).length + 3;
+      });
+      const mark = i => i < 3 ? "✓" : i === 3 ? "◐" : "○";
+      const wf = PHASES.map((p, i) => mark(i)).join("") + "  4/7 Execute Tasks";
+      if (cx + chars(wf).length < W) put(W - chars(wf).length - 1, y, wf, P.dim);
+      y += 2;
+      const conH = S.console ? Math.min(8, Math.max(3, bottom - y - 6)) : 1;
+      const mainH = bottom - y - conH - 1;
+      const v = S.view;
+      if (v === 0 || v === 3) {
+        if (v === 0) taskList(0, y, W, mainH); else { S.tab = 3; details(0, y, W, mainH); }
+      } else if (v === 1) details(0, y, W, mainH);
+      else if (v === 2) { const ah = Math.min(7, mainH); attention(0, y, W, Math.min(6, ah)); agents(0, y + 7, W, mainH - 7); }
+      else { S.ctab = 1; consolePane(0, y, W, mainH); }
+      const cy = bottom - conH;
+      if (S.console) consolePane(0, cy, W, conH);
+      else { fill(0, cy, W, 1, P.surface); put(2, cy, clip("▸ Console collapsed · c to open · 1 new error", W - 4), P.dim); }
+      if (S.help) helpOverlay();
+      return;
+    }
+
+    const conH = Math.max(6, Math.round((bottom - y) * 0.24));
+    const conY = bottom - conH;
+    const midH = conY - y - 1;
+    const sideW = medium ? 5 : (W >= 170 ? 24 : 22);
+    const rest = W - sideW - 1;
+    const rightW = medium ? Math.max(34, Math.round(rest * 0.32)) : Math.min(54, Math.max(36, Math.round(rest * 0.3)));
+    const mainW = rest - rightW - 1;
+    const mx = sideW + 1, rx = mx + mainW + 1;
+
+    // left
+    if (medium) nav(0, y, sideW, midH, true);
+    else { const nh = Math.min(midH, NAV.length + 2); nav(0, y, sideW, nh, false); if (midH - nh > 6) planCard(0, y + nh + 1, sideW, 5); }
+
+    // centre
+    const wfH = 2;
+    workflow(mx, y, mainW, wfH);
+    const listH = Math.min(TASKS.length + 4, Math.max(7, Math.round((midH - wfH - 1) * 0.46)));
+    taskList(mx, y + wfH + 1, mainW, listH);
+    details(mx, y + wfH + 1 + listH + 1, mainW, midH - wfH - listH - 2);
+
+    // right
+    let ry = y;
+    const attH = 6;
+    attention(rx, ry, rightW, Math.min(attH, midH)); ry += attH + 1;
+    const left = midH - attH - 1;
+    if (medium) {
+      // one switchable panel for the secondary information
+      const tabs = ["Agents", "System", "Activity"];
+      const pick = S.focus === 4 ? 1 : S.focus === 5 ? 2 : 0;
+      const fns = [agents, system, activity];
+      fns[pick](rx, ry, rightW, left);
+      // the tab strip replaces the panel's own title so long titles can't collide with it
+      fill(rx + 1, ry, rightW - 1, 1, P.surface);
+      let cx = rx + 2;
+      tabs.forEach((t, i) => { if (cx + chars(t).length < rx + rightW - 1) { put(cx, ry, t, i === pick ? P.accent : P.dim, { b: i === pick, g: P.surface }); hits.push({ x: cx, y: ry, w: chars(t).length, h: 1, act: () => { S.focus = 3 + i; } }); cx += chars(t).length + 2; } });
+    } else {
+      const agH = Math.min(9, Math.max(5, Math.round(left * 0.36)));
+      agents(rx, ry, rightW, agH); ry += agH + 1;
+      const sysH = Math.min(9, Math.max(4, left - agH - 1 - 5));
+      system(rx, ry, rightW, sysH); ry += sysH + 1;
+      activity(rx, ry, rightW, conY - 1 - ry);
+    }
+
+    consolePane(0, conY, W, conH);
+    if (S.help) helpOverlay();
+  }
+
+  // ---- sizing: fit the grid to the frame ----
+  const screen = document.getElementById("screen"), fitBox = document.getElementById("fit");
+  let chRatio = 0.6;
+  function measure() { const p = document.getElementById("probe"); chRatio = p.getBoundingClientRect().width / 1000 || 0.6; }
+  function size() {
+    const avail = fitBox.clientWidth - 20;
+    if (S.size === "fit") {
+      const fs = 13, lh = Math.round(fs * 1.3);
+      W = Math.max(60, Math.min(220, Math.floor(avail / (fs * chRatio))));
+      H = Math.max(18, Math.min(70, Math.floor((window.innerHeight * 0.74) / lh)));
+    } else { [W, H] = S.size.split("x").map(Number); }
+    const fs = Math.max(6, Math.min(15, avail / (W * chRatio)));
+    screen.style.fontSize = fs.toFixed(2) + "px";
+    screen.style.setProperty("--lh", Math.round(fs * 1.3 * 100) / 100 + "px");
+    screen.style.lineHeight = "var(--lh)";
+    const mode = (W < 100 || H < 24) ? "narrow" : W < 140 ? "medium" : "wide";
+    document.getElementById("dims").textContent = `${W} × ${H} · ${mode}${S.color === "none" ? " · NO_COLOR" : ""}`;
+  }
+  function render() { size(); layout(); screen.innerHTML = serialize(); }
+
+  function bind(group, key) {
+    document.querySelectorAll(`#${group} button`).forEach(b => b.addEventListener("click", () => {
+      S[key] = b.dataset.v;
+      document.querySelectorAll(`#${group} button`).forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+      render();
+    }));
+  }
+  bind("g-size", "size"); bind("g-conn", "conn"); bind("g-color", "color");
+
+  screen.addEventListener("click", e => {
+    const rect = screen.getBoundingClientRect();
+    const cx = Math.floor((e.clientX - rect.left) / (rect.width / W)), cy = Math.floor((e.clientY - rect.top) / (rect.height / H));
+    const h = [...hits].reverse().find(a => cx >= a.x && cx < a.x + a.w && cy >= a.y && cy < a.y + a.h);
+    if (h) { h.act(); render(); }
+  });
+  screen.addEventListener("keydown", e => {
+    const k = e.key;
+    if (S.help && (k === "Escape" || k === "?")) { S.help = false; }
+    else if (k === "?") S.help = true;
+    else if (k === "ArrowDown") S.sel = Math.min(TASKS.length - 1, S.sel + 1);
+    else if (k === "ArrowUp") S.sel = Math.max(0, S.sel - 1);
+    else if (k === "Tab") { const order = [0, 1, 2, 3, 4, 5, 6]; S.focus = order[(order.indexOf(S.focus) + (e.shiftKey ? order.length - 1 : 1)) % order.length]; }
+    else if (k === "]") S.tab = (S.tab + 1) % DTABS.length;
+    else if (k === "[") S.tab = (S.tab + DTABS.length - 1) % DTABS.length;
+    else if (/^[1-5]$/.test(k)) S.view = +k - 1;
+    else if (k === "c") S.console = !S.console;
+    else if (k === "p") S.follow = !S.follow;
+    else if (k === "Enter" && W < 100) S.view = 1;
+    else return;
+    e.preventDefault(); render();
+  });
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(render, 80); });
+  measure(); render();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); render(); });
+})();
+</script>
