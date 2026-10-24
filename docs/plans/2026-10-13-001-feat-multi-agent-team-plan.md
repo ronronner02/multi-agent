@@ -749,6 +749,14 @@ The table names execution checkpoints inside T010, not new tasks or a replacemen
 
 (owner decision 2026-10-24 - chosen over raising the budget to ~1,600 lines for one review, and over stopping with the class closed but unlanded.)
 
+**T044 lands on its guarantee; renderer correctness moves to T051 (owner decision, 2026-10-24).** T044's round-3 confirmation review closed both round-2 P1s and confirmed the no-git-on-candidate guarantee, which is the task's core value and the reason it exists; it also raised one new P1 in the patch renderer, reproduced: for a file the base marks `text` or gives an `eol`, cleaning the staged bytes makes the emitted patch write content that differs from the hash the manifest recorded, and the patch still applies, so the disagreement is silent. The cause is a genuine tension rather than a slip — an unmodified candidate needs an empty patch, which requires cleaning, while an edited candidate needs the bytes the manifest hashed, which forbids it, and one staged tree cannot be both. Two related shapes are open with it: a BOM-prefixed file name decodes into a collision with the trailing name and is dropped, and a non-ASCII name never matches the attribute-shaped set, so an unmodified candidate gets a spurious patch.
+- **T044 lands on the guarantee it proves:** no git invocation takes a candidate path as working directory, `-C`, `--git-dir`, `--work-tree` or environment, and the planted-program matrix evidences it. Both reviewers confirmed this on the final candidate.
+- **The new T051 owns manifest/patch agreement for attribute-shaped files,** adopting the design the owner named: hash the cleaned bytes the patch actually carries, so the manifest and the patch describe one reading of the file. It also owns the BOM and non-ASCII name shapes. It takes T051 because T050 is the TUI rendering card approved the same day.
+- **The limitation is documented in the source,** in `cleanedPaths` and `renderPatch`, so a reader of the manifest sees what it does not yet cover.
+- **The measured overrun is accepted:** T044 closed at 1,284 changed lines against a ~1,200 budget, with the excess attributed to the round-trip oracle and the `eol` cleaning path that the review required. No budget rule changes for later tasks.
+
+(owner decision 2026-10-24 - chosen over a fourth fix round inside T044, which would have risked moving a recorded identity under the card's own stop-if, and over returning the task unlanded.)
+
 ### U6. Add observable team views and owner controls to the TUI
 
 - **Goal:** Make task state and essential intervention usable in the terminal without replacing the lead's native conversation, carrying the same information as the reference-benchmark Web UI.
