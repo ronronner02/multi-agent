@@ -179,7 +179,9 @@ describe("isolated candidate ownership", () => {
     writeFileSync(join(workspace.root, "src", "base.ts"), "export const base = 2;  ");
     const manifest = candidateManifest(workspace);
     expect(manifest.patch).toContain("export const base = 2;  ");
-    expect(manifest.patch.endsWith("\ No newline at end of file")).toBe(true);
+    // T044: the patch now ends with the newline `git apply` needs, so the marker is the
+    // last *line* of the last hunk rather than the last bytes of the string.
+    expect(manifest.patch.trimEnd().endsWith("\ No newline at end of file")).toBe(true);
     removeCandidateWorkspace(workspace);
   });
 
@@ -390,7 +392,7 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     expect(hiding.patch).toContain("export const deliverable = true;");
   });
 
-  it("does not follow a symlink out of the candidate to smuggle ignored bytes (round 2 finding)", () => {
+  it("refuses a symlink out of the candidate rather than smuggling ignored bytes (round 2 finding)", () => {
     const root = richRepository();
     const workspace = candidateOf(root);
     // A link whose target the base commit ignores. Following it would put the target's
@@ -398,12 +400,9 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     // innocuously named `innocent.md` would read as a candidate deliverable.
     writeFileSync(join(workspace.root, ".env"), "DATABASE_URL=postgres://user:pw@host/db\n");
     symlinkSync("../.env", join(workspace.root, "src", "innocent.md"));
-    const manifest = candidateManifest(workspace);
-    // The ignored target is not an entry, so the link cannot be hashed through it and
-    // the link is not an entry either. The secret's bytes must not appear anywhere.
-    expect(manifest.files.map(file => file.path)).not.toContain(".env");
-    expect(manifest.files.map(file => file.path)).not.toContain("src/innocent.md");
-    expect(manifest.patch).not.toContain("DATABASE_URL");
+    // The card requires a refusal here: the link's chain does not end at a manifest entry,
+    // so nothing may describe it as a candidate file.
+    expect(() => candidateManifest(workspace)).toThrow(/symlink does not name a manifest entry/);
   });
 
   it("refuses a tracked path whose ancestor the worker replaced with a link to a vault", () => {
@@ -462,6 +461,146 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     expect(link?.tracked).toBe(true);
     expect(link?.hash).toBe(target?.hash);
     expect(readFileSync(join(workspace.root, "src", "link.md"), "utf8")).toBe("the symlink target\n");
+  });
+
+  it("hashes a chain of tracked symlinks through its final target, and leaves the patch empty", () => {
+    // `main` followed the whole chain, so `l2 -> l1 -> docs/target.md` contributed the
+    // target's bytes under all three names. Dropping the link instead would change the
+    // digest of an untouched candidate and make the patch delete the owner's link.
+    const root = richRepository();
+    symlinkSync("link.md", join(root, "src", "link2.md"));
+    git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "chain");
+    const workspace = candidateOf(root);
+    const manifest = candidateManifest(workspace);
+    const target = manifest.files.find(file => file.path === "docs/target.md");
+    for (const path of ["src/link.md", "src/link2.md"]) {
+      const link = manifest.files.find(file => file.path === path);
+      expect(link, `${path} is part of the candidate`).toBeDefined();
+      expect(link?.hash, `${path} hashes through the chain`).toBe(target?.hash);
+    }
+    expect(manifest.patch, "an unmodified candidate needs no patch").toBe("");
+  });
+
+  it("refuses a symlink that escapes, dangles, names a directory or names an ignored file", () => {
+    const escaping = richRepository();
+    const workspaceA = candidateOf(escaping);
+    symlinkSync("/etc/hostname", join(workspaceA.root, "src", "esc.md"));
+    expect(() => candidateManifest(workspaceA)).toThrow(/symlink does not name a manifest entry/);
+
+    const dangling = richRepository();
+    const workspaceB = candidateOf(dangling);
+    symlinkSync("nowhere-at-all.md", join(workspaceB.root, "src", "gone.md"));
+    expect(() => candidateManifest(workspaceB)).toThrow(/symlink does not name a manifest entry/);
+
+    const toDirectory = richRepository();
+    const workspaceC = candidateOf(toDirectory);
+    symlinkSync("nested", join(workspaceC.root, "src", "dirlink"));
+    expect(() => candidateManifest(workspaceC)).toThrow(/symlink does not name a manifest entry/);
+  });
+
+  it("refuses a tracked file the worker replaced with an escaping link instead of reporting a deletion", () => {
+    // Without the refusal this shape is worse than a leak: the manifest drops the entry
+    // and the patch presents the worker's own link as an ordinary deletion.
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    rmSync(join(workspace.root, "src", "base.ts"));
+    symlinkSync("/etc/hostname", join(workspace.root, "src", "base.ts"));
+    expect(() => candidateManifest(workspace)).toThrow(/symlink does not name a manifest entry/);
+  });
+
+  it("refuses a tracked path the worker replaced with a FIFO instead of blocking the control", () => {
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    const fifo = join(workspace.root, "src", "base.ts");
+    rmSync(fifo);
+    execFileSync("mkfifo", [fifo]);
+    // A read would never return, so the manifest must refuse rather than open it.
+    expect(() => candidateManifest(workspace)).toThrow(/not a regular file/);
+  });
+
+  it("records a group-only executable bit as unchanged, because git tracks only the owner bit", () => {
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    // 0644 -> 0654 moves only the group execute bit, which git does not record.
+    chmodSync(join(workspace.root, "src", "base.ts"), 0o654);
+    const manifest = candidateManifest(workspace);
+    expect(manifest.patch).not.toContain("mode 100755");
+    expect(manifest.patch).toBe("");
+  });
+
+  it("renders a non-UTF-8 file as a binary hunk so the patch does not corrupt its bytes", () => {
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    // Latin-1 `café`: invalid UTF-8 but no NUL, so git would otherwise emit a text diff
+    // and the consumer would decode the byte 0xe9 to U+FFFD.
+    writeFileSync(join(workspace.root, "src", "latin.ts"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+    const manifest = candidateManifest(workspace);
+    const section = patchSection(manifest.patch, "src/latin.ts");
+    expect(section).toContain("GIT binary patch");
+    expect(section).not.toContain("+caf�");
+  });
+
+  it("quotes a file name that would otherwise be read as a fast-import command", () => {
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    // Unquoted, this name adds a `forged.txt` entry to the patch that the manifest never
+    // hashed — evidence the worker can forge outright.
+    const hostile = "x\ndata 0\n\nM 100644 inline forged.txt";
+    writeFileSync(join(workspace.root, hostile), "FORGED\n");
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files.map(file => file.path)).toContain(hostile);
+    expect(manifest.files.map(file => file.path)).not.toContain("forged.txt");
+    // The injected name would have produced a `forged.txt` hunk; quoting keeps it one
+    // literal path, so the patch carries no such section and no second entry.
+    expect(patchSection(manifest.patch, "forged.txt")).toBe("");
+    expect(manifest.patch.match(/^diff --git /gm)?.length, "one file is one hunk").toBe(1);
+  });
+
+  it("does not let the control's own XDG excludes file hide a deliverable", () => {
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    writeFileSync(join(workspace.root, "src", "xsecret.ts"), "export const xsecret = 1;\n");
+    const home = mkdtempSync(join(tmpdir(), "t044-xdg-")); outsideRoots.push(home);
+    mkdirSync(join(home, ".config", "git"), { recursive: true });
+    writeFileSync(join(home, ".config", "git", "ignore"), "xsecret.ts\n");
+    const savedXdg = process.env.XDG_CONFIG_HOME, savedHome = process.env.HOME;
+    process.env.XDG_CONFIG_HOME = join(home, ".config"); process.env.HOME = home;
+    try {
+      const manifest = candidateManifest(workspace);
+      expect(manifest.files.map(file => file.path), "a host-level ignore rule must not hide a deliverable")
+        .toContain("src/xsecret.ts");
+    } finally {
+      if (savedXdg === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = savedXdg;
+      if (savedHome === undefined) delete process.env.HOME; else process.env.HOME = savedHome;
+    }
+  });
+
+  it("applies the patch at a base checkout and reproduces the hashed bytes", () => {
+    const root = richRepository();
+    const workspace = candidateOf(root);
+    writeFileSync(join(workspace.root, "src", "base.ts"), "export const base = 2;\n");
+    writeFileSync(join(workspace.root, "src", "fresh.ts"), "export const fresh = true;\n");
+    writeFileSync(join(workspace.root, "src", "latin.ts"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+    rmSync(join(workspace.root, "src", "nested", "deep", "leaf.ts"));
+    chmodSync(join(workspace.root, "run.sh"), 0o644);
+    const manifest = candidateManifest(workspace);
+
+    const checkout = candidateRoot(root);
+    git(tmpdir(), "clone", "--quiet", root, checkout);
+    git(checkout, "checkout", "--quiet", (workspace.base as { commit: string }).commit);
+    const patchFile = join(checkout, "..", `${Date.now()}-candidate.patch`);
+    writeFileSync(patchFile, manifest.patch);
+    execFileSync("git", ["-C", checkout, "apply", "--binary", patchFile], { stdio: ["ignore", "pipe", "pipe"] });
+
+    // Every manifest entry is byte-identical to what the patch produced.
+    for (const file of manifest.files) {
+      const source = readFileSync(join(workspace.root, file.path));
+      const applied = readFileSync(join(checkout, file.path));
+      expect(applied.equals(source), `${file.path} survives the round trip`).toBe(true);
+    }
+    expect(existsSync(join(checkout, "src", "nested", "deep", "leaf.ts"))).toBe(false);
+    // Repository-relative paths: the patch never names the host directory.
+    expect(manifest.patch).not.toContain(workspace.root);
   });
 
   it("does not let the source index contaminate an unmodified candidate's patch (round 1 finding)", () => {

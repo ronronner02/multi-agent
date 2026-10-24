@@ -50,6 +50,14 @@ export interface CandidateWorkspace {
 
 const sha256 = (bytes: Buffer | string): string => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 
+/**
+ * Ceiling for git's stdout. The default 1 MB is smaller than a large repository's
+ * `ls-tree` output and far smaller than a patch for a big deliverable, and hitting it
+ * fails the whole manifest with an unrelated error, so the limit is set well past what
+ * one candidate can reasonably hold.
+ */
+const GIT_OUTPUT_LIMIT = 256 * 1024 * 1024;
+
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
 }
@@ -229,7 +237,8 @@ function readBaseTree(sourceRoot: string, commit: string): Map<string, BaseEntry
  */
 function controlGit(args: readonly string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): string {
   return execFileSync("git", ["-C", cwd, ...args],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(extraEnv) });
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(extraEnv),
+      maxBuffer: GIT_OUTPUT_LIMIT });
 }
 
 /** Read one object's exact bytes from the source repository. */
@@ -282,9 +291,15 @@ function ignoredByControl(gitDir: string, rulesRoot: string, paths: readonly str
   // `check-ignore --stdin -z` reports only the matches. It exits 1 when nothing
   // matched, which is an answer rather than a failure, so the status is read rather
   // than raised. A non-zero status with no output means no path was ignored.
+  //
+  // `core.excludesFile` is pinned to /dev/null because `GIT_CONFIG_GLOBAL` alone does
+  // not disable the control user's `$XDG_CONFIG_HOME/git/ignore`: without this, one
+  // host-level rule could hide a candidate's deliverable from the manifest. The
+  // base commit's rules and the source's `info/exclude` are then the only authority.
   let output: string;
   try {
-    output = execFileSync("git", [`--git-dir=${gitDir}`, `--work-tree=${rulesRoot}`,
+    output = execFileSync("git", ["-c", "core.excludesFile=/dev/null",
+      `--git-dir=${gitDir}`, `--work-tree=${rulesRoot}`,
       "check-ignore", "--stdin", "-z", "--no-index"],
     { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(),
       input: paths.map(path => `${path}\0`).join("") });
@@ -330,36 +345,120 @@ function untrackedCandidates(root: string, tracked: ReadonlySet<string>): string
  *
  * A symlink is never followed to read bytes from outside the tree. Its *link text* is
  * what git stores and what the patch must carry, so that is what this returns; the
- * manifest decides separately whether the link counts as an entry (`resolveLinkTarget`).
- * A path reached through a symlinked ancestor is refused rather than resolved: the walk
- * skips symlinked directories, so such a path can only be a tracked one the worker
- * replaced with a link, which would otherwise read an ignored vault's bytes.
+ * manifest decides separately whether the link counts as an entry (`resolveLinkChain`).
+ *
+ * A path reached through a symlinked ancestor refuses the manifest: the walk skips
+ * symlinked directories, so such a path can only be a tracked one the worker replaced
+ * with a link, which would otherwise read an ignored vault's bytes. A path that is not
+ * a regular file (a FIFO, socket or device the worker created) refuses too — reading it
+ * would block the control or consume an unbounded stream.
  */
 function readCandidateEntry(root: string, path: string): { mode: string; bytes: Buffer; linkText: string | null } {
   const segments = path.split("/");
   let current = root;
   for (const segment of segments.slice(0, -1)) {
     current = join(current, segment);
-    if (lstatSync(current).isSymbolicLink()) throw new Error(`Candidate path is reached through a symlink: ${path}`);
+    let stats;
+    try {
+      stats = lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`Candidate path is missing: ${path}`);
+      throw error;
+    }
+    if (stats.isSymbolicLink()) throw new Error(`Candidate path is reached through a symlink: ${path}`);
+    // A tracked path whose ancestor became a file cannot be read as a path at all.
+    if (!stats.isDirectory()) throw new Error(`Candidate path has a non-directory ancestor: ${path}`);
   }
   const full = join(root, path);
-  if (lstatSync(full).isSymbolicLink()) return { mode: "120000", bytes: Buffer.alloc(0), linkText: readlinkSync(full) };
-  const stats = lstatSync(full);
-  return { mode: stats.mode & 0o111 ? "100755" : "100644", bytes: readFileSync(full), linkText: null };
+  let stats;
+  try {
+    stats = lstatSync(full);
+  } catch (error) {
+    // A path that is gone is reported with the same message the manifest already
+    // treats as "deleted in the candidate", so the caller does not need a second check.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`Candidate path is missing: ${path}`);
+    throw error;
+  }
+  if (stats.isSymbolicLink()) return { mode: "120000", bytes: Buffer.alloc(0), linkText: readlinkSync(full) };
+  if (!stats.isFile()) throw new Error(`Candidate path is not a regular file: ${path}`);
+  // Git records only the owner execute bit; a group- or other-executable file is still
+  // mode 100644, so testing all three bits would invent a mode change that never happened.
+  return { mode: stats.mode & 0o100 ? "100755" : "100644", bytes: readFileSync(full), linkText: null };
+}
+
+/** How many links a chain may pass through before the manifest refuses it. */
+const MAX_LINK_HOPS = 40;
+
+/**
+ * The regular file a candidate symlink finally names, or `null` when it names none.
+ *
+ * A chain is followed to its end, as `git ls-tree` and `readFile` through the path always
+ * did: `l2 -> l1 -> docs/t.md` describes `docs/t.md`'s bytes under all three names, and on
+ * an unmodified candidate those bytes are exactly what the base commit recorded.
+ *
+ * Every hop must stay inside the candidate. An escaping, absolute or looping chain, and
+ * a chain that ends at something other than a regular file, return `null` so the caller
+ * can refuse the manifest — following one is how an ignored owner secret reaches the
+ * digest and the reviewer packet under an innocuous name.
+ */
+function resolveLinkChain(root: string, path: string, linkText: string): string | null {
+  const physical = resolve(root);
+  let current = dirname(path);
+  let text = linkText;
+  for (let hop = 0; hop <= MAX_LINK_HOPS; hop += 1) {
+    if (isAbsolute(text)) return null;
+    const target = relative(physical, resolve(physical, current, text));
+    if (target === "" || target === ".." || target.startsWith(`..${sep}`) || isAbsolute(target)) return null;
+    const targetPath = target.split(sep).join("/");
+    let stats;
+    try {
+      stats = lstatSync(join(physical, targetPath));
+    } catch {
+      return null; // Dangling.
+    }
+    if (!stats.isSymbolicLink()) return stats.isFile() ? targetPath : null;
+    current = dirname(targetPath);
+    text = readlinkSync(join(physical, targetPath));
+  }
+  return null; // A cycle.
 }
 
 /**
- * The in-root regular file a candidate symlink names, or `null`.
+ * Quote a path for a `git fast-import` command line.
  *
- * A link counts only when its target stays inside the candidate and is a regular file.
- * Following one that leaves the tree is exactly how an ignored owner secret would reach
- * the manifest, the digest and the reviewer packet under an innocuous name.
+ * The stream is newline-delimited, so an unquoted path containing a newline would be read
+ * as the start of the next command: a file named `x\ndata 0\n\nM 100644 inline forged.txt`
+ * would put a `forged.txt` entry into the patch that the manifest never hashed. Git's own
+ * C-style quoting (the form `ls-tree` emits) makes the path a single token.
  */
-function resolveLinkTarget(root: string, path: string, linkText: string): string | null {
-  if (isAbsolute(linkText)) return null;
-  const target = relative(resolve(root), resolve(root, dirname(path), linkText));
-  if (target === "" || target === ".." || target.startsWith(`..${sep}`) || isAbsolute(target)) return null;
-  return target.split(sep).join("/");
+function quoteStreamPath(path: string): string {
+  const out: string[] = ['"'];
+  for (const byte of Buffer.from(path, "utf8")) {
+    if (byte === 0x22) out.push('\\"');
+    else if (byte === 0x5c) out.push("\\\\");
+    else if (byte === 0x07) out.push("\\a");
+    else if (byte === 0x08) out.push("\\b");
+    else if (byte === 0x09) out.push("\\t");
+    else if (byte === 0x0a) out.push("\\n");
+    else if (byte === 0x0b) out.push("\\v");
+    else if (byte === 0x0c) out.push("\\f");
+    else if (byte === 0x0d) out.push("\\r");
+    else if (byte >= 0x20 && byte < 0x7f) out.push(String.fromCharCode(byte));
+    else out.push(`\\${byte.toString(8).padStart(3, "0")}`);
+  }
+  out.push('"');
+  return out.join("");
+}
+
+/** Whether bytes need git's binary rendering; anything that is not plain UTF-8 text. */
+function isBinaryContent(bytes: Buffer): boolean {
+  if (bytes.includes(0)) return true;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -369,11 +468,18 @@ function resolveLinkTarget(root: string, path: string, linkText: string): string
  * objects read-only. The bytes written are the ones `candidateManifest` already hashed,
  * so a filter cannot make the patch disagree with the manifest, and git never reads a
  * candidate path — only the scratch store and the source repository.
+ *
+ * An entry whose bytes are not UTF-8 text is marked `-diff` in the store's
+ * `info/attributes`, which makes git emit a `GIT binary patch` block. Without that git
+ * would render a text diff and the consumer would have to decode bytes to a string,
+ * which silently replaces every invalid sequence with U+FFFD and so cannot reproduce
+ * what the manifest hashed.
  */
 function renderPatch(
   sourceRoot: string,
   commit: string,
   entries: readonly { path: string; mode: string; bytes: Buffer }[],
+  gitlinks: readonly { path: string; objectId: string }[],
   scratch: string,
 ): string {
   const store = join(scratch, "patch.git");
@@ -392,8 +498,11 @@ function renderPatch(
   // the entries listed, so a deleted tracked file needs no separate instruction.
   const stream: Buffer[] = [];
   stream.push(Buffer.from("commit refs/t044-manifest\ncommitter manifest <manifest@invalid> 0 +0000\ndata 2\nx\ndeleteall\n"));
+  // A gitlink names another repository's commit. It has no bytes here, so it is copied
+  // through by object id; dropping it would make the patch delete the owner's submodule.
+  for (const link of gitlinks) stream.push(Buffer.from(`M 160000 ${link.objectId} ${quoteStreamPath(link.path)}\n`));
   for (const entry of entries) {
-    stream.push(Buffer.from(`M ${entry.mode} inline ${entry.path}\n`));
+    stream.push(Buffer.from(`M ${entry.mode} inline ${quoteStreamPath(entry.path)}\n`));
     stream.push(Buffer.from(`data ${entry.bytes.byteLength}\n`));
     // `inline` data is length-delimited, so the newline git consumes before the next
     // command is not part of the file it writes. A trailing LF is required.
@@ -401,14 +510,24 @@ function renderPatch(
     stream.push(Buffer.from("\n"));
   }
   stream.push(Buffer.from("\n"));
+  const binary = entries.filter(entry => entry.mode !== "120000" && isBinaryContent(entry.bytes));
+  if (binary.length) {
+    mkdirSync(join(store, "info"), { recursive: true });
+    writeFileSync(join(store, "info", "attributes"),
+      binary.map(entry => `${quoteStreamPath(entry.path).replace(/^"|"$/g, "")} -diff\n`).join(""));
+  }
   try {
     execFileSync("git", ["fast-import", "--quiet"], {
-      input: Buffer.concat(stream), stdio: ["pipe", "pipe", "pipe"], timeout: 120_000, env,
+      input: Buffer.concat(stream), stdio: ["pipe", "pipe", "pipe"], timeout: 120_000, env, maxBuffer: GIT_OUTPUT_LIMIT,
     });
     const patch = execFileSync("git", ["diff", "--binary", commit, "refs/t044-manifest"], {
-      stdio: ["ignore", "pipe", "pipe"], timeout: 120_000, env,
+      stdio: ["ignore", "pipe", "pipe"], timeout: 120_000, env, maxBuffer: GIT_OUTPUT_LIMIT,
     });
-    return patch.toString("utf8").replace(/\n+$/, "");
+    // One trailing newline, because `git apply` reads a patch as text and reports a
+    // corrupt patch when the last hunk's line is unterminated. Git already ends its
+    // output with one, so this only normalizes; an empty diff stays empty.
+    const text = patch.toString("utf8").replace(/\n+$/, "");
+    return text === "" ? "" : `${text}\n`;
   } catch (error) {
     const stderr = (error as { stderr?: Buffer }).stderr;
     throw new Error(`Could not render the candidate patch: ${stderr?.toString("utf8") ?? (error as Error).message}`);
@@ -433,42 +552,52 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
     const untracked = untrackedCandidates(workspace.root, tracked);
     const ignored = ignoredByControl(ignore.gitDir, ignore.rulesRoot, untracked);
     const paths = [...tracked, ...untracked.filter(path => !ignored.has(path))].sort();
-    const files: CandidateFile[] = [];
-    const staged: { path: string; mode: string; bytes: Buffer }[] = [];
-    // Links whose in-root target is a manifest entry are hashed through that target, so
-    // an unmodified candidate's manifest keeps the bytes the base commit recorded. The
-    // patch still carries the link text, because that is what git stores.
-    const pending: { path: string; entry: ReturnType<typeof readCandidateEntry>; target: string | null }[] = [];
+
+    // Every path is classified before anything is hashed, because a link's hash depends
+    // on a target that may itself be a link.
+    const entries = new Map<string, { mode: string; bytes: Buffer; linkText: string | null; linkTarget: string | null }>();
     for (const path of paths) {
-      // A path that vanished while the candidate was being read is not an entry. A
-      // tracked file the candidate deleted is the normal case: the index keeps listing
-      // it until the deletion is staged, and the deletion belongs to the patch (it is
-      // absent from the staged tree) rather than to the manifest.
+      let entry;
       try {
-        const entry = readCandidateEntry(workspace.root, path);
-        pending.push({ path, entry, target: entry.linkText === null ? null : resolveLinkTarget(workspace.root, path, entry.linkText) });
+        entry = readCandidateEntry(workspace.root, path);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        // A tracked file the candidate deleted is part of the patch, not of the manifest:
+        // the deletion is expressed by its absence from the staged tree.
+        if ((error as Error).message.startsWith("Candidate path is missing") && tracked.has(path)) continue;
         throw error;
       }
+      const linkTarget = entry.linkText === null ? null : resolveLinkChain(workspace.root, path, entry.linkText);
+      entries.set(path, { ...entry, linkTarget });
     }
-    const readable = new Set(pending.map(item => item.path));
-    const hashed = new Map<string, string>();
-    for (const item of pending) {
-      if (item.entry.linkText === null) { hashed.set(item.path, sha256(item.entry.bytes)); continue; }
-      // A link is an entry only when it names a regular file that is itself an entry.
-      const target = item.target !== null && readable.has(item.target) ? pending.find(candidate => candidate.path === item.target) : undefined;
-      if (!target || target.entry.linkText !== null) continue;
-      hashed.set(item.path, sha256(target.entry.bytes));
-    }
+
+    // A symlink is an entry only when its chain ends at a regular file that is itself an
+    // entry. Everything else refuses: a link that escapes the candidate, dangles, cycles,
+    // or names a directory (or an ignored file) is a way to describe bytes the candidate
+    // does not own, and the reader would otherwise copy them into the packet.
+    const regular = new Set([...entries].filter(([, entry]) => entry.linkText === null).map(([path]) => path));
+    const files: CandidateFile[] = [];
+    const staged: { path: string; mode: string; bytes: Buffer }[] = [];
     for (const path of paths) {
-      const digest = hashed.get(path);
-      if (digest === undefined) continue;
-      const item = pending.find(candidate => candidate.path === path)!;
-      files.push({ path, hash: digest, tracked: tracked.has(path) });
-      staged.push({ path, mode: item.entry.mode, bytes: item.entry.linkText === null ? item.entry.bytes : Buffer.from(item.entry.linkText, "utf8") });
+      const entry = entries.get(path);
+      if (!entry) continue;
+      if (entry.linkText === null) {
+        files.push({ path, hash: sha256(entry.bytes), tracked: tracked.has(path) });
+        staged.push({ path, mode: entry.mode, bytes: entry.bytes });
+        continue;
+      }
+      if (entry.linkTarget === null || !regular.has(entry.linkTarget)) {
+        throw new Error(`Candidate symlink does not name a manifest entry: ${path}`);
+      }
+      // Hashed through the chain's final file, which is what the base commit recorded.
+      const target = entries.get(entry.linkTarget)!;
+      files.push({ path, hash: sha256(target.bytes), tracked: tracked.has(path) });
+      // Staged as the link's own text, because that is what the repository stores.
+      staged.push({ path, mode: entry.mode, bytes: Buffer.from(entry.linkText, "utf8") });
     }
-    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, staged, scratch) };
+
+    const gitlinks = [...base].filter(([, entry]) => entry.mode === "160000")
+      .map(([path, entry]) => ({ path, objectId: entry.objectId }));
+    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, staged, gitlinks, scratch) };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
