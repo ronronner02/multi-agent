@@ -40,10 +40,10 @@ These rules apply to every agent that implements tasks in this repository, atten
 - The task's Files list is the expected scope, not a fence. A file outside the list may join when the task needs it, such as a helper, a test or a call site; name it and the reason in the PR. Stop and report a plan question only when a change affects acceptance, a public contract, architecture or source ownership.
 
 ### Keep it simple (owner directive, 2026-10-25)
-The project carries too much defensive code and process. Build what the card asks for in the simplest form that works, and stop there.
+The project carries too much defensive code and process. Build what the card asks for in the simplest form that works, and stop there. Load the `karpathy-guidelines` skill (installed user-level for Claude Code and Codex) when writing, reviewing or refactoring code, and follow its simplicity, surgical-change and goal-driven rules. Its "if uncertain, ask" rule yields here to "Decide what the card already settles" below.
 - Write no speculative code: no guard, fallback, retry, option, config knob or abstraction layer for a case that cannot happen or that no card, test scenario or real caller needs.
 - Validate at real boundaries only: data a worker can write, external processes, the network, files from outside the repository and owner input. Inside the daemon, trust typed internal callers and existing checks. Do not re-check an invariant that a single owner already enforces.
-- Prefer deleting or reusing code over adding layers. A change that is shorter and does the same job is the better change.
+- Prefer reusing existing code over adding layers. A change that is shorter and does the same job is the better change. Remove what your change made unused; leave unrelated dead code alone and mention it.
 - Tests cover the card's scenarios and the bugs actually found. Do not add tests for hypothetical misuse.
 - A review finding that asks only for extra hardening, with no concrete reachable scenario in current code, is a P3 residual: record it and do not implement it. This holds in authority, isolation and credential code too; there, a reachable scenario is still a real finding.
 
