@@ -670,4 +670,5 @@ export type InputEvent =
   | { type: "key"; key: "up" | "down" | "left" | "right" | "pageup" | "pagedown"; action: Action }
   | { type: "key"; key: "enter"; action: Action }
   | { type: "key"; key: "backspace" | "escape" | "tab" }
-  | { type: "mouse"; button: number; x: number; y: number };
+  | { type: "mouse"; button: number; x: number; y: number }
+  | { type: "ctrl-c" };

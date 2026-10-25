@@ -83,6 +83,10 @@ export const PIN = Object.freeze({
     'packages/daemon/test/s03-bound-launch.test.ts',
     'packages/tui/package.json',
     'packages/ui/package.json',
+    'packages/tui/src/theme.ts',
+    'packages/tui/src/main.ts',
+    'packages/tui/src/input.ts',
+    'packages/tui/src/types.ts',
   ],
 });
 
@@ -155,6 +159,8 @@ const LOCAL_ENGINE_PATHS = [
   'packages/i18n/src/display-width.ts',
   'packages/i18n/test/catalog-parity.test.ts',
   'packages/i18n/test/display-width.test.ts',
+  'packages/tui/test/terminal-render.test.ts',
+  'packages/tui/src/icons.ts',
 ];
 
 export class ImportError extends Error {

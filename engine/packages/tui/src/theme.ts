@@ -17,8 +17,22 @@ export function detectColorMode(env: NodeJS.ProcessEnv = process.env): ColorMode
   return "16";
 }
 
+const INK_PALETTE = {
+  inkSurface: [[22, 27, 34], 234, 39], // Default background is SGR 49 in 16-color mode.
+  inkText: [[201, 209, 217], 252, 37],
+  inkDim: [[139, 148, 158], 246, 90],
+  inkMute: [[110, 118, 129], 243, 90],
+  inkLine: [[48, 54, 61], 237, 90],
+  inkSelection: [[38, 79, 120], 24, 34],
+  ochre: [[210, 153, 34], 178, 33],
+  cinnabar: [[248, 81, 73], 203, 31],
+  emerald: [[63, 185, 80], 71, 32],
+} satisfies Record<string, [[number, number, number], number, number]>;
+
 /** Semantic tokens — named for meaning, not color, so views stay honest. */
 export type Token =
+  | keyof typeof INK_PALETTE
+  | "inkCanvas"
   | "accent" // G2 selection/links/active blue
   | "accentBright" // G2 tree/link emphasis
   | "warn" // blocked/needs-you/alerts (mockup amber #e6b56e)
@@ -46,7 +60,7 @@ export type Token =
   | "codexBlue"; // OFFICIAL sampled #6867aa (picks-of-record provenance)
 
 // [truecolor rgb, 256 index, 16-color SGR]
-const PALETTE: Record<Token, [[number, number, number], number, number]> = {
+const PALETTE: Record<Exclude<Token, "inkCanvas">, [[number, number, number], number, number]> = {
   accent: [[111, 168, 255], 111, 94],
   accentBright: [[154, 194, 255], 153, 96],
   warn: [[244, 190, 92], 221, 33],
@@ -67,6 +81,7 @@ const PALETTE: Record<Token, [[number, number, number], number, number]> = {
   markInk: [[250, 250, 249], 255, 97],
   markBg: [[12, 10, 9], 233, 30],
   codexBlue: [[104, 103, 170], 61, 34],
+  ...INK_PALETTE,
 };
 
 export interface Style {
@@ -76,7 +91,7 @@ export interface Style {
 }
 
 export function createStyle(mode: ColorMode = detectColorMode()): Style {
-  function open(token: Token, opts?: { bold?: boolean; inverse?: boolean; bg?: Token; blink?: boolean }): string {
+  function open(token: Exclude<Token, "inkCanvas">, opts?: { bold?: boolean; inverse?: boolean; bg?: Token; blink?: boolean }): string {
     if (mode === "none") return "";
     const parts: string[] = [];
     if (opts?.bold) parts.push("1");
@@ -86,7 +101,7 @@ export function createStyle(mode: ColorMode = detectColorMode()): Style {
     if (mode === "truecolor") parts.push(`38;2;${rgb[0]};${rgb[1]};${rgb[2]}`);
     else if (mode === "256") parts.push(`38;5;${x256}`);
     else parts.push(String(basic));
-    if (opts?.bg) {
+    if (opts?.bg && opts.bg !== "inkCanvas") {
       const [brgb, b256, bBasic] = PALETTE[opts.bg];
       if (mode === "truecolor") parts.push(`48;2;${brgb[0]};${brgb[1]};${brgb[2]}`);
       else if (mode === "256") parts.push(`48;5;${b256}`);
@@ -98,7 +113,9 @@ export function createStyle(mode: ColorMode = detectColorMode()): Style {
   return {
     mode,
     paint(token, text, opts) {
-      if (mode === "none" || text === "") return text;
+      if (text === "" || token === "inkCanvas") return text;
+      if (mode === "none") return opts?.bg === "inkSelection" || (token in INK_PALETTE && opts?.inverse)
+        ? `\x1b[7m${text}\x1b[0m` : text;
       return `${open(token, opts)}${text}\x1b[0m`;
     },
   };
