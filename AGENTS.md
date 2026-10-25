@@ -26,6 +26,8 @@ These rules apply to every agent that implements tasks in this repository, atten
   - Run one vitest process at a time.
   - Use `--maxWorkers=2` for focused runs and `--maxWorkers=4` for a full package suite.
   - Before you finish, make sure `pgrep -f vitest` returns nothing.
+- **Shell commands from Windows (2026-10-25).** `wsl.exe -- bash -c '…'` runs the string through WSL's login shell first, which expands `$VAR` and `$(…)` before the inner bash sees them. A `cd "$DIR"` then becomes `cd ""`, stays in the Windows cwd `/mnt/d/Multi-Agent`, and the commands that follow run against the preserved workspace. Two probes committed into `D:\Multi-Agent` this way. Use `wsl.exe -e bash -c '…'`, or write the script to a file and run that file. Start every probe script with `set -euo pipefail`, and write each `cd` as `cd "$DIR" || exit 1`.
+- **Scratch space (2026-10-25).** Probe scripts, logs, review packets and throwaway repositories for a task go under `/home/leo/scratch/<task-id>/`, or under `mktemp -d` for a single command. Never put them loose in `/home/leo` or `/home/leo/src`. An extra clone or worktree is named for its task and removed after the task lands. Test fixtures that outlive their run (tmux servers, daemons, stub runners under `/tmp/openrig-*`) are stopped before you finish, as with vitest.
 
 ### Starting a task
 - Work from the task pack in `docs/tasks/`. First run `spec-first tasks validate <task-pack> --repo /home/leo/src/multi-agent --json`. If it reports source-plan drift, regenerate the pack from the current plan before executing any task. Never execute a stale card.
@@ -85,10 +87,10 @@ These rules size review and verification to the change. They take precedence ove
 
 ### Parallel tracks (owner decision, 2026-10-23)
 Two sessions may execute tasks at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare in the task pack; directory patterns grant nothing. A task that needs a file its card does not declare stops and reports it, as any task would.
-- **Track A, managed launch:** T042, T044, T047, T043, T048, T049, T038 and T046, in that order. T044 comes before T047 because T035 waits on it.
+- **Track A, managed launch:** T042, T044, T051, T047, T043, T048, T049, T038 and T046, in that order. T044 comes before T047 because T035 waits on it. T051, split out of T044 on 2026-10-24, follows it directly because it changes only T044's files.
 - **Track B, owner surfaces:** T036, T013, T014, T050, T015, T019, T035, T016, T020, T021, T022 and T023, then T017, T033 and T018.
 - **Files both tracks declare are serialized:** the task that starts second waits until the other has landed, then starts from current `main`.
-  - T035 waits for T044 and T048 (`team-workspace.ts`).
+  - T035 waits for T044, T051 and T048 (`team-workspace.ts`).
   - T017 waits for T043 (`worker-launch.ts`).
   - T033 and T046 (`review-evidence.ts`): whichever starts second waits for the other.
 - **Shared files** (`tools/upstream-import.mjs`, `docs/tasks/…-tasks.md`, `docs/operations.md`, `docs/known-failures.md`, `AGENTS.md`, `engine/packages/daemon/src/contracts/team-control.ts`, `engine/packages/daemon/src/routes/team-control.ts`, `engine/packages/daemon/src/server.ts`): append-only edits, then rebase onto `main` before landing. On a conflict the later lander resolves it and reruns its focused tests; never force-push.
