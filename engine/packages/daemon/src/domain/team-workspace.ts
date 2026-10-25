@@ -232,10 +232,15 @@ const GITLINK_MODE = "160000";
  * lossy decode would describe a path the candidate does not have — and, worse, a patch
  * that deletes the real one. Refusing keeps the manifest honest about what it could not
  * represent.
+ *
+ * `ignoreBOM` keeps a name that begins with U+FEFF as that name. `TextDecoder` strips a
+ * leading BOM by default, so `﻿anchor.txt` decoded to `anchor.txt`, collided with
+ * the real one and the second path was dropped from the manifest — a completeness failure
+ * on the candidate's own file (T051, R3-2).
  */
 function strictUtf8(bytes: Buffer, what: string): string {
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch {
     throw new Error(`${what} is not valid UTF-8`);
   }
@@ -558,52 +563,102 @@ function readBaseBlobs(sourceRoot: string, objectIds: readonly string[]): Map<st
 }
 
 /**
- * The paths whose candidate bytes must be cleaned before they enter the staged tree,
- * because the base commit's attributes say the working tree differs from the blob.
+ * The paths the base commit's attributes give a *cleaning* behaviour, so the bytes a
+ * checkout shows are not the bytes the repository stores.
  *
- * A checkout applies `text`, `eol` and `filter` rules on the way out, so a worktree file
- * can differ from the recorded blob while the candidate has changed nothing. Staging the
- * worktree bytes verbatim would then produce a patch that rewrites an untouched file.
- * `GIT_ATTR_SOURCE` makes `check-attr` and `hash-object` read attributes from the base
- * commit rather than from anything the worker can write.
+ * A candidate's worktree bytes are what the owner's checkout would show, and the patch
+ * must write them back. Git records the *cleaned* form: `text`, `eol` and `crlf` convert
+ * line endings on the way in, and `filter` runs the driver's clean command. A manifest
+ * hashed from the worktree bytes would therefore record one reading while the patch
+ * carried another, which is the disagreement T051 exists to close.
  *
- * KNOWN LIMITATIONS (the file-attribute patch renderer, carried by T051). Cleaning is a
- * partial mechanism, and three shapes are known to disagree with the manifest:
+ * The values that mean "convert" are the closed set git documents, not an open-ended hook
+ * list: `text` is `set`, `auto` (git decides by content) or `-text` (never convert);
+ * `eol` is `crlf` or `lf`; legacy `crlf` is set or unset; `filter` names a driver or is
+ * unset. Two more convert on check-in and are easy to forget: `ident` expands `$Id$` to
+ * `$Id: <oid> $`, and `working-tree-encoding` transcodes the worktree's encoding to UTF-8.
+ * Both were missing from the first version of this list, and a base `*.txt ident` gave an
+ * *unmodified* candidate a spurious 159-byte patch — the same failure class as the
+ * non-ASCII name. `unset` on any of these disables its conversion, so it is not shaped.
  *
- * - **Edited attribute-shaped files.** A file the base marks `text` or with an `eol` is
- *   staged *cleaned*, while the manifest hashes the candidate's raw worktree bytes. When
- *   a candidate edits such a file the emitted patch can therefore write content that
- *   differs from the hash `candidateManifest` recorded — silently, because the patch
- *   still applies. This is the case the manifest and the patch must reconcile by hashing
- *   the cleaned bytes, and it is why this renderer is scheduled to move.
- * - **Non-ASCII names.** The `check-attr -z` output below is decoded as `latin1` while
- *   the input paths were UTF-8, so a path such as `café.txt` never matches and is treated
- *   as un-shaped. An *unmodified* candidate holding one gets a spurious patch under
- *   `eol=crlf`.
- * - **A base `filter` driver.** Cleaning runs through the base commit's attributes, so a
- *   driver the base declares would run here. The scratch store carries no filter
- *   configuration, so in practice it is a no-op; a candidate-visible filter is exactly
- *   what this module exists to keep out, and it must stay that way.
+ * Making this a *selection* means a value this list misjudged is harmless in one
+ * direction only: a path wrongly selected is cleaned by git to the bytes it already had,
+ * while a path wrongly skipped keeps the old bug. `auto` is therefore selected
+ * unconditionally, because git converts only text-looking content and returns the input
+ * unchanged otherwise.
  *
- * None of these weakens the no-git-on-candidate guarantee, which does not depend on this
- * function.
+ * The `check-attr` output is NUL-separated raw bytes. It is split on those bytes and each
+ * field decoded strictly as UTF-8, because the paths on the input side were already
+ * accepted as UTF-8: decoding the whole buffer as latin1 kept a non-ASCII name from ever
+ * matching its own entry, so an unmodified `café.txt` under `eol=crlf` got a spurious
+ * patch (T051, N1).
  */
-function cleanedPaths(sourceRoot: string, commit: string, paths: readonly string[]): Set<string> {
+function attributeShapedPaths(sourceRoot: string, commit: string, paths: readonly string[]): Set<string> {
   if (paths.length === 0) return new Set();
-  const attributes = execFileSync("git", ["-C", sourceRoot, "check-attr", "-z", "--stdin", "text", "eol", "crlf", "filter"],
+  // `GIT_ATTR_SOURCE` pins the rules to the base commit, so a candidate cannot author the
+  // attributes that decide what its own bytes are.
+  const output = execFileSync("git", ["-C", sourceRoot, "check-attr", "-z", "--stdin",
+    "text", "eol", "crlf", "filter", "ident", "working-tree-encoding"],
     { input: paths.map(path => `${path}\0`).join(""), stdio: ["pipe", "pipe", "pipe"], timeout: 60_000,
       env: controlGitEnv({ GIT_ATTR_SOURCE: commit, GIT_LITERAL_PATHSPECS: "1" }), maxBuffer: GIT_OUTPUT_LIMIT });
-  // Latin-1 keeps every byte distinct, but it also means a non-ASCII path cannot equal the
-  // UTF-8 `entry.path` the caller compares against. See the limitation above.
-  const fields = attributes.toString("latin1").split("\0");
-  const cleaned = new Set<string>();
-  // The output is `<path>\0<attribute>\0<value>\0` repeated. `unspecified` means the base
-  // commit says nothing about the path, so its bytes are already the blob's bytes.
+  const fields: string[] = [];
+  let start = 0;
+  for (let index = 0; index < output.length; index += 1) {
+    if (output[index] !== 0) continue;
+    fields.push(strictUtf8(output.subarray(start, index), "An attribute source path"));
+    start = index + 1;
+  }
+  const shaped = new Set<string>();
+  // `<path>\0<attribute>\0<value>\0`, one triple per requested attribute. Only the
+  // conversion attributes are requested — `text`, `eol`, `crlf`, `filter`, `ident` and
+  // `working-tree-encoding` — so any value other than `unspecified` (the base says
+  // nothing) or `unset` (`-text`, `-filter`: the behaviour is switched off) selects the
+  // path. The triples stay aligned however many attributes are asked for.
   for (let index = 0; index + 2 < fields.length; index += 3) {
     const path = fields[index];
-    if (path && fields[index + 2] !== "unspecified") cleaned.add(path);
+    const value = fields[index + 2];
+    if (!path || value === undefined || value === "unspecified" || value === "unset") continue;
+    shaped.add(path);
   }
-  return cleaned;
+  return shaped;
+}
+
+/**
+ * The bytes git would store for each path whose base-commit attributes clean it.
+ *
+ * `hash-object --path` runs the base commit's own rules over the candidate's bytes, and
+ * the blob it writes *is* what the patch carries, so the manifest hashes that reading
+ * rather than a second one. The scratch store configures no filter driver, so a base that
+ * declares one cleans to the bytes it was given — a program the base names can never run
+ * on the candidate's behalf (the card's attribute-authority clause, pinned by test).
+ *
+ * Only the selected paths are hashed: a repository with no attributes runs no git call
+ * beyond the one `check-attr`, so every recorded identity in such a repository is
+ * unchanged.
+ */
+function cleanedReadings(store: string, env: NodeJS.ProcessEnv, commit: string,
+  entries: readonly { path: string; bytes: Buffer }[]): Map<string, Buffer> {
+  const readings = new Map<string, Buffer>();
+  if (entries.length === 0) return readings;
+  const objectIds = entries.map(entry => execFileSync("git", ["-C", store, "hash-object", "-w", "--stdin", `--path=${entry.path}`],
+    { input: entry.bytes, stdio: ["pipe", "pipe", "pipe"], timeout: 60_000,
+      env: controlGitEnv({ ...env, GIT_ATTR_SOURCE: commit }) }).toString("utf8").trim());
+  // One `cat-file --batch` for the whole set, so cleaning costs one process per shaped
+  // file plus one for the read-back rather than two each.
+  const output = execFileSync("git", ["-C", store, "cat-file", "--batch"],
+    { input: `${objectIds.join("\n")}\n`, stdio: ["pipe", "pipe", "pipe"], timeout: 120_000,
+      env: controlGitEnv(env), maxBuffer: GIT_OUTPUT_LIMIT });
+  let offset = 0;
+  for (const [index, objectId] of objectIds.entries()) {
+    const newline = output.indexOf(0x0a, offset);
+    if (newline < 0) throw new Error(`Could not read the cleaned bytes of ${entries[index]!.path}`);
+    const header = output.subarray(offset, newline).toString("latin1").split(" ");
+    const size = Number(header[2]);
+    if (!Number.isFinite(size)) throw new Error(`Cleaned object ${objectId} is missing from the scratch store`);
+    readings.set(entries[index]!.path, output.subarray(newline + 1, newline + 1 + size));
+    offset = newline + 1 + size + 1;
+  }
+  return readings;
 }
 
 /**
@@ -623,37 +678,20 @@ function cleanedPaths(sourceRoot: string, commit: string, paths: readonly string
  * - **Lossless output.** A `GIT binary patch` section is base85 over the raw bytes, so
  *   the concatenated patch is pure ASCII and no decode can rewrite it.
  *
- * KNOWN LIMITATION (carried by T051). A path the base commit marks `text` or gives an
- * `eol` is staged *cleaned*, while the manifest hashes the candidate's raw bytes; an
- * edited such file can therefore yield a patch whose content differs from the recorded
- * hash. `cleanedPaths` documents the full set of open shapes. The guarantee this function
- * does own is that git never runs against a candidate path.
+ * `staged` holds the bytes the patch must carry, already cleaned for the paths the base
+ * commit gives attributes — the same bytes `candidateManifest` hashed. Nothing here
+ * consults attributes again, so the manifest and the patch cannot describe two readings
+ * (T051, R3-1). The guarantee this function owns is unchanged: git never runs against a
+ * candidate path.
  */
 function renderPatch(
   sourceRoot: string,
   commit: string,
   base: ReadonlyMap<string, BaseEntry>,
   entries: readonly { path: string; mode: string; bytes: Buffer; linkText: string | null }[],
-  scratch: string,
+  store: string,
+  env: NodeJS.ProcessEnv,
 ): string {
-  const store = join(scratch, "patch.git");
-  execFileSync("git", ["init", "--quiet", "--bare", store],
-    { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
-  // The scratch store borrows the source's objects read-only, so the base commit and
-  // every blob the patch quotes resolve without copying a repository.
-  const objectPath = controlGit(["rev-parse", "--git-path", "objects"], sourceRoot).trim();
-  const sourceObjects = realpathSync(isAbsolute(objectPath) ? objectPath : join(sourceRoot, objectPath));
-  const env = controlGitEnv({
-    GIT_DIR: store,
-    GIT_OBJECT_DIRECTORY: join(realpathSync(store), "objects"),
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: sourceObjects,
-  });
-
-  // Gitlinks travel by object id: they name another repository's commit and have no
-  // bytes here. Everything else is written inline, or cleaned and hashed first.
-  const regular = entries.filter(entry => entry.linkText === null);
-  const cleaned = cleanedPaths(sourceRoot, commit, regular.map(entry => entry.path));
-
   const stream: Buffer[] = [];
   stream.push(Buffer.from("commit refs/t044-manifest\ncommitter manifest <manifest@invalid> 0 +0000\ndata 2\nx\ndeleteall\n"));
   for (const [path, entry] of base) {
@@ -667,16 +705,9 @@ function renderPatch(
       stream.push(text, Buffer.from("\n"));
       continue;
     }
-    if (cleaned.has(entry.path)) {
-      // The base commit's own attributes decide what the blob is. Hashing the worktree
-      // bytes through them reproduces the base blob id when the file is unmodified,
-      // which is what makes an untouched candidate's patch empty under `eol=crlf`.
-      const objectId = execFileSync("git", ["-C", store, "hash-object", "-w", "--stdin", `--path=${entry.path}`],
-        { input: entry.bytes, stdio: ["pipe", "pipe", "pipe"], timeout: 60_000,
-          env: controlGitEnv({ ...env, GIT_ATTR_SOURCE: commit }) });
-      stream.push(Buffer.from(`M ${entry.mode} ${objectId.toString("utf8").trim()} ${quoteStreamPath(entry.path)}\n`));
-      continue;
-    }
+    // `entry.bytes` is the reading the manifest hashed: the base commit's cleaning has
+    // already been applied by the caller, so this byte string is the patch's content and
+    // the manifest's hash at once.
     stream.push(Buffer.from(`M ${entry.mode} inline ${quoteStreamPath(entry.path)}\ndata ${entry.bytes.byteLength}\n`));
     // `inline` data is length-delimited, so the newline git consumes before the next
     // command is not part of the file it writes. A trailing LF is required.
@@ -744,13 +775,17 @@ function renderPatch(
 /**
  * The commit lane's manifest and patch.
  *
- * Each candidate file is read exactly once; those same bytes are hashed into the
- * manifest and written into the tree the patch is diffed from. There is therefore no
- * second reading in which a filter could change what the patch says, which is what the
- * round-3 reproduction exploited.
+ * Each candidate file is read exactly once. For a path the base commit cleans through its
+ * attributes, the bytes the patch carries are the *cleaned* bytes, and the manifest hashes
+ * that same reading — so the digest a reviewer is told to expect is the content the patch
+ * writes (T051). Every other path is hashed from the worktree bytes as before.
+ *
+ * `readings` returns those same bytes per path. The review packet copies them rather than
+ * re-reading the candidate, because a packet built from the raw worktree bytes would hash
+ * differently from the manifest it claims to describe.
  */
 function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "commit"; commit: string } }):
-  { files: CandidateFile[]; patch: string } {
+  { files: CandidateFile[]; patch: string; cleanedPaths: readonly string[] } {
   const base = readBaseTree(workspace.sourceRoot, workspace.base.commit);
   // A gitlink names a submodule directory: it is part of the tree the patch must
   // reproduce, but it holds no candidate bytes, so it is never a manifest path and the
@@ -781,32 +816,71 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
       entries.set(path, { ...entry, linkTarget });
     }
 
+    // The scratch object store the patch is built in. It borrows the source's objects
+    // read-only, so the base commit and every blob the patch quotes resolve without
+    // copying a repository.
+    const store = join(scratch, "patch.git");
+    execFileSync("git", ["init", "--quiet", "--bare", store],
+      { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
+    const objectPath = controlGit(["rev-parse", "--git-path", "objects"], workspace.sourceRoot).trim();
+    const sourceObjects = realpathSync(isAbsolute(objectPath) ? objectPath : join(workspace.sourceRoot, objectPath));
+    const storeEnv = controlGitEnv({
+      GIT_DIR: store,
+      GIT_OBJECT_DIRECTORY: join(realpathSync(store), "objects"),
+      GIT_ALTERNATE_OBJECT_DIRECTORIES: sourceObjects,
+    });
+
+    // The reading each regular path contributes: its worktree bytes, or the bytes the base
+    // commit's attributes clean them to. The selection is the closed attribute set above;
+    // a repository whose base records no attributes selects nothing, so no recorded
+    // identity moves.
+    const regular = [...entries].filter(([, entry]) => entry.linkText === null);
+    const shaped = attributeShapedPaths(workspace.sourceRoot, workspace.base.commit, regular.map(([path]) => path));
+    const cleaned = cleanedReadings(store, storeEnv, workspace.base.commit,
+      regular.filter(([path]) => shaped.has(path)).map(([path, entry]) => ({ path, bytes: entry.bytes })));
+
     // A symlink is an entry only when its chain ends at a regular file that is itself an
     // entry. Everything else refuses: a link that escapes the candidate, dangles, cycles,
     // or names a directory (or an ignored file) is a way to describe bytes the candidate
     // does not own, and the reader would otherwise copy them into the packet.
-    const regular = new Set([...entries].filter(([, entry]) => entry.linkText === null).map(([path]) => path));
+    const regularPaths = new Set(regular.map(([path]) => path));
     const files: CandidateFile[] = [];
     const staged: { path: string; mode: string; bytes: Buffer; linkText: string | null }[] = [];
+    // The paths whose canonical reading is not the candidate's worktree form. The review
+    // packet discloses them because it carries the worktree bytes. Selected is not the
+    // same as diverged: `text` on a file whose line endings are already LF cleans to the
+    // bytes it was given, and disclosing that would be a false alarm.
+    const cleanedPaths = new Set<string>();
     for (const path of paths) {
       const entry = entries.get(path);
       if (!entry) continue;
       if (entry.linkText === null) {
-        files.push({ path, hash: sha256(entry.bytes), tracked: tracked.has(path) });
-        staged.push({ path, mode: entry.mode, bytes: entry.bytes, linkText: null });
+        const stored = cleaned.get(path);
+        const bytes = stored ?? entry.bytes;
+        if (stored !== undefined && !stored.equals(entry.bytes)) cleanedPaths.add(path);
+        files.push({ path, hash: sha256(bytes), tracked: tracked.has(path) });
+        staged.push({ path, mode: entry.mode, bytes, linkText: null });
         continue;
       }
-      if (entry.linkTarget === null || !regular.has(entry.linkTarget)) {
+      if (entry.linkTarget === null || !regularPaths.has(entry.linkTarget)) {
         throw new Error(`Candidate symlink does not name a manifest entry: ${path}`);
       }
       // Hashed through the chain's final file, which is what the base commit recorded.
+      // A link carries its target's bytes as the base stored them, so the same cleaned
+      // reading is used here as for the target itself.
       const target = entries.get(entry.linkTarget)!;
-      files.push({ path, hash: sha256(target.bytes), tracked: tracked.has(path) });
+      const storedTarget = cleaned.get(entry.linkTarget);
+      const targetBytes = storedTarget ?? target.bytes;
+      // Same rule as a regular file: selected is not diverged. A target whose cleaned
+      // bytes are identical is not disclosed, and neither is a link to it (R2-2).
+      if (storedTarget !== undefined && !storedTarget.equals(target.bytes)) cleanedPaths.add(path);
+      files.push({ path, hash: sha256(targetBytes), tracked: tracked.has(path) });
       // Staged as the link's own text, because that is what the repository stores.
       staged.push({ path, mode: entry.mode, bytes: Buffer.alloc(0), linkText: entry.linkText });
     }
 
-    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, base, staged, scratch) };
+    return { files, patch: renderPatch(workspace.sourceRoot, workspace.base.commit, base, staged, store, storeEnv),
+      cleanedPaths: [...cleanedPaths].sort() };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -900,19 +974,24 @@ export function createCandidateWorkspace(input: {
 }
 
 /**
- * The exact candidate: base identifier, every file it owns with its hash, a
- * complete manifest digest, and a patch against the base.
+ * The candidate's canonical reading: base identifier, every file it owns with the hash of
+ * the bytes the patch carries, a complete manifest digest, and a patch against the base.
  *
  * Untracked files are listed in the manifest because they are part of the
  * candidate, and their additions are carried in the patch as well so a reader
  * that applies only diffs still lands on the same tree.
+ *
+ * `cleanedPaths` names the paths where the base commit's attributes make the stored form
+ * differ from the worktree form. The review packet discloses them, because the packet
+ * carries the worktree bytes while this manifest records the stored ones.
  */
-export function candidateManifest(workspace: CandidateWorkspace): {
+function candidateArtifact(workspace: CandidateWorkspace): {
   base: WorkspaceBase["kind"];
   baseIdentifier: string;
   files: CandidateFile[];
   manifestDigest: string;
   patch: string;
+  cleanedPaths: readonly string[];
 } {
   if (workspace.base.kind === "commit") {
     const lane = commitLaneManifest(workspace as CandidateWorkspace & { base: { kind: "commit"; commit: string } });
@@ -922,13 +1001,31 @@ export function candidateManifest(workspace: CandidateWorkspace): {
       files: lane.files,
       manifestDigest: digestManifest(lane.files),
       patch: lane.patch,
+      cleanedPaths: lane.cleanedPaths,
     };
   }
   // The snapshot lane has no history to diff against; the hashed manifest IS its
   // identity, which is exactly what KTD8's "complete file manifest" allows. The
   // copy is a plain directory with no Git metadata, so it is walked directly.
+  // No base commit means no attributes, so nothing is cleaned.
   const files = listFiles(workspace.root, { index: false });
-  return { base: "snapshot", baseIdentifier: workspace.base.baselineDigest, files, manifestDigest: digestManifest(files), patch: "" };
+  return { base: "snapshot", baseIdentifier: workspace.base.baselineDigest, files, manifestDigest: digestManifest(files), patch: "",
+    cleanedPaths: [] };
+}
+
+/**
+ * The exact candidate: base identifier, every file it owns with its hash, a
+ * complete manifest digest, and a patch against the base.
+ */
+export function candidateManifest(workspace: CandidateWorkspace): {
+  base: WorkspaceBase["kind"];
+  baseIdentifier: string;
+  files: CandidateFile[];
+  manifestDigest: string;
+  patch: string;
+} {
+  const { base, baseIdentifier, files, manifestDigest, patch } = candidateArtifact(workspace);
+  return { base, baseIdentifier, files, manifestDigest, patch };
 }
 
 /**
@@ -956,12 +1053,33 @@ export function verifySourceUnchanged(workspace: CandidateWorkspace): { unchange
  * manifest digest the daemon holds. A reviewer reading a different tree than the
  * one the manifest names is exactly the false-independence case T012 exists to
  * prevent, so the two travel together.
+ *
+ * Two readings meet here and are deliberately kept apart:
+ *
+ * - `root` and the files under it are the candidate's **own worktree bytes**, because
+ *   "the reviewer sees the exact candidate" is what T012 asks for.
+ * - `identity.manifestDigest` and `manifest` describe the **canonical reading** the patch
+ *   carries. For a path the base commit's attributes clean, that reading is the stored
+ *   form: an edited `eol=lf` file's worktree holds CRLF while the patch writes LF.
+ *
+ * `cleanedPaths` names every path where the two readings differ, so the divergence is
+ * disclosed rather than silent. `packetDigest` records the hash of the packet's own bytes,
+ * which is what `verifyReviewPacket` compares against — the packet's content is proved to
+ * be the candidate the reviewer was given, and the manifest digest independently proves
+ * what the patch will write. Neither is inferred from the other.
  */
 export interface ReviewPacket {
   root: string;
   identity: CandidateIdentity;
-  /** The complete manifest, hashes included, that the packet must still match. */
+  /** The complete manifest, hashes included, that the patch and the candidate agree on. */
   manifest: readonly CandidateFile[];
+  /**
+   * Paths whose packet bytes are the candidate's worktree form while `manifest` records
+   * the cleaned form the patch writes. Empty for a repository with no git attributes.
+   */
+  cleanedPaths: readonly string[];
+  /** sha256 of the packet's own file contents, so the copy can be proved unaltered. */
+  packetDigest: string;
 }
 
 export function candidateIdentity(manifest: ReturnType<typeof candidateManifest>): CandidateIdentity {
@@ -1000,7 +1118,7 @@ export function createReviewPacket(workspace: CandidateWorkspace, destination: s
       throw new Error("Review packet destination overlaps the candidate or source tree");
     }
   }
-  const manifest = candidateManifest(workspace);
+  const manifest = candidateArtifact(workspace);
   // Repository metadata is not part of a candidate. The commit lane's `git
   // ls-files` already omits it, but the snapshot lane walks a plain directory, so
   // a `.git` that appeared there would otherwise be copied and hashed into the
@@ -1019,6 +1137,10 @@ export function createReviewPacket(workspace: CandidateWorkspace, destination: s
       // Record each ancestor once so the final read-only pass reaches all of them.
       for (let current = parent; current !== root; current = dirname(current)) directories.add(current);
     }
+    // The reviewer gets the candidate's own bytes (T012). Where the base commit's
+    // attributes clean a path, those bytes differ from the canonical reading the patch
+    // writes, and `cleanedPaths` is what discloses the difference — the packet never
+    // silently substitutes one reading for the other.
     copyFileSync(candidatePath(workspace.root, file.path), target);
     // 0o444: the reviewer may read the bytes and nothing else.
     chmodSync(target, 0o444);
@@ -1026,11 +1148,18 @@ export function createReviewPacket(workspace: CandidateWorkspace, destination: s
   // The identity the packet claims is the candidate's own digest, so a packet and
   // the manifest it came from can be compared without trusting the caller.
   const identity = candidateIdentity(manifest);
+  // The packet's own content hash: computed from the bytes now on disk, so
+  // `verifyReviewPacket` can prove the copy the reviewer holds is unaltered without
+  // conflating that proof with the canonical reading the patch writes.
+  const packetDigest = digestManifest(files.map(file => ({
+    path: file.path, tracked: file.tracked,
+    hash: sha256(readFileSync(join(root, file.path))),
+  })));
   // Deepest first, so a parent is sealed only after its children exist.
   for (const directory of [...directories].sort((left, right) => right.length - left.length)) {
     chmodSync(directory, 0o555);
   }
-  return { root, identity, manifest: files };
+  return { root, identity, manifest: files, cleanedPaths: [...manifest.cleanedPaths].sort(), packetDigest };
 }
 
 /** Resolve a path through its deepest existing ancestor, so an alias cannot hide a real target. */
@@ -1089,16 +1218,44 @@ export function verifyReviewPacket(packet: ReviewPacket): { unchanged: boolean; 
       reason: `Packet contents differ from its manifest (missing ${missing.length}, extra ${extra.length})` };
   }
   // The packet is a flat copy, so the manifest's `tracked` flag says where the
-  // bytes came from, not whether this copy is a repository. Hash the actual bytes
-  // and keep the flag: that reconstructs the digest the candidate had.
+  // bytes came from, not whether this copy is a repository.
+  //
+  // Three bindings are checked, and each catches something the others cannot:
+  //
+  // - the packet's bytes against `packetDigest`, which catches an edit to a file;
+  // - the manifest's own hashes against `identity.manifestDigest`, which catches a
+  //   tampered manifest entry — a packet whose recorded hashes no longer describe the
+  //   candidate is not evidence about it, and R2-1 showed this case slipping through
+  //   when only the first check ran;
+  // - each path outside `cleanedPaths` against its recorded hash, which catches a
+  //   non-shaped file that changed between being hashed and being copied, so the packet
+  //   and the manifest cannot disagree without one of the first two noticing a moment
+  //   later.
+  //
+  // A shaped path is excluded from the third check by construction: its packet bytes are
+  // the worktree form while its recorded hash is the cleaned form, and `cleanedPaths` is
+  // what tells the reviewer the two differ.
   try {
     const actual: CandidateFile[] = packet.manifest.map((file: CandidateFile) => ({
       path: file.path, tracked: file.tracked,
       hash: sha256(readFileSync(candidatePath(packet.root, file.path))),
     }));
-    const unchanged = digestManifest(actual) === packet.identity.manifestDigest;
+    if (digestManifest(packet.manifest) !== packet.identity.manifestDigest) {
+      return { unchanged: false, identity: packet.identity,
+        reason: "Packet manifest does not match its own identity digest" };
+    }
+    const cleaned = new Set(packet.cleanedPaths);
+    const recorded = new Map(packet.manifest.map(file => [file.path, file.hash]));
+    const mismatched = actual
+      .filter(file => !cleaned.has(file.path) && file.hash !== recorded.get(file.path))
+      .map(file => file.path);
+    if (mismatched.length) {
+      return { unchanged: false, identity: packet.identity,
+        reason: `Packet bytes differ from the manifest for ${mismatched.join(", ")}` };
+    }
+    const unchanged = digestManifest(actual) === packet.packetDigest;
     return { unchanged, identity: { ...packet.identity, fileCount: actual.length },
-      reason: unchanged ? null : "Packet bytes differ from the manifest digest" };
+      reason: unchanged ? null : "Packet bytes differ from the packet digest" };
   } catch (error) {
     // A vanished or unreadable file is a mismatch, not an exception to swallow.
     return { unchanged: false, identity: packet.identity, reason: `Packet file is unreadable: ${(error as Error).message}` };

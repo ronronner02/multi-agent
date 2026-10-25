@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -365,6 +366,39 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     expect(deliverable).toBeDefined();
   });
 
+  it("T051: cleans through the base commit's attributes only, and runs no driver a candidate or source names", () => {
+    // Card clause 4: attribute authority. The base commit declares a filter driver, and the
+    // source repository's own config points that driver at a program. Cleaning must read
+    // the base commit's *rules* without running a driver, and a candidate that rewrites
+    // `.gitattributes` must not change which rules apply.
+    const root = richRepository();
+    const mark = canary();
+    writeFileSync(join(root, ".gitattributes"), "*.txt text eol=lf\nsrc/deliverable.ts filter=evil\n");
+    git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "attributes");
+    // The program the source repository's configuration would run if a filter were consulted.
+    const driver = plantedOutside(root, "printf 'REWRITTEN\\n'", mark.path);
+    git(root, "config", "filter.evil.clean", driver);
+    git(root, "config", "filter.evil.required", "true");
+    const workspace = candidateOf(root);
+    // The candidate tries to take over both the rules and the deliverable's content.
+    writeFileSync(join(workspace.root, ".gitattributes"), "* filter=evil\ndeliverable.ts -text\n");
+    writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const OURS = true;\n");
+    writeFileSync(join(workspace.root, "note.txt"), "ours\r\n");
+    const manifest = candidateManifest(workspace);
+
+    expect(mark.seen(), "a filter driver the source configured ran as the control").toBe(false);
+    // The base commit's `eol=lf` still governs `note.txt`, so the patch and the manifest
+    // carry LF while the worktree holds CRLF — and they agree with each other.
+    const note = manifest.files.find(file => file.path === "note.txt");
+    expect(note?.hash, "the manifest hashes the cleaned reading").toBe(
+      `sha256:${createHash("sha256").update("ours\n").digest("hex")}`);
+    // The candidate's own `-text` rule is inert: attributes come from the base commit.
+    const section = patchSection(manifest.patch, "src/deliverable.ts");
+    expect(section).toContain("export const OURS = true;");
+    expect(manifest.patch).not.toContain("REWRITTEN");
+    expect(manifest.patch).not.toContain(workspace.root);
+  });
+
   it("keeps the base commit's ignore authority when the worker rewrites or deletes .gitignore (round 2 finding)", () => {
     const root = richRepository();
     const workspace = candidateOf(root);
@@ -669,6 +703,15 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
       links?: readonly string[];
       modes?: readonly (readonly [string, number])[];
       submodule?: true;
+      /**
+       * Paths the base commit's attributes clean, so the manifest hashes and the patch
+       * carries the *cleaned* reading rather than the worktree bytes. Their worktree
+       * content legitimately differs from what the applied patch writes, so the byte
+       * comparison goes through the attribute rules instead of `equals`.
+       */
+      attributeShaped?: readonly string[];
+      /** Paths that must be distinct manifest entries, so a decoded-name collision fails. */
+      attributesPresent?: readonly string[];
     };
 
     /** Latin-1 `café\n`: a text file to git's heuristic, invalid UTF-8 to everything else. */
@@ -720,9 +763,21 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
       for (const file of manifest.files) {
         const source = readFileSync(join(workspace.root, file.path));
         const got = readFileSync(join(checkout, file.path));
+        if (row.attributeShaped?.includes(file.path)) {
+          // The property is not "the worktree bytes reappear" but "the patch writes what the
+          // manifest hashed". The base's attributes legitimately clean the candidate's bytes,
+          // so those two differ by design; the digest is what has to match.
+          expect(`sha256:${createHash("sha256").update(got).digest("hex")}`,
+            `${row.name}: ${file.path} reproduces the hashed bytes`).toBe(file.hash);
+          continue;
+        }
         expect(got.equals(source), `${row.name}: ${file.path} reproduces the hashed bytes`).toBe(true);
       }
       for (const path of row.deleted ?? []) expect(existsSync(join(checkout, path)), `${row.name}: ${path} is deleted`).toBe(false);
+      for (const path of row.attributesPresent ?? []) {
+        expect(existsSync(join(checkout, path)), `${row.name}: ${path} is a manifest entry`).toBe(true);
+        expect(existsSync(join(workspace.root, path)), `${row.name}: ${path} exists in the candidate`).toBe(true);
+      }
       for (const path of row.links ?? []) expect(lstatSync(join(checkout, path)).isSymbolicLink(), `${row.name}: ${path} stays a link`).toBe(true);
       for (const [path, bit] of row.modes ?? []) expect(statSync(join(checkout, path)).mode & bit, `${row.name}: ${path} mode`).toBe(bit);
       expect(manifest.patch).not.toContain(workspace.root);
@@ -790,6 +845,46 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
         base: (root) => { writeFileSync(join(root, "run.sh"), "#!/bin/sh\n"); chmodSync(join(root, "run.sh"), 0o644); },
         edit: (root) => { chmodSync(join(root, "run.sh"), 0o755); },
         modes: [["run.sh", 0o100]],
+      },
+      // T051 — the manifest and the patch must describe one reading of an
+      // attribute-shaped file, and an untouched candidate must still produce no patch.
+      {
+        name: "T051: an edited eol=lf file's patch writes exactly the bytes the manifest hashed",
+        base: (root) => {
+          writeFileSync(join(root, ".gitattributes"), "a.txt text eol=lf\n");
+          writeFileSync(join(root, "a.txt"), "old\n");
+        },
+        // The candidate writes CRLF; the base's `eol=lf` cleans it to LF.
+        edit: (root) => { writeFileSync(join(root, "a.txt"), "new\r\n"); },
+        attributeShaped: ["a.txt"],
+      },
+      {
+        name: "T051: a non-ASCII name under eol=crlf leaves an unmodified candidate's patch empty",
+        base: (root) => {
+          writeFileSync(join(root, ".gitattributes"), "*.txt text eol=crlf\n");
+          writeFileSync(join(root, "café.txt"), "alpha\nbeta\n");
+        },
+        unmodified: true,
+      },
+      {
+        name: "T051: a BOM-prefixed name is listed beside the tracked name it would collide with",
+        // `﻿anchor.txt` decoded to `anchor.txt` before `ignoreBOM`, so the two entries
+        // collided and the candidate's own file was dropped from the manifest.
+        edit: (root) => { writeFileSync(join(root, "﻿anchor.txt"), "bom\n"); },
+        // Both files must reach the applied tree, and neither may be lost. `corpus` already
+        // tracks `anchor.txt`, so a collision would show as one entry and a wrong byte count.
+        attributesPresent: ["﻿anchor.txt", "anchor.txt"],
+      },
+      {
+        // `ident` converts on check-in as `text` does: the checkout expands `$Id$` to
+        // `$Id: <oid> $` while the blob keeps `$Id$`. Omitting it from the attribute set
+        // gave an *unmodified* candidate a spurious 159-byte patch (the N1 class).
+        name: "T051: a base ident attribute leaves an unmodified candidate's patch empty",
+        base: (root) => {
+          writeFileSync(join(root, ".gitattributes"), "*.txt ident\n");
+          writeFileSync(join(root, "id.txt"), "$Id$\nalpha\n");
+        },
+        unmodified: true,
       },
     ];
 
