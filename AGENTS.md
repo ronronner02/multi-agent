@@ -37,7 +37,15 @@ These rules apply to every agent that implements tasks in this repository, atten
   - The validator's JSON embeds the entire pack, about 300 KB. Keep only its verdict: `… --json | python3 -c 'import json,sys;d=json.load(sys.stdin);print(json.dumps({k:d[k] for k in ("task_pack_validity","reason_code","errors","validation")}))'`.
   - Read source files the card names, and widen only to what a specific question needs. Read `docs/known-failures.md` only when a test fails. This file is the one document you always read in full.
 - Do one task at a time. Before writing anything, compare the current source with the task's test scenarios. Work that already satisfies a scenario is verified and recorded, not rewritten.
-- The task's Files list is the scope budget. A file outside the list may join only when direct evidence shows it completes this task. When a change affects acceptance, a public contract, architecture or source ownership, stop and report it as a plan question.
+- The task's Files list is the expected scope, not a fence. A file outside the list may join when the task needs it, such as a helper, a test or a call site; name it and the reason in the PR. Stop and report a plan question only when a change affects acceptance, a public contract, architecture or source ownership.
+
+### Keep it simple (owner directive, 2026-10-25)
+The project carries too much defensive code and process. Build what the card asks for in the simplest form that works, and stop there.
+- Write no speculative code: no guard, fallback, retry, option, config knob or abstraction layer for a case that cannot happen or that no card, test scenario or real caller needs.
+- Validate at real boundaries only: data a worker can write, external processes, the network, files from outside the repository and owner input. Inside the daemon, trust typed internal callers and existing checks. Do not re-check an invariant that a single owner already enforces.
+- Prefer deleting or reusing code over adding layers. A change that is shorter and does the same job is the better change.
+- Tests cover the card's scenarios and the bugs actually found. Do not add tests for hypothetical misuse.
+- A review finding that asks only for extra hardening, with no concrete reachable scenario in current code, is a P3 residual: record it and do not implement it. This holds in authority, isolation and credential code too; there, a reachable scenario is still a real finding.
 
 ### Fixing the right way
 - Fix a defect at the owner that the cited KTD names, not at each call site. If a fix would add the same guard to many call sites, stop and report it; that is a design question for the plan owner, not more implementation.
@@ -52,11 +60,11 @@ These rules apply to every agent that implements tasks in this repository, atten
   - A task gets at most 3 `spec-work` runs, 6 edit slices and about 1,200 changed lines.
   - A task gets at most one scope amendment. A second needed amendment means the task is too large: stop and propose a split to the plan owner.
   - Review rounds count per task, not per slice. A slice-level review uses one of the task's rounds, so prefer one review of the task candidate over a review of every slice.
-  - When the next slice would exceed a limit, stop before starting it. Record what is done and reviewed, then hand the remainder back as a split proposal.
+  - These limits are guides, not hard stops (owner directive, 2026-10-25). Finish work that is nearly done even if it runs over, and record the overrun in the PR. Propose a split only when the remaining work is clearly as large again as what is done.
   - The budget applies to T037, T038 and every task not yet started. T010's closeout follows the owner-decided terms in the plan's T010 owner split.
 - When a done signal depends on a production component, owner or composition path that does not exist yet and is not a named slice of the task, stop and report it as a plan question. Do not prepare a scope amendment to absorb it.
 - A resumed or compacted session reuses recorded evidence whose source hashes still match. It does not rerun those checks or re-review an unchanged candidate.
-- When running unattended, do not ask questions. Take the most conservative option these rules allow, record it, and continue.
+- When running unattended, do not ask questions. Take the simplest option these rules allow, record it, and continue.
 - **Decide what the card already settles (owner directive, 2026-10-25).** This applies attended or unattended. When the card, the plan sections it cites, these rules or the launch prompt answer a question, decide it yourself. Do the same when the choice stays inside the card's Files list, done signal and contracts. Record the decision and its reason in the report or PR, and continue without asking. Decisions the owner put in the launch prompt bind the run.
   - Ask the owner only for a scope or Files-list change, a change to acceptance, a public contract or architecture, a grant these rules do not give, or one of the stop conditions below.
   - Collect the questions you do have and ask them together at a natural stopping point. Keep working on any part they do not block while you wait.
@@ -66,20 +74,22 @@ These rules apply to every agent that implements tasks in this repository, atten
   - a fix needs an out-of-scope file that affects architecture or a contract;
   - a required tool or credential is missing;
   - a P0/P1 finding fails the progress gate or survives round 4;
-  - the task-level budget above is reached.
+  - the remaining work is clearly as large again as the task budget.
 
 ### Review and verification cost
-These rules size review and verification to the change. They take precedence over a workflow skill's default review shape and over a card's review intent. Apart from the small-change lane below, which the owner set, they never lower a task's done signal or required review gate.
-- **Small-change lane (owner directive, 2026-10-25).** A change qualifies when both of these hold:
-  - it has fewer than 30 changed lines in total, counting added plus deleted lines from `git diff --numstat <base>` across every file, tests included;
+These rules size review and verification to the change. They take precedence over a workflow skill's default review shape, over a card's review intent, and over any suite run a card or the plan names. Only the owner lowers a done signal or review gate, as in the owner directives below.
+- **Test only what changed (owner directive, 2026-10-25).** Every task, in every lane, verifies with the focused tests for the code it touched and the touched package's typecheck. Run no affected package suite and no full daemon suite per task, even where a card or the plan says "final package suite" or "final daemon suite". The full suite runs once, when the project is wrapped up, or when the owner asks for it. A failure in a focused test that `docs/known-failures.md` lists with a matching test and error is pre-existing without a base-commit reproduction; reproduce only failures the list does not cover.
+- **Small-change lane (owner directive, 2026-10-25; widened the same day).** A change qualifies when both of these hold:
+  - it has fewer than 100 changed lines in total, counting added plus deleted lines from `git diff --numstat <base>` across every file, tests included;
   - it is non-core: it touches no authority, admission, isolation, credential or mailbox code, nothing under `engine/config/isolation/` or a `contracts/` directory, and no plan decision (a KTD, requirement or acceptance criterion).
 
   A qualifying change runs as follows:
   - **Review:** one roster reviewer, `gpt-6.1-sol`, or the second roster model if it is unavailable, for one round. Select lenses as below. A P0/P1 it raises gets the fix and one confirmation by the same reviewer. If it is still open after that, the task leaves the lane. A docs-only change, touching no code, test or config, needs no reviewer.
-  - **Verification:** the focused tests for the touched code and the touched package's typecheck. No full package suite. Validate the task pack when the pack or plan changed.
+  - **Verification:** as for every task, above. Validate the task pack when the pack or plan changed.
   - **Process documents:** the PR description is the report. It lists changed files, the test commands with counts, the reviewer's verdict and the decisions made, and it states `Lane: small-change`. Write no intake, preservation, budget-assessment, residuals or handover files.
-  - **Leaving the lane:** a change that grows to 30 lines or more, or touches core code, leaves the lane and follows the full rules from that point, reusing the evidence already gathered. Never split a change, or defer part of it, just to fit the lane.
-- **Reviewer roster (owner rule, 2026-10-19).** Every required review uses exactly two report-only reviewers on the same frozen candidate:
+  - **Leaving the lane:** a change that grows to 100 lines or more, or touches core code, leaves the lane and follows the full rules from that point, reusing the evidence already gathered. Never split a change, or defer part of it, just to fit the lane.
+- **One reviewer unless core (owner directive, 2026-10-25).** A change outside the small-change lane that touches no core code, as the lane defines it, gets one roster reviewer instead of two, with the same round rules. Two reviewers are required only for core changes.
+- **Reviewer roster (owner rule, 2026-10-19).** Every two-reviewer review uses exactly these two report-only reviewers on the same frozen candidate:
   - `gpt-6.1-sol`;
   - `ds/gpt-6-astra`, the owner's DeepSeek-backed mapping. The gateway requires the `ds/` prefix, so always pass the full ID.
 
@@ -95,17 +105,16 @@ These rules size review and verification to the change. They take precedence ove
 - **Reviewer instructions live in one charter (owner, 2026-10-22).** Give every reviewer `engine/config/team/roles/reviewer.md` and `engine/config/team/core.md` (plan KTD28; managed reviewers load the same files) and tell it to follow them. The brief adds facts only: the task card and cited KTD excerpts, the candidate or fix delta, the round number, the selected lenses and the earlier findings with their dispositions. Do not restate the reviewer's role, conduct, severity scale or report format in a brief.
 - Pick review lenses from the diff. Correctness, testing and security always run. Adversarial runs when the diff touches authority, admission, isolation, credentials or the mailbox. Performance, reliability, maintainability, project standards, learnings, agent-native and the simplify passes run only when the diff touches what that lens checks. Record each skipped lens and the reason.
 - **Review round shape (owner rule, 2026-10-22).** Later rounds confirm fixes; they do not re-review the task.
-  - **Round 1 closes on both reports.** Start fixing only after both roster reviewers have reported on the same frozen round-1 candidate. Retry a reviewer that failed on transport; do not start fixes on one report.
+  - **Round 1 closes on both reports.** In a two-reviewer review, start fixing only after both roster reviewers have reported on the same frozen round-1 candidate. Retry a reviewer that failed on transport; do not start fixes on one report.
   - **From round 2 on, the packet is the fix delta.** It holds only the delta patch against the previously reviewed candidate, the earlier rounds' findings with their dispositions, and the enclosing functions of the changed hunks. Keep it under about 40 KB. Send no full files and no base-to-head diff unless a reviewer asks for a named file. Use the lenses that raised findings plus correctness, and widen only when the fix touches files outside the earlier findings.
   - **A later round asks two questions:** is each earlier P0/P1 closed, and did the delta introduce a regression? Do not ask it to re-attack the design, re-judge dispositions or rule on the done signal; the done-signal verdict belongs to round 1 and the final candidate. A new finding from round 2 on in code the delta did not touch is recorded as a residual, unless it is a P0 with a concrete, reproduced scenario.
   - **The reviewer that raised a finding confirms it.** From round 2 on, each open finding is confirmed by the reviewer that raised it; a finding both raised needs only one. The other reviewer joins the round only when the delta touches code outside the open findings.
   - **Fixes stay minimal.** A fix round changes only what the open findings require. If closing a finding needs a new mechanism or a changed ownership model rather than a local correction, stop and raise it to the plan owner as a design question. After round 1, make no change the review did not ask for: record a defect found on the side as a residual, or, if it is a P0/P1, as a finding the next round's delta closes.
 - Skip the separate final-branch review when the branch tree hash equals the reviewed candidate's; record the matching hashes. When they differ, review only the difference.
-- Run the affected package suite once, on the final candidate, and rerun it only after a later source change. A failure listed in `docs/known-failures.md` with a matching test and error is pre-existing without a new base-commit reproduction; reproduce only failures the list does not cover, and add confirmed ones to it.
-- **Where the full daemon suite runs (2026-10-23).** Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of `packages/daemon` and `packages/cli`, never in a linked worktree whose `node_modules` are symlinked: daemon-spawn tests fail there. Start it with no controlling terminal (`setsid -w … < /dev/null`, inside `tmux` when the session may be reaped) and with `TMUX` and `TMUX_PANE` unset (`env -u TMUX -u TMUX_PANE`), or the hermetic scenario tests refuse to run. A test that opens an interactive shell otherwise takes the terminal, and the whole run stops with SIGTTIN/SIGTTOU while looking hung. Use `--maxWorkers=2 --testTimeout=60000`, and write a `.done` marker on exit.
+- **Where the full daemon suite runs (2026-10-23).** This applies to the wrap-up run and to suite runs the owner asks for. Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of `packages/daemon` and `packages/cli`, never in a linked worktree whose `node_modules` are symlinked: daemon-spawn tests fail there. Start it with no controlling terminal (`setsid -w … < /dev/null`, inside `tmux` when the session may be reaped) and with `TMUX` and `TMUX_PANE` unset (`env -u TMUX -u TMUX_PANE`), or the hermetic scenario tests refuse to run. A test that opens an interactive shell otherwise takes the terminal, and the whole run stops with SIGTTIN/SIGTTOU while looking hung. Use `--maxWorkers=2 --testTimeout=60000`, and write a `.done` marker on exit.
 
 ### Parallel tracks (owner decision, 2026-10-23)
-Two sessions may execute tasks at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare in the task pack; directory patterns grant nothing. A task that needs a file its card does not declare stops and reports it, as any task would.
+Two sessions may execute tasks at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare in the task pack; directory patterns grant nothing. A task may take a file its card does not declare when no not-yet-landed task of the other track declares it; otherwise it stops and reports it.
 - **Track A, managed launch:** T042, T044, T051, T047, T043, T048, T049, T038, T046 and T052, in that order. T052 was added by the T015 amendment of 2026-10-25 (`docs/amendments/2026-10-25-t015-read-only-ui.md`). T044 comes before T047 because T035 waits on it. T051, split out of T044 on 2026-10-24, follows it directly because it changes only T044's files.
 - **Track B, owner surfaces:** T036, T013, T014, T050, T015, T019, T035, T016, T020, T021, T022 and T023, then T017, T033 and T018.
 - **Files both tracks declare are serialized:** the task that starts second waits until the other has landed, then starts from current `main`.
@@ -119,10 +128,9 @@ Two sessions may execute tasks at once, each in its own clone and branch. A trac
 ### Done, evidence and git
 - A task is done when:
   - every test scenario in the task is covered by a passing test;
-  - the daemon typecheck passes;
-  - the focused tests pass;
-  - the affected package suite has no failures the task caused (not required in the small-change lane).
-- Write logs and a short report (changed files, results with counts, pre-existing failures, residuals, conservative choices) to `.spec-first/workflows/spec-work/multi-agent/<UTC-timestamp>-<task>/`. In the small-change lane the PR description is the report.
+  - the touched package's typecheck passes;
+  - the focused tests pass.
+- The PR description is the report for every task (owner directive, 2026-10-25): changed files, test commands with counts, pre-existing failures, residuals, decisions and the reviewer verdicts. Keep logs under `.spec-first/workflows/spec-work/multi-agent/<UTC-timestamp>-<task>/` only when they back a claim in the PR. Write no separate intake, preservation, budget-assessment or handover files.
 - Do not edit `docs/plans/` or `docs/tasks/` while executing a task; regenerating the pack after drift is the only exception.
 - **Standing delivery authorization (owner grant, 2026-10-16).** The owner grants, once, the delivery steps a finished task needs. After a task passes its done signal, commit its scoped candidate, push the feature branch, and create or update its pull request. After the task-level acceptance and required review are evidenced, land it with the documented head-bound rebase merge. Do not stop to ask for a separate grant for commit, push, PR creation or that landing; waiting for one is the failure this grant removes.
   - Stage an explicit file list and commit only the scoped candidate. Unrelated dirty files stay untouched and outside the commit.
