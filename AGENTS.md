@@ -31,6 +31,11 @@ These rules apply to every agent that implements tasks in this repository, atten
 
 ### Starting a task
 - Work from the task pack in `docs/tasks/`. First run `spec-first tasks validate <task-pack> --repo /home/leo/src/multi-agent --json`. If it reports source-plan drift, regenerate the pack from the current plan before executing any task. Never execute a stale card.
+- **Load only the task's context (owner directive, 2026-10-25).** Never read the whole plan or the whole task pack. The plan alone is about 30,000 words. Every turn carries whatever was loaded, so a full load slows every later step of the task.
+  - From the task pack, read only your card: `awk '/^### T051\./{f=1;print;next} f&&/^##+ /{exit} f' <task-pack>`. Do not read the JSON index.
+  - From the plan, read only the sections named in the card's Context line. Each runs from its heading to the next heading of the same level; find them with `grep -n '^#' <plan>`. Read a KTD or requirement the card cites by its ID, not the surrounding chapter.
+  - The validator's JSON embeds the entire pack, about 300 KB. Keep only its verdict: `… --json | python3 -c 'import json,sys;d=json.load(sys.stdin);print(json.dumps({k:d[k] for k in ("task_pack_validity","reason_code","errors","validation")}))'`.
+  - Read source files the card names, and widen only to what a specific question needs. Read `docs/known-failures.md` only when a test fails. This file is the one document you always read in full.
 - Do one task at a time. Before writing anything, compare the current source with the task's test scenarios. Work that already satisfies a scenario is verified and recorded, not rewritten.
 - The task's Files list is the scope budget. A file outside the list may join only when direct evidence shows it completes this task. When a change affects acceptance, a public contract, architecture or source ownership, stop and report it as a plan question.
 
@@ -39,6 +44,7 @@ These rules apply to every agent that implements tasks in this repository, atten
 - Do not fix pre-existing problems that the task does not need.
 - A failing test is pre-existing if it also fails at the task's base commit. To check, run it in a throwaway `git worktree` at that commit, with `node_modules` symlinked from the main checkout; remove the worktree afterwards. Record pre-existing failures and fix only failures the task caused.
 - Never weaken a legacy test to make it pass. Legacy mode must behave exactly as before.
+- **Known-cause fixes skip the full debug workflow (owner directive, 2026-10-25).** The full `spec-debug` workflow is for failures whose cause is not yet known. When the root cause is clear and verified, fix it directly without that workflow's hypothesis and investigation phases. Clear and verified means a reproduced failure, a failing test or a direct trace shows the cause, and you can name the line or decision responsible. Write or keep a test that fails for that cause, fix it, rerun the test, and record the cause and the evidence in the report or PR. This exemption takes precedence, in this repository, over the `spec-debug` entry rule in the `CLAUDE.md` block that spec-first manages. It does not cover a failure whose cause is a guess, an intermittent failure without a measured mechanism, or a fix that would touch more than the cause.
 
 ### Bounded loops and stop conditions
 - Make at most two fix-and-rerun cycles per failing check. Each task gets two review rounds, under the plan's Review convergence rule; after round 2, P2/P3 findings become recorded residuals. Rounds 3 and 4 run only for open P0/P1 findings, and only while the progress gate holds: the open P0/P1 count is strictly lower than after the previous round, and no P0/P1 fixed earlier reappears. Those rounds fix only the open P0/P1 findings. When the gate fails, or a P0/P1 is still open after round 4, the task goes back to the plan owner. When the plan owner records a fix decision for that P0/P1, implement only the decided fix, refresh the candidate and rerun verification; the fix gets one further review round, and a P0/P1 that survives it goes back to the owner again.
@@ -51,6 +57,10 @@ These rules apply to every agent that implements tasks in this repository, atten
 - When a done signal depends on a production component, owner or composition path that does not exist yet and is not a named slice of the task, stop and report it as a plan question. Do not prepare a scope amendment to absorb it.
 - A resumed or compacted session reuses recorded evidence whose source hashes still match. It does not rerun those checks or re-review an unchanged candidate.
 - When running unattended, do not ask questions. Take the most conservative option these rules allow, record it, and continue.
+- **Decide what the card already settles (owner directive, 2026-10-25).** This applies attended or unattended. When the card, the plan sections it cites, these rules or the launch prompt answer a question, decide it yourself. Do the same when the choice stays inside the card's Files list, done signal and contracts. Record the decision and its reason in the report or PR, and continue without asking. Decisions the owner put in the launch prompt bind the run.
+  - Ask the owner only for a scope or Files-list change, a change to acceptance, a public contract or architecture, a grant these rules do not give, or one of the stop conditions below.
+  - Collect the questions you do have and ask them together at a natural stopping point. Keep working on any part they do not block while you wait.
+- **Time-box proofs and investigations (owner directive, 2026-10-25).** A repeat-run or flake-rate proof uses the run count the card names, otherwise 20 runs. An investigation with no card-named target stops after 30 minutes. Then report what was measured, land what is proven, and record the open part as a residual or in `docs/known-failures.md`; do not keep extending the proof. A reviewer call still running after 20 minutes is stopped and treated as a transport failure, with one retry.
 - Stop and report rather than improvise when:
   - the plan conflicts with the current source;
   - a fix needs an out-of-scope file that affects architecture or a contract;
@@ -59,7 +69,16 @@ These rules apply to every agent that implements tasks in this repository, atten
   - the task-level budget above is reached.
 
 ### Review and verification cost
-These rules size review and verification to the change. They take precedence over a workflow skill's default review shape, and they never lower a task's done signal or required review gate.
+These rules size review and verification to the change. They take precedence over a workflow skill's default review shape and over a card's review intent. Apart from the small-change lane below, which the owner set, they never lower a task's done signal or required review gate.
+- **Small-change lane (owner directive, 2026-10-25).** A change qualifies when both of these hold:
+  - it has fewer than 30 changed lines in total, counting added plus deleted lines from `git diff --numstat <base>` across every file, tests included;
+  - it is non-core: it touches no authority, admission, isolation, credential or mailbox code, nothing under `engine/config/isolation/` or a `contracts/` directory, and no plan decision (a KTD, requirement or acceptance criterion).
+
+  A qualifying change runs as follows:
+  - **Review:** one roster reviewer, `gpt-6.1-sol`, or the second roster model if it is unavailable, for one round. Select lenses as below. A P0/P1 it raises gets the fix and one confirmation by the same reviewer. If it is still open after that, the task leaves the lane. A docs-only change, touching no code, test or config, needs no reviewer.
+  - **Verification:** the focused tests for the touched code and the touched package's typecheck. No full package suite. Validate the task pack when the pack or plan changed.
+  - **Process documents:** the PR description is the report. It lists changed files, the test commands with counts, the reviewer's verdict and the decisions made, and it states `Lane: small-change`. Write no intake, preservation, budget-assessment, residuals or handover files.
+  - **Leaving the lane:** a change that grows to 30 lines or more, or touches core code, leaves the lane and follows the full rules from that point, reusing the evidence already gathered. Never split a change, or defer part of it, just to fit the lane.
 - **Reviewer roster (owner rule, 2026-10-19).** Every required review uses exactly two report-only reviewers on the same frozen candidate:
   - `gpt-6.1-sol`;
   - `ds/gpt-6-astra`, the owner's DeepSeek-backed mapping. The gateway requires the `ds/` prefix, so always pass the full ID.
@@ -101,8 +120,8 @@ Two sessions may execute tasks at once, each in its own clone and branch. A trac
   - every test scenario in the task is covered by a passing test;
   - the daemon typecheck passes;
   - the focused tests pass;
-  - the affected package suite has no failures the task caused.
-- Write logs and a short report (changed files, results with counts, pre-existing failures, residuals, conservative choices) to `.spec-first/workflows/spec-work/multi-agent/<UTC-timestamp>-<task>/`.
+  - the affected package suite has no failures the task caused (not required in the small-change lane).
+- Write logs and a short report (changed files, results with counts, pre-existing failures, residuals, conservative choices) to `.spec-first/workflows/spec-work/multi-agent/<UTC-timestamp>-<task>/`. In the small-change lane the PR description is the report.
 - Do not edit `docs/plans/` or `docs/tasks/` while executing a task; regenerating the pack after drift is the only exception.
 - **Standing delivery authorization (owner grant, 2026-10-16).** The owner grants, once, the delivery steps a finished task needs. After a task passes its done signal, commit its scoped candidate, push the feature branch, and create or update its pull request. After the task-level acceptance and required review are evidenced, land it with the documented head-bound rebase merge. Do not stop to ask for a separate grant for commit, push, PR creation or that landing; waiting for one is the failure this grant removes.
   - Stage an explicit file list and commit only the scoped candidate. Unrelated dirty files stay untouched and outside the commit.
