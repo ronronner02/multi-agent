@@ -237,3 +237,17 @@ The owner-only GET /api/team-control/health query is read-only. It reports ok, d
 - sandboxNetwork: failed: stop managed launch, preserve the reachable-set receipt, and rerun the owner-approved network preflight after verifying the installed egress profile.
 - clients: failed: do not update a worker in place; compare the installed executable hashes and versions with client-lock.json, then perform the owner-approved lock update and preflight.
 - unknown: treat the component as unverified. Do not render it as healthy or start a managed attempt until the bounded check completes with an observed result.
+
+## Reaching reviewers
+Moved from `AGENTS.md` on 2026-10-26; the roster and review sizing stay there.
+- `gpt-6.1-sol` runs through `codex exec -s read-only`. `ds/gpt-6-astra` supports the Responses API, so it runs through `codex exec -s read-only -m ds/gpt-6-astra`. The gateway requires the `ds/` prefix.
+- `ds/claude-*` models run only through the Claude CLI (`claude -p --model ds/claude-...`), never through `/chat/completions`.
+- If a stream drops, call the gateway's `/chat/completions` endpoint directly. Send system and user roles only, a client `User-Agent` header and a streamed response, with `reasoning_effort` set to `low`; the gateway ends any request at 300 seconds.
+- A read-only `codex exec` cannot read the WSL checkout. Give each reviewer frozen, read-only copies of the diff, the touched files and the contract excerpt.
+- Reach every model through the locally configured gateway. Never print or persist keys.
+
+## Full daemon suite
+This runs at project wrap-up or when the owner asks; tasks do not run it.
+- Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of `packages/daemon` and `packages/cli`. Never use a linked worktree with symlinked `node_modules`, where daemon-spawn tests fail.
+- Start it with no controlling terminal (`setsid -w … < /dev/null`, inside `tmux` when the session may be reaped). Unset `TMUX` and `TMUX_PANE` (`env -u TMUX -u TMUX_PANE`), or the hermetic scenario tests refuse to run. A test that opens an interactive shell can otherwise take the terminal, and the run then stops with SIGTTIN/SIGTTOU while looking hung.
+- Use `--maxWorkers=2 --testTimeout=60000`, run one suite at a time, and write a `.done` marker on exit.
