@@ -176,6 +176,15 @@ describe("T047-H1 boundary faults from the launcher's own evidence", () => {
     db.close();
   });
 
+  // The check must compare against the lock's own entry. Hardcoding a build would report every legitimate lock
+  // upgrade as drift, so the fixture takes its version from the installed lock rather than naming one.
+  it("accepts whatever build the installed lock currently names", async () => {
+    const lock = JSON.parse(readFileSync("/etc/multi-agent/client-lock.json", "utf8")) as { clients: Record<string, { version: string }> };
+    const { db, read } = reader([attempt({ clientVersion: lock.clients["claude-code"]!.version })]);
+    expect((await read()).lights.clients).toMatchObject({ state: "ok" });
+    db.close();
+  });
+
   it("keeps a proven attempt's boundary lights ok and still reports its attempts", async () => {
     const { db, read } = reader([attempt()]);
     const health = await read();

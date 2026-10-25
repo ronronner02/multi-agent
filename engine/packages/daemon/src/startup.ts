@@ -411,9 +411,6 @@ function managedCandidateRoot(assignmentRoot: string, worker: string, runId: str
   return nodePath.join(assignmentRoot, worker, `${runId}-${taskId}`);
 }
 
-/** The client builds the installed lock is expected to name, from `engine/config/isolation/client-lock.json`. */
-const CLIENT_LOCK_VERSIONS = { "claude-code": "2.1.296", codex: "0.160.0" } as const;
-
 /**
  * T047-H1: the KTD26 health reader over the owners startup already holds.
  *
@@ -466,6 +463,12 @@ export function composeSystemHealthReader(dependencies: {
     if (bytes === null) return null;
     return recorded === hashBytes(bytes) ? null : reason;
   };
+  /** The build the installed lock names for a client, or null when the bytes or the entry are unusable. */
+  const lockedVersion = (bytes: string | null, client: "claude-code" | "codex") => {
+    if (bytes === null) return null;
+    try { return (JSON.parse(bytes) as { clients?: Record<string, { version?: unknown }> }).clients?.[client]?.version as string | undefined ?? null; }
+    catch { return null; }
+  };
   return createSystemHealthReader({
     // Read-only and synchronous: `quick_check` would scan the whole file, which the five-second bound cannot interrupt.
     database: () => result("ok", "database:schema_version:" + String(db.prepare("PRAGMA schema_version").pluck().get())),
@@ -491,13 +494,14 @@ export function composeSystemHealthReader(dependencies: {
       }),
     clients: () => evidenceFirst("clients", "/etc/multi-agent/client-lock.json",
       // The lock's bytes decide first, because a changed digest is the stronger statement; the version is the
-      // finer fact and only meaningful against an unchanged lock.
+      // finer fact and only meaningful against an unchanged lock. Both compare against the lock's own entry, so a
+      // legitimate lock upgrade does not read as drift.
       (attempt, read) => driftedFrom(attempt.clientLockDigest, read, "client_lock_changed")
-        ?? (CLIENT_LOCK_VERSIONS[attempt.client] === attempt.clientVersion ? null : "client_lock_version_mismatch"),
+        ?? (lockedVersion(read(), attempt.client) === attempt.clientVersion ? null : "client_lock_version_mismatch"),
       bytes => {
         const lock = JSON.parse(bytes) as { clients?: Record<string, { version?: unknown }> };
         for (const client of ["claude-code", "codex"] as const) {
-          if (lock.clients?.[client]?.version !== CLIENT_LOCK_VERSIONS[client]) return "client_lock_version_mismatch";
+          if (typeof lock.clients?.[client]?.version !== "string") return "client_lock_version_mismatch";
         }
         return null;
       }),
