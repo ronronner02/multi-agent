@@ -86,6 +86,7 @@ function parseText(text: string, final: boolean, skipLF = false): { events: Inpu
       i += 1;
       continue;
     }
+    if (ch === "\x03") { events.push({ type: "ctrl-c" }); i += 1; continue; }
     if (ch === "\t") { events.push({ type: "key", key: "tab" }); i += 1; continue; }
     if (ch === "\r" || ch === "\n") {
       skipLF = ch === "\r";

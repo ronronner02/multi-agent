@@ -34,12 +34,36 @@ import { readLocal } from "./local-reading.js";
 import { StartupController } from "./startup.js";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
 import type { Action, FleetSnapshot, Screen } from "./types.js";
 import type { SpecReviewCache } from "./hydrate.js";
 import { MOTION_FRAME_MS } from "./visual-layout.js";
 import { launchProcess, runSpecLaunch } from "./specs/launch.js";
 import { runCopySession, processCopyTerminal } from "./print-for-copy.js";
 import { openTerminalInWindow, terminalWindowNotice } from "./terminals/open-window.js";
+
+export function createFrameWriter(render: () => readonly string[] | null, write: (bytes: string) => void) {
+  let previous: readonly string[] = [], timer: NodeJS.Timeout | undefined;
+  let last = -Infinity, closed = false;
+  function flush(): void {
+    timer = undefined; last = performance.now();
+    const next = render();
+    if (next === null || closed) return;
+    const patch = Array.from({ length: Math.max(previous.length, next.length) }, (_, i) =>
+      previous[i] === next[i] ? "" : `\x1b[${i + 1};1H\x1b[2K${next[i] ?? ""}`).join("");
+    if (patch) write(`\x1b[?2026h\x1b[?7l${patch}\x1b[?7h\x1b[?2026l`);
+    previous = [...next];
+  }
+  return {
+    request() {
+      if (closed || timer) return;
+      const delay = Math.max(0, 33 - (performance.now() - last));
+      if (delay) timer = setTimeout(flush, Math.ceil(delay)); else flush();
+    },
+    invalidate() { previous = []; },
+    close() { closed = true; if (timer) clearTimeout(timer); },
+  };
+}
 
 function argOf(args: string[], flag: string): string | undefined {
   const i = args.indexOf(flag);
@@ -148,8 +172,16 @@ async function run(): Promise<void> {
     return currentCommandContext(startup && startup.state.connection !== "up" ? "unverified" : crashCartOpts.daemonState ?? null);
   }
 
-  function draw(): void {
-    if (nativeAttached) return;
+  const frameWriter = createFrameWriter(() => draw(true), bytes => { process.stdout.write(bytes); });
+  let frameSize = "";
+  function draw(paint = false): string[] | null {
+    if (!paint) {
+      const size = `${process.stdout.columns}:${process.stdout.rows}`;
+      if (size !== frameSize) { frameWriter.invalidate(); frameSize = size; }
+      frameWriter.request();
+      return null;
+    }
+    if (nativeAttached || shuttingDown) return null;
     const cols = process.stdout.columns ?? 120;
     const rows = process.stdout.rows ?? 32;
     const nowMs = Date.now();
@@ -185,9 +217,10 @@ async function run(): Promise<void> {
     // hitMap coordinates always match what is on screen
     // The renderer owns line breaks. Wide pasted characters must not wrap a
     // padded row and scroll the entire frame; restore normal wrapping after paint.
-    process.stdout.write("\x1b[?7l\x1b[H" + stylizeLines(lastScreen, style).map((l) => "\x1b[2K" + l).join("\r\n") + "\x1b[?7h");
+    const frame = stylizeLines(lastScreen, style);
     if (motionTimer) clearTimeout(motionTimer);
     motionTimer = lastScreen.motionActive || lastScreen.commandMotionActive ? setTimeout(draw, MOTION_FRAME_MS) : null;
+    return frame;
   }
 
   // 5.2 crash-cart: probe the daemon-down verdict via the shipped `rig crash-cart --json` verb (its
@@ -232,6 +265,8 @@ async function run(): Promise<void> {
         process.stdin.resume();
         process.stdout.write(ALT_SCREEN_ON + MOUSE_ENABLE + PASTE_ENABLE);
         nativeAttached = false;
+        frameWriter.invalidate();
+        draw();
       }
     },
     onWork: async (rig, seat) => {
@@ -428,6 +463,8 @@ async function run(): Promise<void> {
     refreshFromActivity();
   }
 
+  function redrawAfterTerminalReturn(): void { frameWriter.invalidate(); draw(); }
+
   function perform(action: Action): void {
     if (action.type === "print-for-copy") {
       // runCopySession never rejects; while suspended, handleInput and draw return early.
@@ -436,7 +473,7 @@ async function run(): Promise<void> {
         setSuspended: (on) => { nativeAttached = on; },
         isShuttingDown: () => shuttingDown,
         notice: (message) => view.dispatch({ type: "notice", message }),
-        draw,
+        draw: redrawAfterTerminalReturn,
       });
       return;
     }
@@ -450,7 +487,7 @@ async function run(): Promise<void> {
         void runSpecLaunch({ command, terminal: processCopyTerminal(),
           pauseInput: () => { process.stdin.pause(); }, resumeInput: () => { process.stdin.resume(); },
           setSuspended: on => { nativeAttached = on; launching = on; }, isShuttingDown: () => shuttingDown,
-          notice: message => view.dispatch({ type: "notice", message }), draw,
+          notice: message => view.dispatch({ type: "notice", message }), draw: redrawAfterTerminalReturn,
         }).catch(error => view.dispatch({ type: "notice", message: String(error) }));
       } catch (err) { view.dispatch({ type: "notice", message: (err as Error).message }); }
       return;
@@ -468,7 +505,9 @@ async function run(): Promise<void> {
   }
 
   async function shutdown(): Promise<void> {
+    if (shuttingDown) return;
     shuttingDown = true;
+    frameWriter.close();
     process.stdout.off("resize", draw);
     if (motionTimer) clearTimeout(motionTimer);
     live?.close();
@@ -478,6 +517,11 @@ async function run(): Promise<void> {
     activityEvents?.close();
     process.exit(0);
   }
+  process.once("exit", () => {
+    frameWriter.close();
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    if (!shuttingDown) process.stdout.write("\x1b[?2026l\x1b[?7h" + PASTE_DISABLE + MOUSE_DISABLE + ALT_SCREEN_OFF);
+  });
   process.stdout.on("resize", draw);
   // In cooked mode Ctrl-C reaches both us and rig up. Let the child stop while
   // keeping its result and the Enter-to-return prompt available in this TUI.
@@ -487,7 +531,9 @@ async function run(): Promise<void> {
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   function handleInput(events: ReturnType<typeof inputDecoder.write>): void {
     if (nativeAttached) return;
+    if (events.some(ev => ev.type === "ctrl-c") && !launching) { void shutdown(); return; }
     for (const ev of events) {
+      if (ev.type === "ctrl-c") continue;
       inputRevision += 1; startup?.interacted();
       // The bound endpoint's copy label remains usable in startup/palette/restore
       // contexts, whose input handlers otherwise consume the status-row click.
@@ -750,7 +796,7 @@ async function run(): Promise<void> {
   });
 }
 
-run().catch((err: unknown) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) run().catch((err: unknown) => {
   process.stdout.write(PASTE_DISABLE + MOUSE_DISABLE + ALT_SCREEN_OFF);
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
