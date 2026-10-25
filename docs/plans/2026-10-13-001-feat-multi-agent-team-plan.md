@@ -768,6 +768,17 @@ The table names execution checkpoints inside T010, not new tasks or a replacemen
 
 (owner decision 2026-10-24 - chosen over a fourth fix round inside T044, which would have risked moving a recorded identity under the card's own stop-if, and over returning the task unlanded.)
 
+**Candidate manifest from a copied snapshot; T049 cancelled (owner decision, 2026-10-26).** The 2026-10-24 design keeps git off the candidate, but it reimplements git's reading of a worktree by hand: enumeration, symlink-chain rules, attribute cleaning, binary detection, path quoting and patch rendering. That hand-written reading caused T044's overrun and the R3-1, R3-2 and N1 defects T051 fixed. The new T054 replaces it.
+- **Snapshot:** the control copies the candidate's files into a control-owned scratch directory. The copy keeps symlinks as links, never follows one, and skips every entry named `.git`. Nothing in the candidate is read through git, and from this point the worker cannot change what is measured.
+- **Manifest and patch:** git runs only with a control-owned `--git-dir`, whose objects borrow the source repository's through `objects/info/alternates`, and with the snapshot as `--work-tree`. The environment is cleared, with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `core.hooksPath=/dev/null` and `core.fsmonitor=false`. It runs `read-tree <base>`, then `add -A`, then `diff --cached --binary --no-ext-diff --no-textconv <base>` and `ls-files -s`. The manifest is git's index entries (mode, blob id, path), so the manifest and the patch come from one reading. Symlinks are recorded as link text, as git records them.
+- **Ignore authority is unchanged:** the base commit's `.gitignore` files plus the source's `info/exclude`. Before staging, each `.gitignore` in the snapshot is replaced with its base version, and one absent from the base is removed. After `add -A`, the candidate's own `.gitignore` contents are staged as ordinary content.
+- **Probe, 2026-10-26:** a worker-planted `.git` gitdir file carrying `core.fsmonitor`, `core.hooksPath`, `filter.<drv>.clean`, `filter.<drv>.process`, `diff.<drv>.textconv` and `diff.external`, plus `* filter=x diff=x` attributes and a nested repository, ran none of its programs. The patch, applied to a clean base checkout, reproduced the manifest exactly for CRLF/`eol` files, a BOM-prefixed name, `café.txt`, symlinks, the executable bit, and edits, adds and deletes.
+- **Identity change accepted:** recorded `files`/`manifestDigest` values change once, because symlinks are now link text and blob ids come from git. No production candidate has been recorded yet, so nothing needs migration. Test pins are re-captured.
+- **Unchanged:** the snapshot lane, `digestManifest` over the new entries, candidate adoption and removal (T048, which now follows T054), and the review packet.
+- **T049 is cancelled.** Its spawn audit and execution matrix proved properties of the hand-written reader. T054 carries the planted-program matrix as its own regression test.
+
+(owner decision 2026-10-26 - chosen over keeping the hand-written reader, which every review round had extended with another edge case.)
+
 ### U6. Add observable team views and owner controls to the TUI
 
 - **Goal:** Make task state and essential intervention usable in the terminal without replacing the lead's native conversation, carrying the same information as the reference-benchmark Web UI.

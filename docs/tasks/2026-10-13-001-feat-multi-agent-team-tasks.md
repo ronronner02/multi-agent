@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:168e6d5314ce460809b9d35f37007e419f7d3de0e9027b2f66313d59bb5676cc"
+source_plan_hash: "sha256:d6805d002d0342b69d1b596051036ffd8d2a339623756f2160ab2c8b02a2015b"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -24,7 +24,7 @@ source_sections:
 
 ## Overview
 
-This derived execution index decomposes the active, implementation-ready source plan into **52 bounded tasks in 32 waves**, covering U1-U14. The 2026-10-24 T044 closeout revision adds T051 (wave 17, after T044): T044 landed on its no-git-on-candidate guarantee, and the owner moved the remaining patch-renderer correctness to T051, which owns R3-1 (a manifest hash that disagrees with the patch for a file the base marks `text` or gives an `eol`), R3-2 (a BOM-prefixed name decoded into a collision and dropped) and N1 (a non-ASCII name never treated as attribute-shaped). It takes T051 because T050 is the TUI rendering card approved the same day. The owner also accepted T044's measured overrun of 1,284 changed lines against the ~1,200 task budget as the cost of the edge cases it closed. The 2026-10-24 TUI design revision records the owner's approval of `docs/design/t015-tui-design.md` and adds T050 (wave 11), which gives the TUI the ink-wash palette, Nerd Font icons with a plain-text fallback and a flicker-free frame writer; T015 depends on it. The 2026-10-24 split revision divides T044 again after its first execution under the re-plan: T044 keeps the production correctness (tracked symlink chains, symlink refusal, ignore authority, patch rendering) and the tests in its own file, and the new T049 (wave 17, after T044) owns the spawn audit, the full execution-vector matrix and the per-fixture byte-identity pins in a separate test-only card, because closing both would have taken T044 to about 1,425 changed lines against a ~1,200 budget. The 2026-10-24 revision re-plans T044 after three failed review rounds: the commit-lane manifest and patch are computed without running git on the candidate (plan U5), and candidate adoption and removal move to the new T048 (wave 18), which depends on T044. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-23 T042 stop revision adds T047 (attaching a produced managed attempt to the seat's binding and registering its endpoint in the composed chain) at wave 17, because T042's own `stop_if` found that the endpoint map lives only in `startup.ts` and the binding is built at three sites no task owned; T042 keeps the producer, T038 now depends on T047 and moves to wave 18, T046 follows to wave 19, and T026-T030 move to waves 20-24. The 2026-10-23 revision applies KTD28/U14: it adds T045 (the offline slice: the pinned core and role charters in every manifest, and the reviewer report format enforced when a review is recorded; wave 14) and T046 (facts-only briefs, retained review packets and observed charter discovery; wave 18, after T039, T042 and T038). T026 now depends on T046 so the primary live run uses charters, and T026-T030 move to waves 19-23. U14 takes T045 and T046 because the 2026-10-22 closeout split already holds T043 and T044. The 2026-10-22 closeout revision splits two T039 claims whose fixes lie outside its declared files into the new T043 (a reviewer launching into the reviewed candidate, which needs an assignment field naming that task) and T044 (a candidate manifest that cannot be forged by the worker through `core.fsmonitor`); both depend on T039. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
+This derived execution index decomposes the active, implementation-ready source plan into **52 bounded tasks in 32 waves**, covering U1-U14. The 2026-10-26 simplification revision (`docs/amendments/2026-10-26-simplification.md`) cancels T049 and adds T054 (wave 18, after T051). T054 computes the commit-lane manifest and patch with plain git over a control-owned copy of the candidate. T048 now follows T054 at wave 21, and T052 no longer depends on T046. The 2026-10-24 T044 closeout revision adds T051 (wave 17, after T044): T044 landed on its no-git-on-candidate guarantee, and the owner moved the remaining patch-renderer correctness to T051, which owns R3-1 (a manifest hash that disagrees with the patch for a file the base marks `text` or gives an `eol`), R3-2 (a BOM-prefixed name decoded into a collision and dropped) and N1 (a non-ASCII name never treated as attribute-shaped). It takes T051 because T050 is the TUI rendering card approved the same day. The owner also accepted T044's measured overrun of 1,284 changed lines against the ~1,200 task budget as the cost of the edge cases it closed. The 2026-10-24 TUI design revision records the owner's approval of `docs/design/t015-tui-design.md` and adds T050 (wave 11), which gives the TUI the ink-wash palette, Nerd Font icons with a plain-text fallback and a flicker-free frame writer; T015 depends on it. The 2026-10-24 split revision divides T044 again after its first execution under the re-plan: T044 keeps the production correctness (tracked symlink chains, symlink refusal, ignore authority, patch rendering) and the tests in its own file, and the new T049 (wave 17, after T044) owns the spawn audit, the full execution-vector matrix and the per-fixture byte-identity pins in a separate test-only card, because closing both would have taken T044 to about 1,425 changed lines against a ~1,200 budget. The 2026-10-24 revision re-plans T044 after three failed review rounds: the commit-lane manifest and patch are computed without running git on the candidate (plan U5), and candidate adoption and removal move to the new T048 (wave 18), which depends on T044. The 2026-10-19 revision splits T010: T010 closes at its reviewed source and host-provisioning share, and the new T037 owns the full launch lifecycle, production startup composition and installed-client acceptance; T026 now also depends on T037. The 2026-10-20 revision moves T037's installed-client acceptance into the new T038, which depends on T037 and now gates T026 instead. A later 2026-10-20 revision moves T011's production launch wiring into the new T039, which depends on T011, T012 and T037; T038 now also depends on T039 and moves to wave 13. The 2026-10-21 revision closes T037 at the hardened process reader and moves its lifecycle into the new T040 and its production composition into the new T041; T039 now depends on T041 and moves to wave 15, and T038 depends on T039 and T041 and moves to wave 16. A later 2026-10-21 revision adds the managed-attempt producer to T039, after T041's review found that no production path builds the context projection, the per-attempt mailbox endpoint or the seat's managed attempt. The 2026-10-22 revision splits that producer out of T039 into the new T042, because the producer's prerequisites have no production owner and the combined work would exceed the task-level budget; T042 depends on T039 and T041, and T038 now depends on T042 and moves to wave 17. The 2026-10-23 T042 stop revision adds T047 (attaching a produced managed attempt to the seat's binding and registering its endpoint in the composed chain) at wave 17, because T042's own `stop_if` found that the endpoint map lives only in `startup.ts` and the binding is built at three sites no task owned; T042 keeps the producer, T038 now depends on T047 and moves to wave 18, T046 follows to wave 19, and T026-T030 move to waves 20-24. The 2026-10-23 revision applies KTD28/U14: it adds T045 (the offline slice: the pinned core and role charters in every manifest, and the reviewer report format enforced when a review is recorded; wave 14) and T046 (facts-only briefs, retained review packets and observed charter discovery; wave 18, after T039, T042 and T038). T026 now depends on T046 so the primary live run uses charters, and T026-T030 move to waves 19-23. U14 takes T045 and T046 because the 2026-10-22 closeout split already holds T043 and T044. The 2026-10-22 closeout revision splits two T039 claims whose fixes lie outside its declared files into the new T043 (a reviewer launching into the reviewed candidate, which needs an assignment field naming that task) and T044 (a candidate manifest that cannot be forged by the worker through `core.fsmonitor`); both depend on T039. The 2026-10-18 revision applies PC8 and KTD25-KTD27: it adds T034 (client lock), T035 (scope extensions) and T036 (health checks), and amends T012, T015, T016, T019, T020, T023 and T026. The 2026-10-15 regeneration keeps T001-T030 and adds T031 (KTD19 channel spike), T032 (KTD21 Lead wake guards) and T033 (KTD20 failure classification and attempt phases); T004 now carries the KTD22 fixed-startup-mode and admission-invariant boundaries, T007-T010 and T016 carry the KTD21 and PC7 changes, and T018 routes recovery through the KTD20 classifier. This is a derived execution index, not a second plan, an approval record or a progress tracker. Task IDs describe scope, not completed implementation. Progress and current grants live in execution evidence outside this pack.
 
 **2026-10-25 T015 Amendment:** `docs/amendments/2026-10-25-t015-read-only-ui.md` assigns the daemon producer/read boundary to Track A prerequisite T052, makes it a hard T015 dependency, and reflows downstream waves. Only the independently approved Phase 1 UI shell may start early; it does not complete T015. Exact client preference/composition owners, the 1,500-line ceiling, phase commits and unchanged design acceptance are recorded in U6 and T015.
 
@@ -79,7 +79,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | U2 | R1, R4, R5, R13, R19, R21, R22; AE1, AE4, AE6, AE11, AE13; KTD4-KTD6, KTD22 | T003-T004 | Transactional migration/governance, fixed daemon mode, admission invariants and owner-level managed-entry authority checks |
 | U3 | R1-R6, R11, R18, R19, R21, R22; AE1-AE4, AE11, AE13; KTD3-KTD6, KTD21 | T006-T007 | Pinned catalog equality, bounded invocation, task freshness, effective-context manifests and the Lead operating protocol |
 | U4 | R6-R9, R11-R13, R15, R16, R19, R21; AE3, AE5, AE6, AE8, AE12, AE13; KTD3, KTD6, KTD7, KTD11, KTD16, KTD19, KTD21, KTD23, KTD24, KTD27; PC7 | T008-T010, T031-T032, T034, T037-T042, T040-T041 | Safe mailbox and PC7 launch contracts, the KTD19 spike record, Lead wake guards, plus actual two-client containment and resume proof |
-| U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD24, KTD25 | T011-T012, T035, T039, T042-T044, T047-T049, T051 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework, the managed-attempt producer and KTD25 scope extensions |
+| U5 | R4-R6, R10, R11, R16-R18, R21, R22; AE2-AE5, AE9-AE11, AE13; KTD4, KTD8, KTD9, KTD24, KTD25 | T011-T012, T035, T039, T042-T044, T047-T048, T051, T054 | Dependency/snapshot isolation, exact independent review, progress-gated bounded rework, the managed-attempt producer and KTD25 scope extensions |
 | U6 | R9, R12-R14, R16; AE5-AE7, AE10, AE12; KTD4-KTD6, KTD15, KTD16; PC1-PC4 | T015-T016, T050 | Replay/width/language tests, owner controls and two-size bilingual terminal acceptance |
 | U7 | R5, R9-R15, R18, R21, R22; AE4, AE6-AE9, AE13; KTD4-KTD9, KTD20 | T017-T018, T033 | Owned-process cancel/deadlines, failure classification and retry eligibility, crash fault injection, no duplicate side effects and paired restore |
 | U9 | R12-R14, R19, R21, R22; AE6, AE13; KTD6, KTD14, KTD16, KTD18; PC1, PC4, PC5 | T013-T014 | Session/forgery/expiry gates, owner-host identity and audited read-only/take-over boundaries |
@@ -98,7 +98,7 @@ The matrix preserves all source units and their source requirement anchors; the 
 | Distinct native clients and direct addressed collaboration | T008-T010, T037-T042, T040-T041 | T027-T028 |
 | Structured native channels and Lead wake bounds | T007, T031-T032 | T038, T030 |
 | Rejection, PC7 launch mode, context and control isolation | T001-T002, T004, T007-T010, T013-T014, T037-T042, T040-T041 | T027-T028 |
-| Candidate integrity, independent review and integrated acceptance | T011-T012, T039, T042-T044, T047-T049, T051, T024-T026 | T027, T030 |
+| Candidate integrity, independent review and integrated acceptance | T011-T012, T039, T042-T044, T047-T048, T051, T054, T024-T026 | T027, T030 |
 | Cancellation, restart, ambiguous effects and cumulative limits | T017-T018, T033 | T027-T028 |
 | Reproducible source/build and database rollback | T001-T003, T018 | T030 |
 | TUI interaction, log visibility, replay timing and durable projection | T015-T016 | T027 |
@@ -141,7 +141,6 @@ flowchart TD
   T012 --> T052
   T042 --> T052
   T047 --> T052
-  T046 --> T052
   T052 --> T015
   T015 --> T016 --> T017 --> T033 --> T018
   T012 --> T019
@@ -171,8 +170,9 @@ flowchart TD
   T039 --> T043
   T039 --> T044
   T044 --> T048
-  T044 --> T049
   T044 --> T051
+  T051 --> T054
+  T054 --> T048
   T041 --> T042
   T042 --> T047
   T036 --> T047
@@ -223,11 +223,11 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 14 | T021, T045 | T021: Verify responsive, accessible, bilingual Web UI behavior against the reference; T045: Pin the shared core and the implementer and reviewer charters into every attempt's context manifest, and enforce the reviewer charter's report format when a review is recorded (KTD28 offline slice) |
 | 15 | T022, T023, T039 | T022: Add scoped read-only Workspace and Knowledge views; T023: Classify owner task edits and suspend scope changes for plan re-approval; T039: Route every managed launch through runtime eligibility and an isolated, re-entrant candidate workspace |
 | 16 | T042, T044 | T042: Produce the managed attempt for an admitted assignment: the KTD24 context projection, the per-attempt mailbox endpoint and its bootstrap, and the attempt object T047 attaches; T044: Compute a commit-lane candidate's manifest and patch without running git on any path the worker can write |
-| 17 | T043, T047, T049, T051 | T043: Let a reviewer launch into the exact candidate the implementer produced, by naming the task under review; T047: Attach a produced managed attempt to the seat's binding and register its mailbox endpoint in the composed launch chain, so an admitted assignment can actually reach the privileged launch; T049: Prove the commit-lane manifest and patch start no git process on any path the worker can write, across the full reproduction matrix; T051: Make the commit-lane manifest and patch agree for files the base commit gives git attributes, by hashing the cleaned bytes the patch actually carries |
-| 18 | T038, T048 | Installed-client two-client acceptance, and candidate adoption on control-owned provenance (after T043, which shares `workflow-runtime.ts`) |
+| 17 | T043, T047, T051 | T043: Let a reviewer launch into the exact candidate the implementer produced, by naming the task under review; T047: Attach a produced managed attempt to the seat's binding and register its mailbox endpoint in the composed launch chain, so an admitted assignment can actually reach the privileged launch; T049: Prove the commit-lane manifest and patch start no git process on any path the worker can write, across the full reproduction matrix; T051: Make the commit-lane manifest and patch agree for files the base commit gives git attributes, by hashing the cleaned bytes the patch actually carries |
+| 18 | T038, T054 | Installed-client two-client acceptance, and the commit-lane manifest and patch from a control-owned copy of the candidate |
 | 19 | T046 | Facts-only role briefs, retained review packets and observed charter discovery |
 | 20 | T052 | T052: Publish committed managed owner read projections for T015 without moving producer authority into the client |
-| 21 | T015 | T015: Project durable team state, inert logs and shared language labels into the TUI |
+| 21 | T015, T048 | T015: Project durable team state, inert logs and shared language labels into the TUI; T048: candidate adoption on control-owned provenance (after T054, which shares `team-workspace.ts`) |
 | 22 | T016 | T016: Connect TUI owner decisions, browser pairing and terminal take-over with real-terminal acceptance |
 | 23 | T017 | T017: Persist cancellation and enforce cumulative budgets outside controller-only timers |
 | 24 | T033 | T033: Classify failed attempts once and route retry, resume and attempt phases through that classifier |
@@ -369,7 +369,6 @@ The following JSON is the single machine-readable task source. Human cards below
       "tasks": [
         "T043",
         "T047",
-        "T049",
         "T051"
       ]
     },
@@ -377,7 +376,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "wave": 18,
       "tasks": [
         "T038",
-        "T048"
+        "T054"
       ]
     },
     {
@@ -395,7 +394,8 @@ The following JSON is the single machine-readable task source. Human cards below
     {
       "wave": 21,
       "tasks": [
-        "T015"
+        "T015",
+        "T048"
       ]
     },
     {
@@ -3209,7 +3209,8 @@ The following JSON is the single machine-readable task source. Human cards below
       ],
       "goal": "Adopt a resumed candidate only on control-owned provenance, and release a candidate without passing its path to git.",
       "dependencies": [
-        "T044"
+        "T044",
+        "T054"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
@@ -3225,49 +3226,13 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with `adoptCandidate` and `candidateFor` in `workflow-runtime.ts`, `removeCandidateWorkspace` in `team-workspace.ts`, and the adoption findings in T044 review rounds 1 and 3.",
       "test_focus": "Exercise `candidateFor` after a simulated restart in both lanes. A commit-lane candidate the runtime created, with work in it, is adopted when the source repository's worktree registry lists that path; a plain directory, a copied `.git` file or another repository's worktree at that path refuses, and a genuine candidate is still adopted when the source is itself a linked worktree or is reached through a symlink. A snapshot-lane candidate with work in it is adopted when a control-owned creation record, kept outside every worker-writable tree, names it; a directory without that record refuses. A refusal leaves the task launchable rather than wedged on `EEXIST`. Removal deletes the tree and then prunes the source's registry, so no git process receives the candidate path, and a `.git` or configuration planted in the candidate runs nothing. Everything runs offline.",
       "done_signal": "Focused tests pass; the daemon typecheck passes; one final daemon package run has no task-caused failure. Adoption decides provenance only from control-owned records, never from the candidate's contents or `.git`, and no git process in adoption or removal receives a candidate path. Required review closes on the final candidate with the `AGENTS.md` reviewer roster.",
-      "wave": 18,
+      "wave": 21,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the snapshot-lane creation record needs a schema migration or a control-state location the plan does not declare, and return it as a plan question. Stop if the task-level budget in `AGENTS.md` is reached.",
       "review_gate": "required",
       "review_focus": "Check that a worker cannot get a directory of its choosing adopted as a task's candidate, that a candidate with legitimate work is never refused, that a refusal cannot wedge a task, and that nothing inside the candidate can steer its removal. Require a reproduction, not an argument.",
       "notes": "Split out of T044 by owner decision on 2026-10-24. T044's round-1 fix made adoption require a real worktree, which broke snapshot-lane resume. Its round-3 fix compared the adopted tree with the pristine baseline, which refuses every task with work and then wedges on `EEXIST`. On `main`, adoption accepts any directory at the candidate path; before T044 the commit-lane manifest failed on a non-repository, which masked that. `removeCandidateWorkspace` runs `git worktree remove --force` with the candidate path, which reopens the class T044 closes. `workflow-runtime.ts` is shared with T012, T039, T042 and T043, and `team-workspace.ts` with T011, T012, T035 and T044; serialize those changes.",
       "risk_note": "A candidate adopted without provenance presents a tree of unknown origin as the task's work, and a removal that hands the candidate's path to git reopens the configuration class T044 closes.",
-      "expected_side_effects": []
-    },
-    {
-      "task_id": "T049",
-      "source_unit": "U5",
-      "requirement_refs": [
-        "R5",
-        "R11",
-        "R16",
-        "R18",
-        "R21",
-        "AE4",
-        "KTD8"
-      ],
-      "goal": "Prove the commit-lane manifest and patch start no git process on any path the worker can write, across the full reproduction matrix.",
-      "dependencies": [
-        "T044"
-      ],
-      "target_repo": "ronronner02/multi-agent",
-      "files": [
-        "engine/packages/daemon/test/team-candidate-manifest.test.ts"
-      ],
-      "context_refs": [
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review",
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer"
-      ],
-      "entry_hint": "Start with the plan's two U5 owner decisions of 2026-10-24, T044's round-1 records in `20261024T021939Z-t044-manifest-without-candidate-git`, and the module T044 produced in `team-workspace.ts`. The vectors this task proves are listed in T044's pre-split `test_focus` in commit `920f277`.",
-      "test_focus": "A new test file proves the manifest and patch path with a spawn audit and the reproduction matrix T044's split left here. (1) Spawn audit: every git process the commit-lane manifest and patch start is recorded with its working directory and full argv, and none receives the candidate root or its assignment directory as working directory, `-C`, `--git-dir`, `--work-tree`, `GIT_DIR`, `GIT_WORK_TREE` or any other argument. (2) Execution matrix: a planted `core.fsmonitor`, a replaced `.git` gitdir file, `diff.external`, a `textconv` driver, a `filter.<drv>.clean` and a `filter.<drv>.process` driver, each set up through a worker `git init` and `.gitattributes`, and a repository planted in the assignment directory above a candidate with no `.git`, each fail to run their marker program and leave the manifest unchanged. (3) Byte identity: for unmodified, edited, added, deleted, executable, nested and tracked-symlink fixtures with nothing staged, `files` and `manifestDigest` equal the values `23284b8` computes, pinned in the test. The snapshot lane's manifest is unchanged.",
-      "done_signal": "Every reproduction in this file is a test that fails on `main`, or on the commit where its round found it, and passes on the final candidate. The spawn audit covers every git process the manifest and patch path starts, including the ones T044 added. The daemon typecheck passes; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster.",
-      "wave": 17,
-      "parallelizable": false,
-      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a needed change lies outside the declared file, and return it to T044's owner as a finding rather than widening this task. Stop if the task-level budget in `AGENTS.md` is reached.",
-      "review_gate": "required",
-      "review_focus": "Check that the spawn audit actually records the processes (a shim that git never resolves, or an assertion list that no spawn can fail, does not prove anything), that each execution vector reaches the faulting call on the pre-T044 code, and that the pinned byte-identity values were captured from `23284b8` and not regenerated from the code under test. Require a reproduction, not an argument.",
-      "notes": "Split out of T044 by owner decision on 2026-10-24. T044's first execution under the 2026-10-24 re-plan closed the execution class, but the review found further correctness defects and the card's full reproduction matrix was unimplemented; closing both would have taken the task to about 1,425 changed lines against a ~1,200 budget. T044 keeps production correctness and the tests in its own file; this task owns the proof that its done signal previously carried. The file is test-only, so it shares no production owner; it declares the same test file T044 declared before the split, which T044 no longer declares. It follows T044 because every assertion here is about the code T044 produces.",
-      "risk_note": "A spawn audit that cannot fail, or byte-identity values regenerated from the code under test, would report proof the task does not have — the failure this matrix exists to prevent.",
       "expected_side_effects": []
     },
     {
@@ -3377,8 +3342,7 @@ The following JSON is the single machine-readable task source. Human cards below
         "T003",
         "T012",
         "T042",
-        "T047",
-        "T046"
+        "T047"
       ],
       "target_repo": "ronronner02/multi-agent",
       "files": [
@@ -3413,6 +3377,43 @@ The following JSON is the single machine-readable task source. Human cards below
       "expected_side_effects": [
         "tools/upstream-import.mjs"
       ]
+    },
+    {
+      "task_id": "T054",
+      "source_unit": "U5",
+      "requirement_refs": [
+        "R5",
+        "R11",
+        "R16",
+        "R18",
+        "R21",
+        "AE4",
+        "KTD8"
+      ],
+      "goal": "Compute the commit-lane manifest and patch with plain git over a control-owned copy of the candidate, replacing the hand-written worktree reader.",
+      "dependencies": [
+        "T051"
+      ],
+      "target_repo": "ronronner02/multi-agent",
+      "files": [
+        "engine/packages/daemon/src/domain/team-workspace.ts",
+        "engine/packages/daemon/test/team-workspace.test.ts"
+      ],
+      "context_refs": [
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer"
+      ],
+      "entry_hint": "Read the U5 decision \"Candidate manifest from a copied snapshot\" (2026-10-26), which gives the whole git sequence, then `commitLaneManifest`, `renderPatch` and the helpers they call in `team-workspace.ts`.",
+      "test_focus": "(1) Planted programs: a worker-written `.git` gitdir file carrying `core.fsmonitor`, `core.hooksPath`, `filter.<drv>.clean`, `filter.<drv>.process`, `diff.<drv>.textconv` and `diff.external`, plus `* filter=x diff=x` attributes and a nested repository, runs no marker program. (2) Round trip: for CRLF/`eol`, BOM-prefixed, non-ASCII, symlink, executable, nested, edited, added and deleted fixtures, the patch applied at a base checkout reproduces the manifest's entries, and an unmodified candidate gives an empty patch. (3) Ignore authority: a candidate `.gitignore` of `*` does not hide a new file, deleting `.gitignore` does not admit a base-ignored file, and the candidate's `.gitignore` edit appears in the patch. (4) The snapshot lane's manifest is unchanged.",
+      "done_signal": "The four test groups pass, and the focused tests and daemon typecheck pass. The hand-written reader is deleted: the enumeration, symlink-chain, attribute-cleaning, binary-detection, quoting and patch-rendering helpers. No git invocation takes a candidate path. Required review closes with two reviewers, because `team-workspace.ts` is core code.",
+      "wave": 18,
+      "parallelizable": false,
+      "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, or repository identity is unresolved. Stop if copying a realistic candidate takes more than a few seconds: report the measurement to the owner instead of adding an exclusion mechanism.",
+      "review_gate": "required",
+      "review_focus": "Check that no git process reads the candidate directory or its `.git`, that the manifest and the patch come from one git index, and that ignore authority stays with the base commit. Require a reproduction, not an argument.",
+      "notes": "Added by `docs/amendments/2026-10-26-simplification.md`. It replaces the reader that T044 and T051 built; T049 is cancelled. Recorded `files`/`manifestDigest` values change once, which the owner accepted because no production candidate exists yet. `team-workspace.ts` is shared with T035 and T048; serialize those changes.",
+      "risk_note": "A snapshot that followed a symlink, or a git run that read candidate configuration, would reopen the class T044 closed. The planted-program matrix guards both.",
+      "expected_side_effects": []
     }
   ]
 }
@@ -3973,7 +3974,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T048. Adopt a resumed candidate only on control-owned provenance, and release a candidate without passing its path to git.
 
 - **Source / requirements:** `U5`; `R5`, `R11`, `R16`, `R18`, `R21`, `AE4`, `KTD8`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 18; T044.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 21; T044, T054.
 - **Files:** `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/test/team-candidate-adoption.test.ts`.
 - **Expected side effects:** none.
 - **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants`.
@@ -3982,22 +3983,6 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if the snapshot-lane creation record needs a schema migration or a control-state location the plan does not declare, and return it as a plan question. Stop if the task-level budget in `AGENTS.md` is reached.
 - **Notes:** Split out of T044 by owner decision on 2026-10-24. T044's round-1 fix made adoption require a real worktree, which broke snapshot-lane resume. Its round-3 fix compared the adopted tree with the pristine baseline, which refuses every task with work and then wedges on `EEXIST`. On `main`, adoption accepts any directory at the candidate path; before T044 the commit-lane manifest failed on a non-repository, which masked that. `removeCandidateWorkspace` runs `git worktree remove --force` with the candidate path, which reopens the class T044 closes. `workflow-runtime.ts` is shared with T012, T039, T042 and T043, and `team-workspace.ts` with T011, T012, T035 and T044; serialize those changes.
 - **Review intent:** required; Check that a worker cannot get a directory of its choosing adopted as a task's candidate, that a candidate with legitimate work is never refused, that a refusal cannot wedge a task, and that nothing inside the candidate can steer its removal. Require a reproduction, not an argument.
-
-### T049. Prove the commit-lane manifest and patch start no git process on any path the worker can write.
-
-- **Source / requirements:** `U5`; `R5`, `R11`, `R16`, `R18`, `R21`, `AE4`, `KTD8`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 17; T044.
-- **Files:** `engine/packages/daemon/test/team-candidate-manifest.test.ts`.
-- **Expected side effects:** none.
-- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`.
-- **Test focus:** A new test file proves the manifest and patch path with a spawn audit and the reproduction matrix T044's split left here.
-  1. Spawn audit: every git process the commit-lane manifest and patch start is recorded with its working directory and full argv, and none receives the candidate root or its assignment directory as working directory, `-C`, `--git-dir`, `--work-tree`, `GIT_DIR`, `GIT_WORK_TREE` or any other argument.
-  2. Execution matrix: a planted `core.fsmonitor`, a replaced `.git` gitdir file, `diff.external`, a `textconv` driver, a `filter.<drv>.clean` and a `filter.<drv>.process` driver, each set up through a worker `git init` and `.gitattributes`, and a repository planted in the assignment directory above a candidate with no `.git`, each fail to run their marker program and leave the manifest unchanged.
-  3. Byte identity: for unmodified, edited, added, deleted, executable, nested and tracked-symlink fixtures with nothing staged, `files` and `manifestDigest` equal the values `23284b8` computes, pinned in the test. The snapshot lane's manifest is unchanged.
-- **Done signal:** Every reproduction in this file fails on `main`, or on the commit where its round found it, and passes on the final candidate. The spawn audit covers every git process the manifest and patch path starts, including the ones T044 added. The daemon typecheck passes; one final daemon package run has no task-caused failure. Required review closes on the final candidate with the `AGENTS.md` reviewer roster.
-- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. Stop if a needed change lies outside the declared file, and return it to T044's owner as a finding rather than widening this task. Stop if the task-level budget in `AGENTS.md` is reached.
-- **Notes:** Split out of T044 by owner decision on 2026-10-24. T044's first execution under the 2026-10-24 re-plan closed the execution class, but the review found further correctness defects and the card's full reproduction matrix was unimplemented; closing both would have taken the task to about 1,425 changed lines against a ~1,200 budget. T044 keeps production correctness and the tests in its own file; this task owns the proof that its done signal previously carried. The file is test-only, so it shares no production owner; it declares the same test file T044 declared before the split, which T044 no longer declares. It follows T044 because every assertion here is about the code T044 produces.
-- **Review intent:** required; Check that the spawn audit actually records the processes (a shim that git never resolves, or an assertion list that no spawn can fail, does not prove anything), that each execution vector reaches the faulting call on the pre-T044 code, and that the pinned byte-identity values were captured from `23284b8` and not regenerated from the code under test. Require a reproduction, not an argument.
 
 ### T050. Give the TUI the approved ink-wash palette, Nerd Font icons with a plain-text fallback, and a frame writer that does not flicker.
 
@@ -4037,7 +4022,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T052. Publish committed managed owner read projections for T015 without moving producer authority into the client.
 
 - **Source / requirements:** `U2`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD15`, `KTD16`, `KTD26`, `PC1`, `PC2`, `PC3`, `PC4`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 20; T003, T012, T042, T047, T046.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 20; T003, T012, T042, T047.
 - **Files:** `engine/packages/daemon/src/contracts/team-control.ts`, `engine/packages/daemon/src/team-control-surface.ts`, `engine/packages/daemon/src/domain/event-bus.ts`, `engine/packages/daemon/src/domain/plan-governance.ts`, `engine/packages/daemon/src/domain/queue-repository.ts`, `engine/packages/daemon/src/domain/review-evidence.ts`, `engine/packages/daemon/src/domain/workflow-runtime.ts`, `engine/packages/daemon/src/routes/events.ts`, `engine/packages/daemon/src/routes/team-control.ts`, `engine/packages/daemon/src/server.ts`, `engine/packages/daemon/src/startup.ts`, `engine/packages/daemon/test/team-read-model.test.ts`.
 - **Expected side effects:** `tools/upstream-import.mjs`, exact provenance entries only; serialize this owner.
 - **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#t052-publish-managed-owner-read-projections-owner-amendment-2026-10-25`, `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#interface-contracts`, `docs/amendments/2026-10-25-t015-read-only-ui.md`.
@@ -4047,6 +4032,24 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Stop if:** Stop if source-plan lifecycle/hash or repository identity drifts, any durable source/action-specific payload is unidentified, implementation needs an undeclared path or new storage/scheduler design, a raw terminal capture/provider run is required, or the normal task budget is reached. Report unresolved evidence to its canonical owner; never ask T015 to synthesize it.
 - **Notes:** Owner-authorized prerequisite definition on 2026-10-25; Track A execution and approval remain separate. Existing T003/T012/T042 authority is retained; serialize after T047/T046. routes/events.ts is assigned here as the reader only; event-bus/repository owners publish committed facts. Use the existing managed team-control boundary without opening legacy /api/events. No new dependencies/lockfiles, raw terminal store, provider sessions or budget increase. T015 only consumes the landed shared read API.
 - **Review intent:** required; Inspect producer versus reader authority, owner/run isolation, transaction/cursor/replay consistency, candidate-bound evidence, immutable finalization and structured-log secrecy; require composed read/no-mutation evidence.
+
+### T054. Compute the commit-lane manifest and patch with plain git over a control-owned copy of the candidate.
+
+- **Source / requirements:** `U5`; `R5`, `R11`, `R16`, `R18`, `R21`, `AE4`, `KTD8`.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 18; T051.
+- **Files:** `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/test/team-workspace.test.ts`.
+- **Expected side effects:** none.
+- **Context:** `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u5-enforce-dependencies-isolated-changes-and-independent-review`; `docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer`.
+- **Entry:** Read the U5 decision "Candidate manifest from a copied snapshot" (2026-10-26), which gives the whole git sequence. Then read `commitLaneManifest`, `renderPatch` and the helpers they call in `team-workspace.ts`.
+- **Test focus:**
+  1. Planted programs: a worker-written `.git` gitdir file carrying `core.fsmonitor`, `core.hooksPath`, `filter.<drv>.clean`, `filter.<drv>.process`, `diff.<drv>.textconv` and `diff.external`, plus `* filter=x diff=x` attributes and a nested repository, runs no marker program.
+  2. Round trip: for CRLF/`eol`, BOM-prefixed, non-ASCII, symlink, executable, nested, edited, added and deleted fixtures, the patch applied at a base checkout reproduces the manifest's entries. An unmodified candidate gives an empty patch.
+  3. Ignore authority: a candidate `.gitignore` of `*` does not hide a new file, and deleting `.gitignore` does not admit a base-ignored file. The candidate's `.gitignore` edit appears in the patch.
+  4. The snapshot lane's manifest is unchanged.
+- **Done signal:** The four test groups pass, and the focused tests and daemon typecheck pass. The hand-written reader is deleted: the enumeration, symlink-chain, attribute-cleaning, binary-detection, quoting and patch-rendering helpers. No git invocation takes a candidate path. Required review closes with two reviewers, because `team-workspace.ts` is core code.
+- **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, or repository identity is unresolved. Stop if copying a realistic candidate takes more than a few seconds: report the measurement to the owner instead of adding an exclusion mechanism.
+- **Notes:** Added by `docs/amendments/2026-10-26-simplification.md`. It replaces the reader that T044 and T051 built; T049 is cancelled. Recorded `files`/`manifestDigest` values change once, which the owner accepted because no production candidate exists yet. `team-workspace.ts` is shared with T035 and T048; serialize those changes.
+- **Review intent:** required; Check that no git process reads the candidate directory or its `.git`, that the manifest and the patch come from one git index, and that ignore authority stays with the base commit. Require a reproduction, not an argument.
 
 ## Orientation Evidence
 
