@@ -137,19 +137,21 @@ describe("T047-H1 production health composition", () => {
 
 // The healthy fixture takes its digests from the installed files, which are a host-provisioning fact rather than a
 // repository one, so this block skips on a host without them instead of erroring during collection (review R1-4).
+// The digests are read lazily inside each test: `skipIf` skips the tests but still runs the describe body, so an
+// eager read here would throw on such a host before any skip could apply.
 describe.skipIf(!installedPresent)("T047-H1 boundary faults from the launcher's own evidence", () => {
   // The digests a healthy host reports are the installed files' own, so a fixture has to use them to model
   // "nothing drifted"; a deliberately wrong value is then the fault.
   const digest = (path: string) => hashBytes(readFileSync(path));
-  const healthy = {
+  const healthy = () => ({
     policyFingerprint: digest("/etc/multi-agent/worker-policy.json"),
     networkProfileFingerprint: digest("/etc/multi-agent/egress.json"),
     clientLockDigest: digest("/etc/multi-agent/client-lock.json"),
     policyRevision: 5, clientVersion: "2.1.296", provider: "signed_in" as const, networkMode: "filtered-proxy" as const,
-  };
+  });
   const attempt = (over: Partial<ManagedWorkerHealthEvidence["attempts"][number]> = {}) => ({
     attemptId: "attempt-1", runId: "run", worker: "ma-worker1", client: "claude-code" as const, state: "running" as const,
-    evidenceRef: "managed-preflight:fixture", ...healthy, ...over });
+    evidenceRef: "managed-preflight:fixture", ...healthy(), ...over });
   const reader = (attempts: ManagedWorkerHealthEvidence["attempts"]) => {
     const db = createDb(":memory:");
     migrate(db, ALL_MIGRATIONS);
