@@ -106,11 +106,12 @@ These rules size review and verification to the change. They take precedence ove
 
 ### Parallel tracks (owner decision, 2026-10-23)
 Two sessions may execute tasks at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare in the task pack; directory patterns grant nothing. A task that needs a file its card does not declare stops and reports it, as any task would.
-- **Track A, managed launch:** T042, T044, T051, T047, T043, T048, T049, T038 and T046, in that order. T044 comes before T047 because T035 waits on it. T051, split out of T044 on 2026-10-24, follows it directly because it changes only T044's files.
+- **Track A, managed launch:** T042, T044, T051, T047, T043, T048, T049, T038, T046 and T052, in that order. T052 was added by the T015 amendment of 2026-10-25 (`docs/amendments/2026-10-25-t015-read-only-ui.md`). T044 comes before T047 because T035 waits on it. T051, split out of T044 on 2026-10-24, follows it directly because it changes only T044's files.
 - **Track B, owner surfaces:** T036, T013, T014, T050, T015, T019, T035, T016, T020, T021, T022 and T023, then T017, T033 and T018.
 - **Files both tracks declare are serialized:** the task that starts second waits until the other has landed, then starts from current `main`.
   - T035 waits for T044, T051 and T048 (`team-workspace.ts`).
   - T017 waits for T043 (`worker-launch.ts`).
+  - T015 Phase 2 (real read integration) waits for T052. Only T015 Phase 1, the labeled sample-data shell, may land before T052; T016 and every other T015 dependent still wait for all of T015.
   - T033 and T046 (`review-evidence.ts`): whichever starts second waits for the other.
 - **Shared files** (`tools/upstream-import.mjs`, `docs/tasks/…-tasks.md`, `docs/operations.md`, `docs/known-failures.md`, `AGENTS.md`, `engine/packages/daemon/src/contracts/team-control.ts`, `engine/packages/daemon/src/routes/team-control.ts`, `engine/packages/daemon/src/server.ts`): append-only edits, then rebase onto `main` before landing. On a conflict the later lander resolves it and reruns its focused tests; never force-push.
 - T024 and T025 start only after both tracks' prerequisites have landed.
