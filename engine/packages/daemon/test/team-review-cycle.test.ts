@@ -496,6 +496,108 @@ describe("the reviewer's packet is the exact candidate and is read-only", () => 
       expect(() => createReviewPacket(workspace, repository)).toThrow(/overlaps/);
     } finally { removeCandidateWorkspace(workspace); }
   });
+
+  /**
+   * T051 — the two readings a packet carries, and why they must stay apart.
+   *
+   * T012 asks the reviewer to see the exact candidate, so the packet holds the worktree
+   * bytes. The manifest records the canonical reading the patch writes, which for a path
+   * the base commit cleans is the *stored* form. Copying either reading into the other's
+   * field would hide the divergence, so it is disclosed on `cleanedPaths` and the packet
+   * is verified against its own digest.
+   */
+  describe("T051: an attribute-shaped file", () => {
+    /** A base whose `.gitattributes` clean `crlf.txt` from CRLF (worktree) to LF (blob). */
+    const shapedRepository = (): string => {
+      writeFileSync(join(repository, ".gitattributes"), "*.txt text eol=lf\n");
+      writeFileSync(join(repository, "crlf.txt"), "alpha\nbeta\n");
+      writeFileSync(join(repository, "plain.txt"), "plain\n");
+      git(repository, "add", ".");
+      git(repository, "commit", "--quiet", "-m", "attributes");
+      return repository;
+    };
+
+    it("gives the reviewer the candidate's worktree bytes, not the cleaned form", () => {
+      const root = shapedRepository();
+      const base = resolveWorkspaceBase(root);
+      const workspace = createCandidateWorkspace({ root, base, workspaceRoot: join(scratch, "candidate"), label: "T051" });
+      // The candidate writes CRLF; the base's `eol=lf` stores LF.
+      writeFileSync(join(workspace.root, "crlf.txt"), "alpha\r\nbeta\r\ngamma\r\n");
+      const packet = createReviewPacket(workspace, join(scratch, "packet"));
+      try {
+        const candidateBytes = readFileSync(join(workspace.root, "crlf.txt"));
+        const packetBytes = readFileSync(join(packet.root, "crlf.txt"));
+        expect(packetBytes.equals(candidateBytes), "the packet carries the candidate's own bytes").toBe(true);
+        expect(packetBytes.includes(0x0d), "the worktree's carriage returns are visible").toBe(true);
+        // The manifest records the canonical reading, so it disagrees with those bytes.
+        const entry = packet.manifest.find(file => file.path === "crlf.txt");
+        expect(entry, "crlf.txt is a manifest entry").toBeDefined();
+        // ...and the divergence is disclosed rather than silent.
+        expect(packet.cleanedPaths).toEqual(["crlf.txt"]);
+        expect(packet.cleanedPaths).not.toContain("plain.txt");
+        // Verification passes because it compares the packet to its own digest.
+        expect(verifyReviewPacket(packet)).toMatchObject({ unchanged: true, reason: null });
+      } finally {
+        removeReviewPacket(packet);
+        removeCandidateWorkspace(workspace);
+      }
+      // A repository with no shaped path discloses nothing. Its own packet is removed
+      // here, because a sealed packet left behind fails the scratch cleanup.
+      const plain = createCandidateWorkspace({ root, base, workspaceRoot: join(scratch, "candidate2"), label: "T051" });
+      const plainPacket = createReviewPacket(plain, join(scratch, "packet2"));
+      try {
+        expect(plainPacket.cleanedPaths).toEqual([]);
+        expect(verifyReviewPacket(plainPacket)).toMatchObject({ unchanged: true, reason: null });
+      } finally {
+        removeReviewPacket(plainPacket);
+        removeCandidateWorkspace(plain);
+      }
+    });
+
+    it("detects an edit to a shaped path's packet bytes", () => {
+      // Without this, a regression that wrote the cleaned reading into the packet — or a
+      // packet edited after the fact — would verify as unchanged.
+      const root = shapedRepository();
+      const base = resolveWorkspaceBase(root);
+      const workspace = createCandidateWorkspace({ root, base, workspaceRoot: join(scratch, "candidate"), label: "T051" });
+      writeFileSync(join(workspace.root, "crlf.txt"), "alpha\r\nbeta\r\ngamma\r\n");
+      const packet = createReviewPacket(workspace, join(scratch, "packet"));
+      try {
+        expect(verifyReviewPacket(packet).unchanged).toBe(true);
+        chmodSync(join(packet.root, "crlf.txt"), 0o644);
+        writeFileSync(join(packet.root, "crlf.txt"), "alpha\nbeta\ngamma\n");
+        const verdict = verifyReviewPacket(packet);
+        expect(verdict.unchanged, "the cleaned form is not the candidate's bytes").toBe(false);
+      } finally {
+        removeReviewPacket(packet);
+        removeCandidateWorkspace(workspace);
+      }
+    });
+
+    it("detects a tampered manifest, not only tampered packet bytes", () => {
+      // R2-1: verification compared the packet only against its own digest, so editing the
+      // manifest's recorded hashes — while leaving every file and `packetDigest` alone —
+      // still verified as unchanged. A packet whose hashes no longer describe the candidate
+      // is not evidence about it, so this must fail.
+      const root = shapedRepository();
+      const base = resolveWorkspaceBase(root);
+      const workspace = createCandidateWorkspace({ root, base, workspaceRoot: join(scratch, "candidate"), label: "T051" });
+      const packet = createReviewPacket(workspace, join(scratch, "packet"));
+      try {
+        expect(verifyReviewPacket(packet).unchanged).toBe(true);
+        // (a) A manifest entry whose hash was rewritten: the bytes on disk are untouched.
+        const rewritten = { ...packet, manifest: packet.manifest.map((file, index) =>
+          index === 0 ? { ...file, hash: `sha256:${"0".repeat(64)}` } : file) };
+        expect(verifyReviewPacket(rewritten).unchanged, "a rewritten manifest hash is detected").toBe(false);
+        // (b) An identity digest that no longer matches its own manifest.
+        const identityTampered = { ...packet, identity: { ...packet.identity, manifestDigest: `sha256:${"1".repeat(64)}` } };
+        expect(verifyReviewPacket(identityTampered).unchanged, "a rewritten identity digest is detected").toBe(false);
+      } finally {
+        removeReviewPacket(packet);
+        removeCandidateWorkspace(workspace);
+      }
+    });
+  });
 });
 
 /** The shape `parsePlanBinding` accepts; the run row must hold a real one. */
