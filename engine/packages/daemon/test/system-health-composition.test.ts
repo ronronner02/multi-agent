@@ -6,6 +6,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import * as nodeFs from "node:fs";
+
+// A path in this set is unreadable to the code under test. A module mock is the only way to make an ESM import of
+// `node:fs` fail for a chosen path, and the reader must be exercised through its real code path for the case to mean
+// anything (review R1-2). `vi.hoisted` puts the set above the hoisted `vi.mock` factory.
+const unreadable = vi.hoisted(() => new Set<string>());
+vi.mock("node:fs", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  const guarded = (file: never, ...rest: never[]) => {
+    if (unreadable.has(String(file))) throw new Error("EACCES: permission denied");
+    return (actual.readFileSync as never)(file, ...rest);
+  };
+  return { ...actual, readFileSync: guarded as never, default: { ...actual, readFileSync: guarded as never } };
+});
 import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
@@ -18,6 +32,11 @@ import type { ManagedWorkerHealthEvidence } from "../src/contracts/team-control.
 
 const HOSTS = { incoming: { socket: { remoteAddress: "127.0.0.1" } } };
 const OWNER = "owner-health-h1";
+const INSTALLED = ["/etc/multi-agent/worker-policy.json", "/etc/multi-agent/egress.json", "/etc/multi-agent/client-lock.json"];
+// The three installed files are a host-provisioning fact, not a repository one. Without them the composition has
+// nothing to read, so the cases that need them are skipped rather than failed — the alternative would report a
+// missing host as a code defect.
+const installedPresent = INSTALLED.every(file => nodeFs.existsSync(file));
 
 const parked: Array<() => void> = [];
 afterEach(() => { while (parked.length) parked.pop()!(); });
@@ -116,7 +135,9 @@ describe("T047-H1 production health composition", () => {
   }, 60_000);
 });
 
-describe("T047-H1 boundary faults from the launcher's own evidence", () => {
+// The healthy fixture takes its digests from the installed files, which are a host-provisioning fact rather than a
+// repository one, so this block skips on a host without them instead of erroring during collection (review R1-4).
+describe.skipIf(!installedPresent)("T047-H1 boundary faults from the launcher's own evidence", () => {
   // The digests a healthy host reports are the installed files' own, so a fixture has to use them to model
   // "nothing drifted"; a deliberately wrong value is then the fault.
   const digest = (path: string) => hashBytes(readFileSync(path));
@@ -144,6 +165,20 @@ describe("T047-H1 boundary faults from the launcher's own evidence", () => {
     expect(health.lights.workerBoundary).toMatchObject({ state: "failed", reason: "worker_signed_out",
       evidenceRef: "worker-boundary:attempt-1" });
     db.close();
+  });
+
+  // Round-1 review R1-3: the card names a database-lock fault and nothing exercised it. An unreadable handle is the
+  // reachable form — the probe throws and the runner records `probe_failed` rather than failing the whole request.
+  it("fails the database light when the handle cannot be read", async () => {
+    const live = createDb(":memory:");
+    migrate(live, ALL_MIGRATIONS);
+    const events = new EventBus(live);
+    const read = composeSystemHealthReader({ db: live, queue: new QueueRepository(live, events),
+      tmux: { readAllSessionWindowActivity: async () => new Map() } });
+    live.close();
+    const health = await read();
+    expect(health.lights.database).toMatchObject({ state: "failed", reason: "probe_failed" });
+    expect(health.overall).toBe("failed");
   });
 
   it("fails workerBoundary when an attempt's policy fingerprint no longer matches the installed policy", async () => {
@@ -196,15 +231,36 @@ describe("T047-H1 boundary faults from the launcher's own evidence", () => {
     db.close();
   });
 
-  // Round-1 review P1: launcher evidence must settle the light in both directions. Before the fix, a healthy live
-  // attempt still fell through to the installed file, so a rotated file could fail a worker the launcher had proven.
-  it("confirms a proven attempt even when the installed files cannot be read", async () => {
+  // Round-1 review R1-2: the earlier version of this case never made a file unreadable, so it passed under the
+  // fall-through bug it cited. `unreadable` flips the module-level switch below, which makes the composed reader's
+  // own `readFileSync` throw for the three installed files.
+  it("confirms a proven attempt when the installed files cannot be read at all", async () => {
     const { db, read } = reader([attempt()]);
+    unreadable.clear();
+    for (const file of INSTALLED) unreadable.add(file);
+    try {
+      const health = await read();
+      for (const light of ["workerBoundary", "sandboxNetwork", "clients"]) {
+        expect(health.lights[light].state, light).toBe("ok");
+        expect(health.lights[light].evidenceRef, light).toContain(":attempt-1");
+      }
+    } finally { unreadable.clear(); db.close(); }
+  });
+
+  // Round-1 review R1-1: `readHealthEvidence` reports every attempt ever preflighted and never prunes settled ones,
+  // so a stopped attempt must not pin a light. Before the fix, a worker that preflighted signed-out and then signed
+  // back in failed the light until the daemon restarted.
+  it("ignores a settled attempt and falls back to the installed file", async () => {
+    const { db, read } = reader([attempt({ provider: "signed_out", state: "stopped" })]);
     const health = await read();
-    for (const light of ["workerBoundary", "sandboxNetwork", "clients"]) {
-      expect(health.lights[light].state, light).toBe("ok");
-      expect(health.lights[light].evidenceRef, light).toContain(":attempt-1");
-    }
+    expect(health.lights.workerBoundary.state, "a settled attempt is not current evidence").toBe("ok");
+    expect(health.lights.workerBoundary.evidenceRef).toBe("worker-boundary");
+    db.close();
+  });
+
+  it("still fails a signed-out worker that is running", async () => {
+    const { db, read } = reader([attempt({ provider: "signed_out", state: "running" })]);
+    expect((await read()).lights.workerBoundary).toMatchObject({ state: "failed", reason: "worker_signed_out" });
     db.close();
   });
 });

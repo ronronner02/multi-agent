@@ -438,15 +438,17 @@ export function composeSystemHealthReader(dependencies: {
   /**
    * A boundary light's verdict, launcher evidence first and the installed file only when no attempt is live.
    *
-   * The launcher is the owner for these three facts, so a live attempt settles the light in both directions: a
-   * recorded fault fails it, and an attempt with no recorded fault confirms it. Falling through to the file after a
-   * healthy attempt would let a rotated file fail a worker the launcher had already proven.
+   * `readHealthEvidence` reports every attempt the control has ever preflighted and never prunes settled ones, so the
+   * live filter is what keeps a stopped attempt from pinning the light failed forever after its worker signs back in
+   * or its policy is legitimately rotated. Only a `running` attempt is current evidence; anything settled falls back
+   * to the installed file, which is the standing fact.
    */
   const evidenceFirst = (light: string, file: string,
     fault: (attempt: ManagedWorkerHealthEvidence["attempts"][number], installedBytes: () => string | null) => string | null,
     accept: (bytes: string) => string | null): SystemHealthProbeResult => {
     let attempts: ManagedWorkerHealthEvidence["attempts"];
-    try { attempts = evidence?.().attempts ?? []; } catch { return result("failed", light, "launch_evidence_unreadable"); }
+    try { attempts = evidence?.().attempts.filter(attempt => attempt.state === "running") ?? []; }
+    catch { return result("failed", light, "launch_evidence_unreadable"); }
     if (!attempts.length) return installed(file, light, accept);
     // Read the file once for the drift comparisons; an unreadable file cannot contradict a recorded digest.
     const bytes = (() => { try { return readFileSyncNamed(file, "utf8"); } catch { return null; } })();
@@ -497,7 +499,9 @@ export function composeSystemHealthReader(dependencies: {
       // finer fact and only meaningful against an unchanged lock. Both compare against the lock's own entry, so a
       // legitimate lock upgrade does not read as drift.
       (attempt, read) => driftedFrom(attempt.clientLockDigest, read, "client_lock_changed")
-        ?? (lockedVersion(read(), attempt.client) === attempt.clientVersion ? null : "client_lock_version_mismatch"),
+        // An unreadable lock cannot contradict a version the launcher already checked at launch, so it is no finding.
+        ?? (() => { const named = lockedVersion(read(), attempt.client);
+          return named === null || named === attempt.clientVersion ? null : "client_lock_version_mismatch"; })(),
       bytes => {
         const lock = JSON.parse(bytes) as { clients?: Record<string, { version?: unknown }> };
         for (const client of ["claude-code", "codex"] as const) {
