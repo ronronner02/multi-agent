@@ -145,7 +145,9 @@ import { SettingsStore as ContextPackSettingsStore } from "./domain/user-setting
 import { WhoamiService } from "./domain/whoami-service.js";
 import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
-import { PlanGovernance, fixDaemonMode } from "./domain/plan-governance.js";
+import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
+import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, type SystemHealthProbeResult } from "./domain/system-health.js";
+import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
 import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
 import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters/worker-launch.js";
 import { createManagedLaunchControl } from "./adapters/worker-launch-control.js";
@@ -381,7 +383,8 @@ function composeManagedLaunch(dependencies: {
   const launcher = new RestrictedWorkerLauncher({ ...guarded, record: async event => {
     try { await guarded.record(event); } finally { if (event.phase === "blocked") endpoints.delete(event.attemptId); }
   } }, Date.now, randomUUID, admission);
-  return { launcher, channel, endpoints };
+  // `readHealthEvidence` is built by the control but not otherwise reachable from startup; the health reader reads it.
+  return { launcher, channel, endpoints, readHealthEvidence: guarded.readHealthEvidence };
 }
 
 /**
@@ -406,6 +409,100 @@ function managedWorkerRoots(): { assignmentRoot: string; worker: string } {
 /** One tree per task, under the policy's assignment root, addressed the way the launcher expects. */
 function managedCandidateRoot(assignmentRoot: string, worker: string, runId: string, taskId: string): string {
   return nodePath.join(assignmentRoot, worker, `${runId}-${taskId}`);
+}
+
+/** The client builds the installed lock is expected to name, from `engine/config/isolation/client-lock.json`. */
+const CLIENT_LOCK_VERSIONS = { "claude-code": "2.1.296", codex: "0.160.0" } as const;
+
+/**
+ * T047-H1: the KTD26 health reader over the owners startup already holds.
+ *
+ * Each probe reads one existing owner and returns evidence, never a repair. The
+ * three boundary lights read the launcher's own verified observations first,
+ * because that is the owner for them; the installed files are the standing fact
+ * they are checked against and answer when no attempt is live. A light this
+ * composition cannot reach is left absent, so it stays `unknown` with
+ * `<name>_source_unavailable` instead of becoming a second source of truth.
+ */
+export function composeSystemHealthReader(dependencies: {
+  db: Database.Database; queue: QueueRepository; tmux: Pick<TmuxAdapter, "readAllSessionWindowActivity">;
+  evidence?: () => ManagedWorkerHealthEvidence;
+}): () => Promise<TeamSystemHealth> {
+  const { db, queue, tmux, evidence } = dependencies;
+  const result = (state: SystemHealthProbeResult["state"], evidenceRef: string, reason: string | null = null): SystemHealthProbeResult =>
+    ({ state, evidenceRef, reason });
+  // An installed file whose bytes decide a light: unreadable or malformed is failed, never a thrown probe.
+  const installed = (file: string, name: string, accept: (bytes: string) => string | null): SystemHealthProbeResult => {
+    let bytes: string, reason: string | null;
+    try { bytes = readFileSyncNamed(file, "utf8"); } catch { return result("failed", name, "installed_file_unreadable"); }
+    try { reason = accept(bytes); } catch { return result("failed", name, name + "_unreadable"); }
+    return reason ? result("failed", name, reason) : result("ok", name);
+  };
+  /**
+   * A boundary light's verdict, launcher evidence first and the installed file only when no attempt is live.
+   *
+   * The launcher is the owner for these three facts, so a live attempt settles the light in both directions: a
+   * recorded fault fails it, and an attempt with no recorded fault confirms it. Falling through to the file after a
+   * healthy attempt would let a rotated file fail a worker the launcher had already proven.
+   */
+  const evidenceFirst = (light: string, file: string,
+    fault: (attempt: ManagedWorkerHealthEvidence["attempts"][number], installedBytes: () => string | null) => string | null,
+    accept: (bytes: string) => string | null): SystemHealthProbeResult => {
+    let attempts: ManagedWorkerHealthEvidence["attempts"];
+    try { attempts = evidence?.().attempts ?? []; } catch { return result("failed", light, "launch_evidence_unreadable"); }
+    if (!attempts.length) return installed(file, light, accept);
+    // Read the file once for the drift comparisons; an unreadable file cannot contradict a recorded digest.
+    const bytes = (() => { try { return readFileSyncNamed(file, "utf8"); } catch { return null; } })();
+    for (const attempt of attempts) {
+      const reason = fault(attempt, () => bytes);
+      if (reason) return result("failed", light + ":" + attempt.attemptId, reason);
+    }
+    return result("ok", light + ":" + attempts[0]!.attemptId);
+  };
+  // A recorded digest that disagrees with the installed file names that drift. The launcher refuses such a launch,
+  // so the way to observe it is an attempt recorded before the file changed.
+  const driftedFrom = (recorded: string, read: () => string | null, reason: string) => {
+    const bytes = read();
+    if (bytes === null) return null;
+    return recorded === hashBytes(bytes) ? null : reason;
+  };
+  return createSystemHealthReader({
+    // Read-only and synchronous: `quick_check` would scan the whole file, which the five-second bound cannot interrupt.
+    database: () => result("ok", "database:schema_version:" + String(db.prepare("PRAGMA schema_version").pluck().get())),
+    // The queue owns the mailbox's durable rows, so its own read is the readiness signal for both.
+    queueMailbox: () => result("ok", "queue:active:" + queue.list({ activeOnly: true, compact: true }).length),
+    // Null means tmux could not be read at all; an empty map is a live server with no windows.
+    controlTmux: async () => await tmux.readAllSessionWindowActivity() === null
+      ? result("failed", "tmux:server", "tmux_socket_missing") : result("ok", "tmux:server"),
+    workerBoundary: () => evidenceFirst("worker-boundary", "/etc/multi-agent/worker-policy.json",
+      (attempt, read) => attempt.provider === "signed_out" ? "worker_signed_out"
+        : driftedFrom(attempt.policyFingerprint, read, "policy_fingerprint_changed"),
+      bytes => {
+        const policy = JSON.parse(bytes) as { paths?: { assignment_root?: unknown }; worker_identities?: unknown; policy_revision?: unknown };
+        return nodePath.isAbsolute(String(policy.paths?.assignment_root ?? "")) && Array.isArray(policy.worker_identities)
+          && policy.worker_identities.length > 0 && Number.isInteger(policy.policy_revision) ? null : "worker_policy_incomplete";
+      }),
+    sandboxNetwork: () => evidenceFirst("sandbox-network", "/etc/multi-agent/egress.json",
+      (attempt, read) => attempt.networkMode === "unknown" ? "network_profile_unproven"
+        : driftedFrom(attempt.networkProfileFingerprint, read, "network_profile_fingerprint_changed"),
+      bytes => {
+        const profile = JSON.parse(bytes) as { schema?: unknown; allow?: unknown };
+        return profile.schema === "multi-agent-egress/v1" && Array.isArray(profile.allow) ? null : "egress_profile_incomplete";
+      }),
+    clients: () => evidenceFirst("clients", "/etc/multi-agent/client-lock.json",
+      // The lock's bytes decide first, because a changed digest is the stronger statement; the version is the
+      // finer fact and only meaningful against an unchanged lock.
+      (attempt, read) => driftedFrom(attempt.clientLockDigest, read, "client_lock_changed")
+        ?? (CLIENT_LOCK_VERSIONS[attempt.client] === attempt.clientVersion ? null : "client_lock_version_mismatch"),
+      bytes => {
+        const lock = JSON.parse(bytes) as { clients?: Record<string, { version?: unknown }> };
+        for (const client of ["claude-code", "codex"] as const) {
+          if (lock.clients?.[client]?.version !== CLIENT_LOCK_VERSIONS[client]) return "client_lock_version_mismatch";
+        }
+        return null;
+      }),
+    ...(evidence ? { latestAttempts: () => attemptsFromManagedWorkerEvidence(() => new Date(), evidence()) } : {}),
+  });
 }
 
 export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> {
@@ -756,6 +853,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // Read when a launch is admitted, after startup has constructed the runtime.
     workflowRuntime: () => workflowRuntime }) : undefined;
   const workerLauncher = managedLaunch ? { workerLauncher: managedLaunch.launcher } : {};
+  // T047-H1: the KTD26 reader, composed from the owners above, injected through the one teamControl options object.
+  // `evidence` is the control's own verified observation, so it exists only when the launch chain does. A caller that
+  // supplied its own reader keeps it: that is the injection seam the tests and any embedding host use.
+  const teamControlOptions: NonNullable<AppDeps["teamControl"]> = { ...teamControl, readSystemHealth: teamControl.readSystemHealth
+    ?? composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
+      ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) }) };
   const claudeResume = new ClaudeResumeAdapter(tmuxAdapter, { claudeManagedLaunch, seatLaunchEnvironment, ...workerLauncher });
   // #275: one reader for both Codex launch adapters, with the PATH, HOME and CODEX_HOME a seat session gets.
   const readCodexNetworkDefault = codexNetworkDefaultReader({ launchPath: process.env.PATH, home: daemonHome, codexHome });
@@ -1347,7 +1450,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const compatibleSpecLibraryRoot = getCompatibleOpenRigPath("specs");
 
   const deps: AppDeps = {
-    teamControl,
+    teamControl: teamControlOptions,
     teamGovernance,
     ...(managedLaunch ? { managedLaunch, nativeChannelState: managedLaunch.channel.read } : {}),
     rigRepo,
