@@ -209,6 +209,40 @@ export class EventBus {
     return rows.map((row) => this.rowToPersistedEvent(row));
   }
 
+  /**
+   * T052 — replay one run's events from a durable cursor.
+   *
+   * The managed read boundary needs one run's events, not one rig's: a rig may
+   * host several runs, and a run may be projected onto a rig the reader is not
+   * scoped to. The predicate is the event payload's own `runId`, which every
+   * `team.control` event carries, so a run-scoped replay cannot widen into
+   * another run's evidence.
+   */
+  replayRunSince(runId: string, seq: number, limit: number): PersistedEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT seq, rig_id, node_id, type, payload, created_at FROM events
+          WHERE seq > ? AND json_extract(payload, '$.runId') = ? ORDER BY seq LIMIT ?`
+      )
+      .all(seq, runId, limit) as EventRow[];
+
+    return rows.map((row) => this.rowToPersistedEvent(row));
+  }
+
+  /**
+   * T052 — the durable replay window.
+   *
+   * `retainedFrom` is the oldest sequence still present, so a cursor older than
+   * it is a real gap the reader must report rather than silently backfilling.
+   */
+  replayWindow(): { retainedFrom: number; latestSeq: number } {
+    const row = this.db.prepare("SELECT MIN(seq) AS minSeq, MAX(seq) AS maxSeq FROM events").get() as {
+      minSeq: number | null;
+      maxSeq: number | null;
+    };
+    return { retainedFrom: row.minSeq ?? 0, latestSeq: row.maxSeq ?? 0 };
+  }
+
   private drainNotifyRowsToQuiescence(startAfter: number): void {
     if (this.drainingNotifyRows || this.notifyingSubscribers) return;
     this.drainingNotifyRows = true;

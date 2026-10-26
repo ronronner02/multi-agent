@@ -35,7 +35,7 @@ import type { SelfAttachService } from "./domain/self-attach-service.js";
 import { rigsRoutes } from "./routes/rigs.js";
 import { sessionsRoutes, nodesRoutes, sessionAdminRoutes } from "./routes/sessions.js";
 import { adaptersRoutes } from "./routes/adapters.js";
-import { eventsRoute } from "./routes/events.js";
+import { eventsRoute, teamEventsRoutes } from "./routes/events.js";
 import { snapshotsRoutes, restoreRoutes } from "./routes/snapshots.js";
 import { handleExportYaml, handleExportJson, rigspecImportRoutes } from "./routes/rigspec.js";
 import { packagesRoutes } from "./routes/packages.js";
@@ -146,6 +146,7 @@ import { browserBoundary, type BrowserBoundaryOptions } from "./middleware/brows
 import { teamControlAuthentication, resolvePairedOwnerCookie } from "./middleware/auth-bearer-token.js";
 import { transportSenderSession } from "./routes/require-sender-identity.js";
 import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
+import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
@@ -767,6 +768,36 @@ export function createApp(deps: AppDeps): Hono {
   });
   const teamGovernance = deps.teamGovernance ?? new PlanGovernance(deps.rigRepo.db, deps.eventBus,
     deps.queueRepo ?? new QueueRepository(deps.rigRepo.db, deps.eventBus), undefined, teamOptions.readPolicyCapability);
+  // T052 — the managed owner read projections. Composed here from the owners the
+  // daemon already holds: governance for run/task/attempt authority, the queue
+  // for each task's destination seat, and the event bus for the committed
+  // review and exit evidence.
+  //
+  // The composed options are a prototype-linked view of the caller's object
+  // rather than a spread copy: a host that supplies `teamControl` owns a live
+  // object (tests and embedders replace `resolveBinding` or `readSystemHealth`
+  // after construction), and a snapshot would freeze the old callbacks. The
+  // view only ever adds `readModel`, so every caller-supplied value still wins.
+  let teamOptionsWithRead: TeamControlOptions = teamOptions;
+  if (!teamOptions.readModel) {
+    const composed = new TeamReadModel({
+      db: deps.rigRepo.db,
+      governance: teamGovernance,
+      events: deps.eventBus,
+      // The queue owns the task's seat; the read model joins through its rows
+      // rather than re-deriving an assignment from the queue item body.
+      readTaskRows: (runId: string) => (deps.rigRepo.db.prepare(
+        `SELECT a.qitem_id AS qitemId, a.task_id AS taskId,
+          json_extract(a.assignment_json, '$.role') AS role,
+          q.state AS queueState, q.destination_session AS session
+          FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+          WHERE a.run_id = ? ORDER BY a.task_id`).all(runId) as Array<{
+            qitemId: string; taskId: string; role: string; queueState: string; session: string | null }>),
+    });
+    teamOptionsWithRead = Object.create(teamOptions, {
+      readModel: { value: composed, enumerable: true, writable: true, configurable: true },
+    }) as TeamControlOptions;
+  }
 
   // OPR.0.4.6.MH2 FR-2/FR-7 — the single-host READ-THROUGH edge (the read
   // twin of the mission-control remote-forward). Consumes a `?host=<id>`
@@ -777,8 +808,16 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/*", hostReadThrough());
   if (ownerSessions) app.route("/api/team-control/owner-session", ownerSessionRoutes(ownerSessions, () => teamOptions.credentials,
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
-  app.route("/api/team-control", teamControlRoutes(teamGovernance, teamOptions,
+  app.route("/api/team-control", teamControlRoutes(teamGovernance, teamOptionsWithRead,
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
+  // T052 — the managed replay transport. Mounted separately from the legacy
+  // `/api/events` stream so legacy admission and behaviour stay exactly as they
+  // were while managed reads get owner authentication and run scoping.
+  app.route("/api/team-control", teamEventsRoutes({
+    credentials: teamOptions.credentials,
+    legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(teamOptionsWithRead.readModel ? { readModel: teamOptionsWithRead.readModel } : {}),
+  }));
 
   app.get("/healthz", (c) => {
     // OPR.0.4.3.21 — enrich the health surface with event-loop wedge evidence

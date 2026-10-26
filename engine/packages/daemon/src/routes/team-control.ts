@@ -9,12 +9,18 @@ import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
 } from "../middleware/auth-bearer-token.js";
 import { readSystemHealthBounded } from "../domain/system-health.js";
+import type { TeamReadModel } from "../team-control-surface.js";
 
 export interface TeamControlOptions {
   credentials: TeamControlCredentials;
   resolveBinding?: (run: TeamRun) => unknown;
   readPolicyCapability?: () => ProviderPolicyCapability | null;
   readSystemHealth?: () => TeamSystemHealth | Promise<TeamSystemHealth>;
+  /**
+   * T052 — the managed owner read projections. Absent leaves the read routes
+   * unavailable rather than serving a partial or invented projection.
+   */
+  readModel?: TeamReadModel;
 }
 
 export function teamControlRoutes(
@@ -51,6 +57,49 @@ export function teamControlRoutes(
   app.get("/runs/:runId/approvals", (c) => {
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, approvals: governance.listApprovals(c.req.param("runId")) });
+  });
+  /**
+   * T052 — the composed owner read projection for one run.
+   *
+   * Owner-only, because it publishes committed evidence the worker boundary is
+   * not allowed to read. It composes existing owners and writes nothing, so a
+   * read cannot change durable state, files, sessions or provider state.
+   */
+  app.get("/runs/:runId/read", (c) => {
+    if (c.get("controlActor").kind !== "owner") return c.json({ code: "owner_control_required" }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    if (!options.readModel) {
+      return c.json({ code: "team_read_unavailable", error: "The managed read projection is not composed." }, 503);
+    }
+    try {
+      const read = options.readModel.read(c.req.param("runId"));
+      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, read });
+    } catch (error) {
+      // A missing run is a 404, not a 500: the evidence does not exist to read.
+      if (/Run not found/i.test((error as Error).message)) {
+        return c.json({ code: "control_not_found", error: "The requested run was not found." }, 404);
+      }
+      throw error;
+    }
+  });
+  /**
+   * T052 — one bounded replay page for a run from a durable cursor.
+   *
+   * Reads through the event bus's own committed log; a cursor older than the
+   * retained floor reports a gap instead of backfilling silently.
+   */
+  app.get("/runs/:runId/replay", (c) => {
+    if (c.get("controlActor").kind !== "owner") return c.json({ code: "owner_control_required" }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    if (!options.readModel) {
+      return c.json({ code: "team_read_unavailable", error: "The managed read projection is not composed." }, 503);
+    }
+    const afterSeq = Number.parseInt(c.req.query("afterSeq") ?? "0", 10);
+    if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) return c.json({ code: "invalid_team_contract" }, 400);
+    const limitRaw = Number.parseInt(c.req.query("limit") ?? "500", 10);
+    const limit = Number.isSafeInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 1000) : 500;
+    const page = options.readModel.replay(c.req.param("runId"), afterSeq, limit);
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: c.req.param("runId"), ...page });
   });
   for (const action of ["approvals/request", "approvals/decide", "cancel", "tasks/outcome"] as const) {
     app.post(`/runs/:runId/${action}`, async (c) => {

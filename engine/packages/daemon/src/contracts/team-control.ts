@@ -150,6 +150,145 @@ export interface ControlActor {
   sessionId: string;
 }
 
+/**
+ * T052 — the managed run's owner read projections.
+ *
+ * One read contract that U6's two clients consume. It publishes committed,
+ * correlated evidence only; it holds no second store and derives nothing a
+ * durable row does not already say. Every availability field is explicit
+ * because "no evidence" and "zero" are different facts to a reader (AE12).
+ */
+export const TEAM_READ_MODEL_VERSION = "1.0" as const;
+
+/** The seven-stage run stepper (U6). Stage order is the array order. */
+export const TEAM_WORKFLOW_STAGES = [
+  "setup-checks",
+  "plan-approved",
+  "assignments-derived",
+  "execution",
+  "review",
+  "integration-verification",
+  "delivery-decision",
+] as const;
+export type TeamWorkflowStage = (typeof TEAM_WORKFLOW_STAGES)[number];
+
+/**
+ * A stage's observed completion. `unavailable` is not "not started": it means
+ * the durable evidence that would decide the stage does not exist yet, so a
+ * reader must say "unavailable" rather than draw an empty stepper.
+ */
+export type TeamStageState = "complete" | "active" | "pending" | "awaiting-decision" | "not-started" | "unavailable";
+
+export interface TeamStageProgress {
+  stage: TeamWorkflowStage;
+  state: TeamStageState;
+  /** Durable rows the verdict rests on, so a reader can trace it. */
+  evidence: string;
+}
+
+export interface TeamRunStageView {
+  /** The earliest stage without finished required work; `null` when every stage is complete. */
+  current: TeamWorkflowStage | null;
+  stages: TeamStageProgress[];
+}
+
+/**
+ * Verified acceptance criteria, never an agent's self-report (U6). `verified` is
+ * `null` while no durable criteria record exists, so a reader cannot render
+ * `0/0` as if everything were done.
+ */
+export interface TeamCriteriaProgress {
+  verified: number | null;
+  total: number | null;
+  source: string | null;
+}
+
+export interface TeamReviewView {
+  taskId: string;
+  qitemId: string;
+  role: TeamRole;
+  queueState: TeamQueueState;
+  criteria: TeamCriteriaProgress;
+  currentCandidateDigest: string | null;
+  rounds: number;
+  openP0P1: number;
+  /** Availability of the review record itself; a crashed or missing round is unavailable, never passing. */
+  reviewAvailable: boolean;
+  acceptance: { manifestDigest: string; passed: boolean; reason: string; recordedAt: string } | null;
+}
+
+export interface TeamAttemptView {
+  attemptId: string;
+  runId: string;
+  taskId: string | null;
+  qitemId: string | null;
+  role: TeamRole;
+  provider: "claude" | "codex";
+  state: AttemptState;
+  unknownReason: string | null;
+  session: string | null;
+}
+
+/** One bounded, redacted log or exit record correlated to its task and attempt. */
+export interface TeamLogRecord {
+  /** Durable origin of the record, so a reader never has to guess which table it came from. */
+  source: "stream" | "task-outcome" | "attempt-lifecycle";
+  streamItemId: string | null;
+  ts: string;
+  runId: string | null;
+  taskId: string | null;
+  attemptId: string | null;
+  session: string | null;
+  /** Already redacted at the boundary; inert text a client renders literally. */
+  body: string;
+  /** True when the body was shortened to the record bound. */
+  truncated: boolean;
+  exitOutcome: "done" | "failed" | "denied" | "canceled" | null;
+}
+
+/**
+ * Replay metadata. `retainedFrom` is the earliest durable sequence still
+ * present: a client that asks for an older cursor has a real gap, and saying so
+ * is the point (AE12).
+ */
+export interface TeamReplayWindow {
+  retainedFrom: number;
+  latestSeq: number;
+}
+
+export interface TeamOwnerRead {
+  schema: "multi-agent-team-read/v1";
+  protocolVersion: typeof TEAM_READ_MODEL_VERSION;
+  runId: string;
+  generatedAt: string;
+  run: TeamRun;
+  workflow: TeamRunStageView;
+  tasks: TeamReviewView[];
+  attempts: TeamAttemptView[];
+  approvals: Array<TeamApproval & { awaitingDecision: boolean }>;
+  logs: TeamLogRecord[];
+  replay: TeamReplayWindow;
+}
+
+/**
+ * One durable event in a run-scoped replay, with its identity preserved.
+ *
+ * The payload is published as a bounded, redacted body rather than the raw
+ * nested object: replay is the same evidence surface as the snapshot, so a
+ * secret the snapshot removed must not reappear here.
+ */
+export interface TeamReplayEvent {
+  seq: number;
+  createdAt: string;
+  type: string;
+  action: string | null;
+  runId: string | null;
+  taskId: string | null;
+  attemptId: string | null;
+  body: string;
+  truncated: boolean;
+}
+
 export interface ControlRequest<T = JsonValue> {
   protocolVersion: string;
   runId: string;

@@ -47,6 +47,10 @@ export const PIN = Object.freeze({
     'packages/daemon/src/domain/queue-repository.ts',
     'packages/daemon/src/domain/workflow-runtime.ts',
     'packages/daemon/src/server.ts',
+    // T052: the committed-event reader gained a run-scoped replay query and the
+    // route gained the managed mount; both are adaptations, not upstream bytes.
+    'packages/daemon/src/domain/event-bus.ts',
+    'packages/daemon/src/routes/events.ts',
     'packages/daemon/src/routes/terminal-ws.ts',
     'packages/daemon/src/index.ts',
     'packages/daemon/src/startup.ts',
@@ -126,6 +130,7 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/domain/team-workspace.ts',
   'packages/daemon/src/domain/review-evidence.ts',
   'packages/daemon/test/team-review-cycle.test.ts',
+  'packages/daemon/test/team-read-model.test.ts',
   'packages/daemon/test/team-dependencies.test.ts',
   'packages/daemon/test/team-workspace.test.ts',
   'packages/daemon/src/domain/mailbox-delivery.ts',

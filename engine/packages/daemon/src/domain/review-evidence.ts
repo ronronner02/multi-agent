@@ -398,7 +398,7 @@ export function recordReview(input: {
     reportDigest: input.reportDigest };
 }
 
-type Entry =
+export type Entry =
   | { kind: "candidate"; identity: CandidateIdentity }
   | { kind: "review"; record: ReviewRecord }
   | { kind: "retry"; record: RetryRecord }
