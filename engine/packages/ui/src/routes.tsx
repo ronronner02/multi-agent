@@ -16,11 +16,13 @@ import {
   Outlet,
   useParams,
   useSearch,
+  useRouterState,
 } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { DaemonHealthProvider } from "./components/DaemonHealthProvider.js";
 import { queryClient } from "./lib/query-client.js";
 import { AppShell } from "./components/AppShell.js";
+import { TeamShell } from "./team/shell.js";
 import { RigGraph } from "./components/RigGraph.js";
 import { ImportFlow } from "./components/ImportFlow.js";
 import { PackageList } from "./components/PackageList.js";
@@ -39,7 +41,6 @@ import { AuditHistoryView } from "./components/mission-control/views/AuditHistor
 import { useRigSummary } from "./hooks/useRigSummary.js";
 import { EmptyState } from "./components/ui/empty-state.js";
 // Phase 3 destination components.
-import { Dashboard } from "./components/dashboard/Dashboard.js";
 import { Feed } from "./components/for-you/Feed.js";
 import { SpecsLibraryPage } from "./components/specs/SpecsLibraryPage.js";
 import { SkillDetailPage } from "./components/specs/SkillDetailPage.js";
@@ -78,15 +79,12 @@ import {
 
 // Root route — wraps everything in AppShell
 const rootRoute = createRootRoute({
-  component: () => (
-    <QueryClientProvider client={queryClient}>
-      <DaemonHealthProvider>
-        <AppShell>
-          <Outlet />
-        </AppShell>
-      </DaemonHealthProvider>
-    </QueryClientProvider>
-  ),
+  component: () => {
+    const managed = useRouterState({ select: state => state.location.pathname === "/" || /^\/team(?:\/|$)/.test(state.location.pathname) });
+    return <QueryClientProvider client={queryClient}>
+      {managed ? <Outlet /> : <DaemonHealthProvider><AppShell><Outlet /></AppShell></DaemonHealthProvider>}
+    </QueryClientProvider>;
+  },
 });
 
 // =====================================================================
@@ -96,8 +94,16 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: Dashboard,
+  component: () => <Navigate to="/team" search={{ run: undefined }} />,
 });
+
+const teamRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/team",
+  validateSearch: (search: Record<string, unknown>): { run?: string } => ({ run: typeof search.run === "string" ? search.run : undefined }),
+  component: TeamShell,
+});
+const teamPageRoute = createRoute({ getParentRoute: () => teamRoute, path: "$section", component: () => null });
 
 // Topology destination: SC-5 / SC-10 — single URL with view-mode tabs IN-PLACE
 // (graph / table / terminal). Tab state is React useState INSIDE each scope
@@ -539,6 +545,7 @@ const steeringRedirectRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   // Canon destinations
   indexRoute,
+  teamRoute.addChildren([teamPageRoute]),
   topologyRoute,
   topologyRigRoute,
   topologyPodRoute,
