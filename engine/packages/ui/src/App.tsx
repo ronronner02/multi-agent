@@ -1,4 +1,4 @@
-import { RouterProvider } from "@tanstack/react-router";
+import { RouterProvider, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { router } from "./routes.js";
 
@@ -49,9 +49,10 @@ export function UiMaintenanceNotice() {
 }
 
 export function App() {
+  const managed = useRouterState({ router, select: state => state.location.pathname === "/" || /^\/team(?:\/|$)/.test(state.location.pathname) });
   return (
     <>
-      <UiMaintenanceNotice />
+      {!managed && <UiMaintenanceNotice />}
       <RouterProvider router={router} />
     </>
   );
