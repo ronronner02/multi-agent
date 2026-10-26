@@ -105,6 +105,7 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/domain/plan-governance.ts',
   'packages/daemon/src/domain/system-health.ts',
   'packages/daemon/test/system-health.test.ts',
+  'packages/daemon/test/system-health-composition.test.ts',
   'packages/daemon/src/domain/lead-wake-policy.ts',
   'packages/daemon/test/lead-wake-policy.test.ts',
   'packages/daemon/src/routes/team-control.ts',
