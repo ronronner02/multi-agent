@@ -172,6 +172,22 @@ const LOCAL_ENGINE_PATHS = [
   'packages/i18n/test/display-width.test.ts',
   'packages/tui/test/terminal-render.test.ts',
   'packages/tui/src/icons.ts',
+  'packages/ui/public/skins/shuimo-danqing/shuimo-danqing-loop.mp4',
+  'packages/ui/public/skins/shuimo-danqing/sm-paper-grain-strong.webp',
+  'packages/ui/public/skins/shuimo-danqing/sm-paper-grain.webp',
+  'packages/ui/src/hooks/useOwnerSession.ts',
+  'packages/ui/src/hooks/useTeamRun.ts',
+  'packages/ui/src/skins/shuimo-danqing/ATTRIBUTION.md',
+  'packages/ui/src/skins/shuimo-danqing/skin.css',
+  'packages/ui/src/team/activity.tsx',
+  'packages/ui/src/team/agent-status.tsx',
+  'packages/ui/src/team/overview.tsx',
+  'packages/ui/src/team/run-stepper.tsx',
+  'packages/ui/src/team/shell.tsx',
+  'packages/ui/src/team/system-status.tsx',
+  'packages/ui/src/team/task-list.tsx',
+  'packages/ui/test/team-overview.test.tsx',
+  'packages/ui/test/team-skins.test.tsx',
 ];
 
 export class ImportError extends Error {
