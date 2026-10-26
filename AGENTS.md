@@ -80,7 +80,7 @@ Load the `karpathy-guidelines` skill when writing, reviewing or refactoring code
 
 ### Parallel tracks (owner decisions, 2026-10-23 and 2026-10-26)
 Two sessions may run at once, each in its own clone and branch. A track owns the files its not-yet-landed tasks declare. A task may take an undeclared file unless a not-yet-landed task of the other track declares it.
-- **Track A:** T047, T052, T043, T054, T048 and T038, in that order.
+- **Track A:** T052, T054, T048, T043, T053, T047 and T038, in that order. The tasks Track B waits on go first; T053 unblocks T047 (`docs/amendments/2026-10-25-t053-managed-attempt-inputs.md`).
 - **Track B:** T050, T015, T019, T035, T016, T020, T021, T022 and T023, then T017 and T033.
 - **Deferred to wrap-up:** T046, T018, T024, T025 and the live runs T026-T030. They start only after T015, T016 and T019-T022 have landed and the owner says go. T049 is cancelled (`docs/amendments/2026-10-26-simplification.md`).
 - **Serialized:**
@@ -88,7 +88,7 @@ Two sessions may run at once, each in its own clone and branch. A track owns the
   - T017 waits for T043 (`worker-launch.ts`);
   - T015 Phase 2 waits for T052, and only Phase 1, the labeled sample-data shell, may land before it;
   - T033 and T046: whichever starts second waits for the other.
-- **Shared files:** `tools/upstream-import.mjs`, the task pack, `docs/operations.md`, `docs/known-failures.md`, `AGENTS.md`, `contracts/team-control.ts`, `routes/team-control.ts` and `server.ts` get append-only edits. Rebase onto `main` before landing; the later lander resolves conflicts and reruns its focused tests. Never force-push.
+- **Shared files:** `tools/upstream-import.mjs`, the task pack, `docs/operations.md`, `docs/known-failures.md`, `AGENTS.md`, `contracts/team-control.ts`, `routes/team-control.ts`, `server.ts` and `db/all-migrations.ts` get append-only edits. Rebase onto `main` before landing; the later lander resolves conflicts and reruns its focused tests. Never force-push.
 
 ### Done and delivery
 - A task is done when:
