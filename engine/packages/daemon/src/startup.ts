@@ -147,6 +147,7 @@ import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
 import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, type SystemHealthProbeResult } from "./domain/system-health.js";
+import { TeamReadModel } from "./team-control-surface.js";
 import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
 import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
 import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters/worker-launch.js";
@@ -867,6 +868,23 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const teamControlOptions: NonNullable<AppDeps["teamControl"]> = { ...teamControl, readSystemHealth: teamControl.readSystemHealth
     ?? composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
       ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) }) };
+  // T052 — the managed owner read projection, composed over the same owners the
+  // daemon already built. A caller that supplied one keeps it: that is the
+  // injection seam the tests and any embedding host use.
+  if (!teamControlOptions.readModel) {
+    teamControlOptions.readModel = new TeamReadModel({
+      db,
+      governance: teamGovernance,
+      events: eventBus,
+      readTaskRows: (runId: string) => (db.prepare(
+        `SELECT a.qitem_id AS qitemId, a.task_id AS taskId,
+          json_extract(a.assignment_json, '$.role') AS role,
+          q.state AS queueState, q.destination_session AS session
+          FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+          WHERE a.run_id = ? ORDER BY a.task_id`).all(runId) as Array<{
+            qitemId: string; taskId: string; role: string; queueState: string; session: string | null }>),
+    });
+  }
   const claudeResume = new ClaudeResumeAdapter(tmuxAdapter, { claudeManagedLaunch, seatLaunchEnvironment, ...workerLauncher });
   // #275: one reader for both Codex launch adapters, with the PATH, HOME and CODEX_HOME a seat session gets.
   const readCodexNetworkDefault = codexNetworkDefaultReader({ launchPath: process.env.PATH, home: daemonHome, codexHome });
