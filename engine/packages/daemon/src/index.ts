@@ -9,6 +9,7 @@ import { createDaemon } from "./startup.js";
 import { removeParentSessionEnv } from "./domain/parent-session-env.js";
 import { resolveBindPlan } from "./domain/bind-plan.js";
 import { isManagedMode } from "./domain/plan-governance.js";
+import type { TeamControlCredentials } from "./middleware/auth-bearer-token.js";
 import { runQueueRetentionSweep, RETENTION_DEFAULTS } from "./domain/queue-retention.js";
 import {
   createStuckSweepStatus,
@@ -313,10 +314,15 @@ export async function startServer(port?: number) {
     bindHosts = bindPlan.hosts;
   }
 
+  // T053: the process entry holds the one credential object the daemon fills. Startup
+  // writes its `workers` list in place as attempts are admitted, so every holder — control
+  // routes, the managed launch chain and the mailbox endpoint — reads the same tokens, and
+  // the owner credential it started with is never replaced by a second copy.
+  const teamControlCredentials: TeamControlCredentials = { ownerToken };
   const { app, contextMonitor, deps, eventLoopMonitor, injectWebSocket } = await createDaemon({
     dbPath,
     managedMode: requestedMode === "managed",
-    teamControl: { credentials: { ownerToken } },
+    teamControl: { credentials: teamControlCredentials },
     bearerToken,
     terminalBearerToken,
     // S20 — the effective bind plan rides the health surface so adoption gates verify

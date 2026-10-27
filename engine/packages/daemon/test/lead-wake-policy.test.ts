@@ -37,7 +37,8 @@ describe("KTD21 Lead wake admission", () => {
   const task = (source = "peer@rig", destination = "lead@rig", role = "lead", taskId?: string) => {
     const id = taskId ?? `task-${++serial}`;
     const receipt = governance.createTask(command(id, { assignment: {
-      taskId: id, role, paths: ["src"], dependencies: [] }, sourceSession: source, destinationSession: destination, body: "Task" }), binding);
+      taskId: id, role, paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
+      sourceSession: source, destinationSession: destination, body: "Task" }), binding);
     expect(receipt.status).toBe("accepted");
     return (receipt.value as { qitemId: string }).qitemId;
   };

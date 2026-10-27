@@ -72,7 +72,7 @@ describe("managed launch governed scope resolution", () => {
     { kind: "worker", sessionId: "builder@rig" });
     governance.decideApproval(command("implementation", { approvalVersion: 1, decision: "approved" }),
       { kind: "owner", sessionId: "owner-control" }, binding);
-    const created = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+    const created = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
       sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), binding);
     expect(created.status).toBe("accepted"); task = created.value as TeamTaskAuthority;
   });
@@ -648,7 +648,7 @@ describe("managed launch governed scope resolution", () => {
       governance.requestApproval(leadCommand("lead-implementation", { kind: "orchestrator", action: "implementation",
         payload: { bindingDigest: hashBinding(leadBinding) }, targetDigest: hashBinding(leadBinding), expiresAt: "2026-10-20T00:00:00.000Z" }), owner);
       governance.decideApproval(leadCommand("lead-implementation", { approvalVersion: 1, decision: "approved" }), owner, leadBinding);
-      const created = governance.createTask(leadCommand("lead-task", { assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+      const created = governance.createTask(leadCommand("lead-task", { assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
         sourceSession: selfWake ? "lead@rig" : "owner@rig", destinationSession: "lead@rig", body: "Evaluate the assignment." }), leadBinding);
       const leadTask = created.value as TeamTaskAuthority;
       if (!selfWake) for (let i = 1; i <= 11; i++) expect(governance.recordAttempt(leadCommand("lead-prior-" + i, {
@@ -759,6 +759,7 @@ describe("managed launch governed scope resolution", () => {
         governance.decideApproval(otherCommand("other-implementation", { approvalVersion: 1, decision: "approved" }), owner, binding);
         const otherTask = governance.createTask(otherCommand("other-task", {
           assignment: { taskId: "other-task", role: "implementer", paths: ["src"], dependencies: [] },
+          outputs: [], permissions: [],
           sourceSession: "lead@rig", destinationSession: "other@rig", body: "Other run assignment",
         }), binding).value as TeamTaskAuthority;
         expect(admit().effectMayStart).toBe(true);
@@ -809,6 +810,7 @@ describe("managed launch governed scope resolution", () => {
         admit(); observe("stopped");
         const next = governance.createTask(command("next-task", {
           assignment: { taskId: "next-task", role: "implementer", paths: ["src"], dependencies: [] },
+          outputs: [], permissions: [],
           sourceSession: "lead@rig", destinationSession: "second@rig", body: "Second assignment",
         }), binding).value as TeamTaskAuthority;
         expect(governance.admitNativeAttempt(command("next-attempt", { ...payload(), qitemId: next.qitemId,
@@ -823,7 +825,7 @@ describe("managed launch governed scope resolution", () => {
         governance.recordAttempt(command("other-live", { role: "reviewer", provider: "claude", qitemId: null,
           state: "running", identity: nativeIdentity(3), unknownReason: null, usage }), binding);
         admit(); observe("running");
-        const next = governance.createTask(command("next-task", { assignment: { taskId: "next-task", role: "implementer", paths: ["src"], dependencies: [] },
+        const next = governance.createTask(command("next-task", { assignment: { taskId: "next-task", role: "implementer", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
           sourceSession: "lead@rig", destinationSession: "second@rig", body: "Second assignment" }), binding).value as TeamTaskAuthority;
         expect(governance.admitNativeAttempt(command("third-live", { ...payload(), qitemId: next.qitemId,
           expectedTaskVersion: next.entityVersion, sessionId: "second@rig" }), owner, binding).effectMayStart).toBe(true);
@@ -911,7 +913,7 @@ describe("control-owned root inspection", () => {
       payload: { bindingDigest: hashBinding(current) }, targetDigest: hashBinding(current), expiresAt: "2026-10-20T00:00:00.000Z" }),
     { kind: "worker", sessionId: "builder@rig" });
     governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), { kind: "owner", sessionId: "owner-control" }, current);
-    const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+    const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
       sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Inspect the assigned worker." }), current).value as TeamTaskAuthority;
     context = { runId: "run", binding: current, assignment: task.assignment, role: "implementer", client: "claude-code",
       projection: { worker: "ma-worker1", attemptId: "attempt", controlUid: process.getuid!(), workerGid: 61001, policy },
@@ -965,6 +967,7 @@ describe("control-owned root inspection", () => {
     const secondTask = governance.createTask({ protocolVersion: "1.0", runId: "run", actionId: "review-task", idempotencyKey: "review-task",
       expectedEntityVersion: governance.getRun("run").entityVersion, payload: {
         assignment: { taskId: "review-task", role: "reviewer", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: [],
         sourceSession: "lead@rig", destinationSession: "reviewer@rig", body: "Inspect the review tree." } }, context.binding).value as TeamTaskAuthority;
     assignedTree = assignedTree.replace("ma-worker1", "ma-worker2");
     context = { ...context, assignment: secondTask.assignment, role: "reviewer", client: "codex", workerUid: 61002,
@@ -1180,7 +1183,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
       payload: { bindingDigest: hashBinding(current) }, targetDigest: hashBinding(current), expiresAt: "2026-10-20T00:00:00.000Z" }),
     { kind: "worker", sessionId: "builder@rig" });
     governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), { kind: "owner", sessionId: "owner-control" }, current);
-    task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+    task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
       sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), current).value as TeamTaskAuthority;
     rigRepo = new RigRepository(db); sessions = new SessionRegistry(db);
     const nodeId = rigRepo.addNode("rig", "builder", { runtime: "claude-code", cwd: tree }).id;
@@ -1488,7 +1491,7 @@ describe("production managed launch composition", () => {
         payload: { bindingDigest: hashBinding(current) }, targetDigest: hashBinding(current), expiresAt: "2099-01-01T00:00:00.000Z" }),
       { kind: "worker", sessionId: "builder@rig" });
       governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), owner, current);
-      const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+      const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
         sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), current).value as TeamTaskAuthority;
       const tree = policy.paths.assignment_root + "/ma-worker1/project";
       const rigRepo = new RigRepository(db), sessions = new SessionRegistry(db);
@@ -1605,7 +1608,7 @@ describe("offline fixture-daemon restart", () => {
         payload: { bindingDigest: process.env.T041_BINDING_DIGEST }, targetDigest: process.env.T041_BINDING_DIGEST,
         expiresAt: "2099-01-01T00:00:00.000Z" }), { kind: "worker", sessionId: "builder@rig" });
       governance.decideApproval(command("approval", { approvalVersion: 1, decision: "approved" }), owner, binding);
-      const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+      const task = governance.createTask(command("task", { assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] }, outputs: [], permissions: [],
         sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file." }), binding).value;
       deps.chatRepo.sendMailbox("rig", "lead@rig", { messageId: "durable-message", recipient: "builder@rig", taskId: "task", runId: "run",
         body: "durable peer note", capability: scope.capability });

@@ -135,6 +135,7 @@ describe("transactional plan governance", () => {
   }), worker);
   const createTask = () => governance.createTask(command("logical-task", {
     assignment: { taskId: "logical-task", role: "implementer", paths: ["src/change.ts"], dependencies: [] },
+    outputs: [], permissions: [],
     sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Implement the approved scope",
   }), binding);
   it("requires verified provider policy rather than a matching policy digest alone", () => {
@@ -298,6 +299,7 @@ describe("transactional plan governance", () => {
     approvePlan();
     const request = command("task", {
       assignment: { taskId: "task", role: "implementer", paths: ["src/a.ts"], dependencies: [] },
+      outputs: [], permissions: [],
       sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "A task",
     }, "failed-receipt");
     const eventsBefore = db.prepare("SELECT count(*) AS count FROM events").get();
@@ -319,6 +321,7 @@ describe("transactional plan governance", () => {
     approvePlan();
     expect(governance.createTask(command("outside", {
       assignment: { taskId: "outside", role: "implementer", paths: ["src-other/a.ts"], dependencies: [] },
+      outputs: [], permissions: [],
       sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Outside the scope",
     }), binding).status).toBe("denied");
     const qitemId = (createTask().value as { qitemId: string }).qitemId;
@@ -362,6 +365,7 @@ describe("transactional plan governance", () => {
     expect(queue.getById(qitemId)?.state).toBe("failed");
     expect(governance.createTask(command("next-task", {
       assignment: { taskId: "next-task", role: "implementer", paths: ["src/next.ts"], dependencies: [] },
+      outputs: [], permissions: [],
       sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Start more work",
     }), binding).status).toBe("denied");
   });
@@ -567,6 +571,7 @@ describe("transactional plan governance", () => {
     }
     const request = kind === "task" ? command("task", {
       assignment: { taskId: "task", role: "implementer", paths: ["src/a.ts"], dependencies: [] },
+      outputs: [], permissions: [],
       sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "A task",
     }) : command("commit-approval", { kind: "orchestrator", action: "commit", payload: { candidateDigest: sha("d") }, targetDigest: sha("d"), attemptId: "attempt-1" });
     const invoke = () => kind === "task" ? governance.createTask(request, binding) : governance.reserveApproval(request, binding);
@@ -787,6 +792,7 @@ describe("transactional plan governance", () => {
     approvePlan();
     expect(governance.createTask(command("task", {
       assignment: { taskId: "task", role: "implementer", paths: ["src/x.ts"], dependencies: [] },
+      outputs: [], permissions: [],
       sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Work",
     }), undefined).status).toBe("denied");
     expect(governance.getRun("run-1").state).toBe("invalidated");

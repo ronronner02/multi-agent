@@ -200,6 +200,15 @@ Any other `MULTI_AGENT_MODE` value stops the daemon at startup. Pass the owner c
 
 Switching modes requires a daemon restart. Once a database holds a managed run, the daemon starts in managed mode from then on. Legacy tmux sessions that already exist when a managed daemon starts are left untouched; the managed daemon neither adopts nor stops them.
 
+## Managed Attempt Credentials
+
+The producer supplies everything an attempt needs, from owners the daemon already holds. Nothing here is provisioned by hand beyond `/etc/multi-agent/worker-policy.json` and the worker accounts.
+
+- **Worker control credential.** One token per `(run, session)`, minted when the attempt is admitted. Only its digest is durable (`team_worker_credentials`); the plaintext lives in the daemon process, reaches the sandbox only as `bootstrap.json` `authorization` (mode 0600 beside the mailbox socket), and is never written to a log, command line or projection. It is revoked when the attempt retires and at daemon startup, where every inherited digest names a token this process cannot honour. It authenticates that attempt's mailbox and its own control run scope, never an owner action.
+- **Seat mailbox capability.** One `mailbox:{43}` per `(run, session)`, minted with the task assignment and stored in `team_seat_mailbox_capabilities`. The producer's endpoint and any later send for that seat must use this value; `poll` matches on it, so a second independently minted value would make the seat's mailbox unreadable. Deleting a row mints a fresh value on the next assignment, and messages still addressed to the old value become invisible.
+- **Roots.** `context_root` and `mailbox_root` are read from `worker-policy.json` in the same composition that supplies `assignment_root`; the daemon refuses a policy whose `mailbox_root` is not `<control_state_dir>/mailboxes`.
+- **Worker identity.** uid, gid, supplementary groups, home, scratch and the assignment directory are resolved from the policy plus `/etc/passwd` and `/etc/group`, which provisioning installs. A name absent from either is refused; the privileged launcher's own inspection remains the authoritative check at launch.
+
 ## Source Authority and Windows Export
 
 The WSL checkout `/home/leo/src/multi-agent` is the only development source. Provision, preflight, build and test from that checkout. `D:\Multi-Agent` is a preserved read-only copy; it changes only through the one-way export described in `docs/development.md`.
