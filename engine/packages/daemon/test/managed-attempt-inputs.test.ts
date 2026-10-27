@@ -359,6 +359,23 @@ describe("the managed attempt's production inputs", () => {
       capability: bootstrap.capability }, "attempt-1")).ok).toBe(true);
   }, 60_000);
 
+  it("gives a duplicate caller the same outcome as the production it joined", async () => {
+    createTask();
+    // `managedAttempts` receives an attempt only after its endpoint listens, so there is no
+    // window in which a caller could be handed a half-started record. What a duplicate can
+    // observe is the shared production, and it must see that production's failure too rather
+    // than a record whose endpoint never existed.
+    const failing = { invalidateNativeChannel: () => { throw new Error("fixture endpoint failure"); } };
+    const first = runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never }));
+    const second = runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never }));
+    // `first` and `second` are async-method wrappers, so they are distinct promises that must
+    // settle the same way; the record they hand back must be the same object when they succeed.
+    await expect(first).rejects.toThrow("fixture endpoint failure");
+    await expect(second).rejects.toThrow("fixture endpoint failure");
+    expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
+    expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
+  }, 60_000);
+
   it("refuses an endpoint bound to a task the assignment does not name", async () => {
     createTask();
     await expect(runtime.produceManagedAttempt("run", produceInput({ taskId: "task-b" })))
