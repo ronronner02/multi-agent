@@ -1,4 +1,4 @@
-import { TEAM_HEALTH_LIGHTS, type TeamRun, type TeamSystemHealth } from "@openrig/daemon/team-control";
+import { TEAM_HEALTH_LIGHTS, type TeamRun, type TeamSystemHealth } from "../../../daemon/dist/contracts/team-control.js";
 import { useTranslation } from "react-i18next";
 import { Card } from "../components/ui/card.js";
 import { getHealthStatusClass } from "../lib/status-colors.js";
@@ -12,7 +12,7 @@ export function SystemStatus({ run, health, available, now }: {
     <dl className="team-facts">
       <div><dt>{t("web.repository")}</dt><dd><code>{run?.binding.repository.identity ?? t("web.unknown")}</code></dd></div>
       {(["branch", "environment", "ownerClients"] as const).map(key => <div key={key}>
-        <dt>{t(`web.${key}`)}</dt><dd>{t("web.pending")}</dd></div>)}
+        <dt>{t(`web.${key}`)}</dt><dd>{t("value.unavailable")}</dd></div>)}
       {TEAM_HEALTH_LIGHTS.map(name => {
         const light = health?.lights[name];
         const fresh = !!light && Number.isFinite(Date.parse(light.checkedAt)) && now - Date.parse(light.checkedAt) <= 5_000;

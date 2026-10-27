@@ -1,5 +1,5 @@
 import { createContext, createElement, useCallback, useContext, useRef, useState, type ReactNode } from "react";
-import { parseProtocolVersion } from "@openrig/daemon/team-control";
+import { parseProtocolVersion } from "../../../daemon/dist/contracts/team-control.js";
 
 export class OwnerReadError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { createInterfaceI18n, type InterfaceI18n, type InterfaceLanguage } from "@openrig/i18n";
-import type { TeamQueueState, TeamRun } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamQueueState, TeamRun } from "@openrig/daemon/team-control";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import { Activity as ActivityIcon, Bot, ClipboardList, Folder, Home, Library, Settings, ShieldCheck } from "lucide-react";
 import { version } from "../../package.json";
@@ -57,15 +57,15 @@ function Pairing() {
   </Card>;
 }
 
-function CurrentPlan({ run }: { run?: TeamRun }) {
+function CurrentPlan({ run, read }: { run?: TeamRun; read?: TeamOwnerRead }) {
   const { t } = useTranslation();
   return <Card className="team-card team-current-plan" role="region" aria-label={t("web.plan")}>
     <h2>{t("web.plan")}</h2><code>{run?.binding.planRef ?? t("web.unknown")}</code>
     <dl className="team-detail-facts"><div><dt>{t("web.digest")}</dt><dd>{run ? <details><summary><code>{run.binding.planDigest.slice(0, 19)}…</code></summary><code>{run.binding.planDigest}</code></details> : t("web.unknown")}</dd></div>
       <div><dt>{t("web.binding")}</dt><dd>{run ? <details><summary><code>{run.bindingDigest.slice(0, 19)}…</code></summary><code>{run.bindingDigest}</code></details> : t("web.unknown")}</dd></div>
       <div><dt>{t("web.runState")}</dt><dd>{run ? t(`status.run.${run.state}`) : t("web.unknown")}</dd></div>
-      <div><dt>{t("web.approvalTime")}</dt><dd>{t("web.pending")}</dd></div>
-      <div><dt>{t("web.readiness")}</dt><dd>{t("web.pending")}</dd></div>
+      <div><dt>{t("web.approvalTime")}</dt><dd>{t("value.unavailable")}</dd></div>
+      <div><dt>{t("web.readiness")}</dt><dd>{t(`web.stageState.${read?.workflow.stages.find(stage => stage.stage === "plan-approved")?.state ?? "unavailable"}`)}</dd></div>
     </dl>
   </Card>;
 }
@@ -82,7 +82,8 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   const [runDraft, setRunDraft] = useState(runId);
   const [filter, setFilter] = useState<TeamQueueState | "all">("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("priority");
+  const [sort, setSort] = useState("id");
+  const [selectedTask, setSelectedTask] = useState<string>();
   const [detailTab, setDetailTab] = useState("details");
   const [evidenceTab, setEvidenceTab] = useState("logs");
   const mainRef = useRef<HTMLElement>(null);
@@ -106,12 +107,12 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(timer); }, []);
   useEffect(() => { setRunDraft(runId); }, [runId]);
   useEffect(() => { applySkin(skin); return () => applySkin("navy"); }, [skin]);
-  const error = data.run.error ?? data.approvals.error ?? data.health.error;
-  const readAt = runId ? data.run.dataUpdatedAt : data.health.dataUpdatedAt;
+  const error = data.read.error ?? data.events.error ?? data.health.error;
+  const readAt = runId ? Math.min(data.read.dataUpdatedAt, Date.parse(data.read.data?.generatedAt ?? "") || 0) : data.health.dataUpdatedAt;
   const age = readAt ? Math.max(0, Math.floor((now - readAt) / 1_000)) : null;
   const connection = !paired ? "web.pairRequired" : error instanceof OwnerReadError ? (error.status === 404 ? "web.notFound" : "web.error")
     : error instanceof TypeError ? "web.disconnected" : error ? "web.error" : age === null ? "web.loading" : now - readAt > 5_000 ? "web.stale" : "web.snapshot";
-  const approvals = paired && !data.approvals.isError && now - data.approvals.dataUpdatedAt <= 5_000 ? data.approvals.data : undefined;
+  const approvals = paired && !data.read.isError && now - readAt <= 5_000 ? data.read.data?.approvals : undefined;
   const pending = approvals?.filter(item => item.state === "pending");
   const healthAvailable = paired && !data.health.isError && now - data.health.dataUpdatedAt <= 5_000;
   const preferences = <div className="team-preferences">
@@ -133,21 +134,21 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
         <Link to="/team/$section" params={{ section: "decisions" }} search={{ run: runId || undefined }}>{t("web.pendingDecisions")}: {pending?.length ?? "?"}</Link></div>
       {preferences}
     </header>
-    <aside className="team-rail">{nav()}<CurrentPlan run={data.run.data} /></aside>
+    <aside className="team-rail">{nav()}<CurrentPlan run={data.read.data?.run} read={data.read.data} /></aside>
     <main ref={mainRef} data-scroll-pane={`main-${section}`} onScrollCapture={event => {
       const pane = event.target as HTMLElement;
       // The re-pair prompt may temporarily remove a pane's scrollable layout.
       if (paired && pane.dataset.scrollPane) paneScroll.current[pane.dataset.scrollPane] = [pane.scrollLeft, pane.scrollTop];
     }} className={`team-main${paired && runId && ["overview", "tasks"].includes(section) ? " team-main-overview" : ""}`}>
-      <div className="team-connection" role="status"><strong>{t(connection)}</strong>{age !== null && <span>{age} {t("web.seconds")}</span>}<span>{t("web.heartbeat")}</span></div>
+      <div className="team-connection" role="status"><strong>{t(connection)}</strong>{age !== null && <span>{age} {t("web.seconds")}</span>}<span>{t("web.heartbeat")}: {data.events.isSuccess && !data.events.isError && now - data.events.dataUpdatedAt <= 5_000 ? data.events.data.window.latestSeq : t("value.unavailable")}</span></div>
       {!paired && section !== "settings" && <Pairing />}
       <form className="team-run-picker" onSubmit={e => { e.preventDefault(); void navigate({ to: "/team/$section", params: { section }, search: { run: runDraft.trim() || undefined } }); }}>
         <label>{t("web.run")}<input value={runDraft} onChange={e => setRunDraft(e.target.value)} autoComplete="off" /></label><Button type="submit" variant="outline">{t("web.loadRun")}</Button>
       </form>
       {!runId && <div className="team-empty" role="status"><strong>{t("web.noRun")}</strong><p>{t("web.discovery")}</p></div>}
       {section === "settings" ? <Card className="team-card"><h2>{t("web.settings")}</h2>{preferences}<Pairing /></Card> : <>
-        <RunStepper />
-        <Overview section={section} run={data.run.data} runId={runId} approvals={approvals} health={data.health.data}
+        <RunStepper workflow={data.read.data?.workflow} />
+        <Overview section={section} run={data.read.data?.run} runId={runId} read={data.read.data} replay={data.events.data} selectedTask={selectedTask} onSelectTask={setSelectedTask} approvals={approvals} health={data.health.data}
           healthAvailable={healthAvailable} now={now} filter={filter} search={search} sort={sort} onFilter={setFilter} onSearch={setSearch} onSort={setSort}
           detailTab={detailTab} evidenceTab={evidenceTab} onDetailTab={setDetailTab} onEvidenceTab={setEvidenceTab} />
       </>}
