@@ -67,6 +67,7 @@ describe("managed dependency eligibility", () => {
   const createTask = (taskId: string, dependencies: string[] = [], paths = [`src/${taskId}.ts`], destinationSession = `${taskId}@rig-1`) =>
     governance.createTask(command(taskId, {
       assignment: { taskId, role: "implementer", paths, dependencies },
+      outputs: [], permissions: [],
       sourceSession: "lead@rig-1", destinationSession, body: `Implement ${taskId}`,
     }), binding);
   const qitemOf = (taskId: string) => (createTask(taskId).value as { qitemId: string }).qitemId;

@@ -178,6 +178,27 @@ export interface WorkflowRuntimeDeps {
     /** Where the pinned clients and their native policy live; the projection reads both. */
     toolchainDir: string;
   };
+  /**
+   * T053 — the owners that supply the producer's per-attempt inputs, so an attempt can be
+   * produced from production state rather than from whatever a call site happens to hold.
+   *
+   * All three are required together because they are one admission: the credential the
+   * endpoint authenticates with, the capability its seat's mailbox answers to, and the gid
+   * the projection and mailbox are created under. Supplying them from separate places is
+   * how the two ends of a mailbox drift apart. Absent disables production, which the caller
+   * sees as a refusal rather than a half-built attempt.
+   */
+  managedAttemptInputs?: {
+    workerCredentials: (runId: string, sessionId: string) => TeamControlCredentials;
+    mailboxCapability: (runId: string, sessionId: string) => string;
+    workerIdentity: (worker: string) => { uid: number; gid: number; groupIds: number[] };
+  };
+  /**
+   * T053 — an attempt's worker credential lives exactly as long as its endpoint, so it is
+   * revoked on the same retirement T042 already owns. Synchronous: the row and the live
+   * token both go, and the bridge is already closed by the time this runs.
+   */
+  onManagedAttemptRetired?: (attempt: { runId: string; sessionId: string }) => void;
 }
 
 /**
@@ -895,7 +916,8 @@ export class WorkflowRuntime {
     permissions: readonly string[];
     /** Everything about the attempt the projection needs; the producer derives the rest. */
     context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
-      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision" | "nativePolicy">;
+      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision" | "nativePolicy"
+      | "workerUid" | "workerGroups"> & { workerUid?: number; workerGroups?: number[] };
     role: TeamRole;
     client: "claude-code" | "codex";
     /** The workspace the assignment will actually run in, from T039's candidate. */
@@ -906,13 +928,13 @@ export class WorkflowRuntime {
     taskId: string;
     recipients: readonly string[];
     /** The recipient's own mailbox capability: the secret its poll and consume are scoped by. */
-    mailboxCapability: string;
+    mailboxCapability?: string;
     /** The worker's own gid in the projection; the control side is this process. */
-    workerGid: number;
+    workerGid?: number;
     delivery: MailboxDelivery;
     chat: ChatRepository;
     /** The credentials this attempt's endpoint authenticates against. */
-    readCredentials: () => TeamControlCredentials;
+    readCredentials?: () => TeamControlCredentials;
     /** The launcher's own liveness question for this attempt; false closes the generation. */
     isCurrent: () => boolean;
     deadline: number;
@@ -928,21 +950,51 @@ export class WorkflowRuntime {
     if (![worker, runId, attemptId].every(id => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))) {
       throw new Error("Invalid managed attempt identity");
     }
-    if (!/^mailbox:[A-Za-z0-9_-]{43}$/.test(input.mailboxCapability)) {
-      throw new Error("Invalid mailbox capability");
-    }
     const existing = this.managedAttempts.get(attemptId);
     if (existing) return existing;
+    // T053: the three per-attempt inputs the composition owns. A caller may still name them,
+    // as T042's contract allows; the composition is the only issuer, so a caller-supplied
+    // value is a reading of the same owner rather than a second one. They are resolved
+    // before anything is admitted, so a host without them refuses without a claim.
+    const owned = this.managedAttemptInputs;
+    const readCredentials = input.readCredentials ?? (owned ? () => owned.workerCredentials(runId, input.sessionId) : undefined);
+    if (!readCredentials) throw new Error("Managed attempt credentials are not configured");
+    const mailboxCapability = input.mailboxCapability ?? owned?.mailboxCapability(runId, input.sessionId);
+    if (mailboxCapability === undefined) throw new Error("Managed attempt mailbox capability is not configured");
+    if (!/^mailbox:[A-Za-z0-9_-]{43}$/.test(mailboxCapability)) throw new Error("Invalid mailbox capability");
+    // The identity owner answers the ownership questions a caller cannot: the gid the
+    // projection and mailbox are created under, and the uid/groups the manifest uses to prove
+    // the projection is worker-readable without being worker-writable.
+    const identity = owned?.workerIdentity(worker);
+    const workerGid = input.workerGid ?? identity?.gid;
+    const workerUid = input.context.workerUid ?? identity?.uid;
+    const workerGroups = input.context.workerGroups ?? identity?.groupIds;
+    if (workerGid === undefined || workerUid === undefined || workerGroups === undefined) {
+      throw new Error("Managed attempt worker identity is not configured");
+    }
+    const context = { ...input.context, workerUid, workerGroups };
     // The pinned native policy is part of the projection from revision 5 on, and a
     // provisioned host ships revision 5. It is built before admission so a host missing
     // the pinned clients refuses without leaving a claimed candidate behind.
     const nativePolicy = roots.policyRevision >= 5
       ? await buildManagedNativePolicy(input.client, roots.toolchainDir) : undefined;
 
+    // T053: the task's own record is the store for these two arrays, so a caller that names
+    // different ones is refused instead of trusted. A row that predates the record, or a task
+    // this run never recorded, has nothing to disagree with; the launch boundary already
+    // refuses an unrecorded task on its queue row. Checked before admission, so a refusal
+    // here leaves no candidate claim and no projection behind.
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
+    const recorded = governance.findTask(runId, input.assignment.taskId);
+    const differs = (claimed: readonly string[], stored: string[] | null) =>
+      stored !== null && canonicalJson([...claimed].sort()) !== canonicalJson([...stored].sort());
+    if (recorded && (differs(input.outputs, recorded.outputs) || differs(input.permissions, recorded.permissions))) {
+      throw new Error("Assignment inputs disagree with the recorded task");
+    }
+
     const admitted = this.admitForLaunch(runId, { attemptId, worker, assignment: input.assignment,
       outputs: input.outputs, permissions: input.permissions,
       context: { binding: this.managedBinding(runId), runId, role: input.role } as ContextManifest });
-    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
     const binding = governance.getRun(runId).binding;
     const root = resolve(roots.contextRoot, worker, runId, attemptId);
     // Declared outside the try because the failure path needs it: only a projection this
@@ -965,11 +1017,11 @@ export class WorkflowRuntime {
       }
       // A projection already on disk belongs to the attempt that made it, so it is used
       // as it stands. A new one is created and sealed below.
-      if (!resumed) ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker, workerGid: input.workerGid });
+      if (!resumed) ensureAttemptRoot(root, { contextRoot: roots.contextRoot, worker, workerGid });
       const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
         role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
-        permissions: [...input.permissions], context: input.context,
-        nativePolicy, workerGid: input.workerGid, frameworkFiles: input.frameworkFiles, resume: resumed });
+        permissions: [...input.permissions], context,
+        nativePolicy, workerGid, frameworkFiles: input.frameworkFiles, resume: resumed });
 
       const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
       ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId),
@@ -980,8 +1032,8 @@ export class WorkflowRuntime {
       if (existsSync(socketPath)) rmSync(socketPath);
       const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
         runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
-        capability: input.mailboxCapability },
-      input.delivery, input.chat, input.readCredentials, input.isCurrent);
+        capability: mailboxCapability },
+      input.delivery, input.chat, readCredentials, input.isCurrent);
       await bridge.listen();
       const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
         ...(input.previous ? { previous: input.previous } : {}) };
@@ -1016,6 +1068,9 @@ export class WorkflowRuntime {
     if (!produced) return;
     this.managedAttempts.delete(attemptId);
     await produced.bridge.close();
+    // T053: the attempt's worker credential is revoked on the same retirement that closes
+    // its endpoint, so the two never outlive each other.
+    this.onManagedAttemptRetired?.({ runId: produced.bridge.binding.runId, sessionId: produced.bridge.binding.sessionId });
   }
 
   /** T042 — the attempt a seat's launch should attach, if this daemon produced one. */
@@ -1382,6 +1437,8 @@ export class WorkflowRuntime {
   private readonly defaultWorker?: () => string;
   /** T042 — the roots the producer writes into, read from the installed policy at call time. */
   private readonly managedAttemptRoots?: WorkflowRuntimeDeps["managedAttemptRoots"];
+  private readonly managedAttemptInputs?: WorkflowRuntimeDeps["managedAttemptInputs"];
+  private readonly onManagedAttemptRetired?: WorkflowRuntimeDeps["onManagedAttemptRetired"];
   /** T042 — attempt projections and endpoints this daemon produced, keyed by attempt id. */
   private readonly managedAttempts = new Map<string, ProducedManagedAttempt>();
 
@@ -1399,6 +1456,8 @@ export class WorkflowRuntime {
     this.candidateRecordsRoot = deps.candidateRecordsRoot;
     this.defaultWorker = deps.defaultWorker;
     this.managedAttemptRoots = deps.managedAttemptRoots;
+    this.managedAttemptInputs = deps.managedAttemptInputs;
+    this.onManagedAttemptRetired = deps.onManagedAttemptRetired;
     this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,
       resolveAssignee: (runId, qitemId) => this.resolveAssignee(runId, qitemId),
       // The approved binding's limits and the run's own clock, read at write time.

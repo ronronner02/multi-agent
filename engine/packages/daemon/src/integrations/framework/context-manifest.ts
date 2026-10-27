@@ -1,6 +1,9 @@
 import { chmodSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { canonicalJson, parseAssignment, parsePlanBinding, text, type PlanBinding, type ScopedAssignment, type TeamRole } from "../../contracts/team-control.js";
+// T053: the role configuration and the freeze helper live in a dependency-free module, so
+// the governance owner can validate a task's permissions without importing this one back.
+import { immutable, roleConfiguration } from "../../domain/role-configuration.js";
 import { hashBinding, hashBytes } from "../../domain/plan-governance.js";
 import { FRAMEWORK_PIN } from "./catalog.js";
 
@@ -21,7 +24,6 @@ export interface ContextInput {
 export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (ContextFile & { workerPath: string })[]; workerDiscoveryRoots: string[]; generatedHash: string; protocolVersion: string | null; instructionVersions: InstructionVersions }>;
 export interface InstructionVersions { core: string; charter: string }
 export interface ContextObservation { discoveryRoots: string[]; files: { path: string; hash: string }[] }
-export const roleConfiguration = immutable(JSON.parse(readFileSync(new URL("../../../../../config/team/roles.json", import.meta.url), "utf8"))) as Record<TeamRole, { client: ContextInput["client"]; permissions: string[] }>;
 export const leadProtocol = readFileSync(new URL("../../../../../config/team/lead-protocol.md", import.meta.url), "utf8");
 export const LEAD_PROTOCOL_VERSION = "1";
 /** An instruction file without a `Version:` line cannot be projected. */
@@ -50,10 +52,7 @@ export function roleInstructionEntries(role: TeamRole): [["core", string], ["pro
   const current = loadRoleInstructions(role);
   return [["core", current.core], [role === "lead" ? "protocol" : "charter", current.charter]];
 }
-export function immutable<T>(value: T): T {
-  if (value !== null && typeof value === "object") { Object.values(value).forEach(immutable); Object.freeze(value); }
-  return value;
-}
+export { immutable, roleConfiguration };
 export function within(root: string, path: string): boolean { const r = relative(root, path); return r === "" || (r !== ".." && !r.startsWith("../") && !isAbsolute(r)); }
 export function physicalPath(root: string, path: string): string {
   let existing = resolve(root, path); const suffix: string[] = [];

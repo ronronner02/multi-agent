@@ -4,11 +4,13 @@ import { RigRepository } from "./rig-repository.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
   TEAM_CONTROL_VERSION, TEAM_QUEUE_STATES, TeamContractError, canonicalJson, digest, integer, jsonValue,
-  object, parseAssignment, parseAttemptIdentity, parseControlRequest, parsePlanBinding, parseTeamEvent, parseUsage, text,
+  object, parseAssignment, parseAttemptIdentity, parseControlRequest, parsePlanBinding, parseTaskInputs, parseTeamEvent, parseUsage, text,
   type ApprovalAction, type ApprovalConsumption, type ApprovalKind, type AttemptState, type ControlActor,
   type ControlReceipt, type ControlRequest, type JsonObject, type TeamApproval, type TeamAttempt,
   type TeamRun, type TeamTaskAuthority, type UsageEvidence, type UsageMetric,
 } from "../contracts/team-control.js";
+import { roleConfiguration } from "./role-configuration.js";
+import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { EventBus, NotifyRegister } from "./event-bus.js";
 import type { QueueRepository, QueueState } from "./queue-repository.js";
 
@@ -244,11 +246,25 @@ export class PlanGovernance {
 
   getTask(qitemId: string): TeamTaskAuthority | null {
     const row = this.db.prepare(`SELECT qitem_id AS qitemId, run_id AS runId, assignment_json AS assignmentJson,
+      outputs_json AS outputsJson, permissions_json AS permissionsJson,
       entity_version AS entityVersion, evidence_json AS evidenceJson FROM team_queue_authority WHERE qitem_id = ?`)
-      .get(qitemId) as (Omit<TeamTaskAuthority, "assignment" | "evidence"> & { assignmentJson: string; evidenceJson: string | null }) | undefined;
+      .get(qitemId) as (Omit<TeamTaskAuthority, "assignment" | "outputs" | "permissions" | "evidence">
+        & { assignmentJson: string; outputsJson: string | null; permissionsJson: string | null; evidenceJson: string | null }) | undefined;
     if (!row) return null;
-    const { assignmentJson, evidenceJson, ...task } = row;
-    return { ...task, assignment: parseAssignment(JSON.parse(assignmentJson)), evidence: evidenceJson === null ? null : JSON.parse(evidenceJson) as JsonObject };
+    const { assignmentJson, outputsJson, permissionsJson, evidenceJson, ...task } = row;
+    return { ...task, assignment: parseAssignment(JSON.parse(assignmentJson)),
+      // `null` is "this row predates the record", which is different from a task that
+      // declared nothing: only a recorded value can be compared with a caller's.
+      outputs: outputsJson === null ? null : JSON.parse(outputsJson) as string[],
+      permissions: permissionsJson === null ? null : JSON.parse(permissionsJson) as string[],
+      evidence: evidenceJson === null ? null : JSON.parse(evidenceJson) as JsonObject };
+  }
+
+  /** T053 — the run's recorded task for a plan task id, or null when `task.created` never ran for it. */
+  findTask(runId: string, taskId: string): TeamTaskAuthority | null {
+    const row = this.db.prepare("SELECT qitem_id AS qitemId FROM team_queue_authority WHERE run_id = ? AND task_id = ?")
+      .get(runId, taskId) as { qitemId: string } | undefined;
+    return row ? this.getTask(row.qitemId) : null;
   }
 
   getAttempt(id: string): TeamAttempt | null {
@@ -362,16 +378,33 @@ export class PlanGovernance {
       if (assignment.taskId !== ctx.request.actionId) throw new TeamContractError("assignment.taskId");
       if (!ctx.run.binding.roles.includes(assignment.role)) return deny("Assignment role is outside the binding");
       const paths = assignment.role === "reviewer" ? [...ctx.run.binding.readPaths, ...ctx.run.binding.writePaths] : ctx.run.binding.writePaths;
-      if (assignment.paths.some((entry) => !paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`)))) return deny("Assignment path is outside the binding");
+      const covers = (entry: string) => paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
+      if (assignment.paths.some((entry) => !covers(entry))) return deny("Assignment path is outside the binding");
       const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id = ?").get(ctx.run.id) as { count: number };
       if (count.count >= 100) return deny("Managed task limit reached");
+      // T053: the task's declared production inputs are required and validated here, where the
+      // assignment's own paths and the role's installed vocabulary are known. A refused task
+      // reaches neither array, so it leaves no credential and no capability behind.
+      const inputs = parseTaskInputs(v);
+      const declares = (entry: string) => assignment.paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
+      if (inputs.outputs.some((entry) => !declares(entry))) return deny("An output is outside the assignment's paths");
+      if (inputs.permissions.some((entry) => !roleConfiguration[assignment.role].permissions.includes(entry))) {
+        return deny("A permission is outside the assignment role's vocabulary");
+      }
       const body = v.body;
       if (typeof body !== "string" || !body.trim() || body.length > 262_144) throw new TeamContractError("task.body");
-      const created = withQueueWrite(this.db, { operation: "create" }, () => this.queue.createWithinTransaction({ sourceSession: text(v.sourceSession, "sourceSession"),
-        destinationSession: text(v.destinationSession, "destinationSession"), body, targetRepo: ctx.run.binding.repository.root, nudge: false }));
+      const sourceSession = text(v.sourceSession, "sourceSession");
+      const destinationSession = text(v.destinationSession, "destinationSession");
+      const created = withQueueWrite(this.db, { operation: "create" }, () => this.queue.createWithinTransaction({ sourceSession,
+        destinationSession, body, targetRepo: ctx.run.binding.repository.root, nudge: false }));
       ctx.register(created.persistedEvent);
-      this.db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json) VALUES (?, ?, ?, ?)`)
-        .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment));
+      this.db.prepare(`INSERT INTO team_queue_authority
+        (qitem_id, run_id, task_id, assignment_json, outputs_json, permissions_json) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment),
+          canonicalJson(inputs.outputs), canonicalJson(inputs.permissions));
+      // Minted in the same transaction as the assignment: the producer's bridge and every
+      // later send for this seat must read one value, and a refused task leaves none.
+      ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
       return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
     });
   }

@@ -110,6 +110,7 @@ import { sessionStopIntentSchema } from "./migrations/103_session_stop_intent.js
 /** Ordered migrations; numbers may be reserved by independent changes. */
 
 import { ownerSessionsSchema } from "./migrations/105_owner_sessions.js";
+import { managedAttemptInputsSchema } from "./migrations/106_managed_attempt_inputs.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -214,4 +215,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   sessionStopIntentSchema,
   teamGovernanceSchema,
   ownerSessionsSchema,
+  managedAttemptInputsSchema,
 ];

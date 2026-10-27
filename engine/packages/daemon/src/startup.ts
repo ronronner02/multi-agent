@@ -146,6 +146,11 @@ import { WhoamiService } from "./domain/whoami-service.js";
 import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
+// T053 — the managed attempt's production inputs, composed here beside the candidate roots.
+import { WorkerControlAccess } from "./domain/worker-control-access.js";
+import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
+import { WorkerIdentities } from "./domain/worker-identity.js";
+import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
 import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, type SystemHealthProbeResult } from "./domain/system-health.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
@@ -402,16 +407,32 @@ function composeManagedLaunch(dependencies: {
  * creation record is written under the control state directory, the one location the
  * plan keeps outside every worker-writable tree.
  */
-function managedWorkerRoots(): { assignmentRoot: string; controlStateDir: string; worker: string } {
+function managedWorkerRoots(): {
+  assignmentRoot: string; controlStateDir: string; worker: string; workerRoot: string;
+  contextRoot: string; mailboxRoot: string; policyRevision: number; workerIdentities: string[];
+  frameworkRoot: string; toolchainDir: string;
+} {
   const policy = JSON.parse(readFileSyncNamed("/etc/multi-agent/worker-policy.json", "utf8")) as
-    { paths?: { assignment_root?: unknown; control_state_dir?: unknown }; worker_identities?: unknown };
-  const assignmentRoot = policy.paths?.assignment_root;
-  const controlStateDir = policy.paths?.control_state_dir;
+    { paths?: Record<string, unknown>; worker_identities?: unknown; policy_revision?: unknown };
+  // Every root below is one the launcher validates, so each is read from the same bytes and
+  // held to the same standard: an absolute, already-resolved path.
+  const installed = (key: string): string | null => {
+    const value = policy.paths?.[key];
+    return typeof value === "string" && nodePath.isAbsolute(value) && nodePath.resolve(value) === value ? value : null;
+  };
+  const assignmentRoot = installed("assignment_root"), controlStateDir = installed("control_state_dir");
+  const workerRoot = installed("worker_root"), contextRoot = installed("context_root");
+  const mailboxRoot = installed("mailbox_root"), frameworkRoot = installed("framework_dir");
+  const toolchainDir = installed("toolchain_dir");
   const workers = Array.isArray(policy.worker_identities) ? policy.worker_identities : [];
-  if (typeof assignmentRoot !== "string" || !nodePath.isAbsolute(assignmentRoot) || nodePath.resolve(assignmentRoot) !== assignmentRoot
-    || typeof controlStateDir !== "string" || !nodePath.isAbsolute(controlStateDir) || nodePath.resolve(controlStateDir) !== controlStateDir
-    || !workers.length || typeof workers[0] !== "string") throw new Error("managed_candidate_policy_unavailable");
-  return { assignmentRoot, controlStateDir, worker: workers[0] };
+  // The producer refuses a mailbox root that is not `<control_state_dir>/mailboxes`, so an
+  // inconsistent policy is a configuration failure here rather than a refused launch later.
+  if (!assignmentRoot || !controlStateDir || !workerRoot || !contextRoot || !mailboxRoot || !frameworkRoot || !toolchainDir
+    || !Number.isInteger(policy.policy_revision) || (policy.policy_revision as number) < 1
+    || !workers.length || typeof workers[0] !== "string"
+    || mailboxRoot !== nodePath.join(controlStateDir, "mailboxes")) throw new Error("managed_candidate_policy_unavailable");
+  return { assignmentRoot, controlStateDir, worker: workers[0], workerRoot, contextRoot, mailboxRoot,
+    policyRevision: policy.policy_revision as number, workerIdentities: workers as string[], frameworkRoot, toolchainDir };
 }
 
 /** One tree per task, under the policy's assignment root, addressed the way the launcher expects. */
@@ -539,6 +560,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   migrate(db, ALL_MIGRATIONS);
   // KTD22: fixed before any service is built. Managed mode runs no legacy boot effect below.
   const managed = fixDaemonMode(db, opts?.managedMode === true) === "managed";
+  // T053: the worker control credential owner, built before the managed launch chain is
+  // composed because that chain captures the credentials object it authenticates with.
+  // `reconcile` revokes every row a previous process left: the plaintext is never durable,
+  // so an inherited digest can only name a token this daemon cannot honour.
+  const workerControl = managed ? new WorkerControlAccess(db, teamControl.credentials) : undefined;
+  workerControl?.reconcile();
 
   // 51-09 increment 1 — establish the daemon's durable self-host identity at
   // boot (mint on first boot, reconcile thereafter). host.name is a display-only
@@ -1787,6 +1814,15 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // where the launcher will look for it. An unreadable policy throws rather than
     // silently launching without isolation.
     const workerRoots = managed ? managedWorkerRoots() : undefined;
+    // T053: the producer's remaining inputs, from owners this composition already holds —
+    // the installed policy for identity and roots, the control database for the seat's
+    // capability, and the credential owner above for the token its endpoint authenticates with.
+    const managedInputs = workerRoots && workerControl ? {
+      identities: new WorkerIdentities({ workerRoot: workerRoots.workerRoot,
+        assignmentRoot: workerRoots.assignmentRoot, identities: workerRoots.workerIdentities }),
+      capabilities: new SeatMailboxCapabilities(db),
+      credentials: workerControl,
+    } : undefined;
     workflowRuntime = new WorkflowRuntime({
       guidanceLibrary: contextPackLibrary,
       db,
@@ -1798,6 +1834,26 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         candidateRoot: (runId: string, taskId: string, worker: string) =>
           managedCandidateRoot(workerRoots.assignmentRoot, worker, runId, taskId),
         candidateRecordsRoot: () => nodePath.join(workerRoots.controlStateDir, "candidates"),
+        // T053: where the producer writes what the launcher mounts, read from the same
+        // installed policy bytes; and the three ownership facts it cannot derive itself.
+        managedAttemptRoots: () => ({ contextRoot: workerRoots.contextRoot, mailboxRoot: workerRoots.mailboxRoot,
+          controlStateDir: workerRoots.controlStateDir, policyRevision: workerRoots.policyRevision,
+          workerIdentities: workerRoots.workerIdentities, frameworkRoot: workerRoots.frameworkRoot,
+          frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir: workerRoots.toolchainDir }),
+        ...(managedInputs ? {
+          managedAttemptInputs: {
+            // Issued once per seat at admission and returned as the live credential list the
+            // endpoint authenticates against; the same object the control routes read.
+            workerCredentials: (runId: string, sessionId: string) => {
+              managedInputs.credentials.issue(runId, sessionId);
+              return managedInputs.credentials.readCredentials();
+            },
+            mailboxCapability: (runId: string, sessionId: string) => managedInputs.capabilities.forSeat(runId, sessionId),
+            workerIdentity: (worker: string) => managedInputs.identities.resolve(worker),
+          },
+          onManagedAttemptRetired: (attempt: { runId: string; sessionId: string }) =>
+            managedInputs.credentials.retire(attempt.runId, attempt.sessionId),
+        } : {}),
       } : {}),
       // OPR.0.4.6.WF1 FR-3: instantiate/handoff auto-arm the
       // per-instance workflow-keepalive job in-txn; terminal disarms.

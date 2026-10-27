@@ -127,6 +127,16 @@ export interface TeamTaskAuthority {
   qitemId: string;
   runId: string;
   assignment: ScopedAssignment;
+  /**
+   * T053 — the task's declared production inputs, recorded beside the assignment at
+   * `task.created` and read back by the launch path, so the attempt's projection is built
+   * from one record instead of from whichever values its caller supplied.
+   *
+   * `null` means the row predates this record. It is not an empty grant: it says "nothing
+   * was recorded", and the launch path can only refuse a *recorded* disagreement.
+   */
+  outputs: string[] | null;
+  permissions: string[] | null;
   entityVersion: number;
   evidence: JsonObject | null;
 }
@@ -428,6 +438,20 @@ export function parseAssignment(value: unknown): ScopedAssignment {
   const reviewOf = text(v.reviewOf, "reviewOf", 256);
   if (parsed !== "reviewer" || reviewOf === taskId) throw new TeamContractError("reviewOf");
   return { taskId, role: parsed, reviewOf, paths, dependencies };
+}
+
+/**
+ * T053 — the two arrays `task.created` now requires beside the assignment.
+ *
+ * Both are required rather than defaulted: the record is what the launch path compares a
+ * caller's values against, so a task that recorded nothing could never refuse a
+ * disagreement. Membership in the role's permission vocabulary and containment in the
+ * assignment's write paths are checked by the governance owner, which is where the
+ * binding and the role charter are known.
+ */
+export function parseTaskInputs(value: unknown): { outputs: string[]; permissions: string[] } {
+  const v = object(value, "task");
+  return { outputs: strings(v.outputs, "outputs", relativePath), permissions: strings(v.permissions, "permissions") };
 }
 
 export function jsonValue(value: unknown, field = "payload", depth = 0): JsonValue {

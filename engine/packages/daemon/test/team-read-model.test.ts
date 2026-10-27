@@ -125,6 +125,7 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
       expectedEntityVersion: governance.getRun(runId).entityVersion,
       idempotencyKey: `seed-${runId}-${taskId}`,
       payload: { assignment: { taskId, role: "implementer", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: [],
         sourceSession: "lead", destinationSession: session, body: taskId },
     }, binding);
     if (receipt.status !== "accepted") throw new Error(`seed failed: ${receipt.reason}`);

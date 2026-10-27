@@ -190,6 +190,13 @@ const LOCAL_ENGINE_PATHS = [
   'packages/ui/src/team/task-list.tsx',
   'packages/ui/test/team-overview.test.tsx',
   'packages/ui/test/team-skins.test.tsx',
+  // T053: the managed attempt's production inputs are application-owned files.
+  'packages/daemon/src/domain/worker-control-access.ts',
+  'packages/daemon/src/domain/seat-mailbox-capability.ts',
+  'packages/daemon/src/domain/worker-identity.ts',
+  'packages/daemon/src/domain/role-configuration.ts',
+  'packages/daemon/src/db/migrations/106_managed_attempt_inputs.ts',
+  'packages/daemon/test/managed-attempt-inputs.test.ts',
 ];
 
 export class ImportError extends Error {
