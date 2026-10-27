@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { candidateManifest, candidatePath, createCandidateWorkspace, listFiles, removeCandidateWorkspace, resolveWorkspaceBase, sourceFingerprint, verifySourceUnchanged } from "../src/domain/team-workspace.js";
+import { candidateManifest, candidatePath, createCandidateWorkspace, createReviewPacket, listFiles, removeCandidateWorkspace, removeReviewPacket, resolveWorkspaceBase, sourceFingerprint, verifyReviewPacket, verifySourceUnchanged } from "../src/domain/team-workspace.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -214,7 +215,11 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
   // Captured from the base commit's source, on the richRepository() fixture below.
   // The manifest for an unmodified candidate must keep exactly these bytes: every
   // recorded candidate identity in every run is this digest.
-  const GOLDEN_DIGEST = "sha256:10c41a9d50b93449b6924184af35f5fe6a4d0b30edb9572c00ddac18ecfc1cd3";
+  //
+  // T054 re-captured them once, as plan U5 accepted: `src/link.md` is now hashed as the
+  // link's own text, which is what git stores and what the patch writes, instead of
+  // through its target's bytes.
+  const GOLDEN_DIGEST = "sha256:d154f8eb5464dea71f761724a53620e17e42e5dca051be08a3ae8174c7956d7e";
   const GOLDEN_FILES: readonly (readonly [string, string, boolean])[] = [
     [".gitignore", "sha256:9a4e80f747a5791fbca62d7b04bdad73c6e37fdbf4398943bc85810a00facb64", true],
     ["README.md", "sha256:faa5b4816800b8cbe1595e5533fe36c53f396c0c26a3a876dd3e4085232348a1", true],
@@ -222,7 +227,7 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     ["run.sh", "sha256:299001868fb8c02fd431c336c6d058f5558c5dff5b5af5e6fe04b870a6a9cbba", true],
     ["src/base.ts", "sha256:234a49990ed0ca423d7e03f6831099806c117bfe29ed0add57df7415cd732271", true],
     ["src/binary.dat", "sha256:23e5b91bc67af30fad5933903277da95d30a3791f267d540796ed5d381252aa0", true],
-    ["src/link.md", "sha256:7395d98c09c6c11bc827d489c2c974253508fabe2d41bf334b9e929664a887f6", true],
+    ["src/link.md", "sha256:7b23654b6087192fc8a2be9fcb5e7f2edc7f556159da8139594c3cb742996d4a", true],
     ["src/nested/deep/leaf.ts", "sha256:824ff7cdf2b91463b1179488abfd254683ccb0f638549c7d56ffb86c642b2253", true],
     ["src/trailing.ts", "sha256:3da9df10960a5b5df7633e2714424825a9814316e92c9420467cad11297e1ccb", true],
   ];
@@ -341,116 +346,93 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     expect(mark.seen(), "a worker-planted diff.external program ran as the control").toBe(false);
   });
 
-  it("runs no program the worker planted through filter.<drv>.clean, and the patch still matches the manifest (round 3 vector)", () => {
+  it("runs no worker-planted program through filter.<drv>.clean, and refuses the attributes it needs", () => {
+    // A filter driver only runs if attributes select it, and attributes are a rule file, which
+    // this lane gives to the base commit alone. The candidate cannot ask for a driver at all.
     const root = richRepository();
     const workspace = candidateOf(root);
     const mark = canary();
     takeOverRepositoryMetadata(workspace, configure => {
-      // The round-3 reproduction: a filter that runs a program AND rewrites the content,
-      // so the patch a reviewer reads would disagree with the bytes the manifest hashed.
-      // The program is planted OUTSIDE the candidate on purpose: a script written inside
-      // the tree is legitimately part of the candidate, and its own text would then also
-      // appear in the patch, masking what this case is about.
       configure("config", "filter.evil.clean", plantedOutside(workspace.root, "printf 'SAFE CONTENT\\n'", mark.path));
     });
     writeFileSync(join(workspace.root, ".gitattributes"), "* filter=evil\n");
     writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const MALICIOUS = true;\n");
-    const manifest = candidateManifest(workspace);
+    expect(() => candidateManifest(workspace)).toThrow(/changes a rule file/);
     expect(mark.seen(), "a worker-planted filter.<drv>.clean program ran as the control").toBe(false);
-    // Evidence the worker cannot forge: the patch section for the deliverable is the
-    // bytes the manifest hashed, not the filter's rewrite.
-    const section = patchSection(manifest.patch, "src/deliverable.ts");
-    expect(section).toContain("export const MALICIOUS = true;");
-    expect(section).not.toContain("SAFE CONTENT");
-    const deliverable = manifest.files.find(file => file.path === "src/deliverable.ts");
-    expect(deliverable).toBeDefined();
   });
 
-  it("T051: cleans through the base commit's attributes only, and runs no driver a candidate or source names", () => {
-    // Card clause 4: attribute authority. The base commit declares a filter driver, and the
-    // source repository's own config points that driver at a program. Cleaning must read
-    // the base commit's *rules* without running a driver, and a candidate that rewrites
-    // `.gitattributes` must not change which rules apply.
+  it("T051: the base commit's attributes are the only ones in force, and no source driver runs", () => {
+    // The candidate cannot supply attributes, so the only attributes in force are the base's. A
+    // filter driver the base itself names still must not run: the store configures no driver.
     const root = richRepository();
     const mark = canary();
     writeFileSync(join(root, ".gitattributes"), "*.txt text eol=lf\nsrc/deliverable.ts filter=evil\n");
     git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "attributes");
-    // The program the source repository's configuration would run if a filter were consulted.
     const driver = plantedOutside(root, "printf 'REWRITTEN\\n'", mark.path);
     git(root, "config", "filter.evil.clean", driver);
     git(root, "config", "filter.evil.required", "true");
     const workspace = candidateOf(root);
-    // The candidate tries to take over both the rules and the deliverable's content.
-    writeFileSync(join(workspace.root, ".gitattributes"), "* filter=evil\ndeliverable.ts -text\n");
     writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const OURS = true;\n");
     writeFileSync(join(workspace.root, "note.txt"), "ours\r\n");
     const manifest = candidateManifest(workspace);
 
     expect(mark.seen(), "a filter driver the source configured ran as the control").toBe(false);
-    // The base commit's `eol=lf` still governs `note.txt`, so the patch and the manifest
-    // carry LF while the worktree holds CRLF — and they agree with each other.
     const note = manifest.files.find(file => file.path === "note.txt");
     expect(note?.hash, "the manifest hashes the cleaned reading").toBe(
       `sha256:${createHash("sha256").update("ours\n").digest("hex")}`);
-    // The candidate's own `-text` rule is inert: attributes come from the base commit.
     const section = patchSection(manifest.patch, "src/deliverable.ts");
     expect(section).toContain("export const OURS = true;");
     expect(manifest.patch).not.toContain("REWRITTEN");
     expect(manifest.patch).not.toContain(workspace.root);
   });
 
-  it("keeps the base commit's ignore authority when the worker rewrites or deletes .gitignore (round 2 finding)", () => {
-    const root = richRepository();
-    const workspace = candidateOf(root);
-    // A worker-owned secret and log that the base commit ignores, plus a real deliverable.
-    writeFileSync(join(workspace.root, ".env"), "DATABASE_URL=postgres://user:pw@host/db\n");
-    writeFileSync(join(workspace.root, "debug.log"), "noise\n");
-    mkdirSync(join(workspace.root, "node_modules", "dep"), { recursive: true });
-    writeFileSync(join(workspace.root, "node_modules", "dep", "index.js"), "module.exports = 1;\n");
-    writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const deliverable = true;\n");
+  it("refuses a candidate that rewrites or deletes .gitignore, so base ignore authority cannot move", () => {
+    // A rewritten rule could hide a deliverable or admit what the base ignores, and a deleted one
+    // admits everything the base excluded. Both are refused, so neither direction is expressible.
+    const rewriting = richRepository();
+    const rewritingWorkspace = candidateOf(rewriting);
+    writeFileSync(join(rewritingWorkspace.root, ".env"), "DATABASE_URL=postgres://user:pw@host/db\n");
+    writeFileSync(join(rewritingWorkspace.root, ".gitignore"), "*\n");
+    expect(() => candidateManifest(rewritingWorkspace)).toThrow(/changes a rule file/);
 
-    // Direction one: deleting the candidate's .gitignore must not admit ignored files.
-    rmSync(join(workspace.root, ".gitignore"));
-    const deleting = candidateManifest(workspace);
-    const deleted = deleting.files.map(file => file.path);
-    expect(deleted).not.toContain(".env");
-    expect(deleted).not.toContain("debug.log");
-    expect(deleted).not.toContain("node_modules/dep/index.js");
-    expect(deleting.patch).not.toContain("DATABASE_URL");
-    expect(deleted).toContain("src/deliverable.ts");
-
-    // Direction two: writing `*` must not hide the deliverable from the manifest.
-    writeFileSync(join(workspace.root, ".gitignore"), "*\n");
-    const hiding = candidateManifest(workspace);
-    expect(hiding.files.map(file => file.path)).toContain("src/deliverable.ts");
-    expect(hiding.patch).toContain("export const deliverable = true;");
+    const deleting = richRepository();
+    const deletingWorkspace = candidateOf(deleting);
+    rmSync(join(deletingWorkspace.root, ".gitignore"));
+    expect(() => candidateManifest(deletingWorkspace)).toThrow(/changes a rule file/);
   });
 
-  it("refuses a symlink out of the candidate rather than smuggling ignored bytes (round 2 finding)", () => {
+  it("records a symlink out of the candidate as its own text rather than smuggling ignored bytes", () => {
     const root = richRepository();
     const workspace = candidateOf(root);
-    // A link whose target the base commit ignores. Following it would put the target's
-    // bytes into the manifest, the digest, the patch and the reviewer packet, where an
-    // innocuously named `innocent.md` would read as a candidate deliverable.
+    // A link whose target the base commit ignores. Following it would put the target's bytes
+    // into the manifest, the digest, the patch and the reviewer packet, where an innocuously
+    // named `innocent.md` would read as a candidate deliverable. The link's own text does none
+    // of that.
     writeFileSync(join(workspace.root, ".env"), "DATABASE_URL=postgres://user:pw@host/db\n");
     symlinkSync("../.env", join(workspace.root, "src", "innocent.md"));
-    // The card requires a refusal here: the link's chain does not end at a manifest entry,
-    // so nothing may describe it as a candidate file.
-    expect(() => candidateManifest(workspace)).toThrow(/symlink does not name a manifest entry/);
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files.find(file => file.path === "src/innocent.md")?.hash).toBe(
+      `sha256:${createHash("sha256").update("../.env").digest("hex")}`);
+    // The ignored target is still not a candidate file, and its bytes appear nowhere.
+    expect(manifest.files.map(file => file.path)).not.toContain(".env");
+    expect(manifest.patch).not.toContain("DATABASE_URL");
   });
 
-  it("refuses a tracked path whose ancestor the worker replaced with a link to a vault", () => {
+  it("does not follow a tracked directory the worker replaced with a link to a vault", () => {
     const root = richRepository();
     const workspace = candidateOf(root);
-    // A worker turns a tracked directory into a link to a directory of secrets. Its
-    // children still have tracked paths, so the manifest would read them if the link
-    // were followed — and the base commit's fail-closed answer was an error here.
+    // A worker turns a tracked directory into a link to a directory of secrets. Its children
+    // still have tracked paths, so a reader that followed the link would put the vault's bytes
+    // in the manifest. The link is a leaf: the children are gone, and the patch says so.
     writeFileSync(join(workspace.root, ".env"), "DATABASE_URL=postgres://user:pw@host/db\n");
     mkdirSync(join(workspace.root, "vault"), { recursive: true });
     writeFileSync(join(workspace.root, "vault", "leaf.ts"), "export const secret = 1;\n");
     rmSync(join(workspace.root, "src", "nested"), { recursive: true, force: true });
     symlinkSync("../vault", join(workspace.root, "src", "nested"));
-    expect(() => candidateManifest(workspace)).toThrow(/reached through a symlink/);
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files.find(file => file.path === "src/nested")?.hash).toBe(
+      `sha256:${createHash("sha256").update("../vault").digest("hex")}`);
+    expect(manifest.files.map(file => file.path)).not.toContain("src/nested/deep/leaf.ts");
   });
 
   it("ignores ambient GIT_ redirection that would point git at the candidate", () => {
@@ -485,61 +467,82 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
     }
   });
 
-  it("hashes a canonical tracked symlink through its in-root target, as the base commit does", () => {
+  it("records a tracked symlink as its link text, which is what the patch writes", () => {
+    // T054: git records a link as a link, so the manifest hashes the link's own text — the
+    // bytes the patch carries — and not the target's contents. That reading is what makes
+    // the manifest and the patch one description of the candidate.
     const root = richRepository();
     const workspace = candidateOf(root);
     const manifest = candidateManifest(workspace);
     const link = manifest.files.find(file => file.path === "src/link.md");
-    const target = manifest.files.find(file => file.path === "docs/target.md");
     expect(link, "a tracked symlink is part of the candidate").toBeDefined();
     expect(link?.tracked).toBe(true);
-    expect(link?.hash).toBe(target?.hash);
+    expect(link?.hash).toBe(`sha256:${createHash("sha256").update("../docs/target.md").digest("hex")}`);
     expect(readFileSync(join(workspace.root, "src", "link.md"), "utf8")).toBe("the symlink target\n");
   });
 
-  it("hashes a chain of tracked symlinks through its final target, and leaves the patch empty", () => {
-    // `main` followed the whole chain, so `l2 -> l1 -> docs/target.md` contributed the
-    // target's bytes under all three names. Dropping the link instead would change the
-    // digest of an untouched candidate and make the patch delete the owner's link.
+  it("records a chain of tracked symlinks as their own link texts, and leaves the patch empty", () => {
+    // A link is stored as its own text, so `l2 -> l1` is described by the text `l1` and not
+    // by whatever `l1` eventually names. An untouched candidate still needs no patch.
     const root = richRepository();
     symlinkSync("link.md", join(root, "src", "link2.md"));
     git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "chain");
     const workspace = candidateOf(root);
     const manifest = candidateManifest(workspace);
-    const target = manifest.files.find(file => file.path === "docs/target.md");
     for (const path of ["src/link.md", "src/link2.md"]) {
       const link = manifest.files.find(file => file.path === path);
       expect(link, `${path} is part of the candidate`).toBeDefined();
-      expect(link?.hash, `${path} hashes through the chain`).toBe(target?.hash);
+      expect(link?.tracked).toBe(true);
     }
+    expect(manifest.files.find(file => file.path === "src/link2.md")?.hash).toBe(
+      `sha256:${createHash("sha256").update("link.md").digest("hex")}`);
     expect(manifest.patch, "an unmodified candidate needs no patch").toBe("");
   });
 
-  it("refuses a symlink that escapes, dangles, names a directory or names an ignored file", () => {
+  it("records an escaping, dangling or directory symlink as its own text and reads nothing through it", () => {
+    // T054 replaced refusal with a positive guarantee: the copy carries a link's text and
+    // never follows one. A link out of the tree therefore leaks nothing — the vault's bytes
+    // are not read, hashed, patched or copied — which is strictly stronger than refusing the
+    // whole manifest over a link that is, after all, part of the candidate.
     const escaping = richRepository();
     const workspaceA = candidateOf(escaping);
     symlinkSync("/etc/hostname", join(workspaceA.root, "src", "esc.md"));
-    expect(() => candidateManifest(workspaceA)).toThrow(/symlink does not name a manifest entry/);
+    const a = candidateManifest(workspaceA);
+    expect(a.files.find(file => file.path === "src/esc.md")?.hash).toBe(
+      `sha256:${createHash("sha256").update("/etc/hostname").digest("hex")}`);
+    expect(a.patch).not.toContain(readFileSync("/etc/hostname").subarray(0, 20).toString("utf8").trim() || "root:");
 
     const dangling = richRepository();
     const workspaceB = candidateOf(dangling);
     symlinkSync("nowhere-at-all.md", join(workspaceB.root, "src", "gone.md"));
-    expect(() => candidateManifest(workspaceB)).toThrow(/symlink does not name a manifest entry/);
+    const b = candidateManifest(workspaceB);
+    expect(b.files.find(file => file.path === "src/gone.md")?.hash).toBe(
+      `sha256:${createHash("sha256").update("nowhere-at-all.md").digest("hex")}`);
 
     const toDirectory = richRepository();
     const workspaceC = candidateOf(toDirectory);
     symlinkSync("nested", join(workspaceC.root, "src", "dirlink"));
-    expect(() => candidateManifest(workspaceC)).toThrow(/symlink does not name a manifest entry/);
+    const c = candidateManifest(workspaceC);
+    // The link is an entry; the directory it names contributes no entry of its own.
+    expect(c.files.find(file => file.path === "src/dirlink")?.hash).toBe(
+      `sha256:${createHash("sha256").update("nested").digest("hex")}`);
+    expect(c.files.map(file => file.path)).toContain("src/nested/deep/leaf.ts");
   });
 
-  it("refuses a tracked file the worker replaced with an escaping link instead of reporting a deletion", () => {
-    // Without the refusal this shape is worse than a leak: the manifest drops the entry
-    // and the patch presents the worker's own link as an ordinary deletion.
+  it("records a tracked file the worker replaced with an escaping link as that link, not as a deletion", () => {
+    // The patch presents the link itself, which is what the candidate now holds: the worker
+    // chose to replace the file, and the manifest says so instead of hiding the change.
     const root = richRepository();
     const workspace = candidateOf(root);
     rmSync(join(workspace.root, "src", "base.ts"));
     symlinkSync("/etc/hostname", join(workspace.root, "src", "base.ts"));
-    expect(() => candidateManifest(workspace)).toThrow(/symlink does not name a manifest entry/);
+    const manifest = candidateManifest(workspace);
+    expect(manifest.files.find(file => file.path === "src/base.ts")?.hash).toBe(
+      `sha256:${createHash("sha256").update("/etc/hostname").digest("hex")}`);
+    // Git presents a file becoming a link as the deletion of the file plus the addition of
+    // the link. What matters is that the link's text is what the addition carries.
+    expect(manifest.patch).toContain("/etc/hostname");
+    expect(manifest.patch).not.toContain(readFileSync("/etc/hostname", "utf8").trim());
   });
 
   it("refuses a tracked path the worker replaced with a FIFO instead of blocking the control", () => {
@@ -899,7 +902,7 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
       expect(() => candidateManifest(workspace)).toThrow(/not valid UTF-8/);
     });
 
-    it("refuses a link target that climbs out of a symlinked directory", () => {
+    it("records a link target that climbs out of a symlinked directory as text, without reading it", () => {
       const root = richRepository();
       const workspace = candidateOf(root);
       writeFileSync(join(workspace.root, "src", "victim"), "candidate bytes\n");
@@ -907,9 +910,696 @@ describe("T044 commit-lane manifest without a git in the candidate", () => {
       writeFileSync(join(outside, "victim"), "outside bytes\n");
       symlinkSync(outside, join(workspace.root, "src", "jump"));
       // Lexically this names `src/victim`, which the candidate owns; through the kernel it
-      // names the outside file, so the hashed bytes and the applied link would disagree.
+      // names the outside file. A reader that resolved it would hash and patch the outside
+      // bytes. The copy never resolves a link, so the text is all that survives.
       symlinkSync("jump/../victim", join(workspace.root, "src", "climber"));
-      expect(() => candidateManifest(workspace)).toThrow(/symlink/i);
+      const manifest = candidateManifest(workspace);
+      expect(manifest.files.find(file => file.path === "src/climber")?.hash).toBe(
+        `sha256:${createHash("sha256").update("jump/../victim").digest("hex")}`);
+      expect(manifest.patch).not.toContain("outside bytes");
+    });
+  });
+
+  describe("T054 plain git over a control-owned copy", () => {
+    /**
+     * The card's first group, in one fixture: every program hook a candidate can name, at
+     * once, each writing its own canary.
+     *
+     * T044 closed these one review round at a time — `core.fsmonitor`, then `diff.external`,
+     * then `filter.<drv>.clean` — because a reader that runs git in the candidate can be
+     * reached by whichever hook it has not yet disabled. T054's claim is structural rather
+     * than a longer list: the copy contains no `.git` entry for git to discover, so a worker
+     * writes its repository metadata into a directory git is never pointed at. This test
+     * plants every vector at once and requires that none of them ran.
+     */
+    it("runs no program a candidate plants, through any hook, at any depth", () => {
+      const root = richRepository();
+      const workspace = candidateOf(root);
+      const canaries: { name: string; path: string; seen: () => boolean }[] = [];
+      const mark = (name: string) => {
+        const probe = canary();
+        canaries.push({ name, ...probe });
+        return probe.path;
+      };
+      const program = (name: string): string => {
+        const path = plantedOutside(workspace.root, "cat", mark(name));
+        return path;
+      };
+      const fsmonitor = program("core.fsmonitor");
+      const hook = program("core.hooksPath");
+      const clean = program("filter.<drv>.clean");
+      const process = program("filter.<drv>.process");
+      const textconv = program("diff.<drv>.textconv");
+      const external = program("diff.external");
+
+      // Vector one: the candidate replaces the worktree link with its own repository, whose
+      // configuration names every hook.
+      takeOverRepositoryMetadata(workspace, configure => {
+        configure("config", "core.fsmonitor", fsmonitor);
+        configure("config", "core.hooksPath", dirname(hook));
+        configure("config", "filter.x.clean", clean);
+        configure("config", "filter.x.process", process);
+        configure("config", "filter.x.required", "true");
+        configure("config", "diff.x.textconv", textconv);
+        configure("config", "diff.external", external);
+      });
+      // Vector two: attributes that would invoke the filter and the textconv driver. A candidate
+      // cannot supply attributes at all — they are a rule file — so that vector is a separate
+      // candidate, refused before any git command runs.
+      const attributeCandidate = candidateOf(richRepository());
+      writeFileSync(join(attributeCandidate.root, ".gitattributes"), "* filter=x diff=x\n");
+      expect(() => candidateManifest(attributeCandidate), "candidate attributes are refused").toThrow(/changes a rule file/);
+      // Vector three: a nested repository of the worker's own, with a hook of its own.
+      mkdirSync(join(workspace.root, "nested"), { recursive: true });
+      git(join(workspace.root, "nested"), "init", "--quiet");
+      git(join(workspace.root, "nested"), "config", "user.email", "worker@example.invalid");
+      git(join(workspace.root, "nested"), "config", "user.name", "worker");
+      mkdirSync(join(workspace.root, "nested", ".git", "hooks"), { recursive: true });
+      writeFileSync(join(workspace.root, "nested", ".git", "hooks", "pre-commit"),
+        `#!/bin/sh\n: > ${JSON.stringify(mark("nested hook"))}\n`);
+      writeFileSync(join(workspace.root, "nested", "inner.txt"), "inner\n");
+      // Vector four: a `.git` *file* naming a worker-written gitdir, the shape a submodule
+      // checkout leaves behind.
+      const fakeGitDir = join(workspace.root, "nested", "fake-gitdir");
+      mkdirSync(fakeGitDir, { recursive: true });
+      writeFileSync(join(fakeGitDir, "config"),
+        `[core]\n\tfsmonitor = ${fsmonitor}\n\thooksPath = ${dirname(hook)}\n`);
+      mkdirSync(join(workspace.root, "nested", "gitdir-file"), { recursive: true });
+      writeFileSync(join(workspace.root, "nested", "gitdir-file", ".git"), `gitdir: ${fakeGitDir}\n`);
+
+      writeFileSync(join(workspace.root, "src", "deliverable.ts"), "export const deliverable = true;\n");
+      const manifest = candidateManifest(workspace);
+
+      for (const canary of canaries) {
+        expect(canary.seen(), `a candidate-planted ${canary.name} program ran as the control`).toBe(false);
+      }
+      // The deliverable still lands, and its bytes in the patch are its own — a filter that
+      // rewrote content would be visible here even if its canary somehow failed.
+      expect(manifest.files.map(file => file.path)).toContain("src/deliverable.ts");
+      expect(manifest.patch).toContain("export const deliverable = true;");
+    });
+
+    it("carries a nested repository's contents as files and never as a repository", () => {
+      // A `.git` directory at any depth is metadata, not a candidate file. Skipping it by
+      // name is what stops git from discovering the inner repository; the worker's inner
+      // files are ordinary candidate files and are described as such.
+      const root = richRepository();
+      const workspace = candidateOf(root);
+      mkdirSync(join(workspace.root, "nested"), { recursive: true });
+      git(join(workspace.root, "nested"), "init", "--quiet");
+      git(join(workspace.root, "nested"), "config", "user.email", "worker@example.invalid");
+      git(join(workspace.root, "nested"), "config", "user.name", "worker");
+      writeFileSync(join(workspace.root, "nested", "inner.txt"), "inner\n");
+      git(join(workspace.root, "nested"), "add", "-A");
+      git(join(workspace.root, "nested"), "commit", "--quiet", "-m", "inner");
+      const manifest = candidateManifest(workspace);
+      const paths = manifest.files.map(file => file.path);
+      expect(paths).toContain("nested/inner.txt");
+      expect(paths.some(path => path.split("/").includes(".git")), "repository metadata is never a manifest entry").toBe(false);
+      expect(manifest.patch).not.toContain(".git/");
+    });
+
+    it("gives the base commit sole ignore authority by refusing candidate rule edits", () => {
+      // The card's third group, satisfied at the refusal: `*` cannot hide a deliverable, a deleted
+      // rule cannot admit a base-ignored path, and the candidate's own edit cannot be expressed at
+      // all, because the rule file belongs to the base commit. What the candidate *can* deliver —
+      // an ordinary new file beside a rule file it did not touch — still lands.
+      const hiding = candidateOf(richRepository());
+      writeFileSync(join(hiding.root, "src", "deliverable.ts"), "export const deliverable = true;\n");
+      writeFileSync(join(hiding.root, ".gitignore"), "*\n");
+      expect(() => candidateManifest(hiding), "a candidate `*` rule is refused").toThrow(/changes a rule file/);
+
+      const deleting = candidateOf(richRepository());
+      writeFileSync(join(deleting.root, "debug.log"), "noise\n");
+      rmSync(join(deleting.root, ".gitignore"));
+      expect(() => candidateManifest(deleting), "a deleted rule is refused").toThrow(/changes a rule file/);
+
+      // An untouched rule file is fine, and ordinary deliverables beside it are described.
+      const plain = candidateOf(richRepository());
+      writeFileSync(join(plain.root, "src", "deliverable.ts"), "export const deliverable = true;\n");
+      const manifest = candidateManifest(plain);
+      expect(manifest.files.map(file => file.path)).toContain("src/deliverable.ts");
+      expect(manifest.patch).toContain("export const deliverable = true;");
+      expect(manifest.patch, "the untouched rule file is not in the patch").not.toContain("diff --git a/.gitignore");
+    });
+
+    it("refuses a candidate .gitattributes, so a candidate cannot choose its own conversions", () => {
+      // The attribute half of the same decision: the base's `eol` rules clean the candidate's
+      // bytes, and the candidate cannot add or replace a rule that would stop them.
+      const root = richRepository();
+      writeFileSync(join(root, ".gitattributes"), "*.txt text eol=lf\n");
+      writeFileSync(join(root, "note.txt"), "alpha\n");
+      git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "attributes");
+      const workspace = candidateOf(root);
+      writeFileSync(join(workspace.root, ".gitattributes"), "* -text\n");
+      writeFileSync(join(workspace.root, "note.txt"), "ours\r\n");
+      expect(() => candidateManifest(workspace)).toThrow(/changes a rule file/);
+
+      // Without an attribute edit the base's rule still governs, and packet disclosure still works.
+      // The fixture needs a base `.gitattributes` that cleans `note.txt`, which `richRepository`
+      // does not record, so one is committed here.
+      const cleanRoot = richRepository();
+      writeFileSync(join(cleanRoot, ".gitattributes"), "*.txt text eol=lf\n");
+      git(cleanRoot, "add", "-A"); git(cleanRoot, "commit", "--quiet", "-m", "base attributes");
+      const clean = candidateOf(cleanRoot);
+      writeFileSync(join(clean.root, "note.txt"), "ours\r\n");
+      const manifest = candidateManifest(clean);
+      const packet = createReviewPacket(clean, join(candidateRoot(clean.root), "packet"));
+      try {
+        expect(packet.cleanedPaths, "the packet is told the worktree form differs").toContain("note.txt");
+        expect(verifyReviewPacket(packet).unchanged, "the packet verifies against its manifest").toBe(true);
+        expect(manifest.files.find(file => file.path === "note.txt")?.hash,
+          "the base's eol=lf governs the stored bytes").toBe(
+          `sha256:${createHash("sha256").update("ours\n").digest("hex")}`);
+      } finally {
+        removeReviewPacket(packet);
+      }
+    });
+
+        it("renders a text hunk the string type cannot carry as a binary hunk instead", () => {
+      // `patch` is a string. A latin-1 file to git's heuristic would put raw 0xe9 in a text
+      // hunk, which decodes to U+FFFD and would write bytes the candidate never held. The
+      // selection is made on the stored and the base-side bytes, so an edit either way is
+      // covered.
+      const root = richRepository();
+      writeFileSync(join(root, "latin.dat"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+      git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "latin");
+      const workspace = candidateOf(root);
+      writeFileSync(join(workspace.root, "latin.dat"), Buffer.from("café\n", "utf8"));
+      const manifest = candidateManifest(workspace);
+      const section = patchSection(manifest.patch, "latin.dat");
+      expect(section, "the old side is not UTF-8, so the hunk is binary").toContain("GIT binary patch");
+      expect(() => manifest.patch.normalize("NFC").includes("�")).not.toThrow();
+      expect(manifest.patch.includes("�"), "no replacement character reaches the patch").toBe(false);
+    });
+
+    it("copies a realistic candidate in well under a few seconds", () => {
+      // The card's stop-if: copying must not become the cost that tempts an exclusion
+      // mechanism. The fixture is a few thousand small files, which is what a source tree of
+      // this repository's size is; the bound is deliberately loose so a slow host does not
+      // turn a reportable measurement into a flaky failure.
+      const root = mkdtempSync(join(tmpdir(), "t054-scale-")); roots.push(root);
+      git(root, "init", "--quiet", "--initial-branch=main");
+      git(root, "config", "user.email", "test@example.invalid"); git(root, "config", "user.name", "test");
+      for (let directory = 0; directory < 20; directory += 1) {
+        mkdirSync(join(root, "src", `module-${directory}`), { recursive: true });
+        for (let file = 0; file < 100; file += 1) {
+          writeFileSync(join(root, "src", `module-${directory}`, `file-${file}.ts`),
+            `export const value${file} = ${directory * 100 + file};\n`);
+        }
+      }
+      git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "scale");
+      const workspace = candidateOf(root);
+      const started = Date.now();
+      const manifest = candidateManifest(workspace);
+      const elapsed = Date.now() - started;
+      expect(manifest.files.length).toBe(2000);
+      expect(manifest.patch, "an untouched candidate is still an empty patch").toBe("");
+      expect(elapsed, `a 2,000-file candidate took ${elapsed}ms`).toBeLessThan(30_000);
+    });
+
+    /**
+     * The card's second group, as one candidate: CRLF under `eol`, a BOM-prefixed name, a
+     * non-ASCII name, a symlink, an executable, a nested directory, an edit, an addition and
+     * a deletion. The assertion is the only one that matters for evidence: applied at a base
+     * checkout, does the patch reproduce exactly the entries the manifest recorded?
+     */
+    it("reproduces the manifest's entries when the patch is applied at a base checkout", () => {
+      const root = mkdtempSync(join(tmpdir(), "t054-round-")); roots.push(root);
+      git(root, "init", "--quiet", "--initial-branch=main");
+      git(root, "config", "user.email", "test@example.invalid"); git(root, "config", "user.name", "test");
+      writeFileSync(join(root, ".gitattributes"), "*.txt text eol=lf\n");
+      mkdirSync(join(root, "src", "nested", "deep"), { recursive: true });
+      writeFileSync(join(root, "crlf.txt"), "alpha\n");
+      writeFileSync(join(root, "anchor.txt"), "anchor\n");
+      writeFileSync(join(root, "src", "edited.ts"), "export const edited = 1;\n");
+      writeFileSync(join(root, "src", "gone.ts"), "export const gone = 1;\n");
+      writeFileSync(join(root, "src", "nested", "deep", "leaf.ts"), "export const leaf = 1;\n");
+      writeFileSync(join(root, "src", "run.sh"), "#!/bin/sh\necho hi\n");
+      chmodSync(join(root, "src", "run.sh"), 0o644);
+      symlinkSync("edited.ts", join(root, "src", "link.ts"));
+      git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "base");
+      const base = (resolveWorkspaceBase(root) as { commit: string }).commit;
+      const workspace = createCandidateWorkspace({ root, base: resolveWorkspaceBase(root), workspaceRoot: candidateRoot(root), label: "T054" });
+      roots.push(workspace.root);
+
+      // Every shape at once, in the candidate.
+      writeFileSync(join(workspace.root, "crlf.txt"), "beta\r\n");
+      writeFileSync(join(workspace.root, "﻿anchor.txt"), "bom\n");
+      writeFileSync(join(workspace.root, "src", "café.txt"), "café\n");
+      writeFileSync(join(workspace.root, "src", "edited.ts"), "export const edited = 2;\n");
+      rmSync(join(workspace.root, "src", "gone.ts"));
+      chmodSync(join(workspace.root, "src", "run.sh"), 0o755);
+      writeFileSync(join(workspace.root, "src", "nested", "deep", "leaf.ts"), "export const leaf = 2;\n");
+      writeFileSync(join(workspace.root, "src", "fresh.ts"), "export const fresh = true;\n");
+      const manifest = candidateManifest(workspace);
+
+      const checkout = candidateRoot(root);
+      git(tmpdir(), "clone", "--quiet", root, checkout);
+      git(checkout, "checkout", "--quiet", base);
+      const patchFile = join(candidateRoot(root), "candidate.patch");
+      writeFileSync(patchFile, manifest.patch);
+      execFileSync("git", ["-C", checkout, "apply", "--binary", patchFile], { stdio: ["ignore", "pipe", "pipe"] });
+      git(checkout, "add", "-A");
+
+      // The applied tree against the manifest, by content: a git blob id and the manifest's
+    // sha256 are different hashes of the same bytes, so the comparison is made on the bytes
+    // the patch actually wrote.
+    // `-z` keeps a non-ASCII name as itself; without it `ls-files` quotes it, and the
+    // comparison would fail on the quoting rather than on the content.
+    const applied = execFileSync("git", ["-C", checkout, "ls-files", "-z", "--cached"], { encoding: "utf8" })
+      .split("\0").filter(Boolean).sort();
+    expect(applied).toEqual(manifest.files.map(file => file.path).sort());
+    for (const file of manifest.files) {
+      const path = join(checkout, file.path);
+      // A link's reading is its target text; `readFileSync` would follow it and compare the
+      // target's bytes against the link's recorded hash.
+      const written = lstatSync(path).isSymbolicLink() ? Buffer.from(readlinkSync(path), "utf8") : readFileSync(path);
+      const hash = `sha256:${createHash("sha256").update(written).digest("hex")}`;
+      expect(hash, `${file.path} reproduces the manifest's reading`).toBe(file.hash);
+    }
+      // And the properties that are not visible in a blob id.
+      expect(lstatSync(join(checkout, "src", "link.ts")).isSymbolicLink(), "a link stays a link").toBe(true);
+      expect(statSync(join(checkout, "src", "run.sh")).mode & 0o100, "the executable bit arrives").toBe(0o100);
+      expect(existsSync(join(checkout, "src", "gone.ts")), "the deletion is applied").toBe(false);
+      expect(readFileSync(join(checkout, "crlf.txt"), "utf8"), "the base's eol=lf governs the patch too").toBe("beta\n");
+      expect(existsSync(join(checkout, "﻿anchor.txt")), "a BOM-prefixed name is its own file").toBe(true);
+    });
+
+    it("gives an unmodified candidate an empty patch", () => {
+      // The other half of the round trip: rewriting a tree nobody touched is a false
+      // accusation, and it is what every recorded identity depends on staying stable.
+      const root = richRepository();
+      const workspace = candidateOf(root);
+      expect(candidateManifest(workspace).patch).toBe("");
+    });
+
+    /**
+     * Round-1 regression group. Each test fails on the candidate those reviewers saw and
+     * passes on this one; together they are what closes R1-1 to R1-6.
+     */
+    describe("round-1 findings", () => {
+      it("never writes outside the snapshot, and refuses the shapes that made that possible", () => {
+        // The original defect: the control wrote the base's rules back into the copy, and a rule
+        // path the worker had replaced with a link made it write *through* that link, outside its
+        // own tree. Two shapes caused it — a linked rule file, and a rule file below a linked
+        // directory. Both are refused before any write, and the outside file proves it.
+        const outside = candidateRoot("victim");
+        writeFileSync(join(outside, "target-ignore"), "ORIGINAL\n");
+        mkdirSync(join(outside, "vault"), { recursive: true });
+        writeFileSync(join(outside, "vault", "keep.txt"), "KEEP\n");
+
+        const linkedRule = candidateOf(richRepository());
+        rmSync(join(linkedRule.root, ".gitignore"));
+        symlinkSync(join(outside, "target-ignore"), join(linkedRule.root, ".gitignore"));
+        expect(() => candidateManifest(linkedRule)).toThrow(/changes a rule file/);
+
+        const nested = richRepository();
+        mkdirSync(join(nested, "sub"), { recursive: true });
+        writeFileSync(join(nested, "sub", ".gitignore"), "*.log\n");
+        git(nested, "add", "-A"); git(nested, "commit", "--quiet", "-m", "nested rule");
+        const linkedDirectory = candidateOf(nested);
+        rmSync(join(linkedDirectory.root, "sub"), { recursive: true, force: true });
+        symlinkSync(join(outside, "vault"), join(linkedDirectory.root, "sub"));
+        expect(() => candidateManifest(linkedDirectory), "the rule is gone with its directory").toThrow(/changes a rule file/);
+
+        // Neither the outside file nor the outside directory was written to or removed from.
+        expect(readFileSync(join(outside, "target-ignore"), "utf8"), "the outside file is untouched").toBe("ORIGINAL\n");
+        expect(existsSync(join(outside, "vault", "keep.txt")), "the outside directory is untouched").toBe(true);
+        expect(existsSync(join(outside, "vault", ".gitignore")), "nothing was created in the outside directory").toBe(false);
+      });
+
+      it("refuses a deleted rule file rather than describing the deletion", () => {
+        const workspace = candidateOf(richRepository());
+        rmSync(join(workspace.root, ".gitignore"));
+        writeFileSync(join(workspace.root, "debug.log"), "noise\n");
+        expect(() => candidateManifest(workspace)).toThrow(/changes a rule file/);
+      });
+
+      it("refuses a rule file that differs from the base's, even when only its bytes moved", () => {
+        // The comparison is content, not path: the base's rule is the only one this lane accepts.
+        const workspace = candidateOf(richRepository());
+        writeFileSync(join(workspace.root, ".gitattributes"), "*.ts text eol=lf\n");
+        expect(() => candidateManifest(workspace)).toThrow(/changes a rule file/);
+      });
+
+      it("refuses a rule file the candidate adds anywhere", () => {
+        // A new rule file is still a rule edit, wherever it lives. This is what closed the round-4
+        // finding where a new nested rule could govern its own admission. A rule below a
+        // base-ignored directory is accepted instead (the round-5 group pins that), so this
+        // fixture does not use one.
+        const workspace = candidateOf(richRepository());
+        mkdirSync(join(workspace.root, "docs", "inner"), { recursive: true });
+        writeFileSync(join(workspace.root, "docs", "inner", ".gitignore"), "*.tmp\n");
+        expect(() => candidateManifest(workspace)).toThrow(/changes a rule file/);
+      });
+    });
+
+    /**
+     * Round-2 regression group. Each fails on the round-1 candidate and passes here.
+     */
+    describe("round-2 findings", () => {
+      it("refuses a rule file replaced by a directory", () => {
+        // R2-2: with the base's rule materialized into the copy, a directory at that path made the
+        // staging proceed with no base rules at all, admitting `debug.log` and a rule file under a
+        // base-ignored directory. It is refused by name now, before any git command runs.
+        const workspace = candidateOf(richRepository());
+        rmSync(join(workspace.root, ".gitignore"));
+        mkdirSync(join(workspace.root, ".gitignore"));
+        writeFileSync(join(workspace.root, ".gitignore", "inner.txt"), "inner\n");
+        writeFileSync(join(workspace.root, "debug.log"), "noise\n");
+        mkdirSync(join(workspace.root, "node_modules", "dep"), { recursive: true });
+        writeFileSync(join(workspace.root, "node_modules", "dep", ".gitignore"), "ignored\n");
+        expect(() => candidateManifest(workspace)).toThrow(/changes a rule file/);
+      });
+
+      it("refuses a non-UTF-8 symlink target anywhere it appears", () => {
+        // A base attribute such as `working-tree-encoding` must not convert a link's target: git
+        // never converts a symlink, and a link is stored as its raw text. A target the string type
+        // cannot carry is refused by name, at a rule path or anywhere else.
+        const other = richRepository();
+        const otherWorkspace = candidateOf(other);
+        symlinkSync(Buffer.from([0x63, 0x61, 0x66, 0xe9]), join(otherWorkspace.root, "src", "latin-link"));
+        expect(() => candidateManifest(otherWorkspace),
+          "the raw target is refused rather than converted into a different link")
+          .toThrow(/symlink target of src\/latin-link is not valid UTF-8/i);
+
+        const atRulePath = richRepository();
+        const ruleWorkspace = candidateOf(atRulePath);
+        rmSync(join(ruleWorkspace.root, ".gitignore"));
+        symlinkSync(Buffer.from([0x63, 0x61, 0x66, 0xe9]), join(ruleWorkspace.root, ".gitignore"));
+        expect(() => candidateManifest(ruleWorkspace)).toThrow(/changes a rule file/);
+      });
+
+      it("reads a directory through the descriptor it opened, not through its path", () => {
+        // Round 3 found the previous version of this test worthless: `setInterval` cannot run
+        // while `execFileSync` blocks, so the mutator never fired. This is the deterministic
+        // version of the same property, from the mechanism the walk actually relies on.
+        //
+        // A directory that is renamed away and replaced by a link to a vault keeps delivering its
+        // own contents through the descriptor that is already open, and the replaced path refuses
+        // to be opened as a directory. Together those are what make a mid-copy swap unable to
+        // redirect a read.
+        const root = candidateRoot("swap");
+        mkdirSync(join(root, "src"), { recursive: true });
+        writeFileSync(join(root, "src", "leaf.ts"), "candidate bytes\n");
+        const vault = candidateRoot("vault");
+        writeFileSync(join(vault, "leaf.ts"), "VAULT SECRET\n");
+
+        const descriptor = openSync(join(root, "src"), fsConstants.O_RDONLY | fsConstants.O_DIRECTORY);
+        try {
+          renameSync(join(root, "src"), join(root, "src.real"));
+          symlinkSync(vault, join(root, "src"));
+          // The held descriptor still names the real directory.
+          expect(readFileSync(`/proc/self/fd/${descriptor}/leaf.ts`, "utf8")).toBe("candidate bytes\n");
+          // Opening the replaced path as a directory refuses rather than following the link.
+          expect(() => openSync(join(root, "src"), fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW))
+            .toThrow(/ENOTDIR|ELOOP/);
+        } finally {
+          closeSync(descriptor);
+        }
+      });
+    });
+
+    /**
+     * Round-3 regression group. Each finding was about selection: which paths are measured, and
+     * which reading of them. They exist because a round-2 rewrite replaced `add -A` with
+     * hand-written staging; this group pins the behaviour that came back with it.
+     */
+    /**
+     * Round-5 regression group. The comparison is made on the staged index, so the shapes below
+     * are accepted (they are not rule edits) and the type change is still refused.
+     */
+    describe("round-5 findings", () => {
+      it("accepts the rule files a tool writes under ignored directories", () => {
+        // R5-1: a worktree scan refused `.pytest_cache/.gitignore` and `node_modules/*/.gitignore`,
+        // which an ordinary test run creates. Git never stages them, so they are not rule edits.
+        const root = richRepository();
+        // The caches the tools create, ignored by the base like any build output.
+        writeFileSync(join(root, ".gitignore"), "node_modules/\n*.log\n.env\n.pytest_cache/\n__pycache__/\n");
+        git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "ignore caches");
+        const workspace = candidateOf(root);
+        mkdirSync(join(workspace.root, ".pytest_cache"), { recursive: true });
+        writeFileSync(join(workspace.root, ".pytest_cache", ".gitignore"), "*\n!*/\n!.gitignore\n");
+        mkdirSync(join(workspace.root, "__pycache__"), { recursive: true });
+        writeFileSync(join(workspace.root, "__pycache__", "mod.cpython-312.pyc"), "bytecode\n");
+        mkdirSync(join(workspace.root, "node_modules", "dep"), { recursive: true });
+        writeFileSync(join(workspace.root, "node_modules", "dep", ".gitignore"), "ignored\n");
+        writeFileSync(join(workspace.root, "src", "result.ts"), "export const result = 1;\n");
+        const manifest = candidateManifest(workspace);
+        const paths = manifest.files.map(file => file.path);
+        expect(paths, "the deliverable is described").toContain("src/result.ts");
+        expect(paths, "an ignored directory's rule file is not part of the candidate").not.toContain(".pytest_cache/.gitignore");
+        expect(paths).not.toContain("node_modules/dep/.gitignore");
+      });
+
+      it("accepts an untouched rule file whose checkout form differs from its stored form", () => {
+        // R5-2 / R4-3: `working-tree-encoding` and `eol` make the checkout differ from the blob, so
+        // a byte comparison refused an untouched candidate. Comparing staged object ids applies
+        // git's own conversion and finds the base's id.
+        const encoded = richRepository();
+        writeFileSync(join(encoded, ".gitattributes"), ".gitignore working-tree-encoding=UTF-16\n");
+        writeFileSync(join(encoded, ".gitignore"), Buffer.from("\ufeffnode_modules/\n", "utf16le"));
+        git(encoded, "add", "-A"); git(encoded, "commit", "--quiet", "-m", "utf16 rule");
+        const encodedWorkspace = candidateOf(encoded);
+        expect(candidateManifest(encodedWorkspace).patch, "an untouched converted rule is not an edit").toBe("");
+
+        const crlf = richRepository();
+        writeFileSync(join(crlf, ".gitattributes"), ".gitignore text eol=crlf\n");
+        writeFileSync(join(crlf, ".gitignore"), "node_modules/\n");
+        git(crlf, "add", "-A"); git(crlf, "commit", "--quiet", "-m", "crlf rule");
+        expect(candidateManifest(candidateOf(crlf)).patch, "the eol form is not an edit either").toBe("");
+      });
+
+      it("accepts a base-tracked symlinked rule file, and refuses it becoming a regular file", () => {
+        // R5-3 and reviewer 1's type-change finding. An unmodified symlinked rule is not an edit;
+        // replacing it with a regular file of identical text is, because a symlinked `.gitignore`
+        // is not an active ignore file and the regular one would be. The mode is compared for this.
+        const linked = richRepository();
+        rmSync(join(linked, ".gitignore"));
+        writeFileSync(join(linked, "real-ignore"), "*.log\n");
+        symlinkSync("real-ignore", join(linked, ".gitignore"));
+        git(linked, "add", "-A"); git(linked, "commit", "--quiet", "-m", "linked rule");
+        expect(candidateManifest(candidateOf(linked)).patch, "an untouched symlinked rule is not an edit").toBe("");
+
+        const swapped = richRepository();
+        rmSync(join(swapped, ".gitignore"));
+        mkdirSync(join(swapped, "sub"), { recursive: true });
+        writeFileSync(join(swapped, "sub", "neg"), "!secret.env\n");
+        symlinkSync("neg", join(swapped, "sub", ".gitignore"));
+        git(swapped, "add", "-A"); git(swapped, "commit", "--quiet", "-m", "linked nested rule");
+        const swappedWorkspace = candidateOf(swapped);
+        rmSync(join(swappedWorkspace.root, "sub", ".gitignore"));
+        writeFileSync(join(swappedWorkspace.root, "sub", ".gitignore"), "!secret.env\n");
+        writeFileSync(join(swappedWorkspace.root, "sub", "secret.env"), "SECRET=1\n");
+        expect(() => candidateManifest(swappedWorkspace),
+          "a link becoming a regular rule file is a rule edit").toThrow(/changes a rule file/);
+      });
+
+      it("does not treat a submodule's own rule file as a candidate rule edit", () => {
+        // Reviewer 1's populated-gitlink case: the submodule's `.gitignore` belongs to that
+        // repository, and the superproject records the gitlink, not its tree.
+        const sub = mkdtempSync(join(tmpdir(), "t054-sub-")); roots.push(sub);
+        git(sub, "init", "--quiet", "--initial-branch=main");
+        git(sub, "config", "user.email", "test@example.invalid"); git(sub, "config", "user.name", "test");
+        writeFileSync(join(sub, ".gitignore"), "*.log\n");
+        writeFileSync(join(sub, "inner.txt"), "inner\n");
+        git(sub, "add", "-A"); git(sub, "commit", "--quiet", "-m", "sub");
+        const root = richRepository();
+        git(root, "-c", "protocol.file.allow=always", "submodule", "add", "--quiet", sub, "vendor");
+        git(root, "commit", "--quiet", "-m", "gitlink");
+        const workspace = candidateOf(root);
+        mkdirSync(join(workspace.root, "vendor"), { recursive: true });
+        writeFileSync(join(workspace.root, "vendor", ".gitignore"), "*.log\n");
+        writeFileSync(join(workspace.root, "vendor", "inner.txt"), "inner\n");
+        expect(candidateManifest(workspace).patch, "a populated submodule is not a change").toBe("");
+      });
+    });
+
+    /**
+     * Round-6 regression group: rule authority is decided before staging, on the candidate's
+     * own files, so no candidate rule can be read by `add -A` at all.
+     */
+    /** A candidate whose only edit is the given one, run against a committed base. */
+    const ruleFixture = (base: (root: string) => void, edit: (root: string) => void): { ok: boolean; paths: string[]; patch: string; message: string } => {
+      const root = mkdtempSync(join(tmpdir(), "t054-rule-")); roots.push(root);
+      git(root, "init", "--quiet", "--initial-branch=main");
+      git(root, "config", "user.email", "test@example.invalid"); git(root, "config", "user.name", "test");
+      writeFileSync(join(root, "a.txt"), "a\n");
+      base(root);
+      git(root, "add", "-A"); git(root, "commit", "--quiet", "--allow-empty", "-m", "base");
+      const workspace = candidateOf(root);
+      edit(workspace.root);
+      try {
+        const manifest = candidateManifest(workspace);
+        return { ok: true, paths: manifest.files.map(file => file.path), patch: manifest.patch, message: "" };
+      } catch (error) {
+        return { ok: false, paths: [], patch: "", message: (error as Error).message };
+      }
+    };
+
+    describe("round-6 findings", () => {
+
+  it("R6-1 seq A: a self-ignored rule cannot admit a base-ignored secret", () => {
+    const r = ruleFixture(root => writeFileSync(join(root, ".gitignore"), "node_modules/\n*.log\n*.env\n"), root => {
+      mkdirSync(join(root, "sub"), { recursive: true });
+      writeFileSync(join(root, "sub", ".gitignore"), ".gitignore\n!secret.env\n");
+      writeFileSync(join(root, "sub", "secret.env"), "SECRET=1\n");
+    });
+    if (r.ok) {
+      expect(r.paths, "the secret must not reach the manifest").not.toContain("sub/secret.env");
+      expect(r.patch).not.toContain("SECRET");
+    } else expect(r.message).toMatch(/changes a rule file/);
+  });
+
+  it("R6-1 seq A reverse: a self-ignored rule cannot hide a deliverable", () => {
+    // This direction was already refused on the round-6 source, so it pins the behaviour
+    // rather than proving the round-6 fix. It is kept because it is the mirror of the leak
+    // above: a regression here would hide a deliverable rather than admit one.
+    const r = ruleFixture(root => writeFileSync(join(root, ".gitignore"), "node_modules/\n"), root => {
+      mkdirSync(join(root, "sub"), { recursive: true });
+      writeFileSync(join(root, "sub", ".gitignore"), "*\n!.gitignore\n");
+      writeFileSync(join(root, "sub", "deliverable.ts"), "export const d = 1;\n");
+    });
+    if (r.ok) expect(r.paths).toContain("sub/deliverable.ts");
+    else expect(r.message).toMatch(/changes a rule file/);
+  });
+
+  it("R6-1 seq B: an ignored attribute file cannot choose conversions", () => {
+    const r = ruleFixture(root => {
+      writeFileSync(join(root, ".gitignore"), "sub/.gitattributes\n");
+      writeFileSync(join(root, ".gitattributes"), "*.txt text eol=lf\n");
+      mkdirSync(join(root, "sub"), { recursive: true });
+      writeFileSync(join(root, "sub", "base.txt"), "base\n");
+    }, root => {
+      writeFileSync(join(root, "sub", ".gitattributes"), "*.txt -text\n");
+      writeFileSync(join(root, "sub", "note.txt"), "ours\r\n");
+    });
+    if (r.ok) expect(r.patch, "the base's eol=lf must govern").not.toContain("\r");
+    else expect(r.message).toMatch(/changes a rule file/);
+  });
+
+  it("R6-1 seq C: an ident-cleaned rule edit cannot normalize back to the base object id", () => {
+    const r = ruleFixture(root => {
+      writeFileSync(join(root, ".gitattributes"), ".gitignore ident\n");
+      writeFileSync(join(root, ".gitignore"), "$Id$\n");
+    }, root => {
+      writeFileSync(join(root, ".gitignore"), "$Id: changed $\n");
+      writeFileSync(join(root, "$Id$"), "x\n");
+    });
+    expect(r.ok, "an edited rule is refused regardless of how it cleans").toBe(false);
+  });
+    });
+
+    /**
+     * Round-7 regression group: the directory prepass stays inside what git can answer, and a
+     * mode-only rule edit is refused rather than discarded.
+     */
+    describe("round-7 findings", () => {
+      it("accepts an unchanged candidate with a directory named like pathspec magic", () => {
+        // R7-1: `check-ignore --stdin` parses every record as a pathspec, so `:(literal)src` was
+        // rejected as unsupported magic and even an unchanged candidate failed. A `./` prefix
+        // keeps the record out of the magic branch, and the echoed match loses it again.
+        const root = richRepository();
+        mkdirSync(join(root, ":(literal)src"), { recursive: true });
+        writeFileSync(join(root, ":(literal)src", "keep.ts"), "export const keep = 1;\n");
+        git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "pathspec-looking directory");
+        const manifest = candidateManifest(candidateOf(root));
+        expect(manifest.files.map(file => file.path)).toContain(":(literal)src/keep.ts");
+        expect(manifest.patch, "an unchanged candidate is an empty patch").toBe("");
+      });
+
+      it("accepts a populated gitlink that holds a nested directory", () => {
+        // R7-1: `check-ignore` answers a path below an indexed gitlink with status 128 ("is in
+        // submodule"), so the prepass stops at the gitlink root instead of walking into it. The
+        // submodule's files are exempt from rule refusal anyway.
+        const sub = mkdtempSync(join(tmpdir(), "t054-sub-")); roots.push(sub);
+        git(sub, "init", "--quiet", "--initial-branch=main");
+        git(sub, "config", "user.email", "test@example.invalid"); git(sub, "config", "user.name", "test");
+        mkdirSync(join(sub, "src"), { recursive: true });
+        writeFileSync(join(sub, "src", "inner.txt"), "inner\n");
+        git(sub, "add", "-A"); git(sub, "commit", "--quiet", "-m", "sub");
+        const root = richRepository();
+        git(root, "-c", "protocol.file.allow=always", "submodule", "add", "--quiet", sub, "vendor");
+        git(root, "commit", "--quiet", "-m", "gitlink");
+        const workspace = candidateOf(root);
+        mkdirSync(join(workspace.root, "vendor", "src"), { recursive: true });
+        writeFileSync(join(workspace.root, "vendor", "src", "inner.txt"), "inner\n");
+        expect(candidateManifest(workspace).patch, "the submodule's tree is not the candidate's").toBe("");
+      });
+
+      it("refuses a rule file whose owner-executable bit changed", () => {
+        // R7-2: the regular-file branch compared bytes only, so a chmod to the rule was silently
+        // replaced by the base's mode instead of being refused. Git records 100644 and 100755.
+        const r = ruleFixture(root => writeFileSync(join(root, ".gitignore"), "node_modules/\n"), root => {
+          chmodSync(join(root, ".gitignore"), 0o755);
+        });
+        expect(r.ok, "a mode-only rule edit is refused rather than discarded").toBe(false);
+        expect(r.message).toMatch(/changes a rule file/);
+      });
+    });
+
+    describe("round-3 findings", () => {
+      it("keeps a tracked file whose name looks like a pathspec, and gives it no patch", () => {
+        // R3-1: the round-2 `check-ignore` pass sent `:keep.txt` to a pathspec parser, which read
+        // the leading colon as magic and reported it ignored, so an *unchanged* tracked file was
+        // removed from the index and appeared in the patch as a deletion. Ignore decisions now
+        // come from `add -A`, which has no such pass.
+        const root = richRepository();
+        writeFileSync(join(root, ".gitignore"), "keep.txt\n");
+        writeFileSync(join(root, ":keep.txt"), "literal colon name\n");
+        git(root, "add", "-A"); git(root, "commit", "--quiet", "-m", "pathspec-looking name");
+        const manifest = candidateManifest(candidateOf(root));
+        expect(manifest.files.map(file => file.path)).toContain(":keep.txt");
+        expect(manifest.patch, "an unchanged candidate is an empty patch").toBe("");
+      });
+
+      it("records a gitlink replaced by a regular file, and never descends a populated one", () => {
+        // R3-2: filtering descendants by exact gitlink name either dropped a replacement file or
+        // failed the manifest when the candidate's submodule directory held files. Git reports a
+        // gitlink as one entry and does not descend it, so the populated case is simply not a
+        // candidate file, and a replacement is an ordinary entry.
+        const addSubmodule = (root: string): void => {
+          const sub = mkdtempSync(join(tmpdir(), "t054-sub-")); roots.push(sub);
+          git(sub, "init", "--quiet", "--initial-branch=main");
+          git(sub, "config", "user.email", "test@example.invalid"); git(sub, "config", "user.name", "test");
+          writeFileSync(join(sub, "inner.txt"), "inner\n");
+          git(sub, "add", "-A"); git(sub, "commit", "--quiet", "-m", "sub");
+          git(root, "-c", "protocol.file.allow=always", "submodule", "add", "--quiet", sub, "vendor");
+          git(root, "commit", "--quiet", "-m", "gitlink");
+        };
+        const replaced = richRepository();
+        addSubmodule(replaced);
+        const replacedWorkspace = candidateOf(replaced);
+        rmSync(join(replacedWorkspace.root, "vendor"), { recursive: true, force: true });
+        writeFileSync(join(replacedWorkspace.root, "vendor"), "replacement\n");
+        const manifest = candidateManifest(replacedWorkspace);
+        expect(manifest.files.map(file => file.path), "the replacement is a candidate file").toContain("vendor");
+        expect(manifest.patch).toContain("replacement");
+
+        const populated = richRepository();
+        addSubmodule(populated);
+        const populatedWorkspace = candidateOf(populated);
+        mkdirSync(join(populatedWorkspace.root, "vendor"), { recursive: true });
+        writeFileSync(join(populatedWorkspace.root, "vendor", "inner.txt"), "from the submodule\n");
+        const populatedManifest = candidateManifest(populatedWorkspace);
+        expect(populatedManifest.files.map(file => file.path), "a gitlink has no bytes of its own").not.toContain("vendor/inner.txt");
+        expect(populatedManifest.patch, "an unmodified gitlink still needs no patch").toBe("");
+      });
+
+      it("keeps the source's info/exclude as an ignore authority", () => {
+        // R3-3: the round-2 rewrite dropped the copy of the source's repository-level exclude
+        // file, so a path only that file ignores entered the manifest. Committed `.gitignore`
+        // files do not subsume it — it is a separate ignore source.
+        const root = richRepository();
+        const exclude = execFileSync("git", ["-C", root, "rev-parse", "--git-path", "info/exclude"], { encoding: "utf8" }).trim();
+        writeFileSync(join(root, exclude), "private.env\n");
+        const workspace = candidateOf(root);
+        writeFileSync(join(workspace.root, "private.env"), "SECRET=1\n");
+        const manifest = candidateManifest(workspace);
+        expect(manifest.files.map(file => file.path), "the source exclude still hides it").not.toContain("private.env");
+        expect(manifest.patch).not.toContain("SECRET");
+      });
     });
   });
 });

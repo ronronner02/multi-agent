@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:5869a2c7b3e865e426eabcf3fca8c63d9ab1fe949840c8cc7b04a5558a98a8b6"
+source_plan_hash: "sha256:41acc8447c94f23214cb522947429e0fb1068b2587fca634565f6d2488303c60"
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -3411,7 +3411,7 @@ The following JSON is the single machine-readable task source. Human cards below
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#worker-isolation-and-source-transfer"
       ],
       "entry_hint": "Read the U5 decision \"Candidate manifest from a copied snapshot\" (2026-10-26), which gives the whole git sequence, then `commitLaneManifest`, `renderPatch` and the helpers they call in `team-workspace.ts`.",
-      "test_focus": "(1) Planted programs: a worker-written `.git` gitdir file carrying `core.fsmonitor`, `core.hooksPath`, `filter.<drv>.clean`, `filter.<drv>.process`, `diff.<drv>.textconv` and `diff.external`, plus `* filter=x diff=x` attributes and a nested repository, runs no marker program. (2) Round trip: for CRLF/`eol`, BOM-prefixed, non-ASCII, symlink, executable, nested, edited, added and deleted fixtures, the patch applied at a base checkout reproduces the manifest's entries, and an unmodified candidate gives an empty patch. (3) Ignore authority: a candidate `.gitignore` of `*` does not hide a new file, deleting `.gitignore` does not admit a base-ignored file, and the candidate's `.gitignore` edit appears in the patch. (4) The snapshot lane's manifest is unchanged.",
+      "test_focus": "(1) Planted programs: a worker-written `.git` gitdir file carrying `core.fsmonitor`, `core.hooksPath`, `filter.<drv>.clean`, `filter.<drv>.process`, `diff.<drv>.textconv` and `diff.external`, plus `* filter=x diff=x` attributes and a nested repository, runs no marker program. (2) Round trip: for CRLF/`eol`, BOM-prefixed, non-ASCII, symlink, executable, nested, edited, added and deleted fixtures, the patch applied at a base checkout reproduces the manifest's entries, and an unmodified candidate gives an empty patch. (3) Ignore authority: a candidate that adds, edits, deletes or retypes a `.gitignore` or `.gitattributes`, or changes its executable bit, is refused before staging, so a `.gitignore` of `*` cannot hide a new file and a deleted `.gitignore` cannot admit a base-ignored file; a rule file below a base-excluded directory or inside a base gitlink is accepted and stays out of the patch. (4) The snapshot lane's manifest is unchanged.",
       "done_signal": "The four test groups pass, and the focused tests and daemon typecheck pass. The hand-written reader is deleted: the enumeration, symlink-chain, attribute-cleaning, binary-detection, quoting and patch-rendering helpers. No git invocation takes a candidate path. Required review closes with two reviewers, because `team-workspace.ts` is core code.",
       "wave": 18,
       "parallelizable": false,
@@ -4108,7 +4108,7 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 - **Test focus:**
   1. Planted programs: a worker-written `.git` gitdir file carrying `core.fsmonitor`, `core.hooksPath`, `filter.<drv>.clean`, `filter.<drv>.process`, `diff.<drv>.textconv` and `diff.external`, plus `* filter=x diff=x` attributes and a nested repository, runs no marker program.
   2. Round trip: for CRLF/`eol`, BOM-prefixed, non-ASCII, symlink, executable, nested, edited, added and deleted fixtures, the patch applied at a base checkout reproduces the manifest's entries. An unmodified candidate gives an empty patch.
-  3. Ignore authority: a candidate `.gitignore` of `*` does not hide a new file, and deleting `.gitignore` does not admit a base-ignored file. The candidate's `.gitignore` edit appears in the patch.
+  3. Ignore authority: a candidate that adds, edits, deletes or retypes a `.gitignore` or `.gitattributes`, or changes its executable bit, is refused before staging. So a `.gitignore` of `*` cannot hide a new file, and a deleted `.gitignore` cannot admit a base-ignored file. A rule file below a base-excluded directory or inside a base gitlink is accepted and stays out of the patch (owner decision 2026-10-27, plan U5).
   4. The snapshot lane's manifest is unchanged.
 - **Done signal:** The four test groups pass, and the focused tests and daemon typecheck pass. The hand-written reader is deleted: the enumeration, symlink-chain, attribute-cleaning, binary-detection, quoting and patch-rendering helpers. No git invocation takes a candidate path. Required review closes with two reviewers, because `team-workspace.ts` is core code.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, or repository identity is unresolved. Stop if copying a realistic candidate takes more than a few seconds: report the measurement to the owner instead of adding an exclusion mechanism.
