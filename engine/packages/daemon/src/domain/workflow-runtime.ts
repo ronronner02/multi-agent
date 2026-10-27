@@ -981,6 +981,10 @@ export class WorkflowRuntime {
       const item = this.queueRepo.getById(recorded.qitemId);
       if (!item || item.destinationSession !== input.sessionId) throw new Error("Managed attempt seat is not the task's destination");
     }
+    // The endpoint's mailbox scope is the attempt's task, so the caller cannot name a different
+    // one: a task id here that the recorded assignment does not have would register a mailbox
+    // for a task this run never admitted.
+    if (input.taskId !== input.assignment.taskId) throw new Error("Managed attempt task is not the assignment's task");
     /** The owner's value when it exists; a caller value that disagrees is refused. */
     const agree = <T>(field: string, claimed: T | undefined, owner: T | undefined): T | undefined => {
       if (claimed !== undefined && owner !== undefined && canonicalJson(claimed) !== canonicalJson(owner)) {
@@ -1063,11 +1067,20 @@ export class WorkflowRuntime {
         runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
         capability: mailboxCapability },
       input.delivery, input.chat, readCredentials, input.isCurrent);
-      await bridge.listen();
+      // Registered before the endpoint awaits anything: a sibling attempt retiring during
+      // `listen` must see this one holding the seat's credential, or it would revoke a token
+      // this endpoint is about to authenticate with. A failed listen removes the entry again,
+      // so the failure path below still owns the cleanup.
       const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
         ...(input.previous ? { previous: input.previous } : {}) };
       const produced = Object.freeze({ attempt, bridge, candidate: admitted.candidate, manifestDigest: admitted.manifestDigest });
       this.managedAttempts.set(attemptId, produced);
+      try {
+        await bridge.listen();
+      } catch (error) {
+        this.managedAttempts.delete(attemptId);
+        throw error;
+      }
       return produced;
     } catch (error) {
       // Admission retained the candidate claim when it handed this attempt its tree, so
@@ -1084,9 +1097,22 @@ export class WorkflowRuntime {
       // A credential this call minted for an attempt that never started is revoked here: the
       // attempt has no endpoint and no retirement path, so nothing else would ever bound it.
       // A token a live sibling attempt already holds is not this call's to revoke.
-      if (issued) this.onManagedAttemptRetired?.({ runId, sessionId: input.sessionId });
+      if (issued) this.revokeSeatCredential(runId, input.sessionId, attemptId);
       throw error;
     }
+  }
+
+  /**
+   * T053 — revoke a seat's credential only when no other produced attempt of that seat remains.
+   *
+   * A seat has one credential, so a retirement or a failed production must not take the token a
+   * live attempt is authenticating with. `except` names the attempt being removed, which is still
+   * in the map while another attempt of the seat may be finishing its own endpoint.
+   */
+  private revokeSeatCredential(runId: string, sessionId: string, except: string): void {
+    const shared = [...this.managedAttempts.entries()].some(([id, other]) => id !== except
+      && other.bridge.binding.runId === runId && other.bridge.binding.sessionId === sessionId);
+    if (!shared) this.onManagedAttemptRetired?.({ runId, sessionId });
   }
 
   /**
@@ -1100,15 +1126,14 @@ export class WorkflowRuntime {
     const produced = this.managedAttempts.get(attemptId);
     if (!produced) return;
     this.managedAttempts.delete(attemptId);
-    await produced.bridge.close();
-    // T053: the attempt's worker credential is revoked on the same retirement that closes its
-    // endpoint, so the two never outlive each other. A seat has one credential, so a retirement
-    // only revokes it when no other attempt of that seat is still live: retiring a superseded
-    // attempt must not take the credential the current one is authenticating with.
-    const { runId, sessionId } = produced.bridge.binding;
-    const shared = [...this.managedAttempts.values()].some(other =>
-      other.bridge.binding.runId === runId && other.bridge.binding.sessionId === sessionId);
-    if (!shared) this.onManagedAttemptRetired?.({ runId, sessionId });
+    try {
+      await produced.bridge.close();
+    } finally {
+      // T053: the attempt's worker credential is revoked on the same retirement that closes its
+      // endpoint, so the two never outlive each other. In `finally` because a throwing close
+      // must not strand the token: by here the entry is gone and nothing else can reach it.
+      this.revokeSeatCredential(produced.bridge.binding.runId, produced.bridge.binding.sessionId, attemptId);
+    }
   }
 
   /** T042 — the attempt a seat's launch should attach, if this daemon produced one. */
