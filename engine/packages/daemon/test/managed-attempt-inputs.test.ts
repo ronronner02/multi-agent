@@ -342,6 +342,23 @@ describe("the managed attempt's production inputs", () => {
     expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
   }, 60_000);
 
+  it("hands a duplicate caller the same production instead of a half-started endpoint", async () => {
+    createTask();
+    // Two callers race for one attempt id. The second must await the first's listen rather than
+    // receive the record published for a sibling retirement to see, and a failed start must not
+    // delete anything the duplicate is still holding.
+    const [first, second] = await Promise.all([
+      runtime.produceManagedAttempt("run", produceInput()),
+      runtime.produceManagedAttempt("run", produceInput()),
+    ]);
+    expect(second).toBe(first);
+    expect(first.bridge.binding.attemptId).toBe("attempt-1");
+    const bootstrap = JSON.parse(readFileSync(join(mailboxDir(), "bootstrap.json"), "utf8"));
+    expect((await ask({ authorization: bootstrap.authorization, sessionId: "builder@rig", runId: "run",
+      attemptId: "attempt-1", generation: bootstrap.generation, operation: "poll", taskId: "task",
+      capability: bootstrap.capability }, "attempt-1")).ok).toBe(true);
+  }, 60_000);
+
   it("refuses an endpoint bound to a task the assignment does not name", async () => {
     createTask();
     await expect(runtime.produceManagedAttempt("run", produceInput({ taskId: "task-b" })))
