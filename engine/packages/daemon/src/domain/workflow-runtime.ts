@@ -968,10 +968,13 @@ export class WorkflowRuntime {
     // caller must wait for that production rather than receive a half-built endpoint: returning
     // the record while `listen` is still pending would hand out an endpoint that may never
     // listen, and a failed start would then delete the entry under the duplicate's feet.
-    const settled = this.managedAttempts.get(input.attemptId);
-    if (settled) return settled;
+    //
+    // `producing` is the only gate for "one production per attempt id". `managedAttempts` holds
+    // only endpoints that finished listening, so a duplicate can never receive a half-started one.
     const inFlight = this.producing.get(input.attemptId);
     if (inFlight) return inFlight;
+    const settled = this.managedAttempts.get(input.attemptId);
+    if (settled) return settled;
     const production = this.produceManagedAttemptOnce(runId, input);
     this.producing.set(input.attemptId, production);
     try {
@@ -1087,20 +1090,24 @@ export class WorkflowRuntime {
         runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
         capability: mailboxCapability },
       input.delivery, input.chat, readCredentials, input.isCurrent);
-      // Registered before the endpoint awaits anything: a sibling attempt retiring during
-      // `listen` must see this one holding the seat's credential, or it would revoke a token
-      // this endpoint is about to authenticate with. A failed listen removes the entry again,
-      // so the failure path below still owns the cleanup.
+      // Claimed for this seat before the endpoint awaits anything, so a sibling attempt retiring
+      // during `listen` sees that this seat's credential is in use and does not revoke it. This
+      // is a separate record from `managedAttempts` on purpose: that map is what a caller is
+      // handed, and an attempt is only published there once its endpoint actually listens. A
+      // half-started record in that map is what a duplicate caller would receive.
+      const starting = { runId, sessionId: input.sessionId };
+      this.startingAttempts.set(attemptId, starting);
+      try {
+        await bridge.listen();
+      } catch (error) {
+        this.startingAttempts.delete(attemptId);
+        throw error;
+      }
       const attempt: ManagedAttempt = { attemptId, deadline: input.deadline, context: manifest,
         ...(input.previous ? { previous: input.previous } : {}) };
       const produced = Object.freeze({ attempt, bridge, candidate: admitted.candidate, manifestDigest: admitted.manifestDigest });
       this.managedAttempts.set(attemptId, produced);
-      try {
-        await bridge.listen();
-      } catch (error) {
-        if (this.managedAttempts.get(attemptId) === produced) this.managedAttempts.delete(attemptId);
-        throw error;
-      }
+      this.startingAttempts.delete(attemptId);
       return produced;
     } catch (error) {
       // Admission retained the candidate claim when it handed this attempt its tree, so
@@ -1131,8 +1138,10 @@ export class WorkflowRuntime {
    * in the map while another attempt of the seat may be finishing its own endpoint.
    */
   private revokeSeatCredential(runId: string, sessionId: string, except: string): void {
-    const shared = [...this.managedAttempts.entries()].some(([id, other]) => id !== except
-      && other.bridge.binding.runId === runId && other.bridge.binding.sessionId === sessionId);
+    const held = (id: string, run: string, session: string) => id !== except && run === runId && session === sessionId;
+    const shared = [...this.managedAttempts.entries()].some(([id, other]) =>
+      held(id, other.bridge.binding.runId, other.bridge.binding.sessionId))
+      || [...this.startingAttempts.entries()].some(([id, other]) => held(id, other.runId, other.sessionId));
     if (!shared) this.onManagedAttemptRetired?.({ runId, sessionId });
   }
 
@@ -1527,6 +1536,12 @@ export class WorkflowRuntime {
   private readonly managedAttempts = new Map<string, ProducedManagedAttempt>();
   /** T053 — productions still starting, so a duplicate caller awaits the same one. */
   private readonly producing = new Map<string, Promise<ProducedManagedAttempt>>();
+  /**
+   * T053 — attempts whose endpoint is still listening, and the seat each will hold. A sibling
+   * retirement consults this so it does not revoke a credential an in-flight endpoint needs;
+   * it is deliberately not `managedAttempts`, which is the published record a caller receives.
+   */
+  private readonly startingAttempts = new Map<string, { runId: string; sessionId: string }>();
 
   constructor(deps: WorkflowRuntimeDeps) {
     this.guidanceLibrary = deps.guidanceLibrary;
