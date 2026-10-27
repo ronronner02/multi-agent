@@ -18,6 +18,7 @@ import type { AssignmentInput as _Unused } from "../src/domain/team-assignment.j
 import type { WorkerLaunchAdmission, WorkerLaunchControl, WorkerLaunchEvent, WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 import { RestrictedWorkerLauncher } from "../src/adapters/worker-launch.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { parseAssignment } from "../src/contracts/team-control.js";
 
 // T039: every production launch reaches WorkflowRuntime's eligibility check and
 // runs inside the task's own candidate workspace.
@@ -163,9 +164,12 @@ describe("production launch runs through runtime eligibility and one candidate w
       preflight: async input => {
         calls.preflight += 1;
         options.observe?.(input);
-        // The control resolves the assigned tree from the installed policy; the
-        // launcher must have admitted exactly that tree beforehand.
-        const tree = options.assignedTree ?? candidateDir("ma-worker1", "run-1", input.attempt.context.assignment.taskId);
+        // The control resolves the assigned tree from the installed policy; the launcher
+        // must have admitted exactly that tree beforehand. This calls the runtime method
+        // startup's composition calls (`assignedTreeFor`) rather than re-deriving the
+        // mapping here, so a broken production branch cannot be masked by an equivalent
+        // one in the fixture.
+        const tree = options.assignedTree ?? runtime.assignedTreeFor("run-1", input.attempt.context.assignment);
         return ({ assignment: { binding, currentBinding: binding, assignment: input.attempt.context.assignment,
           outputs: [...input.attempt.context.outputs], permissions: [...input.attempt.context.permissions],
           context: input.attempt.context, observed: { discoveryRoots: [], files: [] }, dependencySatisfied: () => true },
@@ -215,8 +219,16 @@ describe("production launch runs through runtime eligibility and one candidate w
     releaseCandidate: (runId, taskId, attemptId) => runtime.releaseCandidate(runId, taskId, attemptId),
   };
 
-  const launcher = (fake: WorkerLaunchControl) =>
-    new RestrictedWorkerLauncher(fake, () => 1000, () => "native-session", admission);
+  // The admission seam is bound to one runtime, so a test that models a restart (a fresh
+// runtime over the same db and roots, with empty in-memory candidate maps) can build a
+// launcher over that instance instead.
+  const launcher = (fake: WorkerLaunchControl, over: WorkflowRuntime = runtime) =>
+    new RestrictedWorkerLauncher(fake, () => 1000, () => "native-session", over === runtime ? admission : {
+      admitForLaunch: (runId, input) => over.admitForLaunch(runId, input),
+      prepareAssignment: input => { prepareCalls.count += 1; return over.prepareLaunchAssignment(input); },
+      candidateSourceUnchanged: (runId, taskId) => over.candidateSourceUnchanged(runId, taskId),
+      releaseCandidate: (runId, taskId, attemptId) => over.releaseCandidate(runId, taskId, attemptId),
+    });
 
   it("creates exactly one candidate for the task before the control preflights", async () => {
     let treeSeenByControl: string | undefined;
@@ -290,13 +302,9 @@ describe("production launch runs through runtime eligibility and one candidate w
   });
 
   it("admits a reviewer into the reviewer's own candidate, mounted read-only", async () => {
-    // A reviewer is a separate task row with its own `taskId`
-    // (`team_queue_authority` is UNIQUE(run_id, task_id) with one role per row), so
-    // the reviewer's candidate is its own tree, not the implementer's. What this
-    // covers is that role does not decide *which* tree a launch gets and that
-    // admission does not refuse a read-only role; handing the reviewer the tree
-    // under review needs a field `ScopedAssignment` does not have, and is recorded
-    // as a plan question in the residuals rather than claimed here.
+    // A reviewer without a `reviewOf` link is an ordinary assignment: its own task row,
+    // its own tree. T043 added the link; a reviewer that omits it keeps the pre-T043
+    // shape, so this pins that role alone does not decide *which* tree a launch gets.
     const implementer = runtime.admitForLaunch("run-1", { attemptId: "attempt-impl", worker: "ma-worker1",
       assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
     const reviewContext = { ...contextFor({ role: "reviewer" }),
@@ -574,5 +582,215 @@ describe("production launch runs through runtime eligibility and one candidate w
     // The checkout still holds the owner's own bytes and no new commit.
     expect(readFileSync(join(repo, "src", "dirty.ts"), "utf8")).toBe("export const dirty = true;\n");
     expect(git(repo, "status", "--porcelain=v1").trim()).toBe("?? src/dirty.ts");
+  });
+
+  // T043: a reviewer launches into the exact candidate the implementer produced.
+  //
+  // The fixture already records `T039` as a live implementer claiming `src` (see
+  // `beforeEach`), so that is the task under review. Extra implementer rows below claim
+  // paths none of these cases use, because two live claims on one path refuse the graph
+  // before the review link is ever consulted.
+  describe("a reviewer launches into the candidate it reviews", () => {
+    /** Record another implementer row: the link is checked against recorded authority. */
+    const recordImplementer = (taskId: string, paths = ["test/other"]) => {
+      db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
+        VALUES (?, '2026-10-22T00:00:00.000Z', '2026-10-22T00:00:00.000Z', 'lead@rig-1', ?, 'in-progress', 'body')`)
+        .run(`item-${taskId}`, `session-${taskId}`);
+      db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json)
+        VALUES (?, 'run-1', ?, ?)`)
+        .run(`item-${taskId}`, taskId, JSON.stringify({ taskId, role: "implementer", paths, dependencies: [] }));
+    };
+    const reviewer = (reviewOf?: string) => {
+      const assignment = { taskId: "T043-review", role: "reviewer" as const,
+        ...(reviewOf === undefined ? {} : { reviewOf }), paths: ["src"], dependencies: [] };
+      return { assignment,
+        context: { ...contextFor({ role: "reviewer" }), assignment, outputs: [],
+          permissions: ["submit-review"] } as unknown as ContextManifest };
+    };
+    const admitReview = (reviewOf?: string, worker = "ma-worker1", attemptId = `attempt-review-${++attemptSeq}`) => {
+      const { assignment, context: reviewContext } = reviewer(reviewOf);
+      return runtime.admitForLaunch("run-1", { attemptId, worker, assignment, outputs: [],
+        permissions: ["submit-review"], context: reviewContext });
+    };
+    const admitImplementer = (attemptId: string) =>
+      runtime.admitForLaunch("run-1", { attemptId, worker: "ma-worker1",
+        assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
+
+    it("hands the reviewer the implementer's tree, not a freshly staged one", () => {
+      // The defect this closes: the reviewer's own candidate was a pristine checkout, so
+      // it reviewed code nobody wrote. The tree under review is the implementer's.
+      const implementer = admitImplementer("attempt-impl-link");
+      const review = admitReview("T039");
+      expect(review.candidate).toBe(implementer.candidate);
+      expect(review.manifestDigest).toBe(implementer.manifestDigest);
+      // And nothing was staged under the reviewer's own task id.
+      expect(existsSync(candidateDir("ma-worker1", "run-1", "T043-review"))).toBe(false);
+    });
+
+    it("resolves the reviewed tree for a launch, and never stages one", () => {
+      // `assignedTreeFor` is what startup's composition calls, so this exercises the
+      // production decision rather than a re-implementation. Reverting the review branch
+      // there makes the first assertion fail.
+      const implementer = admitImplementer("attempt-impl-assigned");
+      expect(runtime.assignedTreeFor("run-1", { taskId: "T043-review", reviewOf: "T039" })).toBe(implementer.candidate);
+      // A review never creates: with no candidate for the named task it refuses rather
+      // than staging a tree at that task's path.
+      recordImplementer("T039-assigned-missing");
+      expect(() => runtime.assignedTreeFor("run-1", { taskId: "T043-review", reviewOf: "T039-assigned-missing" }))
+        .toThrow(/no candidate/i);
+      expect(existsSync(candidateDir("ma-worker1", "run-1", "T039-assigned-missing"))).toBe(false);
+      // An assignment with no link still resolves its own tree.
+      expect(runtime.assignedTreeFor("run-1", { taskId: "T039" })).toBe(implementer.candidate);
+    });
+
+    it("adopts the reviewed tree after a restart instead of refusing it", () => {
+      // A restart forgets the in-memory record but not the tree, which control-owned
+      // provenance still accounts for. Refusing here would make a review impossible after
+      // any daemon restart while the implementer's work sits on disk.
+      const implementer = admitImplementer("attempt-impl-restart");
+      const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+        candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId), assignmentRoot: () => assignmentRoot,
+        defaultWorker: () => "ma-worker1" });
+      const reviewContext = { ...contextFor({ role: "reviewer" }),
+        assignment: { taskId: "T043-review", role: "reviewer", reviewOf: "T039", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: ["submit-review"] } as unknown as ContextManifest;
+      const review = restarted.admitForLaunch("run-1", { attemptId: "attempt-review-restart", worker: "ma-worker1",
+        assignment: reviewContext.assignment, outputs: [], permissions: ["submit-review"], context: reviewContext });
+      expect(review.candidate).toBe(implementer.candidate);
+      // Adopted, not staged: no second tree appeared.
+      expect(existsSync(candidateDir("ma-worker1", "run-1", "T043-review"))).toBe(false);
+    });
+
+    it("does not mistake a workerless reader's adoption for another worker's tree", () => {
+      // The packet and identity accessors name no worker, so their adoption records no
+      // owner. A review on the worker whose directory holds that tree must keep it rather
+      // than re-home it — re-homing would delete the candidate the review is about to enter.
+      const implementer = admitImplementer("attempt-impl-reader");
+      const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+        candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId), assignmentRoot: () => assignmentRoot,
+        defaultWorker: () => "ma-worker1" });
+      expect(restarted.candidateFor("run-1", "T039").root).toBe(implementer.candidate);
+      const reviewContext = { ...contextFor({ role: "reviewer" }),
+        assignment: { taskId: "T043-review", role: "reviewer", reviewOf: "T039", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: ["submit-review"] } as unknown as ContextManifest;
+      const review = restarted.admitForLaunch("run-1", { attemptId: "attempt-review-reader", worker: "ma-worker1",
+        assignment: reviewContext.assignment, outputs: [], permissions: ["submit-review"], context: reviewContext });
+      expect(review.candidate).toBe(implementer.candidate);
+    });
+
+    it("refuses a review on another worker without destroying the reviewed tree", () => {
+      // A refused review must not be able to delete what it was asked to review. Re-homing
+      // is a mutation — it drops the record and asks for the tree's removal — so an
+      // adopt-only caller must refuse without touching anything. Before this rule the
+      // delegation through `candidateFor` deregistered and removed the implementer's
+      // candidate on the way to refusing on a different worker.
+      const implementer = admitImplementer("attempt-impl-cross");
+      const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+        candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId), assignmentRoot: () => assignmentRoot,
+        defaultWorker: () => "ma-worker1" });
+      // A workerless reader adopts it, which leaves the owner unrecorded — the state in
+      // which a cross-worker launch used to look like an unclaimed tree worth re-homing.
+      expect(restarted.candidateFor("run-1", "T039").root).toBe(implementer.candidate);
+      const reviewContext = { ...contextFor({ role: "reviewer" }),
+        assignment: { taskId: "T043-review", role: "reviewer", reviewOf: "T039", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: ["submit-review"] } as unknown as ContextManifest;
+      expect(() => restarted.admitForLaunch("run-1", { attemptId: "attempt-review-cross", worker: "ma-worker2",
+        assignment: reviewContext.assignment, outputs: [], permissions: ["submit-review"], context: reviewContext }))
+        .toThrow(/different worker/i);
+      // The implementer's work is still on disk, and still reachable by the worker that owns it.
+      expect(existsSync(implementer.candidate)).toBe(true);
+      expect(readFileSync(join(implementer.candidate, "src", "base.ts"), "utf8")).toBe("export const base = 1;\n");
+      const again = admitReview("T039", "ma-worker1");
+      expect(again.candidate).toBe(implementer.candidate);
+    });
+
+    it("refuses a review link carried by a writable role", () => {
+      // The read-only guarantee must not rest on the parser alone: admission picks the tree
+      // and the mount access, so a writable role carrying a link is refused here.
+      admitImplementer("attempt-impl-role");
+      const writable = { ...contextFor(), assignment: { taskId: "T043-review", role: "implementer" as const,
+        reviewOf: "T039", paths: ["src"], dependencies: [] } } as unknown as ContextManifest;
+      expect(() => runtime.admitForLaunch("run-1", { attemptId: "attempt-impl-linked", worker: "ma-worker1",
+        assignment: writable.assignment, outputs: ["src/result.ts"], permissions: ["write-assigned-tree"], context: writable }))
+        .toThrow(/not this run's implementer/i);
+    });
+
+    it("refuses a review whose target has no candidate instead of staging one", () => {
+      // A missing candidate is a refusal, not a cue to build a tree: staging here would
+      // hand the reviewer a checkout nobody wrote, which is the defect itself.
+      recordImplementer("T039-uncandidated");
+      expect(() => admitReview("T039-uncandidated")).toThrow(/no candidate/i);
+      expect(existsSync(candidateDir("ma-worker1", "run-1", "T039-uncandidated"))).toBe(false);
+    });
+
+    it("refuses a review whose target is not this run's implementer", () => {
+      // The link resolves from recorded authority, so a launch cannot name a task the run
+      // never recorded, nor one recorded under another role.
+      expect(() => admitReview("T999")).toThrow(/not this run's implementer/i);
+      db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
+        VALUES ('item-reviewer-row', '2026-10-22T00:00:00.000Z', '2026-10-22T00:00:00.000Z', 'lead@rig-1', 's', 'in-progress', 'body')`).run();
+      db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json)
+        VALUES ('item-reviewer-row', 'run-1', 'T043-otherreview', ?)`)
+        .run(JSON.stringify({ taskId: "T043-otherreview", role: "reviewer", paths: ["test/other"], dependencies: [] }));
+      expect(() => admitReview("T043-otherreview")).toThrow(/not this run's implementer/i);
+    });
+
+    it("refuses a reviewed candidate held by a different worker", () => {
+      // The control mounts only trees under the launching worker's directory, so a
+      // reviewer on another worker could never be given this tree.
+      admitImplementer("attempt-impl-worker");
+      expect(() => admitReview("T039", "ma-worker2", "attempt-review-worker")).toThrow(/different worker/i);
+    });
+
+    it("never lets a review attempt own the tree it reads", () => {
+      // A review reads a tree another task owns. If it took a claim on that tree, the
+      // implementer's own release would find the count still non-zero and the candidate
+      // would survive for the daemon's life (R2-2), and a refused review could delete it
+      // (R2-1). So the review takes no claim: after both attempts release, the tree is
+      // gone with the implementer's claim alone.
+      admitImplementer("attempt-impl-release");
+      admitReview("T039", "ma-worker1", "attempt-review-release");
+      expect(existsSync(candidateDir("ma-worker1", "run-1", "T039"))).toBe(true);
+      // The reviewer's own release (what the launcher does for it) changes nothing.
+      runtime.releaseCandidate("run-1", "T043-review", "attempt-review-release");
+      // The implementer's release is the last claim, so the tree goes — unless the review
+      // left a claim behind, in which case it survives and this fails.
+      runtime.releaseCandidate("run-1", "T039", "attempt-impl-release");
+      expect(existsSync(candidateDir("ma-worker1", "run-1", "T039"))).toBe(false);
+    });
+
+    it("does not delete the reviewed tree when a review launch is refused", async () => {
+      // R2-1: after a restart the implementer's tree has no in-memory claim, so a review
+      // that adopted it and then took a claim would be its *only* owner. Any post-admission
+      // refusal — here a candidate mismatch — would then delete the work it was asked to
+      // review. This is the restart shape the older release test missed by keeping the
+      // implementer's attempt live.
+      const implementer = admitImplementer("attempt-impl-refused");
+      const restarted = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+        candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId), assignmentRoot: () => assignmentRoot,
+        defaultWorker: () => "ma-worker1" });
+      const reviewContext = { ...contextFor({ role: "reviewer" }),
+        assignment: { taskId: "T043-review", role: "reviewer", reviewOf: "T039", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: ["submit-review"] } as unknown as ContextManifest;
+      const refused = await launcher(control({ assignedTree: repo }).fake, restarted)
+        .launch({ client: "claude-code", attempt: { attemptId: "attempt-review-refused",
+          deadline: Date.now() + 60_000, context: { ...reviewContext, projection: projectionFor("attempt-review-refused") } } });
+      expect(refused.ok).toBe(false);
+      expect(String(refused.error)).toMatch(/managed_candidate_mismatch/);
+      // The implementer's work is untouched, and still reachable.
+      expect(existsSync(implementer.candidate)).toBe(true);
+      expect(readFileSync(join(implementer.candidate, "src", "base.ts"), "utf8")).toBe("export const base = 1;\n");
+    });
+
+    it("parses the link only on a reviewer, and never onto itself", () => {
+      // The contract is the boundary: a non-reviewer naming a target, or a reviewer naming
+      // itself, would point a launch at a tree the task does not have.
+      const base = { taskId: "R1", role: "reviewer", paths: ["src"], dependencies: [] };
+      expect(parseAssignment({ ...base, reviewOf: "T039" })).toMatchObject({ reviewOf: "T039" });
+      expect(parseAssignment(base)).not.toHaveProperty("reviewOf");
+      expect(() => parseAssignment({ ...base, role: "implementer", reviewOf: "T039" })).toThrow();
+      expect(() => parseAssignment({ ...base, reviewOf: "R1" })).toThrow();
+      expect(() => parseAssignment({ ...base, reviewOf: "" })).toThrow();
+    });
   });
 });

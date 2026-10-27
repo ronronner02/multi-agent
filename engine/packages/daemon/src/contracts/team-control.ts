@@ -58,6 +58,13 @@ export interface PlanBinding {
 export interface ScopedAssignment {
   taskId: string;
   role: TeamRole;
+  /**
+   * A reviewer's link to the task whose candidate it reviews (plan U5).
+   *
+   * The reviewer enters that task's candidate read-only and takes no claim on it, so its
+   * own `taskId` still keys everything it owns: its queue row, its attempt and its release.
+   */
+  reviewOf?: string;
   paths: string[];
   dependencies: string[];
 }
@@ -414,7 +421,13 @@ export function parseAssignment(value: unknown): ScopedAssignment {
   if (dependencies.includes(taskId)) throw new TeamContractError("dependencies");
   const paths = strings(v.paths, "paths", relativePath);
   if (!paths.length) throw new TeamContractError("paths");
-  return { taskId, role: role(v.role), paths, dependencies };
+  const parsed = role(v.role);
+  // Plan U5: only a reviewer reviews, and it cannot review itself — either would point a
+  // launch at a tree the launching task does not own.
+  if (v.reviewOf === undefined) return { taskId, role: parsed, paths, dependencies };
+  const reviewOf = text(v.reviewOf, "reviewOf", 256);
+  if (parsed !== "reviewer" || reviewOf === taskId) throw new TeamContractError("reviewOf");
+  return { taskId, role: parsed, reviewOf, paths, dependencies };
 }
 
 export function jsonValue(value: unknown, field = "payload", depth = 0): JsonValue {

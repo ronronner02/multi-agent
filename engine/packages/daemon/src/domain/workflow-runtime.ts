@@ -500,7 +500,7 @@ export class WorkflowRuntime {
    * it and materializes the base elsewhere. Refusals are raised, never returned,
    * so a caller cannot proceed on a workspace it did not get.
    */
-  candidateFor(runId: string, taskId: string, worker?: string): CandidateWorkspace {
+  candidateFor(runId: string, taskId: string, worker?: string, options?: { adoptOnly?: boolean }): CandidateWorkspace {
     const key = `${runId}\u0000${taskId}`;
     // An invalidated candidate stays recorded so its owners can still release it,
     // but no caller may enter it again.
@@ -518,8 +518,21 @@ export class WorkflowRuntime {
       // only a path a reader guessed at, because the packet and identity accessors
       // name no worker and fall back to the default; re-homing it is safe and is
       // what keeps a reader from deciding where a later launch has to run.
+      //
+      // A record with no worker can also sit in *this* worker's directory: the reader
+      // fell back to the same worker the launch is about to use. That is not a
+      // disagreement to re-home — re-homing would delete the very tree the launch
+      // asks for — so the tree is kept.
       const owner = this.candidateWorker.get(key);
-      if (worker !== undefined && owner !== worker) {
+      const samePlace = owner === undefined && this.candidateRoot !== undefined
+        && worker !== undefined && existing.root === this.candidateRoot(runId, taskId, worker);
+      if (worker !== undefined && (owner !== undefined ? owner !== worker : !samePlace)) {
+        // Re-homing is a mutation: it drops the record and asks for the tree's removal. An
+        // adopt-only caller is a reader that must never destroy state — a review launch
+        // refused here would otherwise deregister and remove the very candidate it was
+        // asked to review, so it refuses without touching anything. The tree stays
+        // accounted for, and the worker that does own it can still launch into it.
+        if (options?.adoptOnly) throw new Error("Reviewed candidate belongs to a different worker");
         // A record with no worker was staged by a reader that names none (packet,
         // identity, source check) in the default worker's directory. It belongs to
         // no attempt, so it is re-homed rather than allowed to decide where the
@@ -530,6 +543,10 @@ export class WorkflowRuntime {
         this.candidateWorker.delete(key);
         this.removeWorkspace(existing);
       } else {
+        // Recording an owner is bookkeeping for a tree about to be launched into. An
+        // adopt-only caller is not launching yet, so it leaves the record as it found it
+        // and the real launch does the recording.
+        if (samePlace && !options?.adoptOnly) this.candidateWorker.set(key, worker!);
         // T039: a candidate is only usable while the source checkout it was staged
         // from is unmoved. Handing one back after the owner's tree changed would
         // present a tree as evidence of work the source no longer supports, so this
@@ -572,6 +589,17 @@ export class WorkflowRuntime {
     const base = resolveWorkspaceBase(run.binding.repository.root);
     const recordPath = base.kind === "snapshot" ? this.snapshotRecordPath(runId, taskId) : undefined;
     const adopted = this.adoptCandidate(runId, taskId, workspaceRoot, base, recordPath);
+    // T043: a review launch may adopt the tree a restart left behind, but must never
+    // create one. Staging here would hand the reviewer a checkout nobody wrote — the
+    // defect this task exists to close — so absence is a refusal, not a cue to build.
+    if (options?.adoptOnly) {
+      if (!adopted) throw new Error("Reviewed task has no candidate");
+      // The record is written only so a later caller in this process sees the same tree;
+      // the launch that actually enters it records the owner, exactly as a non-review
+      // launch does. Refusing above leaves everything untouched.
+      this.candidates.set(key, adopted);
+      return adopted;
+    }
     let workspace: CandidateWorkspace;
     if (adopted) workspace = adopted;
     else {
@@ -700,7 +728,9 @@ export class WorkflowRuntime {
    * attempt is finished with it. The tree goes away only when the last owner does.
    *
    * An unretained release is a no-op rather than a guess: an attempt that never
-   * obtained the candidate has nothing to give back.
+   * obtained the candidate has nothing to give back. A review attempt is exactly that
+   * case — it reads the implementer's tree and never owns it, so this is the no-op that
+   * keeps a refused review from deleting the work it was asked to review.
    */
   releaseCandidate(runId: string, taskId: string, attemptId: string): void {
     const key = `${runId}\u0000${taskId}`, owners = this.candidateOwners.get(key);
@@ -751,6 +781,15 @@ export class WorkflowRuntime {
       || hashBinding(run.binding) !== hashBinding(input.context.binding)) throw new Error("Run is not approved for this assignment");
     const binding = run.binding, assignment = input.assignment;
     if (assignment.role !== input.context.role || !binding.roles.includes(assignment.role)) throw new Error("Assignment role is outside the approval");
+    // Plan U5: the link is checked against the run's own recorded rows, never against the
+    // launch's claim. A reviewer naming a task this run did not record as an implementer is
+    // refused before any tree is touched. The role gate is repeated here rather than left to
+    // `parseAssignment`, because admission is what decides which tree a launch enters and what
+    // access it gets: an implementer carrying a link would be handed another task's candidate
+    // and mounted writable.
+    if (assignment.reviewOf !== undefined && (assignment.role !== "reviewer" || !this.isRunImplementer(runId, assignment.reviewOf))) {
+      throw new Error("Review target is not this run's implementer");
+    }
     const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
     const covered = (path: string) => allowed.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
     for (const path of [...assignment.paths, ...input.outputs]) if (!covered(path)) throw new Error("Assignment or output expands the approved scope");
@@ -761,16 +800,65 @@ export class WorkflowRuntime {
     // omitting an argument: the run is the only source of what its tasks claim.
     const verdict = validateDependencyGraph(this.runGraph(runId, assignment));
     if (!verdict.ok) throw new Error(`Dependency graph refused: ${verdict.reason}`);
-    const candidate = this.candidateFor(runId, assignment.taskId, input.worker);
+    // T043: a reviewer enters the candidate under review; every other assignment gets its own.
+    // The reviewer path is lookup-only on purpose — see `reviewedCandidateFor`.
+    const candidate = assignment.reviewOf === undefined
+      ? this.candidateFor(runId, assignment.taskId, input.worker)
+      : this.reviewedCandidateFor(runId, assignment.reviewOf, input.worker);
     // Only an attempt that is actually handed the candidate owns it. Recording
     // ownership here is what lets a later refusal tell "my tree" from "someone
     // else's live tree" instead of guessing. The digest is read first on purpose: a
     // manifest failure after the claim was taken would leave an owner that never
     // received anything, and the reference count would then hold the tree forever
     // because nothing knows to release it.
+    //
+    // T043: a review attempt takes no claim. It reads a tree another task owns, so a
+    // claim from it would make the reviewer the owner — a refused review would then be
+    // allowed to delete the implementer's work, and a completed one would keep the tree
+    // alive past the implementer's own release. Its release is the no-op that ownership
+    // never existed, which is exactly the behaviour a reader wants.
     const manifestDigest = candidateManifest(candidate).manifestDigest;
-    this.retainCandidate(`${runId}\u0000${assignment.taskId}`, input.attemptId);
+    if (assignment.reviewOf === undefined) this.retainCandidate(`${runId}\u0000${assignment.taskId}`, input.attemptId);
     return { candidate: candidate.root, manifestDigest };
+  }
+
+  /**
+   * T043 — the tree a managed launch of this assignment mounts.
+   *
+   * The production composition asks this before the control's policy check sees the path,
+   * so it is the one place that decides "my own candidate" versus "the candidate I review".
+   * Kept as a runtime method rather than inline in `startup.ts` so the decision the launch
+   * actually uses is the one under test; the composition stays a call site.
+   *
+   * A review launch never creates here: the adopt-only path refuses an absent candidate,
+   * which is what stops a reviewer being handed a checkout nobody wrote.
+   */
+  assignedTreeFor(runId: string, assignment: { taskId: string; reviewOf?: string }): string {
+    return (assignment.reviewOf === undefined
+      ? this.candidateFor(runId, assignment.taskId)
+      : this.reviewedCandidateFor(runId, assignment.reviewOf)).root;
+  }
+
+  /** T043 — whether this run recorded the task as an implementer. */
+  private isRunImplementer(runId: string, taskId: string): boolean {
+    const row = this.db.prepare(
+      `SELECT assignment_json AS assignment FROM team_queue_authority WHERE run_id = ? AND task_id = ?`)
+      .get(runId, taskId) as { assignment: string } | undefined;
+    if (!row) return false;
+    return (JSON.parse(row.assignment) as { role?: string }).role === "implementer";
+  }
+
+  /**
+   * T043 — enter the candidate a reviewer reviews, or refuse.
+   *
+   * The reviewed tree is the one its own task would enter, so this goes through the same
+   * lookup-and-adopt path `candidateFor` owns. It differs in exactly one way: it passes
+   * `adoptOnly`, so a tree a restart left behind is adopted from its control-owned record
+   * while a missing one is refused. Staging would hand the reviewer a checkout nobody
+   * wrote, which is the defect this task closes.
+   */
+  private reviewedCandidateFor(runId: string, reviewedTaskId: string, worker?: string): CandidateWorkspace {
+    return this.candidateFor(runId, reviewedTaskId, worker, { adoptOnly: true });
   }
 
   /** T039 — the worker a non-launch accessor falls back to when it has no attempt. */
@@ -866,7 +954,11 @@ export class WorkflowRuntime {
       // evidence that must survive a later refusal — including one decided before the
       // projection work starts, such as a candidate mismatch.
       resumed = existsSync(root);
-      if (this.candidateFor(runId, input.assignment.taskId, worker).root !== input.candidate) {
+      // The tree the caller named has to be the one admission just handed this attempt.
+      // Admission already resolved it — for a review launch that is the candidate under
+      // review — so this compares against its answer rather than re-resolving here, which
+      // would let the two disagree about whether a reviewer may create a tree.
+      if (admitted.candidate !== input.candidate) {
         // The projection names the tree the worker will work in, so a caller that names
         // another tree would produce a context describing work that cannot happen.
         throw new Error("Managed attempt candidate mismatch");
@@ -899,7 +991,9 @@ export class WorkflowRuntime {
     } catch (error) {
       // Admission retained the candidate claim when it handed this attempt its tree, so
       // every later failure has to give it back: a claim nobody releases would hold the
-      // task's tree for the life of the daemon.
+      // task's tree for the life of the daemon. A review launch took no claim, so this is
+      // the no-op `releaseCandidate` documents — it releases the implementation attempt's
+      // own owner key only.
       this.releaseCandidate(runId, input.assignment.taskId, attemptId);
       // A half-written projection would also wedge the attempt id for good: the next
       // produce would find the directory, treat it as a resume, and be refused for an

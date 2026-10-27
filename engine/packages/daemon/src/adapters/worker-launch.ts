@@ -446,6 +446,11 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       // nothing and must not disturb a candidate a live attempt owns. A started or
       // ambiguously-started attempt also keeps its claim, because it still owns the
       // tree it is working in.
+      //
+      // T043: a review attempt takes no claim at all — it reads a tree another task owns —
+      // so this is a no-op for it. Passing its own task id is what makes that true: a
+      // reviewer keyed onto the reviewed task would be able to release, and therefore
+      // delete, the implementer's work.
       if (this.admission && admitted && !state.startRequested) {
         try {
           this.admission.releaseCandidate(state.input.attempt.context.runId,

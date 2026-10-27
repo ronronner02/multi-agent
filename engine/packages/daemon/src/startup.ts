@@ -343,15 +343,16 @@ function composeManagedLaunch(dependencies: {
     // privileged call — isolation changes where the worker works, not which seat is
     // admitted.
     //
-    // Note what this does *not* claim: a reviewer is a separate task row with its own
-    // `taskId` (`team_queue_authority` is UNIQUE(run_id, task_id), one role per row),
-    // so "the task's candidate" for a reviewer is the reviewer's own tree, not the
-    // implementer's. Handing a reviewer the tree under review needs a field naming
-    // that task, which `ScopedAssignment` does not have; that is a plan question
-    // recorded in the T039 residuals, not something this line can invent.
+    // T043: a reviewer is a separate task row with its own `taskId` (`team_queue_authority`
+    // is UNIQUE(run_id, task_id), one role per row), so its own row names no tree the
+    // implementer wrote. The assignment's optional `reviewOf` supplies that link.
+    //
+    // Which tree that is stays the runtime's decision (`assignedTreeFor`), so the branch
+    // under test is the branch this composition runs. A review launch there resolves only
+    // a candidate the runtime holds or can adopt; it never stages one.
     resolveAssignedTree: (scope) => {
       seat(scope.sessionId, scope.run.rigId);
-      return requireWorkflowRuntime().candidateFor(scope.run.id, scope.task.assignment.taskId).root;
+      return requireWorkflowRuntime().assignedTreeFor(scope.run.id, scope.task.assignment);
     },
     mailbox: input => {
       const endpoint = endpoints.get(input.attempt.attemptId);
