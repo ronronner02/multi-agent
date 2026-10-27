@@ -55,6 +55,13 @@ export interface CandidateWorkspace {
   base: WorkspaceBase;
   /** Source state captured immediately before isolation, for later comparison. */
   source: SourceFingerprint;
+  /**
+   * T048 — the control-owned creation record of a snapshot-lane candidate. The snapshot lane has
+   * no git registry to prove where the tree came from, so this file is its provenance and is
+   * deleted with it. Absent for the commit lane, whose provenance is the source's worktree
+   * registry.
+   */
+  recordPath?: string;
 }
 
 const sha256 = (bytes: Buffer | string): string => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -881,6 +888,129 @@ export function createCandidateWorkspace(input: {
 }
 
 /**
+ * T048 — the source repository's registered worktrees, as the provenance of a commit-lane
+ * candidate.
+ *
+ * The registry is the source's admin directory, which no worker can write, so an entry there was
+ * put there by the control side. Liveness is read from that admin directory and not from git's
+ * `worktree list` annotations: git marks a registration `prunable` when the candidate's own `.git`
+ * file is missing, which is a byte the worker *can* write. Taking that annotation as authority let
+ * a worker turn a candidate holding real work into an unadoptable one, and let one release prune
+ * another candidate's registration — both while the control-owned entry was intact. An entry whose
+ * `gitdir` names a path is a registration; whether the directory is still there is a separate
+ * question, answered by the filesystem when the tree is actually entered.
+ *
+ * The repository's own worktree is included, because it is registered the same way.
+ */
+export function sourceWorktrees(sourceRoot: string): Set<string> {
+  const repository = realpathSync(sourceRoot);
+  const registered = new Set<string>();
+  registered.add(repository);
+  const adminPath = gitOrNull(repository, ["rev-parse", "--git-path", "worktrees"])?.trim();
+  if (!adminPath) return registered;
+  const admin = isAbsolute(adminPath) ? adminPath : join(repository, adminPath);
+  let entries: string[];
+  try { entries = readdirSync(admin); } catch { return registered; }
+  for (const entry of entries) {
+    const pointer = registrationPointer(admin, entry);
+    if (pointer === null) continue;
+    const named = dirname(pointer);
+    try { registered.add(realpathSync(named)); } catch { /* A registration whose tree is gone still names a path; it is kept. */ }
+    // The unresolved parent is kept too: a worktree whose directory was temporarily unmounted is
+    // still a registration, and forgetting it would be the same defect in a quieter form.
+    registered.add(named);
+  }
+  return registered;
+}
+
+/**
+ * T048 — the worktree path one admin registration names.
+ *
+ * A registration's `gitdir` file holds the path of the worktree's own `.git`. It is usually
+ * absolute, but `worktree.useRelativePaths` and `git worktree add --relative-paths` make it
+ * relative to the registration's own directory — not to ours, and not to the repository. Resolving
+ * it against the daemon's working directory, as a bare `dirname` does, then names a path that does
+ * not exist: a genuine candidate would be quarantined and its registration left behind on release.
+ */
+function registrationPointer(admin: string, entry: string): string | null {
+  const directory = join(admin, entry);
+  let pointer: string;
+  try { pointer = readFileSync(join(directory, "gitdir"), "utf8").trim(); } catch { return null; }
+  if (!pointer) return null;
+  return isAbsolute(pointer) ? pointer : resolve(directory, pointer);
+}
+
+/** Whether the source repository's registry holds a worktree at exactly this path. */
+export function isSourceWorktree(sourceRoot: string, workspaceRoot: string): boolean {
+  let canonical: string;
+  try { canonical = realpathSync(workspaceRoot); } catch { return false; }
+  return sourceWorktrees(sourceRoot).has(canonical) || sourceWorktrees(sourceRoot).has(resolve(workspaceRoot));
+}
+
+/**
+ * T048 — drop this candidate's registration, and only this candidate's.
+ *
+ * Git's own `worktree prune` is repository-wide: it deletes every administrative entry it judges
+ * prunable, which includes the owner's own missing worktrees and any other task's candidate whose
+ * `.git` a worker removed. Releasing one task must not destroy registry state it does not own, so
+ * the entry is matched here by the `gitdir` pointer that names this exact tree and removed
+ * directly. No git process runs, so no candidate path is ever passed to one.
+ */
+export function forgetSourceWorktree(sourceRoot: string, workspaceRoot: string): void {
+  const repository = realpathSync(sourceRoot);
+  const adminPath = gitOrNull(repository, ["rev-parse", "--git-path", "worktrees"])?.trim();
+  if (!adminPath) return;
+  const admin = isAbsolute(adminPath) ? adminPath : join(repository, adminPath);
+  let canonical: string;
+  try { canonical = realpathSync(workspaceRoot); } catch { canonical = resolve(workspaceRoot); }
+  let entries: string[];
+  try { entries = readdirSync(admin); } catch { return; }
+  for (const entry of entries) {
+    const pointer = registrationPointer(admin, entry);
+    if (pointer === null) continue;
+    const named = dirname(pointer);
+    let resolved: string;
+    try { resolved = realpathSync(named); } catch { resolved = resolve(named); }
+    // The entry belongs to this candidate when its pointer names this tree, whether the pointer
+    // was written through a symlink, in relative form or not.
+    if (resolved !== canonical && resolve(named) !== resolve(workspaceRoot)) continue;
+    rmSync(join(admin, entry), { recursive: true, force: true });
+  }
+}
+
+/**
+ * T048 — record a snapshot-lane candidate in the control state directory.
+ *
+ * The snapshot lane copies files into a plain directory, so after a restart nothing on disk
+ * separates the daemon's candidate from a directory a worker planted at the same path. This
+ * record is that separation: it names the run, the task and the candidate's canonical path, and
+ * it lives under the control state directory, which the worker sandbox neither mounts nor makes
+ * reachable. The path is resolved before writing, so a symlink swapped in later names a different
+ * location and does not match.
+ */
+export function recordSnapshotCandidate(recordPath: string, input: { runId: string; taskId: string; root: string }): void {
+  const canonical = realpathSync(input.root);
+  mkdirSync(dirname(recordPath), { recursive: true, mode: 0o700 });
+  writeFileSync(recordPath,
+    `${JSON.stringify({ version: 1, runId: input.runId, taskId: input.taskId, root: canonical })}\n`,
+    { mode: 0o600 });
+}
+
+/** Whether a control-owned creation record names this exact snapshot candidate. */
+export function snapshotCandidateRecorded(recordPath: string, input: { runId: string; taskId: string; root: string }): boolean {
+  let record: { version?: unknown; runId?: unknown; taskId?: unknown; root?: unknown };
+  try {
+    record = JSON.parse(readFileSync(recordPath, "utf8")) as typeof record;
+  } catch {
+    return false;
+  }
+  if (record?.version !== 1 || record.runId !== input.runId || record.taskId !== input.taskId) return false;
+  let canonical: string;
+  try { canonical = realpathSync(input.root); } catch { return false; }
+  return record.root === canonical;
+}
+
+/**
  * The candidate's canonical reading: base identifier, every file it owns with the hash of
  * the bytes the patch carries, a complete manifest digest, and a patch against the base.
  *
@@ -1189,11 +1319,21 @@ export function removeReviewPacket(packet: ReviewPacket): void {
   rmSync(packet.root, { recursive: true, force: true });
 }
 
-/** Release the candidate tree. The source worktree was never written, so nothing restores it. */
+/**
+ * Release the candidate tree. The source worktree was never written, so nothing restores it.
+ *
+ * T048 — the tree is deleted directly, never by handing its path to git. `worktree remove <path>`
+ * runs git with the candidate as the repository to operate on, which reopens the configuration
+ * class T044 closed: a worker-written `.git` or `config` in the candidate would be read. Its
+ * registration is then dropped by `forgetSourceWorktree`, which matches the one admin entry that
+ * names this tree — not by a repository-wide `prune`, which would also delete every other
+ * registration git happens to judge prunable. The snapshot lane has no registration; its
+ * control-owned creation record goes with the tree it names.
+ */
 export function removeCandidateWorkspace(workspace: CandidateWorkspace): void {
-  if (workspace.base.kind === "commit") {
-    // Removal is a repository operation, so it runs against the source worktree.
-    if (gitOrNull(workspace.sourceRoot, ["worktree", "remove", "--force", workspace.root]) !== null) return;
-  }
   rmSync(workspace.root, { recursive: true, force: true });
+  if (workspace.base.kind === "commit") {
+    try { forgetSourceWorktree(workspace.sourceRoot, workspace.root); } catch { /* A vanished source has no registry to update. */ }
+  }
+  if (workspace.recordPath) rmSync(workspace.recordPath, { force: true });
 }

@@ -391,20 +391,26 @@ function composeManagedLaunch(dependencies: {
 /**
  * T039: the roots the workflow runtime isolates candidates with.
  *
- * Both come from the installed worker policy — the same bytes the privileged
+ * All come from the installed worker policy — the same bytes the privileged
  * launcher validates — so a candidate is created exactly where the kernel will
  * mount it. Reading the same source is what keeps "created" and "mountable" from
  * drifting apart. An unreadable or incomplete policy is a configuration failure,
  * not a reason to launch without isolation.
+ *
+ * T048 adds `control_state_dir`: the snapshot lane has no git registry, so its
+ * creation record is written under the control state directory, the one location the
+ * plan keeps outside every worker-writable tree.
  */
-function managedWorkerRoots(): { assignmentRoot: string; worker: string } {
+function managedWorkerRoots(): { assignmentRoot: string; controlStateDir: string; worker: string } {
   const policy = JSON.parse(readFileSyncNamed("/etc/multi-agent/worker-policy.json", "utf8")) as
-    { paths?: { assignment_root?: unknown }; worker_identities?: unknown };
+    { paths?: { assignment_root?: unknown; control_state_dir?: unknown }; worker_identities?: unknown };
   const assignmentRoot = policy.paths?.assignment_root;
+  const controlStateDir = policy.paths?.control_state_dir;
   const workers = Array.isArray(policy.worker_identities) ? policy.worker_identities : [];
   if (typeof assignmentRoot !== "string" || !nodePath.isAbsolute(assignmentRoot) || nodePath.resolve(assignmentRoot) !== assignmentRoot
+    || typeof controlStateDir !== "string" || !nodePath.isAbsolute(controlStateDir) || nodePath.resolve(controlStateDir) !== controlStateDir
     || !workers.length || typeof workers[0] !== "string") throw new Error("managed_candidate_policy_unavailable");
-  return { assignmentRoot, worker: workers[0] };
+  return { assignmentRoot, controlStateDir, worker: workers[0] };
 }
 
 /** One tree per task, under the policy's assignment root, addressed the way the launcher expects. */
@@ -1790,6 +1796,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         defaultWorker: () => workerRoots.worker,
         candidateRoot: (runId: string, taskId: string, worker: string) =>
           managedCandidateRoot(workerRoots.assignmentRoot, worker, runId, taskId),
+        candidateRecordsRoot: () => nodePath.join(workerRoots.controlStateDir, "candidates"),
       } : {}),
       // OPR.0.4.6.WF1 FR-3: instantiate/handoff auto-arm the
       // per-instance workflow-keepalive job in-txn; terminal disarms.
