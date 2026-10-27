@@ -902,6 +902,13 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const teamControlOptions: NonNullable<AppDeps["teamControl"]> = { ...teamControl, readSystemHealth: teamControl.readSystemHealth
     ?? composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
       ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) }) };
+  // T053 — the seat capability a managed send must reuse. `createApp` builds the mailbox
+  // owner when none is supplied, so this rides the deps slot rather than constructing it
+  // twice: one owner, one seat table.
+  const seatCapabilities = new SeatMailboxCapabilities(db);
+  // The mailbox owner `createApp` builds reads this slot (through `deps`), so a managed send
+  // reuses the seat's recorded value instead of minting a second one.
+  const readSeatMailboxCapability = (runId: string, sessionId: string) => seatCapabilities.find(runId, sessionId);
   // T052 — the managed owner read projection, composed over the same owners the
   // daemon already built. A caller that supplied one keeps it: that is the
   // injection seam the tests and any embedding host use.
@@ -1512,6 +1519,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const deps: AppDeps = {
     teamControl: teamControlOptions,
     teamGovernance,
+    readSeatMailboxCapability,
     ...(managedLaunch ? { managedLaunch, nativeChannelState: managedLaunch.channel.read } : {}),
     rigRepo,
     sessionRegistry,
@@ -1809,17 +1817,24 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     | undefined;
   if (queueRepoForWorkflow) {
     // T039: in managed mode the runtime is the isolation owner, so it gets the roots
-    // the kernel mounts from. They are read once here from the installed policy — the
-    // same bytes the privileged launcher validates — so a candidate is created exactly
-    // where the launcher will look for it. An unreadable policy throws rather than
-    // silently launching without isolation.
-    const workerRoots = managed ? managedWorkerRoots() : undefined;
+    // the kernel mounts from. They come from the installed policy — the same bytes the
+    // privileged launcher validates — so a candidate is created exactly where the launcher
+    // will look for it. An unreadable policy throws rather than silently launching without
+    // isolation.
+    //
+    // T053: every callback below re-reads the policy at use instead of capturing it here. A
+    // host that re-provisions while the daemon runs would otherwise leave the producer writing
+    // into the old roots and the launcher validating new ones, which is the disagreement this
+    // composition exists to prevent.
+    const policyNow = managed ? managedWorkerRoots() : undefined;
     // T053: the producer's remaining inputs, from owners this composition already holds —
     // the installed policy for identity and roots, the control database for the seat's
     // capability, and the credential owner above for the token its endpoint authenticates with.
-    const managedInputs = workerRoots && workerControl ? {
-      identities: new WorkerIdentities({ workerRoot: workerRoots.workerRoot,
-        assignmentRoot: workerRoots.assignmentRoot, identities: workerRoots.workerIdentities }),
+    const managedInputs = policyNow && workerControl ? {
+      identities: new WorkerIdentities(() => {
+        const policy = managedWorkerRoots();
+        return { workerRoot: policy.workerRoot, assignmentRoot: policy.assignmentRoot, identities: policy.workerIdentities };
+      }),
       capabilities: new SeatMailboxCapabilities(db),
       credentials: workerControl,
     } : undefined;
@@ -1828,26 +1843,29 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       db,
       eventBus,
       queueRepo: queueRepoForWorkflow,
-      ...(workerRoots ? {
-        assignmentRoot: () => workerRoots.assignmentRoot,
-        defaultWorker: () => workerRoots.worker,
+      ...(policyNow ? {
+        assignmentRoot: () => managedWorkerRoots().assignmentRoot,
+        defaultWorker: () => managedWorkerRoots().worker,
         candidateRoot: (runId: string, taskId: string, worker: string) =>
-          managedCandidateRoot(workerRoots.assignmentRoot, worker, runId, taskId),
-        candidateRecordsRoot: () => nodePath.join(workerRoots.controlStateDir, "candidates"),
+          managedCandidateRoot(managedWorkerRoots().assignmentRoot, worker, runId, taskId),
+        candidateRecordsRoot: () => nodePath.join(managedWorkerRoots().controlStateDir, "candidates"),
         // T053: where the producer writes what the launcher mounts, read from the same
-        // installed policy bytes; and the three ownership facts it cannot derive itself.
-        managedAttemptRoots: () => ({ contextRoot: workerRoots.contextRoot, mailboxRoot: workerRoots.mailboxRoot,
-          controlStateDir: workerRoots.controlStateDir, policyRevision: workerRoots.policyRevision,
-          workerIdentities: workerRoots.workerIdentities, frameworkRoot: workerRoots.frameworkRoot,
-          frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir: workerRoots.toolchainDir }),
+        // installed policy bytes at the moment of use; and the ownership facts it cannot
+        // derive itself.
+        managedAttemptRoots: () => {
+          const roots = managedWorkerRoots();
+          return { contextRoot: roots.contextRoot, mailboxRoot: roots.mailboxRoot,
+            controlStateDir: roots.controlStateDir, policyRevision: roots.policyRevision,
+            workerIdentities: roots.workerIdentities, frameworkRoot: roots.frameworkRoot,
+            frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir: roots.toolchainDir };
+        },
         ...(managedInputs ? {
           managedAttemptInputs: {
-            // Issued once per seat at admission and returned as the live credential list the
-            // endpoint authenticates against; the same object the control routes read.
-            workerCredentials: (runId: string, sessionId: string) => {
-              managedInputs.credentials.issue(runId, sessionId);
-              return managedInputs.credentials.readCredentials();
-            },
+            issueCredential: (runId: string, sessionId: string) => managedInputs.credentials.issue(runId, sessionId),
+            hasCredential: (runId: string, sessionId: string) => managedInputs.credentials.has(runId, sessionId),
+            // A read, never a mint: the endpoint authenticates every request through this, and a
+            // request against a revoked seat must not bring its credential back.
+            readCredentials: () => managedInputs.credentials.readCredentials(),
             mailboxCapability: (runId: string, sessionId: string) => managedInputs.capabilities.forSeat(runId, sessionId),
             workerIdentity: (worker: string) => managedInputs.identities.resolve(worker),
           },

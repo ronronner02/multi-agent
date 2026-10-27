@@ -182,14 +182,18 @@ export interface WorkflowRuntimeDeps {
    * T053 — the owners that supply the producer's per-attempt inputs, so an attempt can be
    * produced from production state rather than from whatever a call site happens to hold.
    *
-   * All three are required together because they are one admission: the credential the
-   * endpoint authenticates with, the capability its seat's mailbox answers to, and the gid
-   * the projection and mailbox are created under. Supplying them from separate places is
-   * how the two ends of a mailbox drift apart. Absent disables production, which the caller
-   * sees as a refusal rather than a half-built attempt.
+   * Issuance and reading are separate: the endpoint authenticates every request by *reading*
+   * the credential list, so a read that minted would let a request against a revoked seat
+   * bring its own token back. The producer issues once, before the endpoint exists, and the
+   * bridge only ever reads.
    */
   managedAttemptInputs?: {
-    workerCredentials: (runId: string, sessionId: string) => TeamControlCredentials;
+    /** Mint this seat's token if it has none. Called once per produced attempt. */
+    issueCredential: (runId: string, sessionId: string) => void;
+    /** Whether the seat already has a live token, so an existing one is never re-issued. */
+    hasCredential: (runId: string, sessionId: string) => boolean;
+    /** The live credential list; never mints. */
+    readCredentials: () => TeamControlCredentials;
     mailboxCapability: (runId: string, sessionId: string) => string;
     workerIdentity: (worker: string) => { uid: number; gid: number; groupIds: number[] };
   };
@@ -814,6 +818,16 @@ export class WorkflowRuntime {
     const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
     const covered = (path: string) => allowed.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
     for (const path of [...assignment.paths, ...input.outputs]) if (!covered(path)) throw new Error("Assignment or output expands the approved scope");
+    // T053: the task's own record is the store for outputs and permissions, so admission is
+    // where a caller's claim is checked — both the producer and a direct launch pass through
+    // here, and neither should be able to declare production inputs the run never recorded.
+    // A row that predates the record has nothing to disagree with.
+    const task = governance.findTask(runId, assignment.taskId);
+    const differs = (claimed: readonly string[], stored: string[] | null) =>
+      stored !== null && canonicalJson([...claimed].sort()) !== canonicalJson([...stored].sort());
+    if (task && (differs(input.outputs, task.outputs) || differs(input.permissions, task.permissions))) {
+      throw new Error("Assignment inputs disagree with the recorded task");
+    }
     if (assignment.dependencies.some(id => !this.dependencySatisfied(governance, runId, id))) throw new Error("Dependency lacks validated success");
     // T039's done signal requires a cyclic or over-limit graph and overlapping write
     // claims to refuse the launch, so the graph is derived from the run's own
@@ -952,23 +966,43 @@ export class WorkflowRuntime {
     }
     const existing = this.managedAttempts.get(attemptId);
     if (existing) return existing;
-    // T053: the three per-attempt inputs the composition owns. A caller may still name them,
-    // as T042's contract allows; the composition is the only issuer, so a caller-supplied
-    // value is a reading of the same owner rather than a second one. They are resolved
-    // before anything is admitted, so a host without them refuses without a claim.
+    // T053: the composition is the authority for every input it owns. A caller may still name
+    // them, as T042's contract allows, but only a value that agrees with the owner is accepted:
+    // silently preferring either side would let a caller pick a seat, capability or identity the
+    // run never recorded, which is exactly the grant this task exists to stop issuing twice.
     const owned = this.managedAttemptInputs;
-    const readCredentials = input.readCredentials ?? (owned ? () => owned.workerCredentials(runId, input.sessionId) : undefined);
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
+    const recorded = governance.findTask(runId, input.assignment.taskId);
+    if (owned && !recorded) throw new Error("Managed attempt task is not recorded");
+    // A seat is a recorded fact, not a caller's claim: the capability and the credential are
+    // keyed on `(run, seat)`, so a produce for any other session would mint authority for a
+    // seat this task does not have.
+    if (recorded) {
+      const item = this.queueRepo.getById(recorded.qitemId);
+      if (!item || item.destinationSession !== input.sessionId) throw new Error("Managed attempt seat is not the task's destination");
+    }
+    /** The owner's value when it exists; a caller value that disagrees is refused. */
+    const agree = <T>(field: string, claimed: T | undefined, owner: T | undefined): T | undefined => {
+      if (claimed !== undefined && owner !== undefined && canonicalJson(claimed) !== canonicalJson(owner)) {
+        throw new Error(`Managed attempt ${field} disagrees with the composition`);
+      }
+      return claimed ?? owner;
+    };
+    if (owned && input.readCredentials) throw new Error("Managed attempt credentials come from the composition");
+    // The bridge reads this list on every request, so the token must be live before `listen`
+    // writes the bootstrap. Issuance happens inside the try below, where a failure can revoke.
+    const readCredentials = owned ? owned.readCredentials : input.readCredentials;
     if (!readCredentials) throw new Error("Managed attempt credentials are not configured");
-    const mailboxCapability = input.mailboxCapability ?? owned?.mailboxCapability(runId, input.sessionId);
+    const mailboxCapability = agree("mailbox capability", input.mailboxCapability, owned?.mailboxCapability(runId, input.sessionId));
     if (mailboxCapability === undefined) throw new Error("Managed attempt mailbox capability is not configured");
     if (!/^mailbox:[A-Za-z0-9_-]{43}$/.test(mailboxCapability)) throw new Error("Invalid mailbox capability");
     // The identity owner answers the ownership questions a caller cannot: the gid the
     // projection and mailbox are created under, and the uid/groups the manifest uses to prove
     // the projection is worker-readable without being worker-writable.
     const identity = owned?.workerIdentity(worker);
-    const workerGid = input.workerGid ?? identity?.gid;
-    const workerUid = input.context.workerUid ?? identity?.uid;
-    const workerGroups = input.context.workerGroups ?? identity?.groupIds;
+    const workerGid = agree("worker gid", input.workerGid, identity?.gid);
+    const workerUid = agree("worker uid", input.context.workerUid, identity?.uid);
+    const workerGroups = agree("worker groups", input.context.workerGroups, identity?.groupIds);
     if (workerGid === undefined || workerUid === undefined || workerGroups === undefined) {
       throw new Error("Managed attempt worker identity is not configured");
     }
@@ -979,19 +1013,6 @@ export class WorkflowRuntime {
     const nativePolicy = roots.policyRevision >= 5
       ? await buildManagedNativePolicy(input.client, roots.toolchainDir) : undefined;
 
-    // T053: the task's own record is the store for these two arrays, so a caller that names
-    // different ones is refused instead of trusted. A row that predates the record, or a task
-    // this run never recorded, has nothing to disagree with; the launch boundary already
-    // refuses an unrecorded task on its queue row. Checked before admission, so a refusal
-    // here leaves no candidate claim and no projection behind.
-    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
-    const recorded = governance.findTask(runId, input.assignment.taskId);
-    const differs = (claimed: readonly string[], stored: string[] | null) =>
-      stored !== null && canonicalJson([...claimed].sort()) !== canonicalJson([...stored].sort());
-    if (recorded && (differs(input.outputs, recorded.outputs) || differs(input.permissions, recorded.permissions))) {
-      throw new Error("Assignment inputs disagree with the recorded task");
-    }
-
     const admitted = this.admitForLaunch(runId, { attemptId, worker, assignment: input.assignment,
       outputs: input.outputs, permissions: input.permissions,
       context: { binding: this.managedBinding(runId), runId, role: input.role } as ContextManifest });
@@ -1000,6 +1021,7 @@ export class WorkflowRuntime {
     // Declared outside the try because the failure path needs it: only a projection this
     // call created may be removed.
     let resumed = false;
+    let issued = false;
     try {
       // Read before anything else can throw. The failure path below removes only a
       // projection this call created, and an earlier attempt's projection is run
@@ -1030,6 +1052,13 @@ export class WorkflowRuntime {
       // listen over one, so it is removed first. It can only ever be this attempt's,
       // because the path is built from the attempt id.
       if (existsSync(socketPath)) rmSync(socketPath);
+      // Issued once, immediately before the endpoint that authenticates with it, and inside
+      // the try so every later failure revokes it below. A token minted and then abandoned
+      // would stay live for that seat with no endpoint to bound it.
+      if (owned && !owned.hasCredential(runId, input.sessionId)) {
+        owned.issueCredential(runId, input.sessionId);
+        issued = true;
+      }
       const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
         runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
         capability: mailboxCapability },
@@ -1052,6 +1081,10 @@ export class WorkflowRuntime {
       // owner-writable root. Only a projection this call created is removed; one that
       // was already there belongs to an earlier attempt and is left as evidence.
       if (!resumed) removeAttemptRoot(root);
+      // A credential this call minted for an attempt that never started is revoked here: the
+      // attempt has no endpoint and no retirement path, so nothing else would ever bound it.
+      // A token a live sibling attempt already holds is not this call's to revoke.
+      if (issued) this.onManagedAttemptRetired?.({ runId, sessionId: input.sessionId });
       throw error;
     }
   }
@@ -1068,9 +1101,14 @@ export class WorkflowRuntime {
     if (!produced) return;
     this.managedAttempts.delete(attemptId);
     await produced.bridge.close();
-    // T053: the attempt's worker credential is revoked on the same retirement that closes
-    // its endpoint, so the two never outlive each other.
-    this.onManagedAttemptRetired?.({ runId: produced.bridge.binding.runId, sessionId: produced.bridge.binding.sessionId });
+    // T053: the attempt's worker credential is revoked on the same retirement that closes its
+    // endpoint, so the two never outlive each other. A seat has one credential, so a retirement
+    // only revokes it when no other attempt of that seat is still live: retiring a superseded
+    // attempt must not take the credential the current one is authenticating with.
+    const { runId, sessionId } = produced.bridge.binding;
+    const shared = [...this.managedAttempts.values()].some(other =>
+      other.bridge.binding.runId === runId && other.bridge.binding.sessionId === sessionId);
+    if (!shared) this.onManagedAttemptRetired?.({ runId, sessionId });
   }
 
   /** T042 — the attempt a seat's launch should attach, if this daemon produced one. */

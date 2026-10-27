@@ -17,6 +17,11 @@ import type { TeamControlCredentials } from "../middleware/auth-bearer-token.js"
  * therefore starts with no worker token to honour and revokes every row it inherits
  * (`reconcile`), which is the same lifetime T042 gives an endpoint.
  *
+ * Issuance and reading are separate on purpose. The endpoint authenticates every request
+ * against `readCredentials()`, so a read must never write: a "read" that minted would let a
+ * request against a revoked seat bring its credential back. `issue` is called once, by the
+ * producer, before the endpoint exists.
+ *
  * The `credentials` object is mutated in place rather than replaced: startup hands one
  * instance to the control routes, the managed launch control and the history adapter, and
  * a replacement would leave some of them reading a stale copy.
@@ -50,6 +55,11 @@ export class WorkerControlAccess {
     this.issued.set(key, { token, sessionId, runId });
     this.publish();
     return token;
+  }
+
+  /** Whether this seat currently has a live credential, without minting one. */
+  has(runId: string, sessionId: string): boolean {
+    return this.issued.has(`${runId}\u0000${sessionId}`);
   }
 
   /** The credentials the control routes, the launcher and the mailbox all authenticate against. */

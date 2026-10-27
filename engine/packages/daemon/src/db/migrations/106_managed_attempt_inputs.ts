@@ -6,8 +6,8 @@ import type { Migration } from "../migrate.js";
  * The task's declared outputs and permissions sit beside its assignment rather than inside
  * `assignment_json`: the assignment is the approved scope the launch compares byte-for-byte,
  * and adding fields there would change every recorded row's identity. Nullable because a row
- * created before this migration recorded neither, and the read maps that to `[]` — "not
- * recorded", never an implicit grant.
+ * created before this migration recorded neither; `getTask` reports that as `null` — "nothing
+ * was recorded", which is different from a task that declared nothing and is never a grant.
  */
 export const managedAttemptInputsSchema: Migration = {
   name: "106_managed_attempt_inputs.sql",

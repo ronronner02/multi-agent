@@ -387,7 +387,11 @@ export class PlanGovernance {
       // reaches neither array, so it leaves no credential and no capability behind.
       const inputs = parseTaskInputs(v);
       const declares = (entry: string) => assignment.paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
-      if (inputs.outputs.some((entry) => !declares(entry))) return deny("An output is outside the assignment's paths");
+      // An output is something the task produces, so it has to be writable. A reviewer's
+      // assignment covers the binding's read paths too, and an output under one of those would
+      // describe a write the approval never granted.
+      const writable = (entry: string) => ctx.run.binding.writePaths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
+      if (inputs.outputs.some((entry) => !declares(entry) || !writable(entry))) return deny("An output is outside the assignment's reviewable write paths");
       if (inputs.permissions.some((entry) => !roleConfiguration[assignment.role].permissions.includes(entry))) {
         return deny("A permission is outside the assignment role's vocabulary");
       }

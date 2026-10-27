@@ -76,9 +76,11 @@ export function resolveWorkerIdentity(policy: WorkerIdentityPolicy, name: string
 
 /** The composition handle startup injects; `resolveWorkerIdentity` stays the one owner. */
 export class WorkerIdentities {
-  constructor(private readonly policy: WorkerIdentityPolicy, private readonly read: (file: string) => string[][] = readDatabase) {}
+  /** The policy is a function so a re-provisioned host is read at use, never captured at boot. */
+  constructor(private readonly policy: () => WorkerIdentityPolicy,
+    private readonly read: (file: string) => string[][] = readDatabase) {}
 
   resolve(name: string): WorkerIdentity {
-    return resolveWorkerIdentity(this.policy, name, this.read);
+    return resolveWorkerIdentity(this.policy(), name, this.read);
   }
 }
