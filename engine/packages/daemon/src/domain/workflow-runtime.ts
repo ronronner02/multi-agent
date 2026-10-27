@@ -17,13 +17,17 @@ import {
   candidateManifest,
   createCandidateWorkspace,
   createReviewPacket,
+  isSourceWorktree,
+  recordSnapshotCandidate,
   removeCandidateWorkspace,
   resolveWorkspaceBase,
+  snapshotCandidateRecorded,
   sourceFingerprint,
   verifySourceUnchanged,
   type CandidateWorkspace,
+  type WorkspaceBase,
 } from "./team-workspace.js";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/team-control.js";
 // PL-004 Phase D: workflow runtime facade.
@@ -137,6 +141,15 @@ export interface WorkflowRuntimeDeps {
    * A function so a re-installed policy is read at launch, not at boot.
    */
   assignmentRoot?: () => string;
+  /**
+   * T048: where a snapshot-lane candidate's control-owned creation record is written. The
+   * snapshot lane has no git registry, so this record is the only proof that a directory at a
+   * candidate path was created by this runtime; it must sit in the control state directory, which
+   * the worker sandbox neither mounts nor makes reachable. A function so a re-installed policy is
+   * read at use. Absent, the snapshot lane refuses to create or adopt a candidate rather than
+   * adopting a directory it cannot account for.
+   */
+  candidateRecordsRoot?: () => string;
   /**
    * T039: the worker whose assignment directory holds a candidate when the caller
    * does not name one. Only the non-launch accessors (identity, packet, source
@@ -553,9 +566,42 @@ export class WorkflowRuntime {
     // identity, source check), and it has no way to know which worker the task
     // belongs to. Recording `defaultWorker` for it would pin the task to that
     // worker and refuse the real launch on any other one.
-    const adopted = this.adoptCandidate(runId, taskId, workspaceRoot);
-    const workspace = adopted ?? createCandidateWorkspace({ root: run.binding.repository.root,
-      base: resolveWorkspaceBase(run.binding.repository.root), workspaceRoot, label: taskId });
+    // Adoption decides provenance from control-owned records only: the source repository's
+    // worktree registry for the commit lane, and the creation record the control wrote under its
+    // own state directory for the snapshot lane. Nothing on or in the candidate is consulted.
+    const base = resolveWorkspaceBase(run.binding.repository.root);
+    const recordPath = base.kind === "snapshot" ? this.snapshotRecordPath(runId, taskId) : undefined;
+    const adopted = this.adoptCandidate(runId, taskId, workspaceRoot, base, recordPath);
+    let workspace: CandidateWorkspace;
+    if (adopted) workspace = adopted;
+    else {
+      // Anything at the candidate path the control cannot account for is moved aside, never
+      // deleted and never adopted. The path is under the worker's own assignment directory, so
+      // leaving the entry in place would block this task on every retry — a directory or a plain
+      // file alike, since `git worktree add` refuses any occupied path. The quarantine name is
+      // chosen here and keeps whatever was in it.
+      if (this.present(workspaceRoot)) this.quarantineCandidate(workspaceRoot);
+      try {
+        workspace = createCandidateWorkspace({ root: run.binding.repository.root, base, workspaceRoot, label: taskId });
+      } catch (error) {
+        // A creation that failed partway is no more accounted for than a planted entry, and the
+        // next retry has to be able to try again.
+        if (this.present(workspaceRoot)) this.quarantineCandidate(workspaceRoot);
+        throw error;
+      }
+      if (recordPath) {
+        // The record has to exist before this call returns: a candidate the control cannot account
+        // for is one a restart would have to refuse, and its work would strand. A record that
+        // cannot be written removes the tree again rather than leaving it unexplained.
+        try {
+          recordSnapshotCandidate(recordPath, { runId, taskId, root: workspace.root });
+        } catch (error) {
+          removeCandidateWorkspace(workspace);
+          throw error;
+        }
+        workspace = { ...workspace, recordPath };
+      }
+    }
     // Only a caller that named a worker tells us who owns the task's tree.
     if (worker !== undefined) this.candidateWorker.set(key, worker);
     this.candidates.set(key, workspace);
@@ -565,19 +611,53 @@ export class WorkflowRuntime {
   /**
    * T039 — re-enter a candidate this runtime already staged, before a restart.
    *
-   * Adopted only when the path is already a directory. Anything else — a file, a
-   * symlink — is left to `createCandidateWorkspace`, which refuses it loudly rather
-   * than silently working in a tree of unknown provenance. The base is resolved
-   * from the current source, so the source-moved check downstream still applies to
-   * the adopted tree.
+   * A directory at the candidate path is adopted only when a control-owned record accounts for it:
+   * the source's worktree registry for the commit lane, the creation record under the control state
+   * directory for the snapshot lane. Anything that is not a directory — a file, a symlink — is left
+   * to `createCandidateWorkspace`, which refuses it loudly. The base is resolved from the current
+   * source, so the source-moved check downstream still applies to the adopted tree.
    */
-  private adoptCandidate(runId: string, taskId: string, workspaceRoot: string): CandidateWorkspace | undefined {
+  private adoptCandidate(runId: string, taskId: string, workspaceRoot: string, base: WorkspaceBase,
+    recordPath: string | undefined): CandidateWorkspace | undefined {
     let stats;
-    try { stats = statSync(workspaceRoot); } catch { return undefined; }
+    try { stats = lstatSync(workspaceRoot); } catch { return undefined; }
     if (!stats.isDirectory()) return undefined;
     const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
-    return { root: workspaceRoot, sourceRoot: resolve(run.binding.repository.root),
-      base: resolveWorkspaceBase(run.binding.repository.root), source: sourceFingerprint(run.binding.repository.root) };
+    const sourceRoot = realpathSync(run.binding.repository.root);
+    const accounted = base.kind === "commit"
+      ? isSourceWorktree(sourceRoot, workspaceRoot)
+      : recordPath !== undefined && snapshotCandidateRecorded(recordPath, { runId, taskId, root: workspaceRoot });
+    if (!accounted) return undefined;
+    return { root: workspaceRoot, sourceRoot, base, source: sourceFingerprint(run.binding.repository.root),
+      ...(recordPath ? { recordPath } : {}) };
+  }
+
+  /**
+   * T048 — move an unaccounted directory off a candidate path, keeping everything in it.
+   *
+   * The candidate path sits under `assignments/<worker>`, which the worker owns, so a worker can
+   * put a directory of its choosing there before its task launches. Leaving it in place would
+   * refuse that task on every retry — the `EEXIST` wedge the card forbids, wearing a different
+   * error — and deleting it could destroy genuine work whose record was lost. It is therefore
+   * renamed, never removed: the sibling name is chosen here from the control's own counter, so
+   * nothing about the worker's directory decides where it goes, and the bytes stay for the owner
+   * to inspect. The task then creates its own candidate at the path it was given.
+   */
+  private quarantineCandidate(workspaceRoot: string): void {
+    this.quarantineSeq += 1;
+    renameSync(workspaceRoot, `${workspaceRoot}.rejected-${Date.now()}-${this.quarantineSeq}`);
+  }
+
+  /** T048 — whether anything occupies a path. A broken link counts: it still blocks creation. */
+  private present(path: string): boolean {
+    try { lstatSync(path); return true; } catch { return false; }
+  }
+
+  /** T048 — the control-owned record path for one task's snapshot candidate. */
+  private snapshotRecordPath(runId: string, taskId: string): string {
+    const root = this.candidateRecordsRoot?.();
+    if (!root) throw new Error("Snapshot candidate provenance is not configured");
+    return join(root, `${runId}-${taskId}.json`);
   }
 
   /**
@@ -1200,8 +1280,11 @@ export class WorkflowRuntime {
   private readonly candidateWorker = new Map<string, string>();
   /** T039 — candidates refused because the source moved; kept so their owners can still release them. */
   private readonly invalidCandidates = new Set<string>();
+  /** T048 — keeps two quarantined directories at one candidate path from colliding. */
+  private quarantineSeq = 0;
   private readonly candidateRoot?: WorkflowRuntimeDeps["candidateRoot"];
   private readonly assignmentRoot?: () => string;
+  private readonly candidateRecordsRoot?: () => string;
   private readonly defaultWorker?: () => string;
   /** T042 — the roots the producer writes into, read from the installed policy at call time. */
   private readonly managedAttemptRoots?: WorkflowRuntimeDeps["managedAttemptRoots"];
@@ -1219,6 +1302,7 @@ export class WorkflowRuntime {
     this.events = deps.eventBus;
     this.candidateRoot = deps.candidateRoot;
     this.assignmentRoot = deps.assignmentRoot;
+    this.candidateRecordsRoot = deps.candidateRecordsRoot;
     this.defaultWorker = deps.defaultWorker;
     this.managedAttemptRoots = deps.managedAttemptRoots;
     this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,

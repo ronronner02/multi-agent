@@ -422,12 +422,14 @@ describe("production launch runs through runtime eligibility and one candidate w
 
   it("keeps a path-bearing workspace failure out of the caller-visible error", async () => {
     // The refusal above is decided before any workspace work, so it proves nothing
-    // about a message that *does* quote a path. Occupying the candidate directory
-    // makes `git worktree add` fail from inside the workspace layer, whose message
-    // names that absolute path. That message must not reach the caller.
-    const occupied = candidateDir("ma-worker1");
-    mkdirSync(occupied, { recursive: true });
-    writeFileSync(join(occupied, "placeholder"), "occupied");
+    // about a message that *does* quote a path. T048 made an entry *at* the candidate
+    // path recoverable (it is quarantined and the task proceeds), so the failure this
+    // case needs now comes from the directory above it: with `assignments/<worker>` a
+    // file, the workspace layer's own `mkdir` fails and its message names the absolute
+    // path. That message must not reach the caller.
+    const workerRoot = join(assignmentRoot, "ma-worker1");
+    rmSync(workerRoot, { recursive: true, force: true });
+    writeFileSync(workerRoot, "not a directory");
     const { fake, calls } = control();
     const result = await launcher(fake).launch(launchInput());
     expect(result.ok).toBe(false);
@@ -468,16 +470,20 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(existsSync(tree)).toBe(false);
   });
 
-  it("does not leave a refused attempt owning the candidate", async () => {
+  it("does not leave a refused attempt owning the candidate", () => {
     // A refusal that happens after the candidate exists but before it is handed
     // out must not leave a claim behind: the reference count would then hold the
-    // tree forever, because no release ever names that attempt. Occupy the
-    // candidate path with a file so the workspace cannot be built, then check the
-    // task can still be admitted and released normally afterwards.
-    const occupied = candidateDir("ma-worker1");
-    writeFileSync(occupied, "not a directory");
+    // tree forever, because no release ever names that attempt. T048 made an entry
+    // at the candidate path recoverable, so the refusal has to come from the
+    // workspace layer failing for another reason — a file where the worker's
+    // assignment directory belongs — and the task must still be admissible once
+    // that is cleared.
+    const workerRoot = join(assignmentRoot, "ma-worker1");
+    rmSync(workerRoot, { recursive: true, force: true });
+    writeFileSync(workerRoot, "not a directory");
     expect(() => runtime.candidateFor("run-1", "T039", "ma-worker1")).toThrow();
-    rmSync(occupied, { force: true });
+    rmSync(workerRoot, { force: true });
+    mkdirSync(workerRoot, { recursive: true });
     runtime.admitForLaunch("run-1", { attemptId: "attempt-after-refusal", worker: "ma-worker1",
       assignment: context.assignment, outputs: context.outputs, permissions: context.permissions, context });
     runtime.releaseCandidate("run-1", "T039", "attempt-after-refusal");
