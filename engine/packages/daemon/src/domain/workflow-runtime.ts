@@ -210,11 +210,51 @@ export interface WorkflowRuntimeDeps {
  * endpoint, and the candidate the assignment will run in. Frozen so a caller cannot
  * substitute a different attempt after it was registered.
  */
+/** T042 — what the producer hands back: the attempt object for the binding, the live
+ * endpoint, and the candidate the assignment will run in. Frozen so a caller cannot
+ * substitute a different attempt after it was registered.
+ */
 export interface ProducedManagedAttempt {
   readonly attempt: ManagedAttempt;
   readonly bridge: WorkerMailboxBridge;
   readonly candidate: string;
   readonly manifestDigest: string;
+}
+
+/** T042/T053 — everything `produceManagedAttempt` takes. */
+export interface ProduceManagedAttemptInput {
+  attemptId: string;
+  worker: string;
+  assignment: AssignmentInput["assignment"];
+  outputs: readonly string[];
+  permissions: readonly string[];
+  /** Everything about the attempt the projection needs; the producer derives the rest. */
+  context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
+    | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision" | "nativePolicy"
+    | "workerUid" | "workerGroups"> & { workerUid?: number; workerGroups?: number[] };
+  role: TeamRole;
+  client: "claude-code" | "codex";
+  /** The workspace the assignment will actually run in, from T039's candidate. */
+  candidate: string;
+  /** The session whose capability the mailbox accepts, and the seat it belongs to. */
+  sessionId: string;
+  rigId: string;
+  taskId: string;
+  recipients: readonly string[];
+  /** The recipient's own mailbox capability: the secret its poll and consume are scoped by. */
+  mailboxCapability?: string;
+  /** The worker's own gid in the projection; the control side is this process. */
+  workerGid?: number;
+  delivery: MailboxDelivery;
+  chat: ChatRepository;
+  /** The credentials this attempt's endpoint authenticates against. */
+  readCredentials?: () => TeamControlCredentials;
+  /** The launcher's own liveness question for this attempt; false closes the generation. */
+  isCurrent: () => boolean;
+  deadline: number;
+  previous?: ManagedAttempt["previous"];
+  /** The pinned framework files this attempt loads. */
+  frameworkFiles: readonly { path: string; source: string }[];
 }
 
 export interface InstantiateInput {
@@ -922,40 +962,26 @@ export class WorkflowRuntime {
    * path component, so a resume asks for the attempt it recorded and gets the bytes
    * that attempt was reviewed under, never today's source.
    */
-  async produceManagedAttempt(runId: string, input: {
-    attemptId: string;
-    worker: string;
-    assignment: AssignmentInput["assignment"];
-    outputs: readonly string[];
-    permissions: readonly string[];
-    /** Everything about the attempt the projection needs; the producer derives the rest. */
-    context: Omit<ContextInput, "root" | "projection" | "runId" | "files" | "binding" | "assignment"
-      | "outputs" | "permissions" | "role" | "frameworkRoot" | "frameworkRevision" | "nativePolicy"
-      | "workerUid" | "workerGroups"> & { workerUid?: number; workerGroups?: number[] };
-    role: TeamRole;
-    client: "claude-code" | "codex";
-    /** The workspace the assignment will actually run in, from T039's candidate. */
-    candidate: string;
-    /** The session whose capability the mailbox accepts, and the seat it belongs to. */
-    sessionId: string;
-    rigId: string;
-    taskId: string;
-    recipients: readonly string[];
-    /** The recipient's own mailbox capability: the secret its poll and consume are scoped by. */
-    mailboxCapability?: string;
-    /** The worker's own gid in the projection; the control side is this process. */
-    workerGid?: number;
-    delivery: MailboxDelivery;
-    chat: ChatRepository;
-    /** The credentials this attempt's endpoint authenticates against. */
-    readCredentials?: () => TeamControlCredentials;
-    /** The launcher's own liveness question for this attempt; false closes the generation. */
-    isCurrent: () => boolean;
-    deadline: number;
-    previous?: ManagedAttempt["previous"];
-    /** The pinned framework files this attempt loads. */
-    frameworkFiles: readonly { path: string; source: string }[];
-  }): Promise<ProducedManagedAttempt> {
+  async produceManagedAttempt(runId: string, input: ProduceManagedAttemptInput): Promise<ProducedManagedAttempt> {
+    // One production per attempt id, including while it is still starting. An attempt is
+    // published as soon as it exists so a sibling retirement can see it, which means a duplicate
+    // caller must wait for that production rather than receive a half-built endpoint: returning
+    // the record while `listen` is still pending would hand out an endpoint that may never
+    // listen, and a failed start would then delete the entry under the duplicate's feet.
+    const settled = this.managedAttempts.get(input.attemptId);
+    if (settled) return settled;
+    const inFlight = this.producing.get(input.attemptId);
+    if (inFlight) return inFlight;
+    const production = this.produceManagedAttemptOnce(runId, input);
+    this.producing.set(input.attemptId, production);
+    try {
+      return await production;
+    } finally {
+      this.producing.delete(input.attemptId);
+    }
+  }
+
+  private async produceManagedAttemptOnce(runId: string, input: ProduceManagedAttemptInput): Promise<ProducedManagedAttempt> {
     const roots = this.managedAttemptRoots?.();
     if (!roots) throw new Error("Managed attempt production is not configured");
     const { attemptId, worker } = input;
@@ -964,8 +990,6 @@ export class WorkflowRuntime {
     if (![worker, runId, attemptId].every(id => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))) {
       throw new Error("Invalid managed attempt identity");
     }
-    const existing = this.managedAttempts.get(attemptId);
-    if (existing) return existing;
     // T053: the composition is the authority for every input it owns. A caller may still name
     // them, as T042's contract allows, but only a value that agrees with the owner is accepted:
     // silently preferring either side would let a caller pick a seat, capability or identity the
@@ -1025,7 +1049,6 @@ export class WorkflowRuntime {
     // Declared outside the try because the failure path needs it: only a projection this
     // call created may be removed.
     let resumed = false;
-    let issued = false;
     try {
       // Read before anything else can throw. The failure path below removes only a
       // projection this call created, and an earlier attempt's projection is run
@@ -1059,10 +1082,7 @@ export class WorkflowRuntime {
       // Issued once, immediately before the endpoint that authenticates with it, and inside
       // the try so every later failure revokes it below. A token minted and then abandoned
       // would stay live for that seat with no endpoint to bound it.
-      if (owned && !owned.hasCredential(runId, input.sessionId)) {
-        owned.issueCredential(runId, input.sessionId);
-        issued = true;
-      }
+      if (owned && !owned.hasCredential(runId, input.sessionId)) owned.issueCredential(runId, input.sessionId);
       const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
         runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
         capability: mailboxCapability },
@@ -1078,7 +1098,7 @@ export class WorkflowRuntime {
       try {
         await bridge.listen();
       } catch (error) {
-        this.managedAttempts.delete(attemptId);
+        if (this.managedAttempts.get(attemptId) === produced) this.managedAttempts.delete(attemptId);
         throw error;
       }
       return produced;
@@ -1094,10 +1114,11 @@ export class WorkflowRuntime {
       // owner-writable root. Only a projection this call created is removed; one that
       // was already there belongs to an earlier attempt and is left as evidence.
       if (!resumed) removeAttemptRoot(root);
-      // A credential this call minted for an attempt that never started is revoked here: the
-      // attempt has no endpoint and no retirement path, so nothing else would ever bound it.
-      // A token a live sibling attempt already holds is not this call's to revoke.
-      if (issued) this.revokeSeatCredential(runId, input.sessionId, attemptId);
+      // A credential for an attempt that never started is revoked here: the attempt has no
+      // endpoint and no retirement path, so nothing else would ever bound it. The helper only
+      // revokes when no sibling attempt of the seat remains, which is what keeps this from
+      // taking a token a live attempt is using — including one a *sibling* minted.
+      this.revokeSeatCredential(runId, input.sessionId, attemptId);
       throw error;
     }
   }
@@ -1504,6 +1525,8 @@ export class WorkflowRuntime {
   private readonly onManagedAttemptRetired?: WorkflowRuntimeDeps["onManagedAttemptRetired"];
   /** T042 — attempt projections and endpoints this daemon produced, keyed by attempt id. */
   private readonly managedAttempts = new Map<string, ProducedManagedAttempt>();
+  /** T053 — productions still starting, so a duplicate caller awaits the same one. */
+  private readonly producing = new Map<string, Promise<ProducedManagedAttempt>>();
 
   constructor(deps: WorkflowRuntimeDeps) {
     this.guidanceLibrary = deps.guidanceLibrary;
