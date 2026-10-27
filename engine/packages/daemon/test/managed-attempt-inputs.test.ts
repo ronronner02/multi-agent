@@ -11,6 +11,7 @@ import { hashBinding, hashBytes, type PlanGovernance } from "../src/domain/plan-
 import type { PlanBinding, TeamTaskAuthority } from "../src/contracts/team-control.js";
 import { WorkerControlAccess } from "../src/domain/worker-control-access.js";
 import { resolveWorkerIdentity } from "../src/domain/worker-identity.js";
+import { SeatMailboxCapabilities } from "../src/domain/seat-mailbox-capability.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 import { createDaemon } from "../src/startup.js";
 
@@ -141,7 +142,7 @@ describe("the managed attempt's production inputs", () => {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
       planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
       repository: { root: repo, identity: "git:" + "a".repeat(40) },
-      readPaths: ["src"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
+      readPaths: ["src", "docs"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
       policyRevision: 5, policyFingerprint: hashBytes("policy"),
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
@@ -177,9 +178,10 @@ describe("the managed attempt's production inputs", () => {
     ...overrides,
   }), binding);
 
-  const ask = async (frame: Record<string, unknown>) => {
+  const ask = async (frame: Record<string, unknown>, attemptId = "attempt-1") => {
     const response = await new Promise<string>((resolve, reject) => {
-      const socket = createConnection(join(mailboxDir(), "mailbox.sock"), () => socket.write(JSON.stringify(frame) + "\n"));
+      const socket = createConnection(join(mailboxRoot, "ma-worker1", "run", attemptId, "mailbox.sock"),
+        () => socket.write(JSON.stringify(frame) + "\n"));
       let data = "";
       socket.on("data", chunk => { data += chunk; });
       socket.on("end", () => resolve(data));
@@ -279,8 +281,14 @@ describe("the managed attempt's production inputs", () => {
   }, 60_000);
 
   it("refuses a caller whose inputs disagree with the record, and an output outside the assignment at creation", async () => {
-    // Creation refuses an output the assignment never claimed and a permission the role lacks.
-    expect(createTask({ outputs: ["docs/readme.md"] })).toMatchObject({ status: "denied", reason: "An output is outside the assignment's paths" });
+    // Creation refuses an output the assignment never claimed, an output under a read-only
+    // path, and a permission the role lacks.
+    expect(createTask({ outputs: ["docs/readme.md"] })).toMatchObject({ status: "denied", reason: "An output is outside the assignment's reviewable write paths" });
+    // A reviewer may read `docs` but must not produce there: its assignment covers the read
+    // paths, and an output under one would describe a write the approval never granted.
+    expect(createTask({ assignment: { taskId: "task", role: "reviewer", paths: ["docs"], dependencies: [] },
+      outputs: ["docs/report.md"], permissions: ["submit-review"] })).toMatchObject({
+      status: "denied", reason: "An output is outside the assignment's reviewable write paths" });
     expect(createTask({ permissions: ["approve-plan"] })).toMatchObject({ status: "denied", reason: "A permission is outside the assignment role's vocabulary" });
     expect(db.prepare("SELECT count(*) AS count FROM team_queue_authority").get()).toEqual({ count: 0 });
     expect(db.prepare("SELECT count(*) AS count FROM team_seat_mailbox_capabilities").get()).toEqual({ count: 0 });
@@ -293,6 +301,59 @@ describe("the managed attempt's production inputs", () => {
       .rejects.toThrow("Assignment inputs disagree with the recorded task");
     expect(existsSync(attemptRoot())).toBe(false);
     expect(existsSync(mailboxDir())).toBe(false);
+  }, 60_000);
+
+  it("refuses a seat, capability, identity or credential the composition did not issue", async () => {
+    createTask();
+    // A seat this task does not have: the capability and credential are keyed on (run, seat),
+    // so producing for another session would mint authority for a seat that does not exist.
+    await expect(runtime.produceManagedAttempt("run", produceInput({ sessionId: "other@rig" })))
+      .rejects.toThrow("seat is not the task's destination");
+    expect(db.prepare("SELECT count(*) AS count FROM team_seat_mailbox_capabilities WHERE session_id = 'other@rig'").get())
+      .toEqual({ count: 0 });
+    // A capability that disagrees with the seat's record is refused rather than preferred.
+    await expect(runtime.produceManagedAttempt("run", produceInput({ mailboxCapability: "mailbox:" + "d".repeat(43) })))
+      .rejects.toThrow("mailbox capability disagrees with the composition");
+    // A caller-supplied credential would be a second credential authority for one seat.
+    await expect(runtime.produceManagedAttempt("run", produceInput({ readCredentials: () => ({ ownerToken: null }) })))
+      .rejects.toThrow("credentials come from the composition");
+    // An identity that disagrees with the host's account database is refused, not overridden.
+    await expect(runtime.produceManagedAttempt("run", produceInput({ workerGid: workerGid + 1 })))
+      .rejects.toThrow("worker gid disagrees with the composition");
+    expect(existsSync(attemptRoot())).toBe(false);
+    expect(existsSync(mailboxDir())).toBe(false);
+    // None of the refusals left a credential behind.
+    expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
+    expect(credentials.workers ?? []).toEqual([]);
+  }, 60_000);
+
+  it("revokes a credential whose production failed after issuance", async () => {
+    createTask();
+    // A candidate the caller names that admission does not hand this attempt fails after the
+    // seat's credential could have been issued. Nothing retires the attempt, so the failure
+    // path is the only owner that can bound the token.
+    await expect(runtime.produceManagedAttempt("run", produceInput({ candidate: join(directory, "elsewhere") })))
+      .rejects.toThrow("Managed attempt candidate mismatch");
+    expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
+    expect(credentials.workers ?? []).toEqual([]);
+  }, 60_000);
+
+  it("keeps a live attempt's credential when a superseded attempt of the same seat retires", async () => {
+    createTask();
+    const first = await runtime.produceManagedAttempt("run", produceInput());
+    const second = await runtime.produceManagedAttempt("run", produceInput({ attemptId: "attempt-2" }));
+    expect(second.bridge.binding.attemptId).toBe("attempt-2");
+    const secondBootstrap = JSON.parse(readFileSync(join(join(mailboxRoot, "ma-worker1", "run", "attempt-2"), "bootstrap.json"), "utf8"));
+    const token = secondBootstrap.authorization.slice("Bearer ".length);
+    // One credential per seat: retiring the superseded attempt must not take the token the
+    // live attempt's endpoint is authenticating with.
+    await runtime.retireManagedAttempt(first.bridge.binding.attemptId);
+    expect(credentials.workers?.some(worker => worker.token === token)).toBe(true);
+    expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 1 });
+    const admitted = await ask({ authorization: secondBootstrap.authorization, sessionId: "builder@rig", runId: "run",
+      attemptId: "attempt-2", generation: secondBootstrap.generation, operation: "poll", taskId: "task",
+      capability: secondBootstrap.capability }, "attempt-2");
+    expect(admitted.ok).toBe(true);
   }, 60_000);
 
   it("resolves every worker the policy lists, with the launcher's own account rules, and refuses the rest", async () => {
@@ -343,14 +404,22 @@ describe("the managed attempt's production inputs", () => {
     const task = governance.findTask("run", "task") as TeamTaskAuthority;
     const tables = ["team_queue_authority", "team_worker_credentials", "team_seat_mailbox_capabilities", "team_attempts"];
     const counts = () => tables.map(table => db.prepare(`SELECT count(*) AS count FROM ${table}`).get());
+    // A seat with a live credential, so the read paths run against a populated store.
+    credentials.workers = [{ token: "live-token", sessionId: "builder@rig", runId: "run" }];
     const before = counts();
-    // The reads: the recorded task, the credential list and the identity resolution.
+    // The reads: the recorded task, the credential list (the endpoint's every-request path),
+    // the seat's capability and the identity resolution. A read that minted would show up in
+    // the counts below; a read that revoked would show up as a shorter credential list.
     expect(governance.getTask(task.qitemId)).toEqual(task);
     expect(governance.findTask("run", "task")).toEqual(task);
     expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
     expect(new WorkerControlAccess(db, { ownerToken: "owner-fixture" }).readCredentials()).toEqual({ ownerToken: "owner-fixture" });
+    expect(new SeatMailboxCapabilities(db).find("run", "builder@rig"))
+      .toBe((db.prepare("SELECT capability FROM team_seat_mailbox_capabilities WHERE run_id = 'run' AND session_id = 'builder@rig'")
+        .get() as { capability: string }).capability);
     resolveWorkerIdentity({ workerRoot, assignmentRoot, identities: ["ma-worker1"] }, "ma-worker1");
     expect(counts()).toEqual(before);
+    expect(credentials.workers).toEqual([{ token: "live-token", sessionId: "builder@rig", runId: "run" }]);
     expect(db.prepare("SELECT count(*) AS count FROM team_attempts").get()).toEqual({ count: 0 });
     // Nothing reached a privileged launcher or a provider session.
     expect(existsSync(contextRoot) ? files(contextRoot).length : 0).toBe(0);

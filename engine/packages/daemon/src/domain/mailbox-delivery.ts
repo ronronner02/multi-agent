@@ -288,6 +288,16 @@ export class MailboxDelivery {
     private readonly chatRepo: ChatRepository,
     private readonly readPromptState: MailboxPromptStateReader = () => "unknown",
     private readonly readChannelState: NativeChannelStateReader = () => null,
+    /**
+     * T053 — the seat's own capability, for a send that names none.
+     *
+     * A managed seat's capability is persisted when its assignment is created, and its
+     * endpoint polls with exactly that value. Minting a fresh one here instead would store
+     * the message under a value the seat's poll never matches, so a caller that does not
+     * name a capability gets the seat's own. It returns null when the run recorded none —
+     * the send then mints as before, which is the legacy route's behaviour.
+     */
+    private readonly readSeatCapability: ((runId: string, sessionId: string) => string | null) | undefined = undefined,
   ) {}
 
   send(input: MailboxSendRequest): MailboxSendResult {
@@ -299,7 +309,8 @@ export class MailboxDelivery {
     const body = requiredBody(input.body);
     const messageId = optionalText(input.messageId, "messageId");
     const replyTo = optionalText(input.replyTo, "replyTo") ?? null;
-    const capability = optionalText(input.capability, "capability");
+    const named = optionalText(input.capability, "capability");
+    const capability = named ?? this.readSeatCapability?.(runId, recipient) ?? undefined;
 
     try {
       return this.chatRepo.sendMailbox(rigId, sender, {
@@ -310,7 +321,7 @@ export class MailboxDelivery {
         body,
         replyTo,
         attachment: input.attachment ?? null,
-        capability: capability ?? undefined,
+        capability,
       });
     } catch (error) {
       if (error instanceof MailboxDeliveryError) throw error;

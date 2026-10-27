@@ -171,6 +171,13 @@ export interface AppDeps {
   nativeChannelState?: NativeChannelStateReader;
   /** The single mailbox owner. Built by createApp when absent and published here for endpoint registration. */
   mailboxDelivery?: MailboxDelivery;
+  /**
+   * T053 — the persisted per-seat mailbox capability. When supplied, a send that names no
+   * capability uses the seat's recorded value instead of minting a second one, which is what
+   * keeps a managed seat's poll and its senders agreeing on one value. Absent in legacy
+   * callers, where a send keeps minting as before.
+   */
+  readSeatMailboxCapability?: (runId: string, sessionId: string) => string | null;
   /** The managed launch chain injected into both fresh and both resume adapters (managed mode only). */
   managedLaunch?: {
     launcher: import("./adapters/worker-launch.js").WorkerLauncher;
@@ -557,13 +564,16 @@ export function createApp(deps: AppDeps): Hono {
   // Inject dependencies into context for all routes
   // One mailbox owner per daemon, admitted only by the daemon's own seat evidence (KTD11).
   if (deps.mailboxDelivery && deps.nativeChannelState) throw new Error("A supplied mailbox owner already fixes its channel reader");
+  // A managed daemon resolves the seat's recorded capability; a legacy one reads none, so a
+  // send keeps its existing mint-on-omit behaviour byte for byte.
+  const managedSeatCapability = deps.readSeatMailboxCapability;
   const mailboxDelivery = deps.mailboxDelivery ?? (deps.chatRepo
     ? new MailboxDelivery(deps.chatRepo, createMailboxPromptStateReader({
         db: deps.rigRepo.db,
         seatActivity: deps.seatActivityService,
         agentActivityStore: deps.agentActivityStore,
         observedSince: new Date().toISOString(),
-      }), deps.nativeChannelState)
+      }), deps.nativeChannelState, managedSeatCapability)
     : undefined);
   deps.mailboxDelivery = mailboxDelivery;
   app.use("*", async (c, next) => {

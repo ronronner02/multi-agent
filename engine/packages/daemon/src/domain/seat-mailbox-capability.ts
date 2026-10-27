@@ -33,4 +33,15 @@ export class SeatMailboxCapabilities {
   forSeat(runId: string, sessionId: string): string {
     return ensureSeatMailboxCapability(this.db, runId, sessionId, this.clock());
   }
+
+  /**
+   * The value already recorded for this seat, or null. A send uses this: it must never mint,
+   * because a message is not the place to establish a seat's mailbox identity.
+   */
+  find(runId: string, sessionId: string): string | null {
+    const row = this.db.prepare(
+      "SELECT capability FROM team_seat_mailbox_capabilities WHERE run_id = ? AND session_id = ?")
+      .get(runId, sessionId) as { capability: string } | undefined;
+    return row?.capability ?? null;
+  }
 }
