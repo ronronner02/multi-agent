@@ -265,10 +265,12 @@ describe("the managed attempt's production inputs", () => {
     const row = db.prepare("SELECT capability FROM team_seat_mailbox_capabilities WHERE run_id = 'run' AND session_id = ?")
       .get("builder@rig") as { capability: string };
     expect(row.capability).toBe(bootstrap.capability);
-    // A later send that names the seat's capability is what the seat's mailbox counts.
+    // A later send that names no capability must land under the seat's own value, not a fresh
+    // one: a send that named it here would pass even with the resolver deleted.
     const delivery = daemon.deps.mailboxDelivery!;
-    delivery.send({ rigId: "rig", sender: "lead@rig", recipient: "builder@rig", taskId: "task", runId: "run",
-      body: "review this", messageId: "message-1", capability: row.capability });
+    const sent = delivery.send({ rigId: "rig", sender: "lead@rig", recipient: "builder@rig", taskId: "task", runId: "run",
+      body: "review this", messageId: "message-1" }) as { capability?: string };
+    expect(sent.capability).toBe(row.capability);
     // Delivery is held while no live seat is at a safe boundary, so the capability's effect is
     // read where poll reads it: the scope match. A different capability matches nothing.
     const scope = { rigId: "rig", recipient: "builder@rig", taskId: "task", runId: "run" };
@@ -329,13 +331,23 @@ describe("the managed attempt's production inputs", () => {
 
   it("revokes a credential whose production failed after issuance", async () => {
     createTask();
-    // A candidate the caller names that admission does not hand this attempt fails after the
-    // seat's credential could have been issued. Nothing retires the attempt, so the failure
-    // path is the only owner that can bound the token.
-    await expect(runtime.produceManagedAttempt("run", produceInput({ candidate: join(directory, "elsewhere") })))
-      .rejects.toThrow("Managed attempt candidate mismatch");
+    // The failure has to land *after* issuance, or this proves nothing: a candidate mismatch
+    // throws before the token exists. `listen` fails here, which is the first step that runs
+    // after the credential is minted, so this case fails if the revoke is removed.
+    const failing = { invalidateNativeChannel: () => { throw new Error("fixture endpoint failure"); } };
+    await expect(runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never })))
+      .rejects.toThrow("fixture endpoint failure");
     expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
     expect(credentials.workers ?? []).toEqual([]);
+    expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
+  }, 60_000);
+
+  it("refuses an endpoint bound to a task the assignment does not name", async () => {
+    createTask();
+    await expect(runtime.produceManagedAttempt("run", produceInput({ taskId: "task-b" })))
+      .rejects.toThrow("task is not the assignment's task");
+    expect(existsSync(mailboxDir())).toBe(false);
+    expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
   }, 60_000);
 
   it("keeps a live attempt's credential when a superseded attempt of the same seat retires", async () => {
