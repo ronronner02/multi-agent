@@ -1,8 +1,11 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { TEAM_HEALTH_LIGHTS, TEAM_QUEUE_STATES, type TeamApproval, type TeamRun, type TeamSystemHealth } from "@openrig/daemon/team-control";
+import { TEAM_HEALTH_LIGHTS, TEAM_QUEUE_STATES, TEAM_WORKFLOW_STAGES, type TeamOwnerRead, type TeamReadModel, type TeamApproval, type TeamRun, type TeamSystemHealth } from "@openrig/daemon/team-control";
 import { routeTree } from "../src/routes.js";
 import { queryClient } from "../src/lib/query-client.js";
 import { INTERFACE_LANGUAGE_KEY } from "../src/team/shell.js";
@@ -28,6 +31,8 @@ let failure = 0;
 let healthAge = 0;
 let approvals: TeamApproval[];
 let protocolVersion = "1.0";
+let projection: TeamOwnerRead;
+let replay: ReturnType<TeamReadModel["replay"]>;
 let history: ReturnType<typeof createMemoryHistory>;
 let fetcher: ReturnType<typeof vi.fn>;
 function health(): TeamSystemHealth {
@@ -49,6 +54,10 @@ async function pair() {
 }
 beforeEach(() => {
   failure = 0; healthAge = 0; protocolVersion = "1.0"; approvals = [approval];
+  projection = { schema: "multi-agent-team-read/v1", protocolVersion: "1.0", runId: run.id, generatedAt: new Date().toISOString(), run,
+    workflow: { current: "setup-checks", stages: TEAM_WORKFLOW_STAGES.map(stage => ({ stage, state: "unavailable", evidence: "No durable evidence" })) },
+    tasks: [], attempts: [], approvals: [], logs: [], replay: { retainedFrom: 1, latestSeq: 1000 } };
+  replay = { events: [], window: projection.replay, gap: false };
   localStorage.clear(); localStorage.setItem(INTERFACE_LANGUAGE_KEY, "en"); queryClient.clear();
   fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.endsWith("/owner-session/exchange")) return new Response(JSON.stringify({ antiForgeryToken: "fixture-csrf" }));
@@ -56,6 +65,8 @@ beforeEach(() => {
     if (failure) return new Response(JSON.stringify({ code: failure === 401 ? "owner_session_required" : "control_not_found" }), { status: failure });
     if (url.endsWith("/owner-session") && init?.method === "DELETE") return new Response(JSON.stringify({ revoked: true }));
     if (url.endsWith("/health")) return new Response(JSON.stringify({ protocolVersion, health: health() }));
+    if (url.endsWith("/read")) return new Response(JSON.stringify({ protocolVersion, read: { ...projection, approvals: approvals.map(item => ({ ...item, awaitingDecision: item.state === "pending" })) } }));
+    if (url.includes("/replay?")) return new Response(JSON.stringify({ protocolVersion, runId: run.id, ...replay }));
     if (url.endsWith("/approvals")) return new Response(JSON.stringify({ protocolVersion, approvals }));
     if (url.endsWith("/runs/RUN-001")) return new Response(JSON.stringify({ protocolVersion, run }));
     throw new Error(`Unexpected request: ${url}`);
@@ -65,6 +76,12 @@ beforeEach(() => {
 afterEach(() => { history?.destroy(); queryClient.clear(); vi.unstubAllGlobals(); });
 
 describe("managed overview on landed owner reads", () => {
+  it("excludes the server-backed entrypoint from managed browser runtime imports", () => {
+    for (const file of ["hooks/useOwnerSession.ts", "hooks/useTeamRun.ts", "team/run-stepper.tsx", "team/system-status.tsx", "team/task-list.tsx"]) {
+      const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../src", file), "utf8");
+      expect(source).not.toMatch(/^import (?!type\b).*from "@openrig\/daemon\/team-control";$/m);
+    }
+  });
   it("renders every reference region, only calls managed reads, and never persists credentials", async () => {
     await mount();
     expect(fetcher).not.toHaveBeenCalled();
@@ -93,9 +110,9 @@ describe("managed overview on landed owner reads", () => {
     await screen.findByRole("heading", { name: "多智能体工程团队" });
     expect((screen.getByLabelText("搜索任务") as HTMLInputElement).value).toBe("task-kept");
     expect(within(screen.getByRole("region", { name: "任务列表" })).getByRole("button", { name: "失败", exact: true }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getAllByText("暂不可用 — 等待 T052").length).toBeGreaterThan(3);
-    expect(screen.getByText("等待交付决定")).toBeTruthy();
-    expect(document.querySelector("[aria-current='step']")).toBeNull();
+    expect(screen.getAllByText("不可用").length).toBeGreaterThan(3);
+    expect(screen.getByText("交付决定")).toBeTruthy();
+    expect(document.querySelector("[aria-current='step']")?.getAttribute("data-state")).toBe("unavailable");
     expect(document.querySelector("[role='progressbar']")).toBeNull();
     expect(screen.queryByText("100%")).toBeNull();
   });
@@ -151,13 +168,13 @@ describe("managed overview on landed owner reads", () => {
     protocolVersion = "2.0"; await mount();
     fireEvent.change(screen.getByLabelText("One-time pairing code"), { target: { value: "fixture-pairing" } });
     fireEvent.click(screen.getByRole("button", { name: "Pair browser", exact: true }));
-    await waitFor(() => expect(queryClient.getQueryState(["team", "RUN-001", "run"])?.status).toBe("error"));
+    await waitFor(() => expect(queryClient.getQueryState(["team", "RUN-001", "read"])?.status).toBe("error"));
     expect(screen.queryByText(run.binding.planRef)).toBeNull();
     expect(document.querySelector('[data-health-light] .team-health-ok')).toBeNull();
   });
-  it("does not report a stale approvals list as current while the run read remains fresh", async () => {
+  it("does not report approvals from a stale owner snapshot as current", async () => {
     await mount(); await pair();
-    await act(async () => { queryClient.setQueryData(["team", "RUN-001", "approvals"], approvals, { updatedAt: Date.now() - 6_000 }); });
+    await act(async () => { queryClient.setQueryData(["team", "RUN-001", "read"], { ...projection, approvals, generatedAt: new Date(Date.now() - 6_000).toISOString() }, { updatedAt: Date.now() - 6_000 }); });
     const decisions = screen.getByRole("region", { name: "Pending decisions" });
     await waitFor(() => expect(within(decisions).getByText("Unknown")).toBeTruthy());
     expect(within(decisions).queryByText("APPROVAL-001")).toBeNull();
@@ -187,4 +204,50 @@ describe("managed overview on landed owner reads", () => {
     expect.soft(within(screen.getByRole("region", { name: "Evidence panel" })).getByRole("tab", { name: "Review conversation" }).getAttribute("aria-selected")).toBe("true");
     expect.soft((document.querySelector(".team-monitoring") as HTMLElement).scrollTop).toBe(180);
   });
+  it("consumes the shared snapshot without converting agent claims into verified progress", async () => {
+    projection.tasks = [{ taskId: "TASK-003", qitemId: "QUEUE-003", role: "implementer", queueState: "done",
+      criteria: { verified: 3, total: 4, source: "team_queue_authority.evidence_json" }, currentCandidateDigest: "candidate-003",
+      rounds: 1, openP0P1: 0, reviewAvailable: true,
+      acceptance: { manifestDigest: "candidate-003", passed: false, reason: "One criterion is unverified", recordedAt: run.updatedAt } }];
+    projection.attempts = [{ attemptId: "ATTEMPT-003", runId: run.id, taskId: "TASK-003", qitemId: "QUEUE-003", role: "implementer",
+      provider: "codex", state: "stopped", unknownReason: null, session: "session-003" }];
+    projection.logs = [{ source: "task-outcome", streamItemId: null, ts: run.updatedAt, runId: run.id, taskId: "TASK-003",
+      attemptId: "ATTEMPT-003", session: "session-003", body: "Agent claims 100% <script>throw 1</script> [REDACTED]", truncated: true, exitOutcome: "done" }];
+    projection.workflow = { current: "integration-verification", stages: TEAM_WORKFLOW_STAGES.map(stage => ({ stage,
+      state: stage === "integration-verification" ? "active" : stage === "delivery-decision" ? "pending" : "complete", evidence: "durable evidence" })) };
+    await mount(); await pair();
+    const tasks = screen.getByRole("region", { name: "Task list" });
+    expect(within(tasks).getByText("3/4")).toBeTruthy();
+    expect(within(tasks).queryByText("4/4")).toBeNull();
+    expect(screen.getByRole("region", { name: "Agent status" }).textContent).toContain("session-003");
+    const evidence = screen.getByRole("region", { name: "Evidence panel" });
+    expect(evidence.textContent).toContain("[REDACTED]");
+    expect(evidence.textContent).toContain("Truncated");
+    expect(evidence.querySelector("script")).toBeNull();
+    expect(document.querySelector("[aria-current='step']")?.textContent).toContain("Integration verification");
+    expect((screen.getByRole("option", { name: "Priority" }) as HTMLOptionElement).disabled).toBe(true);
+    fireEvent.click(within(tasks).getByRole("button", { name: "Failed", exact: true }));
+    expect(within(tasks).queryByText("TASK-003")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Interface language"), { target: { value: "zh-CN" } });
+    await screen.findByRole("heading", { name: "多智能体工程团队" });
+    expect(screen.getByRole("region", { name: "智能体状态" }).textContent).toContain("session-003");
+    expect(fetcher.mock.calls.some(([url]) => url.endsWith("/read"))).toBe(true);
+    expect(fetcher.mock.calls.some(([url]) => url.endsWith("/runs/RUN-001") || url.endsWith("/approvals"))).toBe(false);
+  });
+  it("replays from the snapshot cursor, deduplicates events, reports gaps and refreshes durable state", async () => {
+    await mount(); await pair();
+    await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url.includes("/replay?afterSeq=1000"))).toBe(true));
+    replay = { events: [{ seq: 1001, createdAt: run.updatedAt, type: "team.control", action: "review.acceptance", runId: run.id,
+      taskId: "TASK-003", attemptId: null, body: "persisted event [REDACTED]", truncated: true }], window: { retainedFrom: 1001, latestSeq: 1001 }, gap: true };
+    projection.workflow = { current: "delivery-decision", stages: TEAM_WORKFLOW_STAGES.map(stage => ({ stage,
+      state: stage === "delivery-decision" ? "awaiting-decision" : "complete", evidence: "durable evidence" })) };
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ["team", run.id, "events"] }); });
+    const activity = screen.getByRole("region", { name: "Recent activity" });
+    await waitFor(() => expect(within(activity).getByText("Replay gap")).toBeTruthy());
+    await waitFor(() => expect(document.querySelector("[aria-current='step']")?.getAttribute("data-state")).toBe("awaiting-decision"));
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ["team", run.id, "events"] }); });
+    expect(within(activity).getAllByText("persisted event [REDACTED]")).toHaveLength(1);
+    expect(fetcher.mock.calls.some(([url]) => url.includes("/replay?afterSeq=1001"))).toBe(true);
+  });
+
 });

@@ -176,6 +176,7 @@ const LOCAL_ENGINE_PATHS = [
   'packages/ui/public/skins/shuimo-danqing/sm-paper-grain-strong.webp',
   'packages/ui/public/skins/shuimo-danqing/sm-paper-grain.webp',
   'packages/ui/src/hooks/useOwnerSession.ts',
+  'packages/ui/src/hooks/useTeamEvents.ts',
   'packages/ui/src/hooks/useTeamRun.ts',
   'packages/ui/src/skins/shuimo-danqing/ATTRIBUTION.md',
   'packages/ui/src/skins/shuimo-danqing/skin.css',
