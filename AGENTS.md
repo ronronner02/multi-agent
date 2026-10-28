@@ -96,6 +96,7 @@ Two sessions may run at once, each in its own clone and branch. A track owns the
   - the focused tests and the touched package's typecheck pass;
   - the required review has closed.
 - The PR description is the report: changed files, test commands with counts, pre-existing failures, residuals, decisions and reviewer verdicts. Write no separate intake, preservation, budget or handover files. Keep logs under `.spec-first/workflows/spec-work/multi-agent/<UTC>-<task>/` only when they back a claim in the PR.
+- Before the PR says a test fails without a line, revert that line and run the test. If nothing fails, call the line defence-in-depth, not covered behaviour.
 - Do not edit `docs/plans/` or `docs/tasks/` during a task, except to regenerate the pack after drift.
 - **Standing delivery grant (owner, 2026-10-16).** After the done signal, do the following without asking: commit the scoped candidate from an explicit file list, push the feature branch, and open or update the PR. Once review is evidenced, land it with the head-bound rebase merge.
   - Never force-push, rewrite published history, push to the default branch or merge an ungated task.
