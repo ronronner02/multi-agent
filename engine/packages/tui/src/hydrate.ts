@@ -15,12 +15,48 @@ import { fileTargetForPath } from "./reading.js";
 //   - host/rig-down composes BESIDE the items (hostsDown), never into them.
 //   - A failed read leaves its portion honest-empty and records a NAMED error.
 import { emptySnapshot } from "./state.js";
+import { TEAM_HEALTH_LIGHTS, type TeamOwnerRead, type TeamReplayEvent, type TeamSystemHealth } from "../../daemon/dist/contracts/team-control.js";
+import type { TeamPresentation } from "./types.js";
 import type { ConfigRead } from "./config/config-model.js";
 import type { ConnectionsRead, ControlPlaneRead, SlackManifestRead } from "./connections/connections-model.js";
 import { DaemonClient } from "./daemon-client.js";
 import { parse as parseYaml } from "yaml";
 import type { AgentRow, FleetSnapshot, HealthCoverage, HealthRecord, HostNode, NeedsItem, PodNode, QueueRead, RecentTransitionSnap, SeatActivitySummary, SliceDetailSnap, SpecEntry, ViewState } from "./types.js";
 import { isHumanSeatSession } from "./pulse/pulse-model.js";
+
+export function hydrateTeam(read: TeamOwnerRead, health: TeamSystemHealth | null, events: TeamReplayEvent[], gap: boolean): TeamPresentation {
+  const usage = read.run.usage;
+  return {
+    read, gap, source: "live", runId: read.runId, project: read.run.binding.repository.root,
+    branch: null, environment: null, connection: "unavailable", ageSeconds: null,
+    plan: { title: read.run.binding.planRef, digest: read.run.binding.planDigest, state: read.run.state, approvedAt: null },
+    stages: read.workflow.stages.map((stage, i) => ({
+      key: ["initialize", "readSpec", "planSplit", "execute", "review", "integration", "finalize"][i]!,
+      state: stage.state === "complete" ? "completed" : stage.state === "active" ? "current"
+        : stage.state === "awaiting-decision" ? "awaitingDecision" : stage.state,
+    })),
+    tasks: read.tasks.map(task => ({
+      id: task.taskId, title: task.taskId, description: "", agent: read.attempts.find(attempt => attempt.taskId === task.taskId)?.session ?? null,
+      state: task.queueState, priority: null, labels: [], dependencies: [], candidate: task.currentCandidateDigest,
+      criteria: [], reviews: [], diff: [], tests: [], commits: [], discussion: [],
+    })),
+    agents: read.attempts.map(attempt => ({
+      name: attempt.session ?? attempt.attemptId, runtime: attempt.provider,
+      process: attempt.state === "stopped" ? "offline" : attempt.state,
+      taskState: read.tasks.find(task => task.taskId === attempt.taskId)?.queueState ?? "unknown",
+      taskId: attempt.taskId, activity: attempt.unknownReason ?? "", elapsed: "",
+    })),
+    systems: ["git", "worktrees", "storage", "framework", "runtime", "testRunner", "eventStream", ...TEAM_HEALTH_LIGHTS].map(component => ({
+      component, state: health?.lights[component as keyof TeamSystemHealth["lights"]]?.state ?? "unknown",
+      detail: health?.lights[component as keyof TeamSystemHealth["lights"]]?.reason ?? undefined,
+    })),
+    activity: events.map(event => ({ seq: event.seq, time: event.createdAt, target: event.taskId ?? read.runId,
+      text: [event.type, event.action, event.attemptId, event.body, event.truncated ? "…" : ""].filter(Boolean).join(" ") })),
+    needs: [], logs: [],
+    tokens: usage.inputTokens.value === null || usage.outputTokens.value === null ? null : usage.inputTokens.value + usage.outputTokens.value,
+    cost: usage.costUsd.value,
+  };
+}
 
 // Narrow read-shapes: just the served fields this module consumes (names match
 // the daemon's serialized output — see the Phase-2 endpoint-shape survey).

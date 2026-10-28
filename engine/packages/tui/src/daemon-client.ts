@@ -1,3 +1,5 @@
+import { TEAM_CONTROL_VERSION, TEAM_READ_MODEL_VERSION, type TeamOwnerRead, type TeamSystemHealth } from "../../daemon/dist/contracts/team-control.js";
+import type { TeamReadModel } from "../../daemon/dist/team-control-surface.js";
 import type { PageRead } from "./page-read.js";
 import type { ProjectSelection } from "./types.js";
 // The TUI's ONLY daemon surface — thin typed fetch wrappers over the §4.A
@@ -89,14 +91,44 @@ export class DaemonClient {
    *  server) returns null — the caller disables the leg permanently and the TUI behaves
    *  exactly as S16 shipped it (click-to-refresh). Never retried on null. Opening
    *  timeouts/network errors reject so the subscriber can back off and retry. */
-  async openActivityEvents(): Promise<Response | null> {
+  async teamRead(runId: string, signal?: AbortSignal): Promise<TeamOwnerRead> {
+    const result = await this.get("/api/team-control/runs/" + encodeURIComponent(runId) + "/read", this.fetchImpl, signal) as { protocolVersion: string; read: TeamOwnerRead };
+    if (result.protocolVersion !== TEAM_CONTROL_VERSION || result.read?.schema !== "multi-agent-team-read/v1"
+      || result.read.protocolVersion !== TEAM_READ_MODEL_VERSION || result.read.runId !== runId || result.read.run?.id !== runId
+      || !Number.isFinite(Date.parse(result.read.generatedAt)) || !Number.isSafeInteger(result.read.replay?.latestSeq))
+      throw new Error("Invalid managed owner read");
+    return result.read;
+  }
+
+  async teamReplay(runId: string, afterSeq: number, signal?: AbortSignal): Promise<ReturnType<TeamReadModel["replay"]>> {
+    const result = await this.get("/api/team-control/runs/" + encodeURIComponent(runId) + "/replay?afterSeq=" + afterSeq + "&limit=500",
+      this.fetchImpl, signal) as ReturnType<TeamReadModel["replay"]> & { protocolVersion: string; runId: string };
+    if (result.protocolVersion !== TEAM_CONTROL_VERSION || result.runId !== runId || !Array.isArray(result.events))
+      throw new Error("Invalid managed replay");
+    return result;
+  }
+
+  async teamHealth(signal?: AbortSignal): Promise<TeamSystemHealth> {
+    const result = await this.get("/api/team-control/health", this.fetchImpl, signal) as { protocolVersion: string; health: TeamSystemHealth };
+    if (result.protocolVersion !== TEAM_CONTROL_VERSION || result.health?.schema !== "multi-agent-system-health/v1")
+      throw new Error("Invalid managed health");
+    return result.health;
+  }
+
+  openActivityEvents(): Promise<Response | null> { return this.openEvents("/api/activity/events"); }
+
+  openTeamEvents(runId: string, afterSeq: number, signal: AbortSignal): Promise<Response | null> {
+    return this.openEvents("/api/team-control/runs/" + encodeURIComponent(runId) + "/events/stream?afterSeq=" + afterSeq, signal);
+  }
+
+  private async openEvents(route: string, signal?: AbortSignal): Promise<Response | null> {
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 5_000);
     deadline.unref?.();
     try {
-      const res = await this.fetchImpl(`${this.baseUrl}/api/activity/events`, {
+      const res = await this.fetchImpl(`${this.baseUrl}${route}`, {
         headers: { ...this.headers, accept: "text/event-stream" },
-        signal: controller.signal,
+        signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       });
       if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
         // No subscriber will own a rejected body; release its connection now.
@@ -110,8 +142,8 @@ export class DaemonClient {
     }
   }
 
-  private async get(route: string, fetchImpl = this.fetchImpl): Promise<unknown> {
-    const res = await fetchImpl(`${this.baseUrl}${route}`, { headers: this.headers, signal: AbortSignal.timeout(5_000) });
+  private async get(route: string, fetchImpl = this.fetchImpl, signal?: AbortSignal): Promise<unknown> {
+    const res = await fetchImpl(`${this.baseUrl}${route}`, { headers: this.headers, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000) });
     if (!res.ok) {
       const parsed = await res.json().catch(() => null);
       const detail = parsed && typeof parsed === "object" && "error" in parsed ? ` — ${(parsed as { error: unknown }).error}` : "";

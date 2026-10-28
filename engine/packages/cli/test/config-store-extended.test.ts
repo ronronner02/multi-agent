@@ -56,7 +56,7 @@ function clearEnv(): () => void {
     "OPENRIG_HEALTH_CONTEXT_PRESSURE_CRITICAL_PERCENT",
     "OPENRIG_FILES_ALLOWLIST", "OPENRIG_PROGRESS_SCAN_ROOTS",
     "OPENRIG_UI_PREVIEW_REFRESH_INTERVAL_SECONDS",
-    "OPENRIG_UI_PREVIEW_MAX_PINS", "OPENRIG_UI_PREVIEW_DEFAULT_LINES",
+    "OPENRIG_UI_PREVIEW_MAX_PINS", "OPENRIG_UI_PREVIEW_DEFAULT_LINES", "OPENRIG_UI_LANGUAGE",
     "OPENRIG_RECOVERY_AUTO_DRIVE_PROVIDER_PROMPTS",
     "OPENRIG_RECOVERY_PROVIDER_AUTH_ENV_ALLOWLIST",
     "OPENRIG_AGENTS_ADVISOR_SESSION", "OPENRIG_AGENTS_OPERATOR_SESSION",
@@ -108,6 +108,38 @@ describe("ConfigStore — extended namespaces (User Settings v0)", () => {
     restoreEnv();
   });
 
+  it("ui.language defaults to Chinese and persists without replacing other owner settings", () => {
+    const store = new ConfigStore(configPath);
+    expect(store.get("ui.language")).toBe("zh-CN");
+    store.set("ui.timezone", "Asia/Singapore");
+    store.set("ui.language", "en");
+    expect(new ConfigStore(configPath).get("ui.language")).toBe("en");
+    expect(JSON.parse(readFileSync(configPath, "utf-8")).ui).toEqual({ timezone: "Asia/Singapore", language: "en" });
+    store.reset("ui.language");
+    expect(store.get("ui.language")).toBe("zh-CN");
+    expect(store.get("ui.timezone")).toBe("Asia/Singapore");
+  });
+
+  it("ui.language rejects unsupported writes and defaults invalid saved values", () => {
+    const store = new ConfigStore(configPath);
+    store.set("ui.language", "en");
+    const before = readFileSync(configPath, "utf-8");
+    for (const language of ["fr", "EN", "", "zh", "en; touch /tmp/no"])
+      expect(() => store.set("ui.language", language)).toThrow(/ui.language/);
+    expect(readFileSync(configPath, "utf-8")).toBe(before);
+    const warning = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      writeFileSync(configPath, JSON.stringify({ ui: { language: "fr" } }));
+      expect(store.resolveWithSource("ui.language")).toMatchObject({ value: "zh-CN", source: "default" });
+    } finally { warning.mockRestore(); }
+  });
+
+  it("ui.language propagates a failed atomic write instead of reporting saved", () => {
+    writeFileSync(configPath, "unchanged");
+    expect(() => new ConfigStore(join(configPath, "config.json")).set("ui.language", "en")).toThrow();
+    expect(readFileSync(configPath, "utf-8")).toBe("unchanged");
+  });
+
   it("VALID_KEYS includes legacy, user-settings, ui.preview, recovery, agents, feed, and transcript-rotation keys", () => {
     const expected = [
       "daemon.port", "daemon.host",
@@ -133,7 +165,7 @@ describe("ConfigStore — extended namespaces (User Settings v0)", () => {
       "health.context_pressure.warning_percent",
       "health.context_pressure.critical_percent",
       "files.allowlist", "progress.scan_roots",
-      "ui.preview.refresh_interval_seconds", "ui.preview.max_pins", "ui.preview.default_lines", "ui.timezone",
+      "ui.preview.refresh_interval_seconds", "ui.preview.max_pins", "ui.preview.default_lines", "ui.timezone", "ui.language",
       "ui.enabled",
       "recovery.auto_drive_provider_prompts",
       "recovery.provider_auth_env_allowlist",

@@ -349,7 +349,60 @@ export interface HealthSnapshot {
 
 export interface ProjectSelection { id: string; root: string }
 export interface ProjectEntry extends ProjectSelection { name: string; sourcePath: string | null; missionsRoot: string; error?: string }
+/** Client presentation only; the daemon read contract remains owned upstream. */
+export interface TeamPresentation {
+  read?: import("../../daemon/dist/contracts/team-control.js").TeamOwnerRead;
+  gap?: boolean;
+  source: "sample" | "live";
+  runId: string;
+  project: string;
+  branch: string | null;
+  environment: string | null;
+  connection: "connected" | "stale" | "disconnected" | "unavailable";
+  ageSeconds: number | null;
+  plan: { title: string; digest: string; state: string; approvedAt: string | null } | null;
+  stages: Array<{ key: string; state: string }>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    description: string;
+    agent: string | null;
+    state: keyof typeof import("@openrig/i18n").STATUS_LABEL_KEYS.queue;
+    attemptPhase?: "testing";
+    priority: number | null;
+    labels: string[];
+    dependencies: string[];
+    candidate: string | null;
+    criteria: Array<{ text: string; state: string; evidence: string | null }>;
+    reviews: Array<{ reviewer: string; state: string; finding: string | null }>;
+    diff: string[];
+    tests: string[];
+    commits: string[];
+    discussion: string[];
+  }>;
+  agents: Array<{ name: string; runtime: string; process: string; taskState: string; taskId: string | null; activity: string; elapsed: string }>;
+  systems: Array<{ component: string; state: string; detail?: string }>;
+  activity: Array<{ seq?: number; time: string; target: string; text: string }>;
+  needs: Array<{ kind: "scope" | "native"; target: string; paths: Array<{ operation: "create" | "modify"; path: string; reason: string; classification: string }> }>;
+  logs: Array<{ time: string; level: string; stream: "out" | "err" | "sys"; taskId: string; attemptId: string; text: string; exit: number | null; redacted?: boolean; truncated?: boolean; gap?: boolean }>;
+  tokens: number | null;
+  cost: number | null;
+}
+
+export interface TeamViewState {
+  language: import("@openrig/i18n").InterfaceLanguage;
+  runId?: string;
+  page: "tasks" | "details" | "agents" | "reviews" | "logs";
+  detailTab: "details" | "diff" | "tests" | "reviews" | "commits" | "discussion";
+  consoleTab: "terminal" | "logs" | "reviews" | "messages";
+  consoleExpanded?: boolean;
+  sideTab: "agents" | "system" | "activity";
+  selectedTaskId: string | null;
+  offsets: Partial<Record<"tasks" | "details" | "agents" | "system" | "activity" | "console" | "needs" | "plan" | "workflow" | "body", number>>;
+}
+
 export interface FleetSnapshot {
+  team?: TeamPresentation;
   attentionRead?: import("@openrig/daemon/attention").AttentionRead | null;
   projects?: { catalogPath: string; projects: ProjectEntry[] } | null;
   projectRead?: ProjectSelection | null;
@@ -455,6 +508,7 @@ export interface PendingDrill {
 export type ViewTab = "table" | "recent" | "overview" | "graph" | "health" | "topology" | "configuration" | "yaml" | "pulse";
 
 export type Action =
+  | { type: "team-language"; language: import("@openrig/i18n").InterfaceLanguage }
   | { type: "spec-launch" }
   | { type: "launch-folder"; folder: string }
   | { type: "launch-host"; host: string }
@@ -531,6 +585,7 @@ export interface SectionDef {
 }
 
 export interface ViewState {
+  team?: TeamViewState;
   specLaunch?: import("./specs/launch.js").SpecLaunch | null;
   terminalResult?: { view: string; message: string };
   terminalView?: string | null;

@@ -81,6 +81,7 @@ export interface RiggedConfig {
     /** Serve the web UI and its terminal WebSocket. Off by default; the daemon reads it at start. */
     enabled: boolean;
     timezone: string;
+    language: "zh-CN" | "en";
     preview: {
       refreshIntervalSeconds: number;
       maxPins: number;
@@ -257,6 +258,7 @@ const DEFAULTS = {
   ui: {
     enabled: false,
     timezone: "America/Los_Angeles",
+    language: "zh-CN",
     preview: {
       refreshIntervalSeconds: 3,
       maxPins: 4,
@@ -405,6 +407,7 @@ export const VALID_KEYS = [
   "ui.preview.max_pins",
   "ui.preview.default_lines",
   "ui.timezone",
+  "ui.language",
   "ui.enabled",
   "recovery.auto_drive_provider_prompts",
   "recovery.provider_auth_env_allowlist",
@@ -510,6 +513,7 @@ export const ENV_MAP: Record<ValidKey, { primary: string; legacy?: string }> = {
   "ui.preview.refresh_interval_seconds": { primary: "OPENRIG_UI_PREVIEW_REFRESH_INTERVAL_SECONDS" },
   "ui.preview.max_pins": { primary: "OPENRIG_UI_PREVIEW_MAX_PINS" },
   "ui.timezone": { primary: "OPENRIG_UI_TIMEZONE" },
+  "ui.language": { primary: "OPENRIG_UI_LANGUAGE" },
   "ui.enabled": { primary: "OPENRIG_UI_ENABLED" },
   "ui.preview.default_lines": { primary: "OPENRIG_UI_PREVIEW_DEFAULT_LINES" },
   "recovery.auto_drive_provider_prompts": { primary: "OPENRIG_RECOVERY_AUTO_DRIVE_PROVIDER_PROMPTS" },
@@ -596,6 +600,7 @@ const KEY_TO_PATH: Record<ValidKey, string[]> = {
   "ui.preview.refresh_interval_seconds": ["ui", "preview", "refreshIntervalSeconds"],
   "ui.preview.max_pins": ["ui", "preview", "maxPins"],
   "ui.timezone": ["ui", "timezone"],
+  "ui.language": ["ui", "language"],
   "ui.enabled": ["ui", "enabled"],
   "ui.preview.default_lines": ["ui", "preview", "defaultLines"],
   "recovery.auto_drive_provider_prompts": ["recovery", "autoDriveProviderPrompts"],
@@ -856,6 +861,9 @@ const KEY_CONSTRAINTS: Partial<Record<ValidKey, (raw: string, coerced: string | 
       throw new Error(`Invalid value for daemon.port: must be an integer in [0, 65535], got "${raw}"`);
     }
   },
+  "ui.language": (_raw, value) => {
+    if (value !== "zh-CN" && value !== "en") throw new Error("Invalid ui.language: use zh-CN or en");
+  },
   "ui.timezone": (_raw, value) => {
     try {
       if (typeof value !== "string" || !value || /^[+-]/.test(value)) throw new Error();
@@ -1099,6 +1107,7 @@ export class ConfigStore {
       ui: {
         enabled: v("ui.enabled") as boolean,
         timezone: v("ui.timezone") as string,
+        language: v("ui.language") as "zh-CN" | "en",
         preview: {
           refreshIntervalSeconds: v("ui.preview.refresh_interval_seconds") as number,
           maxPins: v("ui.preview.max_pins") as number,

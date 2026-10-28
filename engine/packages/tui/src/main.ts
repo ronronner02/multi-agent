@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createInterfaceI18n, type OwnerLanguagePreference } from "@openrig/i18n";
 import { pageReadKey } from "./page-read.js";
 import { completeCommand } from "./commands/completion.js";
 import { resolveTimeZone } from "./time.js";
@@ -20,7 +21,7 @@ import { createControlSocket, defaultSocketPath } from "./socket-server.js";
 import { demoSnapshot } from "./demo-data.js";
 import { DaemonClient, launchNodeNotice } from "./daemon-client.js";
 import { hydrateSnapshot } from "./hydrate.js";
-import { createLiveRefresh } from "./live.js";
+import { createLiveRefresh, createTeamLive } from "./live.js";
 import { resolvePendingAddress } from "./pending-address.js";
 import { subscribeActivityEvents } from "./live-events.js";
 import { execFile } from "node:child_process";
@@ -65,15 +66,39 @@ export function createFrameWriter(render: () => readonly string[] | null, write:
   };
 }
 
+export function createTuiLanguagePreference(): OwnerLanguagePreference {
+  const entry = process.env["OPENRIG_TUI_CLI_ENTRY"];
+  const call = (args: string[]) => new Promise<string>((resolve, reject) => {
+    execFile(entry ? process.execPath : "rig", entry ? [entry, ...args] : args,
+      { timeout: 5000, maxBuffer: 8192 }, (error, stdout) => error ? reject(error) : resolve(stdout));
+  });
+  const read = async (): Promise<unknown> => {
+    try { return JSON.parse(await call(["config", "get", "ui.language", "--json"])).value; }
+    catch { return undefined; }
+  };
+  return { read, async write(language) {
+    if (language !== "zh-CN" && language !== "en") throw new RangeError("Unsupported interface language");
+    const override = process.env["OPENRIG_UI_LANGUAGE"];
+    if (override && ["zh-CN", "en"].includes(override) && override !== language)
+      throw new Error("Interface language is overridden by OPENRIG_UI_LANGUAGE");
+    await call(["config", "set", "ui.language", language]);
+    if (await read() !== language) throw new Error("Interface language did not persist");
+  } };
+}
+
 function argOf(args: string[], flag: string): string | undefined {
   const i = args.indexOf(flag);
-  return i >= 0 ? args[i + 1] : undefined;
+  return i >= 0 && !args[i + 1]?.startsWith("-") ? args[i + 1] : undefined;
 }
 
 async function run(): Promise<void> {
   const args = process.argv.slice(2);
   const instanceId = argOf(args, "--instance") ?? "tui-1";
-  const demo = args.includes("--demo");
+  const demo = args.includes("--demo"), team = args.includes("--team");
+  const ownerToken = team ? process.env["MULTI_AGENT_OWNER_TOKEN"]?.trim() : undefined;
+  // Configuration subprocesses must not inherit the managed owner credential.
+  if (team) delete process.env["MULTI_AGENT_OWNER_TOKEN"];
+  const language = team ? await createInterfaceI18n({ preference: createTuiLanguagePreference() }) : null;
   // Reuse the entry/runtime that opened this TUI, even under a conflicting PATH.
   const cliEntry = process.env["OPENRIG_TUI_CLI_ENTRY"];
   const cliExecutable = cliEntry ? process.execPath : "rig";
@@ -82,7 +107,7 @@ async function run(): Promise<void> {
   // --demo renders the labeled fixture; otherwise the §4.A reads hydrate the
   // snapshot (honest-empty until the first read answers; failed reads surface
   // as named readErrors in the status line, never fabricated content).
-  let snapshot: FleetSnapshot = demo ? demoSnapshot() : emptySnapshot();
+  let snapshot: FleetSnapshot = team && demo ? demoSnapshot(true) : (demo ? demoSnapshot() : emptySnapshot());
   let timeReadWarning = false;
   const timeSetting = new Promise<unknown>((resolve) => {
     execFile(cliExecutable, cliArgs(["config", "get", "ui.timezone", "--json"]), { timeout: 5000, maxBuffer: 8192 }, (err, stdout, stderr) => {
@@ -91,15 +116,18 @@ async function run(): Promise<void> {
       try { resolve(JSON.parse(stdout).value); } catch { resolve(null); }
     });
   });
-  const view = createViewState({ instanceId, getSnapshot: () => snapshot, timeZoneWarning: "Reading configured timezone…" });
+  const view = createViewState({ instanceId, ...(language ? { team: { language: language.language, runId: argOf(args, "--run") } } : {}), getSnapshot: () => snapshot, timeZoneWarning: "Reading configured timezone…" });
   let startupHeaders: () => Record<string, string> = () => ({});
-  if (cliEntry) {
+  if (cliEntry && !team) {
     try {
       const cli = await import(pathToFileURL(join(dirname(cliEntry), "client.js")).href);
       startupHeaders = cli.terminalAuthHeaders;
     } catch { /* the startup read will expose an unavailable/unauthorized prerequisite */ }
   }
-  const client = demo ? null : new DaemonClient({ baseUrl: argOf(args, "--url"), headers: startupHeaders });
+  const client = team ? null : (demo ? null : new DaemonClient({ baseUrl: argOf(args, "--url"), headers: startupHeaders }));
+  const teamClient = team && !demo && ownerToken ? new DaemonClient({
+    baseUrl: argOf(args, "--url"), headers: { Authorization: "Bearer " + ownerToken },
+  }) : null;
   let startup: StartupController | null = null;
   let nativeAttached = false;
   let launching = false;
@@ -151,6 +179,8 @@ async function run(): Promise<void> {
     ? createLiveRefresh({ scopeKey: () => pageReadKey(view.get()), hydrate: (page, signal) => hydrateSnapshot(client.forPage(page, signal), reviewCache, view.get().scopesMission, selectedSliceDirectory(), selectedRigName(), view.get()), onFrame: () => draw(), now: () => Date.now() })
     : null;
   let motionTimer: NodeJS.Timeout | null = null;
+  let teamClock: NodeJS.Timeout | null = null;
+  let teamLive: ReturnType<typeof createTeamLive> | null = null;
   // S19 AM-R18 — the open view updates ITSELF: oracle pushes drive the refresh owner.
   // Notification-only; the refresh rehydrates the same ps projection through the
   // daemon client (one oracle, with the owner's bounded quiet fallback; HTTP stays
@@ -185,6 +215,7 @@ async function run(): Promise<void> {
     const cols = process.stdout.columns ?? 120;
     const rows = process.stdout.rows ?? 32;
     const nowMs = Date.now();
+    if (teamLive) snapshot = teamLive.snapshot();
     if (live) {
       const next = live.snapshot();
       const scope = pageReadKey(view.get());
@@ -218,6 +249,7 @@ async function run(): Promise<void> {
     // The renderer owns line breaks. Wide pasted characters must not wrap a
     // padded row and scroll the entire frame; restore normal wrapping after paint.
     const frame = stylizeLines(lastScreen, style);
+    if (team && frame[0]) frame[0] = style.paint("inkText", frame[0]);
     if (motionTimer) clearTimeout(motionTimer);
     motionTimer = lastScreen.motionActive || lastScreen.commandMotionActive ? setTimeout(draw, MOTION_FRAME_MS) : null;
     return frame;
@@ -413,8 +445,8 @@ async function run(): Promise<void> {
     if (enableLive()) void live?.refresh();
   }
 
-  const socketPath = argOf(args, "--socket") ?? defaultSocketPath(instanceId);
-  const socket = await createControlSocket({
+  const socketPath = team ? "" : argOf(args, "--socket") ?? defaultSocketPath(instanceId);
+  const socket = team ? null : await createControlSocket({
     socketPath,
     fallbackOnCollision: true,
     view,
@@ -427,7 +459,7 @@ async function run(): Promise<void> {
     currentContext: () => commandContext(),
   });
 
-  if (socket.path !== socketPath) controlSocketPath = socket.path;
+  if (socket && socket.path !== socketPath) controlSocketPath = socket.path;
 
   // Reuse the CLI's desktop opener and the daemon's node-launch contract.
   // The view-state is only told the outcome.
@@ -466,6 +498,7 @@ async function run(): Promise<void> {
   function redrawAfterTerminalReturn(): void { frameWriter.invalidate(); draw(); }
 
   function perform(action: Action): void {
+    if (team) return;
     if (action.type === "print-for-copy") {
       // runCopySession never rejects; while suspended, handleInput and draw return early.
       void runCopySession({
@@ -511,9 +544,11 @@ async function run(): Promise<void> {
     process.stdout.off("resize", draw);
     if (motionTimer) clearTimeout(motionTimer);
     live?.close();
+    teamLive?.close();
+    if (teamClock) clearInterval(teamClock);
     unsubscribeCopyMode();
     process.stdout.write(PASTE_DISABLE + MOUSE_DISABLE + ALT_SCREEN_OFF);
-    await socket.close();
+    await socket?.close();
     activityEvents?.close();
     process.exit(0);
   }
@@ -532,6 +567,10 @@ async function run(): Promise<void> {
   function handleInput(events: ReturnType<typeof inputDecoder.write>): void {
     if (nativeAttached) return;
     if (events.some(ev => ev.type === "ctrl-c") && !launching) { void shutdown(); return; }
+    if (view.get().team) {
+      if (events.some(event => event.type === "char" && event.ch === "q")) void shutdown();
+      return;
+    }
     for (const ev of events) {
       if (ev.type === "ctrl-c") continue;
       inputRevision += 1; startup?.interacted();
@@ -539,7 +578,7 @@ async function run(): Promise<void> {
       // contexts, whose input handlers otherwise consume the status-row click.
       if (ev.type === "mouse" && ev.button === 0 && lastScreen) {
         const hit = lastScreen.hitMap.find((h) => h.y === ev.y && ev.x >= h.x1 && ev.x <= h.x2);
-        if (hit?.action.type === "print-for-copy" && hit.action.value === socket.path) {
+        if (hit?.action.type === "print-for-copy" && hit.action.value === socket?.path) {
           perform(hit.action);
           return;
         }
@@ -785,7 +824,12 @@ async function run(): Promise<void> {
   // Probe the daemon-down verdict once on launch: bare `rig` with the daemon down renders the cockpit.
   // (Key-triggered re-probe after `s start daemon` / `r retry` is the follow-on increment.)
   if (startup) void startup.refresh();
-  else void refreshCrashCart();
+  else if (!team) void refreshCrashCart();
+  if (team) {
+    const runId = view.get().team?.runId;
+    if (teamClient && runId) teamLive = createTeamLive(teamClient, runId, () => draw());
+    teamClock = setInterval(() => { void teamLive?.tick(); draw(); }, 1000);
+  }
   // A merely-open TUI must impose no steady-state fleet load. The initial
   // hydrate establishes honest state; navigation, commands, and socket-driven
   // mutations request later truth through the same single-flight owner.

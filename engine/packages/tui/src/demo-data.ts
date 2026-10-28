@@ -1,9 +1,11 @@
+import { emptySnapshot } from "./state.js";
 // Demo fixture (clearly labeled): the shape the §4.A reads hydrate, with stub
 // values for tests + `openrig-tui --demo` manual runs. Never used unless
 // --demo is passed; the real path is the daemon reads (Phase 2 binding).
 import type { FleetSnapshot } from "./types.js";
 
-export function demoSnapshot(): FleetSnapshot {
+export function demoSnapshot(team = false): FleetSnapshot {
+  if (team) return { ...emptySnapshot(), team: teamSample() };
   return {
     hosts: [
       {
@@ -212,5 +214,48 @@ export function demoSnapshot(): FleetSnapshot {
       { tsEmitted: "2026-08-02T10:05:00.000Z", sourceSession: "orch-lead@v-openrig-build", body: "provider re-auth completed on mm2" },
     ],
     readErrors: [],
+  };
+}
+
+function teamSample(): NonNullable<FleetSnapshot["team"]> {
+  const states = ["pending", "in-progress", "done", "blocked", "failed", "denied", "canceled", "handed-off", "in-progress", "in-progress", "in-progress"] as const;
+  const tasks = states.map((state, i) => ({
+    id: `TASK-${String(i + 1).padStart(3, "0")}`, title: "Implement mixed-width 状态 summaries",
+    description: "Show observed outcomes without treating agent estimates as verified evidence.",
+    agent: "Builder", state, priority: i % 3, labels: ["ui", "read-only"], dependencies: ["TASK-003"],
+    candidate: "sample-candidate-7c2e", attemptPhase: i === 10 ? "testing" as const : undefined,
+    criteria: [
+      { text: "Preserve task identity", state: "passed", evidence: "identity.test.ts:12" },
+      { text: "Validate unknown outcomes", state: "failed", evidence: "outcomes.test.ts:48" },
+      { text: "Verify reconnect recovery", state: "waiting", evidence: null },
+    ],
+    reviews: i === 8 ? [{ reviewer: "Reviewer A", state: "changes-required", finding: "src/status.ts:48 unknown outcome" }]
+      : i === 9 ? [{ reviewer: "Reviewer B", state: "running", finding: null }] : [],
+    diff: ["src/status.ts", "+ preserve unknown outcomes"], tests: ["outcomes.test.ts:48 failed"],
+    commits: [], discussion: ["Builder: awaiting independent verification."],
+  }));
+  return {
+    source: "sample", runId: "sample-run", project: "work-board", branch: "main", environment: "WSL2 · Ubuntu 22.04",
+    connection: "unavailable", ageSeconds: null,
+    plan: { title: "work-board status UI", digest: "3f9a-c21e", state: "approved", approvedAt: "2026-10-25 10:13" },
+    stages: ["initialize", "readSpec", "planSplit", "execute", "review", "integration", "finalize"]
+      .map((key, i) => ({ key, state: i < 3 ? "completed" : i === 3 ? "current" : "pending" })),
+    tasks,
+    agents: [
+      { name: "Builder", runtime: "native CLI", process: "busy", taskState: "in-progress", taskId: "TASK-001", activity: "Checking outcomes", elapsed: "12m" },
+      { name: "Reviewer B", runtime: "native CLI", process: "offline", taskState: "needs-attention", taskId: "TASK-009", activity: "Review unavailable", elapsed: "3m" },
+    ],
+    systems: ["git", "worktrees", "storage", "framework", "runtime", "testRunner", "eventStream", "database", "queueMailbox", "controlTmux", "workerBoundary", "sandboxNetwork", "clients"]
+      .map(component => ({ component, state: "unknown" })),
+    activity: [{ time: "21:04:12", target: "TASK-001", text: "Review requested changes" }, { time: "21:03:07", target: "TASK-009", text: "Attempt started" }],
+    needs: [
+      { kind: "scope", target: "TASK-001", paths: [{ operation: "create", path: "src/filters/status-store.ts", reason: "Store the observed status", classification: "client presentation" }] },
+      { kind: "native", target: "TASK-009", paths: [] },
+    ],
+    logs: [
+      { time: "21:04:12", level: "ERROR", stream: "err", taskId: "TASK-001", attemptId: "attempt-1", text: "outcomes.test.ts:48 unknown outcome", exit: 1 },
+      { time: "21:04:13", level: "WARN", stream: "sys", taskId: "TASK-009", attemptId: "attempt-2", text: "Backfill pending; credential omitted", exit: null, redacted: true, truncated: true, gap: true },
+    ],
+    tokens: null, cost: null,
   };
 }

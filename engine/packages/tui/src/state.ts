@@ -1,3 +1,4 @@
+import { DEFAULT_LANGUAGE } from "@openrig/i18n";
 import { fileTargetForPath } from "./reading.js";
 import { terminalExplorerRows } from "./terminals/terminal-model.js";
 import { CONFIG_CATEGORIES } from "./config/config-model.js";
@@ -35,6 +36,7 @@ export function emptySnapshot(): FleetSnapshot {
 }
 
 export interface CreateViewStateOptions {
+  team?: { language?: import("@openrig/i18n").InterfaceLanguage; runId?: string };
   instanceId: string;
   timeZone?: string;
   timeZoneWarning?: string | null;
@@ -47,6 +49,11 @@ export function createViewState(options: CreateViewStateOptions): ViewStateStore
   if (!instanceId) throw new Error("createViewState requires an instanceId (A2: instances are addressable)");
 
   let state: ViewState = {
+    ...(options.team ? { team: {
+      language: options.team.language ?? DEFAULT_LANGUAGE, runId: options.team.runId,
+      page: "tasks" as const, detailTab: "details" as const, consoleTab: "logs" as const,
+      sideTab: "agents" as const, selectedTaskId: getSnapshot().team?.tasks[0]?.id ?? null, offsets: {},
+    } } : {}),
     instanceId,
     file: null,
     externalUrl: null,
@@ -121,6 +128,9 @@ function reduce(state: ViewState, action: Action, snap: FleetSnapshot): ViewStat
   const readingNotice = state.notice?.includes("\n") && (["layout", "content-scroll", "content-select", "focus", "copy-mode"].includes(action.type) || (action.type === "select" && action.origin === "refresh"));
   const next: ViewState = { ...state, lastError: null, notice: action.type === "notice" || action.type === "act" || readingNotice ? state.notice : null };
   switch (action.type) {
+    case "team-language":
+      return state.team && (action.language === "zh-CN" || action.language === "en")
+        ? { ...state, team: { ...state.team, language: action.language } } : state;
     case "spec-launch": {
       const leaf = state.drill.at(-1);
       const spec = state.section === "specs" ? findSpec(snap, leaf?.name ?? "", leaf?.specKind) : null;

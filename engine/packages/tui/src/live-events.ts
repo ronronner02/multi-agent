@@ -12,13 +12,14 @@ export interface ActivityEventsSubscription {
   close: () => void;
 }
 
-export interface SubscribeActivityEventsOpts {
+type ActivityEvent = { type: string; seatNodeId?: string; seq?: number };
+export interface SubscribeActivityEventsOpts<T = ActivityEvent> {
   /** Opens the SSE stream (daemon-client.openActivityEvents). null = leg unavailable —
    *  disable permanently, never retry. Rejection means a temporary open failure. */
   open: () => Promise<Response | null>;
   /** One pushed oracle change (parsed SSE data line). The consumer refreshes; it never
    *  reads activity fields from the push. */
-  onEvent: (event: { type: string; seatNodeId?: string; seq?: number }) => void;
+  onEvent: (event: T) => void;
   /** Connection lifecycle notes (drop/reconnect/unavailable) — surfaced, never fatal. */
   onStatus?: (status: "connected" | "dropped" | "reconnecting" | "unavailable") => void;
   /** Initial backoff (ms) after a temporary open failure or stream drop; 30s cap. */
@@ -30,7 +31,7 @@ const RECONNECT_CAP_MS = 30_000;
 // including data-field separators, when a malformed stream omits a delimiter.
 const MAX_FRAME_CHARS = 1_048_576;
 
-export function subscribeActivityEvents(opts: SubscribeActivityEventsOpts): ActivityEventsSubscription {
+export function subscribeActivityEvents<T = ActivityEvent>(opts: SubscribeActivityEventsOpts<T>): ActivityEventsSubscription {
   const baseDelayMs = opts.reconnectDelayMs ?? 1_000;
   let delayMs = baseDelayMs;
   let closed = false;
@@ -75,7 +76,7 @@ export function subscribeActivityEvents(opts: SubscribeActivityEventsOpts): Acti
         dataChars = 0;
         if (!raw.trim()) return;
         try {
-          const event = JSON.parse(raw) as { type: string; seatNodeId?: string; seq?: number };
+          const event = JSON.parse(raw) as T;
           // Headers and keepalives can precede another immediate disconnect.
           // Reset only when the stream resumes delivering notifications.
           delayMs = baseDelayMs;
