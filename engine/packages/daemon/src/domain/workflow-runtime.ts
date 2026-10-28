@@ -1171,8 +1171,18 @@ export class WorkflowRuntime {
     return this.managedAttempts.get(attemptId);
   }
 
-  /** T042 — close every endpoint this daemon owns; a restart owns none of the old ones. */
+  /**
+   * T042 — close every endpoint this daemon owns; a restart owns none of the old ones.
+   *
+   * T053: a production that is still inside `listen` is not in `managedAttempts` yet, so it has
+   * to be drained first — otherwise this returns while an endpoint is still coming up, and that
+   * endpoint then publishes and keeps its credential alive past a close that reported success.
+   * Awaiting each production settles it either way: a success lands in `managedAttempts` and the
+   * loop below retires it; a failure has already cleaned itself up. Retiring before the await,
+   * or in parallel with it, would let a success publish after its own retirement had run.
+   */
   async closeManagedAttempts(): Promise<void> {
+    await Promise.allSettled([...this.producing.values()]);
     await Promise.all([...this.managedAttempts.keys()].map(id => this.retireManagedAttempt(id)));
   }
 
