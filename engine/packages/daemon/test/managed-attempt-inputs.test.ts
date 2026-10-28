@@ -401,6 +401,39 @@ describe("the managed attempt's production inputs", () => {
     }
   }, 60_000);
 
+  it("closes an endpoint that was still starting when the close-all ran", async () => {
+    createTask();
+    // R5-1: a production inside `listen` is not in `managedAttempts` yet, so a close-all that
+    // only visits that map returns while the endpoint is still coming up — and the endpoint then
+    // publishes and keeps its credential past a close that reported success. Holding the real
+    // `listen` makes the window deterministic.
+    const listen = WorkerMailboxBridge.prototype.listen;
+    let entered!: () => void;
+    let release!: () => void;
+    const listening = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const spy = vi.spyOn(WorkerMailboxBridge.prototype, "listen").mockImplementation(async function (this: WorkerMailboxBridge) {
+      entered();
+      await gate;
+      return listen.call(this);
+    });
+    try {
+      const starting = runtime.produceManagedAttempt("run", produceInput());
+      await listening;
+      const closed = runtime.closeManagedAttempts();
+      release();
+      await closed;
+      // Nothing may be left live when the close returns: the drained production either published
+      // (and was then retired) or failed and cleaned itself up.
+      expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
+      expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
+      await expect(starting).resolves.toBeDefined();
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+  }, 60_000);
+
   it("refuses an endpoint bound to a task the assignment does not name", async () => {
     createTask();
     await expect(runtime.produceManagedAttempt("run", produceInput({ taskId: "task-b" })))
