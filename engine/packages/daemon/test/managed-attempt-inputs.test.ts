@@ -434,6 +434,49 @@ describe("the managed attempt's production inputs", () => {
     }
   }, 60_000);
 
+  it("keeps the seat's credential when a published attempt retires under a starting sibling", async () => {
+    createTask();
+    // R5-2: the `startingAttempts` clause in `revokeSeatCredential`. A production inside `listen`
+    // is not in `managedAttempts`, so without that clause retiring the published attempt finds no
+    // other holder of the seat and revokes the one credential the starting attempt will use.
+    //
+    // Two attempts per seat is already a supported shape (see the superseded-attempt case below);
+    // the `producing` gate is per attempt id. Holding `listen` for the sibling is what puts it in
+    // the starting state while the published one retires.
+    const listen = WorkerMailboxBridge.prototype.listen;
+    let entered!: () => void;
+    let release!: () => void;
+    const listening = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const spy = vi.spyOn(WorkerMailboxBridge.prototype, "listen").mockImplementation(async function (this: WorkerMailboxBridge) {
+      if (this.binding.attemptId === "attempt-2") {
+        entered();
+        await gate;
+      }
+      return listen.call(this);
+    });
+    try {
+      const live = await runtime.produceManagedAttempt("run", produceInput());
+      const starting = runtime.produceManagedAttempt("run", produceInput({ attemptId: "attempt-2" }));
+      await listening;
+      // The seat is still in use: a starting attempt is about to authenticate with the one token.
+      const retiring = runtime.retireManagedAttempt(live.bridge.binding.attemptId);
+      release();
+      await retiring;
+      expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 1 });
+      const second = await starting;
+      // The surviving row is the one this attempt authenticates with.
+      const bootstrap = JSON.parse(readFileSync(join(join(mailboxRoot, "ma-worker1", "run", "attempt-2"), "bootstrap.json"), "utf8"));
+      const admitted = await ask({ authorization: bootstrap.authorization, sessionId: "builder@rig", runId: "run",
+        attemptId: "attempt-2", generation: bootstrap.generation, operation: "poll", taskId: "task",
+        capability: bootstrap.capability }, second.bridge.binding.attemptId);
+      expect(admitted.ok).toBe(true);
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+  }, 60_000);
+
   it("refuses an endpoint bound to a task the assignment does not name", async () => {
     createTask();
     await expect(runtime.produceManagedAttempt("run", produceInput({ taskId: "task-b" })))
