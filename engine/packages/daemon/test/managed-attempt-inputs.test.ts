@@ -12,6 +12,7 @@ import type { PlanBinding, TeamTaskAuthority } from "../src/contracts/team-contr
 import { WorkerControlAccess } from "../src/domain/worker-control-access.js";
 import { resolveWorkerIdentity } from "../src/domain/worker-identity.js";
 import { SeatMailboxCapabilities } from "../src/domain/seat-mailbox-capability.js";
+import { WorkerMailboxBridge } from "../src/adapters/worker-mailbox-bridge.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 import { createDaemon } from "../src/startup.js";
 
@@ -359,21 +360,45 @@ describe("the managed attempt's production inputs", () => {
       capability: bootstrap.capability }, "attempt-1")).ok).toBe(true);
   }, 60_000);
 
-  it("gives a duplicate caller the same outcome as the production it joined", async () => {
+  it("does not hand a duplicate caller an attempt whose endpoint is still listening", async () => {
     createTask();
-    // `managedAttempts` receives an attempt only after its endpoint listens, so there is no
-    // window in which a caller could be handed a half-started record. What a duplicate can
-    // observe is the shared production, and it must see that production's failure too rather
-    // than a record whose endpoint never existed.
-    const failing = { invalidateNativeChannel: () => { throw new Error("fixture endpoint failure"); } };
-    const first = runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never }));
-    const second = runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never }));
-    // `first` and `second` are async-method wrappers, so they are distinct promises that must
-    // settle the same way; the record they hand back must be the same object when they succeed.
-    await expect(first).rejects.toThrow("fixture endpoint failure");
-    await expect(second).rejects.toThrow("fixture endpoint failure");
-    expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
-    expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
+    // The window the finding names: the first production is between publishing its attempt and
+    // its endpoint finishing `listen`. Holding the real `listen` here makes that window
+    // deterministic. A duplicate that settles inside it was handed a record whose endpoint never
+    // listened, and the failed start below then deletes that record under the duplicate's feet.
+    const listen = WorkerMailboxBridge.prototype.listen;
+    let entered!: () => void;
+    let release!: () => void;
+    const listening = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const spy = vi.spyOn(WorkerMailboxBridge.prototype, "listen").mockImplementation(async function (this: WorkerMailboxBridge) {
+      entered();
+      await gate;
+      return listen.call(this);
+    });
+    try {
+      const failing = { invalidateNativeChannel: () => { throw new Error("fixture endpoint failure"); } };
+      const first = runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never }));
+      await listening;
+      const second = runtime.produceManagedAttempt("run", produceInput({ delivery: failing as never }));
+      let joined: string | undefined;
+      const observed = (outcome: string) => { if (joined === undefined) joined = outcome; };
+      void first.then(() => observed("resolved"), () => observed("rejected"));
+      void second.then(() => observed("resolved"), () => observed("rejected"));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const early = joined;
+      release();
+      // The duplicate must still be waiting on the one production, not holding a half-started
+      // record. On the pre-fix source it has already resolved here.
+      expect(early).toBeUndefined();
+      await expect(first).rejects.toThrow("fixture endpoint failure");
+      await expect(second).rejects.toThrow("fixture endpoint failure");
+      expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
+      expect(db.prepare("SELECT count(*) AS count FROM team_worker_credentials").get()).toEqual({ count: 0 });
+    } finally {
+      release();
+      spy.mockRestore();
+    }
   }, 60_000);
 
   it("refuses an endpoint bound to a task the assignment does not name", async () => {
