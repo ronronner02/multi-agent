@@ -1,4 +1,8 @@
 import { PageRead } from "./page-read.js";
+import type { TeamOwnerRead, TeamReplayEvent, TeamSystemHealth } from "../../daemon/dist/contracts/team-control.js";
+import type { DaemonClient } from "./daemon-client.js";
+import { hydrateTeam } from "./hydrate.js";
+import { subscribeActivityEvents } from "./live-events.js";
 // S19 ROUND-5 (guard NOT-CLEAR at b92c2a58): the refresh OWNER — the one
 // component that knows when a hydrate is actually IN FLIGHT and which seat
 // produced fresh PANE OUTPUT between refreshes. renderScreen stays pure and
@@ -20,6 +24,73 @@ import type { FleetSnapshot, LoadState, RowFlash } from "./types.js";
 export const FLASH_WINDOW_MS = 600;
 /** One passive whole-snapshot read per quiet daemon sample window. */
 export const QUIET_REFRESH_MS = 30_000;
+
+export function createTeamLive(client: DaemonClient, runId: string, onFrame: () => void, now = Date.now) {
+  const controller = new AbortController();
+  let read: TeamOwnerRead | null = null, health: TeamSystemHealth | null = null, events: TeamReplayEvent[] = [];
+  let cursor = 0, gap = false, dirty = true, closed = false, failed = false, receivedAt = 0, attemptedAt = 0;
+  let connection = "unavailable", pending: Promise<void> | null = null;
+  const refresh = (): Promise<void> => {
+    if (closed) return Promise.resolve();
+    if (pending) return pending;
+    attemptedAt = now();
+    pending = (async () => {
+      const [next, lights] = await Promise.all([client.teamRead(runId, controller.signal), client.teamHealth(controller.signal).catch(() => null)]);
+      if (closed) return;
+      hydrateTeam(next, lights, [], false);
+      read = next; health = lights; receivedAt = Math.min(now(), Date.parse(next.generatedAt)); failed = false;
+      dirty = cursor > next.replay.latestSeq;
+    })().catch(() => { failed = true; dirty = false; }).finally(() => {
+      pending = null;
+      if (!closed) onFrame();
+    });
+    return pending;
+  };
+  const accept = (value: unknown): void => {
+    if (closed || !value || typeof value !== "object") return;
+    const event = value as TeamReplayEvent & { retainedFrom?: number };
+    if (event.runId !== runId) return;
+    if (Number.isSafeInteger(event.retainedFrom)) { gap = true; dirty = true; return; }
+    if (!Number.isSafeInteger(event.seq) || event.seq <= cursor || typeof event.body !== "string"
+      || typeof event.createdAt !== "string" || typeof event.type !== "string") return;
+    cursor = event.seq; events = [...events, event].slice(-200);
+    dirty ||= !read || cursor > read.replay.latestSeq;
+  };
+  const ready = refresh();
+  const subscription = subscribeActivityEvents<unknown>({
+    open: async () => {
+      await refresh();
+      if (closed) return null;
+      if (failed) throw new Error("Managed owner read unavailable");
+      let page;
+      do {
+        const before = cursor;
+        page = await client.teamReplay(runId, cursor, controller.signal);
+        if (closed) return null;
+        gap ||= page.gap;
+        page.events.forEach(accept);
+        if (cursor === before) break;
+      } while (page.events.length === 500 && cursor < read!.replay.latestSeq);
+      if (dirty) await refresh();
+      return closed ? null : client.openTeamEvents(runId, cursor, controller.signal);
+    },
+    onEvent: accept,
+    onStatus: status => { connection = status; if (!closed) onFrame(); },
+  });
+  return {
+    ready,
+    snapshot: (): FleetSnapshot => {
+      const snapshot = emptySnapshot();
+      if (!read) return snapshot;
+      const age = Math.max(0, (now() - receivedAt) / 1000);
+      snapshot.team = { ...hydrateTeam(read, health, events, gap), ageSeconds: Math.floor(age),
+        connection: connection === "connected" && !failed ? age > 5 || dirty ? "stale" : "connected" : "disconnected" };
+      return snapshot;
+    },
+    tick: () => dirty || now() - attemptedAt >= 4000 ? refresh() : Promise.resolve(),
+    close: () => { closed = true; controller.abort(); subscription.close(); },
+  };
+}
 
 export interface QuietTimerHandle {
   unref?: () => void;

@@ -1,3 +1,5 @@
+import { CATALOGS, STATUS_LABEL_KEYS, displayWidth, type MessageKey } from "@openrig/i18n";
+import { createIcons, padDisplay, truncateDisplay } from "./icons.js";
 import { helpScreen } from "./commands/help.js";
 import { commandFocusVisible } from "./motion.js";
 import { attentionLines } from "./attention/attention-model.js";
@@ -1603,6 +1605,7 @@ function crashCartShell(
 }
 
 export function renderScreen(state: ViewState, snap: FleetSnapshot, options: RenderOptions = {}, inputLine = ""): Screen {
+  if (state.team) return renderTeamScreen(state, snap, options);
   const screen = state.palette
     ? helpScreen(state.palette, options.commandContext ?? "standard", options.cols ?? 120, options.rows ?? 32)
     : renderBody(state, snap, options, inputLine);
@@ -1865,4 +1868,223 @@ function renderBody(state: ViewState, snap: FleetSnapshot, options: RenderOption
     // bounded expiry redraw — the acknowledgement must settle cleanly
     motionActive: motion.used || flashRows.length > 0 || flashAck,
   };
+}
+
+type TeamLine = { text: string; token?: Token; bg?: Token };
+
+function renderTeamScreen(state: ViewState, snap: FleetSnapshot, options: RenderOptions): Screen {
+  const view = state.team!, data = snap.team;
+  const cols = Math.max(1, options.cols ?? 120), rows = Math.max(1, options.rows ?? 32);
+  const narrow = cols < 100 || rows < 24, wide = !narrow && cols >= 140;
+  const catalog = CATALOGS[view.language], icons = createIcons();
+  const label = (key: string) => catalog[`team.${key}` as MessageKey] ?? catalog["team.unknown"];
+  const safe = (text: unknown) => String(text ?? label("unavailable")).replace(/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g, " ");
+  const fit = (text: string, width: number) => padDisplay(truncateDisplay(safe(text), Math.max(0, width)), Math.max(0, width));
+  const line = (text: string, token: Token = "inkText"): TeamLine => ({ text, token });
+  const tone = (code: string): Token => ["failed", "changes-required", "changesRequested"].includes(code) ? "cinnabar"
+    : ["passed", "completed", "ok"].includes(code) ? "emerald" : ["current", "busy", "running", "blocked", "stale"].includes(code) ? "ochre" : "inkDim";
+  const mark = (code: string) => ["passed", "completed", "done", "ok"].includes(code) ? icons.passed
+    : ["failed", "denied", "changesRequested"].includes(code) ? icons.failed : ["blocked", "canceled"].includes(code) ? icons.blocked
+    : code === "handed-off" ? icons.owner : ["pending", "waiting"].includes(code) ? icons.pending
+    : ["current", "busy", "running", "in-progress", "inReview", "testing"].includes(code) ? icons.running : icons.unknown;
+  const slots: Array<Array<TeamLine & { x: number }>> = Array.from({ length: rows }, () => []);
+  let bodyViewport: { top: number; height: number; offset: number } | undefined;
+  function put(x: number, y: number, width: number, text: string, token: Token = "inkText", bg?: Token): void {
+    if (bodyViewport) {
+      y -= bodyViewport.offset;
+      if (y < bodyViewport.top || y >= bodyViewport.top + bodyViewport.height) return;
+    }
+    if (y < 0 || y >= rows || x >= cols || width <= 0) return;
+    slots[y]!.push({ x, text: fit(text, Math.min(width, cols - x)), token, bg });
+  }
+  function wrapTeamLines(content: TeamLine[], width: number): TeamLine[] {
+    if (width < 3) return content;
+    return content.flatMap(item => {
+      let rest = safe(item.text);
+      const wrapped: TeamLine[] = [];
+      while (displayWidth(rest) > width) {
+        let chunk = truncateDisplay(rest, width).slice(0, -1);
+        const space = chunk.lastIndexOf(" ");
+        if (space > 0) chunk = chunk.slice(0, space);
+        wrapped.push({ ...item, text: chunk });
+        rest = rest.slice(chunk.length).trimStart();
+      }
+      return [...wrapped, { ...item, text: rest }];
+    });
+  }
+  function panel(key: keyof typeof view.offsets | null, x: number, y: number, width: number, height: number, title: string, content: TeamLine[]): void {
+    if (key && key !== "tasks" && key !== "console") content = wrapTeamLines(content, width - 2);
+    const offset = Math.max(0, Math.min((key ? view.offsets[key] : 0) ?? 0, Math.max(0, content.length - 1)));
+    const capacity = Math.max(0, height - 3);
+    for (let i = 0; i < height; i++) {
+      let item = i === 1 ? line(title.toLocaleUpperCase(), "inkDim") : i >= 2 && i < height - 1 ? content[offset + i - 2] : undefined;
+      if (i === height - 2 && content.length > offset + capacity)
+        item = line(`${content.length - offset - capacity + 1} ${label("more")} …`, "inkMute");
+      put(x, y + i, width, ` ${fit(item?.text ?? "", width - 2)} `, item?.token, item?.bg ?? "inkSurface");
+    }
+  }
+  const tasks = data?.tasks ?? [];
+  const selected = tasks.find(task => task.id === view.selectedTaskId) ?? tasks[0];
+  const evidence = (task: typeof selected) => data?.read?.tasks.find(row => row.taskId === task?.id);
+  const priority = (task: typeof tasks[number]) => task.priority === null ? label("unknown") : "P" + task.priority;
+  const progress = (task: typeof tasks[number]) => {
+    const criteria = evidence(task)?.criteria;
+    return data?.read ? criteria?.source && typeof criteria.verified === "number" && typeof criteria.total === "number"
+      ? criteria.verified + "/" + criteria.total : label("unavailable")
+      : task.criteria.filter(item => item.state === "passed" && item.evidence).length + "/" + task.criteria.length;
+  };
+  const taskStatus = (task: typeof tasks[number]) => task.state !== "in-progress" ? task.state
+    : evidence(task)?.reviewAvailable && evidence(task)!.openP0P1 > 0 ? "changesRequested" : task.reviews.some(review => review.state === "changes-required") ? "changesRequested"
+    : task.reviews.some(review => review.state === "running") ? "inReview" : task.attemptPhase === "testing" ? "testing" : task.state;
+  const taskLabel = (task: typeof tasks[number]) => {
+    const code = taskStatus(task), key = STATUS_LABEL_KEYS.queue[code as keyof typeof STATUS_LABEL_KEYS.queue];
+    return key ? catalog[key] : label(code);
+  };
+  const tabs = (keys: string[], active: string) => keys.map(key => key === active ? `[${label(key)}]` : label(key)).join(" · ");
+  const reviewLines = (task = selected): TeamLine[] => {
+    if (data?.read) {
+      const review = evidence(task);
+      const status = !review?.reviewAvailable ? "unavailable" : review.openP0P1 > 0 ? "changes-required"
+        : review.acceptance?.passed ? "passed" : "unavailable";
+      return [line(label(status), tone(status)), ...(review?.reviewAvailable
+        ? [line(label("reviews") + ": " + review.rounds + " · " + (review.currentCandidateDigest ?? label("unavailable")))] : [])];
+    }
+    return task?.reviews.length ? task.reviews.flatMap(review => {
+      const status = ["crashed", "timeout"].includes(review.state) ? "unavailable" : review.state;
+      return [line(`${review.reviewer} · ${label(status)}`, tone(status)), ...(review.finding ? [line(review.finding, "cinnabar")] : [])];
+    }) : [line(label("unavailable"), "inkDim")];
+  };
+  const plan = data?.plan;
+  const planLines = [line(plan?.title ?? label("noRun")), line(plan?.digest ?? label("unknown")),
+    line(label(plan?.state ?? "unavailable"), tone(plan?.state ?? "unknown")), line(plan?.approvedAt ?? label("unknown")), line(data?.environment ?? label("unknown"))];
+  const planSummary = planLines.map(item => item.text).join(" · ");
+  const planWindow = (width: number) => {
+    const content = wrapTeamLines([line(`${label("plan")}: ${planSummary}`)], width);
+    return content[Math.max(0, Math.min(view.offsets.plan ?? 0, content.length - 1))]!.text;
+  };
+  function taskLines(width: number): TeamLine[] {
+    const compact = width < 80;
+    const widths = compact ? [8, Math.max(1, width - 56), 6, 23, 3, 2, 3, 4] : [8, Math.max(1, width - 69), 8, 23, 5, 3, 6, 9];
+    const row = (values: string[]) => values.map((value, i) => fit(value, widths[i]!)).join(" ");
+    return [line(row([label("id"), label("title"), label("agent"), label("state"), label("criteria"), label("priority"), label("labels"), label("dependencies")])),
+      ...tasks.map(task => ({ text: row([task.id, task.title, task.agent ?? label("unknown"), `${mark(taskStatus(task))} ${taskLabel(task)}`,
+        progress(task), priority(task), task.labels.join(",") || (data?.read ? label("unavailable") : ""), task.dependencies.map(id => `↳${compact ? id.replace(/^TASK-/, "") : id}`).join(",") || (data?.read ? label("unavailable") : "")]),
+        token: tone(taskStatus(task)), ...(task.id === view.selectedTaskId ? { bg: "inkSelection" as const } : {}) })),
+      ...(!tasks.length ? [line(label(view.runId ? "unavailable" : "noRun"))] : [])];
+  }
+  function detailLines(): TeamLine[] {
+    const nav = line(tabs(["details", "diff", "tests", "reviews", "commits", "discussion"], view.detailTab), "ochre");
+    if (!selected) return [nav, line(label("unavailable"))];
+    if (view.detailTab === "reviews") return [nav, ...reviewLines(), line(`${label("commit")}: ${label("unavailable")}`)];
+    if (view.detailTab !== "details") return [nav, ...((selected[view.detailTab].length ? selected[view.detailTab] : [label("unavailable")]).map(text => line(text)))];
+    return [nav, line(selected.description || label("unavailable")), line(`${label("state")}: ${taskLabel(selected)}`),
+      ...(data?.read ? [line(label("criteria") + ": " + progress(selected) + " · " + (evidence(selected)?.criteria.source ?? label("unavailable")))] : []),
+      ...selected.criteria.map(item => {
+        const status = item.state === "passed" && !item.evidence ? "unavailable" : item.state;
+        return line(`${mark(status)} ${item.text} · ${label(status)} · ${item.evidence ?? label("unavailable")}`, tone(status));
+      }),
+      line(`${label("priority")}: ${priority(selected)} · ${label("labels")}: ${selected.labels.join(", ") || (data?.read ? label("unavailable") : "")}`),
+      line(`${label("dependencies")}: ${selected.dependencies.join(", ") || (data?.read ? label("unavailable") : "")}`), line(`${label("owners")}: ${selected.agent ?? label("unknown")}`),
+      line(`${label("candidate")}: ${selected.candidate ?? label("unknown")}`), line(label("gate"), "ochre"), ...reviewLines(),
+      line(`${label("commit")}: ${label("unavailable")}`)];
+  }
+  function agentLines(width: number): TeamLine[] {
+    return data?.agents.flatMap(agent => {
+      const states = `${label(agent.process)} / ${label(agent.taskState)}`;
+      const identity = `${agent.name} · ${agent.runtime}`, summary = `${identity} · ${states}`;
+      return [...(displayWidth(summary) <= width ? [line(summary, tone(agent.process))]
+        : [line(identity), line(states, tone(agent.process))]),
+        line(`${agent.taskId ?? "—"} · ${agent.activity || label("unavailable")} · ${agent.elapsed || label("unknown")}`, "inkDim")];
+    }) ?? [line(label("unavailable"))];
+  }
+  const systemLines = data?.systems.map(item => line(`${label(item.component)} · ${label(item.state)}${item.detail ? ` · ${item.detail}` : ""}`, tone(item.state))) ?? [line(label("unknown"))];
+  const activityLines = data?.activity.map(item => line(`${item.time} ${item.target} ${item.text}`)) ?? [line(label("unavailable"))];
+  const needsLines = data?.read ? data.read.approvals.filter(item => item.awaitingDecision)
+    .map(item => line((item.kind === "native" ? label("native") + " · " : "") + item.action + " · " + item.id + " · " + item.targetDigest, "ochre"))
+    : data?.needs.flatMap(item => [line(`${label(item.kind)} · ${item.target}`, "ochre"),
+    ...item.paths.flatMap(path => [line(`${label(path.operation)} ${path.path}`), line(`${label("reason")}: ${path.reason}`), line(`${label("classification")}: ${path.classification}`)]),
+  ]) ?? [];
+  const logs = [...(data?.gap ? [line(label("gap"), "ochre")] : []), ...(data?.read ? data.read.logs.flatMap(item => [
+    line(`${item.ts} ${item.source} ${item.taskId ?? label("unknown")}/${item.attemptId ?? label("unknown")} ${label("exit")}=${item.exitOutcome ?? label("unknown")}`, item.exitOutcome === "failed" ? "cinnabar" : "inkDim"),
+    line(`${[item.body.includes("[REDACTED]") && label("redacted"), item.truncated && label("truncated")].filter(Boolean).join(" ")} ${item.body}`),
+  ]) : data?.logs.flatMap(item => [line(`${item.time} ${item.level} ${item.stream} ${item.taskId}/${item.attemptId} ${label("exit")}=${item.exit ?? label("unknown")}`, item.stream === "err" ? "cinnabar" : "inkDim"),
+    line(`${[item.redacted && label("redacted"), item.truncated && label("truncated"), item.gap && label("gap")].filter(Boolean).join(" ")} ${item.text}`),
+  ]) ?? [line(label("unavailable"))])];
+  const consoleLines = [line(tabs(["terminal", "logs", "reviews", "messages"], view.consoleTab), "ochre"),
+    ...(view.consoleTab === "logs" ? logs : view.consoleTab === "reviews" ? reviewLines() : view.consoleTab === "messages"
+      ? (selected?.discussion ?? [label("unavailable")]).map(text => line(text)) : [line(`${label("readOnly")} · ${label("unavailable")}`)]), line(label("disabled"), "inkMute")];
+  const stages = data?.stages ?? [];
+  const finalize = label(data?.read ? stages[6]?.state === "completed" ? "completed"
+    : stages[6]?.state === "unavailable" ? "unavailable" : "awaitingDecision" : stages.length ? "awaitingDecision" : "unavailable");
+  const workflow = [line(stages.slice(0, 4).map(stage => `${mark(stage.state)} ${label(stage.key)}`).join(" · ")),
+    line(`${stages.slice(4, 6).map(stage => `${mark(stage.state)} ${label(stage.key)}`).join(" · ")} · ${label("finalize")}: ${finalize}`, "ochre")];
+  const current = stages.findIndex(stage => stage.state === "current");
+  const rightHeader = `${data?.source === "sample" ? `${label("sample")} · ` : ""}${label(data?.connection ?? "unavailable")} · ${data?.ageSeconds ?? "—"}s · ${view.language} · ${new Date(options.nowMs ?? 0).toISOString().slice(11, 19)}`;
+  const needsCount = data?.read ? data.read.approvals.filter(item => item.awaitingDecision).length : data?.needs.length ?? "—";
+  const leftHeader = `OpenRig ${data?.project ?? view.runId ?? label("noRun")} · ${current >= 0 ? current + 1 : "—"}/7 ${icons.branch} ${data?.branch ?? "—"} · ${data?.environment ?? label("unknown")} · ${icons.owner} ${needsCount}`;
+  const rightWidth = Math.min(cols, displayWidth(rightHeader)), leftWidth = Math.max(0, cols - rightWidth - 1);
+  put(0, 0, cols, `${fit(leftHeader, leftWidth)} ${rightHeader}`.trimStart());
+  const sideContent = (width: number) => view.sideTab === "system" ? systemLines : view.sideTab === "activity" ? activityLines : agentLines(width);
+  const navItems = ["dashboard", "tasks", "workspace", "agents", "reviews", "logs", "knowledge", "settings"];
+  const navIcons = [icons.dashboard, icons.tasks, icons.directory, icons.agent, icons.reviews, icons.logs, icons.knowledge, icons.settings];
+  if (narrow) {
+    put(0, 1, cols, tabs(["tasks", "details", "agents", "reviews", "logs"], view.page), "ochre", "inkSurface");
+    put(0, 2, cols, planWindow(cols), "inkDim");
+    const stageIndex = Math.max(0, Math.min(view.offsets.workflow ?? Math.max(0, current), stages.length - 1)), stage = stages[stageIndex];
+    put(0, 3, cols, `${stage ? `${stageIndex + 1}/7 ${mark(stage.state)} ${label(stage.key)}` : label("unavailable")} · ${label("finalize")}: ${finalize}`, "ochre");
+    const content = view.page === "tasks" ? taskLines(cols - 2) : view.page === "details" ? detailLines()
+      : view.page === "agents" ? [line(tabs(["agents", "system", "activity"], view.sideTab)), ...sideContent(cols - 2)]
+      : view.page === "reviews" ? [...needsLines, line(label("gate")), ...reviewLines()] : logs;
+    panel(view.consoleExpanded ? "console" : view.page === "reviews" ? "needs" : view.page === "logs" ? "console" : view.page === "agents" ? view.sideTab : view.page,
+      0, 4, cols, rows - 7, label(view.consoleExpanded ? "console" : view.page), view.consoleExpanded ? consoleLines : content);
+    put(0, rows - 3, cols, `${label("console")}: ${tabs(["terminal", "logs", "reviews", "messages"], view.consoleTab)} · ${label("readOnly")}`, "inkDim", "inkSurface");
+    put(0, rows - 2, cols, navIcons.join(" · "), "inkMute");
+  } else {
+    const top = rows >= 30 ? 2 : 1, consoleHeight = Math.max(6, Math.floor((rows - top - 1) * .24));
+    const consoleY = rows - consoleHeight - 1, actualHeight = consoleY - top - 1;
+    const height = Math.max(actualHeight, wide && needsLines.length ? 28 : 20);
+    const maxBodyOffset = height - actualHeight, requestedOffset = view.offsets.body ?? 0;
+    const bodyOffset = Math.max(0, Math.min(Number.isFinite(requestedOffset) ? Math.floor(requestedOffset) : 0, maxBodyOffset));
+    bodyViewport = { top, height: actualHeight, offset: bodyOffset };
+    const rail = wide ? 24 : 5, right = Math.max(36, Math.min(54, Math.floor(cols * .3))), middle = cols - rail - right - 2;
+    const x = rail + 1, rightX = cols - right;
+    if (wide) {
+      panel(null, 0, top, rail, 13, label("dashboard"), navItems.map((key, i) => line(`${navIcons[i]} ${label(key)}`)));
+      panel("plan", 0, top + 14, rail, height - 14, label("plan"), planLines);
+    } else navIcons.forEach((icon, i) => put(0, top + i, rail, icon, "inkDim", "inkSurface"));
+    const bodyTop = top + (wide ? 0 : 1), bodyHeight = height - (wide ? 0 : 1);
+    if (!wide) put(x, top, cols - x, planWindow(cols - x), "inkDim");
+    panel(null, x, bodyTop, middle, 5, label("workflow"), workflow);
+    const listHeight = Math.max(7, Math.floor((bodyHeight - 6) * .45));
+    panel("tasks", x, bodyTop + 6, middle, listHeight, `${label("tasks")} · ${tasks.length}`, taskLines(middle - 2));
+    panel("details", x, bodyTop + 7 + listHeight, middle, bodyHeight - 7 - listHeight, `${selected?.id ?? "—"} · ${label("details")}`, detailLines());
+    const needsHeight = needsLines.length ? Math.min(7, bodyHeight - 7) : 0;
+    let sideY = bodyTop;
+    if (needsHeight) { panel("needs", rightX, sideY, right, needsHeight, label("needs"), needsLines); sideY += needsHeight + 1; }
+    if (wide) {
+      panel("agents", rightX, sideY, right, 9, label("agents"), agentLines(right - 2)); sideY += 10;
+      const systemHeight = Math.max(5, bodyTop + bodyHeight - sideY - 6);
+      panel("system", rightX, sideY, right, systemHeight, label("system"), systemLines); sideY += systemHeight + 1;
+      panel("activity", rightX, sideY, right, bodyTop + bodyHeight - sideY, label("activity"), activityLines);
+    } else panel(view.sideTab, rightX, sideY, right, bodyTop + bodyHeight - sideY, tabs(["agents", "system", "activity"], view.sideTab), sideContent(right - 2));
+    bodyViewport = undefined;
+    if (maxBodyOffset) put(0, consoleY - 1, cols, [
+      bodyOffset > 0 && `↑ ${bodyOffset} ${label("above")}`,
+      bodyOffset < maxBodyOffset && `↓ ${maxBodyOffset - bodyOffset} ${label("below")}`,
+    ].filter(Boolean).join(" · "), "inkDim");
+    panel("console", 0, consoleY, cols, consoleHeight, label("console"), consoleLines);
+  }
+  const metric = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? label("unknown") : String(value);
+  put(0, rows - 1, cols, `q ${label("quit")} · ${label("shell")} · ${label("tokens")}: ${metric(data?.tokens)} · ${label("cost")}: ${metric(data?.cost)}`, "inkDim");
+  const segRows: NonNullable<Screen["segRows"]> = {}, lines = slots.map((parts, y) => {
+    const segments: TeamLine[] = []; let end = 0;
+    for (const part of parts.sort((a, b) => a.x - b.x)) {
+      if (part.x > end) segments.push({ text: " ".repeat(part.x - end) });
+      segments.push({ text: part.text, token: part.token, bg: part.bg }); end = part.x + displayWidth(part.text);
+    }
+    if (end < cols) segments.push({ text: " ".repeat(cols - end) });
+    segRows[y + 1] = segments;
+    return segments.map(segment => segment.text).join("");
+  });
+  return { lines, segRows, explorerWidth: 0, hitMap: [], contentTargets: [], explorerRows: [], contentMaxOffset: 0 };
 }
