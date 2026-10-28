@@ -117,12 +117,15 @@ describe("RestoreOrchestrator", () => {
     pi?: PiResumeAdapter;
     omp?: OmpResumeAdapter;
     listProcesses?: () => Promise<Array<{ pid: number; ppid: number; command: string }>>;
+    managedAttempt?: (input: import("../src/domain/startup-orchestrator.js").StartupInput) =>
+      Promise<import("../src/domain/runtime-adapter.js").ManagedAttempt | undefined>;
   }) {
     const tmux = opts?.tmux ?? mockTmux();
     const nodeLauncher = new NodeLauncher({ db, rigRepo, sessionRegistry, eventBus, tmuxAdapter: tmux });
     return new RestoreOrchestrator({
       db, rigRepo, sessionRegistry, eventBus, snapshotRepo, snapshotCapture,
       checkpointStore, nodeLauncher, tmuxAdapter: tmux,
+      managedAttempt: opts?.managedAttempt,
       claudeResume: opts?.claude ?? mockClaudeResume(),
       codexResume: opts?.codex ?? mockCodexResume(),
       piResume: opts?.pi,
@@ -195,6 +198,35 @@ describe("RestoreOrchestrator", () => {
     if (!updated) throw new Error("expected updated snapshot");
     return updated;
   }
+
+  it("passes the managed-attempt resolver into the pod-aware restore's own orchestrator", async () => {
+    const seen: import("../src/domain/startup-orchestrator.js").StartupInput[] = [];
+    const snap = seedRigAndSnapshot({
+      nodes: [{ logicalId: "worker", role: "worker", runtime: "claude-code" }], edges: [],
+      resumeType: "claude_id", resumeToken: "native-session", withBinding: "worker",
+    });
+    const node = snap.data.nodes[0]!;
+    db.prepare("INSERT INTO pods (id, rig_id, label) VALUES (?, ?, ?)").run("pod-1", snap.rigId, "Dev");
+    db.prepare("UPDATE nodes SET pod_id = ? WHERE id = ?").run("pod-1", node.id);
+    const updated = updateSnapshotData(snap, (data) => {
+      data.nodes[0].podId = "pod-1";
+      data.nodeStartupContext = { [node.id]: { runtime: "claude-code", projectionEntries: [],
+        resolvedStartupFiles: [], startupActions: [] } };
+    });
+    const adapter = {
+      runtime: "claude-code",
+      project: async () => ({ warnings: [], failed: [] }),
+      deliverStartup: async () => ({ warnings: [], failed: [] }),
+      launchHarness: async () => ({ ok: true }),
+      checkReady: async () => ({ ready: true }),
+    } as unknown as RuntimeAdapter;
+    await createOrchestrator({ tmux: mockTmux(), managedAttempt: async (input) => { seen.push(input); return undefined; } })
+      .restore(updated.id, { adapters: { "claude-code": adapter } });
+    // The resolver reaches the orchestrator RestoreOrchestrator constructs; removing the
+    // pass-through leaves this empty while every other assertion still passes.
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0]!.sessionName).toBe("r99-worker");
+  });
 
   it("restores only the snapshot's intended roster and reports historical exclusions", async () => {
     const snap = seedRigAndSnapshot({

@@ -7,7 +7,7 @@ import type { TmuxAdapter } from "../adapters/tmux.js";
 import { isClaudeResumeType } from "../adapters/claude-resume.js";
 import type { StartupAction, StartupProofSelection } from "./types.js";
 import type {
-  RuntimeAdapter, NodeBinding, ResolvedStartupFile,
+  RuntimeAdapter, NodeBinding, ManagedAttempt, ResolvedStartupFile,
   ProjectionResult, StartupDeliveryResult, ForkSource,
 } from "./runtime-adapter.js";
 import { isAttentionRequiredReadinessCode, resolveConcreteHint } from "./runtime-adapter.js";
@@ -118,6 +118,16 @@ interface StartupOrchestratorDeps {
   readinessSettings?: Pick<SettingsStore, "resolveOne">;
   /** Process observation for a Claude resume launch's own record of its process (#1077). */
   listProcesses?: NativeProcessLister;
+  /**
+   * T047 — the attempt this launch runs under, when the seat has one.
+   *
+   * Every managed seat reaches the launcher through this method (a fresh launch, a restore and
+   * an instantiated pod member), so the attachment is resolved once here rather than at three
+   * binding sites. Absent in legacy mode and in tests that do not compose the managed chain.
+   * The resolver returns `undefined` for a seat whose queue task is not an admitted assignment,
+   * which is what keeps a personal launch out of the managed chain.
+   */
+  managedAttempt?: (input: StartupInput) => Promise<ManagedAttempt | undefined>;
 }
 
 /**
@@ -150,6 +160,7 @@ export class StartupOrchestrator {
   private sessionTransport: SessionTransport;
   private readinessSettings: Pick<SettingsStore, "resolveOne">;
   private listProcesses: NativeProcessLister | undefined;
+  private managedAttempt: StartupOrchestratorDeps["managedAttempt"];
 
   constructor(deps: StartupOrchestratorDeps) {
     if (deps.db !== deps.sessionRegistry.db) throw new Error("StartupOrchestrator: sessionRegistry must share the same db handle");
@@ -162,6 +173,7 @@ export class StartupOrchestrator {
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.readinessSettings = deps.readinessSettings ?? new SettingsStore();
     this.listProcesses = deps.listProcesses;
+    this.managedAttempt = deps.managedAttempt;
     this.appliedLaunchStore = new AppliedLaunchObservationStore(deps.db);
     this.sessionTransport = new SessionTransport({
       db: deps.db,
@@ -314,6 +326,21 @@ export class StartupOrchestrator {
 
     // 5. Launch harness (unless skipped for legacy nodes)
     if (!input.skipHarnessLaunch) {
+      // T047: a seat with an admitted assignment launches under the attempt the producer made
+      // for it. Resolving immediately before the launch — after projection and pre-launch file
+      // delivery have already succeeded — is what makes the attachment true for a fresh launch,
+      // a restore and an instantiated pod member alike, without producing an attempt for a
+      // startup that never reaches the launcher. A seat whose task is not admitted resolves to
+      // no attempt and keeps its personal launch; a resolution failure refuses the launch.
+      if (this.managedAttempt) try {
+        const attempt = await this.managedAttempt(input);
+        if (attempt) {
+          input = { ...input, binding: { ...input.binding, managedAttempt: attempt } };
+          deliveryInput.binding = input.binding;
+        }
+      } catch (error) {
+        return this.fail(input, "failed", [`Managed attempt attachment: ${(error as Error).message}`]);
+      }
       try {
         let launchResumeToken = input.resumeToken;
         let attemptedFreshFallback = false;
@@ -332,6 +359,15 @@ export class StartupOrchestrator {
           });
           if (launchResult.ok) {
             appliedLaunch = launchResult.appliedLaunch;
+            // T047: record the receipt the launcher returned before readiness can fail. A later
+            // native-token resume has to present these exact bytes (U5), and the launch-intent
+            // check compares their hash, so they are stored verbatim as run evidence.
+            if (launchResult.managedSession) {
+              const receiptSession = input.sessionName ?? input.binding.tmuxSession;
+              if (receiptSession) this.eventBus.emit({ type: "managed.attempt.receipt",
+                rigId: input.rigId, nodeId: input.nodeId, sessionId: input.sessionId,
+                sessionName: receiptSession, receipt: launchResult.managedSession });
+            }
             if (input.adapter.runtime === "claude-code" && launchResumeToken?.trim()) {
               await this.recordClaudeResumeLaunch(input.sessionId, input.binding.tmuxPane ?? input.binding.tmuxSession, launchResumeToken.trim(), launchResult.launchedProcess);
             }
