@@ -153,6 +153,7 @@ import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
 import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, type SystemHealthProbeResult } from "./domain/system-health.js";
 import { TeamReadModel } from "./team-control-surface.js";
+import { canonicalJson } from "./contracts/team-control.js";
 import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
 import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
 import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters/worker-launch.js";
@@ -392,6 +393,137 @@ function composeManagedLaunch(dependencies: {
   } }, Date.now, randomUUID, admission);
   // `readHealthEvidence` is built by the control but not otherwise reachable from startup; the health reader reads it.
   return { launcher, channel, endpoints, readHealthEvidence: guarded.readHealthEvidence };
+}
+
+/**
+ * T047 — the exact receipt a native-token resume must present again.
+ *
+ * The launcher compares this receipt's hash with the one recorded on the attempt's running
+ * launch intent (U5), so the bytes are read back verbatim from the launch event rather than
+ * reconstructed. A receipt for another run, task or client is treated as absent, and the
+ * launch refuses instead of resuming under an attempt it does not own.
+ */
+function recordedManagedReceipt(dependencies: { db: Database.Database; governance: PlanGovernance }, input: {
+  seat: string; nativeToken: string; runId: string; qitemId: string; client: "claude-code" | "codex";
+}): import("./domain/runtime-adapter.js").ManagedSessionReceipt | undefined {
+  const row = dependencies.db.prepare(`
+    SELECT payload FROM events
+    WHERE type = 'managed.attempt.receipt'
+      AND json_extract(payload, '$.sessionName') = ?
+      AND json_extract(payload, '$.receipt.identity.nativeSessionId') = ?
+      AND json_extract(payload, '$.receipt.runId') = ?
+    ORDER BY seq DESC LIMIT 1`).get(input.seat, input.nativeToken, input.runId) as
+    { payload: string } | undefined;
+  if (!row) return undefined;
+  const receipt = (JSON.parse(row.payload) as
+    { receipt?: import("./domain/runtime-adapter.js").ManagedSessionReceipt }).receipt;
+  const prior = receipt ? dependencies.governance.getAttempt(receipt.attemptId) : null;
+  return receipt && receipt.client === input.client && prior?.qitemId === input.qitemId
+    && prior.identity && canonicalJson(prior.identity) === canonicalJson(receipt.identity)
+    ? receipt : undefined;
+}
+
+/**
+ * T047 — the attempt a managed seat launches under.
+ *
+ * A seat is managed when its queue destination names it and the run is approved. That lookup —
+ * not the daemon's mode — is the authority: a personal seat in a managed daemon resolves to no
+ * task and keeps its personal launch, while an admitted assignment cannot reach the privileged
+ * launcher without the attempt produced for it. The endpoint is registered before this returns,
+ * which is the moment the launcher's `mailbox` seam becomes resolvable for the attempt.
+ */
+function composeManagedAttemptAttachment(dependencies: {
+  db: Database.Database;
+  governance: PlanGovernance;
+  endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"];
+  runtime: () => WorkflowRuntime | undefined;
+  owners: () => { chat?: AppDeps["chatRepo"]; delivery?: AppDeps["mailboxDelivery"] };
+}) {
+  return async (input: import("./domain/startup-orchestrator.js").StartupInput):
+    Promise<import("./domain/runtime-adapter.js").ManagedAttempt | undefined> => {
+    const client = input.adapter.runtime;
+    if (client !== "claude-code" && client !== "codex") return undefined;
+    const seat = input.sessionName ?? input.binding.tmuxSession;
+    if (!seat) return undefined;
+    // A seat may be the destination of at most one live task. Two is not a choice this
+    // composition may make: attaching either would hand one assignment another's binding.
+    const rows = dependencies.db.prepare(`
+      SELECT a.qitem_id AS qitemId, a.run_id AS runId, a.task_id AS taskId,
+        q.source_session AS sourceSession
+      FROM team_queue_authority a
+      JOIN queue_items q ON q.qitem_id = a.qitem_id
+      JOIN team_runs r ON r.id = a.run_id
+      WHERE q.destination_session = ? AND q.state IN ('pending', 'in-progress') AND r.state = 'approved'
+      LIMIT 2`).all(seat) as Array<{ qitemId: string; runId: string; taskId: string;
+        sourceSession: string | null }>;
+    if (rows.length === 0) return undefined;
+    if (rows.length > 1) throw new Error("Managed launch task is ambiguous");
+    const row = rows[0]!;
+    const task = dependencies.governance.getTask(row.qitemId);
+    // T053 made the task record the store for outputs and permissions; a row without one
+    // predates it and cannot describe an attempt this composition may produce.
+    if (!task) throw new Error("Managed attempt task is not recorded");
+    const assignment = task.assignment;
+    const runtime = dependencies.runtime();
+    if (!runtime) throw new Error("Managed launch runtime is unavailable");
+    const roots = managedWorkerRoots();
+    const worker = roots.worker;
+    const identity = new WorkerIdentities(() => ({ workerRoot: roots.workerRoot,
+      assignmentRoot: roots.assignmentRoot, identities: roots.workerIdentities })).resolve(worker);
+    const run = dependencies.governance.getRun(row.runId);
+    // The destination session names a seat on the run's own rig; a row that resolves to a
+    // seat elsewhere would attach this attempt to a binding it never authorized.
+    if (run.rigId !== input.rigId) throw new Error("Managed attempt seat is not on the task's rig");
+    const remainingMs = run.binding.limits.maxActiveMs - run.activeMs;
+    if (remainingMs <= 0) throw new Error("Managed run active-time limit is exhausted");
+    const { chat, delivery } = dependencies.owners();
+    if (!chat || !delivery) throw new Error("Managed attempt mailbox owners are unavailable");
+    // A native-token resume re-enters the attempt it recorded, so the projection is reused
+    // and the launcher receives the exact previous receipt. A token with no recorded receipt
+    // refuses: resuming outside the worker boundary is never the fallback.
+    const previous = input.resumeToken
+      ? recordedManagedReceipt({ db: dependencies.db, governance: dependencies.governance }, {
+          seat, nativeToken: input.resumeToken, runId: row.runId, qitemId: row.qitemId, client })
+      : undefined;
+    if (input.resumeToken && !previous) throw new Error("Managed resume receipt is not recorded");
+    const attemptId = previous?.attemptId ?? randomUUID();
+    const outputs = task.outputs ?? [], permissions = task.permissions ?? [];
+    const remainingDeadline = Date.now() + remainingMs;
+    if (previous && previous.deadline <= Date.now()) throw new Error("Managed resume deadline has expired");
+    // The launcher refuses a resume whose deadline exceeds the previous receipt's, so the
+    // resumed attempt stays inside the run clock the first attempt was given.
+    const deadline = previous ? Math.min(previous.deadline, remainingDeadline) : remainingDeadline;
+    // Admission is asked first so the candidate exists exactly where the producer will be
+    // told to look, and a refusal leaves no tree. `produceManagedAttempt` repeats the same
+    // admission for this attempt, which is idempotent and re-takes the same claim.
+    const admitted = runtime.admitForLaunch(row.runId, { attemptId, worker, assignment,
+      outputs, permissions,
+      context: { binding: run.binding, runId: row.runId, role: assignment.role } as
+        unknown as import("./integrations/framework/context-manifest.js").ContextManifest });
+    let produced: Awaited<ReturnType<WorkflowRuntime["produceManagedAttempt"]>>;
+    try {
+      produced = await runtime.produceManagedAttempt(row.runId, {
+        attemptId, worker, assignment, outputs, permissions,
+        role: assignment.role, client, candidate: admitted.candidate, sessionId: seat,
+        rigId: run.rigId, taskId: row.taskId, recipients: row.sourceSession ? [row.sourceSession] : [],
+        deadline, isCurrent: () => true, ...(previous ? { previous } : {}),
+        delivery, chat, context: { client, discoveryRoots: [], mutableStateRoot: identity.scratch },
+        // Every managed attempt routes substantial work through the pinned framework, so its
+        // entry governor is the one pinned file the manifest always binds. The full framework
+        // tree is already mounted read-only at `/framework`; this entry is the attempt's
+        // instruction-discovery proof, not a second copy of the catalog.
+        frameworkFiles: [{ path: "skills/using-spec-first/SKILL.md",
+          source: nodePath.join(roots.frameworkRoot, "skills/using-spec-first/SKILL.md") }],
+      });
+    } catch (error) {
+      // An admission whose attempt was never produced would otherwise hold the candidate for
+      // the life of the daemon. The release is the no-op a review assignment documents.
+      runtime.releaseCandidate(row.runId, assignment.taskId, attemptId);
+      throw error;
+    }
+    dependencies.endpoints.set(attemptId, produced.bridge);
+    return produced.attempt;
+  };
 }
 
 /**
@@ -896,6 +1028,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // Read when a launch is admitted, after startup has constructed the runtime.
     workflowRuntime: () => workflowRuntime }) : undefined;
   const workerLauncher = managedLaunch ? { workerLauncher: managedLaunch.launcher } : {};
+  // T047 — the attachment every managed launch path resolves through. Assigned once the runtime
+  // exists below; a wrapper that reads it at launch time is the only correct shape, because the
+  // runtime is constructed later in this function and no managed launch precedes it.
+  let managedAttempt: ((input: import("./domain/startup-orchestrator.js").StartupInput) =>
+    Promise<import("./domain/runtime-adapter.js").ManagedAttempt | undefined>) | undefined;
   // T047-H1: the KTD26 reader, composed from the owners above, injected through the one teamControl options object.
   // `evidence` is the control's own verified observation, so it exists only when the launch chain does. A caller that
   // supplied its own reader keeps it: that is the injection seam the tests and any embedding host use.
@@ -960,6 +1097,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     db, rigRepo, sessionRegistry, eventBus, snapshotRepo, snapshotCapture,
     checkpointStore, nodeLauncher, tmuxAdapter, claudeResume, codexResume, piResume, ompResume,
     transcriptStore, serviceOrchestrator,
+    managedAttempt: input => managedAttempt?.(input) ?? Promise.resolve(undefined),
   });
 
   // Connect to cmux at startup — degrades gracefully if absent
@@ -1085,7 +1223,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const { PiRuntimeAdapter } = await import("./adapters/pi-runtime-adapter.js");
   const { OmpRuntimeAdapter } = await import("./adapters/omp-runtime-adapter.js");
 
-  const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter, readFile: (p: string) => fs.readFileSync(p, "utf-8") });
+  const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter, readFile: (p: string) => fs.readFileSync(p, "utf-8"),
+    managedAttempt: input => managedAttempt?.(input) ?? Promise.resolve(undefined) });
   const runtimeSettings = new ContextPackSettingsStore().resolveConfig();
   const claudeAdapter = new ClaudeCodeAdapter({ tmux: tmuxAdapter, seatLaunchEnvironment, claudeManagedLaunch, ...workerLauncher, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, readdir: (dir: string) => fs.readdirSync(dir), statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: os.homedir() }, stateDir: OPENRIG_HOME, collectorAssetPath: nodePath.resolve(import.meta.dirname, "../assets/claude-statusline-context.cjs"), autoDriveProviderPrompts: runtimeSettings.recoveryAutoDriveProviderPrompts, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs"), claudeHooksManifestPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/claude.json"), recordProjection: (targetPath: string, content: string) => projectionManifestStore.record({ targetPath, lastHash: hashContent(content), writtenAt: new Date().toISOString() }) });
   const codexAdapter = new CodexRuntimeAdapter({ prepareTeamWorkspace, tmux: tmuxAdapter, seatLaunchEnvironment, ...workerLauncher, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: daemonHome }, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs") });
@@ -1889,6 +2028,13 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       },
     });
     deps.workflowRuntime = workflowRuntime;
+    // T047 — assigned here, after the runtime it produces through exists and before the app
+    // serves: every seat launch that could reach a worker happens after this point.
+    managedAttempt = managedLaunch ? composeManagedAttemptAttachment({
+      db, governance: teamGovernance, endpoints: managedLaunch.endpoints,
+      runtime: () => workflowRuntime,
+      owners: () => ({ chat: deps.chatRepo, delivery: deps.mailboxDelivery }),
+    }) : undefined;
 
     // OPR.0.4.6.WF5 FR-2 class (b): the shared detection-time exception
     // ensurer — sweep + keepalive both call it; dedup by occurrence tags.

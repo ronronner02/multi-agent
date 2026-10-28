@@ -171,6 +171,9 @@ interface RestoreOrchestratorDeps {
   transcriptStore?: TranscriptStore;
   serviceOrchestrator?: import("./service-orchestrator.js").ServiceOrchestrator;
   listProcesses?: () => Promise<Array<{ pid: number; ppid: number; command: string }>>;
+  /** T047: the attempt a restored managed seat launches under; absent in legacy mode. */
+  managedAttempt?: (input: import("./startup-orchestrator.js").StartupInput) =>
+    Promise<import("./runtime-adapter.js").ManagedAttempt | undefined>;
 }
 
 export class RestoreOrchestrator {
@@ -190,6 +193,7 @@ export class RestoreOrchestrator {
   private transcriptStore: TranscriptStore | null;
   private serviceOrchestrator: import("./service-orchestrator.js").ServiceOrchestrator | null;
   private listProcesses: (() => Promise<Array<{ pid: number; ppid: number; command: string }>>) | undefined;
+  private managedAttempt: RestoreOrchestratorDeps["managedAttempt"];
   private appliedLaunchStore: AppliedLaunchObservationStore;
 
   constructor(deps: RestoreOrchestratorDeps) {
@@ -230,6 +234,7 @@ export class RestoreOrchestrator {
     this.transcriptStore = deps.transcriptStore ?? null;
     this.serviceOrchestrator = deps.serviceOrchestrator ?? null;
     this.listProcesses = deps.listProcesses;
+    this.managedAttempt = deps.managedAttempt;
     this.appliedLaunchStore = new AppliedLaunchObservationStore(deps.db);
   }
 
@@ -1363,7 +1368,8 @@ export class RestoreOrchestrator {
           try {
             const { StartupOrchestrator } = await import("./startup-orchestrator.js");
             const startupOrch = new StartupOrchestrator({ db: this.db, sessionRegistry: this.sessionRegistry, eventBus: this.eventBus, tmuxAdapter: this.tmuxAdapter,
-              ...(this.listProcesses ? { listProcesses: this.listProcesses } : {}) });
+              ...(this.listProcesses ? { listProcesses: this.listProcesses } : {}),
+              ...(this.managedAttempt ? { managedAttempt: this.managedAttempt } : {}) });
             const replayAsRestore = baseStatus !== "fresh-primed";
             const shouldLaunchHarness = isPodAware;
             const startupResult = await startupOrch.startNode({
