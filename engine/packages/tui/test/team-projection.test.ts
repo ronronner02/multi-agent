@@ -155,7 +155,12 @@ it("recovers the exact run from 1,000 durable events within two seconds and dedu
     expect(result.read!.run).toEqual(fixture.governance.getRun("run"));
     expect(result.read!.run.state).toBe("cancel_requested");
     const expected = fixture.model.read("run");
-    expect({ ...result.read, generatedAt: expected.generatedAt }).toEqual(expected);
+    const { controlVersions, ...projected } = result.read!;
+    expect({ ...projected, generatedAt: expected.generatedAt }).toEqual(expected);
+    expect(controlVersions).toEqual({
+      tasks: { [fixture.qitemId!]: fixture.governance.getTask(fixture.qitemId!)!.entityVersion },
+      attempts: {}, latestAttempts: {},
+    });
     expect(result.tasks[0]).toMatchObject({ id: "TASK-READ", state: "in-progress" });
     expect(result.read!.replay.latestSeq).toBe(last);
     expect(result.activity).toHaveLength(200);

@@ -1,3 +1,9 @@
+import { stripVTControlCharacters, promisify } from "node:util";
+import { execFile, spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir, userInfo } from "node:os";
+import { join } from "node:path";
+import { OwnerTerminalHost, OwnerTerminalHostClient, type OwnerTerminalRelay, type OwnerTerminalAttachment } from "../../../daemon/dist/terminal/owner-terminal-host.js";
 import type { DaemonClient } from "../daemon-client.js";
 import type { ExplorerRow, FleetSnapshot, ViewState } from "../types.js";
 import { wrapDetailLines, type ContentLine } from "../detail.js";
@@ -146,4 +152,94 @@ export function terminalLines(state: ViewState, snap: FleetSnapshot, width: numb
     }
   }
   return wrapDetailLines(lines, width);
+}
+
+export function createTeamTerminal(client: Pick<DaemonClient, "openTeamTerminal">,
+  changed: (state: NonNullable<import("../types.js").TeamViewState["terminal"]>) => void) {
+  let socket: WebSocket | null = null, attachment: OwnerTerminalAttachment | null = null, requested = false, raw = "";
+  let state: NonNullable<import("../types.js").TeamViewState["terminal"]> = { session: "", status: "unavailable", lines: [] };
+  const publish = (patch: Partial<typeof state>) => { state = { ...state, ...patch }; changed(state); };
+  const output = (data: string) => {
+    raw = (raw + data).slice(-32768);
+    publish({ lines: stripVTControlCharacters(raw).replace(/\r/g, "").split("\n").slice(-200) });
+  };
+  function release() {
+    requested = false;
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "release" }));
+    if (attachment) { void attachment.close(); attachment = null; }
+    publish({ status: socket?.readyState === WebSocket.OPEN ? "readOnly" : "unavailable" });
+  }
+  function close() { release(); const old = socket; socket = null; old?.close(); raw = ""; }
+  return {
+    close, release,
+    open(session: string) {
+      close(); publish({ session, status: "connecting", lines: [] });
+      const ws = client.openTeamTerminal(session); socket = ws;
+      const nonce = new URL(ws.url).searchParams.get("nonce");
+      const deadline = setTimeout(() => { if (socket === ws && state.status === "connecting") { ws.close(); publish({ status: "unavailable" }); } }, 5000);
+      deadline.unref?.();
+      ws.onmessage = event => {
+        if (socket !== ws) return;
+        let frame: Record<string, unknown>;
+        try { frame = JSON.parse(String(event.data)); } catch { return; }
+        if (!nonce || frame.nonce !== nonce) return;
+        if (frame.type === "output" && frame.session === session && typeof frame.data === "string") output(frame.data);
+        if (frame.type === "ready" && frame.session === session) { clearTimeout(deadline); publish({ status: "readOnly" }); }
+        if (frame.type === "takeover" && frame.session === session) {
+          if (frame.status === "active" && requested) { requested = false; publish({ status: "active" }); }
+          else if (frame.status === "released" || frame.status === "inactive") { requested = false; publish({ status: "readOnly" }); }
+        }
+        if (frame.type === "error") { requested = false; publish({ status: "readOnly" }); }
+      };
+      ws.onclose = ws.onerror = () => { clearTimeout(deadline); if (socket === ws) { requested = false; publish({ status: "unavailable" }); } };
+    },
+    async openOwner(relay: OwnerTerminalRelay) {
+      close(); publish({ session: "owner", status: "connecting", lines: [] });
+      attachment = await relay.attach({ send: output, close: () => publish({ status: "unavailable" }) });
+      publish({ status: "active" });
+    },
+    takeover() {
+      if (state.status !== "readOnly" || socket?.readyState !== WebSocket.OPEN) return;
+      requested = true; publish({ status: "requested" }); socket.send(JSON.stringify({ type: "takeover" }));
+    },
+    input(event: import("../types.js").InputEvent) {
+      if (state.status !== "active") return;
+      const keys: Record<string, string> = { enter: "Enter", backspace: "BSpace", up: "Up", down: "Down", left: "Left", right: "Right", tab: "Tab" };
+      const text = event.type === "char" ? event.ch : event.type === "paste" ? event.text : null;
+      if (attachment) {
+        const bytes: Record<string, string> = { enter: "\r", backspace: "\x7f", up: "\x1b[A", down: "\x1b[B", left: "\x1b[D", right: "\x1b[C", tab: "\t" };
+        const data = text ?? (event.type === "key" ? bytes[event.key] : undefined);
+        if (data) void attachment.sendInput(data).catch(() => publish({ status: "unavailable" }));
+      } else if (socket?.readyState === WebSocket.OPEN) {
+        if (text !== null) socket.send(JSON.stringify({ type: "text", text }));
+        else if (event.type === "key" && keys[event.key]) socket.send(JSON.stringify({ type: "keys", keys: [keys[event.key]] }));
+      }
+    },
+  };
+}
+
+export async function startOwnerTerminal() {
+  const user = userInfo();
+  if (process.platform !== "linux" || user.uid <= 0 || /^ma-(?:control|worker[0-9]+)$/.test(user.username)) throw new Error("Owner login required");
+  const root = await mkdtemp(join(tmpdir(), "multi-agent-owner-")), tmuxSocket = join(root, "tmux.sock");
+  const env = { ...process.env }; delete env["TMUX"]; delete env["TMUX_PANE"]; delete env["MULTI_AGENT_OWNER_TOKEN"];
+  const run = promisify(execFile), quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+  const host = new OwnerTerminalHost({ socketPath: join(root, "relay.sock"), ownerUid: user.uid, transportFactory: () => {
+    let child: ReturnType<typeof spawn> | null = null;
+    return {
+      async start(output, closed) {
+        child = spawn("script", ["-q", "-f", "-c", `tmux -S ${quote(tmuxSocket)} attach-session -t owner`, "/dev/null"], { env });
+        child.stdout!.on("data", data => output(data.toString())); child.stderr!.on("data", data => output(data.toString()));
+        child.on("exit", () => closed()); child.on("error", () => closed("Owner terminal process failed"));
+      },
+      async write(data) { child?.stdin?.write(data); },
+      async close() { child?.kill("SIGTERM"); },
+    };
+  } });
+  const close = async () => { await host.stop(); await run("tmux", ["-S", tmuxSocket, "kill-server"], { env }).catch(() => {}); await rm(root, { recursive: true, force: true }); };
+  try {
+    await run("tmux", ["-S", tmuxSocket, "-f", "/dev/null", "new-session", "-d", "-s", "owner"], { env });
+    await host.start();
+    return { relay: new OwnerTerminalHostClient({ socketPath: host.socketPath, token: host.token }), close, socketPath: host.socketPath, tmuxSocket };
+  } catch (error) { await close(); throw error; }
 }

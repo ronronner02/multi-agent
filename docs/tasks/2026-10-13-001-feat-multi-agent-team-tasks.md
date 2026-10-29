@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: "sha256:41acc8447c94f23214cb522947429e0fb1068b2587fca634565f6d2488303c60"
+source_plan_hash: sha256:927a79aa0856d0052391d44309756ae5945ec6826e22c9ca4cec9c6881c92ba3
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -1379,7 +1379,10 @@ The following JSON is the single machine-readable task source. Human cards below
         "PC1",
         "PC2",
         "PC3",
-        "PC4"
+        "PC4",
+        "KTD9",
+        "KTD25",
+        "PC7"
       ],
       "goal": "Connect TUI owner decisions, browser pairing and terminal take-over with real-terminal acceptance.",
       "dependencies": [
@@ -1395,22 +1398,35 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/tui/src/attention/attention-model.ts",
         "engine/packages/tui/src/terminals/terminal-model.ts",
         "engine/packages/tui/test/team-controls.test.ts",
-        "engine/packages/tui/test/team-language.test.ts"
+        "engine/packages/tui/test/team-language.test.ts",
+        "engine/packages/tui/src/main.ts",
+        "engine/packages/tui/src/types.ts",
+        "engine/packages/i18n/src/catalogs/en.json",
+        "engine/packages/i18n/src/catalogs/zh-CN.json",
+        "engine/packages/daemon/src/contracts/team-control.ts",
+        "engine/packages/daemon/src/routes/team-control.ts",
+        "engine/packages/daemon/src/domain/plan-governance.ts",
+        "engine/packages/daemon/test/team-governance.test.ts",
+        "engine/packages/daemon/src/server.ts",
+        "engine/packages/daemon/src/routes/terminal-ws.ts",
+        "engine/packages/daemon/test/terminal-ws-route.test.ts",
+        "engine/packages/tui/test/team-projection.test.ts"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u6-add-observable-team-views-and-owner-controls-to-the-tui",
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#web-ui-and-tui-experience",
-        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants"
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#state-persistence-and-approval-invariants",
+        "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#t016-owner-control-wiring-and-command-contract-amendment-2026-10-29"
       ],
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
-      "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry. The console input accepts only the allowlisted commands in the approved design (retry, pause, resume, open, help) and refuses free text with a message naming them; no message reaches an agent. Approve is `a` and reject is `x`; `r` refreshes.",
-      "done_signal": "Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI. The real-terminal runs use Windows Terminal once with a Nerd Font and NERD_FONT=1 and once with NERD_FONT=0.",
+      "test_focus": "Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry. The console input accepts only the allowlisted commands in the approved design (retry, pause, resume, open, help) and refuses free text with a message naming them; no message reaches an agent. Approve is `a` and reject is `x`; `r` refreshes. Owner-only pause/resume preserves active attempts and counters; another blocker overrides an owner pause. Counted retry reopens only a verified failed task after exact run/task/attempt checks, without a direct native launch; stale, active, unknown and exhausted cases are denied and rollback is atomic.",
+      "done_signal": "Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI. The owner deferred the Nerd Font-mode run until installation; default/plain-text fallback and Windows Terminal text-mode checks remain required.",
       "wave": 22,
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. Stop if the implementation departs from the approved design in docs/design/t015-tui-design.md, and return the difference as a design question.",
       "review_gate": "required",
       "review_focus": "Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.",
-      "notes": "Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md). The console input is commands only (PC4); there is no chat and no agent picker.",
+      "notes": "Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md). The console input is commands only (PC4); there is no chat and no agent picker. Owner-approved 2026-10-29 amendment: the U6 T016 subsection adds the existing entrypoint, typed state, shared catalogs and bounded managed owner command owners; T038 and native-launch behavior remain outside scope. The same amendment permits exactly one LOCAL_ENGINE_PATHS registration for packages/tui/test/team-controls.test.ts, alongside task-owned PIN.adapted entries.",
       "risk_note": "A terminal projection is not authority; unknown/stale state must remain visible and agent output inert.",
       "expected_side_effects": [
         "tools/upstream-import.mjs"
@@ -3662,14 +3678,14 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 
 ### T016. Connect TUI owner decisions, browser pairing and terminal take-over with real-terminal acceptance.
 
-- **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`.
+- **Source / requirements:** `U6`; `R9`, `R12`, `R13`, `R14`, `R16`, `F4`, `AE5`, `AE6`, `AE7`, `AE10`, `AE12`, `KTD4`, `KTD5`, `KTD6`, `KTD14`, `KTD15`, `KTD16`, `PC1`, `PC2`, `PC3`, `PC4`, `KTD9`, `KTD25`, `PC7`.
 - **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 22; T015, T035.
-- **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/input.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/src/terminals/terminal-model.ts`; `engine/packages/tui/test/team-controls.test.ts`; `engine/packages/tui/test/team-language.test.ts`.
-- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
-- **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry. The console input accepts only the allowlisted commands in the approved design (retry, pause, resume, open, help) and refuses free text with a message naming them; no message reaches an agent. Approve is `a` and reject is `x`; `r` refreshes.
-- **Done signal:** Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI. The real-terminal runs use Windows Terminal once with a Nerd Font and NERD_FONT=1 and once with NERD_FONT=0.
+- **Files:** `engine/packages/tui/src/daemon-client.ts`; `engine/packages/tui/src/input.ts`; `engine/packages/tui/src/state.ts`; `engine/packages/tui/src/render.ts`; `engine/packages/tui/src/attention/attention-model.ts`; `engine/packages/tui/src/terminals/terminal-model.ts`; `engine/packages/tui/test/team-controls.test.ts`; `engine/packages/tui/test/team-language.test.ts`; `engine/packages/tui/src/main.ts`; `engine/packages/tui/src/types.ts`; `engine/packages/i18n/src/catalogs/en.json`; `engine/packages/i18n/src/catalogs/zh-CN.json`; `engine/packages/daemon/src/contracts/team-control.ts`; `engine/packages/daemon/src/routes/team-control.ts`; `engine/packages/daemon/src/domain/plan-governance.ts`; `engine/packages/daemon/test/team-governance.test.ts`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/routes/terminal-ws.ts`; `engine/packages/daemon/test/terminal-ws-route.test.ts`; `engine/packages/tui/test/team-projection.test.ts`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries and the exact `LOCAL_ENGINE_PATHS` registration `packages/tui/test/team-controls.test.ts`; serialize this shared owner.
+- **Test focus:** Versioned/idempotent approve/reject/cancel; lost acknowledgement/reconnect; 60-second one-time pairing and revocation; owner-host start; read-only views until audited take-over; native-prompt configuration-fault blocker under PC7; a KTD25 scope-extension decision shows the task, each path with create or modify, the reason, the classification and, for a dependency change, each package, exact version and matched list entry. The console input accepts only the allowlisted commands in the approved design (retry, pause, resume, open, help) and refuses free text with a message naming them; no message reaches an agent. Approve is `a` and reject is `x`; `r` refreshes. Owner-only pause/resume preserves active attempts and counters; another blocker overrides an owner pause. Counted retry reopens only a verified failed task after exact run/task/attempt checks, without a direct native launch; stale, active, unknown and exhausted cases are denied and rollback is atomic.
+- **Done signal:** Input tests and actual terminal runs at two sizes in both languages show correct target/scope confirmations, requested versus observed outcomes, key hints, language switching and take-over audit; worker tmux cannot control the owner TUI. The owner deferred the Nerd Font-mode run until installation; default/plain-text fallback and Windows Terminal text-mode checks remain required.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. An agent holds the owner credential, unsupported native approval is shown as available, or the owner TUI/terminal shares the workers' namespace. Stop if the implementation departs from the approved design in docs/design/t015-tui-design.md, and return the difference as a design question.
-- **Notes:** Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md). The console input is commands only (PC4); there is no chat and no agent picker.
+- **Notes:** Owner decision 2026-10-24: the TUI design is approved (docs/design/t015-tui-design.md). The console input is commands only (PC4); there is no chat and no agent picker. Owner-approved 2026-10-29 amendment: the U6 T016 subsection adds the existing entrypoint, typed state, shared catalogs and bounded managed owner command owners; T038 and native-launch behavior remain outside scope. The same amendment permits exactly one LOCAL_ENGINE_PATHS registration for packages/tui/test/team-controls.test.ts, alongside task-owned PIN.adapted entries.
 - **Review intent:** required; Inspect owner-only credential handling, duplicate input and terminal/session authority rather than screenshots alone.
 
 ### T017. Persist cancellation and enforce cumulative budgets outside controller-only timers.

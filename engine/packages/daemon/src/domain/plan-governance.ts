@@ -7,7 +7,7 @@ import {
   object, parseAssignment, parseAttemptIdentity, parseControlRequest, parsePlanBinding, parseTaskInputs, parseTeamEvent, parseUsage, text,
   type ApprovalAction, type ApprovalConsumption, type ApprovalKind, type AttemptState, type ControlActor,
   type ControlReceipt, type ControlRequest, type JsonObject, type TeamApproval, type TeamAttempt,
-  type TeamRun, type TeamTaskAuthority, type UsageEvidence, type UsageMetric,
+  type TeamRun, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
@@ -278,6 +278,11 @@ export class PlanGovernance {
   }
 
 
+  getLatestTaskAttempt(qitemId: string): TeamAttempt | null {
+    const row = this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid DESC LIMIT 1").get(qitemId) as { id: string } | undefined;
+    return row ? this.getAttempt(row.id) : null;
+  }
+
   getNativeLaunchIntent(runId: string, attemptId: string): NativeLaunchIntent | null {
     return this.nativeLaunchIntents(runId).find(intent => intent.attemptId === attemptId) ?? null;
   }
@@ -403,6 +408,61 @@ export class PlanGovernance {
       ctx.run.stateReason = reason;
       this.invalidateUnused(ctx);
       return { status: "pending-execution", value: { state: "cancel_requested" }, reason: "Termination has not been observed" };
+    });
+  }
+
+  ownerCommand(operation: TeamOwnerCommand, raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command(operation === "retry" ? "task.retry-requested" : `run.${operation}`, raw, owner, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (operation === "retry") {
+        const reason = this.eligibility(ctx);
+        if (reason) return deny(reason);
+        const task = this.getTask(ctx.request.actionId), item = this.queue.getById(ctx.request.actionId);
+        if (!task || task.runId !== ctx.run.id || !item) throw new Error("Task not found in this run");
+        const v = object(ctx.request.payload, "retry");
+        if (integer(v.expectedTaskVersion, "expectedTaskVersion", 1) !== task.entityVersion) throw new Error("Task version conflict");
+        const attempt = this.getAttempt(text(v.attemptId, "attemptId", 256));
+        if (!attempt || attempt.runId !== ctx.run.id || attempt.qitemId !== task.qitemId || attempt.role !== task.assignment.role) return deny("Retry requires this task's stopped attempt");
+        if (integer(v.expectedAttemptVersion, "expectedAttemptVersion", 1) !== attempt.entityVersion) throw new Error("Attempt version conflict");
+        const latest = this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid DESC LIMIT 1").get(task.qitemId) as { id: string };
+        if (item.state !== "failed" || !task.evidence || !Object.keys(task.evidence).length
+          || attempt.state !== "stopped" || attempt.identity === null || latest.id !== attempt.id
+          || this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(task.qitemId)) {
+          return deny("Retry requires a verified failed task with every attempt observed stopped");
+        }
+        if (ctx.run.retriesUsed >= ctx.run.binding.limits.maxRetries) return deny("Retry limit exhausted");
+        ctx.run.retriesUsed += 1;
+        const changed = this.db.prepare("UPDATE team_queue_authority SET entity_version = entity_version + 1 WHERE qitem_id = ? AND entity_version = ?")
+          .run(task.qitemId, task.entityVersion);
+        if (changed.changes !== 1) throw new Error("Task version conflict");
+        // Failed rows use the queue's ordinary transition; its reopen flag is only for archived outcomes.
+        const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+          qitemId: task.qitemId, actorSession: owner.sessionId, state: "pending", transitionNote: `Owner counted retry of ${attempt.id}`,
+        }));
+        for (const event of updated.persistedEvents) ctx.register(event);
+        return { status: "accepted", value: this.getTask(task.qitemId), taskId: task.assignment.taskId,
+          attemptId: attempt.id, observedBy: owner.sessionId };
+      }
+      if (ctx.request.actionId !== ctx.run.id) throw new TeamContractError("ownerCommand.actionId");
+      object(ctx.request.payload, "ownerCommand");
+      if (operation === "resume") {
+        if (ctx.run.state !== "blocked" || ctx.run.stateReason !== "owner-paused") return deny("Only an owner-paused run can resume");
+        ctx.run.state = "approved";
+        const reason = this.eligibility(ctx);
+        if (reason) {
+          ctx.run.state = "blocked";
+          ctx.run.stateReason = reason;
+          return deny(reason);
+        }
+        ctx.run.stateReason = null;
+      } else {
+        const reason = this.eligibility(ctx);
+        if (reason) return deny(reason);
+        ctx.run.state = "blocked";
+        ctx.run.stateReason = "owner-paused";
+      }
+      return { status: "observed", value: { state: ctx.run.state, stateReason: ctx.run.stateReason }, observedBy: owner.sessionId };
     });
   }
 

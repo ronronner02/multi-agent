@@ -80,6 +80,11 @@ export function teamControlRoutes(
     }
     try {
       const read = options.readModel.read(c.req.param("runId"));
+      read.controlVersions = {
+        latestAttempts: Object.fromEntries(read.tasks.flatMap(task => { const row = governance.getLatestTaskAttempt(task.qitemId); return row ? [[task.qitemId, row.id]] : []; })),
+        tasks: Object.fromEntries(read.tasks.flatMap(task => { const row = governance.getTask(task.qitemId); return row ? [[task.qitemId, row.entityVersion]] : []; })),
+        attempts: Object.fromEntries(read.attempts.flatMap(attempt => { const row = governance.getAttempt(attempt.attemptId); return row ? [[attempt.attemptId, row.entityVersion]] : []; })),
+      };
       return c.json({ protocolVersion: TEAM_CONTROL_VERSION, read });
     } catch (error) {
       // A missing run is a 404, not a 500: the evidence does not exist to read.
@@ -108,7 +113,7 @@ export function teamControlRoutes(
     const page = options.readModel.replay(c.req.param("runId"), afterSeq, limit);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: c.req.param("runId"), ...page });
   });
-  for (const action of ["approvals/request", "approvals/decide", "cancel", "tasks/outcome"] as const) {
+  for (const action of ["approvals/request", "approvals/decide", "cancel", "tasks/outcome", "pause", "resume", "tasks/retry"] as const) {
     app.post(`/runs/:runId/${action}`, async (c) => {
       const request = parseControlRequest(await c.req.json());
       if (request.runId !== c.req.param("runId")) {
@@ -126,7 +131,8 @@ export function teamControlRoutes(
         let binding: unknown;
         try { binding = options.resolveBinding(governance.getRun(request.runId)); }
         catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
-        receipt = governance.decideApproval(request, actor, binding);
+        receipt = action === "approvals/decide" ? governance.decideApproval(request, actor, binding)
+          : governance.ownerCommand(action === "tasks/retry" ? "retry" : action, request, actor, binding);
       }
       return c.json(receipt, receipt.status === "denied" ? 403 : receipt.status === "pending-execution" ? 202 : 200);
     });

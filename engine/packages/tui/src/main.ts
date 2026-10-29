@@ -19,7 +19,7 @@ import { createStyle, detectColorMode } from "./theme.js";
 import { stylizeLines } from "./stylize.js";
 import { createControlSocket, defaultSocketPath } from "./socket-server.js";
 import { demoSnapshot } from "./demo-data.js";
-import { DaemonClient, launchNodeNotice } from "./daemon-client.js";
+import { DaemonClient, TeamControlError, launchNodeNotice } from "./daemon-client.js";
 import { hydrateSnapshot } from "./hydrate.js";
 import { createLiveRefresh, createTeamLive } from "./live.js";
 import { resolvePendingAddress } from "./pending-address.js";
@@ -36,6 +36,10 @@ import { StartupController } from "./startup.js";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { realpathSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { parseTeamCommand, teamNavigation } from "./input.js";
+import { teamDecisionLines } from "./attention/attention-model.js";
+import { createTeamTerminal, startOwnerTerminal } from "./terminals/terminal-model.js";
 import type { Action, FleetSnapshot, Screen } from "./types.js";
 import type { SpecReviewCache } from "./hydrate.js";
 import { MOTION_FRAME_MS } from "./visual-layout.js";
@@ -89,6 +93,158 @@ export function createTuiLanguagePreference(): OwnerLanguagePreference {
 function argOf(args: string[], flag: string): string | undefined {
   const i = args.indexOf(flag);
   return i >= 0 && !args[i + 1]?.startsWith("-") ? args[i + 1] : undefined;
+}
+
+export function createTeamControls(options: {
+  view: import("./types.js").ViewStateStore; getSnapshot: () => FleetSnapshot; client: DaemonClient | null;
+  language: Awaited<ReturnType<typeof createInterfaceI18n>>; refresh: () => Promise<void>; quit: () => void;
+  startOwnerHost?: () => Promise<import("../../daemon/dist/terminal/owner-terminal-host.js").OwnerTerminalRelay>;
+}) {
+  const { view, client } = options;
+  let busy = false, closed = false;
+  const update = (patch: Partial<import("./types.js").TeamViewState>) => { if (!closed) view.dispatch({ type: "team-update", patch }); };
+  const notice = (key: string, detail?: string) => update({ notice: { key, detail } });
+  const terminal = client ? createTeamTerminal(client, state => update({ terminal: state })) : null;
+  const available = () => {
+    const data = options.getSnapshot().team;
+    return !!client && data?.source === "live" && data.connection === "connected" && (data.ageSeconds ?? Infinity) <= 5 && !!data.read;
+  };
+  function confirm(action: import("./types.js").TeamConfirmation["action"], actionId: string, payload: import("./types.js").TeamConfirmation["request"]["payload"], lines: string[]) {
+    if (!available()) { notice("disabled"); return; }
+    if (view.get().team?.pending) { notice("unacknowledged"); return; }
+    const read = options.getSnapshot().team!.read!;
+    update({ confirmation: { action, request: { protocolVersion: "1.0", runId: read.runId, actionId,
+      expectedEntityVersion: read.run.entityVersion, idempotencyKey: randomUUID(), payload }, lines }, overlay: "confirm", overlayOffset: 0 });
+  }
+  async function send(command: import("./types.js").TeamConfirmation) {
+    if (busy || !client || (!view.get().team?.pending && !available())) { notice("disabled"); return; }
+    busy = true; update({ pending: command, notice: { key: "requested" } });
+    try {
+      const receipt = await client.teamControl(command.action, command.request);
+      update({ pending: null, confirmation: null, overlay: null,
+        notice: { key: receipt.status === "observed" ? "observed" : receipt.status === "denied" ? "denied" : "requested", detail: receipt.reason ?? undefined } });
+      await options.refresh().catch(() => notice("refreshUnavailable"));
+    } catch (error) {
+      if (error instanceof TeamControlError && error.status < 500) {
+        update({ pending: null, confirmation: null, overlay: null, notice: { key: error.status === 409 ? "conflict" : "denied", detail: String(error.status) } });
+        await options.refresh().catch(() => notice("refreshUnavailable"));
+      } else update({ pending: command, confirmation: command, overlay: "confirm", notice: { key: "unacknowledged" } });
+    } finally { busy = false; }
+  }
+  function open(target?: string) {
+    if (!available()) { notice("disabled"); return; }
+    const state = view.get().team!, read = options.getSnapshot().team!.read!;
+    target ??= state.focus === "agents" ? state.selectedAgent ?? options.getSnapshot().team?.agents[0]?.name
+      : state.selectedTaskId ?? read.tasks[0]?.taskId;
+    const attempt = read.attempts.find(item => item.session === target || item.attemptId === target)
+      ?? read.attempts.find(item => item.taskId === target && item.attemptId === read.controlVersions?.latestAttempts[item.qitemId ?? ""]);
+    if (!attempt?.session) { notice("unavailable"); return; }
+    terminal?.open(attempt.session);
+    update({ focus: "console", consoleExpanded: true, consoleTab: "terminal" });
+  }
+  function command(line: string) {
+    const parsed = parseTeamCommand(line), read = options.getSnapshot().team?.read;
+    if (!parsed) { notice("commandsOnly"); return; }
+    if (parsed.name === "help") { update({ overlay: "help", overlayOffset: 0 }); return; }
+    if (parsed.name === "open") { open(parsed.target); return; }
+    if (!available() || !read) { notice("disabled"); return; }
+    if (parsed.name === "retry") {
+      const task = read.tasks.find(item => item.taskId === parsed.target), versions = read.controlVersions;
+      const attempt = read.attempts.find(item => item.attemptId === versions?.latestAttempts[task?.qitemId ?? ""]);
+      const expectedTaskVersion = task && versions?.tasks[task.qitemId], expectedAttemptVersion = attempt && versions?.attempts[attempt.attemptId];
+      if (!task || !attempt || !expectedTaskVersion || !expectedAttemptVersion) { notice("unavailable"); return; }
+      confirm("tasks/retry", task.qitemId, { expectedTaskVersion, attemptId: attempt.attemptId,
+        expectedAttemptVersion }, ["retry " + task.taskId, attempt.attemptId, read.run.binding.planRef, ...read.run.binding.writePaths]);
+    } else confirm(parsed.name, read.runId, {}, [parsed.name + " · " + read.runId, read.run.binding.planRef, ...read.run.binding.writePaths]);
+  }
+  return {
+    close() { closed = true; terminal?.close(); },
+    async handle(event: import("./types.js").InputEvent): Promise<void> {
+      if (closed) return;
+      const state = view.get().team!, key = event.type === "char" ? event.ch : event.type === "key" ? event.key : "";
+      if (state.terminal?.status === "active") {
+        if (key === "escape") terminal?.release(); else terminal?.input(event);
+        return;
+      }
+      if (busy && key !== "q") return;
+      if (state.overlay) {
+        if (key === "escape") { update({ overlay: null, confirmation: null, pairing: null }); return; }
+        if (key === "up" || key === "down") { update({ overlayOffset: Math.max(0, (state.overlayOffset ?? 0) + (key === "down" ? 1 : -1)) }); return; }
+        if (state.overlay === "confirm" && key === "enter" && state.confirmation) { await send(state.confirmation); return; }
+        if (state.overlay === "quit" && key === "enter") { options.quit(); return; }
+        if (state.overlay === "takeover" && key === "enter") { terminal?.takeover(); update({ overlay: null }); return; }
+        if (state.overlay === "settings" && available()) {
+          busy = true;
+          try {
+            if (key === "b") update({ pairing: await client!.pairOwnerBrowser() });
+            if (key === "d") {
+              const session = state.ownerSessions?.[state.sessionIndex ?? 0];
+              if (session) { await client!.revokeOwnerBrowser(session.id); update({ ownerSessions: (await client!.ownerBrowserSessions()).sessions }); notice("revoked", session.id); }
+            }
+            if (key === "]" || key === "[") update({ sessionIndex: Math.max(0, Math.min((state.ownerSessions?.length ?? 1) - 1, (state.sessionIndex ?? 0) + (key === "]" ? 1 : -1))) });
+            if (key === "h") { if (options.startOwnerHost) { await terminal?.openOwner(await options.startOwnerHost()); update({ overlay: null, focus: "console", consoleExpanded: true, consoleTab: "terminal" }); } else notice("unavailable"); }
+            if (key === "k") {
+              const read = options.getSnapshot().team!.read!;
+              confirm("cancel", read.runId, { reason: "Owner requested cancellation" }, [read.runId, read.run.binding.planRef, ...read.run.binding.writePaths]);
+            }
+          } catch { notice("unavailable"); } finally { busy = false; }
+        }
+        return;
+      }
+      if (state.editing) {
+        const text = state.editing === "command" ? state.commandText ?? "" : state.filter ?? "";
+        let next = text;
+        if (event.type === "char") next += event.ch;
+        if (event.type === "paste") next += event.text;
+        if (key === "backspace") next = Array.from(text).slice(0, -1).join("");
+        if (key === "escape" || key === "enter") {
+          update({ editing: null, commandText: "" });
+          if (key === "enter" && state.editing === "command") command(text);
+        } else update(state.editing === "command" ? { commandText: next.slice(0, 1024) } : { filter: next.slice(0, 256), offsets: { ...state.offsets, tasks: 0 } });
+        return;
+      }
+      if (key === "L") {
+        busy = true;
+        try { await options.language.changeLanguage(state.language === "en" ? "zh-CN" : "en"); if (!closed) view.dispatch({ type: "team-language", language: options.language.language }); }
+        catch { notice("languageFailed"); } finally { busy = false; }
+        return;
+      }
+      if (key === "r") { await options.refresh().catch(() => notice("refreshUnavailable")); return; }
+      if (key === "?") { update({ overlay: "help", overlayOffset: 0 }); return; }
+      if (key === "s") {
+        update({ overlay: "settings", overlayOffset: 0 });
+        if (available()) try { update({ ownerSessions: (await client!.ownerBrowserSessions()).sessions }); } catch { notice("unavailable"); }
+        return;
+      }
+      if (key === "q") {
+        if (options.getSnapshot().team?.read?.attempts.some(item => item.state !== "stopped")) update({ overlay: "quit", overlayOffset: 0 });
+        else options.quit();
+        return;
+      }
+      if (key === "c") { if (available()) update({ editing: "command", commandText: "", focus: "console", consoleExpanded: true }); else notice("disabled"); return; }
+      if (key === "/") { update({ editing: "search", filter: "", focus: "tasks" }); return; }
+      if (key === "o" || key === "v") { open(); return; }
+      if (key === "t") { if (available() && state.terminal?.status === "readOnly") update({ overlay: "takeover", overlayOffset: 0 }); else notice("unavailable"); return; }
+      if (key === "enter" && state.pending) { await send(state.pending); return; }
+      if (key === "a" || key === "x") {
+        const read = options.getSnapshot().team?.read;
+        const approval = read?.approvals.filter(item => item.awaitingDecision).find((item, index) => state.selectedApprovalId ? item.id === state.selectedApprovalId : index === 0);
+        if (!read || !approval || !available()) { notice("disabled"); return; }
+        if (approval.kind === "native") { notice("nativeFault"); return; }
+        if (approval.bindingDigest !== read.run.bindingDigest || Date.parse(approval.expiresAt) <= Date.now() || ["invalidated", "cancel_requested"].includes(read.run.state)) { notice("disabled"); return; }
+        confirm("approvals/decide", approval.id, { approvalVersion: approval.entityVersion, decision: key === "a" ? "approved" : "rejected",
+          ...(approval.action === "scope-extension" ? { expectedChainHead: approval.payload.expectedChainHead } : {}) },
+          [options.language.t(key === "a" ? "team.approve" : "team.reject"), ...teamDecisionLines(read, approval, state.language)]);
+        return;
+      }
+      if (key === "p") {
+        update({ following: state.following === false, pausedConsole: state.following === false ? undefined
+          : { data: options.getSnapshot().team, terminalLines: state.terminal?.lines ?? [] } }); return;
+      }
+      const navigation = teamNavigation(state, options.getSnapshot().team, event);
+      if (navigation) view.dispatch(navigation);
+    },
+  };
 }
 
 async function run(): Promise<void> {
@@ -181,6 +337,16 @@ async function run(): Promise<void> {
   let motionTimer: NodeJS.Timeout | null = null;
   let teamClock: NodeJS.Timeout | null = null;
   let teamLive: ReturnType<typeof createTeamLive> | null = null;
+  let ownerHost: Awaited<ReturnType<typeof startOwnerTerminal>> | null = null;
+  const teamControls = team && language ? createTeamControls({ view, client: teamClient, language,
+    getSnapshot: () => teamLive?.snapshot() ?? snapshot, quit: () => { void shutdown(); },
+    startOwnerHost: async () => { ownerHost ??= await startOwnerTerminal(); return ownerHost.relay; },
+    refresh: async () => {
+      const runId = view.get().team?.runId;
+      if (teamClient && runId) { teamLive?.close(); teamLive = createTeamLive(teamClient, runId, () => draw()); await teamLive.ready; }
+      draw();
+    },
+  }) : null;
   // S19 AM-R18 — the open view updates ITSELF: oracle pushes drive the refresh owner.
   // Notification-only; the refresh rehydrates the same ps projection through the
   // daemon client (one oracle, with the owner's bounded quiet fallback; HTTP stays
@@ -238,6 +404,9 @@ async function run(): Promise<void> {
     if (liveEnabled && live?.load().settled) previousPage = { state: { ...view.get() }, snapshot };
     const pageOptions = { ...opts, ...(liveEnabled && !live?.load().settled ? { previousPage } : {}) };
     lastScreen = renderScreen(view.get(), snapshot, pageOptions, inputLine);
+    const teamView = view.get().team;
+    if (teamView && lastScreen.teamConsoleOffset !== undefined && teamView.offsets.console !== lastScreen.teamConsoleOffset)
+      view.dispatch({ type: "team-update", patch: { offsets: { ...teamView.offsets, console: lastScreen.teamConsoleOffset } } });
     if (startup?.state.local) startup.state.local.scroll = Math.min(startup.state.local.scroll, lastScreen.contentMaxOffset);
     // Startup has its own selection/scroll; keep the underlying reader bookmark intact.
     if (!startup?.state.open && !view.get().palette && (!liveEnabled || live?.load().settled) && (view.get().contentMaxOffset !== lastScreen.contentMaxOffset || view.get().contentTargetCount !== lastScreen.contentTargets.length)) {
@@ -544,6 +713,8 @@ async function run(): Promise<void> {
     process.stdout.off("resize", draw);
     if (motionTimer) clearTimeout(motionTimer);
     live?.close();
+    teamControls?.close();
+    await ownerHost?.close();
     teamLive?.close();
     if (teamClock) clearInterval(teamClock);
     unsubscribeCopyMode();
@@ -568,7 +739,7 @@ async function run(): Promise<void> {
     if (nativeAttached) return;
     if (events.some(ev => ev.type === "ctrl-c") && !launching) { void shutdown(); return; }
     if (view.get().team) {
-      if (events.some(event => event.type === "char" && event.ch === "q")) void shutdown();
+      for (const event of events) void teamControls?.handle(event).then(() => draw()).catch(() => { view.dispatch({ type: "team-update", patch: { notice: { key: "unavailable" } } }); draw(); });
       return;
     }
     for (const ev of events) {
@@ -814,6 +985,7 @@ async function run(): Promise<void> {
   });
   process.stdin.on("end", () => {
     handleInput(inputDecoder.flush());
+    if (team) void shutdown();
   });
 
   process.stdout.write(ALT_SCREEN_ON + MOUSE_ENABLE + PASTE_ENABLE);

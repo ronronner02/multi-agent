@@ -1,4 +1,5 @@
-import { TEAM_CONTROL_VERSION, TEAM_READ_MODEL_VERSION, type TeamOwnerRead, type TeamSystemHealth } from "../../daemon/dist/contracts/team-control.js";
+import { randomUUID } from "node:crypto";
+import { TEAM_CONTROL_VERSION, TEAM_READ_MODEL_VERSION, type TeamOwnerRead, type TeamSystemHealth, type ControlRequest, type ControlReceipt } from "../../daemon/dist/contracts/team-control.js";
 import type { TeamReadModel } from "../../daemon/dist/team-control-surface.js";
 import type { PageRead } from "./page-read.js";
 import type { ProjectSelection } from "./types.js";
@@ -62,6 +63,10 @@ export function launchNodeNotice(agent: string, result: LaunchNodeResult): strin
   return [notice, ...(result.warnings ?? [])].join("\n");
 }
 
+export class TeamControlError extends Error {
+  constructor(readonly status: number) { super(`Owner control HTTP ${status}`); }
+}
+
 export class DaemonClient {
   readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -91,6 +96,54 @@ export class DaemonClient {
    *  server) returns null — the caller disables the leg permanently and the TUI behaves
    *  exactly as S16 shipped it (click-to-refresh). Never retried on null. Opening
    *  timeouts/network errors reject so the subscriber can back off and retry. */
+  private assertLocalOwnerEndpoint(): void {
+    const url = new URL(this.baseUrl);
+    if (!["http:", "https:"].includes(url.protocol) || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+      || url.username || url.password || url.search || url.hash) throw new Error("Owner controls require a loopback endpoint");
+  }
+
+  private async ownerRequest(route: string, method: string, body?: unknown): Promise<{ status: number; data: unknown }> {
+    this.assertLocalOwnerEndpoint();
+    const response = await this.fetchImpl(this.baseUrl + route, { method, headers: { ...this.headers, "Content-Type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: "error", signal: AbortSignal.timeout(5000) });
+    return { status: response.status, data: await response.json() };
+  }
+
+  async teamControl(action: import("./types.js").TeamConfirmation["action"], request: ControlRequest): Promise<ControlReceipt> {
+    const { status, data } = await this.ownerRequest(`/api/team-control/runs/${encodeURIComponent(request.runId)}/${action}`, "POST", request);
+    const receipt = data as ControlReceipt;
+    if (![200, 202, 403].includes(status) || receipt?.runId !== request.runId || !Number.isSafeInteger(receipt.entityVersion)
+      || receipt.entityVersion <= request.expectedEntityVersion || !["accepted", "denied", "observed", "pending-execution"].includes(receipt.status)) throw new TeamControlError(status);
+    return receipt;
+  }
+
+  async pairOwnerBrowser(): Promise<{ code: string; expiresAt: number }> {
+    const { status, data } = await this.ownerRequest("/api/team-control/owner-session/pairing", "POST");
+    const pair = data as { code: string; expiresAt: number };
+    if (status !== 200 || !/^[A-Za-z0-9_-]{43}$/.test(pair?.code) || !Number.isFinite(pair.expiresAt)) throw new TeamControlError(status);
+    return pair;
+  }
+
+  async ownerBrowserSessions(): Promise<{ sessions: Array<{ id: string; origin: string; revoked_at: number | null }> }> {
+    this.assertLocalOwnerEndpoint();
+    return this.get("/api/team-control/owner-session/sessions") as ReturnType<DaemonClient["ownerBrowserSessions"]>;
+  }
+
+  async revokeOwnerBrowser(id: string): Promise<void> {
+    const { status, data } = await this.ownerRequest("/api/team-control/owner-session/sessions/" + encodeURIComponent(id), "DELETE");
+    if (status !== 200 || !(data as { revoked?: boolean })?.revoked) throw new TeamControlError(status);
+  }
+
+  openTeamTerminal(session: string): WebSocket {
+    this.assertLocalOwnerEndpoint();
+    const url = new URL("/api/terminal/" + encodeURIComponent(session), this.baseUrl);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.searchParams.set("format", "framed"); url.searchParams.set("nonce", randomUUID());
+    // Node's built-in WebSocket accepts headers in its extended constructor, never in the URL.
+    const Socket = WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket;
+    return new Socket(url.href, { headers: this.headers });
+  }
+
   async teamRead(runId: string, signal?: AbortSignal): Promise<TeamOwnerRead> {
     const result = await this.get("/api/team-control/runs/" + encodeURIComponent(runId) + "/read", this.fetchImpl, signal) as { protocolVersion: string; read: TeamOwnerRead };
     if (result.protocolVersion !== TEAM_CONTROL_VERSION || result.read?.schema !== "multi-agent-team-read/v1"
@@ -122,12 +175,13 @@ export class DaemonClient {
   }
 
   private async openEvents(route: string, signal?: AbortSignal): Promise<Response | null> {
+    if (route.startsWith("/api/team-control/")) this.assertLocalOwnerEndpoint();
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 5_000);
     deadline.unref?.();
     try {
       const res = await this.fetchImpl(`${this.baseUrl}${route}`, {
-        headers: { ...this.headers, accept: "text/event-stream" },
+        headers: { ...this.headers, accept: "text/event-stream" }, ...(route.startsWith("/api/team-control/") ? { redirect: "error" as const } : {}),
         signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       });
       if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
@@ -143,7 +197,8 @@ export class DaemonClient {
   }
 
   private async get(route: string, fetchImpl = this.fetchImpl, signal?: AbortSignal): Promise<unknown> {
-    const res = await fetchImpl(`${this.baseUrl}${route}`, { headers: this.headers, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000) });
+    if (route.startsWith("/api/team-control/")) this.assertLocalOwnerEndpoint();
+    const res = await fetchImpl(`${this.baseUrl}${route}`, { ...(route.startsWith("/api/team-control/") ? { redirect: "error" as const } : {}), headers: this.headers, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000) });
     if (!res.ok) {
       const parsed = await res.json().catch(() => null);
       const detail = parsed && typeof parsed === "object" && "error" in parsed ? ` — ${(parsed as { error: unknown }).error}` : "";

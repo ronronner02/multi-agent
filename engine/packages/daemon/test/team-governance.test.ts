@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
+import { teamControlRoutes } from "../src/routes/team-control.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -138,6 +139,96 @@ describe("transactional plan governance", () => {
     outputs: [], permissions: [],
     sourceSession: "lead@rig-1", destinationSession: "builder@rig-1", body: "Implement the approved scope",
   }), binding);
+  it("T016 pauses admission without stopping attempts or resetting the clock, and replays exact input", () => {
+    approvePlan(); recordAttempt();
+    const pause = command("run-1", {});
+    expect(governance.ownerCommand("pause", pause, owner, binding)).toMatchObject({ status: "observed", effectMayStart: false });
+    expect(governance.getRun("run-1")).toMatchObject({ state: "blocked", stateReason: "owner-paused" });
+    expect(governance.getAttempt("attempt-1")?.state).toBe("running");
+    const version = governance.getRun("run-1").entityVersion;
+    expect(governance.ownerCommand("pause", pause, owner, binding).replayed).toBe(true);
+    expect(governance.getRun("run-1").entityVersion).toBe(version);
+    expect(createTask().status).toBe("denied");
+    now = new Date(now.getTime() + 1000);
+    expect(governance.ownerCommand("resume", command("run-1", {}), owner, binding).status).toBe("observed");
+    expect(governance.getRun("run-1")).toMatchObject({ state: "approved", activeMs: 1000, retriesUsed: 0 });
+    expect(governance.getAttempt("attempt-1")?.state).toBe("running");
+  });
+
+  it.each(["cancel", "expiry", "binding", "unknown", "budget"])("T016 resume preserves the %s blocker", (kind) => {
+    approvePlan(); recordAttempt();
+    governance.ownerCommand("pause", command("run-1", {}), owner, binding);
+    if (kind === "cancel") governance.cancelRun(command("cancel", { reason: "stop" }), owner);
+    if (kind === "expiry") db.prepare("UPDATE team_approvals SET expires_at = ?").run(now.toISOString());
+    if (kind === "unknown") db.prepare("UPDATE team_attempts SET state = 'unknown', unknown_reason = 'reconciliation required'").run();
+    if (kind === "budget") now = new Date(now.getTime() + binding.limits.maxActiveMs);
+    const current = kind === "binding" ? { ...binding, planDigest: sha("d") } : binding;
+    expect(governance.ownerCommand("resume", command("run-1", {}), owner, current).status).toBe("denied");
+    expect(governance.getRun("run-1").state).not.toBe("approved");
+  });
+
+  it("T016 denies worker commands and conflicts on stale versions", () => {
+    approvePlan();
+    const request = command("run-1", {});
+    expect(() => governance.ownerCommand("pause", request, worker, binding)).toThrow(/owner/i);
+    governance.ownerCommand("pause", request, owner, binding);
+    expect(() => governance.ownerCommand("resume", { ...request, idempotencyKey: "new-key" }, owner, binding)).toThrow(/version/i);
+  });
+
+  const failedTask = () => {
+    approvePlan();
+    const qitemId = (createTask().value as { qitemId: string }).qitemId;
+    governance.recordAttempt(command("task-attempt", { qitemId, role: "implementer", provider: "claude", identity,
+      unknownReason: null, state: "stopped", usage: usage() }), binding);
+    governance.recordTaskOutcome(command(qitemId, { expectedTaskVersion: 1, state: "failed", actorSession: "builder@rig-1",
+      attemptId: "task-attempt", expectedAttemptVersion: 1, evidence: { receipt: "observed-exit" } }), owner);
+    return qitemId;
+  };
+  const retryRequest = (qitemId: string) => command(qitemId, { expectedTaskVersion: governance.getTask(qitemId)!.entityVersion,
+    attemptId: "task-attempt", expectedAttemptVersion: 1 });
+
+  it("T016 retries the same verified failed task once without launching or discarding its evidence", () => {
+    const qitemId = failedTask(), request = retryRequest(qitemId);
+    const before = governance.getTask(qitemId)!;
+    expect(governance.ownerCommand("retry", request, owner, binding)).toMatchObject({ status: "accepted", effectMayStart: false });
+    expect(queue.getById(qitemId)?.state).toBe("pending");
+    expect(governance.getTask(qitemId)).toMatchObject({ entityVersion: before.entityVersion + 1, assignment: before.assignment, evidence: before.evidence });
+    expect(governance.getRun("run-1").retriesUsed).toBe(1);
+    expect(governance.ownerCommand("retry", request, owner, binding).replayed).toBe(true);
+    expect(governance.getRun("run-1").retriesUsed).toBe(1);
+    expect(governance.getAttempt("task-attempt")?.state).toBe("stopped");
+  });
+
+  it.each(["pending", "done", "denied", "canceled", "running", "unknown", "exhausted"])("T016 does not reopen %s work", (kind) => {
+    const qitemId = failedTask();
+    if (["pending", "done", "denied", "canceled"].includes(kind)) db.prepare("UPDATE queue_items SET state = ? WHERE qitem_id = ?").run(kind, qitemId);
+    if (["running", "unknown"].includes(kind)) db.prepare("UPDATE team_attempts SET state = ?, unknown_reason = ?").run(kind, kind === "unknown" ? "reconciliation required" : null);
+    if (kind === "exhausted") db.prepare("UPDATE team_runs SET retries_used = 1").run();
+    const before = queue.getById(qitemId)?.state;
+    expect(governance.ownerCommand("retry", retryRequest(qitemId), owner, binding).status).toBe("denied");
+    expect(queue.getById(qitemId)?.state).toBe(before);
+    expect(governance.getRun("run-1").retriesUsed).toBe(kind === "exhausted" ? 1 : 0);
+  });
+
+  it("T016 rolls retry state and budget back when the durable receipt fails", () => {
+    const qitemId = failedTask(), request = retryRequest(qitemId), before = governance.getTask(qitemId)!;
+    db.exec("CREATE TRIGGER reject_control_receipt BEFORE INSERT ON team_control_requests BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END");
+    expect(() => governance.ownerCommand("retry", request, owner, binding)).toThrow(/receipt unavailable/);
+    expect(queue.getById(qitemId)?.state).toBe("failed");
+    expect(governance.getTask(qitemId)).toEqual(before);
+    expect(governance.getRun("run-1").retriesUsed).toBe(0);
+  });
+
+  it("T016 routes owner commands through authenticated, versioned governance", async () => {
+    approvePlan();
+    const app = teamControlRoutes(governance, { credentials: { ownerToken: "owner-token-t016" }, resolveBinding: () => binding }, []);
+    const init = { method: "POST", headers: { Authorization: "Bearer owner-token-t016", "Content-Type": "application/json" }, body: JSON.stringify(command("run-1", {})) };
+    const response = await app.request("/runs/run-1/pause", init, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "observed", effectMayStart: false });
+    expect((await app.request("/runs/other/resume", { ...init, body: JSON.stringify(command("run-1", {})) }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } })).status).toBe(403);
+  });
+
   it("requires verified provider policy rather than a matching policy digest alone", () => {
     approvePlan();
     governance = new PlanGovernance(db, bus, queue, () => now);

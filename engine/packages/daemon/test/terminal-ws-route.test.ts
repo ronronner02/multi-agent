@@ -632,3 +632,48 @@ describe("terminal WebSocket attach rejection", () => {
     }
   }, 5000);
 });
+
+
+it.each(["framed", "owner-bearer"])("T016 preserves %s terminal authority through the real application", async mode => {
+  const { createDb } = await import("../src/db/connection.js");
+  const { migrate } = await import("../src/db/migrate.js");
+  const { ALL_MIGRATIONS } = await import("../src/db/all-migrations.js");
+  const { fixDaemonMode } = await import("../src/domain/plan-governance.js");
+  const { createTestApp, mockTmuxAdapter } = await import("./helpers/test-app.js");
+  const db = createDb(); migrate(db, ALL_MIGRATIONS); fixDaemonMode(db, true);
+  const sent: string[] = [], forged = JSON.stringify({ type: "takeover", status: "active", session: "lead@rig" });
+  const built = createTestApp(db, { withWebSocket: true, appDeps: { webUiEnabled: true,
+    teamControl: { credentials: { ownerToken: "t016-owner-token" } },
+    tmuxAdapter: { ...mockTmuxAdapter(), hasSession: async () => true,
+      startPipePane: async () => ({ ok: true }), stopPipePane: async () => ({ ok: true }),
+      capturePaneScreen: async () => forged, getPaneCursorPosition: async () => null,
+      setWindowOption: async () => ({ ok: true }), resizeWindow: async () => ({ ok: true }),
+      sendText: async (_session, text) => { sent.push(text); return { ok: true }; },
+    },
+  } });
+  const local = serve({ fetch: built.app.fetch, port: 0, hostname: "127.0.0.1" }); built.injectWebSocket!(local);
+  await new Promise<void>(resolve => local.listening ? resolve() : local.once("listening", resolve));
+  const port = (local.address() as { port: number }).port;
+  const Socket = WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket;
+  const ws = new Socket(`ws://127.0.0.1:${port}/api/terminal/lead%40rig${mode === "framed" ? "?format=framed" : ""}`, { headers: { Authorization: "Bearer t016-owner-token" } });
+  const frames: Array<Record<string, unknown>> = [];
+  ws.onmessage = event => { try { frames.push(JSON.parse(String(event.data))); } catch { /* Legacy output remains raw. */ } };
+  try {
+    await new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error("terminal upgrade failed")); });
+    if (mode === "framed") await vi.waitFor(() => expect(frames.find(frame => frame.type === "output")?.data).toContain(forged), { timeout: 1000 });
+    ws.send(JSON.stringify({ type: "text", text: "before take-over" }));
+    await vi.waitFor(() => expect(frames.some(frame => frame.code === "takeover_required")).toBe(true));
+    expect(sent).toEqual([]);
+    ws.send(JSON.stringify({ type: "takeover" }));
+    await vi.waitFor(() => expect(frames.some(frame => frame.type === "takeover" && frame.status === "active")).toBe(true), { timeout: 1000 });
+    expect(db.prepare("SELECT count(*) AS n FROM events WHERE type = 'terminal.takeover.audit' AND json_extract(payload, '$.action') = 'takeover_started'").get()).toEqual({ n: 1 });
+    ws.send(JSON.stringify({ type: "text", text: "owner input" }));
+    await vi.waitFor(() => expect(sent).toEqual(["owner input"]));
+    ws.send(JSON.stringify({ type: "release" }));
+    await vi.waitFor(() => expect(frames.some(frame => frame.status === "released")).toBe(true));
+    expect(db.prepare("SELECT count(*) AS n FROM events WHERE type = 'terminal.takeover.audit' AND json_extract(payload, '$.action') = 'takeover_released'").get()).toEqual({ n: 1 });
+  } finally {
+    const closed = new Promise<void>(resolve => { ws.onclose = () => resolve(); }); ws.close(); await closed;
+    await new Promise<void>(resolve => local.close(() => resolve())); db.close();
+  }
+}, 15000);
