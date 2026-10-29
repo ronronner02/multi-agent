@@ -591,7 +591,9 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       && policy.sandbox.mailbox === "/run/multi-agent/mailbox.sock", "managed_mailbox_policy_mismatch");
     requireFact(mailbox && mailbox.path === mailboxRoot + "/" + p.worker.name + "/" + attempt.context.runId + "/" + attempt.attemptId + "/mailbox.sock"
       && Number.isSafeInteger(p.control.uid) && p.control.uid >= 0 && Number.isSafeInteger(p.control.gid) && p.control.gid! >= 0
-      && mailbox.uid === p.control.uid && mailbox.gid === p.control.gid
+      // The endpoint is control-owned but carries the worker's group, because bwrap resolves the
+      // socket as the worker and a control-group path would be untraversable for it.
+      && mailbox.uid === p.control.uid && mailbox.gid === p.worker.gid
       && Number.isSafeInteger(mailbox.dev) && mailbox.dev >= 0 && Number.isSafeInteger(mailbox.ino) && mailbox.ino > 0
       && typeof mailbox.generation === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(mailbox.generation),
     "managed_mailbox_identity_mismatch");
