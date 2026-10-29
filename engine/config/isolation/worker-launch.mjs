@@ -24,6 +24,9 @@ const NATIVE_POLICY_MOUNTS = Object.freeze({
 const INSTALLED_POLICY = '/etc/multi-agent/worker-policy.json';
 // KTD27: client builds are pinned outside the worker policy, so a lock change never bumps policy_revision.
 const INSTALLED_CLIENT_LOCK = '/etc/multi-agent/client-lock.json';
+// The owner's provider gateway is a runtime dependency, like the client lock, so it is separate
+// from the policy and changing it does not bump policy_revision (docs/amendments/2026-10-29).
+const INSTALLED_PROVIDER_GATEWAY = '/etc/multi-agent/provider-gateway.json';
 export const CLIENT_LOCK_SCHEMA = 'multi-agent-client-lock/v1';
 const CLIENT_ENTRYPOINTS = Object.freeze({ 'claude-code': 'clients/bin/claude', codex: 'clients/bin/codex' });
 // Provider sign-in is evidenced by these files' metadata in the worker home; their bytes are never opened.
@@ -497,7 +500,7 @@ export function inspectLaunchRequest(policy, request, facts) {
       installed,
       network: { hostNamespace: namespaces.net, profileFingerprint: installed.egress.sha256 },
       ...(resolved.clientLock ? { clientLock: resolved.clientLock } : {}),
-      ...(resolved.client ? { provider: providerEvidence(resolved, facts) } : {}),
+      ...(resolved.client ? { provider: { ...providerEvidence(resolved, facts), ...gatewayEvidence(resolved) } } : {}),
     };
   } catch {
     throw new LaunchError('preflight-unverified', 'Installed launch facts are missing, untrusted or changed');
@@ -549,6 +552,14 @@ export function nativePolicyInventory(client, bytes, entries, remotePolicy) {
   } catch { nativeExceptions = 'unknown'; }
   return { selectedSource: target, managedDropIns: entries.length === 1 && entries[0] === posix.basename(target) ? 'absent' : 'present',
     remotePolicy, platformPolicy: process.platform === 'linux' ? 'not-applicable' : 'unknown', nativeExceptions };
+}
+
+/** Gateway facts, additive to the existing provider record, and never the bearer. */
+function gatewayEvidence(resolved) {
+  const gateway = readProviderGateway(resolved.client);
+  if (!gateway) return {};
+  return { gateway: { client: gateway.client, digest: gateway.digest, model: gateway.model,
+    baseUrl: gateway.baseUrl, ...(gateway.wireApi ? { wireApi: gateway.wireApi } : {}) } };
 }
 
 /** Hash an opened root-owned file rather than a caller-supplied receipt or mutable pathname. */
@@ -624,6 +635,7 @@ export function buildSandboxCommand(policy, resolved, supervised = false) {
     TMPDIR: '/tmp',
     ...resolved.env,
     ...(resolved.client ? { CODEX_HOME: s.home + "/.codex", CLAUDE_CONFIG_DIR: s.home + "/.claude", DISABLE_AUTOUPDATER: "1" } : {}),
+    ...(resolved.client === 'claude-code' ? claudeGatewayEnv(resolved) : {}),
     // Clients differ in which spelling they read, so both are set.
     HTTPS_PROXY: proxy,
     HTTP_PROXY: proxy,
@@ -792,6 +804,41 @@ function readInstalledClientLock() {
   } catch {
     return null;
   }
+}
+
+/**
+ * A gateway is a provider, not a sign-in. This returns the verified configuration for one client,
+ * or null when the file is absent or does not describe that client. The bearer is read here and
+ * used only to build the client's environment; it is never returned in inspection facts.
+ */
+function readProviderGateway(client) {
+  try {
+    const raw = readFileSync(INSTALLED_PROVIDER_GATEWAY), inspected = inspectInstalledFile(INSTALLED_PROVIDER_GATEWAY);
+    const sha256 = 'sha256:' + createHash('sha256').update(raw).digest('hex');
+    // Root-owned and not group/other-writable: the token is the one asset the daemon must read
+    // and no worker may ever write.
+    if (inspected.realpath !== INSTALLED_PROVIDER_GATEWAY || inspected.sha256 !== sha256
+      || inspected.uid !== 0 || (inspected.mode & 0o022) !== 0) return null;
+    const parsed = JSON.parse(raw.toString('utf8'));
+    if (parsed?.schema !== 'multi-agent-provider-gateway/v1') return null;
+    const entry = parsed[client];
+    if (!entry || typeof entry.base_url !== 'string' || typeof entry.bearer !== 'string'
+      || typeof entry.model !== 'string' || !/^https:\/\/[^\s]+$/.test(entry.base_url)
+      || entry.bearer.length < 16 || entry.bearer.length > 4096 || /[\x00-\x1f\x7f]/.test(entry.bearer)
+      || entry.model.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(entry.model)) return null;
+    return { baseUrl: entry.base_url, bearer: entry.bearer, model: entry.model, client,
+      digest: sha256 };
+  } catch {
+    return null;
+  }
+}
+
+/** Claude Code reads both the endpoint and the token from its environment; neither is argv. */
+function claudeGatewayEnv(resolved) {
+  if (resolved.client !== 'claude-code') return {};
+  const gateway = readProviderGateway('claude-code');
+  if (!gateway) return {};
+  return { ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.bearer };
 }
 
 function reportError(err) {

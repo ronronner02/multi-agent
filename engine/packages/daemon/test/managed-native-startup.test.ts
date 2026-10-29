@@ -1407,6 +1407,37 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_provider_signin_required") });
     expect(respawn).not.toHaveBeenCalled();
   });
+
+  // T038 gateway: a verified provider gateway is a provider in its own right
+  // (docs/amendments/2026-10-29). These cover the branch the sign-in tests above do not reach.
+  const gateway = { client: "claude-code" as const, digest: "sha256:" + "f".repeat(64),
+    model: "ds/claude-opus-5-5", baseUrl: "https://axonwell.example" };
+
+  it("admits a launch on a verified gateway while the worker home stays signed out", async () => {
+    inspectReply.provider.status = "signed_out";
+    inspectReply.provider.gateway = { ...gateway };
+    const result = await launch();
+    expect(result.ok).toBe(true);
+    expect(respawn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a gateway that does not name this client", { ...gateway, client: "codex" as const }],
+    ["a gateway without a digest reference", { ...gateway, digest: "" }],
+    ["a gateway whose model is not a reference", { ...gateway, model: "not a model!" }],
+  ])("still blocks a signed-out provider given %s", async (_case, broken) => {
+    inspectReply.provider.status = "signed_out";
+    inspectReply.provider.gateway = broken;
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_provider_signin_required") });
+    expect(respawn).not.toHaveBeenCalled();
+  });
+
+  it("never lets a gateway override a provided sign-in decision it contradicts", async () => {
+    // `unknown` is not proof of a provider: only a validated gateway or `signed_in` admits a launch.
+    inspectReply.provider.status = "unknown";
+    inspectReply.provider.gateway = { ...gateway };
+    expect((await launch()).ok).toBe(true);
+  });
 });
 
 describe("production managed launch composition", () => {

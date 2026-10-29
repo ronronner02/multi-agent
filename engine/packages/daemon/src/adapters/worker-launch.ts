@@ -80,7 +80,9 @@ export interface WorkerLaunchPreflight {
   /** Root-owned installed policy observed by the control preflight, bound to the approved fingerprint. */
   installedPolicy: WorkerLaunchPolicy;
   network: WorkerNetworkPolicy;
-  provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string };
+  provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string;
+    /** Present when an installed provider gateway, not a worker sign-in, satisfies this launch. */
+    gateway?: { client: WorkerClient; digest: string; model: string; baseUrl: string } };
   nativePolicy?: ManagedNativePolicy;
   mailbox?: ReturnType<WorkerMailboxBridge["endpoint"]>;
   previous?: ManagedSessionReceipt;
@@ -372,8 +374,19 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       for (const option of [input.model, input.effort]) requireFact(option === undefined
         || (option.length > 0 && option.length <= 256 && !option.startsWith("-") && !/[\x00-\x1f\x7f]/.test(option)), "managed_launch_option_invalid");
       requireFact(resumeToken === undefined || /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(resumeToken), "managed_resume_identity_mismatch");
-      requireFact(preflight.provider.status === "signed_in" && preflight.provider.client === client
-        && preflight.provider.home === preflight.worker.home && reference(preflight.provider.evidenceRef), "managed_provider_signin_required");
+      // A gateway is a provider in its own right (docs/amendments/2026-10-29): the installed file
+      // names this client, its digest is bound into the launch evidence, and the launcher injects
+      // the credential privileged-side. Only when there is no gateway does the worker's own
+      // sign-in decide, and then it decides exactly as before.
+      const gateway = preflight.provider.gateway;
+      // The gateway's own client field is the one that must match: `preflight.provider.client` is
+      // written by the control from the requested client, so comparing it would accept a gateway
+      // installed for a different client.
+      const gatewayProvider = gateway !== undefined && gateway.client === client
+        && preflight.provider.client === client
+        && reference(gateway.digest) && reference(gateway.baseUrl) && reference(gateway.model);
+      requireFact(gatewayProvider || (preflight.provider.status === "signed_in" && preflight.provider.client === client
+        && preflight.provider.home === preflight.worker.home && reference(preflight.provider.evidenceRef)), "managed_provider_signin_required");
       if (resumeToken !== undefined) {
         const previous = attempt.previous;
         requireFact(previous && preflight.previous && same(previous, preflight.previous), "managed_resume_identity_mismatch");
