@@ -13,6 +13,8 @@ const OPEN_READ = fsConstants.O_RDONLY;
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import type { CandidateIdentity } from "./review-evidence.js";
+import type { ScopeProjection } from "../contracts/team-control.js";
+import type { CandidateScopeEvidence } from "./scope-extension.js";
 
 /**
  * T011 / KTD8 — isolated candidate ownership.
@@ -50,6 +52,7 @@ export interface SourceFingerprint {
 }
 
 export interface CandidateWorkspace {
+  checkScope?: (evidence: CandidateScopeEvidence) => ScopeProjection;
   root: string;
   sourceRoot: string;
   base: WorkspaceBase;
@@ -94,7 +97,7 @@ function gitOrNull(cwd: string, args: readonly string[]): string | null {
  * when its target stays inside the root: an escaping link would make an
  * "isolated" candidate depend on bytes the candidate does not own.
  */
-export function candidatePath(root: string, path: string): string {
+export function candidatePath(root: string, path: string, allowMissing = false): string {
   if (isAbsolute(path) || path.split("/").includes("..")) throw new Error(`Candidate path escapes the repository: ${path}`);
   // Compare against the physical root: `resolved` comes from realpath, so a
   // root reached through a symlink would otherwise report every path as
@@ -118,7 +121,7 @@ export function candidatePath(root: string, path: string): string {
   const resolved = resolve(realpathSync(existing), ...suffix);
   const escapes = relative(physicalRoot, resolved) === ".." || relative(physicalRoot, resolved).startsWith(`..${sep}`);
   if (escapes) throw new Error(`Candidate path escapes the repository through a symlink: ${path}`);
-  if (suffix.length > 0) throw new Error(`Candidate path is missing: ${path}`);
+  if (suffix.length > 0 && !allowMissing) throw new Error(`Candidate path is missing: ${path}`);
   return resolved;
 }
 
@@ -641,7 +644,7 @@ function excludedDirectories(store: string, workTree: string, gitlinks: Readonly
  * a link as a text hunk whatever the attributes say, so a string patch cannot carry it.
  */
 function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "commit"; commit: string } }):
-  { files: CandidateFile[]; patch: string; cleanedPaths: readonly string[] } {
+  { files: CandidateFile[]; patch: string; cleanedPaths: readonly string[]; scope?: ScopeProjection } {
   const commit = workspace.base.commit;
   const scratch = mkdtempSync(join(tmpdir(), "candidate-manifest-"));
   try {
@@ -790,7 +793,10 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
     if (!isUtf8(rendered)) {
       throw new Error("Could not render the candidate patch as UTF-8, even with every non-UTF-8 path rendered as binary");
     }
-    return { files, patch: rendered.toString("utf8"), cleanedPaths: cleanedPaths.sort() };
+    const scope = workspace.checkScope?.({ root: snapshot, candidateDigest: digestManifest(files), files: files.map(file => file.path),
+      changes: changed.map(path => ({ path, before: baseSide.get(base.get(path)?.objectId ?? "") ?? null,
+        after: stored.get(staged.get(path)?.objectId ?? "") ?? null })) });
+    return { files, patch: rendered.toString("utf8"), cleanedPaths: cleanedPaths.sort(), ...(scope ? { scope } : {}) };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -1029,6 +1035,7 @@ function candidateArtifact(workspace: CandidateWorkspace): {
   manifestDigest: string;
   patch: string;
   cleanedPaths: readonly string[];
+  scope?: ScopeProjection;
 } {
   if (workspace.base.kind === "commit") {
     const lane = commitLaneManifest(workspace as CandidateWorkspace & { base: { kind: "commit"; commit: string } });
@@ -1039,12 +1046,27 @@ function candidateArtifact(workspace: CandidateWorkspace): {
       manifestDigest: digestManifest(lane.files),
       patch: lane.patch,
       cleanedPaths: lane.cleanedPaths,
+      ...(lane.scope ? { scope: lane.scope } : {}),
     };
   }
   // The snapshot lane has no history to diff against; the hashed manifest IS its
   // identity, which is exactly what KTD8's "complete file manifest" allows. The
   // copy is a plain directory with no Git metadata, so it is walked directly.
   // No base commit means no attributes, so nothing is cleaned.
+  if (workspace.checkScope) {
+    const snapshot = mkdtempSync(join(tmpdir(), "candidate-scope-"));
+    try {
+      snapshotCandidate(workspace.root, snapshot);
+      const files = listFiles(snapshot, { index: false });
+      const before = new Map(workspace.base.files.map(file => [file.path, file.hash])), after = new Map(files.map(file => [file.path, file.hash]));
+      const changed = [...new Set([...before.keys(), ...after.keys()])].filter(path => before.get(path) !== after.get(path)).sort();
+      const scope = workspace.checkScope({ root: snapshot, candidateDigest: digestManifest(files), files: files.map(file => file.path),
+        changes: changed.map(path => ({ path,
+          before: before.has(path) ? readFileSync(candidatePath(workspace.sourceRoot, path)) : null,
+          after: after.has(path) ? readFileSync(candidatePath(snapshot, path)) : null })) });
+      return { base: "snapshot", baseIdentifier: workspace.base.baselineDigest, files, manifestDigest: digestManifest(files), patch: "", cleanedPaths: [], scope };
+    } finally { rmSync(snapshot, { recursive: true, force: true }); }
+  }
   const files = listFiles(workspace.root, { index: false });
   return { base: "snapshot", baseIdentifier: workspace.base.baselineDigest, files, manifestDigest: digestManifest(files), patch: "",
     cleanedPaths: [] };
@@ -1060,9 +1082,10 @@ export function candidateManifest(workspace: CandidateWorkspace): {
   files: CandidateFile[];
   manifestDigest: string;
   patch: string;
+  scope?: ScopeProjection;
 } {
-  const { base, baseIdentifier, files, manifestDigest, patch } = candidateArtifact(workspace);
-  return { base, baseIdentifier, files, manifestDigest, patch };
+  const { base, baseIdentifier, files, manifestDigest, patch, scope } = candidateArtifact(workspace);
+  return { base, baseIdentifier, files, manifestDigest, patch, ...(scope ? { scope } : {}) };
 }
 
 /**
@@ -1106,6 +1129,7 @@ export function verifySourceUnchanged(workspace: CandidateWorkspace): { unchange
  * what the patch will write. Neither is inferred from the other.
  */
 export interface ReviewPacket {
+  scope?: ScopeProjection;
   root: string;
   identity: CandidateIdentity;
   /** The complete manifest, hashes included, that the patch and the candidate agree on. */
@@ -1204,7 +1228,7 @@ export function createReviewPacket(workspace: CandidateWorkspace, destination: s
   for (const directory of [...directories].sort((left, right) => right.length - left.length)) {
     chmodSync(directory, 0o555);
   }
-  return { root, identity, manifest: files, cleanedPaths: [...manifest.cleanedPaths].sort(), packetDigest };
+  return { root, identity, manifest: files, cleanedPaths: [...manifest.cleanedPaths].sort(), packetDigest, ...(manifest.scope ? { scope: manifest.scope } : {}) };
 }
 
 /** Resolve a path through its deepest existing ancestor, so an alias cannot hide a real target. */

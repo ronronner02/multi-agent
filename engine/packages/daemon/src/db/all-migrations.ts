@@ -111,6 +111,7 @@ import { sessionStopIntentSchema } from "./migrations/103_session_stop_intent.js
 
 import { ownerSessionsSchema } from "./migrations/105_owner_sessions.js";
 import { managedAttemptInputsSchema } from "./migrations/106_managed_attempt_inputs.js";
+import { scopeExtensionsSchema } from "./migrations/105_scope_extensions.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -216,4 +217,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   teamGovernanceSchema,
   ownerSessionsSchema,
   managedAttemptInputsSchema,
+  scopeExtensionsSchema,
 ];

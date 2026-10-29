@@ -27,7 +27,7 @@ export interface ManagedWorkerHealthEvidence {
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 export type ApprovalKind = "orchestrator" | "native";
-export type ApprovalAction = "implementation" | "commit" | "push" | "pr-create" | "merge" | "release" | "deploy" | "scope-change" | "limit-increase" | "native-tool";
+export type ApprovalAction = "implementation" | "commit" | "push" | "pr-create" | "merge" | "release" | "deploy" | "scope-change" | "limit-increase" | "native-tool" | "scope-extension";
 export type ApprovalState = "pending" | "approved" | "rejected" | "expired" | "invalidated";
 export type TeamRunState = "pending" | "approved" | "cancel_requested" | "invalidated" | "blocked";
 export type AttemptState = "running" | "stopped" | "unknown";
@@ -161,6 +161,27 @@ export interface ApprovalConsumption {
   state: "reserved" | "confirmed" | "ambiguous";
   receipt: JsonObject | null;
 }
+
+export interface ScopeExtension {
+  runId: string;
+  classification: "new-sibling" | "owner-decision" | "low-risk-dev-dependencies";
+  dependencyDigest: string | null;
+  id: string;
+  bindingDigest: string;
+  taskId: string;
+  attemptId: string | null;
+  paths: Array<{ path: string; canonicalPath: string; operation: "create" | "modify"; evidenceDigest: string }>;
+  reason: string;
+  candidateDigest: string;
+  assignmentDigest: string;
+  expectedChainHead: string;
+  chainHead: string | null;
+  packages: Array<{ name: string; version: string; matched: string }>;
+  state: ApprovalState;
+  decisionActor: string | null;
+  automatic: boolean;
+}
+export interface ScopeProjection { chainHead: string; scopeDigest: string; extensions: ScopeExtension[]; }
 
 export interface ControlActor {
   kind: "owner" | "worker";

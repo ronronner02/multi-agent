@@ -1,0 +1,12 @@
+{
+  "maxPathsPerRequest": 5,
+  "maxApprovedExtensionsPerTask": 5,
+  "packages": [
+    "vitest",
+    "supertest",
+    "@testing-library/*",
+    "@types/*",
+    "eslint-plugin-*",
+    "@*/eslint-plugin"
+  ]
+}

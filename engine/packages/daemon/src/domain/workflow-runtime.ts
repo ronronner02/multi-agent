@@ -1,3 +1,4 @@
+import { ScopeExtensions } from "./scope-extension.js";
 import { PlanGovernance, hashBinding, hashBytes } from "./plan-governance.js";
 import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
 import { buildManagedNativePolicy, createContextManifest, recordedContextManifest, roleConfiguration, roleInstructionEntries, within,
@@ -625,7 +626,7 @@ export class WorkflowRuntime {
           this.invalidCandidates.add(key);
           throw new Error("Source checkout changed while the candidate was staged");
         }
-        return existing;
+        return this.scopedCandidate(runId, taskId, existing);
       }
     }
     if (!this.candidateRoot || !this.assignmentRoot) throw new Error("Candidate isolation is not configured");
@@ -663,7 +664,7 @@ export class WorkflowRuntime {
       // the launch that actually enters it records the owner, exactly as a non-review
       // launch does. Refusing above leaves everything untouched.
       this.candidates.set(key, adopted);
-      return adopted;
+      return this.scopedCandidate(runId, taskId, adopted);
     }
     let workspace: CandidateWorkspace;
     if (adopted) workspace = adopted;
@@ -698,7 +699,7 @@ export class WorkflowRuntime {
     // Only a caller that named a worker tells us who owns the task's tree.
     if (worker !== undefined) this.candidateWorker.set(key, worker);
     this.candidates.set(key, workspace);
-    return workspace;
+    return this.scopedCandidate(runId, taskId, workspace);
   }
 
   /**
@@ -759,6 +760,13 @@ export class WorkflowRuntime {
    * The candidate's own manifest is the identity; nothing about the launch can
    * name a different tree afterward.
    */
+  private scopedCandidate(runId: string, taskId: string, workspace: CandidateWorkspace): CandidateWorkspace {
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
+    // Provenance inspection can precede task registration; only a recorded task has an effective scope.
+    if (governance.findTask(runId, taskId)) workspace.checkScope = evidence => governance.stageCandidateScope(runId, taskId, evidence);
+    return workspace;
+  }
+
   candidateIdentityFor(runId: string, taskId: string): CandidateIdentity {
     return candidateIdentity(candidateManifest(this.candidateFor(runId, taskId)));
   }
@@ -863,6 +871,7 @@ export class WorkflowRuntime {
     // here, and neither should be able to declare production inputs the run never recorded.
     // A row that predates the record has nothing to disagree with.
     const task = governance.findTask(runId, assignment.taskId);
+    if (!task && assignment.role !== "reviewer") throw new Error("Task not found in this run");
     const differs = (claimed: readonly string[], stored: string[] | null) =>
       stored !== null && canonicalJson([...claimed].sort()) !== canonicalJson([...stored].sort());
     if (task && (differs(input.outputs, task.outputs) || differs(input.permissions, task.permissions))) {
@@ -1345,17 +1354,21 @@ export class WorkflowRuntime {
     // resume), while `handed-off` is terminal, so a local list would both miss a
     // live claim and keep a finished one.
     const live = (state: string) => (ACTIVE_QUEUE_STATES as readonly string[]).includes(state);
+    const extensions = new ScopeExtensions(this.db), bindingDigest = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId).bindingDigest;
+    const extended = (taskId: string) => extensions.records(runId, taskId)
+      .filter(record => record.state === "approved" && record.bindingDigest === bindingDigest)
+      .flatMap(record => record.paths.flatMap(path => [path.path, path.canonicalPath]));
     const tasks = rows.map(row => {
       const assignment = JSON.parse(row.assignment) as { role?: string; paths?: string[]; dependencies?: string[] };
       return { taskId: row.taskId, role: assignment.role ?? admitted.role,
         // A settled task keeps its edges but drops its claim.
-        paths: live(row.state) ? [...(assignment.paths ?? [])] : [],
+        paths: live(row.state) ? [...(assignment.paths ?? []), ...extended(row.taskId)] : [],
         dependencies: [...(assignment.dependencies ?? [])] };
     });
     // The admitted assignment wins over its stored row: a stale row would otherwise
     // let an earlier, narrower claim stand in for the one about to launch.
     return [...tasks.filter(task => task.taskId !== admitted.taskId),
-      { taskId: admitted.taskId, role: admitted.role, paths: [...admitted.paths], dependencies: [...admitted.dependencies] }];
+      { taskId: admitted.taskId, role: admitted.role, paths: [...admitted.paths, ...extended(admitted.taskId)], dependencies: [...admitted.dependencies] }];
   }
 
   /**
@@ -1486,7 +1499,9 @@ export class WorkflowRuntime {
    */
   reviewProgress(runId: string, taskId: string) {
     const state = this.reviewEvidence.state(runId, taskId);
-    return { state, gate: this.progressGate(runId, state), delivery: deliveryVerdict({ state }) };
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
+    const scope = governance.findTask(runId, taskId) ? governance.scopeForTask(runId, taskId) : undefined;
+    return { state, gate: this.progressGate(runId, state), delivery: { ...deliveryVerdict({ state }), ...(scope ? { scope } : {}) } };
   }
 
   /**
