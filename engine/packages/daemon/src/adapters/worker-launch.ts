@@ -403,6 +403,13 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
           ...(resumeToken ? ["--resume", resumeToken] : ["--session-id", this.sessionId()])]
         : [preflight.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false",
           "-c", "model_catalog_json=" + JSON.stringify(codexModelCatalog(policy.paths.toolchain_dir)),
+          // A verified gateway replaces the built-in provider. The key is named by variable, so
+          // the command that is hashed and persisted never contains it.
+          ...(gatewayProvider ? ["-c", "model_provider=" + JSON.stringify("managed"),
+            "-c", "model_providers.managed.name=" + JSON.stringify("managed"),
+            "-c", "model_providers.managed.base_url=" + JSON.stringify(gateway!.baseUrl),
+            "-c", "model_providers.managed.env_key=" + JSON.stringify("MA_GATEWAY_API_KEY"),
+            "-c", "model_providers.managed.wire_api=" + JSON.stringify("responses")] : []),
           ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
           ...(resumeToken ? ["resume", resumeToken] : [])];
       const command: WorkerCommand = state.command = immutable({
