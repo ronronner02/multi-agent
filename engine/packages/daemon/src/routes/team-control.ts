@@ -9,6 +9,7 @@ import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
 } from "../middleware/auth-bearer-token.js";
 import { readSystemHealthBounded } from "../domain/system-health.js";
+import { ScopeExtensionError } from "../domain/scope-extension.js";
 import type { TeamReadModel } from "../team-control-surface.js";
 
 export interface TeamControlOptions {
@@ -57,6 +58,12 @@ export function teamControlRoutes(
   app.get("/runs/:runId/approvals", (c) => {
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, approvals: governance.listApprovals(c.req.param("runId")) });
+  });
+  app.get("/runs/:runId/tasks/:taskId/scope", (c) => {
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    const scope = governance.scopeForTask(c.req.param("runId"), c.req.param("taskId"));
+    const pending = scope.extensions.some(extension => extension.state === "pending");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, status: pending ? "extension-pending" : "observed", scope }, pending ? 202 : 200);
   });
   /**
    * T052 — the composed owner read projection for one run.
@@ -125,6 +132,9 @@ export function teamControlRoutes(
     });
   }
   app.onError((error, c) => {
+    if (error instanceof ScopeExtensionError) {
+      return c.json({ code: error.code, rule: error.rule, extension: error.extension ?? null }, error.code === "extension-pending" ? 202 : 409);
+    }
     if (error instanceof TeamContractError || error instanceof SyntaxError) {
       return c.json({ code: "invalid_team_contract", error: "The control request is malformed or incompatible." }, 400);
     }

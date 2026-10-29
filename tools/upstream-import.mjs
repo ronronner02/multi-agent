@@ -113,6 +113,10 @@ const DEST = path.join(repoRoot, 'engine');
 const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'multi-agent', `openrig-${PIN.commit}.tar.gz`);
 // Application-owned files are exact entries; only a trailing slash grants a directory subtree.
 const LOCAL_ENGINE_PATHS = [
+  'config/governance/low-risk-dev-dependencies.json',
+  'packages/daemon/src/domain/scope-extension.ts',
+  'packages/daemon/src/db/migrations/105_scope_extensions.ts',
+  'packages/daemon/test/scope-extension.test.ts',
   'config/isolation/', 'test/worker-isolation-preflight.test.mjs', 'test/project-baseline.test.mjs',
   'packages/daemon/src/contracts/team-control.ts',
   'packages/daemon/src/team-control-surface.ts',

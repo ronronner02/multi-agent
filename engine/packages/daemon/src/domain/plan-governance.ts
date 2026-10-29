@@ -11,6 +11,7 @@ import {
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
+import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
 import type { EventBus, NotifyRegister } from "./event-bus.js";
 import type { QueueRepository, QueueState } from "./queue-repository.js";
 
@@ -126,7 +127,7 @@ interface Result {
 }
 
 const deny = (reason: string): Result => ({ status: "denied", reason });
-const approvalActions: readonly ApprovalAction[] = ["implementation", "commit", "push", "pr-create", "merge", "release", "deploy", "scope-change", "limit-increase", "native-tool"];
+const approvalActions: readonly ApprovalAction[] = ["implementation", "commit", "push", "pr-create", "merge", "release", "deploy", "scope-change", "limit-increase", "native-tool", "scope-extension"];
 
 function isEscalation(approval: { kind: ApprovalKind; action: ApprovalAction }): boolean {
   return approval.kind === "orchestrator" && (approval.action === "scope-change" || approval.action === "limit-increase");
@@ -298,10 +299,38 @@ export class PlanGovernance {
     return { ...consumption, receipt: receiptJson === null ? null : JSON.parse(receiptJson) as JsonObject };
   }
 
+  stageCandidateScope(runId: string, taskId: string, evidence: CandidateScopeEvidence) {
+    const scope = new ScopeExtensions(this.db), run = this.getRun(runId), task = this.findTask(runId, taskId);
+    if (!task) throw new Error("Task not found in this run");
+    const current = scope.currentBinding(run);
+    if (!current || hashBinding(current) !== run.bindingDigest) {
+      this.reconcileBinding({ protocolVersion: TEAM_CONTROL_VERSION, runId, actionId: randomUUID(),
+        expectedEntityVersion: run.entityVersion, idempotencyKey: randomUUID(), payload: current ?? {} });
+      throw new ScopeExtensionError("plan-change-required", "plan-digest");
+    }
+    if (run.state !== "approved") throw new ScopeExtensionError("plan-change-required", "run-not-approved");
+    const result = this.events.withNotifyEnvelope(register => {
+      const value = scope.stage(run, task, evidence, this.clock().toISOString());
+      if (value.invalidated.length) this.emit(run, register, "scope-extension.invalidated", { approvalIds: value.invalidated }, taskId);
+      if (value.created) this.emit(run, register, "scope-extension.requested",
+        { approvalId: value.created.id, automatic: value.created.automatic }, taskId, value.created.attemptId ?? undefined);
+      return value;
+    });
+    if (result.refusal) throw result.refusal;
+    return result.projection;
+  }
+
+  scopeForTask(runId: string, taskId: string) {
+    const task = this.findTask(runId, taskId);
+    if (!task) throw new Error("Task not found in this run");
+    return new ScopeExtensions(this.db).projection(this.getRun(runId), task);
+  }
+
   requestApproval(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
     const requester = actorIdentity(actor);
     return this.command("approval.requested", raw, requester, (ctx) => {
       const approval = approvalPayload(ctx.request.payload);
+      if (approval.action === "scope-extension") return deny("Only candidate staging creates scope extensions");
       if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       const v = object(ctx.request.payload, "approval");
       const expiresAt = timestamp(v.expiresAt, "expiresAt");
@@ -333,7 +362,10 @@ export class PlanGovernance {
       if (!approval || approval.runId !== ctx.run.id) throw new Error("Approval not found in this run");
       if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       const v = object(ctx.request.payload, "decision");
-      if (approval.state !== "pending") return deny("Approval is no longer pending");
+      if (approval.state !== "pending") {
+        if (approval.action === "scope-extension") throw new Error("Scope extension approval state conflict");
+        return deny("Approval is no longer pending");
+      }
       if (integer(v.approvalVersion, "approvalVersion", 1) !== approval.entityVersion) throw new Error("Approval version conflict");
       if (v.decision !== "approved" && v.decision !== "rejected") throw new TeamContractError("decision");
       const blockedEscalation = ctx.run.state === "blocked" && isEscalation(approval);
@@ -341,6 +373,11 @@ export class PlanGovernance {
       if (v.decision === "approved" && approval.action !== "implementation" && !blockedEscalation) {
         const reason = this.eligibility(ctx);
         if (reason) return deny(reason);
+      }
+      if (approval.action === "scope-extension") {
+        const task = this.findTask(ctx.run.id, text(approval.payload.taskId, "taskId"));
+        if (!task) throw new Error("Task not found in this run");
+        new ScopeExtensions(this.db).decide(ctx.run, task, approval, v.expectedChainHead, v.decision);
       }
       const updated = this.db.prepare(`UPDATE team_approvals SET state = ?, decision_actor = ?, entity_version = entity_version + 1,
         updated_at = ? WHERE id = ? AND entity_version = ? AND state = 'pending'`)
@@ -692,7 +729,7 @@ export class PlanGovernance {
       if (v.kind !== approval.kind || v.action !== approval.action || v.targetDigest !== approval.targetDigest
         || hashBytes(canonicalJson(v.payload)) !== approval.payloadDigest || approval.bindingDigest !== ctx.run.bindingDigest) return deny("Approval does not match the exact operation");
       if (approval.action === "implementation") return deny("A plan grant is scope authority, not a one-shot operation grant");
-      if (isEscalation(approval)) return deny("Scope and limit decisions do not authorize a process effect or mutate the run binding");
+      if (isEscalation(approval) || approval.action === "scope-extension") return deny("Scope and limit decisions do not authorize a process effect or mutate the run binding");
       if (approval.state !== "approved") return deny("Operation approval is not active");
       const attempt = this.getAttempt(text(v.attemptId, "attemptId", 256));
       if (!attempt || attempt.runId !== ctx.run.id || attempt.state !== "running" || attempt.identity === null) return deny("Operation requires the recorded active attempt");
