@@ -167,6 +167,8 @@ export function registerTerminalWs(
 
   const createAgentHandler = (c: any) => {
       const sessionName = c.req.param("sessionName")!;
+      const framed = c.req.query("format") === "framed", nonce = c.req.query("nonce") ?? null;
+      const controlFrame = (value: Record<string, unknown>) => JSON.stringify(framed ? { ...value, nonce } : value);
       let broker: TerminalSessionBroker | null = null;
       let subscriber: TerminalSubscriber | null = null;
       // The WebSocket can close DURING the async attach (before the broker
@@ -190,20 +192,20 @@ export function registerTerminalWs(
           if (msg.type === "takeover") {
             if (!actor || actor.kind === "worker" || actor.kind === "terminal") {
               takeovers.authorizeInput(actor?.sessionId ?? "unknown", sessionName);
-              ws?.send(JSON.stringify({ type: "error", code: "owner_control_required" }));
+              ws?.send(controlFrame({ type: "error", code: "owner_control_required" }));
               return;
             }
             const result = takeovers.begin(actor.sessionId, sessionName);
-            ws?.send(JSON.stringify(result.ok
+            ws?.send(controlFrame(result.ok
               ? { type: "takeover", status: "active", session: sessionName }
               : { type: "error", code: result.code }));
           } else if (msg.type === "release") {
-            if (actor?.kind !== "owner") { ws?.send(JSON.stringify({ type: "error", code: "owner_control_required" })); return; }
+            if (actor?.kind !== "owner") { ws?.send(controlFrame({ type: "error", code: "owner_control_required" })); return; }
             const released = takeovers.release(actor.sessionId, sessionName);
-            ws?.send(JSON.stringify({ type: "takeover", status: released ? "released" : "inactive", session: sessionName }));
+            ws?.send(controlFrame({ type: "takeover", status: released ? "released" : "inactive", session: sessionName }));
           } else if ((msg.type === "keys" && Array.isArray(msg.keys)) || (msg.type === "text" && typeof msg.text === "string")) {
             if (opts.managed && (actor?.kind !== "owner" || !takeovers.authorizeInput(actor.sessionId, sessionName))) {
-              ws?.send(JSON.stringify({ type: "error", code: "takeover_required" }));
+              ws?.send(controlFrame({ type: "error", code: "takeover_required" }));
               return;
             }
             if (msg.type === "keys") {
@@ -230,7 +232,7 @@ export function registerTerminalWs(
           // Adapt the WebSocket to a broker subscriber. The broker owns the pipe,
           // the seed, the fanout, honest session-death close, and cleanup.
           const sub: TerminalSubscriber = {
-            send: (data: string) => { try { ws.send(data); } catch { /* closed socket */ } },
+            send: (data: string) => { try { ws.send(framed ? controlFrame({ type: "output", session: sessionName, data }) : data); } catch { /* closed socket */ } },
             close: (code: number, reason: string) => { try { ws.close(code, reason); } catch { /* already closed */ } },
           };
           subscriber = sub;
@@ -248,6 +250,7 @@ export function registerTerminalWs(
             return;
           }
           broker = b;
+          if (framed && !closed) ws.send(controlFrame({ type: "ready", session: sessionName }));
           // If the socket closed while attach was in flight, detach now so the
           // broker does not retain a dead subscriber (detach is idempotent).
           if (closed) { b.detach(sub); return; }

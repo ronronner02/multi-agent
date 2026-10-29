@@ -1,3 +1,4 @@
+import { CATALOGS, type InterfaceLanguage, type MessageKey } from "@openrig/i18n";
 import type { AttentionRead, AttentionItem } from "@openrig/daemon/attention";
 import type { FleetSnapshot, ViewState } from "../types.js";
 import { listItem, wrapDetailLines, type ContentLine } from "../detail.js";
@@ -80,4 +81,19 @@ export function attentionLines(state: ViewState, snap: FleetSnapshot, width: num
   }
   lines.push({ text: "" }, { text: "Viewing is not approval. Required Slack decisions still apply." });
   return wrapDetailLines(lines, width);
+}
+
+export function teamDecisionLines(read: import("../../../daemon/dist/contracts/team-control.js").TeamOwnerRead,
+  approval: import("../../../daemon/dist/contracts/team-control.js").TeamApproval, language: InterfaceLanguage): string[] {
+  const label = (key: string) => CATALOGS[language][`team.${key}` as MessageKey] ?? key;
+  const payload = approval.payload;
+  return [approval.action + " · " + approval.id, `${label("target")}: ${approval.targetDigest}`,
+    `${label("task")}: ${payload.taskId ?? read.runId}`, `${label("plan")}: ${read.run.binding.planRef} · ${read.run.bindingDigest}`,
+    `${label("scope")}: ${read.run.binding.writePaths.join(", ")}`, `${label("expires")}: ${approval.expiresAt}`,
+    ...(Array.isArray(payload.paths) ? payload.paths.flatMap(entry => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [JSON.stringify(entry)];
+      return [`${label(String(entry.operation))} ${entry.path}`, `${label("reason")}: ${entry.reason ?? payload.reason ?? ""}`,
+        `${label("classification")}: ${entry.classification ?? payload.classification ?? ""}`];
+    }) : [JSON.stringify(payload)]),
+    ...(Array.isArray(payload.packages) ? payload.packages.map(entry => `${label("packages")}: ${JSON.stringify(entry)}`) : [])];
 }

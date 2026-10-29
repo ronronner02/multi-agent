@@ -389,6 +389,12 @@ export interface TeamPresentation {
   cost: number | null;
 }
 
+export interface TeamConfirmation {
+  action: "approvals/decide" | "cancel" | "pause" | "resume" | "tasks/retry";
+  request: import("../../daemon/dist/contracts/team-control.js").ControlRequest;
+  lines: string[];
+}
+
 export interface TeamViewState {
   language: import("@openrig/i18n").InterfaceLanguage;
   runId?: string;
@@ -396,6 +402,23 @@ export interface TeamViewState {
   detailTab: "details" | "diff" | "tests" | "reviews" | "commits" | "discussion";
   consoleTab: "terminal" | "logs" | "reviews" | "messages";
   consoleExpanded?: boolean;
+  focus?: "tasks" | "details" | "needs" | "agents" | "console";
+  editing?: "command" | "search" | null;
+  commandText?: string;
+  filter?: string;
+  selectedApprovalId?: string;
+  selectedAgent?: string;
+  overlay?: "help" | "settings" | "quit" | "confirm" | "takeover" | null;
+  overlayOffset?: number;
+  confirmation?: TeamConfirmation | null;
+  pending?: TeamConfirmation | null;
+  notice?: { key: string; detail?: string };
+  pairing?: { code: string; expiresAt: number } | null;
+  ownerSessions?: Array<{ id: string; origin: string; revoked_at: number | null }>;
+  sessionIndex?: number;
+  terminal?: { session: string; status: "connecting" | "readOnly" | "requested" | "active" | "unavailable"; lines: string[] };
+  following?: boolean;
+  pausedConsole?: { data: TeamPresentation | undefined; terminalLines: string[] };
   sideTab: "agents" | "system" | "activity";
   selectedTaskId: string | null;
   offsets: Partial<Record<"tasks" | "details" | "agents" | "system" | "activity" | "console" | "needs" | "plan" | "workflow" | "body", number>>;
@@ -508,6 +531,7 @@ export interface PendingDrill {
 export type ViewTab = "table" | "recent" | "overview" | "graph" | "health" | "topology" | "configuration" | "yaml" | "pulse";
 
 export type Action =
+  | { type: "team-update"; patch: Partial<TeamViewState> }
   | { type: "team-language"; language: import("@openrig/i18n").InterfaceLanguage }
   | { type: "spec-launch" }
   | { type: "launch-folder"; folder: string }
@@ -698,6 +722,8 @@ export interface Screen {
   hitMap: HitTarget[];
   contentTargets: HitTarget[];
   contentMaxOffset: number;
+  /** Retain the rendered terminal viewport when following is paused. */
+  teamConsoleOffset?: number;
   explorerRows: Array<ExplorerRow & { y: number }>;
   /** slice-17: token segments for canvas-rendered content rows (keyed by
    * 1-based terminal row) — the paint layer renders them with its own Style;
@@ -724,6 +750,6 @@ export type InputEvent =
   | { type: "char"; ch: string }
   | { type: "key"; key: "up" | "down" | "left" | "right" | "pageup" | "pagedown"; action: Action }
   | { type: "key"; key: "enter"; action: Action }
-  | { type: "key"; key: "backspace" | "escape" | "tab" }
+  | { type: "key"; key: "backspace" | "escape" | "tab" | "backtab" }
   | { type: "mouse"; button: number; x: number; y: number }
   | { type: "ctrl-c" };

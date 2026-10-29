@@ -29,6 +29,7 @@ function parseText(text: string, final: boolean, skipLF = false): { events: Inpu
       if (text[i + 1] === "[") {
         if (i + 2 >= text.length && !final) break;
         const code = text[i + 2];
+        if (code === "Z") { events.push({ type: "key", key: "backtab" }); i += 3; continue; }
         if (code === "<") {
           const tail = text.slice(i);
           const match = tail.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
@@ -232,3 +233,44 @@ export const MOUSE_ENABLE = "\x1b[?1000h\x1b[?1006h";
 export const MOUSE_DISABLE = "\x1b[?1006l\x1b[?1000l";
 export const ALT_SCREEN_ON = "\x1b[?1049h\x1b[?25l";
 export const ALT_SCREEN_OFF = "\x1b[?25h\x1b[?1049l";
+
+export type TeamCommand = { name: "retry" | "open"; target: string } | { name: "pause" | "resume" | "help" };
+export function parseTeamCommand(line: string): TeamCommand | null {
+  const words = line.trim().split(/\s+/), name = words[0];
+  if (words.length === 1 && (name === "pause" || name === "resume" || name === "help")) return { name };
+  if (words.length === 2 && (name === "retry" || name === "open") && words[1]!.length <= 256) return { name, target: words[1]! };
+  return null;
+}
+
+export function teamNavigation(view: import("./types.js").TeamViewState, data: import("./types.js").TeamPresentation | undefined, event: InputEvent): Action | null {
+  const key = event.type === "char" ? event.ch : event.type === "key" ? event.key : "";
+  const patch: Partial<typeof view> = {}, focus = view.focus ?? "tasks";
+  const pages = ["tasks", "details", "agents", "reviews", "logs"] as const;
+  if (/^[1-5]$/.test(key)) {
+    patch.page = pages[Number(key) - 1]!; patch.consoleExpanded = false;
+    patch.focus = patch.page === "reviews" ? "needs" : patch.page === "logs" ? "console" : patch.page;
+  } else if (key === "tab" || key === "backtab") {
+    const regions = ["tasks", "details", "needs", "agents", "console"] as const;
+    patch.focus = regions[(regions.indexOf(focus) + (key === "tab" ? 1 : 4)) % regions.length];
+  } else if (key === "[" || key === "]") {
+    const delta = key === "]" ? 1 : -1;
+    if (focus === "console") {
+      const tabs = ["terminal", "logs", "reviews", "messages"] as const;
+      patch.consoleTab = tabs[(tabs.indexOf(view.consoleTab) + delta + tabs.length) % tabs.length];
+    } else {
+      const tabs = ["details", "diff", "tests", "reviews", "commits", "discussion"] as const;
+      patch.detailTab = tabs[(tabs.indexOf(view.detailTab) + delta + tabs.length) % tabs.length];
+    }
+  } else if (key === "up" || key === "down") {
+    const delta = key === "down" ? 1 : -1;
+    const rows = focus === "tasks" ? (data?.tasks ?? []).filter(task => !view.filter || (task.id + " " + task.title).toLowerCase().includes(view.filter.toLowerCase())).map(task => task.id)
+      : focus === "needs" ? (data?.read?.approvals ?? []).filter(item => item.awaitingDecision).map(item => item.id)
+      : focus === "agents" ? (data?.agents ?? []).map(item => item.name) : [];
+    const field = focus === "needs" ? "selectedApprovalId" : focus === "agents" ? "selectedAgent" : "selectedTaskId";
+    if (rows.length) patch[field] = rows[Math.max(0, Math.min(rows.length - 1, Math.max(0, rows.indexOf(view[field] ?? "")) + delta))];
+    patch.offsets = { ...view.offsets, [focus]: Math.max(0, (view.offsets[focus] ?? 0) + delta) };
+  } else if (key === "enter") { patch.page = "details"; patch.focus = "details"; }
+  else if (key === "escape") { patch.consoleExpanded = false; patch.page = "tasks"; patch.focus = "tasks"; }
+  else return null;
+  return { type: "team-update", patch };
+}

@@ -546,7 +546,8 @@ export function createApp(deps: AppDeps): Hono {
   const terminalTakeover = deps.terminalTakeover ?? new TerminalTakeoverManager({
     eventBus: deps.eventBus,
     isOwnerSessionActive: ownerSessions
-      ? (sessionId, at) => ownerSessions.list().some(session => session.id === sessionId
+      ? (sessionId, at) => (sessionId === "owner-control" && !!teamOptions.credentials.ownerToken)
+        || ownerSessions.list().some(session => session.id === sessionId
         && session.revoked_at === null
         && session.expires_at > at
         && session.last_seen_at > at - 30 * 60_000)

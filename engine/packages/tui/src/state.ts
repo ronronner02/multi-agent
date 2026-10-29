@@ -128,6 +128,8 @@ function reduce(state: ViewState, action: Action, snap: FleetSnapshot): ViewStat
   const readingNotice = state.notice?.includes("\n") && (["layout", "content-scroll", "content-select", "focus", "copy-mode"].includes(action.type) || (action.type === "select" && action.origin === "refresh"));
   const next: ViewState = { ...state, lastError: null, notice: action.type === "notice" || action.type === "act" || readingNotice ? state.notice : null };
   switch (action.type) {
+    case "team-update":
+      return state.team ? { ...state, team: { ...state.team, ...action.patch } } : state;
     case "team-language":
       return state.team && (action.language === "zh-CN" || action.language === "en")
         ? { ...state, team: { ...state.team, language: action.language } } : state;

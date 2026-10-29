@@ -1,3 +1,4 @@
+import { teamDecisionLines } from "./attention/attention-model.js";
 import { CATALOGS, STATUS_LABEL_KEYS, displayWidth, type MessageKey } from "@openrig/i18n";
 import { createIcons, padDisplay, truncateDisplay } from "./icons.js";
 import { helpScreen } from "./commands/help.js";
@@ -1912,18 +1913,23 @@ function renderTeamScreen(state: ViewState, snap: FleetSnapshot, options: Render
       return [...wrapped, { ...item, text: rest }];
     });
   }
+  let teamConsoleOffset: number | undefined;
   function panel(key: keyof typeof view.offsets | null, x: number, y: number, width: number, height: number, title: string, content: TeamLine[]): void {
     if (key && key !== "tasks" && key !== "console") content = wrapTeamLines(content, width - 2);
-    const offset = Math.max(0, Math.min((key ? view.offsets[key] : 0) ?? 0, Math.max(0, content.length - 1)));
     const capacity = Math.max(0, height - 3);
+    const terminalConsole = key === "console" && content === consoleLines && view.consoleTab === "terminal" && !!view.terminal;
+    const maximum = Math.max(0, content.length - (terminalConsole ? capacity : 1));
+    const requested = terminalConsole && view.following !== false ? maximum : (key ? view.offsets[key] : 0) ?? 0;
+    const offset = Math.max(0, Math.min(requested, maximum));
+    if (terminalConsole) teamConsoleOffset = offset;
     for (let i = 0; i < height; i++) {
-      let item = i === 1 ? line(title.toLocaleUpperCase(), "inkDim") : i >= 2 && i < height - 1 ? content[offset + i - 2] : undefined;
+      let item = i === 1 ? line((key === view.focus ? "> " : "") + title.toLocaleUpperCase(), "inkDim") : i >= 2 && i < height - 1 ? content[offset + i - 2] : undefined;
       if (i === height - 2 && content.length > offset + capacity)
         item = line(`${content.length - offset - capacity + 1} ${label("more")} …`, "inkMute");
       put(x, y + i, width, ` ${fit(item?.text ?? "", width - 2)} `, item?.token, item?.bg ?? "inkSurface");
     }
   }
-  const tasks = data?.tasks ?? [];
+  const tasks = (data?.tasks ?? []).filter(task => !view.filter || (task.id + " " + task.title).toLowerCase().includes(view.filter.toLowerCase()));
   const selected = tasks.find(task => task.id === view.selectedTaskId) ?? tasks[0];
   const evidence = (task: typeof selected) => data?.read?.tasks.find(row => row.taskId === task?.id);
   const priority = (task: typeof tasks[number]) => task.priority === null ? label("unknown") : "P" + task.priority;
@@ -2000,19 +2006,25 @@ function renderTeamScreen(state: ViewState, snap: FleetSnapshot, options: Render
   const systemLines = data?.systems.map(item => line(`${label(item.component)} · ${label(item.state)}${item.detail ? ` · ${item.detail}` : ""}`, tone(item.state))) ?? [line(label("unknown"))];
   const activityLines = data?.activity.map(item => line(`${item.time} ${item.target} ${item.text}`)) ?? [line(label("unavailable"))];
   const needsLines = data?.read ? data.read.approvals.filter(item => item.awaitingDecision)
-    .map(item => line((item.kind === "native" ? label("native") + " · " : "") + item.action + " · " + item.id + " · " + item.targetDigest, "ochre"))
+    .flatMap(item => [line(`${item.id === (view.selectedApprovalId ?? data.read!.approvals.filter(row => row.awaitingDecision)[0]?.id) ? "> " : ""}${item.kind === "native" ? label("native") : item.action} · ${item.id}`, "ochre"),
+      ...(item.kind === "native" ? [line(label("nativeFault"), "ochre")] : []),
+      ...teamDecisionLines(data.read!, item, view.language).map(text => line(text))])
     : data?.needs.flatMap(item => [line(`${label(item.kind)} · ${item.target}`, "ochre"),
     ...item.paths.flatMap(path => [line(`${label(path.operation)} ${path.path}`), line(`${label("reason")}: ${path.reason}`), line(`${label("classification")}: ${path.classification}`)]),
   ]) ?? [];
-  const logs = [...(data?.gap ? [line(label("gap"), "ochre")] : []), ...(data?.read ? data.read.logs.flatMap(item => [
+  const consoleData = view.following === false ? view.pausedConsole?.data : data;
+  const logs = [...(consoleData?.gap ? [line(label("gap"), "ochre")] : []), ...(consoleData?.read ? consoleData.read.logs.flatMap(item => [
     line(`${item.ts} ${item.source} ${item.taskId ?? label("unknown")}/${item.attemptId ?? label("unknown")} ${label("exit")}=${item.exitOutcome ?? label("unknown")}`, item.exitOutcome === "failed" ? "cinnabar" : "inkDim"),
     line(`${[item.body.includes("[REDACTED]") && label("redacted"), item.truncated && label("truncated")].filter(Boolean).join(" ")} ${item.body}`),
-  ]) : data?.logs.flatMap(item => [line(`${item.time} ${item.level} ${item.stream} ${item.taskId}/${item.attemptId} ${label("exit")}=${item.exit ?? label("unknown")}`, item.stream === "err" ? "cinnabar" : "inkDim"),
+  ]) : consoleData?.logs.flatMap(item => [line(`${item.time} ${item.level} ${item.stream} ${item.taskId}/${item.attemptId} ${label("exit")}=${item.exit ?? label("unknown")}`, item.stream === "err" ? "cinnabar" : "inkDim"),
     line(`${[item.redacted && label("redacted"), item.truncated && label("truncated"), item.gap && label("gap")].filter(Boolean).join(" ")} ${item.text}`),
   ]) ?? [line(label("unavailable"))])];
   const consoleLines = [line(tabs(["terminal", "logs", "reviews", "messages"], view.consoleTab), "ochre"),
     ...(view.consoleTab === "logs" ? logs : view.consoleTab === "reviews" ? reviewLines() : view.consoleTab === "messages"
-      ? (selected?.discussion ?? [label("unavailable")]).map(text => line(text)) : [line(`${label("readOnly")} · ${label("unavailable")}`)]), line(label("disabled"), "inkMute")];
+      ? (selected?.discussion ?? [label("unavailable")]).map(text => line(text)) : view.terminal
+        ? [line(`${view.terminal.session} · ${label(view.terminal.status)}`, "ochre"), ...(view.following === false ? view.pausedConsole?.terminalLines ?? [] : view.terminal.lines).slice(-Math.max(1, rows - 12)).map(text => line(text))]
+        : [line(`${label("readOnly")} · ${label("unavailable")}`)]), line(view.editing === "command" ? "> " + (view.commandText ?? "")
+          : data?.source === "live" && data.connection === "connected" ? label("commandsOnly") : label("disabled"), "inkMute")];
   const stages = data?.stages ?? [];
   const finalize = label(data?.read ? stages[6]?.state === "completed" ? "completed"
     : stages[6]?.state === "unavailable" ? "unavailable" : "awaitingDecision" : stages.length ? "awaitingDecision" : "unavailable");
@@ -2075,7 +2087,33 @@ function renderTeamScreen(state: ViewState, snap: FleetSnapshot, options: Render
     panel("console", 0, consoleY, cols, consoleHeight, label("console"), consoleLines);
   }
   const metric = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? label("unknown") : String(value);
-  put(0, rows - 1, cols, `q ${label("quit")} · ${label("shell")} · ${label("tokens")}: ${metric(data?.tokens)} · ${label("cost")}: ${metric(data?.cost)}`, "inkDim");
+  const controlsReady = data?.source === "live" && data.connection === "connected" && (data.ageSeconds ?? Infinity) <= 5;
+  const hint = view.editing ? (view.editing === "search" ? "/ " + (view.filter ?? "") : "> " + (view.commandText ?? ""))
+    : view.terminal?.status === "active" ? `${view.terminal.session} · ${label("active")}`
+    : `${controlsReady ? "a/x " + label("confirm") + " · " : ""}${label("commandHints")}`;
+  put(0, rows - 1, cols, `${hint} · ${label("tokens")}: ${metric(data?.tokens)} · ${label("cost")}: ${metric(data?.cost)}`, "inkDim");
+  if (view.notice || view.following === false) {
+    slots[rows - 2] = [];
+    put(0, rows - 2, cols, view.notice ? label(view.notice.key) + (view.notice.detail ? " · " + view.notice.detail : "") : label("followPaused"), "ochre");
+  }
+  if (view.overlay && rows > 5 && cols > 6) {
+    let content: string[] = [];
+    if (view.overlay === "confirm") content = [...(view.confirmation?.action === "cancel" ? [label("cancelPrompt")] : []), ...(view.confirmation?.lines ?? [])];
+    if (view.overlay === "help") content = label("helpControls").split("\n").concat(label("commandsOnly"));
+    if (view.overlay === "quit") content = [label("quitPrompt")];
+    if (view.overlay === "takeover") content = [view.terminal?.session ?? label("unavailable"), label("takeoverPrompt")];
+    if (view.overlay === "settings") content = [label("settingsControls"),
+      ...(view.pairing && view.pairing.expiresAt > (options.nowMs ?? Date.now()) ? [label("pairing"), view.pairing.code, `${label("expires")}: ${new Date(view.pairing.expiresAt).toISOString()}`] : []),
+      ...(view.ownerSessions ?? []).map((session, i) => `${i === (view.sessionIndex ?? 0) ? "> " : ""}${session.id} · ${session.origin}${session.revoked_at === null ? "" : " · " + label("revoked")}`)];
+    if (view.notice) content.unshift(label(view.notice.key) + (view.notice.detail ? " · " + view.notice.detail : ""));
+    const wrapped = wrapTeamLines(content.flatMap(text => text.split("\n").map(value => line(value))), cols - 4);
+    const offset = Math.min(view.overlayOffset ?? 0, Math.max(0, wrapped.length - (rows - 6)));
+    for (let y = 1; y < rows - 1; y++) slots[y] = [];
+    put(0, 1, cols, "┌" + fit(label(["confirm", "takeover", "quit"].includes(view.overlay) ? "confirm" : view.overlay), cols - 2) + "┐", "ochre", "inkSurface");
+    for (let y = 2; y < rows - 3; y++) put(0, y, cols, "│ " + fit(wrapped[offset + y - 2]?.text ?? "", cols - 4) + " │", "inkText", "inkSurface");
+    put(0, rows - 3, cols, "│ " + fit(label("confirmHints"), cols - 4) + " │", "ochre", "inkSurface");
+    put(0, rows - 2, cols, "└" + "─".repeat(cols - 2) + "┘", "ochre", "inkSurface");
+  }
   const segRows: NonNullable<Screen["segRows"]> = {}, lines = slots.map((parts, y) => {
     const segments: TeamLine[] = []; let end = 0;
     for (const part of parts.sort((a, b) => a.x - b.x)) {
@@ -2086,5 +2124,6 @@ function renderTeamScreen(state: ViewState, snap: FleetSnapshot, options: Render
     segRows[y + 1] = segments;
     return segments.map(segment => segment.text).join("");
   });
-  return { lines, segRows, explorerWidth: 0, hitMap: [], contentTargets: [], explorerRows: [], contentMaxOffset: 0 };
+  return { lines, segRows, explorerWidth: 0, hitMap: [], contentTargets: [], explorerRows: [], contentMaxOffset: 0,
+    ...(teamConsoleOffset === undefined ? {} : { teamConsoleOffset }) };
 }

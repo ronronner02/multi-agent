@@ -31,6 +31,7 @@ export type ApprovalAction = "implementation" | "commit" | "push" | "pr-create" 
 export type ApprovalState = "pending" | "approved" | "rejected" | "expired" | "invalidated";
 export type TeamRunState = "pending" | "approved" | "cancel_requested" | "invalidated" | "blocked";
 export type AttemptState = "running" | "stopped" | "unknown";
+export type TeamOwnerCommand = "pause" | "resume" | "retry";
 
 export interface TeamLimits {
   maxSessions: number;
@@ -304,6 +305,7 @@ export interface TeamOwnerRead {
   tasks: TeamReviewView[];
   attempts: TeamAttemptView[];
   approvals: Array<TeamApproval & { awaitingDecision: boolean }>;
+  controlVersions?: { tasks: Record<string, number>; attempts: Record<string, number>; latestAttempts: Record<string, string> };
   logs: TeamLogRecord[];
   replay: TeamReplayWindow;
 }

@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createInterfaceI18n } from "@openrig/i18n";
-import { createTuiLanguagePreference } from "../src/main.js";
+import { createTeamControls, createTuiLanguagePreference } from "../src/main.js";
 import { createViewState } from "../src/state.js";
 import { demoSnapshot } from "../src/demo-data.js";
 import { renderScreen } from "../src/render.js";
+import { decodeInput } from "../src/input.js";
 
 let home: string;
 beforeEach(async () => {
@@ -66,3 +67,18 @@ it("reports an effective-language override without changing the stored preferenc
   expect(language.language).toBe("en");
   expect(JSON.parse(await readFile(config, "utf8")).ui.language).toBe("zh-CN");
 });
+
+
+it.each([false, true])("persists the decoded L key and preserves view language on write failure: %s", async blocked => {
+  if (blocked) {
+    const file = join(home, "blocked-config"); await writeFile(file, "preserved"); vi.stubEnv("OPENRIG_HOME", file);
+  }
+  const language = await createInterfaceI18n({ preference: createTuiLanguagePreference() }), snapshot = demoSnapshot(true);
+  const view = createViewState({ instanceId: "t016-language", team: { language: language.language }, getSnapshot: () => snapshot });
+  const controls = createTeamControls({ view, language, getSnapshot: () => snapshot, client: null, refresh: async () => {}, quit: () => {} });
+  const selected = view.get().team!.selectedTaskId;
+  try { for (const event of decodeInput("L")) await controls.handle(event); } finally { controls.close(); }
+  expect(view.get().team!.language).toBe(blocked ? "zh-CN" : "en"); expect(view.get().team!.selectedTaskId).toBe(selected);
+  expect((await createInterfaceI18n({ preference: createTuiLanguagePreference() })).language).toBe(blocked ? "zh-CN" : "en");
+  if (blocked) expect(view.get().team!.notice?.key).toBe("languageFailed");
+}, 10000);
