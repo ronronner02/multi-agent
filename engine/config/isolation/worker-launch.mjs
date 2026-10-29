@@ -635,7 +635,7 @@ export function buildSandboxCommand(policy, resolved, supervised = false) {
     TMPDIR: '/tmp',
     ...resolved.env,
     ...(resolved.client ? { CODEX_HOME: s.home + "/.codex", CLAUDE_CONFIG_DIR: s.home + "/.claude", DISABLE_AUTOUPDATER: "1" } : {}),
-    ...(resolved.client === 'claude-code' ? claudeGatewayEnv(resolved) : {}),
+    ...clientGatewayEnv(resolved),
     // Clients differ in which spelling they read, so both are set.
     HTTPS_PROXY: proxy,
     HTTP_PROXY: proxy,
@@ -833,12 +833,20 @@ function readProviderGateway(client) {
   }
 }
 
-/** Claude Code reads both the endpoint and the token from its environment; neither is argv. */
-function claudeGatewayEnv(resolved) {
-  if (resolved.client !== 'claude-code') return {};
-  const gateway = readProviderGateway('claude-code');
+/**
+ * Each client reads its provider from a different place. Claude Code takes the endpoint and the
+ * token from the environment. Codex takes the provider selection from argv and the key from an
+ * environment variable it names itself, so its token is still never argv.
+ */
+const GATEWAY_KEY_VAR = 'MA_GATEWAY_API_KEY';
+function clientGatewayEnv(resolved) {
+  if (resolved.client !== 'claude-code' && resolved.client !== 'codex') return {};
+  const gateway = readProviderGateway(resolved.client);
   if (!gateway) return {};
-  return { ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.bearer };
+  if (resolved.client === 'claude-code') {
+    return { ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.bearer };
+  }
+  return { [GATEWAY_KEY_VAR]: gateway.bearer };
 }
 
 function reportError(err) {
