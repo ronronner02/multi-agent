@@ -194,7 +194,8 @@ interface RootInspection {
   installed: Record<"policy" | "launcher" | "executable" | "egress", InstalledFileFact>;
   network: { hostNamespace: string; profileFingerprint: string };
   clientLock: { client: string; version: string; digest: string; files: { path: string; sha256: string }[] };
-  provider: { client: string; status: WorkerLaunchPreflight["provider"]["status"] };
+  provider: { client: string; status: WorkerLaunchPreflight["provider"]["status"];
+    gateway?: NonNullable<WorkerLaunchPreflight["provider"]["gateway"]> };
 }
 
 /** Only the launcher's fixed refusal code is read; its message and any other output are never propagated. */
@@ -260,8 +261,13 @@ export async function inspectManagedWorker(
     const facts = JSON.parse(output) as RootInspection;
     if (facts.schema !== "multi-agent-launch-preflight/v1"
       || !same(Object.keys(facts).sort(), ["clientLock", "control", "installed", "network", "provider", "roots", "schema", "worker"])
-      || !same(Object.keys(facts.provider).sort(), ["client", "status"]) || facts.provider.client !== context.client
+      // Gateway facts are additive and optional; when present they are validated strictly rather
+      // than trusted, because they decide whether a launch may proceed without a sign-in.
+      || !same(Object.keys(facts.provider).sort(), Object.hasOwn(facts.provider, "gateway")
+        ? ["client", "gateway", "status"] : ["client", "status"]) || facts.provider.client !== context.client
       || !["signed_in", "signed_out", "unknown"].includes(facts.provider.status)
+      || (Object.hasOwn(facts.provider, "gateway") && !same(Object.keys(facts.provider.gateway!).sort(),
+        ["baseUrl", "client", "digest", "model"]))
       || !same(Object.keys(facts.clientLock).sort(), ["client", "digest", "files", "version"]) || facts.clientLock.client !== context.client
       || facts.clientLock.digest !== lockDigest || facts.clientLock.version !== lockEntry.version
       || !Array.isArray(facts.clientLock.files) || facts.clientLock.files.length !== lockEntry.files.length
@@ -587,7 +593,8 @@ export function createManagedLaunchControl(dependencies: ManagedWorkerScopeDepen
         generation: prior ? prior.identity!.generation + 1 : 1,
         policyFingerprint: context.binding.policyFingerprint, policyRevision: policy.policy_revision, installedPolicy: policy,
         network: { mode: policy.sandbox.network as WorkerNetworkPolicy["mode"], ...facts.network, preflightRef: evidenceRef },
-        provider: { status: facts.provider.status, client: input.client, home: facts.roots.home, evidenceRef },
+        provider: { status: facts.provider.status, client: input.client, home: facts.roots.home, evidenceRef,
+          ...(facts.provider.gateway ? { gateway: facts.provider.gateway } : {}) },
         nativePolicy: await buildManagedNativePolicy(context.client, policy.paths.toolchain_dir),
         mailbox, ...(claimed ? { previous: claimed } : {}),
         credentialValues: [options.credentials.ownerToken, ...options.credentials.workers?.map(worker => worker.token) ?? [], ...legacyTokens]
