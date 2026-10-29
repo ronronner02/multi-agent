@@ -217,6 +217,15 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/src/domain/role-configuration.ts',
   'packages/daemon/src/db/migrations/106_managed_attempt_inputs.ts',
   'packages/daemon/test/managed-attempt-inputs.test.ts',
+  'packages/ui/src/team/bottom-panel.tsx',
+  'packages/ui/src/team/decision-card.tsx',
+  'packages/ui/src/team/decision-dialog.tsx',
+  'packages/ui/src/team/logs.tsx',
+  'packages/ui/src/team/review-decisions.tsx',
+  'packages/ui/src/team/task-detail.tsx',
+  'packages/ui/test/team-decisions.test.tsx',
+  'packages/ui/test/team-task-detail.test.tsx',
+  'packages/ui/test/team-terminal.test.tsx',
 ];
 
 export class ImportError extends Error {

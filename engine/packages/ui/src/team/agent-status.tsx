@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Card } from "../components/ui/card.js";
 import { Button } from "../components/ui/button.js";
 
-export function AgentStatus({ health, runId, attempts: sessions }: { health?: TeamSystemHealth; runId: string; attempts?: TeamAttemptView[] }) {
+export function AgentStatus({ health, runId, attempts: sessions, onOpenSession }: { health?: TeamSystemHealth; runId: string; attempts?: TeamAttemptView[]; onOpenSession?: (attempt: TeamAttemptView) => void }) {
   const { t } = useTranslation();
   const attempts = Object.values(health?.latestAttempts ?? {}).filter(attempt => attempt.runId === runId);
   return <Card className="team-card" role="region" aria-label={t("web.agentStatus")}>
@@ -17,13 +17,15 @@ export function AgentStatus({ health, runId, attempts: sessions }: { health?: Te
         <div><dt>{t("web.model")}</dt><dd>{t("value.unavailable")}</dd></div>
         <div><dt>{t("web.sessionState")}</dt><dd>{t(`status.attempt.${attempt.state}`)}<small>{attempt.unknownReason}</small></dd></div>
         <div><dt>{t("web.session")}</dt><dd><code>{attempt.session ?? t("value.unavailable")}</code></dd></div>
+        <div><dt>{t("web.openSession")}</dt><dd><Button variant="outline" disabled={!onOpenSession || attempt.runId !== runId || attempt.state !== "running" || !attempt.session}
+          onClick={() => onOpenSession?.(attempt)}>{t("web.openSession")}</Button></dd></div>
       </dl>)}
     <h3>{t("web.observedAttempts")}</h3>
     {attempts.length ? <ul className="team-attempts">{attempts.map(attempt => <li key={attempt.attemptId}>
       <code>{attempt.worker ?? attempt.attemptId}</code><span>{attempt.client ?? t("web.unknown")}</span>
       <span>{attempt.state} · {attempt.checkedAt}</span><span>{attempt.reasonCode}</span>
     </li>)}</ul> : <p className="team-muted">{t("web.noAttempts")}</p>}
-    <Button variant="outline" disabled>{t("web.openSession")}</Button>
+    {!sessions?.length && <Button variant="outline" disabled>{t("web.openSession")}</Button>}
     <p className="team-muted">{t("web.nativeTarget")}</p>
   </Card>;
 }

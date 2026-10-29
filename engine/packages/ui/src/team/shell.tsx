@@ -148,7 +148,7 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
       {!runId && <div className="team-empty" role="status"><strong>{t("web.noRun")}</strong><p>{t("web.discovery")}</p></div>}
       {section === "settings" ? <Card className="team-card"><h2>{t("web.settings")}</h2>{preferences}<Pairing /></Card> : <>
         <RunStepper workflow={data.read.data?.workflow} />
-        <Overview section={section} run={data.read.data?.run} runId={runId} read={data.read.data} replay={data.events.data} selectedTask={selectedTask} onSelectTask={setSelectedTask} approvals={approvals} health={data.health.data}
+        <Overview controlsAvailable={paired && !error && age !== null && now - readAt <= 5_000} refresh={() => data.read.refetch({ throwOnError: true })} section={section} run={data.read.data?.run} runId={runId} read={data.read.data} replay={data.events.data} selectedTask={selectedTask} onSelectTask={setSelectedTask} health={data.health.data}
           healthAvailable={healthAvailable} now={now} filter={filter} search={search} sort={sort} onFilter={setFilter} onSearch={setSearch} onSort={setSort}
           detailTab={detailTab} evidenceTab={evidenceTab} onDetailTab={setDetailTab} onEvidenceTab={setEvidenceTab} />
       </>}
