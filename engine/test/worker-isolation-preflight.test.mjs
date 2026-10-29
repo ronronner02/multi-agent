@@ -426,10 +426,14 @@ describe('offline: fixed native policy and mailbox mounts', () => {
     return { ...base, clientLock, inspectFile: lockedFile, readFile: p => { assert.equal(p, bootstrapPath); return JSON.stringify(bootstrap); }, lstat: p => {
       if (p === bootstrapPath) return { uid: 990, gid: 990, dev: 10, ino: 24, mode: 0o600, size: 256,
         isFile: () => true, isSymbolicLink: () => false };
-      if (p === socket) return { uid: 990, gid: 990, dev: 9, ino: 22, mode: 0o666,
+      // Control-owned, worker-group, 0660: reachable by the owning worker, by nothing else.
+      if (p === socket) return { uid: 990, gid: 991, dev: 9, ino: 22, mode: 0o660,
         isSocket: () => true, isSymbolicLink: () => false, ...change };
       if (p === policy.paths.control_state_dir || p.startsWith(policy.paths.control_state_dir + '/')) {
-        return { uid: 990, gid: 990, mode: 0o700, isDirectory: () => true, isSymbolicLink: () => false };
+        // Strictly private at the root; traverse-only below it, which is what a live launch needs
+        // because bwrap resolves the mailbox descriptor as the worker.
+        const mode = p === policy.paths.control_state_dir ? 0o700 : 0o711;
+        return { uid: 990, gid: 990, mode, isDirectory: () => true, isSymbolicLink: () => false };
       }
       if (p === nativePath) return { uid: 990, gid: 991, dev: 10, ino: 23, mode: 0o440, size: 200,
         isFile: () => true, isSymbolicLink: () => false };
@@ -523,6 +527,22 @@ describe('offline: fixed native policy and mailbox mounts', () => {
     }
   });
 
+  test('maps each client id to its gateway section, so neither silently loses its provider', async () => {
+    // A mismatch here made every Claude launch run unauthenticated while the whole suite stayed
+    // green, because the reader returns null for an unknown section and null is indistinguishable
+    // from "no gateway configured". The mapping is asserted for both clients, not just one.
+    // Read from the reviewed source, not the installed copy: this asserts the contract the source
+    // states, and the installed file is what provisioning copies from it.
+    const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../config/isolation/worker-launch.mjs"), "utf8");
+    const mapping = /export const GATEWAY_SECTION = Object\.freeze\(\{([^}]*)\}\)/.exec(source);
+    assert.ok(mapping, "the source must declare the gateway section mapping");
+    const pairs = Object.fromEntries(mapping[1].split(",").map(part => {
+      const [key, value] = part.split(":").map(token => token.trim().replace(/^"|"$/g, ""));
+      return [key, value];
+    }));
+    assert.deepEqual(pairs, { "claude-code": "claude", codex: "codex" });
+  });
+
   test('requires a registered mailbox before either native client starts', () => {
     for (const client of ['claude', 'codex']) {
       const request = parseLaunchArgs([...argv.slice(0, 10), '--', policy.paths.toolchain_dir + '/clients/bin/' + client]);
@@ -531,7 +551,8 @@ describe('offline: fixed native policy and mailbox mounts', () => {
   });
 
   test('rejects a missing, replaced, aliased, foreign-owned or publicly discoverable endpoint', () => {
-    for (const change of [{ uid: 991 }, { gid: 991 }, { ino: 99 }, { dev: 99 }, { mode: 0o777 }, { isSocket: () => false }]) {
+    for (const change of [{ uid: 991 }, { gid: 990 }, { gid: 992 }, { ino: 99 }, { dev: 99 },
+      { mode: 0o666 }, { mode: 0o777 }, { isSocket: () => false }]) {
       expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), facts(change)), 'mailbox-unavailable');
     }
     const good = facts();
@@ -539,6 +560,7 @@ describe('offline: fixed native policy and mailbox mounts', () => {
       { lstat: p => { if (p === socket) throw new Error('ENOENT'); return good.lstat(p); } },
       { realpath: p => p === socket ? socket + '-other' : p },
       { lstat: p => p === path.dirname(socket) ? { ...good.lstat(p), mode: 0o755 } : good.lstat(p) },
+      { lstat: p => p === path.dirname(socket) ? { ...good.lstat(p), mode: 0o774 } : good.lstat(p) },
     ]) expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), { ...good, ...changed }), 'mailbox-unavailable');
   });
 

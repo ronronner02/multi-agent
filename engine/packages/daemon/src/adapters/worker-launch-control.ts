@@ -238,7 +238,9 @@ export async function inspectManagedWorker(
       || registration.taskId !== scope.task.assignment.taskId || registration.sessionId !== scope.sessionId
       || registration.attemptId !== attemptId || registration.socketPath !== mailbox.path
       || mailbox.path !== posix.join(paths.mailbox_root!, name, context.runId, attemptId, "mailbox.sock")
-      || mailbox.uid !== controlUid || mailbox.gid !== controlGid
+      // Control-owned in uid; the group is the worker's, because bwrap resolves the socket as the
+      // worker and a control-group endpoint would be unreachable for it.
+      || mailbox.uid !== controlUid || mailbox.gid !== context.projection.workerGid
       || !Number.isSafeInteger(mailbox.dev) || mailbox.dev < 0 || !Number.isSafeInteger(mailbox.ino) || mailbox.ino <= 0
       || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(mailbox.generation)) throw new Error();
     // The original repository binding is shared by the run, not a worker-specific mount selection.

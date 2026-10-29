@@ -920,8 +920,10 @@ describe("control-owned root inspection", () => {
       root: policy.paths.context_root + "/ma-worker1/run/attempt", mutableStateRoot: policy.paths.worker_root + "/ma-worker1/home",
       frameworkRoot: policy.paths.framework_dir, frameworkRevision: "fixture", workerUid: 61001, workerGroups: [],
       outputs: [], permissions: [], files: [], discoveryRoots: [], workerDiscoveryRoots: [], generatedHash: "sha256:" + "f".repeat(64), protocolVersion: null };
+    // Control-owned uid with the worker's group: the endpoint is created by control but must be
+    // reachable by the worker, whose client is what bwrap resolves the socket as.
     endpoint = { path: policy.paths.mailbox_root + "/ma-worker1/run/attempt/mailbox.sock", dev: 1, ino: 23,
-      uid: process.getuid!(), gid: process.getgid!(), generation: "generation-1" };
+      uid: process.getuid!(), gid: 61001, generation: "generation-1" };
     bridge = { binding: { socketPath: endpoint.path, workerId: "builder", sessionId: "builder@rig", runId: "run",
       attemptId: "attempt", rigId: "rig", taskId: "task", recipients: [] }, endpoint: () => Object.freeze({ ...endpoint }) };
     const fact = (path: string, sha256 = "sha256:" + "a".repeat(64)) => ({ path, realpath: path, uid: 0, gid: 0,
@@ -973,7 +975,8 @@ describe("control-owned root inspection", () => {
     context = { ...context, assignment: secondTask.assignment, role: "reviewer", client: "codex", workerUid: 61002,
       root: context.root.replace("ma-worker1", "ma-worker2").replace("/attempt", "/attempt-2"),
       projection: { ...context.projection, worker: "ma-worker2", workerGid: 61002, attemptId: "attempt-2" } };
-    endpoint = { ...endpoint, path: endpoint.path.replace("ma-worker1", "ma-worker2").replace("/attempt/", "/attempt-2/"), ino: 24, generation: "generation-2" };
+    endpoint = { ...endpoint, path: endpoint.path.replace("ma-worker1", "ma-worker2").replace("/attempt/", "/attempt-2/"),
+      gid: 61002, ino: 24, generation: "generation-2" };
     bridge = { endpoint: bridge.endpoint, binding: { ...bridge.binding, socketPath: endpoint.path, attemptId: "attempt-2", taskId: "review-task", workerId: "reviewer", sessionId: "reviewer@rig" } };
     reply.installed.executable.path = reply.installed.executable.realpath = reply.installed.executable.path.replace("/claude", "/codex");
     reply = { ...reply, worker: { name: "ma-worker2", uid: 61002, gid: 61002 }, provider: { client: "codex", status: "signed_out" },
@@ -1104,8 +1107,9 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     new Map(files.map((file, index) => [file.path, entries[index]![1]])));
   };
   let nativePolicyFor: Awaited<ReturnType<typeof buildManagedNativePolicy>>;
+  // Control-owned in uid, worker-group (that is how a provisioned host creates it), 0660.
   const endpoint = (attemptId: string) => ({ path: join(policy.paths.mailbox_root, "ma-worker1", "run", attemptId, "mailbox.sock"),
-    dev: 1, ino: 23, uid, gid, generation: "generation-1" });
+    dev: 1, ino: 23, uid, gid: workerGroup!, generation: "generation-1" });
   const bridgeFor = (input: Readonly<WorkerLaunchInput>) => ({ endpoint: () => Object.freeze(endpoint(input.attempt.attemptId)),
     binding: { socketPath: endpoint(input.attempt.attemptId).path, workerId: "builder", sessionId: "builder@rig", runId: "run",
       attemptId: input.attempt.attemptId, rigId: "rig", taskId: "task", recipients: [] } });
@@ -1138,7 +1142,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
         mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]", pidNamespace: "pid:[2]" },
       mountInfo: mountInfo(attempt), stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })),
       files: [...attempt.files.map(file => ({ path: file.workerPath, hash: file.hash })), { path: "/etc/claude-code/managed-settings.json", hash: managed.hash }],
-      discoveryRoots: [...attempt.workerDiscoveryRoots], nativeSessions: [], mailbox: { uid, gid, dev: 1, ino: 23 },
+      discoveryRoots: [...attempt.workerDiscoveryRoots], nativeSessions: [], mailbox: { uid, gid: workerGroup!, dev: 1, ino: 23 },
       nativePolicy: { inventory: { selectedSource: "/etc/claude-code/managed-settings.json", managedDropIns: "absent", remotePolicy: "absent",
         platformPolicy: "not-applicable", nativeExceptions: "absent" } } };
     snapshotChange(value);
@@ -1543,8 +1547,9 @@ describe("production managed launch composition", () => {
       expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(0);
       // Each path is its own attempt: a refusal blocks that attempt in the shared launcher.
       const register = (attemptId: string) => {
+        // Control-owned uid, and the group of the worker this projection declares (61001 below).
         const endpoint = { path: policy.paths.mailbox_root + "/ma-worker1/run/" + attemptId + "/mailbox.sock", dev: 1, ino: 23,
-          uid: process.getuid!(), gid: process.getgid!(), generation: "generation-1" };
+          uid: process.getuid!(), gid: 61001, generation: "generation-1" };
         launch.endpoints.set(attemptId, { endpoint: () => Object.freeze({ ...endpoint }), binding: { socketPath: endpoint.path, workerId: "builder",
           sessionId: "builder@rig", runId: "run", attemptId, rigId: "rig", taskId: "task", recipients: [] } });
         return attemptId;

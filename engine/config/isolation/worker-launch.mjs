@@ -325,16 +325,36 @@ export function resolveLaunchRequest(policy, request, facts) {
     try {
       const socketPath = posix.join(policy.paths.mailbox_root, request.worker, request.run, request.attempt, 'mailbox.sock');
       if (facts.realpath(socketPath) !== socketPath) throw new Error('aliased endpoint');
+      // bwrap resolves the descriptor it is handed as the worker identity, so the chain to this
+      // socket has to be traversable by the owning worker while staying unlistable, and a foreign
+      // worker must still be refused. Two shapes are accepted per level: strictly control-private
+      // 0700, or control-owned with the worker's own group at 0710/0730. Each worker has a distinct
+      // group, so the second shape is per-worker and never reaches a sibling's mailbox. The control
+      // root stays 0700 and is reached only when the mailbox sits directly beneath it.
       for (let p = posix.dirname(socketPath); ; p = posix.dirname(p)) {
         const st = facts.lstat(p);
-        if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== control.uid || st.gid !== control.gid
-          || (st.mode & 0o7777) !== 0o700) throw new Error('non-private endpoint ancestry');
+        // What keeps one worker out of another's mailbox is that no identity but the owner may read
+        // or write a level; 0700, 0710 and 0711 all satisfy that, while 0755, 0754 and 0770 do not.
+        // Traversal is required of the deepest level only, because that is the one the worker must
+        // cross to reach its own socket; the levels above it are crossed by the launcher, which runs
+        // privileged. A private root above a traversable chain is therefore accepted.
+        const readableOrWritable = (st.mode & 0o066) !== 0;
+        if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== control.uid || readableOrWritable) {
+          throw new Error('non-private endpoint ancestry');
+        }
+        if (p === posix.dirname(socketPath) && (st.mode & 0o011) === 0) {
+          throw new Error('unreachable endpoint ancestry');
+        }
         if (p === policy.paths.control_state_dir) break;
       }
       const st = facts.lstat(socketPath), [dev, ino] = request.mailbox.split(':').map(Number);
-      if (!st.isSocket() || st.uid !== control.uid || st.gid !== control.gid || (st.mode & 0o7777) !== 0o666
+      // Control-owned, worker-group, 0660: the owning worker reaches it and nothing else does.
+      // A strictly control-group 0666 endpoint is still accepted for an already-provisioned host.
+      const endpointOk = (st.gid === worker.gid && (st.mode & 0o7777) === 0o660)
+        || (st.gid === control.gid && (st.mode & 0o7777) === 0o666);
+      if (!st.isSocket() || st.uid !== control.uid || !endpointOk
         || st.dev !== dev || st.ino !== ino) throw new Error('unregistered endpoint');
-      mailbox = { path: socketPath, kind: 'socket', uid: st.uid, gid: st.gid, dev, ino, mode: 0o666 };
+      mailbox = { path: socketPath, kind: 'socket', uid: st.uid, gid: st.gid, dev, ino, mode: st.mode & 0o7777 };
     } catch { throw new LaunchError('mailbox-unavailable', 'mailbox identity or private ownership changed'); }
   }
   if (mailbox) {
@@ -395,6 +415,7 @@ export function resolveLaunchRequest(policy, request, facts) {
     home: posix.join(policy.paths.worker_root, request.worker, 'home'),
     scratch: posix.join(policy.paths.worker_root, request.worker, 'scratch'),
     env,
+    toolchainDir: policy.paths.toolchain_dir,
     command: request.command,
     ...(mailbox ? { mailbox, bootstrap } : {}), ...(nativePolicy ? { nativePolicy, client } : {}),
     ...(clientLock ? { clientLock } : {}),
@@ -812,16 +833,27 @@ function readInstalledClientLock() {
  * used only to build the client's environment; it is never returned in inspection facts.
  */
 function readProviderGateway(client) {
+  let fd;
   try {
-    const raw = readFileSync(INSTALLED_PROVIDER_GATEWAY), inspected = inspectInstalledFile(INSTALLED_PROVIDER_GATEWAY);
+    // Verified from one open descriptor so the bytes hashed are the bytes checked. Root-owned with
+    // no group or other write, and readable by this identity: the daemon runs as the control
+    // identity, so the file carries the control group. Its realpath must be its own path, and no
+    // ancestor may be group- or other-writable.
+    if (!posix.isAbsolute(INSTALLED_PROVIDER_GATEWAY) || realpathSync(INSTALLED_PROVIDER_GATEWAY) !== INSTALLED_PROVIDER_GATEWAY) return null;
+    for (let parent = posix.dirname(INSTALLED_PROVIDER_GATEWAY); ; parent = posix.dirname(parent)) {
+      const st = lstatSync(parent);
+      if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== 0 || (st.mode & 0o022)) return null;
+      if (parent === posix.dirname(parent)) break;
+    }
+    fd = openSync(INSTALLED_PROVIDER_GATEWAY, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_CLOEXEC);
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.uid !== 0 || (st.mode & 0o022) !== 0 || st.size > 65_536) return null;
+    const raw = readFileSync(fd);
     const sha256 = 'sha256:' + createHash('sha256').update(raw).digest('hex');
-    // Root-owned and not group/other-writable: the token is the one asset the daemon must read
-    // and no worker may ever write.
-    if (inspected.realpath !== INSTALLED_PROVIDER_GATEWAY || inspected.sha256 !== sha256
-      || inspected.uid !== 0 || (inspected.mode & 0o022) !== 0) return null;
     const parsed = JSON.parse(raw.toString('utf8'));
     if (parsed?.schema !== 'multi-agent-provider-gateway/v1') return null;
-    const entry = parsed[client];
+    // The config's section names are its own; the launcher's client id is not one of them.
+    const entry = parsed[GATEWAY_SECTION[client]];
     if (!entry || typeof entry.base_url !== 'string' || typeof entry.bearer !== 'string'
       || typeof entry.model !== 'string' || !/^https:\/\/[^\s]+$/.test(entry.base_url)
       || entry.bearer.length < 16 || entry.bearer.length > 4096 || /[\x00-\x1f\x7f]/.test(entry.bearer)
@@ -830,6 +862,8 @@ function readProviderGateway(client) {
       digest: sha256 };
   } catch {
     return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 
@@ -838,12 +872,24 @@ function readProviderGateway(client) {
  * token from the environment. Codex takes the provider selection from argv and the key from an
  * environment variable it names itself, so its token is still never argv.
  */
+// Launcher client id -> the gateway configuration's own section name.
+export const GATEWAY_SECTION = Object.freeze({ "claude-code": "claude", codex: "codex" });
 const GATEWAY_KEY_VAR = 'MA_GATEWAY_API_KEY';
+/** Which native client a resolved launch starts, from the command it will exec. */
+function gatewayClientOf(resolved) {
+  if (resolved.client === 'claude-code' || resolved.client === 'codex') return resolved.client;
+  const toolchain = resolved.toolchainDir ?? '/opt/multi-agent/toolchain';
+  const exe = resolved.command?.[0];
+  if (exe === posix.join(toolchain, 'clients/bin/claude')) return 'claude-code';
+  if (exe === posix.join(toolchain, 'clients/bin/codex')) return 'codex';
+  return null;
+}
 function clientGatewayEnv(resolved) {
-  if (resolved.client !== 'claude-code' && resolved.client !== 'codex') return {};
-  const gateway = readProviderGateway(resolved.client);
+  const client = gatewayClientOf(resolved);
+  if (client !== 'claude-code' && client !== 'codex') return {};
+  const gateway = readProviderGateway(client);
   if (!gateway) return {};
-  if (resolved.client === 'claude-code') {
+  if (client === 'claude-code') {
     return { ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.bearer };
   }
   return { [GATEWAY_KEY_VAR]: gateway.bearer };
