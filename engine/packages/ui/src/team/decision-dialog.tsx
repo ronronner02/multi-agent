@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Content } from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import type { JsonValue, TeamApproval, TeamRun } from "@openrig/daemon/team-control";
@@ -10,10 +10,11 @@ export function OwnerDialog({ title, description, trigger, onClose, children }: 
 }) {
   const { t } = useTranslation();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const content = useRef<HTMLDivElement>(null);
   const fallback = container?.closest<HTMLElement>("[role=region], section[aria-label]");
   return <div ref={setContainer}><Dialog open onOpenChange={open => { if (!open) onClose(); }}>
     {container && <DialogPortal container={container}><DialogOverlay />
-      <Content className="team-card team-decision-dialog" onCloseAutoFocus={event => { event.preventDefault(); (trigger?.isConnected && !trigger.matches(":disabled") ? trigger : fallback)?.focus(); }}>
+      <Content ref={content} className="team-card team-decision-dialog" onOpenAutoFocus={event => { event.preventDefault(); content.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); (trigger?.isConnected && !trigger.matches(":disabled") ? trigger : fallback)?.focus(); }}>
         <DialogTitle>{title}</DialogTitle><DialogDescription className="team-muted">{description}</DialogDescription>
         {children}<DialogClose asChild><Button variant="outline">{t("web.close")}</Button></DialogClose>
       </Content>
