@@ -113,6 +113,20 @@ export function teamControlRoutes(
     const page = options.readModel.replay(c.req.param("runId"), afterSeq, limit);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: c.req.param("runId"), ...page });
   });
+  app.get("/runs/:runId/tasks/:taskId/edit", c => {
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    return c.json(governance.taskForEdit(c.req.param("runId"), c.req.param("taskId")));
+  });
+  app.post("/runs/:runId/tasks/:taskId/edit", async c => {
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== c.req.param("runId") || request.actionId !== c.req.param("taskId")) return c.json({ code: "control_scope_denied" }, 403);
+    if (!options.resolveBinding) return c.json({ code: "current_binding_unavailable" }, 503);
+    let binding: unknown;
+    try { binding = options.resolveBinding(governance.getRun(request.runId)); }
+    catch { return c.json({ code: "current_binding_unavailable" }, 503); }
+    const receipt = governance.editTask(request, c.get("controlActor"), binding);
+    return c.json(receipt, receipt.status === "denied" ? 403 : 200);
+  });
   for (const action of ["approvals/request", "approvals/decide", "cancel", "tasks/outcome", "pause", "resume", "tasks/retry"] as const) {
     app.post(`/runs/:runId/${action}`, async (c) => {
       const request = parseControlRequest(await c.req.json());
