@@ -13,6 +13,8 @@ import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/
 import { useTeamRun } from "../hooks/useTeamRun.js";
 import { RunStepper } from "./run-stepper.js";
 import { Overview } from "./overview.js";
+import { WorkspaceView, type BrowseState } from "./workspace/workspace-view.js";
+import { KnowledgeView } from "./knowledge/knowledge-view.js";
 import "../skins/shuimo-danqing/skin.css";
 
 export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
@@ -80,6 +82,8 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   const navigate = useNavigate();
   const data = useTeamRun(runId);
   const [runDraft, setRunDraft] = useState(runId);
+  const [workspaceBrowse, setWorkspaceBrowse] = useState<BrowseState & { runId: string }>({ runId, path: "", source: "" });
+  const [knowledgeBrowse, setKnowledgeBrowse] = useState<BrowseState & { runId: string }>({ runId, path: "", source: "target" });
   const [filter, setFilter] = useState<TeamQueueState | "all">("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("id");
@@ -123,7 +127,6 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   </div>;
   const nav = (mobile = false) => <nav className={mobile ? "team-mobile-nav" : "team-nav"} aria-label={mobile ? t("web.overview") : t("web.title")}>
     {destinations.filter(([id]) => !mobile || ["overview", "tasks", "decisions", "logs", "settings"].includes(id)).map(([id, Icon]) =>
-      id === "workspace" || id === "knowledge" ? <Button key={id} disabled variant="ghost" title={t("web.laterPage")}><Icon aria-hidden="true" /><span>{t(`web.${id}`)}</span></Button> :
         <Link key={id} to="/team/$section" params={{ section: id }} search={{ run: runId || undefined }} resetScroll={false} aria-current={section === id ? "page" : undefined}>
           <Icon aria-hidden="true" /><span>{t(`web.${id}`)}</span></Link>)}
   </nav>;
@@ -145,12 +148,19 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
       <form className="team-run-picker" onSubmit={e => { e.preventDefault(); void navigate({ to: "/team/$section", params: { section }, search: { run: runDraft.trim() || undefined } }); }}>
         <label>{t("web.run")}<input value={runDraft} onChange={e => setRunDraft(e.target.value)} autoComplete="off" /></label><Button type="submit" variant="outline">{t("web.loadRun")}</Button>
       </form>
+      <nav className="team-filters" aria-label={`${t("web.workspace")} / ${t("web.knowledge")}`}>
+        {(["workspace", "knowledge"] as const).map(id => <Button asChild variant="outline" key={id}>
+          <Link to="/team/$section" params={{ section: id }} search={{ run: runId || undefined }} aria-current={section === id ? "page" : undefined}>{t(`web.${id}`)}</Link>
+        </Button>)}
+      </nav>
       {!runId && <div className="team-empty" role="status"><strong>{t("web.noRun")}</strong><p>{t("web.discovery")}</p></div>}
       {section === "settings" ? <Card className="team-card"><h2>{t("web.settings")}</h2>{preferences}<Pairing /></Card> : <>
         <RunStepper workflow={data.read.data?.workflow} />
-        <Overview controlsAvailable={paired && !error && age !== null && now - readAt <= 5_000} refresh={() => data.read.refetch({ throwOnError: true })} section={section} run={data.read.data?.run} runId={runId} read={data.read.data} replay={data.events.data} selectedTask={selectedTask} onSelectTask={setSelectedTask} health={data.health.data}
+        {section === "workspace" ? <WorkspaceView runId={runId} state={workspaceBrowse.runId === runId ? workspaceBrowse : { path: "", source: "" }} onState={state => setWorkspaceBrowse({ ...state, runId })} tasks={data.read.data?.tasks} />
+          : section === "knowledge" ? <KnowledgeView runId={runId} state={knowledgeBrowse.runId === runId ? knowledgeBrowse : { path: "", source: "target" }} onState={state => setKnowledgeBrowse({ ...state, runId })} />
+          : <Overview controlsAvailable={paired && !error && age !== null && now - readAt <= 5_000} refresh={() => data.read.refetch({ throwOnError: true })} section={section} run={data.read.data?.run} runId={runId} read={data.read.data} replay={data.events.data} selectedTask={selectedTask} onSelectTask={setSelectedTask} health={data.health.data}
           healthAvailable={healthAvailable} now={now} filter={filter} search={search} sort={sort} onFilter={setFilter} onSearch={setSearch} onSort={setSort}
-          detailTab={detailTab} evidenceTab={evidenceTab} onDetailTab={setDetailTab} onEvidenceTab={setEvidenceTab} />
+          detailTab={detailTab} evidenceTab={evidenceTab} onDetailTab={setDetailTab} onEvidenceTab={setEvidenceTab} />}
       </>}
     </main>
     {nav(true)}

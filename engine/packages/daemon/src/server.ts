@@ -96,7 +96,7 @@ import { PermissionDriftObserver, type PermissionDriftReader } from "./domain/pe
 import { chatRoutes } from "./routes/chat.js";
 import { streamRoutes } from "./routes/stream.js";
 import { queueRoutes } from "./routes/queue.js";
-import { workspaceRoutes } from "./routes/workspace.js";
+import { workspaceRoutes, workspaceBrowseRoutes } from "./routes/workspace.js";
 import { projectsRoutes } from "./routes/projects.js";
 import { viewsRoutes } from "./routes/views.js";
 import { watchdogRoutes } from "./routes/watchdog.js";
@@ -824,6 +824,11 @@ export function createApp(deps: AppDeps): Hono {
   // T052 — the managed replay transport. Mounted separately from the legacy
   // `/api/events` stream so legacy admission and behaviour stay exactly as they
   // were while managed reads get owner authentication and run scoping.
+  app.route("/api/team-control", workspaceBrowseRoutes(teamGovernance, {
+    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
+    orchestratorRoot: fileURLToPath(new URL("../../../../", import.meta.url)),
+  }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,
     legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],

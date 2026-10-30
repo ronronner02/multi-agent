@@ -4,7 +4,7 @@ type: "task-pack"
 status: "derived"
 date: "2026-10-13"
 source_plan: "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md"
-source_plan_hash: sha256:927a79aa0856d0052391d44309756ae5945ec6826e22c9ca4cec9c6881c92ba3
+source_plan_hash: sha256:95d3e622ea1b470d55f8d7312f7336c7db2fb80cd97ef099aa7fd9a35b281121
 generated_by: "spec-write-tasks"
 mode: "derived"
 target_repo: "ronronner02/multi-agent"
@@ -221,7 +221,8 @@ Tasks in a wave have disjoint primary file ownership. Tasks carrying the shared 
 | 12 | T019, T040, T035 | T019: Build the reference-derived Web UI shell and durable run projections; T040: Complete the control-owned WorkerLaunchControl lifecycle on the hardened process reader; T035: Record KTD25 scope extensions beside the binding and gate candidate staging on effective scope |
 | 13 | T020, T041 | T020: Add Web task evidence, owner decision dialogs and read-only session/owner terminal views; T041: Compose the managed launch chain into production daemon startup and prove it with an offline fixture-daemon restart |
 | 14 | T021, T045 | T021: Verify responsive, accessible, bilingual Web UI behavior against the reference; T045: Pin the shared core and the implementer and reviewer charters into every attempt's context manifest, and enforce the reviewer charter's report format when a review is recorded (KTD28 offline slice) |
-| 15 | T022, T023, T039 | T022: Add scoped read-only Workspace and Knowledge views; T023: Classify owner task edits and suspend scope changes for plan re-approval; T039: Route every managed launch through runtime eligibility and an isolated, re-entrant candidate workspace |
+| 15 | T023, T039 | T023: Classify owner task edits and suspend scope changes for plan re-approval; T039: Route every managed launch through runtime eligibility and an isolated, re-entrant candidate workspace |
+| 15-T022 | T022 | Add scoped read-only Workspace and Knowledge views after shared candidate ownership |
 | 16 | T042, T044 | T042: Produce the managed attempt for an admitted assignment: the KTD24 context projection, the per-attempt mailbox endpoint and its bootstrap, and the attempt object T047 attaches; T044: Compute a commit-lane candidate's manifest and patch without running git on any path the worker can write |
 | 16.5 | T053 | T053: Supply the managed-attempt production inputs (the worker control-access store, the per-seat mailbox capability, durable task outputs/permissions and a provisioned worker-identity source) and compose the attempt roots, so the T042 producer is reachable and T047 can attach what it returns. Its own wave because T047 depends on it and the dependency must precede T047 in wave 17 |
 | 17 | T043, T047, T051 | T043: Let a reviewer launch into the exact candidate the implementer produced, by naming the task under review; T047: Attach a produced managed attempt to the seat's binding and register its mailbox endpoint in the composed launch chain, so an admitted assignment can actually reach the privileged launch; T049: Prove the commit-lane manifest and patch start no git process on any path the worker can write, across the full reproduction matrix; T051: Make the commit-lane manifest and patch agree for files the base commit gives git attributes, by hashing the cleaned bytes the patch actually carries |
@@ -353,9 +354,14 @@ The following JSON is the single machine-readable task source. Human cards below
     {
       "wave": 15,
       "tasks": [
-        "T022",
         "T023",
         "T039"
+      ]
+    },
+    {
+      "wave": "15-T022",
+      "tasks": [
+        "T022"
       ]
     },
     {
@@ -1790,7 +1796,13 @@ The following JSON is the single machine-readable task source. Human cards below
         "engine/packages/daemon/test/workspace-scope.test.ts",
         "engine/packages/ui/src/team/workspace/workspace-view.tsx",
         "engine/packages/ui/src/team/knowledge/knowledge-view.tsx",
-        "engine/packages/ui/src/routes.tsx"
+        "engine/packages/ui/src/routes.tsx",
+        "engine/packages/ui/src/team/shell.tsx",
+        "engine/packages/daemon/src/server.ts",
+        "engine/packages/daemon/src/domain/workflow-runtime.ts",
+        "engine/packages/daemon/src/domain/team-workspace.ts",
+        "engine/packages/daemon/src/domain/scope-extension.ts",
+        "engine/config/governance/credential-exclusions.json"
       ],
       "context_refs": [
         "docs/plans/2026-10-13-001-feat-multi-agent-team-plan.md#u12-add-workspace-knowledge-and-task-editing-views",
@@ -1800,7 +1812,7 @@ The following JSON is the single machine-readable task source. Human cards below
       "entry_hint": "Start with the first context anchor and the task's listed source/test owners.",
       "test_focus": "Canonical target and candidate diff browsing; traversal/symlink denial; policy credential exclusions; owner-only plan/requirements/solution browsing with inert Markdown.",
       "done_signal": "Route tests and browser receipts show only the registered target/candidates plus the explicitly allowed owner knowledge documents; embedded HTML/scripts remain inert and credential files are excluded.",
-      "wave": 15,
+      "wave": "15-T022",
       "parallelizable": false,
       "stop_if": "Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases. The owner has not approved the UI/TUI design proposal for this task.",
       "review_gate": "required",
@@ -3746,9 +3758,9 @@ The JSON contains the complete reading pointers, risk notes and review focus. Ea
 ### T022. Add scoped read-only Workspace and Knowledge views.
 
 - **Source / requirements:** `U12`; `R4`, `R5`, `R12`, `R16`, `R21`, `R22`, `AE4`, `AE13`, `KTD5`, `KTD17`, `PC5`.
-- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 15; T021.
-- **Files:** `engine/packages/daemon/src/routes/files.ts`; `engine/packages/daemon/src/routes/workspace.ts`; `engine/packages/daemon/test/workspace-scope.test.ts`; `engine/packages/ui/src/team/workspace/workspace-view.tsx`; `engine/packages/ui/src/team/knowledge/knowledge-view.tsx`; `engine/packages/ui/src/routes.tsx`.
-- **Expected side effects:** `tools/upstream-import.mjs`, limited to the task-owned `PIN.adapted` entries; serialize this shared owner.
+- **Target / wave / dependencies:** `ronronner02/multi-agent`; wave 15-T022; T021.
+- **Files:** `engine/packages/daemon/src/routes/files.ts`; `engine/packages/daemon/src/routes/workspace.ts`; `engine/packages/daemon/test/workspace-scope.test.ts`; `engine/packages/ui/src/team/workspace/workspace-view.tsx`; `engine/packages/ui/src/team/knowledge/knowledge-view.tsx`; `engine/packages/ui/src/routes.tsx`; `engine/packages/ui/src/team/shell.tsx`; `engine/packages/daemon/src/server.ts`; `engine/packages/daemon/src/domain/workflow-runtime.ts`; `engine/packages/daemon/src/domain/team-workspace.ts`; `engine/packages/daemon/src/domain/scope-extension.ts`; `engine/config/governance/credential-exclusions.json`.
+- **Expected side effects:** `tools/upstream-import.mjs`, limited to task-owned `PIN.adapted` entries and exact `LOCAL_ENGINE_PATHS` entries for the newly authorized files; serialize this shared owner.
 - **Test focus:** Canonical target and candidate diff browsing; traversal/symlink denial; policy credential exclusions; owner-only plan/requirements/solution browsing with inert Markdown.
 - **Done signal:** Route tests and browser receipts show only the registered target/candidates plus the explicitly allowed owner knowledge documents; embedded HTML/scripts remain inert and credential files are excluded.
 - **Stop if:** Stop if the source plan is no longer active, its canonical body hash differs, repository identity is unresolved, or implementation needs undeclared mutation paths. A worker can read orchestrator docs/source through the owner view, a browse route writes files, secrets are served, or roots are expanded through aliases. The owner has not approved the UI/TUI design proposal for this task.
