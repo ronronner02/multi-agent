@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { applyTaskEdit, readTaskEdit } from "./task-edit.js";
 import { LeadWakePolicy } from "./lead-wake-policy.js";
 import { RigRepository } from "./rig-repository.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -463,6 +464,29 @@ export class PlanGovernance {
         ctx.run.stateReason = "owner-paused";
       }
       return { status: "observed", value: { state: ctx.run.state, stateReason: ctx.run.stateReason }, observedBy: owner.sessionId };
+    });
+  }
+
+  taskForEdit(runId: string, taskId: string) {
+    const run = this.getRun(runId);
+    return { protocolVersion: TEAM_CONTROL_VERSION, runVersion: run.entityVersion, runState: run.state,
+      task: readTaskEdit(this.db, runId, taskId), scope: this.scopeForTask(runId, taskId) };
+  }
+
+  editTask(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("task.edited", raw, owner, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.state !== "approved") return deny("Run is closed to task edits");
+      const task = this.findTask(ctx.run.id, ctx.request.actionId);
+      if (!task) throw new Error("Task not found in this run");
+      const result = applyTaskEdit(this.db, this.queue, ctx.run, ctx.request.actionId, ctx.request.payload, ctx.now, () => this.eligibility(ctx));
+      if (result.status === "accepted" && result.value.classification === "plan-change-required") {
+        ctx.run.state = "invalidated";
+        ctx.run.stateReason = "plan-change-required";
+        this.invalidateUnused(ctx);
+      }
+      return { ...result, taskId: ctx.request.actionId, observedBy: owner.sessionId };
     });
   }
 
