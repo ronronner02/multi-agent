@@ -114,15 +114,25 @@ export function BottomPanel({ tab, onTab, read, available, target, onTarget }: {
   const { t } = useTranslation();
   const { terminalAvailable } = useOwnerSession();
   const [wide, setWide] = useState(() => window.innerWidth >= 768);
+  const panel = useRef<HTMLDivElement>(null), logsTab = useRef<HTMLButtonElement>(null);
   useEffect(() => { const resize = () => setWide(window.innerWidth >= 768); window.addEventListener("resize", resize); return () => window.removeEventListener("resize", resize); }, []);
-  useEffect(() => { if (!wide && target === "owner") onTarget(null); }, [wide, target, onTarget]);
+  useEffect(() => {
+    if (wide || target && target !== "owner") return;
+    if (target === "owner") onTarget(null);
+    if (tab === "terminal") {
+      const restoreFocus = document.activeElement === document.body || panel.current?.contains(document.activeElement);
+      onTab("logs");
+      if (restoreFocus) logsTab.current?.focus();
+    }
+  }, [wide, target, tab, onTarget, onTab]);
+  const visibleTab = !wide && (!target || target === "owner") && tab === "terminal" ? "logs" : tab;
   const attempts = read?.attempts.filter(item => item.runId === read.runId && item.state === "running" && item.session && item.session !== "owner") ?? [];
   const verified = target === "owner" ? wide : !!target && attempts.some(item => item.attemptId === target.attemptId && item.runId === target.runId && item.session === target.session);
-  return <Card className={"team-card team-evidence" + (tab === "terminal" ? " team-evidence-terminal" : "")} data-scroll-pane="evidence" role="region" aria-label={t("web.evidence")}>
+  return <Card ref={panel} className={"team-card team-evidence" + (visibleTab === "terminal" ? " team-evidence-terminal" : "")} data-scroll-pane="evidence" role="region" aria-label={t("web.evidence")}>
     <h2 className="sr-only">{t("web.evidence")}</h2>
-    <Tabs value={tab} onValueChange={onTab}><TabsList aria-label={t("web.evidence")}>
+    <Tabs value={visibleTab} onValueChange={onTab}><TabsList aria-label={t("web.evidence")}>
       <TabsTrigger value="terminal" disabled={!available || !terminalAvailable} className={!target || target === "owner" ? "team-owner-terminal" : undefined}>{t(target && target !== "owner" ? "team.terminal" : "web.terminal")}</TabsTrigger>
-      <TabsTrigger value="logs">{t("web.logs")}</TabsTrigger><TabsTrigger value="review">{t("web.reviewConversation")}</TabsTrigger>
+      <TabsTrigger ref={logsTab} value="logs">{t("web.logs")}</TabsTrigger><TabsTrigger value="review">{t("web.reviewConversation")}</TabsTrigger>
     </TabsList>
     <TabsContent value="terminal">
       <div className="team-terminal-controls"><Button variant="outline" className="team-owner-terminal" disabled={!wide || !available || !terminalAvailable} onClick={() => onTarget("owner")}>{t("web.terminal")}</Button>

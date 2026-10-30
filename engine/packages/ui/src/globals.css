@@ -714,7 +714,7 @@
 .team-shell input, .team-shell select { width: 100%; min-width: 0; }
 .team-shell label { display: grid; gap: 4px; color: var(--team-muted); min-width: 0; }
 .team-shell button:disabled { opacity: 1; color: var(--team-muted); border-style: dashed; cursor: not-allowed; }
-.team-shell :is(button, a, input, select, .team-monitoring):focus-visible { outline: 2px solid var(--team-focus); outline-offset: 3px; box-shadow: none; }
+.team-shell :is(button, a, input, select, [role="tabpanel"], .team-decision-dialog, .team-monitoring):focus-visible { outline: 2px solid var(--team-focus); outline-offset: 3px; box-shadow: none; }
 .team-shell a { color: var(--team-accent); text-decoration: none; }
 .team-shell button:hover:not(:disabled), .team-shell a:hover { background: var(--team-raised); color: var(--team-text); }
 .team-shell [aria-pressed="true"], .team-shell [role="tab"][data-state="active"], .team-shell [aria-current="page"] {

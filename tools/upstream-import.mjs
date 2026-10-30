@@ -226,6 +226,8 @@ const LOCAL_ENGINE_PATHS = [
   'packages/ui/test/team-decisions.test.tsx',
   'packages/ui/test/team-task-detail.test.tsx',
   'packages/ui/test/team-terminal.test.tsx',
+  'packages/ui/src/team/__tests__/responsive.test.tsx',
+  'packages/ui/src/team/__tests__/decisions.test.tsx',
 ];
 
 export class ImportError extends Error {
