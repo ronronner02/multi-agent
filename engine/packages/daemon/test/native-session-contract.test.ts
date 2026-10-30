@@ -538,6 +538,35 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     expect(f.control.start).not.toHaveBeenCalled();
   });
 
+  it("launches a manifest whose workerGroups lists the worker's own memberships", async () => {
+    // On a provisioned host the identity owner reports every group the worker belongs to, its
+    // primary gid included, and the manifest records that list because `locked()` reads it to
+    // decide which group class may see the projection. The preflight's `worker.groups` is a
+    // different fact — the *runtime* supplementary set, empty because the client starts under
+    // `setpriv --clear-groups` — so the two must never be compared as one. T038's live lane
+    // failed on exactly that comparison, so this pins the manifest shape that triggered it.
+    const f = fixture(client);
+    expect(f.context.workerGroups).toEqual([]);
+    // Rebuild the projection with the memberships the identity owner would supply, the same
+    // way `nextProjection` does, so the recorded hash covers them.
+    const { generatedHash, protocolVersion, workerDiscoveryRoots, ...input } = f.context;
+    const memberships = [f.context.projection.workerGid, process.getgid!()];
+    const root = join(input.projection.policy.paths.context_root, input.projection.worker, input.runId, "memberships");
+    const files = input.files.map(({ workerPath, ...file }) => ({ ...file, path: join(root, file.kind) }));
+    const context = projectContext({ ...input, workerGroups: memberships, projection: { ...input.projection, attemptId: "memberships" },
+      root, discoveryRoots: [root], files }, new Map(files.map((file, index) => [file.path, readFileSync(input.files[index]!.path)])));
+    expect(context.workerGroups).toEqual(memberships);
+    const observed = { discoveryRoots: [...context.workerDiscoveryRoots], files: context.files.map(({ workerPath, hash }) => ({ path: workerPath, hash })) };
+    f.p.assignment.context = context; f.p.assignment.observed = structuredClone(observed);
+    f.observation.context = structuredClone(observed);
+    f.observation.boundary.mounts.find(m => m.target === "/context")!.source = root;
+    // The control's observation names the attempt it observed, so it moves with the id.
+    f.observation.attemptId = "memberships";
+    const attempt = { ...f.attempt, attemptId: "memberships", context };
+    expect(await f.launcher.launch({ client, attempt })).toMatchObject({ ok: true });
+    expect(f.control.start).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses to reuse an old projection for a new attempt", async () => {
     const f = fixture(client), first = await f.launch();
     if (!first.ok || !first.managedSession) throw new Error("Fixture launch failed");

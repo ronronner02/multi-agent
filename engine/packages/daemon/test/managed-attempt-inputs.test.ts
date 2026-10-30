@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createConnection } from "node:net";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveTeamControlCredential } from "../src/middleware/auth-bearer-token.js";
@@ -25,7 +25,7 @@ import { createDaemon } from "../src/startup.js";
 // The privileged launcher is never invoked: production here is offline, and the endpoint it
 // would mount is proven by connecting to it.
 
-const host = vi.hoisted(() => ({ policy: "", passwd: "", group: "" }));
+const host = vi.hoisted(() => ({ policy: "", passwd: "", group: "", setgidChmods: [] as string[] }));
 vi.mock("node:fs", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
@@ -36,6 +36,12 @@ vi.mock("node:fs", async importOriginal => {
         : file === "/etc/passwd" ? host.passwd : file === "/etc/group" ? host.group : undefined;
       return fake === undefined ? actual.readFileSync(...args) : fake;
     },
+    // The producer imports `chmodSync` by name, so a spy installed at run time cannot see it;
+    // the module mock is the only seam. Records the setgid modes an ownership helper would use.
+    chmodSync: ((path: Parameters<typeof actual.chmodSync>[0], mode: Parameters<typeof actual.chmodSync>[1]) => {
+      if (mode === 0o2750 || mode === 0o2710) host.setgidChmods.push(String(path));
+      return actual.chmodSync(path, mode);
+    }) as typeof actual.chmodSync,
   };
 });
 
@@ -523,6 +529,81 @@ describe("the managed attempt's production inputs", () => {
     const produced = await runtime.produceManagedAttempt("run", produceInput());
     expect(produced.attempt.context.workerUid).toBe(first.uid);
     expect(produced.attempt.context.projection.workerGid).toBe(first.gid);
+    // The manifest's workerGroups is the full membership list, primary gid first, because
+    // that is what `locked()` reads to decide which group class may see the projection. It
+    // is deliberately not the empty supplementary set the launcher starts the client with
+    // (`setpriv --clear-groups`); a launch compares the two only where both are the runtime
+    // set. Pinned here because T038's live lane failed when the two were compared as one.
+    expect(produced.attempt.context.workerGroups).toEqual(first.groupIds);
+    expect(first.groupIds).toContain(first.gid);
+  }, 60_000);
+
+  it("creates the attempt and mailbox directories by mkdir alone, and never by a chmod on a setgid directory", async () => {
+    // The control identity is never a member of the worker's group, so `chmod(path, 0o2750)`
+    // by it clears S_ISGID and yields 0750 — which the producer's own ownership check then
+    // refuses. That is the shape that made every live produce fail (measured on the
+    // provisioned host: mkdir gives 2750, a following chmod gives 0750). What makes mkdir
+    // right is the anchor: provisioning installs it setgid with a default ACL, so a child
+    // inherits the worker's group and the requested mode under any umask.
+    //
+    // The chmod is observed rather than reproduced, because it cannot be: this runner is a
+    // member of the fixture anchor's group, so a chmod here is legal and lands the setgid bit
+    // back. Counting the calls is what distinguishes the two implementations under a runner
+    // for which the difference is invisible — on the real host the same call clears the bit.
+    host.setgidChmods.length = 0;
+    createTask();
+    const produced = await runtime.produceManagedAttempt("run", produceInput());
+    const root = produced.attempt.context.root, mailbox = mailboxDir();
+    // The directories exist with the anchor's group and mode, which is what the launcher checks.
+    for (const path of [root, mailbox, join(mailboxRoot, "ma-worker1", "run")]) {
+      const stat = lstatSync(path);
+      expect(stat.gid).toBe(workerGid);
+    }
+    expect(lstatSync(mailbox).mode & 0o7777).toBe(0o2710);
+    expect(lstatSync(join(mailboxRoot, "ma-worker1", "run")).mode & 0o7777).toBe(0o2710);
+    // Nothing in either chain is group- or other-writable.
+    expect(lstatSync(mailbox).mode & 0o022).toBe(0);
+    // The one asserted property: no directory in either chain is chmod'ed to a setgid mode.
+    // The projection's own seal (0550) and its files (0440) are separate, non-setgid modes.
+    expect(host.setgidChmods.filter(entry => entry.includes("/context/") || entry.includes("/mailboxes/")))
+      .toEqual([]);
+    await runtime.retireManagedAttempt("attempt-1");
+  }, 60_000);
+
+  it("resolves a worker-owned mutable state root without reading it as the control identity", async () => {
+    // The producer used to realpath every context root, including the worker's scratch. That
+    // directory is worker-owned 0700 beneath a worker-owned 0700 parent, so the control
+    // identity cannot traverse it and the realpath fails with EACCES on every provisioned
+    // host: the producer refused every attempt it was asked to produce.
+    //
+    // The denial is reproduced the only way an owner can be denied its own directory — by
+    // removing execute from the parent, which is what a worker-owned 0700 ancestor does to
+    // the control identity. The produce must still succeed, because the canonical form is
+    // required lexically here and the privileged launcher verifies the path physically.
+    const scratchParent = join(workerRoot, "ma-worker1", "state");
+    const scratch = join(scratchParent, "scratch");
+    mkdirSync(scratch, { recursive: true, mode: 0o700 });
+    chmodSync(scratchParent, 0o600);
+    // Root ignores the mode, so the denial cannot be shown there; the produce assertion below
+    // still holds, it just proves less.
+    const denied = process.getuid!() !== 0;
+    if (denied) expect(() => realpathSync(scratch)).toThrow(/EACCES/);
+    createTask();
+    const produced = await runtime.produceManagedAttempt("run",
+      produceInput({ context: { discoveryRoots: [], mutableStateRoot: scratch } }));
+    expect(produced.attempt.context.mutableStateRoot).toBe(scratch);
+    await runtime.retireManagedAttempt("attempt-1");
+    chmodSync(scratchParent, 0o700);
+  }, 60_000);
+
+  it("refuses a mutable state root that is not canonically written, without touching the filesystem", async () => {
+    // Lexical canonicality is what replaces the realpath for this one root, so it still has to
+    // be enforced: a relative path or one carrying `..` is refused before any directory work.
+    createTask();
+    for (const mutableStateRoot of ["relative/state", join(stateRoot, "..", "state") + "/"]) {
+      await expect(runtime.produceManagedAttempt("run", produceInput({ context: { discoveryRoots: [], mutableStateRoot } })))
+        .rejects.toThrow(/Non-canonical context root|not owned as the policy requires|Task not found/);
+    }
   }, 60_000);
 
   it("revokes the token when the attempt retires and on daemon-restart reconciliation", async () => {

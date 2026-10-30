@@ -1092,7 +1092,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     WHERE json_extract(payload, '$.action') = 'attempt.launch-intent' AND json_extract(payload, '$.attemptId') = ? ORDER BY seq DESC LIMIT 1`)
     .get(attemptId) as { ref: string }).ref;
 
-  const project = (attemptId: string) => {
+  const project = (attemptId: string, workerGroups: number[] = []) => {
     const base = join(policy.paths.context_root, "ma-worker1", "run", attemptId);
     const entries = [["framework", "pinned instructions"], ["plan", "approved plan\n"], ["role", JSON.stringify(roleConfiguration)], ...roleInstructionEntries("implementer")] as const;
     const files = entries.map(([kind, content]) => ({ path: join(base, kind), hash: hashBytes(content), kind, readOnly: true as const,
@@ -1103,7 +1103,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
         worker_identities: policy.worker_identities, paths: { context_root: policy.paths.context_root, framework_dir: policy.paths.framework_dir },
         sandbox: { context: "/context", framework: "/framework" } } },
       mutableStateRoot: join(policy.paths.worker_root, "ma-worker1", "home"), frameworkRoot: policy.paths.framework_dir,
-      frameworkRevision: FRAMEWORK_PIN.revision, workerUid, workerGroups: [], discoveryRoots: [base], files },
+      frameworkRevision: FRAMEWORK_PIN.revision, workerUid, workerGroups, discoveryRoots: [base], files },
     new Map(files.map((file, index) => [file.path, entries[index]![1]])));
   };
   let nativePolicyFor: Awaited<ReturnType<typeof buildManagedNativePolicy>>;
@@ -1292,6 +1292,26 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     snapshotChange = s => { s.mountInfo = s.mountInfo.split("\n").filter((line: string) => !line.includes(" /usr/lib/wsl ro ")).join("\n"); };
     expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
     expect(governance.getAttempt("attempt")?.state).toBe("stopped");
+  });
+
+  it("does not ask the control identity to resolve a worker-owned home or scratch", async () => {
+    // `home` and `scratch` are worker-owned 0700 beneath a worker-owned 0700 parent, so this
+    // process cannot traverse them: a realpath through them fails with EACCES on every
+    // provisioned host, before any client starts. Removing execute reproduces exactly that
+    // denial for an owner — note the path must be resolved *through* the directory, since
+    // resolving the directory itself needs only its parent's execute bit. The launch must
+    // still reach the privileged launcher, which verifies both paths itself
+    // (`openVerifiedDirectory`, O_NOFOLLOW).
+    const home = join(policy.paths.worker_root, "ma-worker1", "home");
+    const scratch = join(policy.paths.worker_root, "ma-worker1", "scratch");
+    chmodSync(home, 0o600); chmodSync(scratch, 0o600);
+    try {
+      if (process.getuid!() !== 0) {
+        expect(() => realpathSync(join(home, "marker"))).toThrow(/EACCES/);
+        expect(() => realpathSync(join(scratch, "marker"))).toThrow(/EACCES/);
+      }
+      expect(await launch()).toMatchObject({ ok: true });
+    } finally { chmodSync(home, 0o755); chmodSync(scratch, 0o755); }
   });
 
   it("resumes only from the exact receipt recorded for the stopped attempt", async () => {

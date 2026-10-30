@@ -61,12 +61,6 @@ export const PIN = Object.freeze({
     'packages/daemon/src/startup.ts',
     'packages/daemon/src/adapters/tmux.ts',
     'packages/daemon/src/domain/runtime-adapter.ts',
-    // T047 changed these three when it attached the produced managed attempt at the
-    // single startNode seam. The changes are deliberate, so they are declared rather
-    // than reported as unreviewed drift; the pin still byte-checks every one.
-    'packages/daemon/src/domain/startup-orchestrator.ts',
-    'packages/daemon/src/domain/restore-orchestrator.ts',
-    'packages/daemon/test/restore-orchestrator.test.ts',
     'packages/daemon/src/domain/chat-repository.ts',
     'packages/daemon/src/routes/chat.ts',
     'packages/daemon/src/adapters/claude-code-adapter.ts',
@@ -187,7 +181,8 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/test/worker-mailbox-bridge.test.ts',
   'packages/daemon/test/managed-native-policy.test.ts',
   'packages/daemon/test/worker-control-isolation.test.ts',
-  'packages/daemon/test/managed-attempt-attachment.test.ts',
+  'packages/daemon/test/worker-live-acceptance.test.ts',
+  'packages/daemon/test/fixtures/t038-live-daemon.mjs',
   'packages/daemon/test/native-session-contract.test.ts',
   'packages/daemon/test/native-channel-contract.test.ts',
   'packages/daemon/test/team-candidate-adoption.test.ts',
