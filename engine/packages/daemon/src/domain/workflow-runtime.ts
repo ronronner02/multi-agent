@@ -767,6 +767,13 @@ export class WorkflowRuntime {
     return workspace;
   }
 
+  /** Browsing observes existing records only; it never acquires or validates a workspace. */
+  existingCandidate(runId: string, taskId: string): Pick<CandidateWorkspace, "root" | "sourceRoot" | "base"> | null {
+    const key = `${runId}\u0000${taskId}`;
+    const candidate = this.invalidCandidates.has(key) ? undefined : this.candidates.get(key);
+    return candidate ? { root: candidate.root, sourceRoot: candidate.sourceRoot, base: candidate.base } : null;
+  }
+
   candidateIdentityFor(runId: string, taskId: string): CandidateIdentity {
     return candidateIdentity(candidateManifest(this.candidateFor(runId, taskId)));
   }

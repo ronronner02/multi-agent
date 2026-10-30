@@ -19,6 +19,12 @@
 // routes; no separate /api/workspace/whoami.
 
 import { Hono } from "hono";
+import { TEAM_CONTROL_VERSION, parseProtocolVersion } from "../contracts/team-control.js";
+import type { PlanGovernance } from "../domain/plan-governance.js";
+import type { WorkflowRuntime } from "../domain/workflow-runtime.js";
+import { credentialExcluded } from "../domain/scope-extension.js";
+import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
+import { readManagedWorkspace } from "./files.js";
 import * as path from "node:path";
 import {
   validateWorkspaceFrontmatter,
@@ -159,5 +165,55 @@ export function workspaceRoutes(): Hono {
     }
   });
 
+  return app;
+}
+
+
+export function workspaceBrowseRoutes(governance: PlanGovernance, options: {
+  credentials: TeamControlCredentials; legacyTokens: readonly (string | null | undefined)[];
+  runtime?: WorkflowRuntime; orchestratorRoot: string;
+}): Hono<TeamControlEnv> {
+  const app = new Hono<TeamControlEnv>();
+  for (const view of ["workspace", "knowledge"] as const) {
+    const route = `/runs/:runId/${view}`;
+    app.use(route, teamControlAuthentication(() => options.credentials, options.legacyTokens));
+    app.get(route, c => {
+      if (c.get("controlActor").kind !== "owner" || (c.get("controlRunId") !== null && c.get("controlRunId") !== c.req.param("runId"))) {
+        return c.json({ code: "owner_control_required" }, 403);
+      }
+      try {
+        parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+        const run = governance.getRun(c.req.param("runId")!);
+        const query = c.req.query(), relativePath = query.path ?? "";
+        if (Object.keys(query).some(key => !(view === "workspace" ? ["path", "taskId"] : ["path", "root"]).includes(key))) throw new Error();
+        let root = run.binding.repository.root;
+        let candidate: ReturnType<WorkflowRuntime["existingCandidate"]> = null;
+        let excluded = credentialExcluded;
+        if (view === "workspace" && query.taskId) {
+          candidate = options.runtime?.existingCandidate(run.id, query.taskId) ?? null;
+          if (!candidate || candidate.sourceRoot !== root) throw new Error();
+          root = candidate.root;
+        }
+        if (view === "knowledge") {
+          if (query.root && !["target", "orchestrator"].includes(query.root)) throw new Error();
+          if (query.root === "orchestrator") root = options.orchestratorRoot;
+          const prefixes = ["docs/plans", "docs/requirements", "docs/solutions"];
+          const plan = query.root === "orchestrator" ? "" : run.binding.planRef;
+          excluded = name => credentialExcluded(name) || !(name === "" || (plan && (name === plan || plan.startsWith(name + "/")))
+            || prefixes.some(prefix => prefix === name || prefix.startsWith(name + "/") || (name.startsWith(prefix + "/") && (!path.extname(name) || /\.(?:md|mdown|markdown)$/i.test(name)))));
+        }
+        const read = readManagedWorkspace(root, relativePath, candidate ?? undefined, excluded);
+        if (view === "knowledge" && read.kind === "file" && !/\.(?:md|mdown|markdown)$/i.test(relativePath)) throw new Error();
+        if (view === "knowledge" && read.kind === "directory") {
+          read.entries = read.entries.filter(entry => entry.kind === "directory" || /\.(?:md|mdown|markdown)$/i.test(entry.name));
+        }
+        c.header("Cache-Control", "no-store");
+        c.header("X-Content-Type-Options", "nosniff");
+        return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...read });
+      } catch {
+        return c.json({ protocolVersion: TEAM_CONTROL_VERSION, code: "workspace_not_available", error: "Not available" }, 404);
+      }
+    });
+  }
   return app;
 }

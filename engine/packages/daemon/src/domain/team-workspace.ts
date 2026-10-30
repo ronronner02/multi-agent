@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, chmodSync, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, chmodSync, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, opendirSync, readFileSync, readdirSync, readSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { constants as fsConstants } from "node:fs";
 
 /** `O_NOFOLLOW` refuses a symlink at the leaf instead of reading through it. */
@@ -410,6 +410,90 @@ function openDirectory(parentDescriptor: number, name: string, path: string): nu
     }
     throw new Error(`Candidate directory is unreadable: ${path} (${code ?? (error as Error).message})`);
   }
+}
+
+export type WorkspaceRead =
+  | { kind: "missing" }
+  | { kind: "directory"; entries: Array<{ name: string; kind: "directory" | "file" }> }
+  | { kind: "file"; content: string; hash: string };
+
+/** Read objects from the owner's recorded commit, never from the worker's Git metadata. */
+export function readCommittedWorkspacePath(sourceRoot: string, commit: string, path: string): WorkspaceRead {
+  const readGit = (args: string[]) => execFileSync("git", ["-C", sourceRoot, "--no-replace-objects",
+    "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", ...args], {
+    stdio: ["ignore", "pipe", "pipe"], timeout: 5000, maxBuffer: 262145,
+    env: controlGitEnv({ GIT_NO_LAZY_FETCH: "1" }),
+  });
+  const entries = (tree: string) => {
+    const rows = strictUtf8(readGit(["ls-tree", "-z", tree]), "Commit tree").split("\0").filter(Boolean);
+    if (rows.length > 1000) throw new Error("Workspace directory exceeds browse limit");
+    return rows.map(row => {
+      const match = /^(\d+) (tree|blob|commit) ([a-f0-9]+)\t([\s\S]*)$/.exec(row);
+      if (!match) throw new Error("Commit entry not available");
+      return { mode: match[1]!, type: match[2]!, object: match[3]!, name: match[4]! };
+    });
+  };
+  let object = commit, type = "tree";
+  for (const part of path ? path.split("/") : []) {
+    if (type !== "tree") return { kind: "missing" };
+    const entry = entries(object).find(entry => entry.name === part);
+    if (!entry) return { kind: "missing" };
+    object = entry.object; type = entry.type;
+  }
+  if (type === "tree") return { kind: "directory", entries: entries(object)
+    .filter(entry => entry.type === "tree" || entry.mode === "100644" || entry.mode === "100755")
+    .map(entry => ({ name: entry.name, kind: entry.type === "tree" ? "directory" : "file" })) };
+  if (type !== "blob") return { kind: "missing" };
+  const bytes = readGit(["cat-file", "blob", object]);
+  if (bytes.length > 262144 || bytes.includes(0)) throw new Error("Workspace baseline not available as text");
+  return { kind: "file", content: strictUtf8(bytes, "Commit blob"), hash: sha256(bytes) };
+}
+
+/** Bounded reads through pinned directories: no Git, temporary stores, or scope callbacks. */
+export function readWorkspacePath(root: string, path: string, excluded: (path: string) => boolean): WorkspaceRead {
+  const parts = path === "" ? [] : path.split("/");
+  if (!isAbsolute(root) || path.length > 4096 || parts.length > 64
+    || parts.some(part => !part || part === "." || part === ".." || /[\\\x00-\x1f]/.test(part)) || excluded(path)) {
+    throw new Error("Workspace path not available");
+  }
+  // Pin the root's ancestors too: replacing an assignment directory must not redirect a read.
+  let descriptor = openDirectory(-1, "", sep);
+  try {
+    for (const part of resolve(root).split(sep).filter(Boolean)) {
+      const next = openDirectory(descriptor, part, root);
+      closeSync(descriptor);
+      descriptor = next;
+    }
+    for (const part of parts) {
+      const next = openSync(`/proc/self/fd/${descriptor}/${part}`, OPEN_READ | O_NOFOLLOW | O_NONBLOCK);
+      closeSync(descriptor);
+      descriptor = next;
+    }
+    const stat = fstatSync(descriptor);
+    if (stat.isDirectory()) {
+      const entries: Array<{ name: string; kind: "directory" | "file" }> = [];
+      const directory = opendirSync(`/proc/self/fd/${descriptor}`);
+      try {
+        let count = 0;
+        for (let entry = directory.readSync(); entry; entry = directory.readSync()) {
+          if (++count > 1000) throw new Error("Workspace directory exceeds browse limit");
+          if (!/[\\\x00-\x1f]/.test(entry.name) && !excluded(path ? `${path}/${entry.name}` : entry.name) && (entry.isDirectory() || entry.isFile())) {
+            entries.push({ name: entry.name, kind: entry.isDirectory() ? "directory" : "file" });
+          }
+        }
+      } finally { directory.closeSync(); }
+      return { kind: "directory", entries: entries.sort((a, b) => a.name.localeCompare(b.name)) };
+    }
+    if (!stat.isFile() || stat.size > 262144) throw new Error("Workspace file exceeds browse limit");
+    const bytes = Buffer.alloc(262145);
+    let size = 0, count: number;
+    while (size < bytes.length && (count = readSync(descriptor, bytes, size, bytes.length - size, null)) > 0) size += count;
+    if (size > 262144 || bytes.subarray(0, size).includes(0)) throw new Error("Workspace file not available as text");
+    return { kind: "file", content: new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, size)), hash: sha256(bytes.subarray(0, size)) };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+    throw error;
+  } finally { closeSync(descriptor); }
 }
 
 /**

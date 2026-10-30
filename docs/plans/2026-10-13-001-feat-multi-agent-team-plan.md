@@ -915,6 +915,8 @@ The owner approved one scoped amendment after the current source exposed missing
 
 ### U12. Add workspace, knowledge and task-editing views
 
+- **Owner amendment (2026-10-30, T022):** `engine/config/governance/credential-exclusions.json`, seeded exactly from the credential patterns in `scope-extension.ts`, is "the sandbox credential-exclusion patterns" referenced by KTD25 and the U12 test scenarios; scope checks and read-only browsing consume this same list.
+
 - **Goal:** Let the owner browse the target repository and plans read-only and edit tasks within plan authority.
 - **Requirements:** R4, R5, R12, R16, R21, R22; AE4, AE13; KTD5, KTD17; PC5.
 - **Dependencies:** U3, U5, U11.

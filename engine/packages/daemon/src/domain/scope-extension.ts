@@ -14,6 +14,11 @@ export interface CandidateScopeEvidence {
 const hash = (value: unknown) => "sha256:" + createHash("sha256").update(canonicalJson(value)).digest("hex");
 const canonical = (root: string, path: string) => relative(realpathSync(root), candidatePath(root, path, true)).replaceAll("\\", "/");
 const covers = (path: string, paths: readonly string[]) => paths.some(owned => path === owned || path.startsWith(owned + "/"));
+const credentialPatterns: RegExp[] = JSON.parse(readFileSync(
+  new URL("../../../../config/governance/credential-exclusions.json", import.meta.url), "utf8",
+)).patterns.map((pattern: string) => new RegExp(pattern));
+export const credentialExcluded = (path: string): boolean => credentialPatterns.some(pattern => pattern.test(path));
+
 const protectedPath = (path: string) =>
   /^(docs\/(?:plans|tasks)|engine\/config\/(?:isolation|governance))(\/|$)/.test(path)
   || /(^|\/)(contracts|migrations|\.github|\.circleci|\.buildkite|\.husky)(\/|$)/.test(path)
@@ -21,7 +26,7 @@ const protectedPath = (path: string) =>
   || /(^|\/)(?:Cargo\.(?:toml|lock)|pyproject\.toml|(?:poetry|uv)\.lock|requirements[^/]*\.txt|go\.(?:mod|sum)|Gemfile(?:\.lock)?|composer\.(?:json|lock)|pom\.xml|build\.gradle(?:\.kts)?|pnpm-workspace\.ya?ml|\.yarnrc\.ya?ml)$/.test(path)
   || /(^|\/)(?:Jenkinsfile|(?:\.gitlab-ci|azure-pipelines|\.travis|\.?appveyor|bitbucket-pipelines|\.?drone|cloudbuild)\.ya?ml)$/.test(path)
   || /^engine\/packages\/daemon\/src\/(?:index\.ts|startup\.ts|server\.ts|domain\/(?:plan-governance|queue-repository|workflow-runtime|scope-extension)\.ts|adapters\/(?:tmux\.ts|worker-launch[^/]*\.ts)|middleware\/|routes\/team-control\.ts)/.test(path)
-  || /(^|\/)(?:\.git|\.ssh|\.aws|\.codex|\.claude|\.env[^/]*|\.npmrc|\.netrc|credentials[^/]*)(\/|$)|\.(?:pem|key)$/.test(path);
+  || credentialExcluded(path);
 
 export class ScopeExtensionError extends Error {
   constructor(readonly code: "extension-pending" | "plan-change-required", readonly rule: string, readonly extension?: ScopeExtension) {

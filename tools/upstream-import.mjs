@@ -40,6 +40,8 @@ export const PIN = Object.freeze({
   // private tmux server lifetime and child chdir/exec timing before assertions;
   // T041's startup assertion pins the worker launcher argument it now passes.
   adapted: [
+    'packages/daemon/src/routes/files.ts',
+    'packages/daemon/src/routes/workspace.ts',
     'package-lock.json', 'package.json', 'packages/cli/package.json', 'packages/daemon/package.json',
     'packages/cli/src/commands/release.ts',
     'packages/cli/test/lifecycle.test.ts',
@@ -116,6 +118,10 @@ const DEST = path.join(repoRoot, 'engine');
 const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'multi-agent', `openrig-${PIN.commit}.tar.gz`);
 // Application-owned files are exact entries; only a trailing slash grants a directory subtree.
 const LOCAL_ENGINE_PATHS = [
+  'config/governance/credential-exclusions.json',
+  'packages/daemon/test/workspace-scope.test.ts',
+  'packages/ui/src/team/workspace/workspace-view.tsx',
+  'packages/ui/src/team/knowledge/knowledge-view.tsx',
   'config/governance/low-risk-dev-dependencies.json',
   'packages/daemon/src/domain/scope-extension.ts',
   'packages/daemon/src/db/migrations/105_scope_extensions.ts',
