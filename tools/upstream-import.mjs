@@ -183,6 +183,8 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/test/worker-mailbox-bridge.test.ts',
   'packages/daemon/test/managed-native-policy.test.ts',
   'packages/daemon/test/worker-control-isolation.test.ts',
+  'packages/daemon/test/worker-live-acceptance.test.ts',
+  'packages/daemon/test/fixtures/t038-live-daemon.mjs',
   'packages/daemon/test/managed-attempt-attachment.test.ts',
   'packages/daemon/test/native-session-contract.test.ts',
   'packages/daemon/test/native-channel-contract.test.ts',

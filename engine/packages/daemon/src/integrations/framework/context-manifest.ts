@@ -205,7 +205,17 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
   if (spec.root !== projectionRoot(spec) || spec.frameworkRoot !== spec.projection.policy.paths.framework_dir) throw new Error("Context projection path mismatch");
   if (!spec.binding.roles.includes(spec.role) || spec.assignment.role !== spec.role || !["claude-code", "codex"].includes(spec.client) || spec.frameworkRevision !== FRAMEWORK_PIN.revision) throw new Error("Context role, client or framework mismatch");
   if (!Number.isSafeInteger(spec.workerUid) || spec.workerUid <= 0 || !spec.workerGroups.every(g => Number.isSafeInteger(g) && g >= 0)) throw new Error("Invalid worker identity");
-  for (const p of [spec.root, spec.mutableStateRoot, spec.frameworkRoot, ...spec.discoveryRoots]) if (!isAbsolute(p) || realpathSync(p) !== p) throw new Error("Non-canonical context root");
+  // Every path here but the mutable state root is control-owned, so the control identity can
+  // resolve it and a real path is required.
+  for (const p of [spec.root, spec.frameworkRoot, ...spec.discoveryRoots]) if (!isAbsolute(p) || realpathSync(p) !== p) throw new Error("Non-canonical context root");
+  // The mutable state root is the worker's own scratch: worker-owned and 0700, so the control
+  // identity cannot traverse it and a realpath here fails with EACCES on every real host — the
+  // producer would refuse every attempt it is asked to produce. Its canonical form is required
+  // lexically instead, and the privileged launcher verifies it physically: it opens the
+  // directory O_NOFOLLOW and requires the descriptor's own path to be the expected one beneath
+  // the worker directory (worker-launch.mjs `openVerifiedDirectory`), which is the identity that
+  // can actually see the path.
+  if (!isAbsolute(spec.mutableStateRoot) || resolve(spec.mutableStateRoot) !== spec.mutableStateRoot) throw new Error("Non-canonical context root");
   privateProjection(spec);
   locked(spec.root, spec); locked(spec.frameworkRoot, spec);
   for (const root of spec.discoveryRoots) workerContextPath(spec.projection.policy, spec.root, root);

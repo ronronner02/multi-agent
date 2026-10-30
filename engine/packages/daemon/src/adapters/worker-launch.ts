@@ -359,15 +359,33 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
         ? await this.admission.prepareAssignment({ ...preflight.assignment, context: attempt.context })
         : await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
       requireFact(prepared.context.generatedHash === attempt.context.generatedHash, "managed_context_mismatch");
+      // Identity here is uid and gid, both from the launcher's own inspection; `checkContextProjection`
+      // holds the projection's worker gid to the same value. The manifest's `workerGroups` is deliberately
+      // not compared: it lists every group the worker belongs to, primary gid included, because the
+      // manifest uses it to decide which group class may read the projection. `preflight.worker.groups`
+      // is the *runtime* supplementary set and is empty on purpose — the launcher starts the client under
+      // `setpriv --clear-groups` (worker-launch-control.ts). Comparing the two asks a group-membership
+      // question of a supplementary-group answer, so it can never hold: the primary gid is always in one
+      // and never in the other. `verifyObservation` below is where the runtime set is checked, against
+      // the sandbox's own observed groups.
       requireFact(preflight.worker.uid !== preflight.control.uid && preflight.worker.uid > 0
-        && preflight.worker.uid === attempt.context.workerUid && same(groups(preflight.worker.groups), groups(attempt.context.workerGroups)),
+        && preflight.worker.uid === attempt.context.workerUid,
       "managed_worker_identity_mismatch");
       requireFact(policy.worker_identities.includes(preflight.worker.name), "managed_worker_identity_mismatch");
       requireFact(preflight.policyFingerprint === attempt.context.binding.policyFingerprint
         && preflight.policyRevision === attempt.context.binding.policyRevision && preflight.policyRevision === policy.policy_revision, "managed_policy_mismatch");
-      for (const root of [preflight.worker.home, preflight.worker.scratch, preflight.worker.tree]) {
-        requireFact(realpathSync(root) === root, "managed_worker_root_invalid");
-      }
+      // The tree is the one fact here the control can still resolve: it is control-staged and
+      // worker-owned through the control group (assignment_root/<worker> is 2770 with a control ACL),
+      // and it is the tree admission handed this attempt. `home` and `scratch` are not resolvable by
+      // this identity at all — both are worker-owned 0700 beneath a worker-owned 0700 parent — so a
+      // realpath here fails with EACCES on every provisioned host rather than proving anything.
+      //
+      // Their canonical form and their identity are the privileged launcher's to verify, and it does
+      // both: `openVerifiedDirectory` opens each O_NOFOLLOW and requires the descriptor's own path to
+      // be the expected one beneath the worker directory (worker-launch.mjs), and `resolveLaunchRequest`
+      // derives home and scratch from `paths.worker_root` rather than accepting them from this side.
+      // Re-resolving them here would only re-ask a question this identity cannot answer.
+      requireFact(realpathSync(preflight.worker.tree) === preflight.worker.tree, "managed_worker_root_invalid");
       requireFact(preflight.executable === policy.paths.toolchain_dir + "/clients/bin/" + (client === "codex" ? "codex" : "claude")
         && preflight.executableVersion.trim(), "managed_executable_unsupported");
       this.checkClientLock(client, preflight);

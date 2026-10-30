@@ -344,22 +344,27 @@ export function resolveLaunchRequest(policy, request, facts) {
       // socket has to be traversable by the owning worker while staying unlistable, and a foreign
       // worker must still be refused. Two shapes are accepted per level: strictly control-private
       // 0700, or control-owned with the worker's own group at 0710/0730. Each worker has a distinct
-      // group, so the second shape is per-worker and never reaches a sibling's mailbox. The control
-      // root stays 0700 and is reached only when the mailbox sits directly beneath it.
+      // group, so the second shape is per-worker and never reaches a sibling's mailbox.
+      //
+      // MEASURED, and the reason this loop is worth reading before trusting it: bwrap reopens the
+      // handed descriptor's PATH as the worker, so a level the worker cannot search fails the mount
+      // with `bwrap: Can't find source path /proc/self/fd/N: Permission denied`. This validator
+      // checks worker traversal at the DEEPEST level only, and stops at `control_state_dir`, so a
+      // 0700 ancestor above a valid chain passes here and then fails inside bwrap. Provisioning
+      // therefore installs `control_state_dir` at 0711 (search without listing) and gives each
+      // per-worker mailbox anchor an explicit `g::--x` ACL; a host at the old 0700 shape fails every
+      // managed launch. Widening this validator is deliberately left to its owner: the deepest-level
+      // rule is pinned by `worker-isolation-preflight.test.mjs`.
       for (let p = posix.dirname(socketPath); ; p = posix.dirname(p)) {
         const st = facts.lstat(p);
         // What keeps one worker out of another's mailbox is that no identity but the owner may read
         // or write a level; 0700, 0710 and 0711 all satisfy that, while 0755, 0754 and 0770 do not.
-        // Traversal is required of the deepest level only, because that is the one the worker must
-        // cross to reach its own socket; the levels above it are crossed by the launcher, which runs
-        // privileged. A private root above a traversable chain is therefore accepted.
         const readableOrWritable = (st.mode & 0o066) !== 0;
         if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== control.uid || readableOrWritable) {
           throw new Error('non-private endpoint ancestry');
         }
-        // The deepest level must be traversable by *this* worker, which `setpriv --clear-groups`
-        // leaves with its own ids only. A group-execute bit for some other group, or an owner bit
-        // held by the control identity, is not access; the worker's effective class decides.
+        // Checked at the deepest level only. Every level above it is equally crossed by bwrap as the
+        // worker (see above), so this check is necessary but not sufficient on its own.
         if (p === posix.dirname(socketPath) && (effectiveBits(st, worker) & 0o1) === 0) {
           throw new Error('unreachable endpoint ancestry');
         }

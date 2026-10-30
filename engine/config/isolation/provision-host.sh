@@ -155,7 +155,12 @@ for w in "${WORKERS[@]}"; do ensure_user "$w" "$STATE_ROOT/workers/$w/home"; don
 
 log "laying out state directories"
 install -d -o root -g root -m 0755 "$STATE_ROOT"
-install -d -o "$CONTROL" -g "$CONTROL" -m 0700 "$STATE_ROOT/control"
+# Traverse-only, like the mailbox root beneath it: bwrap reopens every level of an endpoint's
+# ancestry *as the worker*, so the worker must be able to search this directory even though it
+# must not be able to list or read it. 0711 grants exactly that — search without listing — and
+# keeps the tree unreadable to every worker. At 0700 the launch fails with "Can't find source
+# path /proc/self/fd/9: Permission denied" (measured on the provisioned host).
+install -d -o "$CONTROL" -g "$CONTROL" -m 0711 "$STATE_ROOT/control"
 MAILBOX_ROOT="$("$NODE" -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$SRC_DIR/worker-policy.json','utf8')).paths.mailbox_root)")"
 [ "$MAILBOX_ROOT" = "$STATE_ROOT/control/mailboxes" ] && [ ! -L "$MAILBOX_ROOT" ] || die "mailbox root must be the fixed private control directory"
 # Traverse-only: the launcher hands each endpoint to bubblewrap as the worker, so the chain to a
@@ -177,7 +182,22 @@ for w in "${WORKERS[@]}"; do
   # The per-worker mailbox anchor: setgid for the worker, so every attempt directory created
   # beneath it carries the worker's group and the endpoint is worker-group 0660 — the only shape
   # the launcher accepts — while the control identity, as owner, keeps full access.
-  install -d -o "$CONTROL" -g "$w" -m 2710 "$MAILBOX_ROOT/$w"
+  #
+  # The ACL is written out rather than left to the mode, for the same reason the context anchor
+  # above writes its own: `install -d` inherits the parent's default ACL, and the mailbox root's
+  # default is `d:g::---`. Without this, `group::---` masks the mode's group-execute, so the
+  # worker cannot search the anchor even though its mode says 0710 — and bwrap reopens every
+  # level of the endpoint's path *as the worker*, so the launch fails with "Can't find source
+  # path /proc/self/fd/9: Permission denied". Group search and no read, exactly as the mode says.
+  #
+  # Order matters: the ACL is written first and the mode last. `setfacl` recomputes the mode from
+  # the ACL's mask, which drops the setgid bit the producer requires — so the mode is re-applied
+  # after the ACL, the same way the context anchor above does it.
+  install -d -o "$CONTROL" -g "$w" "$MAILBOX_ROOT/$w"
+  setfacl -b -k "$MAILBOX_ROOT/$w"
+  setfacl -m "u::rwx,g::--x,m::--x,o::---" "$MAILBOX_ROOT/$w"
+  setfacl -m "d:u::rwx,d:g::--x,d:m::--x,d:o::---" "$MAILBOX_ROOT/$w"
+  chmod 2710 "$MAILBOX_ROOT/$w"
   # Control stages trees here; the worker owns and edits them.
   install -d -o "$w" -g "$CONTROL" -m 2770 "$STATE_ROOT/assignments/$w"
   setfacl -m "u:$w:rwx,g:$CONTROL:rwx" -m "d:u:$w:rwx,d:g:$CONTROL:rwx,d:o::---" "$STATE_ROOT/assignments/$w"

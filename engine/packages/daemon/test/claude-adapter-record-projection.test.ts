@@ -38,7 +38,11 @@ function mockFs(files?: Record<string, string>): ClaudeAdapterFsOps & { _store: 
     },
     exists: (p: string) => p in store,
     mkdirp: () => {},
-    copyFile: () => {},
+    copyFile: (from: string, to: string) => {
+      // A real copy lands bytes at the destination; the store records that so a test can see
+      // which files a provisioning step wrote into the working tree.
+      store[to] = store[from] ?? "";
+    },
     listFiles: (dir: string) => Object.keys(store).filter((k) => k.startsWith(dir + "/")).map((k) => k.slice(dir.length + 1)),
     _store: store,
   } as ClaudeAdapterFsOps & { _store: Record<string, string> };
@@ -112,5 +116,48 @@ describe("P20 record-at-apply — the adapter records the manifest on skill_inst
     );
 
     expect(recorded).toHaveLength(0);
+  });
+});
+
+describe("a managed seat's working tree stays free of legacy native config", () => {
+  // A managed attempt's working tree is the candidate, mounted rw at /work. `.claude/settings.local.json`
+  // there would be a worker-writable native config source beside the fixed managed-settings mount —
+  // the shadowing the card's stop names — and `.openrig/context-collector.cjs` is legacy-only. The
+  // managed channel is delivered through managed-settings.json with `allowManagedHooksOnly: true`
+  // (context-manifest.ts), so neither file is needed. These two cases pin both entry points that
+  // used to write them: `project()` (activity-hook reconciliation) and `deliverStartup()`.
+  const managedBinding = (cwd = "/candidate") => ({ ...makeBinding(cwd), managedAttempt: { attemptId: "attempt" } }) as NodeBinding;
+  const provisioned = (store: Record<string, string>) =>
+    Object.keys(store).filter(path => path.includes("/.claude/") || path.includes("/.openrig/"));
+  const collectorAdapter = (fs: ReturnType<typeof mockFs>) => new ClaudeCodeAdapter({ tmux: mockTmux(), fsOps: fs,
+    stateDir: "/state", collectorAssetPath: "/assets/claude-statusline-context.cjs",
+    activityRelayPath: "/assets/activity-relay.cjs", claudeHooksManifestPath: "/assets/claude.json" });
+
+  it("writes no settings or collector file when the binding carries a managed attempt", async () => {
+    const fs = mockFs({ "/assets/claude-statusline-context.cjs": "collector", "/assets/activity-relay.cjs": "relay",
+      "/assets/claude.json": JSON.stringify({ hooks: { PostToolUse: [{ matcher: "*" }] } }) });
+    const adapter = collectorAdapter(fs);
+    const plan = { runtime: "claude-code", cwd: "/candidate", entries: [{ category: "runtime_resource",
+      resourceType: "claude_activity_hooks", effectiveId: "activity", classification: "runtime" }],
+      startup: { files: [], actions: [] }, conflicts: [], noOps: [] } as never;
+
+    await adapter.project(plan, managedBinding());
+    await adapter.deliverStartup([], managedBinding());
+
+    expect(provisioned(fs._store)).toEqual([]);
+  });
+
+  it("still writes them for a personal seat, so the skip is scoped to managed attempts", async () => {
+    const fs = mockFs({ "/assets/claude-statusline-context.cjs": "collector", "/assets/activity-relay.cjs": "relay",
+      "/assets/claude.json": JSON.stringify({ hooks: { PostToolUse: [{ matcher: "*" }] } }) });
+    const adapter = collectorAdapter(fs);
+
+    await adapter.deliverStartup([], makeBinding("/project"));
+
+    // The collector's two artifacts, which is what a personal seat still gets.
+    expect(provisioned(fs._store).sort()).toEqual([
+      "/project/.claude/settings.local.json",
+      "/project/.openrig/context-collector.cjs",
+    ]);
   });
 });

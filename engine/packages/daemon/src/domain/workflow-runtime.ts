@@ -486,9 +486,25 @@ function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: n
   }
   if (!within(anchor, path) || path === anchor) throw new Error("Managed attempt directory is outside the policy root");
   mkdirSync(path, { recursive: true, mode });
-  // Under a setgid parent the child already carries the parent's group; the explicit
-  // chmod keeps the mode exact without touching that group.
-  for (let p = path; p !== anchor; p = dirname(p)) chmodSync(p, mode);
+  // Nothing is chmod'ed here, and that is the whole point of this function.
+  //
+  // The control identity is never a member of the worker's group, so it cannot *set* the
+  // setgid bit: the kernel clears S_ISGID on chmod by a caller outside the file's group.
+  // Measured on the provisioned host as ma-control, beneath the 2750 control:ma-worker1
+  // anchor: mkdirSync(path, {mode: 0o2750}) yields 2750 control:ma-worker1, and a following
+  // chmodSync(path, 0o2750) yields 0750 — which the check below then refuses.
+  //
+  // What makes mkdir right is the anchor, and provisioning is what guarantees it: the
+  // context anchor is installed setgid with a default ACL of `d:u::rwx,d:g::r-x,d:m::r-x,
+  // d:o::---` (provision-host.sh), so a child inherits the worker's group and the requested
+  // mode under any umask; the mailbox anchor is installed setgid for the same reason. A
+  // directory this call cannot create that way is refused below rather than repaired.
+  for (let p = path; p !== anchor; p = dirname(p)) {
+    const observed = statSync(p);
+    if (observed.uid !== process.getuid!() || observed.gid !== gid || (observed.mode & 0o7777) !== mode) {
+      throw new Error("Managed attempt directory is not owned as the policy requires");
+    }
+  }
   const stat = statSync(path);
   // A directory that is not what was asked for is refused rather than repaired:
   // repairing it would be this code deciding what another owner's data should look like.
