@@ -158,7 +158,9 @@ install -d -o root -g root -m 0755 "$STATE_ROOT"
 install -d -o "$CONTROL" -g "$CONTROL" -m 0700 "$STATE_ROOT/control"
 MAILBOX_ROOT="$("$NODE" -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$SRC_DIR/worker-policy.json','utf8')).paths.mailbox_root)")"
 [ "$MAILBOX_ROOT" = "$STATE_ROOT/control/mailboxes" ] && [ ! -L "$MAILBOX_ROOT" ] || die "mailbox root must be the fixed private control directory"
-install -d -o "$CONTROL" -g "$CONTROL" -m 0700 "$MAILBOX_ROOT"
+# Traverse-only: the launcher hands each endpoint to bubblewrap as the worker, so the chain to a
+# mailbox must be searchable by that worker while nothing in this tree is listable or readable.
+install -d -o "$CONTROL" -g "$CONTROL" -m 0711 "$MAILBOX_ROOT"
 install -d -o root -g root -m 0711 "$STATE_ROOT/workers" "$STATE_ROOT/assignments"
 CONTEXT_ROOT="$("$NODE" -e "process.stdout.write(JSON.parse(require('fs').readFileSync('$SRC_DIR/worker-policy.json','utf8')).paths.context_root)")"
 [ ! -L "$CONTEXT_ROOT" ] || die "context root must not be a symlink"
@@ -172,6 +174,10 @@ for w in "${WORKERS[@]}"; do
   setfacl -m "u::rwx,g::r-x,m::r-x,o::---" "$CONTEXT_ROOT/$w"
   setfacl -m "d:u::rwx,d:g::r-x,d:m::r-x,d:o::---" "$CONTEXT_ROOT/$w"
   install -d -o "$w" -g "$w" -m 0700 "$STATE_ROOT/workers/$w" "$STATE_ROOT/workers/$w/home" "$STATE_ROOT/workers/$w/scratch"
+  # The per-worker mailbox anchor: setgid for the worker, so every attempt directory created
+  # beneath it carries the worker's group and the endpoint is worker-group 0660 — the only shape
+  # the launcher accepts — while the control identity, as owner, keeps full access.
+  install -d -o "$CONTROL" -g "$w" -m 2710 "$MAILBOX_ROOT/$w"
   # Control stages trees here; the worker owns and edits them.
   install -d -o "$w" -g "$CONTROL" -m 2770 "$STATE_ROOT/assignments/$w"
   setfacl -m "u:$w:rwx,g:$CONTROL:rwx" -m "d:u:$w:rwx,d:g:$CONTROL:rwx,d:o::---" "$STATE_ROOT/assignments/$w"

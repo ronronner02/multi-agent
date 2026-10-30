@@ -279,10 +279,31 @@ async function serve([socketPath, configPath, ...extra]) {
 
 async function relay(argv) {
   const sep = argv.indexOf('--');
-  const [portArg, socketPath] = argv.slice(0, Math.max(sep, 0));
+  const [portArg, socketPath, ...options] = argv.slice(0, Math.max(sep, 0));
   const command = argv.slice(sep + 1);
-  if (sep !== 2 || !/^\d{1,5}$/.test(portArg ?? '') || !socketPath || command.length === 0) {
-    throw new EgressError('egress-usage', 'usage: egress.mjs relay <port> <socket> -- <command...>');
+  // The gateway bearer reaches the client here and nowhere else: the launcher mounts it as a 0400
+  // file and names that file, so no process command line carries the value.
+  let envFile;
+  for (let i = 0; i < options.length; i += 1) {
+    if (options[i] === '--env-file' && envFile === undefined && options[i + 1] !== undefined && options[i + 1] !== '--') {
+      envFile = options[i + 1];
+      i += 1;
+    } else throw new EgressError('egress-usage', 'usage: egress.mjs relay <port> <socket> [--env-file <path>] -- <command...>');
+  }
+  if (sep !== 2 + (envFile === undefined ? 0 : 2) || !/^\d{1,5}$/.test(portArg ?? '') || !socketPath || command.length === 0) {
+    throw new EgressError('egress-usage', 'usage: egress.mjs relay <port> <socket> [--env-file <path>] -- <command...>');
+  }
+  let env = process.env;
+  if (envFile !== undefined) {
+    // Fail closed: a client launched on a verified gateway must not start without its credential.
+    let raw;
+    try { raw = readFileSync(envFile, 'utf8'); } catch { throw new EgressError('egress-env-missing', 'the gateway environment file is unavailable'); }
+    env = { ...process.env };
+    for (const line of raw.split('\n').filter(Boolean)) {
+      const eq = line.indexOf('=');
+      if (eq <= 0 || !/^[A-Z][A-Z0-9_]{0,63}$/.test(line.slice(0, eq))) throw new EgressError('egress-env-invalid', 'the gateway environment file is malformed');
+      env[line.slice(0, eq)] = line.slice(eq + 1);
+    }
   }
   const server = net.createServer({ allowHalfOpen: true }, (local) => {
     const up = net.connect({ path: socketPath, allowHalfOpen: true });
@@ -295,7 +316,7 @@ async function relay(argv) {
     server.once('error', reject);
     server.listen(Number(portArg), '127.0.0.1', resolve);
   });
-  const child = spawn(command[0], command.slice(1), { stdio: 'inherit' });
+  const child = spawn(command[0], command.slice(1), { stdio: 'inherit', env });
   // The terminal already delivers keyboard signals to the child's process group;
   // forwarding them again would double them (two ^C exits an interactive client).
   for (const signal of ['SIGINT', 'SIGQUIT']) process.on(signal, () => {});
@@ -312,7 +333,7 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     if (mode === 'serve') await serve(rest);
     else if (mode === 'relay') await relay(rest);
-    else throw new EgressError('egress-usage', 'usage: egress.mjs serve <socket> <config> | relay <port> <socket> -- <command...>');
+    else throw new EgressError('egress-usage', 'usage: egress.mjs serve <socket> <config> | relay <port> <socket> [--env-file <path>] -- <command...>');
   } catch (err) {
     process.stderr.write(`${JSON.stringify({ egress_error: err instanceof EgressError ? err.code : 'egress-internal', message: err.message })}\n`);
     process.exit(126);

@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import {
   closeSync, constants as fsConstants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readlinkSync, readdirSync, readSync, realpathSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
-import { constants as osConstants } from 'node:os';
+import { constants as osConstants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +45,12 @@ export const EGRESS_SOCKET_NAME = 'proxy.sock';
 // Child descriptor number for the bubblewrap --seccomp program.
 export const SECCOMP_FD = 6;
 export const SANDBOX_STATUS_FD = 12;
+// The gateway bearer reaches the client through a data file and the relay's environment, never
+// through an argv: /proc/<pid>/cmdline is world-readable, and setpriv's and bwrap's command lines
+// are just as visible as the client's (docs/amendments/2026-10-29, decision 4). The file sits
+// outside /run/multi-agent, which a native launch covers with its own mailbox tmpfs.
+export const GATEWAY_FD = 13;
+export const GATEWAY_ENV_PATH = '/run/multi-agent-provider/provider.env';
 
 // KTD23: a network namespace does not cover AF_VSOCK, the Hyper-V channel to the
 // Windows host, and io_uring can create sockets without the socket() syscall.
@@ -200,9 +206,9 @@ export function validatePolicy(policy) {
 }
 
 export function parseLaunchArgs(argv) {
-  const request = { worker: null, role: null, tree: null, run: null, attempt: null, mailbox: null, clientLock: null, env: [], command: [] };
+  const request = { worker: null, role: null, tree: null, run: null, attempt: null, mailbox: null, clientLock: null, gateway: null, env: [], command: [] };
   const valueFlags = { '--worker': 'worker', '--role': 'role', '--tree': 'tree', '--run': 'run', '--attempt': 'attempt', '--mailbox': 'mailbox',
-    '--client-lock': 'clientLock' };
+    '--client-lock': 'clientLock', '--gateway': 'gateway' };
   let i = 0;
   for (; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -234,6 +240,9 @@ export function parseLaunchArgs(argv) {
   if (request.clientLock !== null && !/^sha256:[a-f0-9]{64}$/.test(request.clientLock)) {
     throw new LaunchError('argument-invalid', 'client lock must be a sha256 digest');
   }
+  if (request.gateway !== null && !/^sha256:[a-f0-9]{64}$/.test(request.gateway)) {
+    throw new LaunchError('argument-invalid', 'gateway must be the sha256 digest of the admitted configuration');
+  }
   return request;
 }
 
@@ -254,6 +263,12 @@ function verifyReadOnlyDirectory(source, facts, worker, control, privateRoot = n
   } catch {
     throw new LaunchError('context-mount-unavailable', 'context and framework must exist with verified read-only ownership');
   }
+}
+
+/** What one identity may do with a file: the owner, its own group, or other bits. No supplementaries. */
+function effectiveBits(st, identity) {
+  if (st.uid === identity.uid) return (st.mode >> 6) & 7;
+  return st.gid === identity.gid ? (st.mode >> 3) & 7 : st.mode & 7;
 }
 
 // facts: { callerUid, lookupUser(name) -> {name, uid, gid, groups[]} | null,
@@ -342,17 +357,19 @@ export function resolveLaunchRequest(policy, request, facts) {
         if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== control.uid || readableOrWritable) {
           throw new Error('non-private endpoint ancestry');
         }
-        if (p === posix.dirname(socketPath) && (st.mode & 0o011) === 0) {
+        // The deepest level must be traversable by *this* worker, which `setpriv --clear-groups`
+        // leaves with its own ids only. A group-execute bit for some other group, or an owner bit
+        // held by the control identity, is not access; the worker's effective class decides.
+        if (p === posix.dirname(socketPath) && (effectiveBits(st, worker) & 0o1) === 0) {
           throw new Error('unreachable endpoint ancestry');
         }
         if (p === policy.paths.control_state_dir) break;
       }
       const st = facts.lstat(socketPath), [dev, ino] = request.mailbox.split(':').map(Number);
       // Control-owned, worker-group, 0660: the owning worker reaches it and nothing else does.
-      // A strictly control-group 0666 endpoint is still accepted for an already-provisioned host.
-      const endpointOk = (st.gid === worker.gid && (st.mode & 0o7777) === 0o660)
-        || (st.gid === control.gid && (st.mode & 0o7777) === 0o666);
-      if (!st.isSocket() || st.uid !== control.uid || !endpointOk
+      // There is no other accepted shape; a control-group 0666 endpoint would be reachable by every
+      // worker that knows the pathname.
+      if (!st.isSocket() || st.uid !== control.uid || st.gid !== worker.gid || (st.mode & 0o7777) !== 0o660
         || st.dev !== dev || st.ino !== ino) throw new Error('unregistered endpoint');
       mailbox = { path: socketPath, kind: 'socket', uid: st.uid, gid: st.gid, dev, ino, mode: st.mode & 0o7777 };
     } catch { throw new LaunchError('mailbox-unavailable', 'mailbox identity or private ownership changed'); }
@@ -405,6 +422,21 @@ export function resolveLaunchRequest(policy, request, facts) {
   }
   const clientLock = checkClientLock(policy, facts.clientLock, request.command, facts.inspectFile, request.clientLock);
 
+  // The provider mode is bound into the request, not re-decided here. A launch admitted on the
+  // gateway carries that configuration's digest, so the bytes are re-read and compared before
+  // anything is mounted: if the installed file moved, vanished or stopped being the admitted shape,
+  // the launch is refused instead of running an endpoint from one configuration and a bearer from
+  // another. A launch admitted on the worker's own sign-in carries no digest and injects no gateway.
+  let gateway;
+  if (request.gateway !== null) {
+    if (!client) throw new LaunchError('provider-gateway-changed', 'a gateway digest names a native client launch');
+    const admitted = readGateway(facts, client, control?.gid);
+    if (!admitted || admitted.digest !== request.gateway) {
+      throw new LaunchError('provider-gateway-changed', 'the installed gateway configuration is not the one this launch was admitted under');
+    }
+    gateway = admitted;
+  }
+
   return {
     worker: { name: worker.name, uid: worker.uid, gid: worker.gid },
     role: request.role,
@@ -417,7 +449,8 @@ export function resolveLaunchRequest(policy, request, facts) {
     env,
     toolchainDir: policy.paths.toolchain_dir,
     command: request.command,
-    ...(mailbox ? { mailbox, bootstrap } : {}), ...(nativePolicy ? { nativePolicy, client } : {}),
+    ...(mailbox ? { mailbox, bootstrap } : {}), ...(nativePolicy ? { nativePolicy } : {}), ...(client ? { client } : {}),
+    ...(gateway ? { gateway } : {}),
     ...(clientLock ? { clientLock } : {}),
   };
 }
@@ -521,7 +554,7 @@ export function inspectLaunchRequest(policy, request, facts) {
       installed,
       network: { hostNamespace: namespaces.net, profileFingerprint: installed.egress.sha256 },
       ...(resolved.clientLock ? { clientLock: resolved.clientLock } : {}),
-      ...(resolved.client ? { provider: { ...providerEvidence(resolved, facts), ...gatewayEvidence(resolved) } } : {}),
+      ...(resolved.client ? { provider: { ...providerEvidence(resolved, facts), ...gatewayEvidence(facts, resolved.client, control?.gid) } } : {}),
     };
   } catch {
     throw new LaunchError('preflight-unverified', 'Installed launch facts are missing, untrusted or changed');
@@ -575,9 +608,17 @@ export function nativePolicyInventory(client, bytes, entries, remotePolicy) {
     remotePolicy, platformPolicy: process.platform === 'linux' ? 'not-applicable' : 'unknown', nativeExceptions };
 }
 
+/** The gateway observation behind admission and execution: the installed file, or the fact source's
+ * own reader. Both call sites go through it, so a launch cannot be admitted and started from two
+ * different readers. */
+function readGateway(facts, client, controlGid) {
+  return typeof facts.readGateway === 'function'
+    ? facts.readGateway(client, controlGid) : readProviderGateway(client, controlGid);
+}
+
 /** Gateway facts, additive to the existing provider record, and never the bearer. */
-function gatewayEvidence(resolved) {
-  const gateway = readProviderGateway(resolved.client);
+function gatewayEvidence(facts, client, controlGid) {
+  const gateway = readGateway(facts, client, controlGid);
   if (!gateway) return {};
   return { gateway: { client: gateway.client, digest: gateway.digest, model: gateway.model,
     baseUrl: gateway.baseUrl, ...(gateway.wireApi ? { wireApi: gateway.wireApi } : {}) } };
@@ -621,6 +662,10 @@ export function inspectInstalledFile(file) {
 export function buildSandboxCommand(policy, resolved, supervised = false) {
   const s = policy.sandbox;
   const p = policy.paths;
+  // A gateway is bound by digest before this point; only what admission actually verified is used,
+  // so the endpoint here and the bearer the relay injects come from the same admitted bytes.
+  const gateway = resolved.gateway ? gatewayEnv(resolved.gateway, resolved.client) : undefined;
+  const gatewayData = gateway ? Object.entries(gateway.secret).map(([key, value]) => `${key}=${value}\n`).join('') : null;
   const args = [
     `--reuid=${resolved.worker.uid}`,
     `--regid=${resolved.worker.gid}`,
@@ -656,7 +701,7 @@ export function buildSandboxCommand(policy, resolved, supervised = false) {
     TMPDIR: '/tmp',
     ...resolved.env,
     ...(resolved.client ? { CODEX_HOME: s.home + "/.codex", CLAUDE_CONFIG_DIR: s.home + "/.claude", DISABLE_AUTOUPDATER: "1" } : {}),
-    ...clientGatewayEnv(resolved),
+    ...(gateway?.argv ?? {}),
     // Clients differ in which spelling they read, so both are set.
     HTTPS_PROXY: proxy,
     HTTP_PROXY: proxy,
@@ -685,6 +730,9 @@ export function buildSandboxCommand(policy, resolved, supervised = false) {
     '--dev', '/dev',
     '--tmpfs', '/tmp',
     '--tmpfs', '/run',
+    // The bearer arrives as file content on an inherited descriptor at 0400; the relay turns it
+    // into the client's environment.
+    ...(gatewayData ? ['--dir', posix.dirname(GATEWAY_ENV_PATH), '--perms', '0400', '--bind-data', String(GATEWAY_FD), GATEWAY_ENV_PATH] : []),
     // After the /run tmpfs, which would otherwise cover it.
     '--ro-bind', p.egress_socket_dir, p.egress_socket_dir,
     ...(resolved.mailbox ? ['--tmpfs', posix.dirname(s.mailbox), '--ro-bind-fd', String(MOUNT_FD.mailbox), s.mailbox, '--remount-ro', posix.dirname(s.mailbox)] : []),
@@ -699,12 +747,14 @@ export function buildSandboxCommand(policy, resolved, supervised = false) {
     '--chdir', s.work,
     '--',
     `${p.toolchain_dir}/node/bin/node`, p.installed_egress, 'relay', String(s.egress_port), posix.join(p.egress_socket_dir, EGRESS_SOCKET_NAME),
+    ...(gatewayData ? ['--env-file', GATEWAY_ENV_PATH] : []),
     '--',
     ...resolved.command,
   );
   // Writable sources are passed as descriptors opened and re-verified by the
   // launcher, so a path swapped after validation cannot change what is mounted.
-  return { file: '/usr/bin/setpriv', args, mountSources: { home: resolved.home, scratch: resolved.scratch, tree: resolved.tree, context: resolved.context, framework: resolved.framework } };
+  return { file: '/usr/bin/setpriv', args, gatewayData,
+    mountSources: { home: resolved.home, scratch: resolved.scratch, tree: resolved.tree, context: resolved.context, framework: resolved.framework } };
 }
 
 // A directory descriptor on stdio would let the worker openat() outside its mounts.
@@ -832,39 +882,62 @@ function readInstalledClientLock() {
  * or null when the file is absent or does not describe that client. The bearer is read here and
  * used only to build the client's environment; it is never returned in inspection facts.
  */
-function readProviderGateway(client) {
+function readProviderGateway(client, controlGid) {
   let fd;
   try {
-    // Verified from one open descriptor so the bytes hashed are the bytes checked. Root-owned with
-    // no group or other write, and readable by this identity: the daemon runs as the control
-    // identity, so the file carries the control group. Its realpath must be its own path, and no
-    // ancestor may be group- or other-writable.
+    // Verified from one open descriptor so the bytes hashed are the bytes checked. Root-owned at
+    // exactly 0640 with the control group, which is the declared reader set: root, and the daemon
+    // group. Any other reader — other, another group, a mode change — is not a gateway we admitted
+    // (docs/amendments/2026-10-29, decision 2). Its realpath must be its own path, and no ancestor
+    // may be group- or other-writable.
     if (!posix.isAbsolute(INSTALLED_PROVIDER_GATEWAY) || realpathSync(INSTALLED_PROVIDER_GATEWAY) !== INSTALLED_PROVIDER_GATEWAY) return null;
     for (let parent = posix.dirname(INSTALLED_PROVIDER_GATEWAY); ; parent = posix.dirname(parent)) {
       const st = lstatSync(parent);
       if (!st.isDirectory() || st.isSymbolicLink() || st.uid !== 0 || (st.mode & 0o022)) return null;
       if (parent === posix.dirname(parent)) break;
     }
+    if (!Number.isSafeInteger(controlGid)) return null;
     fd = openSync(INSTALLED_PROVIDER_GATEWAY, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_CLOEXEC);
     const st = fstatSync(fd);
-    if (!st.isFile() || st.uid !== 0 || (st.mode & 0o022) !== 0 || st.size > 65_536) return null;
+    if (!gatewayFileAdmits(st, controlGid)) return null;
     const raw = readFileSync(fd);
-    const sha256 = 'sha256:' + createHash('sha256').update(raw).digest('hex');
-    const parsed = JSON.parse(raw.toString('utf8'));
-    if (parsed?.schema !== 'multi-agent-provider-gateway/v1') return null;
-    // The config's section names are its own; the launcher's client id is not one of them.
-    const entry = parsed[GATEWAY_SECTION[client]];
-    if (!entry || typeof entry.base_url !== 'string' || typeof entry.bearer !== 'string'
-      || typeof entry.model !== 'string' || !/^https:\/\/[^\s]+$/.test(entry.base_url)
-      || entry.bearer.length < 16 || entry.bearer.length > 4096 || /[\x00-\x1f\x7f]/.test(entry.bearer)
-      || entry.model.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(entry.model)) return null;
-    return { baseUrl: entry.base_url, bearer: entry.bearer, model: entry.model, client,
-      digest: sha256 };
+    if (raw.length !== st.size) return null;
+    const entry = providerGatewayEntry(raw, client);
+    if (!entry) return null;
+    return { ...entry, digest: 'sha256:' + createHash('sha256').update(raw).digest('hex') };
   } catch {
     return null;
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
+}
+
+/**
+ * The metadata that makes an installed gateway the file admission may rely on: root-owned, exactly
+ * 0640 with the control group, so the declared readers — root and the daemon group — and nothing
+ * else can open the bearer. An extra read bit for other or for another group is not admitted
+ * (docs/amendments/2026-10-29, decision 2).
+ */
+export function gatewayFileAdmits(st, controlGid) {
+  return !!st && Number.isSafeInteger(controlGid) && st.isFile() === true && st.uid === 0 && st.gid === controlGid
+    && (st.mode & 0o7777) === 0o640 && Number.isSafeInteger(st.size) && st.size >= 0 && st.size <= 65_536;
+}
+
+/**
+ * The provider decision a gateway file makes for one client. `GATEWAY_SECTION` is the only place a
+ * launcher client id becomes a configuration section name, so a regression here cannot hide in the
+ * file read: this function is what the reader calls, and what the tests exercise for both clients.
+ */
+export function providerGatewayEntry(raw, client) {
+  let parsed;
+  try { parsed = JSON.parse(Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw)); } catch { return null; }
+  if (parsed?.schema !== 'multi-agent-provider-gateway/v1') return null;
+  const entry = parsed[GATEWAY_SECTION[client]];
+  if (!entry || typeof entry !== 'object' || typeof entry.base_url !== 'string' || typeof entry.bearer !== 'string'
+    || typeof entry.model !== 'string' || !/^https:\/\/[^\s]+$/.test(entry.base_url)
+    || entry.bearer.length < 16 || entry.bearer.length > 4096 || /[\x00-\x1f\x7f]/.test(entry.bearer)
+    || entry.model.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(entry.model)) return null;
+  return { client, baseUrl: entry.base_url, bearer: entry.bearer, model: entry.model };
 }
 
 /**
@@ -875,24 +948,26 @@ function readProviderGateway(client) {
 // Launcher client id -> the gateway configuration's own section name.
 export const GATEWAY_SECTION = Object.freeze({ "claude-code": "claude", codex: "codex" });
 const GATEWAY_KEY_VAR = 'MA_GATEWAY_API_KEY';
-/** Which native client a resolved launch starts, from the command it will exec. */
-function gatewayClientOf(resolved) {
-  if (resolved.client === 'claude-code' || resolved.client === 'codex') return resolved.client;
-  const toolchain = resolved.toolchainDir ?? '/opt/multi-agent/toolchain';
-  const exe = resolved.command?.[0];
-  if (exe === posix.join(toolchain, 'clients/bin/claude')) return 'claude-code';
-  if (exe === posix.join(toolchain, 'clients/bin/codex')) return 'codex';
-  return null;
+/**
+ * The gateway environment for one client, split by what may appear in a command line. The endpoint
+ * is configuration and travels with the other environment; the bearer is a credential and travels
+ * only through the data file the relay reads, so no process argv ever contains it.
+ */
+function gatewayEnv(gateway, client) {
+  return client === 'claude-code'
+    ? { argv: { ANTHROPIC_BASE_URL: gateway.baseUrl }, secret: { ANTHROPIC_AUTH_TOKEN: gateway.bearer } }
+    : { argv: {}, secret: { [GATEWAY_KEY_VAR]: gateway.bearer } };
 }
-function clientGatewayEnv(resolved) {
-  const client = gatewayClientOf(resolved);
-  if (client !== 'claude-code' && client !== 'codex') return {};
-  const gateway = readProviderGateway(client);
-  if (!gateway) return {};
-  if (client === 'claude-code') {
-    return { ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.bearer };
-  }
-  return { [GATEWAY_KEY_VAR]: gateway.bearer };
+
+/** The gateway payload on an inherited descriptor. The private file is unlinked before the spawn,
+ * so the only surviving copy is the descriptor bubblewrap turns into a 0400 sandbox file. */
+function openGatewayData(data) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ma-gateway-'));
+  try {
+    const file = path.join(dir, 'provider.env');
+    writeFileSync(file, data, { mode: 0o400 });
+    return openSync(file, fsConstants.O_RDONLY);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
 function reportError(err) {
@@ -1357,7 +1432,7 @@ export async function main(argv = process.argv.slice(2)) {
       return;
     }
     const resolved = resolveLaunchRequest(policy, request, facts);
-    const { file, args, mountSources } = buildSandboxCommand(policy, resolved, supervised);
+    const { file, args, mountSources, gatewayData } = buildSandboxCommand(policy, resolved, supervised);
     const workerDir = path.posix.join(policy.paths.worker_root, resolved.worker.name);
     const assignmentDir = path.posix.join(realpathSync(policy.paths.assignment_root), resolved.worker.name);
     const fds = [];
@@ -1370,6 +1445,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (resolved.mailbox) fds[MOUNT_FD.mailbox] = openVerifiedSource(resolved.mailbox);
     if (resolved.nativePolicy) fds[MOUNT_FD.nativePolicy] = openVerifiedSource(resolved.nativePolicy);
     if (resolved.bootstrap) fds[MOUNT_FD.bootstrap] = openVerifiedSource(resolved.bootstrap);
+    if (gatewayData) fds[GATEWAY_FD] = openGatewayData(gatewayData);
     const stdio = ['inherit', 'inherit', 'inherit', ...Array.from(fds.slice(3), fd => fd ?? 'ignore')];
     const lifecycle = supervised ? startSandbox({ file, args }, stdio, resolved.worker.uid) : null;
     const child = lifecycle?.child ?? spawn(file, args, { stdio, env: {} });

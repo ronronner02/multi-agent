@@ -121,7 +121,9 @@ describe("the managed attempt's production inputs", () => {
     chmodSync(contextRoot, 0o755);
     for (const anchor of [join(contextRoot, "ma-worker1"), join(mailboxRoot, "ma-worker1")]) mkdirSync(anchor, { recursive: true });
     chmodSync(join(contextRoot, "ma-worker1"), 0o2750);
-    chmodSync(join(mailboxRoot, "ma-worker1"), 0o700);
+    // The mailbox anchor is setgid for the worker, so attempt directories below it carry the
+    // worker's group and the endpoint is worker-group 0660.
+    chmodSync(join(mailboxRoot, "ma-worker1"), 0o2710);
     chmodSync(frameworkRoot, 0o2750);
     frameworkSource = join(frameworkRoot, "skills", "autoresearch", "SKILL.md");
     mkdirSync(join(frameworkRoot, "skills", "autoresearch"), { recursive: true });

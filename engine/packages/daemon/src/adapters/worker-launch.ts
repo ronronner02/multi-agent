@@ -387,6 +387,11 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
         && reference(gateway.digest) && reference(gateway.baseUrl) && reference(gateway.model);
       requireFact(gatewayProvider || (preflight.provider.status === "signed_in" && preflight.provider.client === client
         && preflight.provider.home === preflight.worker.home && reference(preflight.provider.evidenceRef)), "managed_provider_signin_required");
+      // The gateway's model is the verified pin, not metadata (docs/amendments/2026-10-29, decision 6):
+      // the launch runs that model, and a caller naming a different one is refused rather than
+      // allowed to override the configuration the provider was admitted under.
+      requireFact(!gatewayProvider || input.model === undefined || input.model === gateway!.model, "managed_launch_option_invalid");
+      const model = input.model ?? (gatewayProvider ? gateway!.model : undefined);
       if (resumeToken !== undefined) {
         const previous = attempt.previous;
         requireFact(previous && preflight.previous && same(previous, preflight.previous), "managed_resume_identity_mismatch");
@@ -399,7 +404,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       } else requireFact(!attempt.previous && !preflight.previous && preflight.generation === 1, "managed_resume_identity_mismatch");
       const nativeArgv = client === "claude-code"
         ? [preflight.executable, "--permission-mode", "bypassPermissions",
-          ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
+          ...(model ? ["--model", model] : []), ...(input.effort ? ["--effort", input.effort] : []),
           ...(resumeToken ? ["--resume", resumeToken] : ["--session-id", this.sessionId()])]
         : [preflight.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false",
           "-c", "model_catalog_json=" + JSON.stringify(codexModelCatalog(policy.paths.toolchain_dir)),
@@ -410,13 +415,16 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
             "-c", "model_providers.managed.base_url=" + JSON.stringify(gateway!.baseUrl),
             "-c", "model_providers.managed.env_key=" + JSON.stringify("MA_GATEWAY_API_KEY"),
             "-c", "model_providers.managed.wire_api=" + JSON.stringify("responses")] : []),
-          ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
+          ...(model ? ["-m", model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
           ...(resumeToken ? ["resume", resumeToken] : [])];
       const command: WorkerCommand = state.command = immutable({
         file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
           ...(policy.policy_revision >= 5 ? ["--supervise"] : []),
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
           "--run", attempt.context.runId, "--attempt", attempt.attemptId, "--client-lock", preflight.clientLock.digest,
+          // The privileged launch re-reads the gateway and refuses unless it is these bytes, so the
+          // endpoint recorded here and the bearer injected there cannot come from two configurations.
+          ...(gatewayProvider ? ["--gateway", gateway!.digest] : []),
           ...(policy.policy_revision >= 5 ? ["--mailbox", `${preflight.mailbox!.dev}:${preflight.mailbox!.ino}`] : []), "--", ...nativeArgv],
         nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
       });

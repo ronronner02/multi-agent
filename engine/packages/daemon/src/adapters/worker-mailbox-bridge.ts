@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, lstatSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, chownSync, lstatSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { createServer, type Socket } from "node:net";
 import { object, text } from "../contracts/team-control.js";
@@ -64,11 +64,14 @@ export class WorkerMailboxBridge {
       });
     });
     try {
-      // The private control-owned directory prevents host-side discovery and replacement.
-      // Only the individually bound socket is exposed inside this attempt's namespace.
-      chmodSync(this.binding.socketPath, 0o666);
+      // Control-owned with the worker's group at 0660: the owning worker reaches it and no other
+      // worker does, which is the only endpoint shape the launcher accepts. The group arrives from
+      // the setgid parent (measured: a bound socket takes the directory's group), so it is read
+      // from there rather than assumed, and never chowned — the daemon is not in that group.
+      const group = lstatSync(dirname(this.binding.socketPath)).gid;
+      chmodSync(this.binding.socketPath, 0o660);
       const stat = lstatSync(this.binding.socketPath);
-      if (!stat.isSocket() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()) {
+      if (!stat.isSocket() || stat.uid !== process.getuid!() || stat.gid !== group || (stat.mode & 0o7777) !== 0o660) {
         throw new Error("mailbox_endpoint_invalid");
       }
       this.socketIdentity = { dev: stat.dev, ino: stat.ino, uid: stat.uid, gid: stat.gid };
@@ -88,7 +91,7 @@ export class WorkerMailboxBridge {
       const stat = lstatSync(this.binding.socketPath);
       if (this.closed || this.invalid || !this.server.listening || !stat.isSocket() || !this.socketIdentity
         || stat.dev !== this.socketIdentity.dev || stat.ino !== this.socketIdentity.ino
-        || stat.uid !== this.socketIdentity.uid || stat.gid !== this.socketIdentity.gid || (stat.mode & 0o7777) !== 0o666) {
+        || stat.uid !== this.socketIdentity.uid || stat.gid !== this.socketIdentity.gid || (stat.mode & 0o7777) !== 0o660) {
         throw new Error("mailbox_endpoint_invalid");
       }
       return Object.freeze({ path: this.binding.socketPath, ...this.socketIdentity, generation: this.generation });
@@ -136,6 +139,9 @@ export class WorkerMailboxBridge {
     // Written 0600 from the start: a create-then-chmod would leave one window in
     // which the file is readable by whatever shares this directory.
     writeFileSync(source, body, { mode: 0o600, flag: "w" });
+    // The attempt directory is setgid for the worker, so the file arrives with the worker's group
+    // and is moved back to the control's own: the launcher requires a control-group bootstrap.
+    chownSync(source, process.getuid!(), process.getgid!());
     chmodSync(source, 0o600);
     const stat = lstatSync(source);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
@@ -160,9 +166,12 @@ export class WorkerMailboxBridge {
 
   private checkDirectory(): void {
     const path = this.binding.socketPath, parent = dirname(path), stat = lstatSync(parent);
+    // Control-owned, grouped to the worker by the installed setgid anchor, and traversal only:
+    // group-read or group-write here would let every worker in that group discover or replace
+    // this attempt's endpoint.
     if (!isAbsolute(path) || basename(path) !== "mailbox.sock" || realpathSync(parent) !== parent
-      || !stat.isDirectory() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
-      || (stat.mode & 0o7777) !== 0o700) throw new Error("mailbox_endpoint_invalid");
+      || !stat.isDirectory() || stat.uid !== process.getuid!()
+      || (stat.mode & 0o7777) !== 0o2710) throw new Error("mailbox_endpoint_invalid");
   }
 
   private accept(socket: Socket): void {
