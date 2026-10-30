@@ -22,7 +22,11 @@ It then drops to the worker identity (`setpriv --no-new-privs`, all capabilities
 
 The launcher opens the three writable sources itself, re-verifies each through `/proc/self/fd`, and hands them to bubblewrap as descriptors (`--bind-fd`), so a path swapped after validation cannot change what is mounted. It also refuses to start when any standard stream is a directory descriptor, which a worker could otherwise use with `openat()` to reach outside its mounts.
 
+A native launch also names the provider's mode. The worker's own sign-in is one mode; the installed `/etc/multi-agent/provider-gateway.json` — root-owned, exactly `0640`, group `ma-control` — is the other. A launch admitted on the gateway passes that file's digest, and the launcher re-reads the file and refuses (`provider-gateway-changed`) unless it is the same bytes. The bearer never reaches any command line: the launcher mounts it as a `0400` sandbox file and the in-sandbox relay turns it into the client's environment.
+
 Control state, owner tokens, the browser session store, the SQLite database with its WAL and shared-memory files, supervisor and tmux sockets, other workers' data, `/mnt/*` (the Windows drives) and `/run/WSL` (the Windows interop sockets) are never mounted. Restrictive ownership is a second layer.
+
+A seat's mailbox endpoint is control-owned with the worker's own group at `0660`, and its directory chain is control-owned and traverse-only (`0711` for the mailbox root, setgid `2710` per worker), because bubblewrap resolves the endpoint descriptor as the worker. No other endpoint shape is accepted, and a foreign worker that knows the path can traverse but neither read nor connect.
 
 The installed policy (`/etc/multi-agent/worker-policy.json`) and launcher are root-owned copies of `engine/config/isolation/`. Workers and the control identity cannot modify them. Callers cannot pass bind mounts or sandbox flags.
 

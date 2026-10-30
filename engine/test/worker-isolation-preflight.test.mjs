@@ -31,6 +31,8 @@ import {
   assertSafeStdio,
   MOUNT_FD,
   SECCOMP_FD,
+  GATEWAY_FD,
+  GATEWAY_ENV_PATH,
   buildSeccompFilter,
 } from '../config/isolation/worker-launch.mjs';
 import * as workerLaunch from '../config/isolation/worker-launch.mjs';
@@ -421,14 +423,18 @@ describe('offline: fixed native policy and mailbox mounts', () => {
   };
   const argv = ['--worker', 'ma-worker1', '--role', 'implementer', '--tree', TREE,
     '--run', 'run-1', '--attempt', 'attempt-1', '--mailbox', '9:22', '--client-lock', clientLock.sha256, '--', executable];
-  const facts = (change = {}) => {
+  const gatewayFixture = (change = {}) => ({ client: 'claude-code', baseUrl: 'https://gateway.invalid/claude',
+    bearer: 'e'.repeat(32), model: 'pinned-model', digest: 'sha256:' + 'a'.repeat(64), ...change });
+  const facts = (change = {}, deepest = {}, readGateway = () => null) => {
     const base = fakeFacts();
-    return { ...base, clientLock, inspectFile: lockedFile, readFile: p => { assert.equal(p, bootstrapPath); return JSON.stringify(bootstrap); }, lstat: p => {
+    return { ...base, clientLock, readGateway, inspectFile: lockedFile, readFile: p => { assert.equal(p, bootstrapPath); return JSON.stringify(bootstrap); }, lstat: p => {
       if (p === bootstrapPath) return { uid: 990, gid: 990, dev: 10, ino: 24, mode: 0o600, size: 256,
         isFile: () => true, isSymbolicLink: () => false };
       // Control-owned, worker-group, 0660: reachable by the owning worker, by nothing else.
       if (p === socket) return { uid: 990, gid: 991, dev: 9, ino: 22, mode: 0o660,
         isSocket: () => true, isSymbolicLink: () => false, ...change };
+      if (p === path.dirname(socket)) return { uid: 990, gid: 990, mode: 0o711,
+        isDirectory: () => true, isSymbolicLink: () => false, ...deepest };
       if (p === policy.paths.control_state_dir || p.startsWith(policy.paths.control_state_dir + '/')) {
         // Strictly private at the root; traverse-only below it, which is what a live launch needs
         // because bwrap resolves the mailbox descriptor as the worker.
@@ -527,20 +533,58 @@ describe('offline: fixed native policy and mailbox mounts', () => {
     }
   });
 
-  test('maps each client id to its gateway section, so neither silently loses its provider', async () => {
+  test('resolves each client id through the reader to its own gateway section, and refuses what it cannot verify', () => {
     // A mismatch here made every Claude launch run unauthenticated while the whole suite stayed
     // green, because the reader returns null for an unknown section and null is indistinguishable
-    // from "no gateway configured". The mapping is asserted for both clients, not just one.
-    // Read from the reviewed source, not the installed copy: this asserts the contract the source
-    // states, and the installed file is what provisioning copies from it.
-    const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../config/isolation/worker-launch.mjs"), "utf8");
-    const mapping = /export const GATEWAY_SECTION = Object\.freeze\(\{([^}]*)\}\)/.exec(source);
-    assert.ok(mapping, "the source must declare the gateway section mapping");
-    const pairs = Object.fromEntries(mapping[1].split(",").map(part => {
-      const [key, value] = part.split(":").map(token => token.trim().replace(/^"|"$/g, ""));
-      return [key, value];
-    }));
-    assert.deepEqual(pairs, { "claude-code": "claude", codex: "codex" });
+    // from "no gateway configured". This goes through the reader's own selection, so reverting it
+    // to `parsed[client]` fails here instead of silently in a live launch.
+    const config = JSON.stringify({ schema: 'multi-agent-provider-gateway/v1',
+      claude: { base_url: 'https://gateway.invalid/claude', bearer: 'c'.repeat(32), model: 'ds/claude-opus-5-5' },
+      codex: { base_url: 'https://gateway.invalid/codex', bearer: 'd'.repeat(32), model: 'gpt-6.1-sol' } });
+    assert.deepEqual(workerLaunch.providerGatewayEntry(config, 'claude-code'),
+      { client: 'claude-code', baseUrl: 'https://gateway.invalid/claude', bearer: 'c'.repeat(32), model: 'ds/claude-opus-5-5' });
+    assert.deepEqual(workerLaunch.providerGatewayEntry(config, 'codex'),
+      { client: 'codex', baseUrl: 'https://gateway.invalid/codex', bearer: 'd'.repeat(32), model: 'gpt-6.1-sol' });
+    for (const broken of [
+      '{}',
+      JSON.stringify({ schema: 'multi-agent-provider-gateway/v1' }),
+      JSON.stringify({ schema: 'multi-agent-provider-gateway/v1', claude: { base_url: 'http://plain.invalid', bearer: 'c'.repeat(32), model: 'm' } }),
+      JSON.stringify({ schema: 'multi-agent-provider-gateway/v1', codex: { base_url: 'https://g.invalid', bearer: 'short', model: 'gpt-6.1-sol' } }),
+      'not json',
+    ]) {
+      assert.equal(workerLaunch.providerGatewayEntry(broken, 'claude-code'), null, broken);
+      assert.equal(workerLaunch.providerGatewayEntry(broken, 'codex'), null, broken);
+    }
+  });
+
+  test('admits only a root-owned, exactly 0640, control-group gateway file', () => {
+    // 0644 passed the old check: it had no write bit, but every host identity could read the bearer.
+    const st = (change = {}) => ({ isFile: () => true, uid: 0, gid: 990, mode: 0o100640, size: 512, ...change });
+    assert.equal(workerLaunch.gatewayFileAdmits(st(), 990), true);
+    for (const change of [{ mode: 0o100644 }, { mode: 0o100604 }, { mode: 0o100660 }, { mode: 0o100600 },
+      { gid: 991 }, { gid: 0 }, { uid: 991 }, { isFile: () => false }, { size: 65_537 }]) {
+      assert.equal(workerLaunch.gatewayFileAdmits(st(change), 990), false, JSON.stringify(change));
+    }
+    assert.equal(workerLaunch.gatewayFileAdmits(st(), undefined), false);
+  });
+
+  test('binds a gateway launch to the admitted digest and refuses when it cannot verify it', () => {
+    const index = argv.indexOf('--');
+    const digest = gatewayFixture().digest;
+    const bound = command => [...argv.slice(0, index), '--gateway', digest, '--', ...command];
+    // The admitted bytes are what execution carries: the same digest resolves, and the launch holds
+    // the verified endpoint and model, which are the values buildSandboxCommand delivers.
+    const admitted = resolveLaunchRequest(policy, parseLaunchArgs(bound([executable])), facts({}, {}, () => gatewayFixture()));
+    assert.deepEqual([admitted.gateway.model, admitted.gateway.baseUrl], ['pinned-model', 'https://gateway.invalid/claude']);
+    // A file replaced between admission and execution is refused rather than paired with a stale endpoint.
+    const changed = facts({}, {}, () => gatewayFixture({ digest: 'sha256:' + 'b'.repeat(64) }));
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(bound([executable])), changed), 'provider-gateway-changed');
+    // So is a configuration that vanished, which is the cold-launch half of the same defect.
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(bound([executable])), facts({}, {}, () => null)), 'provider-gateway-changed');
+    // A gateway digest names a native client; a non-client command cannot be bound to one.
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(bound([NODE, '-e', '1'])), facts()), 'provider-gateway-changed');
+    const malformed = [...argv.slice(0, index), '--gateway', 'sha256:xyz', ...argv.slice(index)];
+    expectLaunchError(() => parseLaunchArgs(malformed), 'argument-invalid');
   });
 
   test('requires a registered mailbox before either native client starts', () => {
@@ -551,8 +595,10 @@ describe('offline: fixed native policy and mailbox mounts', () => {
   });
 
   test('rejects a missing, replaced, aliased, foreign-owned or publicly discoverable endpoint', () => {
+    // The control-group 0666 shape was the legacy endpoint a previously provisioned host carried; it
+    // let any worker that knew the pathname connect, so it is refused rather than migrated.
     for (const change of [{ uid: 991 }, { gid: 990 }, { gid: 992 }, { ino: 99 }, { dev: 99 },
-      { mode: 0o666 }, { mode: 0o777 }, { isSocket: () => false }]) {
+      { mode: 0o666 }, { gid: 990, mode: 0o666 }, { mode: 0o777 }, { isSocket: () => false }]) {
       expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), facts(change)), 'mailbox-unavailable');
     }
     const good = facts();
@@ -562,6 +608,15 @@ describe('offline: fixed native policy and mailbox mounts', () => {
       { lstat: p => p === path.dirname(socket) ? { ...good.lstat(p), mode: 0o755 } : good.lstat(p) },
       { lstat: p => p === path.dirname(socket) ? { ...good.lstat(p), mode: 0o774 } : good.lstat(p) },
     ]) expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), { ...good, ...changed }), 'mailbox-unavailable');
+  });
+
+  test('requires the deepest mailbox level to be traversable by the owning worker with its own ids', () => {
+    // The worker arrives with `--clear-groups`, so a group-execute bit held by a group it is not in
+    // is not access: the worker's effective class at a control-group 0710 level is "other", which
+    // has no execute bit, and binding its own socket would be refused after a launch was admitted.
+    assert.equal(resolveLaunchRequest(policy, parseLaunchArgs(argv), facts({}, { gid: 991, mode: 0o710 })).mailbox.gid, 991);
+    expectLaunchError(() => resolveLaunchRequest(policy, parseLaunchArgs(argv), facts({}, { gid: 990, mode: 0o710 })), 'mailbox-unavailable');
+    assert.equal(resolveLaunchRequest(policy, parseLaunchArgs(argv), facts({}, { gid: 990, mode: 0o711 })).mailbox.gid, 991);
   });
 
   test('rejects changed native policy ownership, write access, type and path before binding', () => {
@@ -1312,6 +1367,42 @@ describe('offline: sandbox command construction', () => {
     const { args } = buildSandboxCommand(policy, resolved);
     const values = args.flatMap((a, i) => (a === '--setenv' && args[i + 1] === 'HTTPS_PROXY' ? [args[i + 2]] : []));
     assert.deepEqual(values, [`http://127.0.0.1:${policy.sandbox.egress_port}`]);
+  });
+
+  test('carries the gateway bearer in a 0400 sandbox file the relay reads, never on a command line', () => {
+    // R2-1: setpriv and bwrap command lines are as readable as the client's, so `--setenv TOKEN` was
+    // never a non-argv channel. The value now travels as file content on an inherited descriptor,
+    // and only the file's path appears in argv.
+    const bearer = 'sk-' + 'b'.repeat(40);
+    const gateway = client => ({ client, baseUrl: 'https://gateway.invalid/' + client, bearer, model: 'pinned-model',
+      digest: 'sha256:' + 'a'.repeat(64) });
+    const claude = buildSandboxCommand(policy, { ...resolvedFor('implementer'), client: 'claude-code', gateway: gateway('claude-code') });
+    assert.equal(claude.gatewayData, `ANTHROPIC_AUTH_TOKEN=${bearer}\n`);
+    assert.ok(!claude.args.some(arg => arg.includes(bearer)), 'no argv entry may contain the bearer');
+    const file = claude.args.indexOf(GATEWAY_ENV_PATH);
+    assert.deepEqual(claude.args.slice(file - 6, file + 1),
+      ['--dir', path.posix.dirname(GATEWAY_ENV_PATH), '--perms', '0400', '--bind-data', String(GATEWAY_FD), GATEWAY_ENV_PATH]);
+    assert.ok(file > claude.args.indexOf('/run'), 'the data file must be bound after the /run tmpfs');
+    // A native launch covers /run/multi-agent with its own mailbox tmpfs, so the bearer file must
+    // not live under it.
+    assert.notEqual(path.posix.dirname(GATEWAY_ENV_PATH), '/run/multi-agent');
+    const relay = claude.args.indexOf('relay');
+    assert.deepEqual(claude.args.slice(relay - 1, relay + 6), [policy.paths.installed_egress, 'relay',
+      String(policy.sandbox.egress_port), `${policy.paths.egress_socket_dir}/proxy.sock`, '--env-file', GATEWAY_ENV_PATH, '--']);
+    // The endpoint is configuration, not a credential, so it stays with the other environment.
+    const base = claude.args.indexOf('ANTHROPIC_BASE_URL');
+    assert.equal(claude.args[base - 1], '--setenv');
+    assert.equal(claude.args[base + 1], 'https://gateway.invalid/claude-code');
+    // Codex names its key by variable, and the variable is set from the same file.
+    const codex = buildSandboxCommand(policy, { ...resolvedFor('implementer'), client: 'codex', gateway: gateway('codex') });
+    assert.equal(codex.gatewayData, `MA_GATEWAY_API_KEY=${bearer}\n`);
+    assert.ok(!codex.args.some(arg => arg.includes(bearer)));
+    for (const arg of codex.args) assert.ok(!arg.includes('ANTHROPIC_'), 'a Codex launch carries no Claude variables');
+    // Without a gateway there is no file, no mount and no relay option.
+    const plain = buildSandboxCommand(policy, resolvedFor('implementer'));
+    assert.equal(plain.gatewayData, null);
+    assert.ok(!plain.args.includes(GATEWAY_ENV_PATH) && !plain.args.includes('--env-file'));
+    assert.ok(!plain.args.includes('--bind-data'));
   });
 
   test('KTD23: bwrap loads the seccomp program from the launcher descriptor', () => {

@@ -35,7 +35,7 @@ interface InstalledPolicy {
   control_identity: string;
   worker_identities: string[];
   launch_callers: string[];
-  paths: { assignment_root: string; worker_root: string; context_root: string; state_root: string };
+  paths: { assignment_root: string; worker_root: string; context_root: string; state_root: string; control_state_dir: string };
 }
 
 const installed = existsSync(POLICY) && existsSync(LOCK) && existsSync(LAUNCHER);
@@ -125,12 +125,20 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
   // Scenario 3 and 13's containment half, measured from inside a real sandbox rather than read
   // from a flag. The launcher spawns the probe exactly as it spawns a native client, so the
   // boundary under test is the one the client runs in.
-  let stage: string, tree: string, context!: string, runDir!: string;
+  //
+  // The forbidden fixtures live in the control state directory, outside every source the launcher
+  // mounts. A fixture placed inside the assigned tree sits at /work/<name> inside the sandbox, so a
+  // probe of its original host pathname would pass by absence while the mounted alias stayed
+  // reachable — a false positive this layout removes.
+  let stage: string, tree: string, forbidden!: string, context!: string, runDir!: string;
   let sentinelToken: string, sentinelDatabase: string, sentinelWal: string, supervisor: string, controlSocket: string;
   let listener: ReturnType<typeof spawn> | undefined;
   let ownerServer: ReturnType<typeof createServer> | undefined;
   let ownerPort = 0;
+  let gatewayHost: string | null = null;
   const tag = `t038-${randomBytes(4).toString("hex")}`;
+  /** The names the fixtures carry, so the mounted tree can be checked for every one of them. */
+  const FIXTURE_NAMES = ["owner.token", "state.db", "state.db-wal", "supervisor.sock", "control.sock"];
 
   const PROBE = String.raw`
     import fs from "node:fs";
@@ -157,6 +165,8 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
       contextRead: attempt(() => fs.readFileSync("/context/instructions.txt", "utf8")),
       frameworkRead: attempt(() => fs.statSync("/framework").isDirectory()),
       ownContext: attempt(() => fs.readdirSync("/context").length),
+      // The mount alias accounting: nothing forbidden may appear inside the one writable mount.
+      workEntries: attempt(() => fs.readdirSync("/work")),
     };
     for (const p of input.denyRead) out.read[p] = attempt(() => fs.readFileSync(p).length);
     for (const p of input.denyWrite) out.write[p] = attempt(() => fs.closeSync(fs.openSync(p, "r+")));
@@ -186,7 +196,7 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
         denyRead: [sentinelToken, sentinelDatabase, sentinelWal, "/etc/shadow", "/etc/sudoers", `/home/${process.env.USER ?? "leo"}`],
         denyWrite: [sentinelToken, sentinelDatabase],
         denyList: [policy!.paths.worker_root + "/ma-worker2"],
-        denySockets: [supervisor, controlSocket],
+        denySockets: [supervisor, controlSocket, ...FIXTURE_NAMES.map(name => "/work/" + name)],
         loopbackScan: [ownerPort, 3128],
         ...extra,
       })]);
@@ -194,26 +204,30 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
   };
 
   beforeAll(async () => {
-    // Everything the worker must not reach is created control-owned and confirmed live first, so a
-    // denial below cannot be an artefact of a target that never existed. The projection reproduces
-    // the launcher's own layout: context_root/<worker>/<run>/<attempt>, every level control-owned
-    // with the worker's group and no write bit, which arrives through the private root's setgid bit.
+    // Everything the worker must not reach is created control-owned inside the control state
+    // directory, outside every source the launcher mounts, and confirmed live first, so a denial
+    // below cannot be an artefact of a target that never existed. The projection reproduces the
+    // launcher's own layout: context_root/<worker>/<run>/<attempt>, every level control-owned with
+    // the worker's group and no write bit, which arrives through the private root's setgid bit.
     stage = `${policy!.paths.assignment_root}/ma-worker1/${tag}`;
     tree = stage;
+    forbidden = `${policy!.paths.control_state_dir}/${tag}`;
     runDir = `${policy!.paths.context_root}/ma-worker1/${tag}`;
     context = `${runDir}/${tag}`;
-    sentinelToken = `${stage}/owner.token`;
-    sentinelDatabase = `${stage}/state.db`;
-    sentinelWal = `${stage}/state.db-wal`;
-    supervisor = `${stage}/supervisor.sock`;
-    controlSocket = `${stage}/control.sock`;
-    // The staging process holds the two control listeners for the whole suite, so it is spawned
-    // in the background and polled: asControl would block until it exits.
+    sentinelToken = `${forbidden}/owner.token`;
+    sentinelDatabase = `${forbidden}/state.db`;
+    sentinelWal = `${forbidden}/state.db-wal`;
+    supervisor = `${forbidden}/supervisor.sock`;
+    controlSocket = `${forbidden}/control.sock`;
+    // The staging process holds the fixtures and the two control listeners for the whole suite, so
+    // it is detached and polled: asControl would block until it exits, and a process group is what
+    // the teardown can stop as a whole.
     const staged = spawn(SUDO, ["-n", "-u", policy!.control_identity, "--", NODE, "-e", `
       const fs = require("node:fs"), net = require("node:net");
       const workerGid = ${JSON.stringify(workerGid)};
       const secret = ${JSON.stringify(randomBytes(16).toString("hex"))};
       fs.mkdirSync(${JSON.stringify(tree)}, { recursive: true, mode: 0o770 });
+      fs.mkdirSync(${JSON.stringify(forbidden)}, { recursive: true, mode: 0o700 });
       for (const file of [${JSON.stringify(sentinelToken)}, ${JSON.stringify(sentinelDatabase)}, ${JSON.stringify(sentinelWal)}]) {
         fs.writeFileSync(file, secret, { mode: 0o600 });
       }
@@ -231,10 +245,10 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
       }
       // Two control-owned listeners the worker must never reach, kept alive for the whole suite.
       for (const socket of [${JSON.stringify(supervisor)}, ${JSON.stringify(controlSocket)}]) {
-        net.createServer(s => { s.on("error", () => {}); s.end("control"); }).listen(socket, () => fs.chmodSync(socket, 0o666));
+        net.createServer(s => { s.on("error", () => {}); s.end("control"); }).listen(socket, () => fs.chmodSync(socket, 0o600));
       }
       setTimeout(() => process.exit(0), 600000);
-    `], { stdio: ["ignore", "pipe", "pipe"] });
+    `], { stdio: ["ignore", "pipe", "pipe"], detached: true });
     listener = staged;
     // Wait until both listeners are actually accepting, bounded. An early failure is reported here
     // rather than surfacing later as a denial against a target that never existed.
@@ -249,9 +263,16 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
     }
     expect(ready, `control listeners did not come up: ${stderr.slice(0, 300)}`).toBe(true);
 
+    // The intended provider host, read as the control identity because the installed file is
+    // 0640 control-group. Only the hostname is kept, so the bearer never reaches this process.
+    const installed = asControl("/usr/bin/cat", ["/etc/multi-agent/provider-gateway.json"]);
+    if (installed.status === 0) {
+      gatewayHost = new URL((JSON.parse(installed.stdout) as { claude: { base_url: string } }).claude.base_url).hostname;
+    }
+
     // A live owner-side loopback listener: the positive control for the loopback scan. It runs in
     // the host namespace, which the sandbox's own namespace is expected not to reach.
-    ownerServer = createServer((_, res) => res.end("owner"));
+    ownerServer = createServer(socket => socket.end("owner"));
     const server = ownerServer;
     return new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => {
       ownerPort = (server.address() as { port: number }).port;
@@ -259,14 +280,37 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
     }));
   }, 60_000);
 
-  afterAll(() => {
+  afterAll(async () => {
     if (!installed) return;
     ownerServer?.close();
-    // The projection is 0550 so the launcher accepts it, which also denies its owner unlink.
-    asControl("/usr/bin/chmod", ["-R", "u+w", runDir]);
-    asControl("/usr/bin/rm", ["-rf", stage, runDir]);
-    expect(existsSync(stage), "stage tree removed").toBe(false);
-    expect(existsSync(runDir), "projection removed").toBe(false);
+    // The held listener is stopped with its whole process group and reaped here; leaving it to its
+    // own 600-second timer would keep listeners and pipe handles alive past the suite.
+    if (listener?.pid !== undefined && listener.exitCode === null) {
+      try { process.kill(-listener.pid, "SIGKILL"); } catch { /* already gone */ }
+      await new Promise<void>((resolve) => listener!.once("exit", () => resolve()));
+    }
+    expect(listener?.exitCode ?? 0).not.toBeNull();
+    // Removal runs as the control identity and every status must succeed. The projection is 0550,
+    // which also denies its owner unlink, so it is opened first; the assigned tree and the fixtures
+    // are control-owned directories whose entries — including the worker's own edit — control can
+    // unlink without changing their modes.
+    const opened = asControl("/usr/bin/chmod", ["-R", "u+w", runDir]);
+    expect(opened.status, `chmod ${runDir}: ${opened.stderr}`).toBe(0);
+    for (const target of [runDir, stage, forbidden]) {
+      const removed = asControl("/usr/bin/rm", ["-rf", target]);
+      expect(removed.status, `rm -rf ${target}: ${removed.stderr}`).toBe(0);
+    }
+    // Absence is verified from the control identity, which can traverse the control state directory:
+    // this runner cannot, so existsSync() here would report false for an inaccessible survivor too.
+    // ENOENT and a refused lookup are told apart, so an access error can never read as removal.
+    const absent = asControl(NODE, ["-e", `
+      const fs = require("node:fs");
+      console.log(${JSON.stringify([stage, runDir, forbidden])}.map(p => {
+        try { fs.lstatSync(p); return "present"; } catch (e) { return e.code === "ENOENT" ? "absent" : "unreachable:" + e.code; }
+      }).join(" "));
+    `]);
+    expect(absent.status, absent.stderr).toBe(0);
+    expect(absent.stdout.trim(), "stage, projection and fixtures are gone").toBe("absent absent absent");
   });
 
   it("keeps its own live control targets reachable from the owner side before probing", async () => {
@@ -295,6 +339,14 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
     `], { timeout: 15_000 });
     expect(client.stdout, client.stderr).toContain("connected " + supervisor);
     expect(client.stdout).toContain("connected " + controlSocket);
+    // The fixture files exist and are control-readable outside the sandbox, so the denials below
+    // are measured against live targets rather than absent pathnames.
+    for (const file of [sentinelToken, sentinelDatabase, sentinelWal]) {
+      expect(asControl("/usr/bin/stat", ["-c", "%s", file]).status, `live fixture ${file}`).toBe(0);
+    }
+    // And none of them is inside the assigned tree, which is what the sandbox mounts at /work.
+    const treeEntries = asControl("/usr/bin/ls", ["-A", tree]).stdout.split("\n").filter(Boolean);
+    for (const name of FIXTURE_NAMES) expect(treeEntries, `${name} must not be inside the mounted tree`).not.toContain(name);
   }, 60_000);
 
   it("denies owner token, database, supervisor and host access while the allowed edit succeeds", async () => {
@@ -313,9 +365,13 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
     expect(probe.write[sentinelToken]?.ok, "write owner token").toBe(false);
     expect(probe.write[sentinelDatabase]?.ok, "write database").toBe(false);
     expect(probe.list[policy!.paths.worker_root + "/ma-worker2"]?.ok, "list another worker").toBe(false);
-    for (const socket of [supervisor, controlSocket]) {
+    for (const socket of [supervisor, controlSocket, ...FIXTURE_NAMES.map(name => "/work/" + name)]) {
       expect(probe.connect[socket]?.ok, `connect ${socket}`).toBe(false);
     }
+    // The mount alias accounting: the fixtures are outside the mounted tree, so none of their
+    // names exists at /work and the denials above are not passing on a mounted copy.
+    expect(probe.workEntries.ok).toBe(true);
+    for (const name of FIXTURE_NAMES) expect(probe.workEntries.value, `/work/${name}`).not.toContain(name);
     // A live host process is invisible: inside a PID namespace it is simply absent, so ESRCH is
     // the expected refusal. The live pid was confirmed from the owner side by the previous test,
     // which is what makes its absence here the boundary's doing rather than a dead target.
@@ -345,7 +401,10 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
     }
     expect(probe.write[sentinelToken]?.ok).toBe(false);
     expect(probe.list[policy!.paths.worker_root + "/ma-worker2"]?.ok).toBe(false);
-    for (const socket of [supervisor, controlSocket]) expect(probe.connect[socket]?.ok).toBe(false);
+    for (const socket of [supervisor, controlSocket, ...FIXTURE_NAMES.map(name => "/work/" + name)]) {
+      expect(probe.connect[socket]?.ok).toBe(false);
+    }
+    for (const name of FIXTURE_NAMES) expect(probe.workEntries.value, `/work/${name}`).not.toContain(name);
     expect(probe.hostProcess.ok).toBe(false);
     expect(probe.abstractSockets).toBe(0);
     expect(probe.allowedEdit).toEqual({ ok: true, value: "edit" });
@@ -361,6 +420,7 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
       NODE, "--input-type=module", "-e", String.raw`
         import net from "node:net";
         import { spawnSync } from "node:child_process";
+        const ownerPort = Number(process.argv[1]), gatewayHost = process.argv[2];
         const probe = (host, port) => new Promise((resolve) => {
           const s = net.connect({ host, port });
           const done = (r) => { s.destroy(); resolve(r); };
@@ -378,15 +438,22 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
           registry: curl("https://registry.npmjs.org/"),
           unlistedHost: curl("https://example.com/"),
           ipLiteral: curl("https://1.1.1.1/"),
-          loopbackOwner: await probe("127.0.0.1", Number(process.argv[2])),
-          gatewayHost: await probe(process.argv[3], 443),
+          // The node script hears its own arguments from argv[1], not argv[2]. Off by one, the owner
+          // probe tested port 0 and the gateway probe an undefined default host, so ordinary
+          // refusals passed for targets that were never tried. The echo is what makes that visible.
+          argvEcho: { ownerPort, gatewayHost },
+          loopbackOwner: await probe("127.0.0.1", ownerPort),
+          gatewayHost: gatewayHost ? await probe(gatewayHost, 443) : "not-configured",
           overlay: await probe("100.100.100.100", 53),
           proxy: process.env.HTTPS_PROXY ?? null,
         };
         process.stdout.write(JSON.stringify(out));
-      `, String(ownerPort), String(process.env.T038_GATEWAY_HOST ?? "")]);
+      `, String(ownerPort), String(gatewayHost ?? "")]);
     expect(result.status, result.stderr.slice(0, 400)).toBe(0);
-    const reach = JSON.parse(result.stdout) as Record<string, string>;
+    const reach = JSON.parse(result.stdout) as Record<string, any>;
+    // The probe used the targets it was given: the live owner port and the installed gateway host.
+    expect(reach.argvEcho.ownerPort, "the probe received the live owner port").toBe(ownerPort);
+    expect(reach.argvEcho.gatewayHost, "the probe received the intended gateway host").toBe(gatewayHost ?? "");
     // The allowed registry endpoint succeeds through the filter; the sandbox uses its own relay.
     expect(reach.registry).toBe("200 200");
     expect(reach.proxy).toBe("http://127.0.0.1:3128");
@@ -394,10 +461,19 @@ describe.skipIf(!installed && !ACCEPTANCE)("provider-free boundary proof against
     // merely a non-200 response, and never a redirect.
     expect(reach.unlistedHost).toBe("000 403");
     expect(reach.ipLiteral).toBe("000 403");
-    // The live owner loopback listener, the LAN gateway and the overlay resolver are unreachable.
-    for (const [name, value] of [["loopbackOwner", reach.loopbackOwner], ["gatewayHost", reach.gatewayHost], ["overlay", reach.overlay]] as const) {
+    // The live owner loopback listener and the overlay resolver are unreachable. The provider host
+    // named by the installed gateway is added only when one is installed: inventing a target, or
+    // probing an undefined one, would make the denial vacuous.
+    for (const [name, value] of [["loopbackOwner", reach.loopbackOwner], ["overlay", reach.overlay]] as const) {
       expect(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ETIMEDOUT", "timeout", "EAI_AGAIN"],
         `${name}=${value}`).toContain(value);
+    }
+    if (gatewayHost === null) {
+      expect(ACCEPTANCE, "acceptance requires the installed provider gateway to name the intended host").toBe(false);
+    } else {
+      expect(gatewayHost, "the intended provider host is a DNS name").toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i);
+      expect(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ETIMEDOUT", "timeout", "EAI_AGAIN"],
+        `gatewayHost=${reach.gatewayHost}`).toContain(reach.gatewayHost);
     }
   }, 180_000);
 });

@@ -142,6 +142,28 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     const command = vi.mocked(f.control.start).mock.calls[0]![0];
     expect(command.args.slice(0, 4)).toEqual(["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--worker"]);
     expect(command.args).not.toContain("--supervise");
+    expect(command.args).not.toContain("--gateway");
+  });
+
+  it("runs the verified gateway's pinned model and binds its digest into the privileged request", async () => {
+    // The pin is the configuration's, not a default: a launch admitted on the gateway selects that
+    // model and carries the digest the privileged re-read must match before it injects the bearer.
+    const f = fixture(client);
+    const digest = hashBytes("admitted gateway");
+    f.p.provider.gateway = { client, digest, model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    expect(await f.launch()).toMatchObject({ ok: true });
+    const command = vi.mocked(f.control.start).mock.calls[0]![0];
+    const flag = client === "codex" ? "-m" : "--model";
+    expect(command.nativeArgv[command.nativeArgv.indexOf(flag) + 1]).toBe("pinned-model");
+    expect(command.args[command.args.indexOf("--gateway") + 1]).toBe(digest);
+  });
+
+  it("refuses a model override that disagrees with the verified gateway pin", async () => {
+    const f = fixture(client);
+    f.p.provider.gateway = { client, digest: hashBytes("admitted gateway"), model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    f.node.model = "other-model";
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_launch_option_invalid") });
+    expect(f.control.start).not.toHaveBeenCalled();
   });
 
   it("confirms worker quiescence before reporting an initial boundary fault", async () => {

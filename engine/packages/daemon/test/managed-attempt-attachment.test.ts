@@ -102,7 +102,9 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     chmodSync(contextRoot, 0o755);
     for (const anchor of [join(contextRoot, "ma-worker1"), join(mailboxRoot, "ma-worker1")]) mkdirSync(anchor, { recursive: true });
     chmodSync(join(contextRoot, "ma-worker1"), 0o2750);
-    chmodSync(join(mailboxRoot, "ma-worker1"), 0o700);
+    // The mailbox anchor is setgid for the worker, so attempt directories below it carry the
+    // worker's group and the endpoint is worker-group 0660.
+    chmodSync(join(mailboxRoot, "ma-worker1"), 0o2710);
     chmodSync(frameworkRoot, 0o2750);
     // The pinned entry governor the attempt's manifest binds, in the provisioned layout.
     mkdirSync(join(frameworkRoot, "skills", "using-spec-first"), { recursive: true });
