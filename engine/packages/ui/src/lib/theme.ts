@@ -85,24 +85,3 @@ export function applyTheme(theme: ThemeId): void {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("dark", resolveTheme(theme) === "dark");
 }
-
-export const SKIN_STORAGE_KEY = "openrig.skin";
-export const SKINS = ["navy", "shuimo-danqing"] as const;
-export type SkinId = (typeof SKINS)[number];
-
-export function readStoredSkin(): SkinId {
-  try {
-    return localStorage.getItem(SKIN_STORAGE_KEY) === "shuimo-danqing" ? "shuimo-danqing" : "navy";
-  } catch {
-    return "navy";
-  }
-}
-
-export function writeStoredSkin(skin: SkinId): void {
-  try { localStorage.setItem(SKIN_STORAGE_KEY, skin); } catch { /* Selection still works for this page. */ }
-}
-
-export function applySkin(skin: SkinId): void {
-  if (skin === "navy") delete document.documentElement.dataset.skin;
-  else document.documentElement.dataset.skin = skin;
-}
