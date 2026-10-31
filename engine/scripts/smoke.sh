@@ -24,6 +24,7 @@ npm run test -w packages/daemon -- \
   test/unisolated-launch.test.ts \
   test/team-start.test.ts \
   test/team-result.test.ts \
+  test/user-settings-routes.test.ts \
   --maxWorkers=2
 
 npm run test -w packages/cli -- test/team-start.test.ts test/team-apply.test.ts --maxWorkers=2
