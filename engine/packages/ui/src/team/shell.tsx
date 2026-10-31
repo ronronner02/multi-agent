@@ -120,10 +120,11 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
  * The app shell itself: sidebar, command strip and the destination's content. It holds no data
  * and no router, so the same frame serves the web app and the desktop wrapper.
  */
-export function ShellFrame({ language, section, theme, onTheme, runId, runPicker, project, coordinator, connection, notifications, onSelect, onSearch, children }: {
+export function ShellFrame({ language, section, theme, onTheme, runId, runPicker, project, coordinator, connection, notifications, hrefFor, onSelect, onSearch, children }: {
   language: InterfaceI18n; section: TeamSection; theme: TeamTheme; onTheme: (theme: TeamTheme) => void;
   runId: string; runPicker?: ReactNode; project: string; coordinator: { state: string; known: boolean }; connection: string;
-  notifications: number | undefined; onSelect: (section: TeamSection) => void; onSearch: (query: string) => void;
+  notifications: number | undefined; hrefFor: (section: TeamSection) => string;
+  onSelect: (section: TeamSection) => void; onSearch: (query: string) => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -142,8 +143,11 @@ export function ShellFrame({ language, section, theme, onTheme, runId, runPicker
       <nav className="ui-nav" aria-label={t("shell.appName")}>
         {TEAM_SECTIONS.map(id => {
           const Icon = NAV_ICONS[id];
-          return <a key={id} href={`#/team/${id}`} onClick={event => { event.preventDefault(); onSelect(id); }}
-            aria-current={section === id ? "page" : undefined}><Icon aria-hidden="true" /><span>{t(`nav.${id}`)}</span></a>;
+          return <a key={id} href={hrefFor(id)} onClick={event => {
+            // Plain clicks stay in the app; a modified click keeps the browser's own behaviour.
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault(); onSelect(id);
+          }} aria-current={section === id ? "page" : undefined}><Icon aria-hidden="true" /><span>{t(`nav.${id}`)}</span></a>;
         })}
       </nav>
       <div className="ui-sidebar-foot">
@@ -233,7 +237,9 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   return <ShellFrame language={language} section={section} theme={theme} onTheme={setTheme}
     runId={runId} runPicker={paired ? <RunSelect current={runId} /> : undefined}
     project={read?.run.rigId ?? ""} coordinator={{ state: coordinator?.state ?? "unknown", known: !!coordinator }}
-    connection={connection} notifications={pending?.length} onSelect={go} onSearch={query => go("tasks", query)}>
+    connection={connection} notifications={pending?.length}
+    hrefFor={next => `/team/${next}${runId ? `?run=${encodeURIComponent(runId)}` : ""}`}
+    onSelect={go} onSearch={query => go("tasks", query)}>
     {!paired && section !== "settings" && <Pairing />}
     {section === "settings" ? <SettingsScreen language={language} theme={theme} onTheme={setTheme} /> : <>
       {!runId && <Card className="team-card ui-empty" role="status"><strong>{t("shell.noRun")}</strong>
