@@ -188,7 +188,7 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
   program.addCommand(importCommand(depsOverride?.importDeps));
   program.addCommand(uiCommand(depsOverride?.uiDeps));
   program.addCommand(tuiCommand());
-  // MVP slice 2 - the owner starts team work from a goal.
+  // MVP slices 2 and 3 - the owner starts team work from a goal, then reads and applies the result.
   program.addCommand(teamCommand(depsOverride?.teamStartDeps));
   program.addCommand(packageCommand(depsOverride?.packageDeps));
   program.addCommand(bootstrapCommand(depsOverride?.bootstrapDeps));
@@ -269,6 +269,7 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
   program.addCommand(scopeCommand());
   // OPR.0.4.4.19 FR-8 — rig proof: the C1 proof-drop write path.
   program.addCommand(proofCommand());
+  // MVP slice 3 — read a finished task's result and apply it to the owner's repository.
 
   return program;
 }

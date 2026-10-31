@@ -363,5 +363,12 @@
   "edit.submit": "\u63d0\u4ea4\u7f16\u8f91",
   "edit.routine": "\u5e38\u89c4",
   "edit.urgent": "\u7d27\u6025",
-  "edit.critical": "\u5173\u952e"
+  "edit.critical": "\u5173\u952e",
+  "web.result": "任务结果",
+  "web.resultPending": "该任务尚无已完成的尝试。",
+  "web.resultUnavailable": "当前快照中无法获取该任务的结果。",
+  "web.changedFiles": "变更文件",
+  "web.diff": "统一差异",
+  "web.applyCommand": "应用命令",
+  "web.copy": "复制"
 }
