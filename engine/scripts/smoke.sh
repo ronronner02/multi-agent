@@ -30,4 +30,4 @@ npm run test -w packages/cli -- test/team-start.test.ts test/team-apply.test.ts 
 
 npm run test -w packages/tui -- test/team-controls.test.ts --maxWorkers=2
 
-npm run test -w packages/ui -- src/team/__tests__/decisions.test.tsx src/team/__tests__/new-task.test.tsx src/team/__tests__/result-panel.test.tsx --maxWorkers=2
+npm run test -w packages/ui -- src/team/__tests__/decisions.test.tsx src/team/__tests__/new-task.test.tsx src/team/__tests__/result-panel.test.tsx src/team/__tests__/shell.test.tsx src/team/__tests__/overview.test.tsx src/team/__tests__/tasks.test.tsx --maxWorkers=2

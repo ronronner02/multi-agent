@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nextProvider } from "react-i18next";
 import { createInterfaceI18n } from "@openrig/i18n";
 import { OwnerReadError } from "../../hooks/useOwnerSession.js";
-import { NewTaskForm, RunPicker } from "../new-task.js";
+import { NewTaskForm, RunSelect } from "../new-task.js";
 
 /**
  * MVP slice 2 — the Web UI "New task" form.
@@ -64,14 +64,22 @@ it("lists the runs the daemon returned so an id need not be typed", async () => 
     { id: "run-9", rigId: "rig", rigName: "demo", state: "approved", planRef: "plan.md", createdAt: "2026-10-31T00:00:00.000Z" },
     { id: "run-8", rigId: "rig", rigName: "demo", state: "pending", planRef: "plan.md", createdAt: "2026-10-30T00:00:00.000Z" },
   ] });
-  const language = await show(<RunPicker current="run-8" />);
-  const items = await screen.findAllByRole("listitem");
-  expect(items.map(item => item.textContent)).toEqual([
-    "run-9 · demo · " + language.t("status.run.approved"),
-    "run-8 · demo · " + language.t("status.run.pending"),
-  ]);
-  expect(items[1]!.getAttribute("aria-current")).toBe("true");
-  expect(screen.getByRole("link", { name: "run-9" }).getAttribute("href")).toBe("/team?run=run-9");
+  const language = await show(<RunSelect current="run-8" />);
+  const select = screen.getByRole("combobox", { name: language.t("shell.run") }) as HTMLSelectElement;
+  await waitFor(() => expect(select.options).toHaveLength(2));
+  expect([...select.options].map(option => option.value)).toEqual(["run-9", "run-8"]);
+  expect(select.value).toBe("run-8");
+  fireEvent.change(select, { target: { value: "run-9" } });
+  expect(mocks.navigate.mock.calls[0]![0]).toMatchObject({ params: { section: "overview" }, search: { run: "run-9" } });
+});
+
+it("keeps the current run selectable when the run list does not include it", async () => {
+  mocks.request.mockResolvedValue({ runs: [] });
+  const language = await show(<RunSelect current="run-7" />);
+  const select = screen.getByRole("combobox", { name: language.t("shell.run") }) as HTMLSelectElement;
+  await waitFor(() => expect(select.options).toHaveLength(1));
+  expect(select.options[0]!.value).toBe("run-7");
+  expect(select.value).toBe("run-7");
 });
 
 it("does not call the daemon until the browser is paired", async () => {

@@ -1,44 +1,73 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { createInterfaceI18n, type InterfaceI18n, type InterfaceLanguage } from "@openrig/i18n";
-import type { TeamOwnerRead, TeamQueueState, TeamRun } from "@openrig/daemon/team-control";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import { Activity as ActivityIcon, Bot, ClipboardList, Folder, Home, Library, Settings, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ChartColumn, ChevronDown, House, LayoutGrid, Moon, Search, Settings as SettingsIcon, SquareCheck, Sun } from "lucide-react";
 import { version } from "../../package.json";
 import { Card } from "../components/ui/card.js";
 import { Button } from "../components/ui/button.js";
-import { applySkin, readStoredSkin, SKINS, writeStoredSkin, type SkinId } from "../lib/theme.js";
-import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion.js";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
-import { RunStepper } from "./run-stepper.js";
-import { NewTaskForm, RunPicker } from "./new-task.js";
+import { NewTaskForm, RunSelect } from "./new-task.js";
 import { Overview } from "./overview.js";
+import { TasksScreen } from "./tasks.js";
 import { WorkspaceView, type BrowseState } from "./workspace/workspace-view.js";
 import { KnowledgeView } from "./knowledge/knowledge-view.js";
-import "../skins/shuimo-danqing/skin.css";
+import { AgentStatus } from "./agent-status.js";
+import { Activity } from "./activity.js";
+import { BottomPanel, type TerminalTarget } from "./bottom-panel.js";
+import { DecisionCard } from "./decision-card.js";
+import { ReviewDecisions } from "./review-decisions.js";
+import { RunStepper } from "./run-stepper.js";
+import { SystemStatus } from "./system-status.js";
+import "./team.css";
 
 export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
-const destinations = [
-  ["overview", Home], ["tasks", ClipboardList], ["workspace", Folder], ["agents", Bot],
-  ["decisions", ShieldCheck], ["logs", ActivityIcon], ["knowledge", Library], ["settings", Settings],
-] as const;
 
-export function SkinBackdrop({ skin }: { skin: SkinId }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const reduced = usePrefersReducedMotion();
-  useEffect(() => {
-    if (!video.current) return;
-    if (reduced) video.current.pause();
-    else void video.current.play().catch(() => { /* A blocked autoplay leaves a decorative still frame. */ });
-  }, [skin, reduced]);
-  return skin === "shuimo-danqing" ? <div className="team-backdrop" aria-hidden="true">
-    <video ref={video} src="/skins/shuimo-danqing/shuimo-danqing-loop.mp4"
-      poster="/skins/shuimo-danqing/sm-paper-grain.webp" loop muted playsInline preload="metadata" />
-  </div> : null;
+/** The six destinations the shell ships; the order is the sidebar order. */
+export const TEAM_SECTIONS = ["overview", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
+export type TeamSection = (typeof TEAM_SECTIONS)[number];
+
+/**
+ * Destinations the retired eight-item rail exposed. Their deep links stay valid by opening the
+ * destination that now owns the same evidence instead of a blank page.
+ */
+const LEGACY_SECTIONS: Readonly<Record<string, TeamSection>> = {
+  agents: "workspace", logs: "workspace", knowledge: "workspace", decisions: "reviews",
+};
+
+export function teamSection(pathname: string): TeamSection {
+  const raw = pathname.split("/")[2] || "overview";
+  if (LEGACY_SECTIONS[raw]) return LEGACY_SECTIONS[raw]!;
+  return (TEAM_SECTIONS as readonly string[]).includes(raw) ? (raw as TeamSection) : "overview";
 }
 
-function Pairing() {
+export const TEAM_THEME_KEY = "openrig.teamTheme";
+export type TeamTheme = "dark" | "light";
+
+export function readTeamTheme(): TeamTheme {
+  try {
+    return localStorage.getItem(TEAM_THEME_KEY) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+export function writeTeamTheme(theme: TeamTheme): void {
+  try {
+    localStorage.setItem(TEAM_THEME_KEY, theme);
+  } catch {
+    // The choice still applies to this load when storage is unavailable.
+  }
+}
+
+const NAV_ICONS = {
+  overview: House, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: SettingsIcon,
+} as const;
+
+const USAGE_LABELS = ["costUsd", "inputTokens", "outputTokens"] as const;
+
+export function Pairing() {
   const { t } = useTranslation();
   const { paired, pair, revoke } = useOwnerSession();
   const [code, setCode] = useState("");
@@ -60,17 +89,114 @@ function Pairing() {
   </Card>;
 }
 
-function CurrentPlan({ run, read }: { run?: TeamRun; read?: TeamOwnerRead }) {
+/** The command strip's search field. It jumps to Tasks with the query, and Ctrl K focuses it. */
+export function GlobalSearch({ onSearch }: { onSearch: (query: string) => void }) {
   const { t } = useTranslation();
-  return <Card className="team-card team-current-plan" role="region" aria-label={t("web.plan")}>
-    <h2>{t("web.plan")}</h2><code>{run?.binding.planRef ?? t("web.unknown")}</code>
-    <dl className="team-detail-facts"><div><dt>{t("web.digest")}</dt><dd>{run ? <details><summary><code>{run.binding.planDigest.slice(0, 19)}…</code></summary><code>{run.binding.planDigest}</code></details> : t("web.unknown")}</dd></div>
-      <div><dt>{t("web.binding")}</dt><dd>{run ? <details><summary><code>{run.bindingDigest.slice(0, 19)}…</code></summary><code>{run.bindingDigest}</code></details> : t("web.unknown")}</dd></div>
-      <div><dt>{t("web.runState")}</dt><dd>{run ? t(`status.run.${run.state}`) : t("web.unknown")}</dd></div>
-      <div><dt>{t("web.approvalTime")}</dt><dd>{t("value.unavailable")}</dd></div>
-      <div><dt>{t("web.readiness")}</dt><dd>{t(`web.stageState.${read?.workflow.stages.find(stage => stage.stage === "plan-approved")?.state ?? "unavailable"}`)}</dd></div>
-    </dl>
-  </Card>;
+  const [value, setValue] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const focus = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); input.current?.focus(); }
+    };
+    window.addEventListener("keydown", focus);
+    return () => window.removeEventListener("keydown", focus);
+  }, []);
+  return <form className="ui-search" role="search" onSubmit={event => { event.preventDefault(); onSearch(value.trim()); }}>
+    <Search aria-hidden="true" />
+    <input ref={input} value={value} onChange={event => setValue(event.target.value)}
+      placeholder={t("shell.searchJump")} aria-label={t("shell.searchJump")} autoComplete="off" />
+    <kbd>{t("shell.ctrlK")}</kbd>
+  </form>;
+}
+
+export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+  return <header className="ui-page-head">
+    <div><h1>{title}</h1>{subtitle && <p className="ui-subtitle"><code>{subtitle}</code></p>}</div>
+    {actions && <div className="ui-page-actions">{actions}</div>}
+  </header>;
+}
+
+/**
+ * The app shell itself: sidebar, command strip and the destination's content. It holds no data
+ * and no router, so the same frame serves the web app and the desktop wrapper.
+ */
+export function ShellFrame({ language, section, theme, onTheme, runId, runPicker, project, coordinator, connection, notifications, onSelect, onSearch, children }: {
+  language: InterfaceI18n; section: TeamSection; theme: TeamTheme; onTheme: (theme: TeamTheme) => void;
+  runId: string; runPicker?: ReactNode; project: string; coordinator: { state: string; known: boolean }; connection: string;
+  notifications: number | undefined; onSelect: (section: TeamSection) => void; onSearch: (query: string) => void;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  return <div className="team-shell" lang={language.language} data-ui-theme={theme} data-testid="team-shell">
+    <aside className="ui-sidebar">
+      <div className="ui-brand"><span className="ui-monogram" aria-hidden="true">M</span><span>{t("shell.appName")}</span></div>
+      <div className="ui-project">
+        <span className="ui-project-label">{t("shell.project")}</span>
+        <strong>{project || "—"}</strong>
+        <ChevronDown aria-hidden="true" />
+      </div>
+      <div className="ui-coordinator">
+        <span className="ui-dot" data-state={coordinator.known ? coordinator.state : "unknown"} aria-hidden="true" />
+        <span>{t("shell.coordinator")} · {coordinator.known ? t(coordinator.state === "running" ? "shell.active" : "shell.idle") : t("web.unknown")}</span>
+      </div>
+      <nav className="ui-nav" aria-label={t("shell.appName")}>
+        {TEAM_SECTIONS.map(id => {
+          const Icon = NAV_ICONS[id];
+          return <a key={id} href={`#/team/${id}`} onClick={event => { event.preventDefault(); onSelect(id); }}
+            aria-current={section === id ? "page" : undefined}><Icon aria-hidden="true" /><span>{t(`nav.${id}`)}</span></a>;
+        })}
+      </nav>
+      <div className="ui-sidebar-foot">
+        <button type="button" className="ui-theme-toggle" aria-label={t(theme === "dark" ? "shell.themeLight" : "shell.themeDark")}
+          onClick={() => onTheme(theme === "dark" ? "light" : "dark")}>
+          {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+          <span>{t(theme === "dark" ? "settings.theme.light" : "settings.theme.dark")}</span>
+        </button>
+        <span className="ui-connection"><span className="ui-dot" data-state={connection === "shell.connected" ? "ok" : "unknown"} aria-hidden="true" />{t("shell.remoteMonitor")}</span>
+      </div>
+    </aside>
+    <div className="ui-content">
+      <header className="ui-topstrip">
+        <div className="ui-breadcrumb"><span>{project || t("shell.project")}</span><span aria-hidden="true">/</span>{runPicker ?? <code>{runId || "—"}</code>}</div>
+        <GlobalSearch onSearch={onSearch} />
+        <div className="ui-top-meta">
+          <span className="ui-status" role="status"><span className="ui-dot" data-state={connection === "shell.connected" ? "ok" : "unknown"} aria-hidden="true" />{t(connection as "shell.connected")}</span>
+          <span className="ui-bell" aria-label={`${t("shell.notifications")}: ${notifications ?? "—"}`}>
+            <span aria-hidden="true">◔</span>{notifications !== undefined && notifications > 0 && <span className="ui-badge">{notifications}</span>}
+          </span>
+        </div>
+      </header>
+      <main className="ui-main">{children}</main>
+    </div>
+  </div>;
+}
+
+function SettingsScreen({ language, theme, onTheme }: {
+  language: InterfaceI18n; theme: TeamTheme; onTheme: (theme: TeamTheme) => void;
+}) {
+  const { t } = useTranslation();
+  const { read } = useTeamRun("");
+  return <>
+    <PageHeader title={t("settings.title")} />
+    <Card className="team-card" role="region" aria-label={t("settings.appearance")}>
+      <h2>{t("settings.appearance")}</h2>
+      <div className="ui-field">
+        <label>{t("language.label")}<select value={language.language} onChange={event => void language.changeLanguage(event.target.value as InterfaceLanguage)}>
+          <option value="zh-CN">{t("language.zh-CN")}</option><option value="en">{t("language.en")}</option></select></label>
+        <label>{t("settings.theme")}<select value={theme} onChange={event => onTheme(event.target.value as TeamTheme)}>
+          <option value="dark">{t("settings.theme.dark")}</option><option value="light">{t("settings.theme.light")}</option></select></label>
+      </div>
+      <p className="team-muted">{t("settings.themeHelp")}</p>
+    </Card>
+    <Card className="team-card" role="region" aria-label={t("settings.connection")}>
+      <h2>{t("settings.connection")}</h2><p className="team-muted"><code>v{version}</code></p>
+      <Pairing />
+    </Card>
+    <Card className="team-card" role="region" aria-label={t("settings.plan")}>
+      <h2>{t("settings.plan")}</h2>
+      <p className="team-muted">{read.data?.run.binding.planRef ?? t("web.noRun")}</p>
+    </Card>
+  </>;
 }
 
 function ManagedShell({ language }: { language: InterfaceI18n }) {
@@ -79,95 +205,72 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   const searchParams = useSearch({ from: "/team" });
   const runId = searchParams.run ?? "";
   const pathname = useRouterState({ select: state => state.location.pathname });
-  const section = pathname.split("/")[2] || "overview";
+  const section = teamSection(pathname);
   const navigate = useNavigate();
   const data = useTeamRun(runId);
-  const [runDraft, setRunDraft] = useState(runId);
+  const [now, setNow] = useState(Date.now);
+  const [theme, setTheme] = useState<TeamTheme>(readTeamTheme);
   const [workspaceBrowse, setWorkspaceBrowse] = useState<BrowseState & { runId: string }>({ runId, path: "", source: "" });
   const [knowledgeBrowse, setKnowledgeBrowse] = useState<BrowseState & { runId: string }>({ runId, path: "", source: "target" });
-  const [filter, setFilter] = useState<TeamQueueState | "all">("all");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("id");
-  const [selectedTask, setSelectedTask] = useState<string>();
-  const [detailTab, setDetailTab] = useState("details");
   const [evidenceTab, setEvidenceTab] = useState("logs");
-  const mainRef = useRef<HTMLElement>(null);
-  const paneScroll = useRef<Record<string, [number, number]>>({});
-  useLayoutEffect(() => {
-    const main = mainRef.current;
-    if (!main) return;
-    for (const pane of [main, ...main.querySelectorAll<HTMLElement>("[data-scroll-pane]")]) {
-      const position = paneScroll.current[pane.dataset.scrollPane!];
-      if (position) { pane.scrollLeft = position[0]; pane.scrollTop = position[1]; }
-    }
-    const viewport = `window-${section}`;
-    const position = paneScroll.current[viewport];
-    if (position) window.scrollTo(...position);
-    const rememberViewport = () => { if (paired) paneScroll.current[viewport] = [window.scrollX, window.scrollY]; };
-    window.addEventListener("scroll", rememberViewport);
-    return () => window.removeEventListener("scroll", rememberViewport);
-  }, [section, paired]);
-  const [skin, setSkin] = useState(readStoredSkin);
-  const [now, setNow] = useState(Date.now);
+  const [target, setTarget] = useState<TerminalTarget>(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(timer); }, []);
-  useEffect(() => { setRunDraft(runId); }, [runId]);
-  useEffect(() => { applySkin(skin); return () => applySkin("navy"); }, [skin]);
+  useEffect(() => { writeTeamTheme(theme); }, [theme]);
+
+  const read = data.read.data;
   const error = data.read.error ?? data.events.error ?? data.health.error;
-  const readAt = runId ? Math.min(data.read.dataUpdatedAt, Date.parse(data.read.data?.generatedAt ?? "") || 0) : data.health.dataUpdatedAt;
+  const readAt = runId ? Math.min(data.read.dataUpdatedAt, Date.parse(read?.generatedAt ?? "") || 0) : data.health.dataUpdatedAt;
   const age = readAt ? Math.max(0, Math.floor((now - readAt) / 1_000)) : null;
+  const fresh = age !== null && now - readAt <= 5_000;
   const connection = !paired ? "web.pairRequired" : error instanceof OwnerReadError ? (error.status === 404 ? "web.notFound" : "web.error")
-    : error instanceof TypeError ? "web.disconnected" : error ? "web.error" : age === null ? "web.loading" : now - readAt > 5_000 ? "web.stale" : "web.snapshot";
-  const approvals = paired && !data.read.isError && now - readAt <= 5_000 ? data.read.data?.approvals : undefined;
-  const pending = approvals?.filter(item => item.state === "pending");
-  const healthAvailable = paired && !data.health.isError && now - data.health.dataUpdatedAt <= 5_000;
-  const preferences = <div className="team-preferences">
-    <label>{t("language.label")}<select value={language.language} onChange={e => void language.changeLanguage(e.target.value as InterfaceLanguage)}>
-      <option value="zh-CN">{t("language.zh-CN")}</option><option value="en">{t("language.en")}</option></select></label>
-    <label>{t("web.skin")}<select value={skin} onChange={e => { const next = e.target.value as SkinId; setSkin(next); writeStoredSkin(next); }}>
-      {SKINS.map(id => <option key={id} value={id}>{t(`web.skin.${id}`)}</option>)}</select></label>
-  </div>;
-  const nav = (mobile = false) => <nav className={mobile ? "team-mobile-nav" : "team-nav"} aria-label={mobile ? t("web.overview") : t("web.title")}>
-    {destinations.filter(([id]) => !mobile || ["overview", "tasks", "decisions", "logs", "settings"].includes(id)).map(([id, Icon]) =>
-        <Link key={id} to="/team/$section" params={{ section: id }} search={{ run: runId || undefined }} resetScroll={false} aria-current={section === id ? "page" : undefined}>
-          <Icon aria-hidden="true" /><span>{t(`web.${id}`)}</span></Link>)}
-  </nav>;
-  return <div className="team-shell" lang={language.language} data-testid="team-shell">
-    <SkinBackdrop skin={skin} />
-    <header className="team-topbar"><div className="team-brand"><Bot aria-hidden="true" /><h1>{t("web.title")}</h1><code>v{version}</code></div>
-      <div className="team-top-meta"><span>{t("web.environment")}: {t("web.unknown")}</span><time dateTime={new Date(now).toISOString()}>{new Date(now).toLocaleTimeString(language.language)}</time>
-        <Link to="/team/$section" params={{ section: "decisions" }} search={{ run: runId || undefined }}>{t("web.pendingDecisions")}: {pending?.length ?? "?"}</Link></div>
-      {preferences}
-    </header>
-    <aside className="team-rail">{nav()}<CurrentPlan run={data.read.data?.run} read={data.read.data} /></aside>
-    <main ref={mainRef} data-scroll-pane={`main-${section}`} onScrollCapture={event => {
-      const pane = event.target as HTMLElement;
-      // The re-pair prompt may temporarily remove a pane's scrollable layout.
-      if (paired && pane.dataset.scrollPane) paneScroll.current[pane.dataset.scrollPane] = [pane.scrollLeft, pane.scrollTop];
-    }} className={`team-main${paired && runId && ["overview", "tasks"].includes(section) ? " team-main-overview" : ""}`}>
-      <div className="team-connection" role="status"><strong>{t(connection)}</strong>{age !== null && <span>{age} {t("web.seconds")}</span>}<span>{t("web.heartbeat")}: {data.events.isSuccess && !data.events.isError && now - data.events.dataUpdatedAt <= 5_000 ? data.events.data.window.latestSeq : t("value.unavailable")}</span></div>
-      {!paired && section !== "settings" && <Pairing />}
-      <form className="team-run-picker" onSubmit={e => { e.preventDefault(); void navigate({ to: "/team/$section", params: { section }, search: { run: runDraft.trim() || undefined } }); }}>
-        <label>{t("web.run")}<input value={runDraft} onChange={e => setRunDraft(e.target.value)} autoComplete="off" /></label><Button type="submit" variant="outline">{t("web.loadRun")}</Button>
-      </form>
-      <NewTaskForm />
-      <RunPicker current={runId} />
-      <nav className="team-filters" aria-label={`${t("web.workspace")} / ${t("web.knowledge")}`}>
-        {(["workspace", "knowledge"] as const).map(id => <Button asChild variant="outline" key={id}>
-          <Link to="/team/$section" params={{ section: id }} search={{ run: runId || undefined }} aria-current={section === id ? "page" : undefined}>{t(`web.${id}`)}</Link>
-        </Button>)}
-      </nav>
-      {!runId && <div className="team-empty" role="status"><strong>{t("web.noRun")}</strong><p>{t("web.discovery")}</p></div>}
-      {section === "settings" ? <Card className="team-card"><h2>{t("web.settings")}</h2>{preferences}<Pairing /></Card> : <>
-        <RunStepper workflow={data.read.data?.workflow} />
-        {section === "workspace" ? <WorkspaceView runId={runId} state={workspaceBrowse.runId === runId ? workspaceBrowse : { path: "", source: "" }} onState={state => setWorkspaceBrowse({ ...state, runId })} tasks={data.read.data?.tasks} />
-          : section === "knowledge" ? <KnowledgeView runId={runId} state={knowledgeBrowse.runId === runId ? knowledgeBrowse : { path: "", source: "target" }} onState={state => setKnowledgeBrowse({ ...state, runId })} />
-          : <Overview controlsAvailable={paired && !error && age !== null && now - readAt <= 5_000} refresh={() => data.read.refetch({ throwOnError: true })} section={section} run={data.read.data?.run} runId={runId} read={data.read.data} replay={data.events.data} selectedTask={selectedTask} onSelectTask={setSelectedTask} health={data.health.data}
-          healthAvailable={healthAvailable} now={now} filter={filter} search={search} sort={sort} onFilter={setFilter} onSearch={setSearch} onSort={setSort}
-          detailTab={detailTab} evidenceTab={evidenceTab} onDetailTab={setDetailTab} onEvidenceTab={setEvidenceTab} />}
+    : error instanceof TypeError ? "web.disconnected" : error ? "web.error" : !runId ? "web.noRun" : age === null ? "web.loading" : fresh ? "shell.connected" : "web.stale";
+  const pending = paired && fresh ? read?.approvals.filter(item => item.state === "pending") : undefined;
+  const coordinator = read?.attempts.find(attempt => attempt.role === "lead");
+  const go = (next: TeamSection, query?: string) => void navigate({
+    to: "/team/$section", params: { section: next }, search: { run: runId || undefined, q: query || undefined },
+  });
+
+  return <ShellFrame language={language} section={section} theme={theme} onTheme={setTheme}
+    runId={runId} runPicker={paired ? <RunSelect current={runId} /> : undefined}
+    project={read?.run.rigId ?? ""} coordinator={{ state: coordinator?.state ?? "unknown", known: !!coordinator }}
+    connection={connection} notifications={pending?.length} onSelect={go} onSearch={query => go("tasks", query)}>
+    {!paired && section !== "settings" && <Pairing />}
+    {section === "settings" ? <SettingsScreen language={language} theme={theme} onTheme={setTheme} /> : <>
+      {!runId && <Card className="team-card ui-empty" role="status"><strong>{t("shell.noRun")}</strong>
+        <p className="team-muted">{t("web.discovery")}</p></Card>}
+      {section === "overview" && <Overview read={read} run={read?.run} now={now}
+        onInspect={() => go("workspace")} onOpenTasks={() => go("tasks")} />}
+      {section === "tasks" && <TasksScreen read={read} runId={runId} query={searchParams.q} />}
+      {section === "workspace" && <>
+        <PageHeader title={t("nav.workspace")} subtitle={runId || undefined} />
+        <WorkspaceView runId={runId} state={workspaceBrowse.runId === runId ? workspaceBrowse : { path: "", source: "" }}
+          onState={state => setWorkspaceBrowse({ ...state, runId })} tasks={read?.tasks} />
+        <KnowledgeView runId={runId} state={knowledgeBrowse.runId === runId ? knowledgeBrowse : { path: "", source: "target" }}
+          onState={state => setKnowledgeBrowse({ ...state, runId })} tasks={read?.tasks} />
+        <AgentStatus health={data.health.data} runId={runId} attempts={read?.attempts} />
+        <Activity read={read} replay={data.events.data} />
+        <BottomPanel tab={evidenceTab} onTab={setEvidenceTab} read={read} available={paired && !error && fresh}
+          target={target} onTarget={setTarget} />
       </>}
-    </main>
-    {nav(true)}
-  </div>;
+      {section === "reviews" && <>
+        <PageHeader title={t("nav.reviews")} subtitle={runId || undefined} />
+        <DecisionCard read={paired && !error && fresh ? read : undefined} available={paired && !error && fresh} now={now}
+          refresh={() => data.read.refetch({ throwOnError: true })} />
+        <ReviewDecisions tasks={read?.tasks} />
+      </>}
+      {section === "analytics" && <>
+        <PageHeader title={t("nav.analytics")} subtitle={runId || undefined} />
+        <RunStepper workflow={read?.workflow} />
+        <SystemStatus run={read?.run} health={data.health.data} available={paired && !error && fresh} now={now} />
+        <Card className="team-card" role="region" aria-label={t("web.usage")}><h2>{t("web.usage")}</h2>
+          <dl className="team-facts">{USAGE_LABELS.map(name => <div key={name}>
+            <dt>{t(name === "costUsd" ? "web.cost" : name === "inputTokens" ? "web.inputTokens" : "web.outputTokens")}</dt>
+            <dd>{read?.run.usage[name].value ?? t("web.unknown")}<small>{read?.run.usage[name].reason}</small></dd>
+          </div>)}</dl>
+        </Card>
+      </>}
+    </>}
+  </ShellFrame>;
 }
 
 export function TeamShell() {

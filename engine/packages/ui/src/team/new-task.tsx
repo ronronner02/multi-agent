@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import type { TeamRunSummary, TeamStartReceipt } from "@openrig/daemon/team-control";
 import { Button } from "../components/ui/button.js";
@@ -10,28 +10,28 @@ import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 /**
  * MVP slice 2 — start team work from the Web UI.
  *
- * A "New task" form that calls the same owner endpoint `rig team start` calls, and a list of
- * the runs that exist so nobody has to type an id. Both use the components the team view
- * already ships; a full restyle is a later slice, so this adds no styling of its own.
+ * A "New task" form that calls the same owner endpoint `rig team start` calls, and a run
+ * selector fed by the run list, so nobody has to type an id.
  */
 
 const runsKey = ["team", "runs"] as const;
 
-export function RunPicker({ current }: { current: string }) {
-  const { t } = useTranslation(), session = useOwnerSession();
+/**
+ * The run selector the command strip shows. It lists the runs the daemon returns, so the owner
+ * picks one instead of typing an id; an empty or unavailable list keeps the current run visible.
+ */
+export function RunSelect({ current }: { current: string }) {
+  const { t } = useTranslation(), session = useOwnerSession(), navigate = useNavigate();
   const query = useQuery({ queryKey: runsKey, enabled: session.paired, retry: false, refetchInterval: 5_000,
     queryFn: ({ signal }) => session.request<{ runs: TeamRunSummary[] }>("/runs", { signal }) });
   const runs = query.data?.runs ?? [];
-  return <Card className="team-card" role="region" aria-label={t("web.runs")}>
-    <h2>{t("web.runs")}</h2>
-    {query.isError ? <p role="alert">{t("web.error")}</p>
-      : !session.paired ? <p>{t("web.pairRequired")}</p>
-      : runs.length === 0 ? <p role="status">{t("web.noRuns")}</p>
-      : <ul>{runs.map(run => <li key={run.id} aria-current={run.id === current ? "true" : undefined}>
-        <Link to="/team/$section" params={{ section: "overview" }} search={{ run: run.id }}><code>{run.id}</code></Link>
-        {" · "}{run.rigName}{" · "}{t(`status.run.${run.state}`)}
-      </li>)}</ul>}
-  </Card>;
+  const known = runs.some(run => run.id === current);
+  return <select className="ui-runselect" aria-label={t("shell.run")} value={current}
+    onChange={event => void navigate({ to: "/team/$section", params: { section: "overview" }, search: { run: event.target.value || undefined } })}>
+    {!current && <option value="">{t("shell.chooseRun")}</option>}
+    {current && !known && <option value={current}>{current}</option>}
+    {runs.map(run => <option key={run.id} value={run.id}>{run.id} · {run.rigName}</option>)}
+  </select>;
 }
 
 export function NewTaskForm() {
