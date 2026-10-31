@@ -111,7 +111,9 @@ describe("config routes (User Settings v0)", () => {
     // + 1 queue.wake_human_rung (#811; default "always").
     // + 1 output.compact (slice 15 compact command-output switch; default off).
     // + 1 provider.usage_windows (slice 01 Codex usage windows; default off).
-    expect(Object.keys(body.settings).length).toBe(75);
+    // + 1 workers.isolation (MVP slice 1; default "none").
+    expect(Object.keys(body.settings).length).toBe(76);
+    expect(body.settings["workers.isolation"]).toMatchObject({ value: "none", source: "default" });
     expect(body.settings["launch.non_interruptive"]).toMatchObject({ value: false, source: "default" });
     expect(body.settings["runtime.readiness_timeout_seconds"]).toMatchObject({ value: 30, source: "default" });
     expect(body.settings["ui.enabled"]).toMatchObject({ value: false, source: "default" });
