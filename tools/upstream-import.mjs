@@ -114,6 +114,8 @@ export const PIN = Object.freeze({
     'packages/daemon/src/domain/restore-orchestrator.ts',
     'packages/daemon/src/domain/startup-orchestrator.ts',
     'packages/daemon/test/restore-orchestrator.test.ts',
+    // The smoke lane runs the team decisions suite that lives under src/.
+    'packages/ui/vitest.config.ts',
   ],
 });
 
@@ -243,6 +245,7 @@ const LOCAL_ENGINE_PATHS = [
   'packages/ui/src/team/__tests__/responsive.test.tsx',
   'packages/ui/src/team/__tests__/decisions.test.tsx',
   'packages/daemon/test/managed-attempt-attachment.test.ts',
+  'scripts/smoke.sh',
 ];
 
 export class ImportError extends Error {

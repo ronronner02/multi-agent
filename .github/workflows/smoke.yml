@@ -1,0 +1,31 @@
+name: smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: engine/package-lock.json
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: engine
+      - name: Build
+        run: npm run build
+        working-directory: engine
+      - name: Typecheck
+        run: npm run lint
+        working-directory: engine
+      - name: Smoke tests
+        run: npm run smoke
+        working-directory: engine
