@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -8,13 +10,12 @@ import { readOpenRigEnv } from "../openrig-compat.js";
 import { realDeps } from "./daemon.js";
 
 /**
- * `rig team start "<goal>"` — MVP slice 2.
+ * `rig team` — MVP slices 2 and 3.
  *
- * One owner action that turns a goal into a run and a task, then prints how to watch it. The
- * start itself is the daemon's: this verb authenticates with the owner credential the managed
- * daemon was started with, calls the one endpoint, and reports what came back. It never builds
- * a plan, a binding or a task of its own, so a CLI start and a Web start cannot disagree about
- * what was created.
+ * `start` turns a goal into a run and a task; `diff` and `apply` hand a finished task's patch
+ * back to the owner. Every verb is the daemon's work: these only authenticate with the owner
+ * credential the managed daemon was started with and report what came back, so a CLI action and
+ * a Web action cannot disagree about what exists.
  */
 
 export interface TeamStartDeps {
@@ -24,12 +25,13 @@ export interface TeamStartDeps {
   fetchImpl?: typeof fetch;
 }
 
-interface StartReceipt {
-  runId: string;
-  rigId: string;
-  taskId: string;
-  seat: string;
-  state: string;
+interface StartReceipt { runId: string; rigId: string; taskId: string; seat: string; state: string }
+
+/** The result the daemon serves for one finished task; the shape `TeamTaskResult` publishes. */
+interface TeamTaskResult {
+  schema: "multi-agent-team-result/v1"; runId: string; taskId: string; attemptId: string | null;
+  repositoryRoot: string; base: "commit" | "snapshot"; baseIdentifier: string; manifestDigest: string;
+  files: Array<{ path: string; hash: string; tracked: boolean }>; patch: string;
 }
 
 const BASE = "/api/team-control";
@@ -54,7 +56,18 @@ export function readOwnerTokenFile(env: NodeJS.ProcessEnv = process.env): string
   return null;
 }
 
+/** The one credential resolution every verb uses: explicit dep, then the environment, then setup's file. */
+function ownerToken(deps: TeamStartDeps): string | null {
+  return deps.ownerToken ?? readOpenRigEnv("MULTI_AGENT_OWNER_TOKEN")?.trim() ?? readOwnerTokenFile();
+}
+
+class TeamCommandError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) { super(message); this.code = code; }
+}
+
 export function teamCommand(depsOverride?: TeamStartDeps): Command {
+  const deps = (): TeamStartDeps => depsOverride ?? { lifecycleDeps: realDeps() };
   const cmd = new Command("team").description("start and inspect owner-governed team runs");
   cmd
     .command("start <goal>")
@@ -66,21 +79,19 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .option("--write <path...>", "repository-relative paths the task may write (default: src)")
     .option("--json", "print the daemon's receipt as JSON")
     .action(async (goal: string, opts: Record<string, unknown>) => {
-      const deps = depsOverride ?? { lifecycleDeps: realDeps() };
-      const token = deps.ownerToken ?? readOpenRigEnv("MULTI_AGENT_OWNER_TOKEN")?.trim() ?? readOwnerTokenFile();
+      const token = ownerToken(deps());
       if (!token) {
         console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
         process.exitCode = 1;
         return;
       }
-      const status = await getDaemonStatus(deps.lifecycleDeps);
+      const status = await getDaemonStatus(deps().lifecycleDeps);
       if (!daemonStatusGuard(status)) return;
-      const client = new DaemonClient(getDaemonUrl(status), { ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}) });
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
       const body = { goal, ...(opts.rig ? { rig: String(opts.rig) } : {}), ...(opts.seat ? { seat: String(opts.seat) } : {}),
         ...(opts.repository ? { repository: { root: String(opts.repository), ...(opts.plan ? { planRef: String(opts.plan) } : {}) } }
           : opts.plan ? { repository: { planRef: String(opts.plan) } } : {}),
         ...(opts.write ? { writePaths: (opts.write as string[]) } : {}) };
-      let receipt: StartReceipt;
       const response = await client.post<StartReceipt & { error?: string }>(BASE + "/runs", body,
         { headers: { Authorization: "Bearer " + token } });
       if (response.status !== 201 || !response.data?.runId) {
@@ -88,7 +99,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
         process.exitCode = 1;
         return;
       }
-      receipt = response.data;
+      const receipt = response.data;
       if (opts.json) { console.log(JSON.stringify(receipt)); return; }
       const base = getDaemonUrl(status);
       console.log(`Run:  ${receipt.runId}`);
@@ -97,5 +108,96 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log("Watch it:");
       console.log(`  ${base}/team?run=${encodeURIComponent(receipt.runId)}   (after rig config set ui.enabled true)`);
     });
+
+  /**
+   * Fetch one task's result. `apply` and `diff` share this: the patch and the manifest are the
+   * candidate's own computation, and neither verb may produce a second reading of the tree.
+   */
+  async function readResult(runId: string, taskId: string | undefined): Promise<TeamTaskResult> {
+    const token = ownerToken(deps());
+    if (!token) throw new TeamCommandError("control_auth_required",
+      "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+    const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+    if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+      "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+    const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+    const headers = { Authorization: "Bearer " + token };
+    const resolved = taskId ?? await firstTask(client, runId, headers);
+    const response = await client.get<{ protocolVersion: string; result: TeamTaskResult }>(
+      `${BASE}/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(resolved)}/result`, { headers });
+    if (response.status === 200 && response.data.result?.schema === "multi-agent-team-result/v1") return response.data.result;
+    const code = (response.data as { code?: string } | undefined)?.code ?? "team_result_unavailable";
+    const message = (response.data as { error?: string } | undefined)?.error ?? "The daemon refused the result read.";
+    if (response.status === 401) throw new TeamCommandError("control_auth_required",
+      "The owner credential was refused. Check MULTI_AGENT_OWNER_TOKEN or re-run ./setup.sh.");
+    if (response.status === 409) throw new TeamCommandError(code, `${message} Wait for the task to finish, then retry.`);
+    throw new TeamCommandError(code, message);
+  }
+
+  /** The run's only implementer task, so `rig team diff <run-id>` needs no task id for a one-task run. */
+  async function firstTask(client: DaemonClient, runId: string, headers: Record<string, string>): Promise<string> {
+    const response = await client.get<{ read?: { tasks: Array<{ taskId: string; role: string }> } }>(
+      `${BASE}/runs/${encodeURIComponent(runId)}/read`, { headers });
+    const tasks = response.data.read?.tasks.filter(task => task.role === "implementer") ?? [];
+    if (response.status !== 200 || tasks.length !== 1) {
+      throw new TeamCommandError("team_task_required",
+        tasks.length === 0 ? "This run has no implementer task to read."
+          : "This run has more than one implementer task; name one with --task <id>.");
+    }
+    return tasks[0]!.taskId;
+  }
+
+  /** The changed paths, from git's own reading of the patch. */
+  function changedFiles(patch: string, cwd: string): string[] {
+    return execFileSync("git", ["apply", "--numstat", "-z"], { cwd, input: patch, encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"] }).split("\0").filter(Boolean).map(entry => entry.split("\t").at(-1)!);
+  }
+
+  /** Whether the target tree has anything uncommitted, which `git apply` would then mix into. */
+  function dirty(cwd: string): boolean {
+    return execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=no"], { cwd, encoding: "utf8" }).trim() !== "";
+  }
+
+  cmd.command("diff <run-id>")
+    .description("print a finished task's patch")
+    .option("--task <id>", "the task whose result to read (default: the run's only implementer task)")
+    .action(async (runId: string, options: { task?: string }) => {
+      const result = await readResult(runId, options.task);
+      if (!result.patch) {
+        throw new TeamCommandError("team_result_no_patch",
+          `Task ${result.taskId} has no patch: its candidate uses the ${result.base} lane, which has no history to diff.`);
+      }
+      process.stdout.write(result.patch);
+    });
+
+  cmd.command("apply <run-id>")
+    .description("apply a finished task's patch to your repository with git apply --3way")
+    .option("--task <id>", "the task whose result to apply (default: the run's only implementer task)")
+    .option("--repo <path>", "the repository to apply into (default: the run's project repository)")
+    .option("--allow-dirty", "apply even when the target tree has uncommitted changes")
+    .action(async (runId: string, options: { task?: string; repo?: string; allowDirty?: boolean }) => {
+      const result = await readResult(runId, options.task);
+      if (!result.patch) {
+        throw new TeamCommandError("team_result_no_patch",
+          `Task ${result.taskId} has no patch: its candidate uses the ${result.base} lane, which has no history to diff.`);
+      }
+      const target = realpathSync(options.repo ?? result.repositoryRoot);
+      if (dirty(target) && !options.allowDirty) {
+        throw new TeamCommandError("team_target_dirty",
+          `${target} has uncommitted changes. Commit or stash them, or pass --allow-dirty.`);
+      }
+      const files = changedFiles(result.patch, target);
+      try {
+        execFileSync("git", ["apply", "--3way"], { cwd: target, input: result.patch, encoding: "utf8",
+          stdio: ["pipe", "pipe", "pipe"] });
+      } catch (error) {
+        const detail = (error as { stderr?: string }).stderr?.trim();
+        throw new TeamCommandError("team_apply_failed",
+          `git apply refused the patch in ${target}.${detail ? " " + detail : ""}`);
+      }
+      console.log(`Applied ${result.taskId} (${result.attemptId ?? "no recorded attempt"}) to ${target}.`);
+      for (const file of files) console.log(`  ${file}`);
+    });
+
   return cmd;
 }

@@ -576,3 +576,30 @@ export function parseTeamEvent(value: unknown): TeamControlEvent {
     entityVersion: integer(v.entityVersion, "entityVersion", 1), action: text(v.action, "action"),
     payload: JSON.parse(canonicalJson(object(v.payload, "event.payload"))) as JsonObject };
 }
+
+/**
+ * MVP slice 3 — one finished task's result, as the owner receives it.
+ *
+ * The patch and the file manifest are the candidate's own computation
+ * (`candidateManifest`); this contract only carries them to a client. `files`
+ * is the complete candidate manifest, not only the changed paths, so a reader
+ * can tell what the tree holds from what the patch moves.
+ */
+export const TEAM_RESULT_SCHEMA = "multi-agent-team-result/v1" as const;
+
+export interface TeamTaskResult {
+  schema: typeof TEAM_RESULT_SCHEMA;
+  runId: string;
+  taskId: string;
+  /** The latest recorded attempt, or null when the producer recorded none. */
+  attemptId: string | null;
+  /** The run's project repository, which `rig team apply` defaults to. */
+  repositoryRoot: string;
+  /** Where the patch applies: an owner-established commit, or the snapshot baseline. */
+  base: "commit" | "snapshot";
+  baseIdentifier: string;
+  manifestDigest: string;
+  files: Array<{ path: string; hash: string; tracked: boolean }>;
+  /** A unified diff against `baseIdentifier`; empty for the snapshot lane, which has no history. */
+  patch: string;
+}

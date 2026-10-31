@@ -1,4 +1,5 @@
 import { TaskEditControls } from "./task-edit/task-edit-dialog.js";
+import { ResultPanel } from "./result-panel.js";
 import type { TeamReviewView } from "@openrig/daemon/team-control";
 import { useTranslation } from "react-i18next";
 import { Card } from "../components/ui/card.js";
@@ -27,5 +28,6 @@ export function TaskDetail({ tab, onTab, task }: { tab: string; onTab: (value: s
         tab === "reviewRecord" && task?.reviewAvailable ? <p>{t("web.reviewRounds")}: {task.rounds} · {t("web.openP0P1")}: {task.openP0P1}</p> : <p>{t("value.unavailable")}</p>}
     </TabsContent>)}
     </Tabs>
+    {task && runId && <ResultPanel runId={runId} taskId={task.taskId} />}
   </Card>;
 }

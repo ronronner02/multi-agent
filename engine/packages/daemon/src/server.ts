@@ -149,6 +149,7 @@ import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 import { teamStartRoutes } from "./routes/team-start.js";
+import { teamResultRoutes } from "./routes/team-result.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
@@ -829,6 +830,12 @@ export function createApp(deps: AppDeps): Hono {
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
     orchestratorRoot: fileURLToPath(new URL("../../../../", import.meta.url)),
+  }));
+  // MVP slice 3 — the finished task's patch, served to the owner so `rig team apply` and the
+  // Web UI can hand the result back. Absent a runtime there are no candidate trees to read.
+  app.route("/api/team-control", teamResultRoutes(teamGovernance, {
+    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
   }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,
