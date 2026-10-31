@@ -28,14 +28,9 @@ rig team start "Say hello from the demo team"
 ```
 
 `rig team start` creates a run, gets the plan approved for you, and puts a task on the
-rig's implementer seat. It prints the run id and the commands that watch it:
-
-```bash
-rig tui --team --run <run-id>                  # terminal
-```
-
-Or open `http://127.0.0.1:7433/team?run=<run-id>` in a browser, after
-`rig config set ui.enabled true` and a daemon restart.
+rig's implementer seat. It prints the run id. Watch it in a browser at
+`http://127.0.0.1:7433/team?run=<run-id>`, after `rig config set ui.enabled true` and a
+daemon restart.
 
 The Web UI has the same action as a "New task" form, and lists the runs that exist so
 you never have to type an id.

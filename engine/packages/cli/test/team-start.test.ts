@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createProgram } from "../src/index.js";
 import { teamCommand, type TeamStartDeps } from "../src/commands/team.js";
 import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-lifecycle.js";
@@ -61,7 +64,28 @@ describe("rig team start", () => {
       repository: { root: "/work/repo", planRef: "docs/plan.md" }, writePaths: ["src", "docs"] });
     expect(result.lines).toContain("Run:  run-1");
     expect(result.lines).toContain("Task: task-1 on dev@demo");
-    expect(result.lines).toContain("  rig tui --team --run run-1");
+    expect(result.lines.join("\n")).toContain("http://127.0.0.1:7433/team?run=run-1");
+  });
+
+  it("uses the owner token ./setup.sh wrote when this shell has none", async () => {
+    // The README's quick start: start.sh loads owner.env into the daemon only, so a fresh
+    // shell has the daemon running and no credential of its own.
+    const configHome = mkdtempSync(join(tmpdir(), "mvp2-owner-"));
+    mkdirSync(join(configHome, "multi-agent"));
+    writeFileSync(join(configHome, "multi-agent", "owner.env"),
+      "MULTI_AGENT_MODE=managed\nMULTI_AGENT_OWNER_TOKEN=token-from-owner-env\n");
+    const saved = process.env.XDG_CONFIG_HOME;
+    process.env.XDG_CONFIG_HOME = configHome;
+    try {
+      const fetchImpl = vi.fn(async () => new Response(JSON.stringify(receipt), { status: 201 })) as unknown as typeof fetch;
+      const result = await run(["team", "start", "Add a health endpoint"], { ...deps(fetchImpl, null), ownerToken: undefined });
+      expect(result.code).toBeUndefined();
+      const init = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls[0]![1];
+      expect(new Headers(init.headers).get("authorization")).toBe("Bearer token-from-owner-env");
+    } finally {
+      if (saved === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = saved;
+      rmSync(configHome, { recursive: true, force: true });
+    }
   });
 
   it("refuses to start without an owner credential, before any request", async () => {
@@ -69,7 +93,7 @@ describe("rig team start", () => {
     const result = await run(["team", "start", "Add a health endpoint"], deps(fetchImpl, null));
     expect(result.code).toBe(1);
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(result.lines.join("\n")).toMatch(/no owner credential/);
+    expect(result.lines.join("\n")).toMatch(/no owner credential.*Run \.\/setup\.sh/);
   });
 
   it("reports the daemon's refusal instead of printing a run", async () => {
@@ -78,7 +102,7 @@ describe("rig team start", () => {
     const result = await run(["team", "start", "Add a health endpoint"], deps(fetchImpl));
     expect(result.code).toBe(1);
     expect(result.lines.join("\n")).toMatch(/the start was refused: Implementation approval is not active/);
-    expect(result.lines.join("\n")).not.toMatch(/rig tui --team/);
+    expect(result.lines.join("\n")).not.toMatch(/team\?run=/);
   });
 });
 
