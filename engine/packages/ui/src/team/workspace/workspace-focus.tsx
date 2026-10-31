@@ -4,11 +4,13 @@ import type { TeamAttemptView, TeamOwnerRead, TeamReplayEvent, TeamReviewView, T
 import { Button } from "../../components/ui/button.js";
 import { Card } from "../../components/ui/card.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs.js";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip.js";
 import { useOwnerSession } from "../../hooks/useOwnerSession.js";
 import { isFinished, useTeamResult } from "../../hooks/useTeamResult.js";
 import { BottomPanel, type TerminalTarget } from "../bottom-panel.js";
 import { DiffView } from "../diff-view.js";
 import { OwnerDialog } from "../decision-dialog.js";
+import { fullDigest, shortDigest } from "../digest.js";
 import { compactTokens } from "../overview.js";
 
 /**
@@ -54,6 +56,40 @@ export function checksLabel(task: TeamReviewView | undefined, translate: (key: s
   return checked == null || total == null ? translate("overview.verifiedUnknown") : translate("overview.verified", { verified: checked, total });
 }
 
+/** A task that has stopped working cannot be paused or stopped again. */
+export const TERMINAL_QUEUE_STATES = ["done", "failed", "denied", "canceled"] as const;
+
+export function isTerminal(state: string | undefined): boolean {
+  return !!state && (TERMINAL_QUEUE_STATES as readonly string[]).includes(state);
+}
+
+/**
+ * Pause and Stop are run controls, but they act on the agent in front of the owner. Once its task
+ * is terminal there is nothing left to pause, so both are disabled with the reason on the wrapper:
+ * a disabled button swallows pointer events, and a control that silently does nothing is worse
+ * than one that says why.
+ */
+function RunControls({ task, run, available, onPause, onStop }: {
+  task: TeamReviewView | undefined; run: TeamRun | undefined; available: boolean;
+  onPause: (trigger: HTMLElement) => void; onStop: (trigger: HTMLElement) => void;
+}) {
+  const { t } = useTranslation();
+  const finished = isTerminal(task?.queueState);
+  const disabled = !available || !run || finished;
+  const reason = finished ? t("workspace.finished") : t("workspace.controlUnavailable");
+  return <TooltipProvider delayDuration={150}>
+    <div className="ui-identity-actions">
+      {(["pause", "stop"] as const).map(action => <Tooltip key={action}>
+        <TooltipTrigger asChild><span className="ui-control-wrap" tabIndex={disabled ? 0 : -1} aria-label={`${t(`workspace.${action}`)} — ${reason}`}>
+          <Button variant="outline" disabled={disabled}
+            onClick={event => (action === "pause" ? onPause : onStop)(event.currentTarget)}>{t(`workspace.${action}`)}</Button>
+        </span></TooltipTrigger>
+        <TooltipContent>{reason}</TooltipContent>
+      </Tooltip>)}
+    </div>
+  </TooltipProvider>;
+}
+
 function Identity({ task, attempt, run, available, onPause, onStop }: {
   task: TeamReviewView | undefined; attempt: TeamAttemptView | undefined; run: TeamRun | undefined;
   available: boolean; onPause: (trigger: HTMLElement) => void; onStop: (trigger: HTMLElement) => void;
@@ -70,10 +106,7 @@ function Identity({ task, attempt, run, available, onPause, onStop }: {
       <div><dt>{t("workspace.elapsed")}</dt><dd>{elapsedLabel(run?.usage.activeMs)}</dd></div>
       <div><dt>{t("workspace.tokens")}</dt><dd>{compactTokens(run)}</dd></div>
     </dl>
-    <div className="ui-identity-actions">
-      <Button variant="outline" disabled={!available || !run} onClick={event => onPause(event.currentTarget)}>{t("workspace.pause")}</Button>
-      <Button variant="outline" disabled={!available || !run} onClick={event => onStop(event.currentTarget)}>{t("workspace.stop")}</Button>
-    </div>
+    <RunControls task={task} run={run} available={available} onPause={onPause} onStop={onStop} />
   </Card>;
 }
 
@@ -112,7 +145,7 @@ function Changes({ runId, task }: { runId: string; task: TeamReviewView | undefi
   if (result.isPending) return <p className="team-muted" role="status">{t("web.loading")}</p>;
   if (result.isError) return <p className="team-muted" role="alert">{t("web.resultUnavailable")}</p>;
   return <>
-    <p className="team-muted ui-diff-meta">{t("web.candidate")}: <code>{result.data.manifestDigest}</code></p>
+    <p className="team-muted ui-diff-meta">{t("web.candidate")}: <code title={fullDigest(result.data.manifestDigest)}>{shortDigest(result.data.manifestDigest)}</code></p>
     <DiffView patch={result.data.patch} label={t("workspace.changes")} empty={t("diff.empty")} />
   </>;
 }

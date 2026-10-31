@@ -5,6 +5,7 @@ import { createInterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import { parsePatch } from "../diff-model.js";
 import { DiffView } from "../diff-view.js";
+import { fullDigest, shortDigest } from "../digest.js";
 
 /**
  * Slice B — the one diff surface.
@@ -147,5 +148,15 @@ describe("parsePatch", () => {
     const language = await show("");
     expect(screen.getByTestId("diff-empty").textContent).toBe(language.t("diff.empty"));
     expect(screen.queryByTestId("diff-view")).toBeNull();
+  });
+
+  it("shortens a digest to its algorithm and 12 hex characters, and keeps the full value", () => {
+    const full = `sha256:${"a1b2c3d4e5f6".repeat(5)}a1b2`;
+    expect(shortDigest(full)).toBe("sha256:a1b2c3d4e5f6…");
+    expect(fullDigest(full)).toBe(full);
+    // Nothing to shorten: the value is returned as it is, never truncated into a different digest.
+    expect(shortDigest("sha256:abc")).toBe("sha256:abc");
+    expect(shortDigest(null)).toBe("—");
+    expect(fullDigest(null)).toBeUndefined();
   });
 });
