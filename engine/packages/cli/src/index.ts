@@ -11,6 +11,7 @@ import { exportCommand, type ExportDeps } from "./commands/export.js";
 import { importCommand, type ImportDeps } from "./commands/import.js";
 import { uiCommand, type UiDeps } from "./commands/ui.js";
 import { tuiCommand } from "./commands/tui.js";
+import { teamCommand, type TeamStartDeps } from "./commands/team.js";
 import { packageCommand } from "./commands/package.js";
 import { bootstrapCommand } from "./commands/bootstrap.js";
 import { requirementsCommand } from "./commands/requirements.js";
@@ -162,6 +163,7 @@ export interface ProgramDeps {
   startupProofDeps?: StartupProofDeps;
   healthDeps?: HealthDeps;
   startDeps?: StartDeps;
+  teamStartDeps?: TeamStartDeps;
   configPath?: string;
 }
 
@@ -186,6 +188,8 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
   program.addCommand(importCommand(depsOverride?.importDeps));
   program.addCommand(uiCommand(depsOverride?.uiDeps));
   program.addCommand(tuiCommand());
+  // MVP slice 2 - the owner starts team work from a goal.
+  program.addCommand(teamCommand(depsOverride?.teamStartDeps));
   program.addCommand(packageCommand(depsOverride?.packageDeps));
   program.addCommand(bootstrapCommand(depsOverride?.bootstrapDeps));
   program.addCommand(requirementsCommand(depsOverride?.requirementsDeps));

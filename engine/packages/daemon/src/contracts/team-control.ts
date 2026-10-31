@@ -370,6 +370,40 @@ export class TeamContractError extends Error {
   }
 }
 
+/**
+ * MVP slice 2 — one row of the owner's run picker.
+ *
+ * A projection of the run's own durable columns plus its rig's name, so a client can list
+ * runs and open one without a second read per row. It is not a second store: every field is
+ * read from `team_runs` or the rig it names.
+ */
+export interface TeamRunSummary {
+  id: string;
+  rigId: string;
+  rigName: string;
+  state: TeamRunState;
+  planRef: string;
+  createdAt: string;
+}
+
+/**
+ * MVP slice 2 — what an owner start returns.
+ *
+ * The run, the approval that admitted it, and the one task that puts an agent on the goal.
+ * A client opens the run from `runId` and needs nothing else; the remaining fields say what
+ * was created, so the owner can see the seat and the queue row rather than trust a 201.
+ */
+export interface TeamStartReceipt {
+  protocolVersion: string;
+  runId: string;
+  rigId: string;
+  approvalId: string;
+  taskId: string;
+  qitemId: string;
+  seat: string;
+  state: TeamRunState;
+}
+
 export function object(value: unknown, field: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new TeamContractError(field);

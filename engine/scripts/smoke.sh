@@ -22,8 +22,11 @@ npm run test -w packages/daemon -- \
   test/scope-extension.test.ts \
   test/owner-session.test.ts \
   test/unisolated-launch.test.ts \
+  test/team-start.test.ts \
   --maxWorkers=2
+
+npm run test -w packages/cli -- test/team-start.test.ts --maxWorkers=2
 
 npm run test -w packages/tui -- test/team-controls.test.ts --maxWorkers=2
 
-npm run test -w packages/ui -- src/team/__tests__/decisions.test.tsx --maxWorkers=2
+npm run test -w packages/ui -- src/team/__tests__/decisions.test.tsx src/team/__tests__/new-task.test.tsx --maxWorkers=2

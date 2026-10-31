@@ -148,6 +148,7 @@ import { transportSenderSession } from "./routes/require-sender-identity.js";
 import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
+import { teamStartRoutes } from "./routes/team-start.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
@@ -834,6 +835,11 @@ export function createApp(deps: AppDeps): Hono {
     legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(teamOptionsWithRead.readModel ? { readModel: teamOptionsWithRead.readModel } : {}),
   }));
+  // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
+  app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {
+    credentials: teamOptions.credentials,
+    ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
+  }, [deps.missionControlBearerToken, deps.terminalBearerToken]));
 
   app.get("/healthz", (c) => {
     // OPR.0.4.3.21 — enrich the health surface with event-loop wedge evidence

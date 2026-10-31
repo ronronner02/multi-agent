@@ -147,6 +147,7 @@ import { WhoamiService } from "./domain/whoami-service.js";
 import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
+import { unisolatedPolicyCapability } from "./routes/team-start.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
 import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
@@ -1139,6 +1140,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   });
   // KTD22: one governance owner serves the app and the managed launch chain, which only managed attempts reach.
   const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, teamControl.readPolicyCapability);
+  // MVP slice 2 — what a new run's binding is approved against. Under `hardened` that is the
+  // caller's own reader, unchanged. Under `workers.isolation: none` nothing is installed, so
+  // the daemon states the unisolated roots' revision instead of reading a policy file that
+  // does not exist on such a host; dispatch then refuses a binding built for any other mode.
+  const runPolicyCapability = teamControl.readPolicyCapability
+    ?? (unisolated ? () => unisolatedPolicyCapability(unisolatedWorkerRoots(OPENRIG_HOME).policyRevision) : undefined);
   // MVP — the roots in force for this daemon. Under `hardened` they are the installed policy's,
   // read at use so a re-provisioned host is picked up; under `none` they are the daemon's own
   // state tree, so nothing in the launch path ever reads `/etc/multi-agent`.
@@ -1172,7 +1179,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       // installed file nothing enforces. The other three are unchanged.
       ? composeUnisolatedHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter })
       : composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
-          ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) })) };
+          ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) })),
+    // MVP slice 2 — the capability a start request approves its binding against.
+    ...(runPolicyCapability ? { readPolicyCapability: runPolicyCapability } : {}) };
   // T053 — the seat capability a managed send must reuse. `createApp` builds the mailbox
   // owner when none is supplied, so this rides the deps slot rather than constructing it
   // twice: one owner, one seat table.

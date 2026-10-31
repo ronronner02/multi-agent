@@ -217,6 +217,18 @@ export class PlanGovernance {
     });
   }
 
+  /**
+   * MVP slice 2 — every recorded run, newest first.
+   *
+   * A read for the owner's run picker: a client that has no run id cannot discover one from
+   * the per-run routes, and asking the owner to remember a UUID is not a flow. It writes
+   * nothing, so it holds no authority of its own; the route that serves it is owner-only.
+   */
+  listRuns(): TeamRun[] {
+    const rows = this.db.prepare("SELECT id FROM team_runs ORDER BY created_at DESC, id").all() as Array<{ id: string }>;
+    return rows.map(row => this.getRun(row.id));
+  }
+
   getRun(id: string): TeamRun {
     const row = this.db.prepare(`SELECT id, rig_id AS rigId, binding_json AS bindingJson, binding_digest AS bindingDigest,
       state, state_reason AS stateReason, entity_version AS entityVersion, active_ms AS activeMs, accounted_at AS accountedAt,
