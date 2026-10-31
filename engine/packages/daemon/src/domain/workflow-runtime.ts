@@ -180,6 +180,15 @@ export interface WorkflowRuntimeDeps {
     toolchainDir: string;
   };
   /**
+   * MVP — the worker is the daemon's own user (`workers.isolation: none`).
+   *
+   * The projection's private-ownership checks exist to prove a sandboxed worker cannot
+   * rewrite the instructions it reads. With one identity there is no such boundary, so
+   * those checks are skipped rather than made trivially true; everything else about the
+   * projection (bytes, hashes, canonical paths, the plan, the role charter) is unchanged.
+   */
+  sameIdentity?: boolean;
+  /**
    * T053 — the owners that supply the producer's per-attempt inputs, so an attempt can be
    * produced from production state rather than from whatever a call site happens to hold.
    *
@@ -542,11 +551,13 @@ function ensureAttemptRoot(path: string, roots: { contextRoot: string; worker: s
  * The bridge and the privileged launcher both re-check this 0700, control-gid shape, so
  * it is created to exactly that here instead of being loosened for the worker.
  */
-function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string; controlStateDir: string }): void {
+function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string; controlStateDir: string },
+  sameIdentity = false): void {
   // The launcher anchors its ancestry walk on `control_state_dir` and requires the
   // mailbox root to sit directly under it, so an inconsistent roots object is refused
-  // here rather than discovered as a launch refusal later.
-  if (roots.mailboxRoot !== join(roots.controlStateDir, "mailboxes")) {
+  // here rather than discovered as a launch refusal later. An unisolated host has no such
+  // launcher, and keeps its mailbox root shallow so the socket path fits AF_UNIX.
+  if (!sameIdentity && roots.mailboxRoot !== join(roots.controlStateDir, "mailboxes")) {
     throw new Error("Managed mailbox root is not beneath the control state directory");
   }
   ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700, process.getgid!());
@@ -1093,7 +1104,7 @@ export class WorkflowRuntime {
 
       const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
       ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId),
-        { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir });
+        { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir }, this.sameIdentity);
       // A socket left by a daemon that died is still a file; the bridge refuses to
       // listen over one, so it is removed first. It can only ever be this attempt's,
       // because the path is built from the attempt id.
@@ -1311,6 +1322,7 @@ export class WorkflowRuntime {
       // Revision 5 and later requires the pinned native policy, and the manifest also
       // checks that its files are actually projected, so the producer supplies both.
       ...(input.nativePolicy ? { nativePolicy: input.nativePolicy } : {}),
+      ...(this.sameIdentity ? { sameIdentity: true } : {}),
       runId: input.runId,
       role,
       client,
@@ -1564,6 +1576,8 @@ export class WorkflowRuntime {
   private readonly managedAttemptRoots?: WorkflowRuntimeDeps["managedAttemptRoots"];
   private readonly managedAttemptInputs?: WorkflowRuntimeDeps["managedAttemptInputs"];
   private readonly onManagedAttemptRetired?: WorkflowRuntimeDeps["onManagedAttemptRetired"];
+  /** MVP: the worker is the daemon's own user, so the private-ownership checks are skipped. */
+  private readonly sameIdentity: boolean;
   /** T042 — attempt projections and endpoints this daemon produced, keyed by attempt id. */
   private readonly managedAttempts = new Map<string, ProducedManagedAttempt>();
   /** T053 — productions still starting, so a duplicate caller awaits the same one. */
@@ -1591,6 +1605,7 @@ export class WorkflowRuntime {
     this.managedAttemptRoots = deps.managedAttemptRoots;
     this.managedAttemptInputs = deps.managedAttemptInputs;
     this.onManagedAttemptRetired = deps.onManagedAttemptRetired;
+    this.sameIdentity = deps.sameIdentity === true;
     this.reviewEvidence = new ReviewEvidenceLedger({ db: this.db, events: deps.eventBus, now: this.now,
       resolveAssignee: (runId, qitemId) => this.resolveAssignee(runId, qitemId),
       // The approved binding's limits and the run's own clock, read at write time.

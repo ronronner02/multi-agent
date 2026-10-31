@@ -52,7 +52,8 @@ async function boot(teamControl?: never) {
   seed.prepare("INSERT INTO rigs (id, name) VALUES ('h1-rig', 'h1')").run();
   // The daemon opens its own handle; this one only seeds the fixture above.
   seed.close();
-  const result = await createDaemon({ dbPath, managedMode: true,
+  // The hardened boundary lights this file asserts on only exist under hardened isolation.
+  const result = await createDaemon({ dbPath, managedMode: true, workersIsolation: "hardened",
     teamControl: teamControl ?? { credentials: { ownerToken: OWNER } } });
   parked.push(() => {
     result.deps.proofSourceWatch?.close();

@@ -19,6 +19,13 @@ export interface ContextInput {
   runId: string; assignment: ScopedAssignment; outputs: string[]; permissions: string[]; role: TeamRole; client: "claude-code" | "codex"; binding: PlanBinding;
   root: string; mutableStateRoot: string; frameworkRoot: string; frameworkRevision: string;
   workerUid: number; workerGroups: number[]; discoveryRoots: string[]; files: ContextFile[];
+  /**
+   * MVP: the worker is the daemon's own user (`workers.isolation: none`). The checks below
+   * exist to prove a *sandboxed* worker can read its instructions without being able to
+   * rewrite them; when the worker and the control are the same identity there is no
+   * boundary for them to prove, so they are skipped rather than trivially satisfied.
+   */
+  sameIdentity?: boolean;
   lead?: { activationId: string; roster: { member: string; role: TeamRole; mailbox: string }[]; instructions: string };
 }
 export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (ContextFile & { workerPath: string })[]; workerDiscoveryRoots: string[]; generatedHash: string; protocolVersion: string | null; instructionVersions: InstructionVersions }>;
@@ -66,7 +73,7 @@ function projectionRoot(input: ContextInput): string {
   if (![worker, input.runId, attemptId].every(id => /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))
     || !policy.worker_identities.includes(worker) || policy.policy_revision < 4
     || input.binding.policyRevision !== policy.policy_revision
-    || !Number.isSafeInteger(controlUid) || controlUid < 0 || controlUid === input.workerUid
+    || !Number.isSafeInteger(controlUid) || controlUid < 0 || (!input.sameIdentity && controlUid === input.workerUid)
     || !Number.isSafeInteger(workerGid) || workerGid <= 0) throw new Error("Invalid context projection identity");
   for (const root of [policy.paths.context_root, policy.paths.framework_dir]) {
     if (!isAbsolute(root) || resolve(root) !== root) throw new Error("Non-canonical context policy root");
@@ -86,6 +93,9 @@ export function workerContextPath(policy: ContextMountPolicy, attemptRoot: strin
 }
 
 function privateProjection(input: ContextInput): void {
+  // A worker that is the daemon's own user reads this tree as its owner; there is no
+  // separate identity to keep it private from, and the read-only mode still stands.
+  if (input.sameIdentity) return;
   const { worker, controlUid, workerGid, policy } = input.projection;
   const workerRoot = resolve(policy.paths.context_root, worker);
   for (let p = input.root; ; p = dirname(p)) {
@@ -145,12 +155,13 @@ export function projectContext(input: ContextInput, contents: ReadonlyMap<string
   }
   const workerRoot = dirname(dirname(input.root)), worker = lstatSync(workerRoot);
   if (realpathSync(workerRoot) !== workerRoot || worker.uid !== input.projection.controlUid
-    || worker.gid !== input.projection.workerGid || (worker.mode & 0o027)) throw new Error("Context worker directory is not private and control-owned");
+    || worker.gid !== input.projection.workerGid || (!input.sameIdentity && (worker.mode & 0o027))) throw new Error("Context worker directory is not private and control-owned");
   locked(workerRoot, input);
   const runRoot = dirname(input.root);
   try { mkdirSync(runRoot, { mode: 0o2750 }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const run = lstatSync(runRoot);
-  if (realpathSync(runRoot) !== runRoot || run.uid !== worker.uid || run.gid !== worker.gid || (run.mode & 0o027) || !(run.mode & 0o2000)) {
+  if (realpathSync(runRoot) !== runRoot || run.uid !== worker.uid || run.gid !== worker.gid
+    || (!input.sameIdentity && ((run.mode & 0o027) || !(run.mode & 0o2000)))) {
     throw new Error("Context run directory is not private, setgid and control-owned");
   }
   mkdirSync(input.root, { mode: 0o2750 });
@@ -178,6 +189,9 @@ export function projectContext(input: ContextInput, contents: ReadonlyMap<string
 
 function locked(path: string, input: ContextInput): void {
   if (realpathSync(path) !== path) throw new Error("Context aliases are forbidden");
+  // Same-identity workers read these files as their owner, which is what this walk is
+  // checking for the *other* case; the canonical-path and alias checks above still hold.
+  if (input.sameIdentity) return;
   for (let p = path; ; p = dirname(p)) {
     const s = lstatSync(p); const writable = s.mode & 0o022;
     const access = (s.mode >> ((s.gid === input.projection.workerGid || input.workerGroups.includes(s.gid)) ? 3 : 0)) & 7, needed = s.isDirectory() ? 5 : 4;
@@ -212,13 +226,16 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
   if (within(spec.root, spec.mutableStateRoot) || within(spec.mutableStateRoot, spec.root) || within(spec.binding.repository.root, spec.root)) throw new Error("Mutable state and instructions must be separate");
   if (spec.permissions.some(p => !roleConfiguration[spec.role].permissions.includes(p))) throw new Error("Context grants a prohibited role permission");
   const kinds = spec.files.map(f => f.kind);
-  if (!["framework", "role", "plan"].every(k => kinds.includes(k as ContextFile["kind"])) || new Set(spec.files.map(f => f.path)).size !== spec.files.length) throw new Error("Missing or duplicate context files");
+  // MVP: an unisolated host installs no pinned framework tree, so an attempt binds no
+  // framework entry. The plan and the role charter are still required either way.
+  const required = spec.sameIdentity ? ["role", "plan"] : ["framework", "role", "plan"];
+  if (!required.every(k => kinds.includes(k as ContextFile["kind"])) || new Set(spec.files.map(f => f.path)).size !== spec.files.length) throw new Error("Missing or duplicate context files");
   for (const f of spec.files) {
     if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
     workerContextPath(spec.projection.policy, spec.root, f.path);
     if (within(spec.root, f.path)) {
       const s = lstatSync(f.path);
-      if (s.uid !== spec.projection.controlUid || s.gid !== spec.projection.workerGid || (s.mode & 0o227)) throw new Error("Context file is not private and read-only");
+      if (s.uid !== spec.projection.controlUid || s.gid !== spec.projection.workerGid || (!spec.sameIdentity && (s.mode & 0o227))) throw new Error("Context file is not private and read-only");
     }
     locked(f.path, spec);
     if (f.kind === "framework" && (!f.source || !within(spec.frameworkRoot, realpathSync(f.source)) || /\/(?:\.agents|\.claude|\.codex|\.opencode|\.pi)(?:\/|$)/.test(realpathSync(f.source)))) throw new Error("Framework must come from pinned source, never root runtime mirrors");

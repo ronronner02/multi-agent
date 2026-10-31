@@ -2,7 +2,24 @@
 
 Local runbook for the multi-agent engineering team milestone. Commands run inside the WSL Ubuntu distribution unless stated otherwise.
 
+## Worker Isolation
+
+`workers.isolation` selects how a managed worker runs. It is read once at daemon startup, so a change applies on the next restart.
+
+| Value | What runs |
+| --- | --- |
+| `none` (default) | The native client runs as the daemon's own user, inside the task's candidate git worktree, in the seat's tmux pane. No host provisioning, sudo, extra accounts or sandbox. |
+| `hardened` | The existing restricted worker launcher. Requires the `ma-*` accounts, the installed policy and sudo, all from the provisioning step below. |
+
+Under `none`, the daemon keeps its state under `$OPENRIG_HOME/state/workers/`: `assignments/<worker>/<run>-<task>` for candidate worktrees, `context/<worker>/<run>/<attempt>` for attempt projections, and `$OPENRIG_HOME/sock/<worker>/<run>/<attempt>/mailbox.sock` for mailbox endpoints (kept shallow because an AF_UNIX path is limited to 108 bytes). Nothing in that path reads `/etc/multi-agent`, `/opt/multi-agent`, `/run/multi-agent` or `/usr/local/libexec/multi-agent`, and no launch calls sudo.
+
+The isolation is a boundary between tasks, not between the worker and the host: a worker under `none` has the daemon's full filesystem access, its network and its environment. The receipt records `network.mode: "unknown"` because no profile is enforced. Use `hardened` where that matters.
+
+The three health lights that describe the hardened boundary (`workerBoundary`, `sandboxNetwork`, `clients`) report `unknown` with the reason `workers_isolation_none` in this mode, rather than reading files nothing enforces.
+
 ## Identities and Boundaries
+
+The table and the boundary description below apply to `workers.isolation: hardened`.
 
 | Identity | Purpose | Notes |
 | --- | --- | --- |
@@ -42,6 +59,8 @@ Known boundary properties:
 - **Interactive panes rely on the kernel TIOCSTI restriction.** Interactive sessions keep the tmux pane as their controlling terminal. The launcher refuses to start one unless `dev.tty.legacy_tiocsti` is `0`.
 
 ## Host Provisioning
+
+Only needed for `workers.isolation: hardened`; the default `none` requires none of it.
 
 Owner-run and idempotent. It requires the owner's sudo password and network access to `nodejs.org` and `registry.npmjs.org`.
 
@@ -202,7 +221,7 @@ Switching modes requires a daemon restart. Once a database holds a managed run, 
 
 ## Managed Attempt Credentials
 
-The producer supplies everything an attempt needs, from owners the daemon already holds. Nothing here is provisioned by hand beyond `/etc/multi-agent/worker-policy.json` and the worker accounts.
+The producer supplies everything an attempt needs, from owners the daemon already holds. Under `workers.isolation: hardened`, nothing here is provisioned by hand beyond `/etc/multi-agent/worker-policy.json` and the worker accounts; under `none`, the daemon creates all of it itself.
 
 - **Worker control credential.** One token per `(run, session)`, minted when the attempt is admitted. Only its digest is durable (`team_worker_credentials`); the plaintext lives in the daemon process, reaches the sandbox only as `bootstrap.json` `authorization` (mode 0600 beside the mailbox socket), and is never written to a log, command line or projection. It is revoked when the attempt retires and at daemon startup, where every inherited digest names a token this process cannot honour. It authenticates that attempt's mailbox and its own control run scope, never an owner action.
 - **Seat mailbox capability.** One `mailbox:{43}` per `(run, session)`, minted with the task assignment and stored in `team_seat_mailbox_capabilities`. The producer's endpoint and any later send for that seat must use this value; `poll` matches on it, so a second independently minted value would make the seat's mailbox unreadable. Deleting a row mints a fresh value on the next assignment, and messages still addressed to the old value become invisible.

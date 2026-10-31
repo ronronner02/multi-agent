@@ -1420,7 +1420,7 @@ describe("production managed launch composition", () => {
     process.env.OPENRIG_SLICES_ROOT = join(scratch, mode + "-missions");
     mkdirSync(process.env.OPENRIG_SLICES_ROOT, { recursive: true });
     const { createDaemon } = await import("../src/startup.js");
-    return createDaemon({ dbPath: join(scratch, mode + ".sqlite"), managedMode: mode === "managed", teamControl,
+    return createDaemon({ dbPath: join(scratch, mode + ".sqlite"), managedMode: mode === "managed", workersIsolation: "hardened", teamControl,
       tmuxExec: async () => "", cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
   };
   beforeEach(async () => {
@@ -1576,7 +1576,7 @@ describe("offline fixture-daemon restart", () => {
       readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: binding.policyFingerprint, verifiedProviders: ["claude", "codex"] }) };
     // Every terminal command this daemon sends; a native start is a respawn-pane.
     const tmuxCommands = [];
-    const daemon = await createDaemon({ dbPath: process.env.OPENRIG_DB, managedMode: true, teamControl,
+    const daemon = await createDaemon({ dbPath: process.env.OPENRIG_DB, managedMode: true, workersIsolation: "hardened", teamControl,
       tmuxExec: async command => { tmuxCommands.push(command); return ""; },
       cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
     const { db, deps } = daemon, governance = deps.teamGovernance, launch = deps.managedLaunch, owner = { kind: "owner", sessionId: "owner-control" };

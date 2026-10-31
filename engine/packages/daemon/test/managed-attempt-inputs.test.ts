@@ -148,7 +148,7 @@ describe("the managed attempt's production inputs", () => {
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
     credentials = { ownerToken: "owner-fixture" };
-    daemon = await createDaemon({ dbPath: join(directory, "t053.db"), managedMode: true,
+    daemon = await createDaemon({ dbPath: join(directory, "t053.db"), managedMode: true, workersIsolation: "hardened",
       teamControl: { credentials, resolveBinding: () => structuredClone(binding),
         readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: binding.policyFingerprint,
           verifiedProviders: ["claude", "codex"] }) },

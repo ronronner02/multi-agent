@@ -125,7 +125,7 @@ describe("a managed seat launches under the attempt produced for its admitted ta
       policyRevision: 5, policyFingerprint: hashBytes("policy"),
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
-    daemon = await createDaemon({ dbPath: join(directory, "t047.db"), managedMode: true,
+    daemon = await createDaemon({ dbPath: join(directory, "t047.db"), managedMode: true, workersIsolation: "hardened",
       teamControl: { credentials: { ownerToken: "owner-fixture" }, resolveBinding: () => structuredClone(binding),
         readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: binding.policyFingerprint,
           verifiedProviders: ["claude", "codex"] }) },
