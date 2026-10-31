@@ -7,7 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { WorkspaceScreen, WORKSPACE_VIEWS } from "../workspace/workspace-screen.js";
 import { RunControlDialog, WorkspaceFocus, attemptFor, checksLabel, defaultTask, elapsedLabel, isTerminal } from "../workspace/workspace-focus.js";
-import { read, run, task } from "./fixtures.js";
+import { attempt, read, run, task } from "./fixtures.js";
 
 /**
  * Slice B — Workspace.
@@ -63,8 +63,7 @@ describe("focus helpers", () => {
 
   it("opens on the task with a running attempt, else the first published task", () => {
     const tasks = [task({ taskId: "T-101", qitemId: "q-T-101" }), task({ queueState: "in-progress" })];
-    const attempts = [{ attemptId: "a", runId: run.id, taskId: "T-101", qitemId: "q-T-101", role: "implementer" as const,
-      provider: "claude" as const, state: "running" as const, unknownReason: null, session: "seat-a" }];
+    const attempts = [attempt({ attemptId: "a", taskId: "T-101", qitemId: "q-T-101", state: "running", session: "seat-a" })];
     expect(defaultTask(tasks, attempts)?.taskId).toBe("T-101");
     expect(defaultTask(tasks, [])?.taskId).toBe("T-101");
     expect(defaultTask([], undefined)).toBeUndefined();

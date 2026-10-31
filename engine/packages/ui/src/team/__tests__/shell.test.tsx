@@ -3,7 +3,8 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
-import { ShellFrame, TEAM_SECTIONS, teamSection, type TeamSection, type TeamTheme } from "../shell.js";
+import { ShellFrame, TEAM_SECTIONS, teamSection, type TeamSection } from "../shell.js";
+import type { TeamTheme } from "../theme.js";
 
 /**
  * Slice A — the shell's six destinations.

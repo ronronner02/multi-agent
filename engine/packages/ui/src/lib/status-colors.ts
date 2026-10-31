@@ -16,12 +16,3 @@ export function getStatusColorClass(status: string | null): string {
       return "bg-foreground-muted/50";
   }
 }
-
-export function getHealthStatusClass(state: string): string {
-  switch (state) {
-    case "ok": return "team-health-ok";
-    case "degraded": return "team-health-degraded";
-    case "failed": return "team-health-failed";
-    default: return "team-health-unknown";
-  }
-}
