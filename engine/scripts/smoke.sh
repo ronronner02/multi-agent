@@ -9,10 +9,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 # that supports clear. A headless CI step has none, so pin one.
 export TERM=xterm-256color
 
-# daemon-mode.test.ts stays out: its managed-boot case reads the provisioned
-# /etc/multi-agent/worker-policy.json, which the MVP does not install. Include it
-# again once `workers.isolation: none` lands.
+# daemon-mode.test.ts runs here now that `workers.isolation: none` is the default: its
+# managed boot no longer needs the provisioned /etc/multi-agent policy.
 npm run test -w packages/daemon -- \
+  test/daemon-mode.test.ts \
   test/team-control-auth.test.ts \
   test/team-governance.test.ts \
   test/team-read-model.test.ts \
@@ -21,6 +21,7 @@ npm run test -w packages/daemon -- \
   test/managed-attempt-attachment.test.ts \
   test/scope-extension.test.ts \
   test/owner-session.test.ts \
+  test/unisolated-launch.test.ts \
   --maxWorkers=2
 
 npm run test -w packages/tui -- test/team-controls.test.ts --maxWorkers=2

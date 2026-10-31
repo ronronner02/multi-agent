@@ -174,6 +174,8 @@ describe("SettingsStore (User Settings v0)", () => {
       "queue.wake_unconfirmed_window_minutes",
       "queue.wake_swap_grace_seconds",
       "queue.wake_human_rung",
+      // MVP — worker isolation level (none | hardened).
+      "workers.isolation",
     ]);
   });
 

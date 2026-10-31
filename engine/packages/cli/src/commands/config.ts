@@ -103,6 +103,10 @@ Keys:
   terminal.status_bar    show the inner tmux status bar on launch (default off)
   output.compact         short default output for queue writes; --full restores the whole row (default off)
   provider.usage_windows Codex usage windows in rig provider status, refreshed on request (default off)
+  workers.isolation      none | hardened — run managed agents as the current user in git
+                         worktrees (default none), or inside the provisioned sandbox
+                         (hardened; needs /etc/multi-agent and the sudo launcher).
+                         Read at daemon startup.
 
 Precedence: CLI flag > environment variable > config file > default`)
     .action((opts: { json?: boolean; withSource?: boolean }) => {

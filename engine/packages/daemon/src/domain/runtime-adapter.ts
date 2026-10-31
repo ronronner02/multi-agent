@@ -50,7 +50,11 @@ export interface ManagedSessionReceipt {
   observedContextHash: string;
   network: {
     namespace: string;
-    mode: "isolated-allowlist" | "filtered-proxy";
+    /**
+     * MVP: `unknown` for an unisolated worker, whose network is the host's and whose profile
+     * nothing enforces. The hardened launcher only ever records the two filtered modes.
+     */
+    mode: "isolated-allowlist" | "filtered-proxy" | "unknown";
     profileFingerprint: string;
     preflightRef: string;
   };

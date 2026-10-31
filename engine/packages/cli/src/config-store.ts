@@ -196,6 +196,11 @@ export interface RiggedConfig {
     wakeSwapGraceSeconds: number;
     wakeHumanRung: string;
   };
+  // MVP — whether a managed worker runs as the current user ("none", the default) or
+  // inside the provisioned sandbox ("hardened"). Twin of the daemon settings-store key.
+  workers: {
+    isolation: string;
+  };
 }
 
 const DEFAULT_WORKSPACE_ROOT = getDefaultOpenRigPath("workspace");
@@ -352,6 +357,8 @@ const DEFAULTS = {
     wakeSwapGraceSeconds: 180,
     wakeHumanRung: "always",
   },
+  // MVP — the default runs agents as the current user; no host provisioning is needed.
+  workers: { isolation: "none" },
 } as const;
 
 export const VALID_KEYS = [
@@ -472,6 +479,8 @@ export const VALID_KEYS = [
   // Under explicit-only, an ask that needs a person must be addressed to the person;
   // without a human registry, explicit-only posts everything, as always does.
   "queue.wake_human_rung",
+  // MVP — worker isolation level; lockstep with the daemon settings-store twin.
+  "workers.isolation",
 ] as const;
 
 export type ValidKey = typeof VALID_KEYS[number];
@@ -564,6 +573,7 @@ export const ENV_MAP: Record<ValidKey, { primary: string; legacy?: string }> = {
   "queue.wake_unconfirmed_window_minutes": { primary: "OPENRIG_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES" },
   "queue.wake_swap_grace_seconds": { primary: "OPENRIG_QUEUE_WAKE_SWAP_GRACE_SECONDS" },
   "queue.wake_human_rung": { primary: "OPENRIG_QUEUE_WAKE_HUMAN_RUNG" },
+  "workers.isolation": { primary: "OPENRIG_WORKERS_ISOLATION" },
 };
 
 // Maps dotted-string config keys to the camelCase RiggedConfig path.
@@ -645,6 +655,7 @@ const KEY_TO_PATH: Record<ValidKey, string[]> = {
   "queue.wake_unconfirmed_window_minutes": ["queue", "wakeUnconfirmedWindowMinutes"],
   "queue.wake_swap_grace_seconds": ["queue", "wakeSwapGraceSeconds"],
   "queue.wake_human_rung": ["queue", "wakeHumanRung"],
+  "workers.isolation": ["workers", "isolation"],
 };
 
 function isValidKey(key: string): key is ValidKey {
@@ -812,6 +823,12 @@ function wakeHumanRungConstraint(raw: string): void {
   }
 }
 
+function workersIsolationConstraint(raw: string): void {
+  if (raw !== "none" && raw !== "hardened") {
+    throw new Error(`Invalid value for workers.isolation: must be "none" or "hardened", got "${raw}"`);
+  }
+}
+
 function percentageConstraint(key: string) {
   return (raw: string, coerced: string | number | boolean): void => {
     if (!/^\d+$/.test((raw ?? "").trim())
@@ -959,6 +976,7 @@ const KEY_CONSTRAINTS: Partial<Record<ValidKey, (raw: string, coerced: string | 
   "queue.wake_unconfirmed_window_minutes": positiveIntegerConstraint("queue.wake_unconfirmed_window_minutes"),
   "queue.wake_swap_grace_seconds": positiveIntegerConstraint("queue.wake_swap_grace_seconds"),
   "queue.wake_human_rung": wakeHumanRungConstraint,
+  "workers.isolation": workersIsolationConstraint,
 };
 
 function validateKeyConstraints(key: ValidKey, raw: string, coerced: string | number | boolean): void {
@@ -1187,6 +1205,9 @@ export class ConfigStore {
         wakeUnconfirmedWindowMinutes: v("queue.wake_unconfirmed_window_minutes") as number,
         wakeSwapGraceSeconds: v("queue.wake_swap_grace_seconds") as number,
         wakeHumanRung: v("queue.wake_human_rung") as string,
+      },
+      workers: {
+        isolation: v("workers.isolation") as string,
       },
     };
   }

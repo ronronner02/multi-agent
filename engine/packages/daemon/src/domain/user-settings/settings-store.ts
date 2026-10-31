@@ -216,6 +216,10 @@ export const SETTINGS_VALID_KEYS = [
   // Under explicit-only, an ask that needs a person must be addressed to the person;
   // without a human registry, explicit-only posts everything, as always does.
   "queue.wake_human_rung",
+  // MVP — whether a managed worker runs as the current user ("none", the default) or
+  // inside the provisioned sandbox ("hardened"). Read at daemon startup, so a change
+  // applies on the next restart. Lockstep with cli/src/config-store.ts VALID_KEYS.
+  "workers.isolation",
 ] as const;
 
 export type SettingsValidKey = typeof SETTINGS_VALID_KEYS[number];
@@ -307,6 +311,7 @@ const ENV_MAP: Record<SettingsValidKey, { primary: string; legacy?: string }> = 
   "queue.wake_unconfirmed_window_minutes": { primary: "OPENRIG_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES" },
   "queue.wake_human_rung": { primary: "OPENRIG_QUEUE_WAKE_HUMAN_RUNG" },
   "queue.wake_swap_grace_seconds": { primary: "OPENRIG_QUEUE_WAKE_SWAP_GRACE_SECONDS" },
+  "workers.isolation": { primary: "OPENRIG_WORKERS_ISOLATION" },
 };
 
 const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
@@ -385,6 +390,7 @@ const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
   "queue.wake_unconfirmed_window_minutes": ["queue", "wakeUnconfirmedWindowMinutes"],
   "queue.wake_human_rung": ["queue", "wakeHumanRung"],
   "queue.wake_swap_grace_seconds": ["queue", "wakeSwapGraceSeconds"],
+  "workers.isolation": ["workers", "isolation"],
 };
 
 export type SettingSource = "env" | "file" | "default";
@@ -663,6 +669,7 @@ function getDefaultValue(key: SettingsValidKey, workspaceRoot: string): string |
     case "queue.wake_unconfirmed_window_minutes": return 30;
     case "queue.wake_swap_grace_seconds": return 180;
     case "queue.wake_human_rung": return "always";
+    case "workers.isolation": return "none";
     default: return "";
   }
 }
@@ -697,6 +704,12 @@ function positiveIntegerConstraint(key: string) {
 function wakeHumanRungConstraint(raw: string): void {
   if (raw !== "always" && raw !== "explicit-only") {
     throw new Error(`Invalid value for queue.wake_human_rung: must be "always" or "explicit-only", got "${raw}"`);
+  }
+}
+
+function workersIsolationConstraint(raw: string): void {
+  if (raw !== "none" && raw !== "hardened") {
+    throw new Error(`Invalid value for workers.isolation: must be "none" or "hardened", got "${raw}"`);
   }
 }
 
@@ -850,6 +863,7 @@ const KEY_CONSTRAINTS: Partial<Record<SettingsValidKey, (raw: string, coerced: s
   "queue.wake_unconfirmed_window_minutes": positiveIntegerConstraint("queue.wake_unconfirmed_window_minutes"),
   "queue.wake_swap_grace_seconds": positiveIntegerConstraint("queue.wake_swap_grace_seconds"),
   "queue.wake_human_rung": wakeHumanRungConstraint,
+  "workers.isolation": workersIsolationConstraint,
 };
 
 function validateKeyConstraints(key: SettingsValidKey, raw: string, coerced: string | number | boolean): void {

@@ -33,7 +33,7 @@ const PATHS = new Set(["db.path", "transcripts.path", "workspace.root", "workspa
   "topology.root", "context.root", "skills.root", "policies.claude_compaction.message_file_path"]);
 const IDENTITIES = new Set(["daemon.host", "host.name", "host.selected", "context.system_world",
   "ui.timezone", "agents.advisor_session", "agents.operator_session", "workspace.operator_seat_name",
-  "workflow.exception_routing", "policies.idle_gate_qitem.auto_register"]);
+  "workflow.exception_routing", "policies.idle_gate_qitem.auto_register", "workers.isolation"]);
 const INSTRUCTIONS = new Set(["policies.claude_compaction.pre_compact_instruction",
   "policies.claude_compaction.compact_instruction", "policies.claude_compaction.message_inline",
   "policies.claude_compaction.post_restore_audit_instruction"]);
@@ -98,6 +98,7 @@ function application(key: string): string {
   if (key.startsWith("retention.")) return "Read on the retention sweep; last applied value unverified.";
   if (key.startsWith("policies.claude_compaction.")) return "Read by the compaction policy consumer; running action unverified.";
   if (key === "terminal.status_bar" || key.startsWith("runtime.")) return "Future launch behavior; existing sessions not verified.";
+  if (key === "workers.isolation") return "Read at daemon startup; the running isolation level is unverified.";
   return "Resolved configuration; running application unverified.";
 }
 

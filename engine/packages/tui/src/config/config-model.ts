@@ -42,7 +42,7 @@ export function configCategory(entry: ConfigEntry): string {
   if (/^(workflow|queue|policies\.idle_gate_qitem)\./.test(key)) return "waiting";
   if (/^(recovery|snapshots|policies\.claude_compaction)\./.test(key)) return "recovery";
   if (/^(transcripts|feed|retention)\./.test(key)) return "activity";
-  if (/^(agents|runtime)\./.test(key)) return "agents";
+  if (/^(agents|runtime|workers)\./.test(key)) return "agents";
   return "all"; // Future registry additions remain discoverable without an inventory fork.
 }
 const LABELS: Record<string, string> = {
@@ -67,6 +67,7 @@ const LABELS: Record<string, string> = {
   "onboarding.default_pack.enabled": "Default onboarding pack",
   "output.compact": "Compact command output",
   "provider.usage_windows": "Codex usage windows",
+  "workers.isolation": "Worker isolation",
   "ui.enabled": "Web UI",
   "health.context_pressure.warning_percent": "Context warning threshold",
   "health.context_pressure.critical_percent": "Context critical threshold",

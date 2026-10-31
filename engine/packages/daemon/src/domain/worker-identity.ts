@@ -76,11 +76,34 @@ export function resolveWorkerIdentity(policy: WorkerIdentityPolicy, name: string
 
 /** The composition handle startup injects; `resolveWorkerIdentity` stays the one owner. */
 export class WorkerIdentities {
-  /** The policy is a function so a re-provisioned host is read at use, never captured at boot. */
+  /**
+   * `currentUser` switches the reader to the daemon's own identity (`workers.isolation: none`).
+   * That path never reads `/etc/passwd`: the worker *is* this process's user, so the kernel
+   * facts it runs under are the ones to record, and no account has to exist on the host.
+   */
   constructor(private readonly policy: () => WorkerIdentityPolicy,
-    private readonly read: (file: string) => string[][] = readDatabase) {}
+    private readonly read: (file: string) => string[][] = readDatabase,
+    private readonly currentUser = false) {}
 
   resolve(name: string): WorkerIdentity {
-    return resolveWorkerIdentity(this.policy(), name, this.read);
+    const policy = this.policy();
+    return this.currentUser ? currentUserIdentity(policy, name) : resolveWorkerIdentity(policy, name, this.read);
   }
+}
+
+/**
+ * The daemon's own identity, shaped like a provisioned worker's.
+ *
+ * `groups` is empty for the same reason the hardened control reports it empty: the launcher
+ * starts the client with its supplementary groups cleared, so the projection is checked
+ * against the groups the process will actually carry.
+ */
+function currentUserIdentity(policy: WorkerIdentityPolicy, name: string): WorkerIdentity {
+  if (!policy.identities.includes(name)) throw new Error("Worker identity is not in the installed policy");
+  const uid = process.getuid!(), gid = process.getgid!();
+  if (!Number.isSafeInteger(uid) || uid <= 0) throw new Error("Worker account is privileged");
+  return { name, uid, gid, groups: [], groupIds: [gid],
+    home: join(policy.workerRoot, name, "home"),
+    scratch: join(policy.workerRoot, name, "scratch"),
+    tree: join(policy.assignmentRoot, name) };
 }
