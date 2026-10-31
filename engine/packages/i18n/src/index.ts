@@ -21,6 +21,11 @@ export const MESSAGE_PARAMETERS = {
   "task.progress": ["completed", "total"],
   "approval.requestedBy": ["actor"],
   "session.attempt": ["number"],
+  // Slice A's progress and board counters. They interpolate in both catalogs, so they belong
+  // here; a key that is not declared is one a caller can mistype without the type noticing.
+  "overview.verified": ["verified", "total"],
+  "tasks.count": ["count"],
+  "tasks.criteriaOf": ["verified", "total"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS

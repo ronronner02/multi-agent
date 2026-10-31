@@ -7,6 +7,7 @@ import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { isFinished, useTeamResult } from "../hooks/useTeamResult.js";
 import { DiffView } from "./diff-view.js";
 import { OwnerDialog } from "./decision-dialog.js";
+import { fullDigest, shortDigest } from "./digest.js";
 
 /**
  * Slice B — Reviews.
@@ -76,7 +77,7 @@ function Finding({ task }: { task: TeamReviewView | undefined }) {
     <dl className="ui-facts">
       <div><dt>{t("web.reviewRounds")}</dt><dd>{task.rounds}</dd></div>
       <div><dt>{t("web.openP0P1")}</dt><dd data-testid="open-p0p1">{task.openP0P1}</dd></div>
-      <div><dt>{t("reviews.candidateDigest")}</dt><dd><code>{task.currentCandidateDigest ?? "—"}</code></dd></div>
+      <div><dt>{t("reviews.candidateDigest")}</dt><dd><code title={fullDigest(task.currentCandidateDigest)}>{shortDigest(task.currentCandidateDigest)}</code></dd></div>
     </dl>
   </>;
 }

@@ -284,7 +284,6 @@ body:has(.team-shell) > #root { height: 100%; }
   color: var(--ui-muted); font-size: 13px; padding: 6px 10px;
 }
 .ui-subnav button[aria-pressed="true"] { color: var(--ui-text); border-bottom-color: var(--ui-accent); }
-.ui-viewswitch-note { display: inline-flex; align-items: center; padding: 3px 8px; color: var(--ui-muted); font-size: 12px; border-left: 1px solid var(--ui-divider); }
 .ui-viewswitch-later { display: inline-flex; }
 .ui-viewswitch-later button { min-height: 28px; }
 
@@ -300,6 +299,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .ui-identity-facts dt { color: var(--ui-muted); font-size: 11px; }
 .ui-identity-facts dd { margin: 2px 0 0; font-size: 14px; font-variant-numeric: tabular-nums; }
 .ui-identity-actions { display: flex; gap: 8px; }
+.ui-control-wrap { display: inline-flex; }
 .ui-focus [role="tablist"] { border-bottom: 1px solid var(--ui-divider); gap: 0; }
 .ui-focus [role="tab"] { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px 12px; font-size: 13px; }
 .ui-focus [role="tab"][data-state="active"] { background: transparent; border-bottom-color: var(--ui-accent); }
@@ -386,10 +386,13 @@ body:has(.team-shell) > #root { height: 100%; }
 }
 .ui-diff-head code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-diff-head .ui-state { margin-left: auto; }
-.ui-diff-body { overflow: auto; font-family: var(--ui-mono); font-size: 12px; line-height: 20px; flex: 1 1 auto; min-height: 0; }
+/* The code area scrolls on both axes: a hunk takes its natural width rather than the pane's, so a
+ * long line is reachable by scrolling instead of being clipped at the pane edge. */
+.ui-diff-body { overflow: auto; font-family: var(--ui-mono); font-size: 12px; line-height: 20px; flex: 1 1 auto; min-width: 0; min-height: 0; }
 .ui-hunk + .ui-hunk { border-top: 1px solid var(--ui-divider); }
+.ui-hunk { min-width: max-content; }
 .ui-hunk-head { padding: 4px 12px; color: var(--ui-muted); background: var(--ui-raised); font-size: 11px; white-space: pre; }
-.ui-diff-line { display: grid; grid-template-columns: 44px 44px 18px minmax(0, 1fr); align-items: baseline; }
+.ui-diff-line { display: grid; grid-template-columns: 44px 44px 18px auto; align-items: baseline; }
 .ui-diff-line[data-kind="add"] { background: var(--ui-add); }
 .ui-diff-line[data-kind="remove"] { background: var(--ui-remove); }
 .ui-diff-line[data-kind="note"] { color: var(--ui-muted); }
@@ -397,7 +400,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .ui-marker { color: var(--ui-muted); user-select: none; }
 .ui-diff-line[data-kind="add"] .ui-marker { color: var(--ui-add-strong); }
 .ui-diff-line[data-kind="remove"] .ui-marker { color: var(--ui-remove-strong); }
-.ui-code { padding-right: 12px; white-space: pre; overflow-wrap: normal; color: var(--ui-text); }
+.ui-code { padding-right: 12px; white-space: pre; overflow-wrap: normal; color: var(--ui-text); min-width: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

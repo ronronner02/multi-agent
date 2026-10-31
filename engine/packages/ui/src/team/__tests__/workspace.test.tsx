@@ -6,7 +6,7 @@ import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { WorkspaceScreen, WORKSPACE_VIEWS } from "../workspace/workspace-screen.js";
-import { RunControlDialog, WorkspaceFocus, attemptFor, checksLabel, defaultTask, elapsedLabel } from "../workspace/workspace-focus.js";
+import { RunControlDialog, WorkspaceFocus, attemptFor, checksLabel, defaultTask, elapsedLabel, isTerminal } from "../workspace/workspace-focus.js";
 import { read, run, task } from "./fixtures.js";
 
 /**
@@ -101,6 +101,27 @@ describe("focus screen", () => {
     expect(screen.queryByTestId("diff-empty")).toBeNull();
   });
 
+  it.each(["en", "zh-CN"] as const)("disables Pause and Stop once the task is terminal, with the reason (%s)", async locale => {
+    const language = await showFocus(read({ tasks: [task({ queueState: "done" })] }), locale);
+    const identity = screen.getByRole("region", { name: language.t("workspace.identity") });
+    for (const action of ["pause", "stop"] as const) {
+      const button = within(identity).getByRole("button", { name: language.t(`workspace.${action}`) });
+      expect(button).toHaveProperty("disabled", true);
+    }
+    // The wrapper carries the explanation: a disabled button receives no pointer events.
+    expect(identity.querySelector(".ui-control-wrap")?.getAttribute("aria-label"))
+      .toBe(`${language.t("workspace.pause")} — ${language.t("workspace.finished")}`);
+    expect(isTerminal("done") && isTerminal("failed") && isTerminal("denied") && isTerminal("canceled")).toBe(true);
+    expect(isTerminal("in-progress") || isTerminal("pending") || isTerminal(undefined)).toBe(false);
+  });
+
+  it("keeps Pause and Stop available while the task is still working", async () => {
+    const language = await showFocus(read({ tasks: [task({ queueState: "in-progress" })] }));
+    const identity = screen.getByRole("region", { name: language.t("workspace.identity") });
+    for (const action of ["pause", "stop"] as const)
+      expect(within(identity).getByRole("button", { name: language.t(`workspace.${action}`) })).toHaveProperty("disabled", false);
+  });
+
   it("keeps the evidence panel under Tools and the task's own lines under Output", async () => {
     const value = read({ logs: [{ source: "stream", streamItemId: "s1", ts: "2026-10-31T00:00:01.000Z", runId: run.id,
       taskId: "T-102", attemptId: null, session: "seat-a", body: "applied the filter", truncated: false, exitOutcome: null }] });
@@ -160,8 +181,11 @@ describe("workspace frame", () => {
       language.t("workspace.grid"), language.t("workspace.split"), language.t("workspace.focus")]);
     expect([grid!.disabled, split!.disabled, focus!.disabled]).toEqual([true, true, false]);
     expect(focus!.getAttribute("aria-pressed")).toBe("true");
-    // The disabled pair says why, so a dead control is never mistaken for a broken one.
-    expect(group.textContent).toContain(language.t("workspace.later"));
+    // Exactly three segments: the explanation is the disabled pair's tooltip, not a fourth option.
+    expect(group.querySelectorAll("button")).toHaveLength(3);
+    expect(group.textContent).not.toContain(language.t("workspace.later"));
+    expect(group.querySelector(".ui-viewswitch-later")?.getAttribute("aria-label"))
+      .toBe(`${language.t("workspace.grid")} — ${language.t("workspace.later")}`);
   });
 
   it("keeps the file browser, knowledge and agent monitoring reachable as sub-views", async () => {

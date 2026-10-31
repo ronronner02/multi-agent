@@ -25,15 +25,15 @@ export function LayoutSwitch() {
   return <TooltipProvider delayDuration={150}>
     <div className="ui-viewswitch" role="group" aria-label={t("workspace.layout")}>
       {/* A disabled button swallows pointer events, so the tooltip hangs off a wrapper: the
-          explanation is the only way to learn why the control does nothing. */}
+          explanation is the only way to learn why the control does nothing. It stays a tooltip
+          rather than a fourth segment, which would read as another layout option. */}
       {(["grid", "split"] as const).map(name => <Tooltip key={name}>
-        <TooltipTrigger asChild><span className="ui-viewswitch-later" tabIndex={0} aria-label={t("workspace.later")}>
+        <TooltipTrigger asChild><span className="ui-viewswitch-later" tabIndex={0} aria-label={`${t(`workspace.${name}`)} — ${t("workspace.later")}`}>
           <button type="button" aria-pressed={false} disabled>{t(`workspace.${name}`)}</button>
         </span></TooltipTrigger>
         <TooltipContent>{t("workspace.laterHelp")}</TooltipContent>
       </Tooltip>)}
       <button type="button" aria-pressed>{t("workspace.focus")}</button>
-      <span className="ui-viewswitch-note">{t("workspace.later")}</span>
     </div>
   </TooltipProvider>;
 }

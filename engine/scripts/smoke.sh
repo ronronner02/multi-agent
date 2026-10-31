@@ -28,6 +28,10 @@ npm run test -w packages/daemon -- \
 
 npm run test -w packages/cli -- test/team-start.test.ts test/team-apply.test.ts --maxWorkers=2
 
+# The catalog parity check runs here so a key that interpolates without a declared parameter
+# fails CI. Slice A added three such keys and nothing caught it until a later review.
+npm run test -w packages/i18n -- --maxWorkers=2
+
 npm run test -w packages/tui -- test/team-controls.test.ts --maxWorkers=2
 
 npm run test -w packages/ui -- src/team/__tests__/decisions.test.tsx src/team/__tests__/new-task.test.tsx src/team/__tests__/result-panel.test.tsx src/team/__tests__/shell.test.tsx src/team/__tests__/overview.test.tsx src/team/__tests__/tasks.test.tsx src/team/__tests__/diff.test.tsx src/team/__tests__/workspace.test.tsx src/team/__tests__/reviews.test.tsx --maxWorkers=2
