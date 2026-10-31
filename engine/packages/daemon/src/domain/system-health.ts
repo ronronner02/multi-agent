@@ -22,6 +22,13 @@ export interface SystemHealthSources {
   sandboxNetwork?: SystemHealthProbe;
   clients?: SystemHealthProbe;
   latestAttempts?: SystemHealthAttemptsProbe;
+  /**
+   * The `workers.isolation` level this process resolved at startup. It is a fact the daemon
+   * decided, not a probe: a reader asking the daemon what it runs under gets the level the
+   * launch chain is actually using. Absent leaves the runtime block out, which a client shows
+   * as unknown rather than as the setting's default.
+   */
+  isolation?: "none" | "hardened";
   now?: () => Date;
   timeoutMs?: number;
 }
@@ -123,7 +130,8 @@ export async function readSystemHealth(sources: SystemHealthSources): Promise<Te
   const attemptsValid = attemptsResult?.kind === "value" && validAttempts(attemptsResult.value);
   const latestAttempts = attemptsValid ? attemptsResult.value : {};
   return { schema: "multi-agent-system-health/v1", protocolVersion: TEAM_SYSTEM_HEALTH_VERSION,
-    checkedAt: checkedAt(now), timeoutMs, overall: overall(lights, attemptsResult !== null && !attemptsValid), lights, latestAttempts };
+    checkedAt: checkedAt(now), timeoutMs, overall: overall(lights, attemptsResult !== null && !attemptsValid), lights, latestAttempts,
+    ...(sources.isolation ? { runtime: { isolation: sources.isolation } } : {}) };
 }
 export function createSystemHealthReader(sources: SystemHealthSources): () => Promise<TeamSystemHealth> {
   return () => readSystemHealth(sources);
@@ -135,6 +143,9 @@ function validHealth(value: unknown): value is TeamSystemHealth {
     || typeof result.checkedAt !== "string" || !Number.isFinite(Date.parse(result.checkedAt))
     || !Number.isFinite(result.timeoutMs) || result.timeoutMs <= 0 || result.timeoutMs > SYSTEM_HEALTH_PROBE_TIMEOUT_MS
     || !["ok", "degraded", "failed", "unknown"].includes(result.overall) || !result.lights || !validAttempts(result.latestAttempts)) return false;
+  // The runtime block is optional, and a present one must name a level the launch chain has.
+  if (result.runtime !== undefined && (result.runtime === null || typeof result.runtime !== "object"
+    || !["none", "hardened"].includes(String(result.runtime.isolation)))) return false;
   if (!TEAM_HEALTH_LIGHTS.every(name => {
     const entry = result.lights[name];
     return !!entry && ["ok", "degraded", "failed", "unknown"].includes(entry.state)

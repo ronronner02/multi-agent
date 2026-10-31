@@ -89,6 +89,9 @@ describe("T047-H1 production health composition", () => {
       expect(body.health.lights[name].state, name).toBe("ok");
     }
     expect(body.health.timeoutMs).toBeLessThanOrEqual(SYSTEM_HEALTH_PROBE_TIMEOUT_MS);
+    // The level this daemon resolved at startup travels with the health read, so a read-only
+    // client reports the level in force rather than the setting's default.
+    expect(body.health.runtime).toEqual({ isolation: "hardened" });
   }, 60_000);
 
   it("refuses an agent credential on the same composed daemon", async () => {

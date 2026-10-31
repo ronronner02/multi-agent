@@ -16,6 +16,13 @@ export interface TeamAttemptHealth {
 export interface TeamSystemHealth {
   schema: "multi-agent-system-health/v1"; protocolVersion: typeof TEAM_SYSTEM_HEALTH_VERSION; checkedAt: string; timeoutMs: number;
   overall: TeamHealthState; lights: Record<TeamHealthLightName, TeamHealthLight>; latestAttempts: Record<string, TeamAttemptHealth>;
+  /**
+   * The runtime facts a read-only client cannot infer from its own page. `isolation` is the
+   * level this process resolved at startup, reported by the process that decided it. A host
+   * that composes no runtime block leaves it absent, and a reader shows "unknown" rather
+   * than guessing a level it never verified.
+   */
+  runtime?: { isolation: "none" | "hardened" | null };
 }
 export interface ManagedWorkerHealthEvidence {
   observedAt: string;
@@ -277,6 +284,10 @@ export interface TeamAttemptView {
   state: AttemptState;
   unknownReason: string | null;
   session: string | null;
+  /** When the attempt was recorded; the time axis of any per-attempt series. */
+  createdAt: string;
+  /** The attempt's own recorded usage. A metric is `null` with a reason until its producer observed it. */
+  usage: UsageEvidence;
 }
 
 /** One bounded, redacted log or exit record correlated to its task and attempt. */
