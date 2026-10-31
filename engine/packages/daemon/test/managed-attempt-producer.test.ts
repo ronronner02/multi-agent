@@ -160,6 +160,12 @@ describe("the managed attempt a seat launches from", () => {
       VALUES ('dep-item', 'run-1', 'T011', ?, ?)`).run(
       JSON.stringify({ taskId: "T011", role: "implementer", paths: ["test/dependency"], dependencies: [] }),
       JSON.stringify({ validated: true }));
+    const task = produceInput();
+    db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
+      VALUES ('task-item', '2026-10-23T00:00:00.000Z', '2026-10-23T00:00:00.000Z', 'lead@rig-1', 'implementer-session', 'pending', 'body')`).run();
+    db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json, outputs_json, permissions_json)
+      VALUES ('task-item', 'run-1', 'T042', ?, ?, ?)`).run(
+      JSON.stringify(task.assignment), JSON.stringify(task.outputs), JSON.stringify(task.permissions));
   });
 
   afterEach(() => {
