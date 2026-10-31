@@ -126,7 +126,7 @@ describe("the managed attempt a seat launches from", () => {
     const anchors = [join(contextRoot, "ma-worker1"), join(mailboxRoot, "ma-worker1")];
     for (const anchor of anchors) mkdirSync(anchor, { recursive: true });
     chmodSync(join(contextRoot, "ma-worker1"), 0o2750);
-    chmodSync(join(mailboxRoot, "ma-worker1"), 0o700);
+    chmodSync(join(mailboxRoot, "ma-worker1"), 0o2710);
     // The pinned framework tree is control-owned and worker-readable through the worker
     // group, exactly as provisioning installs it.
     chmodSync(frameworkRoot, 0o2750);
