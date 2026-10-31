@@ -114,6 +114,9 @@ export const PIN = Object.freeze({
     'packages/daemon/src/domain/restore-orchestrator.ts',
     'packages/daemon/src/domain/startup-orchestrator.ts',
     'packages/daemon/test/restore-orchestrator.test.ts',
+    // T038: regressions for managed projection and pre-launch attempt attachment.
+    'packages/daemon/test/claude-adapter-record-projection.test.ts',
+    'packages/daemon/test/startup-orchestrator.test.ts',
   ],
 });
 
