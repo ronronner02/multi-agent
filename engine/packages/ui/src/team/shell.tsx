@@ -11,13 +11,10 @@ import { useTeamRun } from "../hooks/useTeamRun.js";
 import { NewTaskForm, RunSelect } from "./new-task.js";
 import { Overview } from "./overview.js";
 import { TasksScreen } from "./tasks.js";
-import { WorkspaceView, type BrowseState } from "./workspace/workspace-view.js";
-import { KnowledgeView } from "./knowledge/knowledge-view.js";
-import { AgentStatus } from "./agent-status.js";
-import { Activity } from "./activity.js";
+import { WorkspaceScreen } from "./workspace/workspace-screen.js";
+import type { BrowseState } from "./workspace/workspace-view.js";
+import { ReviewsScreen } from "./reviews.js";
 import { BottomPanel, type TerminalTarget } from "./bottom-panel.js";
-import { DecisionCard } from "./decision-card.js";
-import { ReviewDecisions } from "./review-decisions.js";
 import { RunStepper } from "./run-stepper.js";
 import { SystemStatus } from "./system-status.js";
 import "./team.css";
@@ -247,23 +244,15 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
       {section === "overview" && <Overview read={read} run={read?.run} now={now}
         onInspect={() => go("workspace")} onOpenTasks={() => go("tasks")} />}
       {section === "tasks" && <TasksScreen read={read} runId={runId} query={searchParams.q} />}
-      {section === "workspace" && <>
-        <PageHeader title={t("nav.workspace")} subtitle={runId || undefined} />
-        <WorkspaceView runId={runId} state={workspaceBrowse.runId === runId ? workspaceBrowse : { path: "", source: "" }}
-          onState={state => setWorkspaceBrowse({ ...state, runId })} tasks={read?.tasks} />
-        <KnowledgeView runId={runId} state={knowledgeBrowse.runId === runId ? knowledgeBrowse : { path: "", source: "target" }}
-          onState={state => setKnowledgeBrowse({ ...state, runId })} tasks={read?.tasks} />
-        <AgentStatus health={data.health.data} runId={runId} attempts={read?.attempts} />
-        <Activity read={read} replay={data.events.data} />
-        <BottomPanel tab={evidenceTab} onTab={setEvidenceTab} read={read} available={paired && !error && fresh}
-          target={target} onTarget={setTarget} />
-      </>}
-      {section === "reviews" && <>
-        <PageHeader title={t("nav.reviews")} subtitle={runId || undefined} />
-        <DecisionCard read={paired && !error && fresh ? read : undefined} available={paired && !error && fresh} now={now}
-          refresh={() => data.read.refetch({ throwOnError: true })} />
-        <ReviewDecisions tasks={read?.tasks} />
-      </>}
+      {section === "workspace" && <WorkspaceScreen read={read} runId={runId} health={data.health.data}
+        available={paired && !error && fresh} replay={data.events.data?.events}
+        browse={{ state: workspaceBrowse.runId === runId ? workspaceBrowse : { path: "", source: "" },
+          onState: state => setWorkspaceBrowse({ ...state, runId }) }}
+        knowledge={{ state: knowledgeBrowse.runId === runId ? knowledgeBrowse : { path: "", source: "target" },
+          onState: state => setKnowledgeBrowse({ ...state, runId }) }}
+        evidence={{ tab: evidenceTab, onTab: setEvidenceTab, target, onTarget: setTarget }} />}
+      {section === "reviews" && <ReviewsScreen read={read} runId={runId} available={paired && !error && fresh}
+        refresh={() => data.read.refetch({ throwOnError: true })} />}
       {section === "analytics" && <>
         <PageHeader title={t("nav.analytics")} subtitle={runId || undefined} />
         <RunStepper workflow={read?.workflow} />

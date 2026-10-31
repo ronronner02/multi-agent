@@ -12,8 +12,8 @@ import { TaskEditControls } from "./task-edit/task-edit-dialog.js";
  * Slice A — the Tasks screen.
  *
  * The board groups the run's published tasks into the four working columns. A card shows the
- * task id, its owner and its verified criteria; the read model publishes no task title or
- * dependency list yet, so both read as an em dash rather than as an empty or invented value.
+ * task id, its title, its owner, its dependencies and its verified criteria. A field the read
+ * model does not publish reads as an em dash rather than as an empty or invented value.
  */
 
 export const BOARD_COLUMNS = ["pending", "in-progress", "review", "blocked"] as const;
@@ -40,15 +40,20 @@ function verified(task: TeamReviewView): string {
   return task.criteria.verified === null || task.criteria.total === null ? DASH : `${task.criteria.verified}/${task.criteria.total}`;
 }
 
+/** A dependency list: `—` when the assignment could not be read, and "None" when it recorded none. */
+function dependencies(task: TeamReviewView, none: string): string {
+  return task.dependencies === null ? DASH : task.dependencies.length === 0 ? none : task.dependencies.join(", ");
+}
+
 function TaskCard({ task, selected, onSelect }: { task: TeamReviewView; selected: boolean; onSelect: () => void }) {
   const { t } = useTranslation();
   return <li>
     <button type="button" className="ui-task-card" aria-pressed={selected} onClick={onSelect} data-task-id={task.taskId}>
       <span className="ui-task-card-head"><code>{task.taskId}</code><span className="ui-state" data-state={task.queueState}>{t(`status.queue.${task.queueState}`)}</span></span>
-      <span className="ui-task-card-title">{DASH}</span>
+      <span className="ui-task-card-title">{task.title ?? DASH}</span>
       <span className="ui-task-card-meta">
         <span>{t("overview.colOwner")}: {t(`role.${task.role}`)}</span>
-        <span>{t("tasks.dependencies")}: {DASH}</span>
+        <span>{t("tasks.dependencies")}: {dependencies(task, t("tasks.noDependencies"))}</span>
         <span>{t("overview.colVerified")}: {verified(task)}</span>
       </span>
     </button>
@@ -71,14 +76,15 @@ function TaskList({ tasks, selected, onSelect }: { tasks: TeamReviewView[]; sele
   return <Card className="ui-panel" role="region" aria-label={t("tasks.list")}>
     {tasks.length === 0 ? <p className="team-muted">{t("web.noTasks")}</p>
       : <table className="ui-table">
-        <thead><tr>{(["overview.colId", "overview.colOwner", "overview.colState", "overview.colVerified", "tasks.dependencies"] as const)
+        <thead><tr>{(["overview.colId", "overview.colTask", "overview.colOwner", "overview.colState", "overview.colVerified", "tasks.dependencies"] as const)
           .map(key => <th key={key} scope="col">{t(key)}</th>)}</tr></thead>
         <tbody>{tasks.map(task => <tr key={task.qitemId} data-task-id={task.taskId} aria-selected={selected === task.qitemId}>
           <td><button type="button" className="ui-row-button" aria-pressed={selected === task.qitemId} onClick={() => onSelect(task.qitemId)}><code>{task.taskId}</code></button></td>
+          <td className="team-muted">{task.title ?? DASH}</td>
           <td>{t(`role.${task.role}`)}</td>
           <td><span className="ui-state" data-state={task.queueState}>{t(`status.queue.${task.queueState}`)}</span></td>
           <td>{verified(task)}</td>
-          <td>{DASH}</td>
+          <td>{dependencies(task, t("tasks.noDependencies"))}</td>
         </tr>)}</tbody>
       </table>}
   </Card>;
@@ -94,13 +100,17 @@ function Detail({ read, runId, task, onClose }: { read?: TeamOwnerRead; runId: s
         <button type="button" className="ui-close" aria-label={t("web.close")} onClick={onClose}>×</button>
       </div>
       <p className="team-muted">{t(`role.${task.role}`)} · {t(`status.queue.${task.queueState}`)}</p>
+      {task.title && <p>{task.title}</p>}
       <h3>{t("web.criteria")}</h3>
       <p>{task.criteria.verified === null || task.criteria.total === null ? DASH : t("tasks.criteriaOf", { verified: task.criteria.verified, total: task.criteria.total })}</p>
       {task.criteria.verified !== null && task.criteria.total !== null && task.criteria.total > 0 &&
         <span className="ui-meter"><span style={{ width: `${Math.round((task.criteria.verified / task.criteria.total) * 100)}%` }} /></span>}
-      <p className="team-muted">{t("web.criteriaSource")}: <code>{task.criteria.source ?? DASH}</code></p>
+      {/* The source is a durable column name. The owner reads what recorded the evidence, not the
+          schema: a source this slice does not know is shown as its own name rather than guessed at. */}
+      <p className="team-muted">{t("web.criteriaSource")}: {task.criteria.source === "team_queue_authority.evidence_json"
+        ? t("tasks.criteriaSourceQueue") : <code>{task.criteria.source ?? DASH}</code>}</p>
       <h3>{t("tasks.dependencies")}</h3>
-      <p className="team-muted">{DASH}</p>
+      <p className="team-muted">{dependencies(task, t("tasks.noDependencies"))}</p>
       <h3>{t("tasks.recentAttempts")}</h3>
       {attempts.length === 0 ? <p className="team-muted">{t("web.noAttempts")}</p>
         : <ul className="ui-attempts">{attempts.map(attempt => <li key={attempt.attemptId}>

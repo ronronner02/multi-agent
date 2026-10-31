@@ -20,7 +20,7 @@ vi.mock("../../hooks/useOwnerSession.js", async importOriginal => ({ ...(await i
 vi.mock("../new-task.js", () => ({ NewTaskForm: () => null }));
 
 function task(id: string, state: TeamReviewView["queueState"], role: TeamReviewView["role"] = "implementer"): TeamReviewView {
-  return { taskId: id, qitemId: `q-${id}`, role, queueState: state,
+  return { taskId: id, qitemId: `q-${id}`, role, queueState: state, title: null, dependencies: [],
     criteria: { verified: null, total: null, source: null }, currentCandidateDigest: null,
     rounds: 0, openP0P1: 0, reviewAvailable: false, acceptance: null };
 }
@@ -69,6 +69,25 @@ describe("tasks board grouping", () => {
       `${language.t("tasks.column.pending")}1`, `${language.t("tasks.column.in-progress")}1`,
       `${language.t("tasks.column.review")}2`, `${language.t("tasks.column.blocked")}2`,
     ]);
+  });
+
+  it("shows each task's published title and dependencies, and an em dash when the row has none", async () => {
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const published = { tasks: [
+      { ...task("T-201", "pending"), title: "Add the status filter", dependencies: ["T-101"] },
+      { ...task("T-202", "pending"), title: null, dependencies: null },
+      { ...task("T-203", "pending"), title: "Wire the gate", dependencies: [] },
+    ] } as Pick<TeamOwnerRead, "tasks"> as TeamOwnerRead;
+    render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}>
+      <TasksScreen read={published} runId="RUN-1" />
+    </I18nextProvider></QueryClientProvider>);
+    const card = (id: string) => screen.getByRole("button", { name: new RegExp(id) });
+    expect(card("T-201").textContent).toContain("Add the status filter");
+    expect(card("T-201").textContent).toContain("T-101");
+    // A row the read model could not read is an em dash; a recorded empty list says "None".
+    expect(card("T-202").textContent).toContain("—");
+    expect(card("T-203").textContent).toContain(language.t("tasks.noDependencies"));
   });
 
   it("opens the task detail for the selected card and shows an em dash for unpublished fields", async () => {

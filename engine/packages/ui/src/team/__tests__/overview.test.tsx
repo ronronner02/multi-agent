@@ -25,7 +25,7 @@ const run: TeamRun = {
 };
 
 function task(id: string, state: TeamReviewView["queueState"], verified: number | null, total: number | null): TeamReviewView {
-  return { taskId: id, qitemId: `q-${id}`, role: "implementer", queueState: state,
+  return { taskId: id, qitemId: `q-${id}`, role: "implementer", queueState: state, title: null, dependencies: [],
     criteria: { verified, total, source: verified === null ? null : "team_queue_authority.evidence_json" },
     currentCandidateDigest: null, rounds: 0, openP0P1: 0, reviewAvailable: false, acceptance: null };
 }

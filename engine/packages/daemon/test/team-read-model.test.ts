@@ -108,7 +108,7 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
    * the exact moment it wants.
    */
   function seedTask(runId: string, taskId: string, qitemId: string, session: string,
-    startedAt = "2026-10-26T00:00:00.000Z") {
+    startedAt = "2026-10-26T00:00:00.000Z", task: { body?: string; dependencies?: string[] } = {}) {
     // Managed mode refuses a legacy queue write, so the task is created through
     // the governed path exactly as production does. That also means the read
     // projection is proven against rows a real producer wrote.
@@ -124,9 +124,9 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
       protocolVersion: "1.0", runId, actionId: taskId,
       expectedEntityVersion: governance.getRun(runId).entityVersion,
       idempotencyKey: `seed-${runId}-${taskId}`,
-      payload: { assignment: { taskId, role: "implementer", paths: ["src"], dependencies: [] },
+      payload: { assignment: { taskId, role: "implementer", paths: ["src"], dependencies: task.dependencies ?? [] },
         outputs: [], permissions: [],
-        sourceSession: "lead", destinationSession: session, body: taskId },
+        sourceSession: "lead", destinationSession: session, body: task.body ?? taskId },
     }, binding);
     if (receipt.status !== "accepted") throw new Error(`seed failed: ${receipt.reason}`);
     const created = (receipt.value as { qitemId: string }).qitemId;
@@ -171,6 +171,39 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     // did not make the legacy mount owner-scoped or run-scoped.
     expect((await request("/api/team-control/runs/run/events?afterSeq=0", ownerToken)).status).toBe(200);
     expect((await request("/api/team-control/runs/run/events?afterSeq=0", workerToken)).status).toBe(403);
+  });
+
+  it("publishes each task's title and declared dependencies", async () => {
+    seedTask("run", "T001", "", "seat-a", "2026-10-26T00:00:00.000Z",
+      { body: "  Add the status filter\n\nIt must reject unknown states.", dependencies: ["T000"] });
+    seedTask("run", "T002", "", "seat-b", "2026-10-26T00:00:01.000Z", { body: "No dependencies here" });
+
+    const body = (await (await request("/api/team-control/runs/run/read")).json()) as {
+      read: { tasks: Array<{ taskId: string; title: string | null; dependencies: string[] | null }> };
+    };
+    const [first, second] = body.read.tasks;
+    // The title is the body's first non-blank line, trimmed: the task's own words, not a summary.
+    expect(first).toMatchObject({ taskId: "T001", title: "Add the status filter", dependencies: ["T000"] });
+    // A task that declared no dependencies publishes an empty list, not null: the two are different
+    // facts, and only null means the assignment could not be read.
+    expect(second).toMatchObject({ taskId: "T002", title: "No dependencies here", dependencies: [] });
+  });
+
+  it("bounds a long title to one display line and never invents one", async () => {
+    seedTask("run", "T001", "", "seat-a", "2026-10-26T00:00:00.000Z", { body: "x".repeat(500) });
+    const body = (await (await request("/api/team-control/runs/run/read")).json()) as {
+      read: { tasks: Array<{ title: string | null }> };
+    };
+    expect(body.read.tasks[0].title).toHaveLength(80);
+    // An empty body has no title; the read model says so rather than echoing the task id.
+    db.prepare("UPDATE queue_items SET body = '   ' WHERE qitem_id = (SELECT qitem_id FROM team_queue_authority WHERE task_id = 'T001')").run();
+    const blank = (await (await request("/api/team-control/runs/run/read")).json()) as {
+      read: { tasks: Array<{ title: string | null; dependencies: string[] | null }> };
+    };
+    expect(blank.read.tasks[0].title).toBeNull();
+    // The row's own JSON validity check is the boundary: an assignment the table accepted always
+    // parses, so a published list is never `null` for a task the authority actually holds.
+    expect(blank.read.tasks[0].dependencies).toEqual([]);
   });
 
   it("binds criteria and reviews to candidate identity, keeps missing reviews unavailable, and Finalize awaiting decision", async () => {
