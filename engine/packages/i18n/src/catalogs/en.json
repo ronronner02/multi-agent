@@ -363,5 +363,12 @@
   "edit.submit": "Submit edit",
   "edit.routine": "Routine",
   "edit.urgent": "Urgent",
-  "edit.critical": "Critical"
+  "edit.critical": "Critical",
+  "web.result": "Task result",
+  "web.resultPending": "No finished attempt for this task yet.",
+  "web.resultUnavailable": "This task's result is unavailable in the current snapshot.",
+  "web.changedFiles": "Changed files",
+  "web.diff": "Unified diff",
+  "web.applyCommand": "Apply command",
+  "web.copy": "Copy"
 }

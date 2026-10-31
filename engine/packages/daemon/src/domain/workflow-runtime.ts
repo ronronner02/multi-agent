@@ -790,6 +790,26 @@ export class WorkflowRuntime {
   }
 
   /**
+   * MVP slice 3 — the candidate's own manifest and patch, for the owner's result read.
+   *
+   * The result endpoint needs the patch `candidateManifest` already computes; this is the
+   * one place that hands it out, so the route never reaches into the file reader itself.
+   *
+   * Adopt-only on purpose: this is a read, and a read must never stage a tree. A candidate
+   * that is not on disk throws instead of producing a patch of the base against itself, and
+   * one a restart left behind is adopted from its recorded provenance rather than refused.
+   *
+   * The scope hook is dropped here. `candidateFor` attaches it so a *launch* can stage the
+   * scope extensions a candidate's edits need; a read that ran it would either write an
+   * approval as a side effect of reading, or refuse to show work the owner has already been
+   * told about. The owner is reading the result, not admitting the work.
+   */
+  candidateManifestFor(runId: string, taskId: string): ReturnType<typeof candidateManifest> {
+    const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
+    return candidateManifest({ ...workspace, checkScope: undefined });
+  }
+
+  /**
    * T039 — the read-only packet a reviewer receives for the exact candidate.
    *
    * `destination` must not overlap the candidate or the source checkout; the

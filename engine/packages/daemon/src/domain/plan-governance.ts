@@ -281,6 +281,11 @@ export class PlanGovernance {
     return row ? this.getTask(row.qitemId) : null;
   }
 
+  /** MVP slice 3 — a task's queue state, so a reader can tell a finished task from one in flight. */
+  queueState(qitemId: string): string | null {
+    return this.queue.getById(qitemId)?.state ?? null;
+  }
+
   getAttempt(id: string): TeamAttempt | null {
     const row = this.db.prepare(`SELECT id, run_id AS runId, qitem_id AS qitemId, role, provider, identity_json AS identityJson,
       unknown_reason AS unknownReason, state, usage_json AS usageJson, entity_version AS entityVersion FROM team_attempts WHERE id = ?`)
