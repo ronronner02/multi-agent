@@ -110,6 +110,10 @@ export const PIN = Object.freeze({
     'packages/tui/src/live.ts',
     'packages/cli/src/config-store.ts',
     'packages/cli/test/config-store-extended.test.ts',
+    // T047: the landed launch attachment adapts the startup and restore orchestrators.
+    'packages/daemon/src/domain/restore-orchestrator.ts',
+    'packages/daemon/src/domain/startup-orchestrator.ts',
+    'packages/daemon/test/restore-orchestrator.test.ts',
   ],
 });
 
@@ -238,6 +242,7 @@ const LOCAL_ENGINE_PATHS = [
   'packages/ui/test/team-terminal.test.tsx',
   'packages/ui/src/team/__tests__/responsive.test.tsx',
   'packages/ui/src/team/__tests__/decisions.test.tsx',
+  'packages/daemon/test/managed-attempt-attachment.test.ts',
 ];
 
 export class ImportError extends Error {
