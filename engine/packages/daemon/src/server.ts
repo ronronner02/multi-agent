@@ -184,6 +184,13 @@ export interface AppDeps {
     channel: ManagedNativeChannelEvidence;
     /** Per-attempt mailbox endpoints; an unregistered attempt cannot launch. */
     endpoints: Map<string, Pick<import("./adapters/worker-mailbox-bridge.js").WorkerMailboxBridge, "binding" | "endpoint">>;
+    /**
+     * T047 — the attachment resolver the startup orchestrator reaches every managed seat through.
+     * Exposed here so a restart can ask the same composition, from durable rows alone, which
+     * attempt a seat re-adopts; it is the production seam, not a test-only view.
+     */
+    managedAttempt?: (input: import("./domain/startup-orchestrator.js").StartupInput) =>
+      Promise<import("./domain/runtime-adapter.js").ManagedAttempt | undefined>;
   };
   proofSourceWatch?: import("./domain/proof/source-watch.js").ProofSourceWatch;
   /** S20 — effective bind plan for the health surface (absent = legacy body). */

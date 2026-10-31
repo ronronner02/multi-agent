@@ -169,6 +169,16 @@ describe.skipIf(!installed)("the daemon-mediated lane", () => {
     expect(directory, "restart requires a retained live home").toBeDefined();
     const restarted = phase("restart", client, directory!);
     expect(restarted.result.error).toBeUndefined();
-    expect(restarted.result.restart).toMatchObject({ sameAttempt: true, liveIdentityObserved: true });
+    // F-2: recording the first process's attempt and PID proves the client survived. The restart
+    // itself is proven by what the second process reads for itself — it registered no endpoint,
+    // the first process's socket is gone, it re-adopts the same attempt from durable rows alone,
+    // it still refuses a resume token it never recorded, and the wake counters did not reset.
+    expect(restarted.result.restart).toMatchObject({
+      sameAttempt: true, liveIdentityObserved: true,
+      endpointCount: 0, mailboxReRegistered: false, mailboxSocketAbsent: true,
+      adoption: { adopted: true, sameAttemptId: true, sameContext: true },
+      unrecordedResumeRefused: true,
+      wakePreserved: true,
+    });
   }, 900_000);
 });

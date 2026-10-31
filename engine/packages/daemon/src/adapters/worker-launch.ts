@@ -257,6 +257,12 @@ function refusalCode(error: unknown): string {
 function same(a: unknown, b: unknown): boolean { return canonicalJson(a) === canonicalJson(b); }
 function groups(value: number[]): number[] { return [...value].sort((a, b) => a - b); }
 const configHome = (client: WorkerClient) => "/home/worker/" + (client === "codex" ? ".codex" : ".claude");
+/**
+ * The gateway's credential file inside the sandbox, named exactly as the privileged launcher
+ * binds it (worker-launch.mjs, `GATEWAY_ENV_PATH`). A gateway launch always produces this mount
+ * and a launch without one never does, so the observed set can be held to it in both directions.
+ */
+export const GATEWAY_ENV_MOUNT: WorkerMount = Object.freeze({ source: "tmpfs", target: "/run/multi-agent-provider/provider.env", access: "rw" });
 /** Provisioned beside the pinned client; it keeps tools in the standard Responses request (see provision-host.sh). */
 export const codexModelCatalog = (toolchainDir: string) => toolchainDir + "/clients/codex-model-catalog.json";
 export interface WorkerLaunchPolicy extends ContextMountPolicy {
@@ -670,8 +676,16 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       ...p.nativePolicy!.aliases.map(alias => ({ source: attempt.context.files.find(file => file.workerPath === alias.source)!.path,
         target: alias.target, access: "ro" as const })),
     );
+    // A gateway launch carries the bearer as a 0400 data file bubblewrap turns into this exact
+    // path, so the observation shows a `tmpfs` mount there at `rw` (measured against the sandbox's
+    // own mountinfo). The daemon records the `--gateway` digest on the command it started, and the
+    // launcher binds the file only when the admitted gateway's client is this client, so the
+    // presence of the flag is the fact to hold the mount to: required with it, refused without it.
+    const gatewayLaunch = command.args.includes("--gateway");
+    if (gatewayLaunch) expected.push(GATEWAY_ENV_MOUNT);
     for (const mount of expected) requireFact(b.mounts.filter(m => m.target === mount.target).length === 1
       && b.mounts.some(m => same(m, mount)), "managed_worker_mount_mismatch");
+    requireFact(gatewayLaunch === b.mounts.some(m => same(m, GATEWAY_ENV_MOUNT)), "managed_worker_mount_mismatch");
     const hostReadOnly = ["/usr", policy.paths.toolchain_dir, ...policy.sandbox.etc_ro_binds];
     requireFact(b.mounts.every(m => expected.some(e => same(e, m))
       || (m.access === "ro" && m.source === m.target && hostReadOnly.includes(m.target))

@@ -13,7 +13,7 @@
 // every run starts from an empty database. That matters: governance refuses a new launch while
 // an earlier attempt's intent is unresolved, which is the correct behaviour and would otherwise
 // make a rerun after a failed start look like a new defect.
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
@@ -65,6 +65,9 @@ const { createDaemon } = await import(new URL("../../dist/startup.js", import.me
 const { RigRepository } = await import(new URL("../../dist/domain/rig-repository.js", import.meta.url).href);
 const { SessionRegistry } = await import(new URL("../../dist/domain/session-registry.js", import.meta.url).href);
 const { hashBinding } = await import(new URL("../../dist/domain/plan-governance.js", import.meta.url).href);
+// The wake policy is the production owner of the counters, read here through its own class so a
+// restart compares the same reading the hourly and cycle guards make.
+const { LeadWakePolicy: WakePolicyClass } = await import(new URL("../../dist/domain/lead-wake-policy.js", import.meta.url).href);
 
 const daemon = await createDaemon({ dbPath: DB, managedMode: true, teamControl });
 const { db, deps } = daemon;
@@ -142,6 +145,26 @@ try {
     const recorded = governance.getAttempt(prior.attemptId), identity = prior.receipt.identity;
     const raw = readFileSync("/proc/" + identity.processId + "/stat", "utf8");
     const fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
+    // F-2: recording a PID and a start time proves the first process's client is still there. It
+    // does not prove this daemon restarted, nor that the restart preserved what the plan requires
+    // it to preserve. Each fact below is read from this process, against what the first one wrote.
+    //
+    // 1. The endpoint. `endpoints` is built empty per process (startup.ts), so a non-empty map here
+    //    would mean this process inherited registrations it never made.
+    const endpointCount = deps.managedLaunch.endpoints.size;
+    // 2. Re-adoption. The production seat path (`composeManagedAttemptAttachment`) resolves this
+    //    seat's attempt from durable rows alone — the approved run, its live task row and the
+    //    recorded task — and re-enters the recorded attempt id. Asking it without a token is the
+    //    re-adoption a restart has to preserve. Asking it with the recorded token is the resume
+    //    path; asking it with a token this daemon never recorded is the designed refusal.
+    const shared = { prior, sessions, rigRepo, adapters, client };
+    const adopted = await seatAdoption({ ...shared, resumeToken: prior.resumeToken });
+    const unrecorded = adopted.adopted ? await seatAdoption({ ...shared,
+      resumeToken: "native-token-this-daemon-never-recorded" }) : null;
+    // 3. The wake counters. `lead.wake-state` lives in the event log, so the count this process
+    //    reads is the first process's, unchanged; a counter that reset would let the hourly guard
+    //    be defeated by restarting.
+    const wake = wakeState();
     out.restart = {
       sameAttempt: recorded?.attemptId === prior.attemptId,
       liveIdentityObserved: fields[19] === identity.processStart && !["Z", "X"].includes(fields[0])
@@ -149,8 +172,27 @@ try {
       recordedAttemptId: recorded?.attemptId ?? null,
       recordedState: recorded?.state ?? null,
       recordedContextHash: prior.receipt.contextHash ?? null,
+      endpointCount,
+      // The socket the first process registered is gone with it: the second process owns no
+      // endpoint, so nothing is listening on that path even though the client still runs.
+      mailboxReRegistered: endpointCount > 0 && deps.managedLaunch.endpoints.has(prior.attemptId),
+      mailboxSocketAbsent: !existsSync(prior.mailbox),
+      adoption: { ...adopted, sameContext: adopted.contextHash === prior.receipt.contextHash },
+      // The other designed answer: a token with no recorded receipt refuses instead of resuming
+      // outside the worker boundary. A restart that accepted it would be the failure.
+      unrecordedResumeRefused: unrecorded ? !unrecorded.adopted && unrecorded.refusal !== undefined : null,
+      unrecordedRefusal: unrecorded?.refusal ?? null,
+      wake,
+      wakePreserved: wake.activations === prior.wake?.activations && wake.cycles === prior.wake?.cycles
+        && wake.reason === prior.wake?.reason && wake.progress === prior.wake?.progress,
     };
     if (!out.restart.sameAttempt || !out.restart.liveIdentityObserved) throw new Error("restart live identity is unconfirmed");
+    if (endpointCount !== 0 || !out.restart.mailboxSocketAbsent) throw new Error("restart endpoint state is unconfirmed");
+    if (!adopted.adopted || !adopted.sameAttemptId || !out.restart.adoption.sameContext) {
+      throw new Error("restart re-adoption is unconfirmed: " + JSON.stringify(adopted));
+    }
+    if (unrecorded && !out.restart.unrecordedResumeRefused) throw new Error("restart unrecorded-resume refusal is unconfirmed");
+    if (!out.restart.wakePreserved) throw new Error("restart wake counters are not preserved");
   } else {
   const resumeToken = phase === "resume" ? prior?.resumeToken : undefined;
   const attemptId = resumeToken && prior?.attemptId ? prior.attemptId : `attempt-${Date.now()}`;
@@ -206,7 +248,16 @@ try {
       errors: result.ok ? null : result.errors, warnings: result.warnings ?? null,
       managedSession: receipt, resumeToken: tokenRow?.resume_token ?? null };
     if (result.ok && tokenRow?.resume_token) {
-      writeFileSync(STATE, JSON.stringify({ attemptId, resumeToken: tokenRow.resume_token, receipt }, null, 1));
+      // F-2: the restart cell has to prove the restart, so it needs the facts that only this
+      // process can record: the endpoint registration it held, the durable wake state it left
+      // behind, and the attempt it ran under. `endpoints` is process-local by design (a restart
+      // owns none of the old ones), so its *absence* in the second process is only meaningful
+      // against a recorded size here.
+      const wake = wakeState();
+      writeFileSync(STATE, JSON.stringify({ attemptId, resumeToken: tokenRow.resume_token, receipt,
+        sessionId: sessionRecord.sessionId, endpoint: describeEndpoint(attemptId),
+        mailbox: produced.bridge.binding.socketPath, wake,
+        taskQitemId: task.qitemId, seat: SEAT }, null, 1));
     }
   }
   }
@@ -224,4 +275,55 @@ function digestOf(value) {
 }
 function readState() {
   try { return JSON.parse(readFileSync(STATE, "utf8")); } catch { return null; }
+}
+
+/** What this process registered for the attempt, recorded so a restart can be read against it. */
+function describeEndpoint(attemptId) {
+  const registered = deps.managedLaunch.endpoints.get(attemptId);
+  if (!registered) return { registered: false };
+  const endpoint = registered.endpoint();
+  return { registered: true, generation: endpoint.generation, path: endpoint.path,
+    dev: endpoint.dev, ino: endpoint.ino };
+}
+
+/**
+ * The durable wake state the plan's restart scenario (17) requires to survive.
+ *
+ * It is read through the production policy, so what a restart compares is the same reading the
+ * hourly and cycle guards make — not a copy this fixture keeps.
+ */
+function wakeState() {
+  const check = new WakePolicyClass(db, deps.eventBus).check(governance.getRun(RUN), null, new Date().toISOString());
+  return { activations: check.state.activations.length, cycles: Object.keys(check.state.cycles).length,
+    pending: Object.values(check.state.pending).flat().length, reason: check.reason, progress: check.progress };
+}
+
+/**
+ * Which attempt this seat re-adopts, asked of the production attachment resolver.
+ *
+ * `composeManagedAttemptAttachment` reads the approved run, the live task row and the recorded
+ * task, then re-enters the attempt id it recorded — no process-local state is consulted. That is
+ * exactly what a restart has to be shown to preserve, and why this asks the resolver itself
+ * rather than re-deriving its answer here.
+ */
+async function seatAdoption({ prior, sessions, rigRepo, adapters, client, resumeToken }) {
+  const resolve = deps.managedLaunch.managedAttempt;
+  if (!resolve) return { adopted: false, refusal: "attachment_resolver_unavailable" };
+  const session = sessions.findResumeContextByName(SEAT), node = rigRepo.getRig("rig")?.nodes.find(row => row.id === session.nodeId);
+  try {
+    const attempt = await resolve({ rigId: "rig", nodeId: session.nodeId, sessionId: session.sessionId,
+      binding: { ...(node.binding ?? {}), id: "binding-adoption", nodeId: session.nodeId, tmuxSession: SEAT,
+        cwd: node.cwd, permissionMode: "acceptEdits" },
+      adapter: adapters[client], plan: { runtime: client, cwd: node.cwd, entries: [],
+        startup: { files: [], actions: [] }, conflicts: [], noOps: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: SEAT,
+      ...(resumeToken ? { resumeToken, resumeType: client === "codex" ? "codex_id" : "claude_id" } : {}) });
+    return attempt ? { adopted: true, attemptId: attempt.attemptId,
+      sameAttemptId: attempt.attemptId === prior.attemptId,
+      contextHash: attempt.context.generatedHash } : { adopted: false, refusal: "no_recorded_attempt" };
+  } catch (error) {
+    // The composition's own refusals are the designed answer here, not a defect: report the one
+    // it gave rather than turning it into a test failure.
+    return { adopted: false, refusal: String(error?.message ?? error) };
+  }
 }

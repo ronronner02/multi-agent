@@ -1113,7 +1113,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
   const bridgeFor = (input: Readonly<WorkerLaunchInput>) => ({ endpoint: () => Object.freeze(endpoint(input.attempt.attemptId)),
     binding: { socketPath: endpoint(input.attempt.attemptId).path, workerId: "builder", sessionId: "builder@rig", runId: "run",
       attemptId: input.attempt.attemptId, rigId: "rig", taskId: "task", recipients: [] } });
-  const mountInfo = (attempt: ContextManifest) => {
+  const mountInfo = (attempt: ContextManifest, gateway: boolean) => {
     const host = (source: string, target: string, access = "ro") => `8:1 ${source} ${target} ${access},nosuid - ext4 /dev/sda rw`;
     const managed = attempt.files.find(file => file.workerPath === "/context/native/claude/managed-settings.json")!.path;
     // [parent row, mount]; the 9p drivers mount sits below the masked tmpfs, as on a WSL host.
@@ -1121,16 +1121,23 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
       [1, "0:91 / /usr/lib/wsl ro - tmpfs tmpfs rw"], [0, host("/etc/hosts", "/etc/hosts")], [0, host(toolchain, toolchain)],
       [0, host(policy.paths.framework_dir, "/framework")], [0, host(attempt.root, "/context")], [0, "0:92 / /proc rw - proc proc rw"],
       [0, "0:93 / /dev rw - tmpfs tmpfs rw"], [9, "0:6 /null /dev/null rw - devtmpfs none rw"], [9, "0:94 / /dev/pts rw - devpts devpts rw"],
-      [0, "0:95 / /tmp rw - tmpfs tmpfs rw"], [0, "0:96 / /run rw - tmpfs tmpfs rw"], [13, host(policy.paths.egress_socket_dir, policy.paths.egress_socket_dir)],
+      [0, "0:95 / /tmp rw - tmpfs tmpfs rw"], [0, "0:96 / /run rw - tmpfs tmpfs rw"],
+      [13, host(policy.paths.egress_socket_dir, policy.paths.egress_socket_dir)],
       [13, "0:97 / /run/multi-agent ro - tmpfs tmpfs rw"], [15, host(endpoint(attempt.projection.attemptId).path, "/run/multi-agent/mailbox.sock")],
       [0, "0:98 / /etc/claude-code ro - tmpfs tmpfs rw"], [17, host(managed, "/etc/claude-code/managed-settings.json")],
       [0, host(join(policy.paths.worker_root, "ma-worker1/home"), "/home/worker", "rw")], [19, "0:99 / /home/worker/.multi-agent/mailbox rw - tmpfs tmpfs rw"],
       [20, "0:90 /bindfile//deleted /home/worker/.multi-agent/mailbox/bootstrap.json ro - tmpfs tmpfs rw"],
       [0, host(join(policy.paths.worker_root, "ma-worker1/scratch"), "/scratch", "rw")], [0, host(tree, "/work", "rw")]];
+    // Appended last so every parent index above keeps naming the row it names; the parent is the
+    // sandbox's own `/run` tmpfs, which is where bubblewrap puts the bound data file.
+    if (gateway) rows.push([13, "0:90 /bindfile//deleted /run/multi-agent-provider/provider.env rw - tmpfs tmpfs rw"]);
     return rows.map(([parent, row], index) => `${200 + index} ${200 + parent} ${row}`).join("\n") + "\n";
   };
   const snapshot = (attemptId: string, attempt: ContextManifest) => {
     const argv = intent(attemptId)!.command!.nativeArgv as string[];
+    // The privileged request is what decides the mount: a launch carrying `--gateway` binds the
+    // credential file, and the observation this fixture returns must show what it really binds.
+    const gateway = (intent(attemptId)!.command!.args as string[]).includes("--gateway");
     const managed = attempt.files.find(file => file.workerPath === "/context/native/claude/managed-settings.json")!;
     const value = { pane: { processId: PANE, processStart: String(30_000 + PANE) }, sandbox: { mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]" },
       lineage: [{ processId: RELAY, processStart: String(30_000 + RELAY), executable: realpathSync(join(toolchain, "node/bin/node")) },
@@ -1140,7 +1147,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
         executable: realpathSync(join(toolchain, "clients/lib/claude.exe")), cwd: "/work",
         environment: { HOME: "/home/worker", CLAUDE_CONFIG_DIR: "/home/worker/.claude" },
         mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]", pidNamespace: "pid:[2]" },
-      mountInfo: mountInfo(attempt), stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })),
+      mountInfo: mountInfo(attempt, gateway), stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })),
       files: [...attempt.files.map(file => ({ path: file.workerPath, hash: file.hash })), { path: "/etc/claude-code/managed-settings.json", hash: managed.hash }],
       discoveryRoots: [...attempt.workerDiscoveryRoots], nativeSessions: [], mailbox: { uid, gid: workerGroup!, dev: 1, ino: 23 },
       nativePolicy: { inventory: { selectedSource: "/etc/claude-code/managed-settings.json", managedDropIns: "absent", remotePolicy: "absent",

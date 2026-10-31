@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
+import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, GATEWAY_ENV_MOUNT, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code-adapter.js";
 import { CodexRuntimeAdapter } from "../src/adapters/codex-runtime-adapter.js";
 import { ClaudeResumeAdapter } from "../src/adapters/claude-resume.js";
@@ -151,6 +151,8 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     const f = fixture(client);
     const digest = hashBytes("admitted gateway");
     f.p.provider.gateway = { client, digest, model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    // A gateway launch binds its bearer file, so the observation it is verified against shows it.
+    f.observation.boundary.mounts.push({ ...GATEWAY_ENV_MOUNT });
     expect(await f.launch()).toMatchObject({ ok: true });
     const command = vi.mocked(f.control.start).mock.calls[0]![0];
     const flag = client === "codex" ? "-m" : "--model";
@@ -164,6 +166,37 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     f.node.model = "other-model";
     expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_launch_option_invalid") });
     expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  // F-1: the gateway's bearer file is a mount the launcher really creates, and the observation
+  // reports it. Its exact shape comes from the sandbox's own mountinfo: bubblewrap turns the
+  // inherited 0400 data descriptor into a fresh `tmpfs` file mount at the launcher's fixed path,
+  // which `workerMounts` names by type because the device belongs to no host mount.
+  it("accepts the gateway credential mount an admitted gateway launch actually reports", async () => {
+    const f = fixture(client);
+    f.p.provider.gateway = { client, digest: hashBytes("admitted gateway"), model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    f.observation.boundary.mounts.push({ ...GATEWAY_ENV_MOUNT });
+    expect(await f.launch()).toMatchObject({ ok: true, managedSession: expect.anything() });
+    expect(vi.mocked(f.control.start).mock.calls[0]![0].args).toContain("--gateway");
+  });
+
+  // The same mount on a launch that carries no `--gateway` is a mount this attempt never admitted,
+  // so accepting it would widen the boundary rather than verify it.
+  it("refuses the gateway credential mount on a launch without --gateway", async () => {
+    const f = fixture(client);
+    f.observation.boundary.mounts.push({ ...GATEWAY_ENV_MOUNT });
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
+    expect(vi.mocked(f.control.start).mock.calls[0]![0].args).not.toContain("--gateway");
+    expect(f.events.at(-1)).toMatchObject({ phase: "blocked", causeCode: "managed_worker_mount_mismatch" });
+  });
+
+  // And the converse: a gateway launch whose observation does not show the file is unproven,
+  // because nothing else in the receipt says the bearer reached the client.
+  it("refuses a gateway launch that reports no credential mount", async () => {
+    const f = fixture(client);
+    f.p.provider.gateway = { client, digest: hashBytes("admitted gateway"), model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
+    expect(vi.mocked(f.control.start).mock.calls[0]![0].args).toContain("--gateway");
   });
 
   it("confirms worker quiescence before reporting an initial boundary fault", async () => {
