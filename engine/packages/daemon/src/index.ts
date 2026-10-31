@@ -400,7 +400,9 @@ export async function startServer(port?: number) {
   // exit so any in-flight policy evaluation completes (or is awaited).
   // Multi-bind: close every serve() instance in parallel.
   if (!managed) deps.healthDiagnosis?.start();
+  deps.teamControl?.reconciliation?.start();
   const shutdown = createDaemonShutdown({
+    managedCancellation: deps.teamControl?.reconciliation ? () => deps.teamControl!.reconciliation!.shutdown() : undefined,
     receiptPath: path.join(OPENRIG_HOME, DAEMON_SHUTDOWN_RECEIPT),
     phases: [
       ["timers", () => {

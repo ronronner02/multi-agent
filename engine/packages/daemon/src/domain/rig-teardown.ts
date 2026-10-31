@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { ManagedCancellationControl, ManagedSessionReceipt } from "./runtime-adapter.js";
 import { RigDeletionBlockedError, RigDeletionInProgressError, RigDeletionFinalizationError, type RigDeletionFinalizationFailure, type RigRepository } from "./rig-repository.js";
 import type { SessionRegistry } from "./session-registry.js";
 import type { TmuxAdapter } from "../adapters/tmux.js";
@@ -32,6 +33,7 @@ interface TeardownOptions {
 }
 
 interface TeardownDeps {
+  managedCancellation?: { stopRig(rigId: string): Promise<{ stopped: string[]; unresolved: string[] } | null> };
   db: Database.Database;
   rigRepo: RigRepository;
   sessionRegistry: SessionRegistry;
@@ -84,6 +86,15 @@ export class RigTeardownOrchestrator {
       result.deleteBlocked = true;
       result.errors.push("Rig has retained governance history; stop without deletion or archive it.");
       return result;
+    }
+    if (this.deps.managedCancellation) {
+      const managed = await this.deps.managedCancellation.stopRig(rigId);
+      if (managed) {
+        result.sessionsKilled = managed.stopped.length;
+        result.alreadyStopped = managed.stopped.length === 0 && managed.unresolved.length === 0;
+        result.errors = managed.unresolved.map(id => "Managed termination unresolved: " + id);
+        return result;
+      }
     }
     const guard = this.deps.tmuxAdapter.deliveryGuard;
     const ids = rig.nodes.map(node => node.id);
@@ -356,4 +367,37 @@ export class RigTeardownOrchestrator {
       deleteFile: (path) => fs.unlinkSync(path),
     }, targetPath);
   }
+}
+
+// A graceful request is not exit evidence; the privileged owner confirms the entire group.
+export async function stopManagedSession(
+  readSession: () => ManagedSessionReceipt | undefined, control: ManagedCancellationControl, requestedAt: number,
+): Promise<boolean> {
+  let expired = false;
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  const wait = (ms: number) => new Promise<void>(resolve => timers.push(setTimeout(resolve, Math.max(0, ms))));
+  const deadline = Math.min(requestedAt + 15_000, Date.now() + 15_000);
+  const timeout = new Promise<boolean>(resolve => timers.push(setTimeout(() => { expired = true; resolve(false); },
+    Math.max(0, deadline - Date.now()))));
+  const stop = async () => {
+    if (Date.now() >= deadline) return timeout;
+    const initial = readSession();
+    if (initial && control.requestStop && Date.now() < requestedAt + 5_000) {
+      void Promise.resolve().then(() => control.requestStop!(initial)).catch(() => {});
+    }
+    const grace = Math.min(5_000, requestedAt + 5_000 - Date.now());
+    if (grace > 0) await wait(grace);
+    while (!expired && Date.now() < deadline) {
+      const session = readSession();
+      if (session) {
+        try { if (await control.quiesce(session)) return true; } catch { /* A failed probe proves no exit. */ }
+        return timeout;
+      }
+      // An already-admitted launch can publish its owned receipt after the grace period.
+      await wait(Math.min(100, deadline - Date.now()));
+    }
+    return false;
+  };
+  try { return await Promise.race([stop(), timeout]); }
+  finally { expired = true; for (const timer of timers) clearTimeout(timer); }
 }

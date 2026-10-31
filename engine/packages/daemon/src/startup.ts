@@ -1,3 +1,4 @@
+import { TeamReconciliation } from "./domain/team-reconciliation.js";
 import { fileURLToPath } from "node:url";
 import { discoverTailscaleSelfNames } from "./middleware/browser-boundary.js";
 import { configureShadowCapture } from "./domain/shadow-capture.js";
@@ -308,6 +309,7 @@ export function collectAllowlistedProviderAuthEnv(
  * and channel evidence only from the launcher's own verified observations, revoked before any blocked record.
  */
 function composeManagedLaunch(dependencies: {
+  events: EventBus;
   db: Database.Database; governance: PlanGovernance; queue: QueueRepository; options: NonNullable<AppDeps["teamControl"]>;
   rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
   /** T039: the workflow runtime a managed launch must be admitted through. Read at launch, not at composition. */
@@ -371,12 +373,31 @@ function composeManagedLaunch(dependencies: {
     get tmuxServer() { return tmuxServer(); },
   });
   const guarded = channel.guard(control, (runId, attemptId) => governance.getNativeLaunchIntent(runId, attemptId)?.sessionId);
+  const reconciliation = new TeamReconciliation({ db, governance, events: dependencies.events, control: {
+    quiesce: async session => {
+      const intent = governance.getNativeLaunchIntent(session.runId, session.attemptId);
+      const command = intent?.command as unknown as import("./adapters/worker-launch.js").WorkerCommand | undefined;
+      if (!command || command.attemptId !== session.attemptId || command.deadline !== session.deadline) return false;
+      const receipt = await guarded.quiesce({ command, identity: session.identity,
+        processGroupId: session.processGroupId, causeCode: "managed_cancel_requested" });
+      if (receipt.status !== "terminated" || receipt.processGroupId !== session.processGroupId
+        || canonicalJson(receipt.identity) !== canonicalJson(session.identity)) return false;
+      await guarded.record({ phase: "blocked", attemptId: session.attemptId, deadline: session.deadline,
+        contextHash: session.contextHash, code: "managed_cancel_requested", quiescence: receipt });
+      endpoints.delete(session.attemptId);
+      return true;
+    },
+  } });
+
   // T039: the launcher asks the workflow runtime to admit each assignment and place
   // its candidate tree. The runtime is constructed later in startup, but no managed
   // launch can run before startup completes, so the reference is read at launch time
   // rather than captured here — the same late-read shape as `tmuxServer` above.
   const admission: WorkerLaunchAdmission = {
-    admitForLaunch: (runId, input) => requireWorkflowRuntime().admitForLaunch(runId, input),
+    admitForLaunch: (runId, input) => {
+      reconciliation.checkpoint(runId);
+      return requireWorkflowRuntime().admitForLaunch(runId, input);
+    },
     prepareAssignment: input => requireWorkflowRuntime().prepareLaunchAssignment(input),
     candidateSourceUnchanged: (runId, taskId) => requireWorkflowRuntime().candidateSourceUnchanged(runId, taskId),
     releaseCandidate: (runId, taskId, attemptId) => requireWorkflowRuntime().releaseCandidate(runId, taskId, attemptId),
@@ -392,7 +413,7 @@ function composeManagedLaunch(dependencies: {
     try { await guarded.record(event); } finally { if (event.phase === "blocked") endpoints.delete(event.attemptId); }
   } }, Date.now, randomUUID, admission);
   // `readHealthEvidence` is built by the control but not otherwise reachable from startup; the health reader reads it.
-  return { launcher, channel, endpoints, readHealthEvidence: guarded.readHealthEvidence };
+  return { launcher, channel, endpoints, reconciliation, readHealthEvidence: guarded.readHealthEvidence };
 }
 
 /**
@@ -435,6 +456,7 @@ function recordedManagedReceipt(dependencies: { db: Database.Database; governanc
 function composeManagedAttemptAttachment(dependencies: {
   db: Database.Database;
   governance: PlanGovernance;
+  reconciliation: TeamReconciliation;
   endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"];
   runtime: () => WorkflowRuntime | undefined;
   owners: () => { chat?: AppDeps["chatRepo"]; delivery?: AppDeps["mailboxDelivery"] };
@@ -470,6 +492,9 @@ function composeManagedAttemptAttachment(dependencies: {
     const worker = roots.worker;
     const identity = new WorkerIdentities(() => ({ workerRoot: roots.workerRoot,
       assignmentRoot: roots.assignmentRoot, identities: roots.workerIdentities })).resolve(worker);
+    const before = dependencies.reconciliation.checkpoint(row.runId);
+    dependencies.governance.reconcileBinding({ protocolVersion: "1.0", runId: row.runId, actionId: row.runId,
+      expectedEntityVersion: before.entityVersion, idempotencyKey: randomUUID(), payload: before.binding });
     const run = dependencies.governance.getRun(row.runId);
     // The destination session names a seat on the run's own rig; a row that resolves to a
     // seat elsewhere would attach this attempt to a binding it never authorized.
@@ -1023,7 +1048,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   });
   // KTD22: one governance owner serves the app and the managed launch chain, which only managed attempts reach.
   const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, teamControl.readPolicyCapability);
-  const managedLaunch = managed ? composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
+  const managedLaunch = managed ? composeManagedLaunch({ db, events: eventBus, governance: teamGovernance, queue: queueRepoInstance,
     options: teamControl, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
     // Read when a launch is admitted, after startup has constructed the runtime.
     workflowRuntime: () => workflowRuntime }) : undefined;
@@ -1039,6 +1064,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const teamControlOptions: NonNullable<AppDeps["teamControl"]> = { ...teamControl, readSystemHealth: teamControl.readSystemHealth
     ?? composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
       ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) }) };
+  if (managedLaunch) teamControlOptions.reconciliation = managedLaunch.reconciliation;
   // T053 — the seat capability a managed send must reuse. `createApp` builds the mailbox
   // owner when none is supplied, so this rides the deps slot rather than constructing it
   // twice: one owner, one seat table.
@@ -1730,6 +1756,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     }),
     teardownOrchestrator: new RigTeardownOrchestrator({
       db, rigRepo, sessionRegistry, tmuxAdapter, snapshotCapture, eventBus, resumeMetadataRefresher, serviceOrchestrator,
+      managedCancellation: managedLaunch?.reconciliation,
     }),
     podInstantiator,
     podBundleSourceResolver,
@@ -2031,7 +2058,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // T047 — assigned here, after the runtime it produces through exists and before the app
     // serves: every seat launch that could reach a worker happens after this point.
     managedAttempt = managedLaunch ? composeManagedAttemptAttachment({
-      db, governance: teamGovernance, endpoints: managedLaunch.endpoints,
+      db, governance: teamGovernance, reconciliation: managedLaunch.reconciliation, endpoints: managedLaunch.endpoints,
       runtime: () => workflowRuntime,
       owners: () => ({ chat: deps.chatRepo, delivery: deps.mailboxDelivery }),
     }) : undefined;

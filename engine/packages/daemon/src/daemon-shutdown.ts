@@ -105,6 +105,7 @@ export function closeHttpServer(server: ServerShutdownHandle, graceMs = DAEMON_H
  * wedge still needs identity-checked operator recovery, not another supervisor. */
 export function createDaemonShutdown(options: {
   phases: Array<[string, () => unknown]>;
+  managedCancellation?: () => Promise<void>;
   markClean: () => void;
   receiptPath: string;
   timeoutMs?: number;
@@ -119,7 +120,7 @@ export function createDaemonShutdown(options: {
     let phase = "starting";
     const startedAt = new Date().toISOString();
     const failures: DaemonShutdownReceipt["failures"] = [];
-    const timeoutMs = options.timeoutMs ?? DAEMON_SHUTDOWN_TIMEOUT_MS;
+    const timeoutMs = options.timeoutMs ?? (DAEMON_SHUTDOWN_TIMEOUT_MS + (options.managedCancellation ? 15_000 : 0));
     const log = options.log ?? console.error;
     const exit = options.exit ?? ((code) => process.exit(code));
     const fail = (error: unknown) => {
@@ -154,7 +155,9 @@ export function createDaemonShutdown(options: {
     }, timeoutMs);
     log(`OpenRig daemon received ${signal}; shutting down (budget ${timeoutMs}ms)`);
     void (async () => {
-      for (const [name, run] of options.phases) {
+      const phases: Array<[string, () => unknown]> = options.managedCancellation
+        ? [["managed-cancellation", options.managedCancellation], ...options.phases] : options.phases;
+      for (const [name, run] of phases) {
         if (finished) return;
         phase = name;
         try { await run(); } catch (error) { if (!finished) fail(error); }

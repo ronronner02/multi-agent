@@ -22,6 +22,7 @@ export interface TeamControlOptions {
    * unavailable rather than serving a partial or invented projection.
    */
   readModel?: TeamReadModel;
+  reconciliation?: import("../domain/team-reconciliation.js").TeamReconciliation;
 }
 
 export function teamControlRoutes(
@@ -136,7 +137,10 @@ export function teamControlRoutes(
       const actor = c.get("controlActor");
       let receipt;
       if (action === "approvals/request") receipt = governance.requestApproval(request, actor);
-      else if (action === "cancel") receipt = governance.cancelRun(request, actor);
+      else if (action === "cancel") {
+        receipt = governance.cancelRun(request, actor);
+        options.reconciliation?.scheduleStop(request.runId);
+      }
       else if (action === "tasks/outcome") receipt = governance.recordTaskOutcome(request, actor);
       else {
         if (!options.resolveBinding) {

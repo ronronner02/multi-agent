@@ -57,6 +57,21 @@ export interface ManagedSessionReceipt {
   deadline: number;
 }
 
+export interface ManagedCancellationControl {
+  /** Optional until the privileged launcher supports graceful delivery; completion is not exit evidence. */
+  requestStop?: (session: Readonly<ManagedSessionReceipt>) => Promise<void>;
+  /** Revalidate ownership at the effect; true proves the entire recorded group and descendants stopped. */
+  quiesce(session: Readonly<ManagedSessionReceipt>): Promise<boolean>;
+}
+
+export interface ManagedRunObservation {
+  progress?: "tool_step" | "task_state" | "validated_evidence" | "heartbeat" | "status";
+  tool?: { attemptId: string; deadline: number; evidenceRef: string } | null;
+  rawLogBytes?: number;
+  artifactBytes?: number;
+  omittedLogBytes?: number;
+}
+
 // -- Resolved startup file with source-root provenance --
 
 export interface ResolvedStartupFile {
