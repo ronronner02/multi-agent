@@ -10,10 +10,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  DAEMON_ORIGIN, cloneAndSetupArgv, decodeWslOutput, decideWsl, enableUiArgv, installArgv,
-  isAllowedNavigation, listQuietArgv, listVerboseArgv, mintPairingArgv, normalizeRepoPath,
-  parseDistroList, parseDistroTable, parsePairingCode, probeRepoArgv,
-  setupArgv, startArgv, statusArgv, stopEngineArgv,
+  DAEMON_ORIGIN, PAIR_SCRIPT, cloneAndSetupArgv, decodeWslOutput, decideWsl, enableUiArgv,
+  installArgv, isAllowedNavigation, isDaemonHealth, listQuietArgv, listVerboseArgv,
+  normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable, parsePairingResult,
+  probeRepoArgv, setupArgv, startArgv, statusArgv, stopEngineArgv,
 } = require('../src/wsl.js');
 
 /** Encode text the way `wsl.exe` does: UTF-16LE, with a BOM. */
@@ -112,7 +112,7 @@ test('every in-distro command goes through -e and never through a shell string',
     enableUiArgv('Ubuntu', '/home/leo/multi-agent'),
     stopEngineArgv('Ubuntu', '/home/leo/multi-agent'),
     cloneAndSetupArgv('Ubuntu'),
-    mintPairingArgv('Ubuntu'),
+    pairArgv('Ubuntu'),
   ];
   for (const argv of commands) {
     assert.equal(argv[0], '-d');
@@ -131,12 +131,47 @@ test('the repository path is passed as an argv element, not interpolated into th
   assert.equal(stopEngineArgv('Ubuntu', '/srv/multi-agent').at(-1), '/srv/multi-agent');
 });
 
-test('the mint command never echoes the owner token', () => {
-  const script = mintPairingArgv('Ubuntu')[5];
-  assert.ok(script.includes('owner.env'));
-  // The token reaches exactly one place: an Authorization header on the loopback call.
-  assert.ok(script.includes('Authorization: Bearer $tok'));
-  assert.ok(!script.includes('echo $tok') && !script.includes('printf $tok'));
+test('the pairing script keeps both credentials inside the distro', () => {
+  const argv = pairArgv('Ubuntu');
+  assert.equal(argv[5], PAIR_SCRIPT);
+  // The token reaches curl as a config on stdin, never as an argv element another local
+  // user could read from the process command line.
+  assert.ok(PAIR_SCRIPT.includes("printf 'header = \"Authorization: Bearer %s\"\\n' \"$tok\" | curl -sf --noproxy '*' -K -"));
+  assert.ok(!PAIR_SCRIPT.includes('Authorization: Bearer $tok'));
+  // Both halves of the exchange target the distro's own loopback.
+  assert.ok(PAIR_SCRIPT.includes('base=http://127.0.0.1:7433'));
+  assert.ok(PAIR_SCRIPT.includes('"$base/api/team-control/owner-session/pairing"'));
+  assert.ok(PAIR_SCRIPT.includes('"$base/api/team-control/owner-session/exchange"'));
+  // Nothing prints the token, and the app is told only the cookie and the anti-forgery token.
+  assert.ok(!PAIR_SCRIPT.includes('echo "$tok"') && !PAIR_SCRIPT.includes('printf "$tok"'));
+  assert.ok(PAIR_SCRIPT.trimEnd().endsWith(`printf 'cookie=%s\\ncsrf=%s\\n' "$cookie" "$csrf"`));
+  // The one-time code never reaches the app either: it is consumed by the exchange above.
+  assert.ok(!/^printf .*code=/m.test(PAIR_SCRIPT));
+});
+
+test('reads a complete pairing result and rejects a partial one', () => {
+  const cookie = 'a'.repeat(43), csrf = 'b'.repeat(43);
+  assert.deepEqual(parsePairingResult(`cookie=${cookie}\ncsrf=${csrf}\n`), { cookie, antiForgeryToken: csrf });
+  assert.deepEqual(parsePairingResult(`cookie=${cookie}\r\ncsrf=${csrf}\r\n`), { cookie, antiForgeryToken: csrf });
+  assert.equal(parsePairingResult(`cookie=${cookie}\n`), null);
+  assert.equal(parsePairingResult(`csrf=${csrf}\n`), null);
+  assert.equal(parsePairingResult('exchange-failed\n'), null);
+  assert.equal(parsePairingResult('cookie=short\ncsrf=short\n'), null);
+  assert.equal(parsePairingResult(''), null);
+});
+
+test('accepts only a body that is this daemon, not any 200', () => {
+  const body = JSON.stringify({ status: 'ok', pid: 42, selfHostId: 'host-1', eventLoop: {} });
+  assert.equal(isDaemonHealth(body), true);
+  assert.equal(isDaemonHealth('{"status":"ok"}'), false);
+  assert.equal(isDaemonHealth('{"status":"ok","pid":0,"selfHostId":"host-1"}'), false);
+  assert.equal(isDaemonHealth('{"status":"ok","pid":42,"selfHostId":""}'), false);
+  assert.equal(isDaemonHealth('{"status":"down","pid":42,"selfHostId":"host-1"}'), false);
+  assert.equal(isDaemonHealth('<html>hello</html>'), false);
+  assert.equal(isDaemonHealth('null'), false);
+  assert.equal(isDaemonHealth('[]'), false);
+  assert.equal(isDaemonHealth(''), false);
+  assert.equal(isDaemonHealth(undefined), false);
 });
 
 test('the install command elevates a fixed command string', () => {
@@ -144,13 +179,6 @@ test('the install command elevates a fixed command string', () => {
   assert.deepEqual(statusArgv(), ['--status']);
   assert.deepEqual(listVerboseArgv(), ['-l', '-v']);
   assert.deepEqual(listQuietArgv(), ['-l', '-q']);
-});
-
-test('extracts a pairing code and rejects anything that is not one', () => {
-  assert.equal(parsePairingCode('{"code":"' + 'a'.repeat(43) + '","expiresAt":1}'), 'a'.repeat(43));
-  assert.equal(parsePairingCode('{"code":"short"}'), null);
-  assert.equal(parsePairingCode('missing-owner-env'), null);
-  assert.equal(parsePairingCode(''), null);
 });
 
 test('allows only the daemon origin', () => {

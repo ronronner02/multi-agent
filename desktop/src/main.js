@@ -20,9 +20,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   DAEMON_ORIGIN, HEALTH_URL, TEAM_URL,
-  cloneAndSetupArgv, decideWsl, enableUiArgv, installArgv, isAllowedNavigation, listQuietArgv,
-  listVerboseArgv, mintPairingArgv, normalizeRepoPath, parseDistroList, parseDistroTable,
-  parsePairingCode, probeRepoArgv, startArgv, statusArgv, stopEngineArgv,
+  cloneAndSetupArgv, decideWsl, enableUiArgv, installArgv, isAllowedNavigation, isDaemonHealth,
+  listQuietArgv, listVerboseArgv, normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable,
+  parsePairingResult, probeRepoArgv, startArgv, statusArgv, stopEngineArgv,
 } = require('./wsl.js');
 
 const BACKGROUND = '#151619';
@@ -188,10 +188,17 @@ function streamWsl(argv, { detached = false } = {}) {
   });
 }
 
+/**
+ * Is the daemon answering, and is it this product's daemon?
+ *
+ * A bare 200 is not proof: any local process can listen on the port, and the window is about
+ * to load and trust whatever answers. The body has to carry the daemon's own health fields.
+ */
 async function healthAnswers() {
   try {
     const response = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(2_500) });
-    return response.ok;
+    if (!response.ok) return false;
+    return isDaemonHealth(await response.text());
   } catch {
     return false;
   }
@@ -279,62 +286,30 @@ async function startEngine() {
 /**
  * Open the team view with an owner session.
  *
- * The daemon's pairing flow is the only supported way in: mint a one-time code with the
- * owner token inside WSL, exchange it for an HttpOnly cookie plus an anti-forgery token, and
- * hand only the anti-forgery token to the page. The cookie stays in Chromium's jar; the
- * token lives in this tab's session storage; the owner token never leaves WSL.
+ * The whole pairing runs inside WSL, through the daemon's own flow: mint a one-time code with
+ * the owner token, exchange it for an HttpOnly cookie plus an anti-forgery token, and print
+ * only those two. Neither the owner token nor the one-time code crosses into Windows, so a
+ * rogue listener on Windows `127.0.0.1:7433` never receives either. The cookie goes into
+ * Chromium's jar; the anti-forgery token lives in this tab's session storage.
  */
 async function openTeamView() {
   const { distro } = resolved;
   publish({ phase: 'pairing', message: 'Connecting to the local runtime…' });
-  let token = null;
+  let session = null;
   if (distro) {
-    const minted = await runWsl(mintPairingArgv(distro), { timeoutMs: 20_000 });
-    const code = minted.ok ? parsePairingCode(minted.stdout.toString('utf8')) : null;
-    if (code) token = await pair(code);
-    else appendLog('No pairing code was available; the team view opens unpaired.');
+    const paired = await runWsl(pairArgv(distro), { timeoutMs: 30_000 });
+    session = paired.ok ? parsePairingResult(paired.stdout.toString('utf8')) : null;
+    if (!session) appendLog('Pairing did not complete; the team view opens unpaired.');
   }
-  await showTeam(token);
+  if (session) await applySessionCookie(session.cookie);
+  await showTeam(session ? session.antiForgeryToken : null);
 }
 
-async function pair(code) {
-  let response;
-  try {
-    response = await fetch(`${DAEMON_ORIGIN}/api/team-control/owner-session/exchange`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: DAEMON_ORIGIN, 'Sec-Fetch-Site': 'same-origin' },
-      body: JSON.stringify({ code }),
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {
-    appendLog('The pairing exchange could not be reached; the team view opens unpaired.');
-    return null;
-  }
-  if (!response.ok) {
-    appendLog(`The pairing exchange was refused (HTTP ${response.status}); the team view opens unpaired.`);
-    return null;
-  }
-  const body = await response.json().catch(() => null);
-  if (!body || typeof body.antiForgeryToken !== 'string') {
-    appendLog('The pairing exchange returned no anti-forgery token; the team view opens unpaired.');
-    return null;
-  }
-  // Apply the session cookie to the window's own jar, so the page's requests carry it and the
-  // page never has to see the value.
-  for (const raw of response.headers.getSetCookie?.() ?? []) {
-    const [pairPart] = raw.split(';');
-    const index = pairPart.indexOf('=');
-    if (index <= 0) continue;
-    await session.defaultSession.cookies.set({
-      url: DAEMON_ORIGIN,
-      name: pairPart.slice(0, index).trim(),
-      value: pairPart.slice(index + 1).trim(),
-      httpOnly: true,
-      sameSite: 'strict',
-      path: '/api',
-    }).catch(() => undefined);
-  }
-  return body.antiForgeryToken;
+/** Apply the session cookie to the window's own jar, so the page never has to see it. */
+async function applySessionCookie(value) {
+  await session.defaultSession.cookies.set({
+    url: DAEMON_ORIGIN, name: 'multi_agent_owner', value, httpOnly: true, sameSite: 'strict', path: '/api',
+  }).catch(() => undefined);
 }
 
 async function showTeam(token) {

@@ -149,6 +149,7 @@ import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 import { teamStartRoutes } from "./routes/team-start.js";
+import { teamResultRoutes } from "./routes/team-result.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
@@ -483,12 +484,11 @@ function isUiAssetRequestPath(requestPath: string): boolean {
 
 /**
  * KTD22 keeps legacy pages out of managed mode, but the managed team view ships in the same
- * bundle. Only what that view needs is reachable: its own entry routes and the bundle's
- * assets. Every other page keeps the managed-mode refusal.
+ * bundle. Only what that view needs is reachable: its own route and the bundle's assets.
+ * Every other page, `/` and `/index.html` included, keeps the managed-mode refusal.
  */
 function isManagedUiRequestPath(requestPath: string): boolean {
-  return requestPath === "/" || requestPath === "/team" || requestPath.startsWith("/team/")
-    || isUiAssetRequestPath(requestPath);
+  return requestPath === "/team" || requestPath.startsWith("/team/") || isUiAssetRequestPath(requestPath);
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -840,6 +840,12 @@ export function createApp(deps: AppDeps): Hono {
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
     orchestratorRoot: fileURLToPath(new URL("../../../../", import.meta.url)),
   }));
+  // MVP slice 3 — the finished task's patch, served to the owner so `rig team apply` and the
+  // Web UI can hand the result back. Absent a runtime there are no candidate trees to read.
+  app.route("/api/team-control", teamResultRoutes(teamGovernance, {
+    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
+  }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,
     legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
@@ -1078,7 +1084,10 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     const indexHtml = fs.readFileSync(uiIndexPath, "utf-8");
-    const tokenScript = deps.terminalBearerToken
+    // The legacy token script hands the terminal bearer to whoever loads a page. A managed
+    // daemon serves its team view to any local process, so that page must never carry the
+    // bearer: the managed UI authenticates through the paired owner session instead.
+    const tokenScript = deps.terminalBearerToken && daemonModeOf(deps.rigRepo.db) !== "managed"
       ? `<script>if(!window.localStorage.getItem("openrig.terminalBearerToken"))window.localStorage.setItem("openrig.terminalBearerToken",${JSON.stringify(deps.terminalBearerToken)})</script>`
       : "";
     const injected = tokenScript ? indexHtml.replace("</head>", `${tokenScript}</head>`) : indexHtml;

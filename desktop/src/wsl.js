@@ -176,26 +176,70 @@ export function cloneAndSetupArgv(distro) {
 }
 
 /**
- * Mint a one-time pairing code inside the distro.
+ * Pair this window with the daemon, entirely inside the distro.
  *
- * The owner token is the daemon's own credential and never leaves WSL: this script reads it
- * from the file `./setup.sh` wrote, uses it for one loopback POST, and prints only the
- * short-lived code. Neither the token nor the request headers are echoed, and the app never
- * puts a credential in a URL.
+ * Both halves stay in WSL on purpose. The owner token is the daemon's own credential and
+ * never leaves WSL, and the one-time code and the session it buys never cross the Windows
+ * boundary either: a rogue process listening on Windows `127.0.0.1:7433` never sees them.
+ * The app receives only the finished session cookie and anti-forgery token, which it would
+ * hold anyway.
+ *
+ * The token reaches curl through `-K -` on stdin, not argv, so it never appears in a
+ * process command line that any other local user can read.
  */
-export function mintPairingArgv(distro) {
-  return ["-d", distro, "-e", LOGIN_SHELL, LOGIN_FLAG,
-    'set -e; f="${XDG_CONFIG_HOME:-$HOME/.config}/multi-agent/owner.env"; [ -f "$f" ] || { echo "missing-owner-env" >&2; exit 1; }; '
-    + 'tok="$(sed -n \'s/^MULTI_AGENT_OWNER_TOKEN=//p\' "$f" | head -1)"; [ -n "$tok" ] || { echo "missing-owner-token" >&2; exit 1; }; '
-    + 'curl -sf --noproxy "*" -X POST -H "Authorization: Bearer $tok" '
-    + 'http://127.0.0.1:7433/api/team-control/owner-session/pairing',
-    "mint"];
+export function pairArgv(distro) {
+  return ["-d", distro, "-e", LOGIN_SHELL, LOGIN_FLAG, PAIR_SCRIPT, "pair"];
 }
 
-/** Pull the code out of the mint response; anything else is a failed mint, not a code. */
-export function parsePairingCode(stdout) {
-  const match = /"code"\s*:\s*"([A-Za-z0-9_-]{43})"/.exec(String(stdout));
-  return match ? match[1] : null;
+/**
+ * The in-distro pairing script. Written as lines rather than a template literal so the
+ * shell's own `${...}` expressions stay literal JavaScript strings.
+ */
+export const PAIR_SCRIPT = [
+  'set -e',
+  'f="${XDG_CONFIG_HOME:-$HOME/.config}/multi-agent/owner.env"',
+  '[ -f "$f" ] || { echo "missing-owner-env" >&2; exit 1; }',
+  'tok="$(sed -n \'s/^MULTI_AGENT_OWNER_TOKEN=//p\' "$f" | head -1)"',
+  '[ -n "$tok" ] || { echo "missing-owner-token" >&2; exit 1; }',
+  'base=http://127.0.0.1:7433',
+  'mint="$(printf \'header = "Authorization: Bearer %s"\\n\' "$tok" | curl -sf --noproxy \'*\' -K - -X POST "$base/api/team-control/owner-session/pairing")"',
+  'code="$(printf \'%s\' "$mint" | sed -n \'s/.*"code":"\\([A-Za-z0-9_-]*\\)".*/\\1/p\')"',
+  '[ -n "$code" ] || { echo "mint-failed" >&2; exit 1; }',
+  'hdr="$(mktemp)"',
+  'trap \'rm -f "$hdr"\' EXIT',
+  'body="$(printf \'{"code":"%s"}\' "$code" | curl -sf --noproxy \'*\' -D "$hdr" -X POST -H \'Origin: http://127.0.0.1:7433\' -H \'Sec-Fetch-Site: same-origin\' -H \'Content-Type: application/json\' --data-binary @- "$base/api/team-control/owner-session/exchange")"',
+  'cookie="$(sed -n \'s/^[Ss]et-[Cc]ookie: *multi_agent_owner=\\([^;]*\\).*/\\1/p\' "$hdr")"',
+  'csrf="$(printf \'%s\' "$body" | sed -n \'s/.*"antiForgeryToken":"\\([A-Za-z0-9_-]*\\)".*/\\1/p\')"',
+  '[ -n "$cookie" ] && [ -n "$csrf" ] || { echo "exchange-failed" >&2; exit 1; }',
+  'printf \'cookie=%s\\ncsrf=%s\\n\' "$cookie" "$csrf"',
+].join('\n');
+
+/**
+ * Read the pair script's two output lines. Anything short of both a session cookie and an
+ * anti-forgery token is a failed pairing, never a partial session.
+ */
+export function parsePairingResult(stdout) {
+  const text = String(stdout);
+  const cookie = /^cookie=([A-Za-z0-9_-]{43})$/m.exec(text)?.[1];
+  const antiForgeryToken = /^csrf=([A-Za-z0-9_-]{43})$/m.exec(text)?.[1];
+  return cookie && antiForgeryToken ? { cookie, antiForgeryToken } : null;
+}
+
+/**
+ * Whether a `/healthz` body is this product's daemon. A bare 200 is not enough: anything can
+ * answer on the port, and the window is about to load and trust whatever it finds there.
+ */
+export function isDaemonHealth(body) {
+  if (typeof body !== "string" || body.length === 0) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return false;
+  }
+  return !!parsed && typeof parsed === "object" && parsed.status === "ok"
+    && typeof parsed.selfHostId === "string" && parsed.selfHostId.length > 0
+    && Number.isInteger(parsed.pid) && parsed.pid > 0;
 }
 
 /** The health probe target. Loopback only; the daemon binds nowhere else in this product. */
