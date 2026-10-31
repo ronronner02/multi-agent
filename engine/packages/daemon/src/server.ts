@@ -481,6 +481,16 @@ function isUiAssetRequestPath(requestPath: string): boolean {
     || relativePath === "manifest.webmanifest";
 }
 
+/**
+ * KTD22 keeps legacy pages out of managed mode, but the managed team view ships in the same
+ * bundle. Only what that view needs is reachable: its own entry routes and the bundle's
+ * assets. Every other page keeps the managed-mode refusal.
+ */
+function isManagedUiRequestPath(requestPath: string): boolean {
+  return requestPath === "/" || requestPath === "/team" || requestPath.startsWith("/team/")
+    || isUiAssetRequestPath(requestPath);
+}
+
 export function createApp(deps: AppDeps): Hono {
   // Hard runtime invariant: all domain services must share the same db handle.
   if (deps.rigRepo.db !== deps.eventBus.db) {
@@ -1044,7 +1054,7 @@ export function createApp(deps: AppDeps): Hono {
       return c.notFound();
     }
 
-    if (daemonModeOf(deps.rigRepo.db) === "managed") {
+    if (daemonModeOf(deps.rigRepo.db) === "managed" && !isManagedUiRequestPath(requestPath)) {
       c.header("X-OpenRig-Web-UI", "off");
       return c.text("Legacy pages are inactive in a managed-mode daemon.", 404);
     }

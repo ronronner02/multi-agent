@@ -1,0 +1,39 @@
+{
+  "name": "multi-agent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows desktop window for Multi-Agent, running the engine in WSL2",
+  "license": "Apache-2.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "dev.multiagent.desktop",
+    "productName": "Multi-Agent",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "!test/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Multi-Agent"
+    }
+  }
+}
