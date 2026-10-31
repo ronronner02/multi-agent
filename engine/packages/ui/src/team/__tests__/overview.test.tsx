@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
-import type { TeamOwnerRead, TeamReviewView, TeamRun } from "@openrig/daemon/team-control";
+import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun } from "@openrig/daemon/team-control";
 import { Overview, compactTokens, observedCost, stageGroupState, verifiedChecks } from "../overview.js";
 
 /**
@@ -28,6 +28,14 @@ function task(id: string, state: TeamReviewView["queueState"], verified: number 
   return { taskId: id, qitemId: `q-${id}`, role: "implementer", queueState: state, title: null, dependencies: [],
     criteria: { verified, total, source: verified === null ? null : "team_queue_authority.evidence_json" },
     currentCandidateDigest: null, rounds: 0, openP0P1: 0, reviewAvailable: false, acceptance: null };
+}
+
+/** An attempt whose usage no producer observed, which is the state a fresh attempt is in. */
+function attempt(overrides: Partial<TeamAttemptView> = {}): TeamAttemptView {
+  return { attemptId: "a1", runId: run.id, taskId: "T-102", qitemId: "q-T-102", role: "implementer", provider: "claude",
+    state: "stopped", unknownReason: null, session: null, createdAt: "2026-10-31T00:00:00.000Z",
+    usage: { activeMs: 0, inputTokens: { value: null, reason: "not reported" }, outputTokens: { value: null, reason: "not reported" },
+      costUsd: { value: null, reason: "not reported" } }, ...overrides };
 }
 
 function read(overrides: Partial<TeamOwnerRead> = {}): TeamOwnerRead {
@@ -61,7 +69,7 @@ describe("overview summary", () => {
 
   it("shows the run's published counts and observed cost", async () => {
     const value = read({ tasks: [task("T-101", "done", 2, 2), task("T-102", "in-progress", 1, 4), task("T-104", "blocked", null, null)],
-      attempts: [{ attemptId: "a1", runId: run.id, taskId: "T-102", qitemId: "q-T-102", role: "implementer", provider: "claude", state: "running", unknownReason: null, session: null }] });
+      attempts: [attempt({ state: "running" })] });
     value.run = { ...run, usage: { activeMs: 0, inputTokens: { value: 100_000, reason: null }, outputTokens: { value: 28_000, reason: null }, costUsd: { value: 1.84, reason: null } } };
     const language = await show(value);
     const summary = screen.getByRole("region", { name: language.t("overview.summary") });
@@ -142,8 +150,8 @@ describe("overview panels", () => {
 
   it("lists the fleet by role with the provider and observed attempt state", async () => {
     const value = read({ attempts: [
-      { attemptId: "a1", runId: run.id, taskId: "T-101", qitemId: "q", role: "lead", provider: "codex", state: "running", unknownReason: null, session: null },
-      { attemptId: "a2", runId: run.id, taskId: "T-102", qitemId: "q", role: "implementer", provider: "claude", state: "stopped", unknownReason: null, session: null }] });
+      attempt({ attemptId: "a1", taskId: "T-101", qitemId: "q", role: "lead", provider: "codex", state: "running" }),
+      attempt({ attemptId: "a2" })] });
     const language = await show(value);
     const fleet = screen.getByRole("region", { name: language.t("overview.fleet") });
     expect([...fleet.querySelectorAll("[data-fleet-role]")].map(item => item.getAttribute("data-fleet-role"))).toEqual(["lead", "implementer"]);

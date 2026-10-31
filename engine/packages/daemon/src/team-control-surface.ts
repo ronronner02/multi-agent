@@ -3,7 +3,7 @@ export * from "./contracts/team-control.js";
 import type Database from "better-sqlite3";
 import { redactTranscriptContent } from "./domain/transcript-redaction.js";
 import {
-  TEAM_READ_MODEL_VERSION, TEAM_WORKFLOW_STAGES, canonicalJson,
+  TEAM_READ_MODEL_VERSION, TEAM_WORKFLOW_STAGES, canonicalJson, parseUsage,
   type JsonObject, type TeamApproval, type TeamAttemptView, type TeamCriteriaProgress,
   type TeamLogRecord, type TeamOwnerRead, type TeamReplayEvent, type TeamReviewView, type TeamRunStageView,
   type TeamStageProgress, type TeamStageState, type TeamWorkflowStage,
@@ -267,16 +267,25 @@ export class TeamReadModel {
     return { current, stages };
   }
 
-  /** Attempts, correlated to the session their queue item names. */
+  /**
+   * Attempts, correlated to the session their queue item names.
+   *
+   * Each attempt carries its own recorded usage and recording time. The run's usage is a
+   * cumulative projection of these rows, so publishing them is what lets a reader show
+   * usage over time without a second store: the per-attempt numbers are the ones the
+   * run total was summed from.
+   */
   private attempts(runId: string, tasks: TeamReviewView[]): TeamAttemptView[] {
     const taskByQitem = new Map(tasks.map((task) => [task.qitemId, task]));
     const rows = this.deps.db
       .prepare(`SELECT a.id AS attemptId, a.run_id AS runId, a.qitem_id AS qitemId, a.role, a.provider, a.state,
-        a.unknown_reason AS unknownReason, q.destination_session AS session
+        a.unknown_reason AS unknownReason, a.usage_json AS usageJson, a.created_at AS createdAt,
+        q.destination_session AS session
         FROM team_attempts a LEFT JOIN queue_items q ON q.qitem_id = a.qitem_id
         WHERE a.run_id = ? ORDER BY a.created_at, a.id`)
       .all(runId) as Array<{ attemptId: string; runId: string; qitemId: string | null; role: string;
-        provider: string; state: string; unknownReason: string | null; session: string | null }>;
+        provider: string; state: string; unknownReason: string | null; usageJson: string;
+        createdAt: string; session: string | null }>;
     return rows.map((row) => ({
       attemptId: row.attemptId,
       runId: row.runId,
@@ -287,6 +296,8 @@ export class TeamReadModel {
       state: row.state as TeamAttemptView["state"],
       unknownReason: row.unknownReason,
       session: row.session,
+      createdAt: row.createdAt,
+      usage: parseUsage(JSON.parse(row.usageJson)),
     }));
   }
 

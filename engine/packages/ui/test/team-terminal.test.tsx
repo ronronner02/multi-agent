@@ -72,7 +72,10 @@ vi.mock("@xterm/xterm", () => ({ Terminal: class {
 } }));
 
 const attempt: TeamAttemptView = { attemptId: "attempt", runId: "run", taskId: "task", qitemId: "qitem",
-  role: "lead", provider: "codex", state: "running", session: "agent-session", unknownReason: null };
+  role: "lead", provider: "codex", state: "running", session: "agent-session", unknownReason: null,
+  createdAt: "2026-10-31T00:00:00.000Z",
+  usage: { activeMs: 0, inputTokens: { value: null, reason: "not reported" },
+    outputTokens: { value: null, reason: "not reported" }, costUsd: { value: null, reason: "not reported" } } };
 
 async function mountTerminal(target: Exclude<TerminalTarget, null> = attempt) {
   install(); const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });

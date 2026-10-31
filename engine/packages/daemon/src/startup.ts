@@ -660,6 +660,9 @@ export function composeSystemHealthReader(dependencies: {
   evidence?: () => ManagedWorkerHealthEvidence;
 }): () => Promise<TeamSystemHealth> {
   const { db, queue, tmux, evidence } = dependencies;
+  // The level the launch chain runs under is a fact this process decided; the health read
+  // publishes it so a read-only client never has to infer it from a config file.
+  const isolation = "hardened" as const;
   const result = (state: SystemHealthProbeResult["state"], evidenceRef: string, reason: string | null = null): SystemHealthProbeResult =>
     ({ state, evidenceRef, reason });
   // An installed file whose bytes decide a light: unreadable or malformed is failed, never a thrown probe.
@@ -706,6 +709,7 @@ export function composeSystemHealthReader(dependencies: {
     catch { return null; }
   };
   return createSystemHealthReader({
+    isolation,
     // Read-only and synchronous: `quick_check` would scan the whole file, which the five-second bound cannot interrupt.
     database: () => result("ok", "database:schema_version:" + String(db.prepare("PRAGMA schema_version").pluck().get())),
     // The queue owns the mailbox's durable rows, so its own read is the readiness signal for both.
@@ -776,6 +780,7 @@ export function composeUnisolatedHealthReader(dependencies: {
   const unisolated = (): SystemHealthProbeResult => ({ state: "unknown", evidenceRef: "workers.isolation:none",
     reason: "workers_isolation_none" });
   return createSystemHealthReader({
+    isolation: "none",
     database: () => ({ state: "ok", evidenceRef: "database:schema_version:" + String(db.prepare("PRAGMA schema_version").pluck().get()) }),
     queueMailbox: () => ({ state: "ok", evidenceRef: "queue:active:" + queue.list({ activeOnly: true, compact: true }).length }),
     controlTmux: async () => await tmux.readAllSessionWindowActivity() === null

@@ -71,7 +71,7 @@ Stop and report instead of looping when:
 
 ### Review
 - The orchestrating session reviews every PR: it reads the diff, runs the slice's demo and checks smoke CI. Implementers do not dispatch their own reviewers.
-- A change to credential handling, `engine/packages/daemon/src/domain/team-workspace.ts` (the reader of worker-written files) or the hardened isolation path also gets one independent, report-only reviewer. It runs one round, plus one confirmation of any P0/P1 fix. `docs/operations.md` "Reaching reviewers" says how to call one.
+- A change to credential handling, `engine/packages/daemon/src/domain/team-workspace.ts` (the reader of worker-written files) or the hardened isolation path also gets one independent, report-only reviewer. It runs one round, plus one confirmation of any P0/P1 fix. Give every reviewer `engine/config/team/roles/reviewer.md` and `engine/config/team/core.md`; `docs/operations.md` "Reaching reviewers" says how to call one.
 - A finding that only asks for more hardening, with no reachable scenario in current code, is recorded as a P3 residual and not implemented.
 
 ### Done and delivery
