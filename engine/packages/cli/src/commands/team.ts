@@ -1,4 +1,7 @@
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { DaemonClient } from "../client.js";
 import { getDaemonStatus, getDaemonUrl, daemonStatusGuard, type LifecycleDeps } from "../daemon-lifecycle.js";
 import { readOpenRigEnv } from "../openrig-compat.js";
@@ -7,16 +10,16 @@ import { realDeps } from "./daemon.js";
 /**
  * `rig team start "<goal>"` — MVP slice 2.
  *
- * One owner action that turns a goal into a run and a task, then prints the two ways to
- * watch it. The start itself is the daemon's: this verb authenticates with the owner
- * credential the managed daemon was started with, calls the one endpoint, and reports what
- * came back. It never builds a plan, a binding or a task of its own, so a CLI start and a
- * Web or TUI start cannot disagree about what was created.
+ * One owner action that turns a goal into a run and a task, then prints how to watch it. The
+ * start itself is the daemon's: this verb authenticates with the owner credential the managed
+ * daemon was started with, calls the one endpoint, and reports what came back. It never builds
+ * a plan, a binding or a task of its own, so a CLI start and a Web start cannot disagree about
+ * what was created.
  */
 
 export interface TeamStartDeps {
   lifecycleDeps: LifecycleDeps;
-  /** Owner control credential. Defaults to `MULTI_AGENT_OWNER_TOKEN` in this process. */
+  /** Owner control credential. Defaults to `MULTI_AGENT_OWNER_TOKEN`, then `owner.env`. */
   ownerToken?: string | null;
   fetchImpl?: typeof fetch;
 }
@@ -31,6 +34,26 @@ interface StartReceipt {
 
 const BASE = "/api/team-control";
 
+/**
+ * The owner token `./setup.sh` wrote.
+ *
+ * `./scripts/start.sh` sources this file into the daemon's own process, so a fresh shell
+ * that follows the README has the daemon running and no credential of its own. Reading the
+ * same file here is what makes the documented quick start work as written. The file holds
+ * simple `KEY=value` lines, so it is parsed rather than sourced: this process never executes
+ * anything a file in the user's config directory says.
+ */
+export function readOwnerTokenFile(env: NodeJS.ProcessEnv = process.env): string | null {
+  const configHome = env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config");
+  try {
+    for (const line of readFileSync(join(configHome, "multi-agent", "owner.env"), "utf8").split("\n")) {
+      const match = /^\s*MULTI_AGENT_OWNER_TOKEN\s*=\s*(.*?)\s*$/.exec(line);
+      if (match?.[1]) return match[1].replace(/^["']|["']$/g, "") || null;
+    }
+  } catch { /* No setup yet, or an unreadable file: the caller reports the missing credential. */ }
+  return null;
+}
+
 export function teamCommand(depsOverride?: TeamStartDeps): Command {
   const cmd = new Command("team").description("start and inspect owner-governed team runs");
   cmd
@@ -44,9 +67,9 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .option("--json", "print the daemon's receipt as JSON")
     .action(async (goal: string, opts: Record<string, unknown>) => {
       const deps = depsOverride ?? { lifecycleDeps: realDeps() };
-      const token = deps.ownerToken ?? readOpenRigEnv("MULTI_AGENT_OWNER_TOKEN")?.trim() ?? null;
+      const token = deps.ownerToken ?? readOpenRigEnv("MULTI_AGENT_OWNER_TOKEN")?.trim() ?? readOwnerTokenFile();
       if (!token) {
-        console.error("error: no owner credential. Start the daemon with ./scripts/start.sh, or set MULTI_AGENT_OWNER_TOKEN.");
+        console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
         process.exitCode = 1;
         return;
       }
@@ -72,7 +95,6 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log(`Task: ${receipt.taskId} on ${receipt.seat}`);
       console.log("");
       console.log("Watch it:");
-      console.log(`  rig tui --team --run ${receipt.runId}`);
       console.log(`  ${base}/team?run=${encodeURIComponent(receipt.runId)}   (after rig config set ui.enabled true)`);
     });
   return cmd;

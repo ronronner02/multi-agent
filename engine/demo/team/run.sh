@@ -59,4 +59,4 @@ for (const task of read.tasks) console.log("task   " + task.taskId + "  " + task
 ' "$SCRATCH/read.json"
 
 echo "==> Done. The daemon this script started stops when the script exits."
-echo "    In a normal session, watch a run with: rig tui --team --run $RUN_ID"
+echo "    In a normal session, watch a run at: http://127.0.0.1:$DEMO_PORT/team?run=$RUN_ID"
