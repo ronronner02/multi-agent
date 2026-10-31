@@ -12,6 +12,7 @@ import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion.js";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
 import { RunStepper } from "./run-stepper.js";
+import { NewTaskForm, RunPicker } from "./new-task.js";
 import { Overview } from "./overview.js";
 import { WorkspaceView, type BrowseState } from "./workspace/workspace-view.js";
 import { KnowledgeView } from "./knowledge/knowledge-view.js";
@@ -148,6 +149,8 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
       <form className="team-run-picker" onSubmit={e => { e.preventDefault(); void navigate({ to: "/team/$section", params: { section }, search: { run: runDraft.trim() || undefined } }); }}>
         <label>{t("web.run")}<input value={runDraft} onChange={e => setRunDraft(e.target.value)} autoComplete="off" /></label><Button type="submit" variant="outline">{t("web.loadRun")}</Button>
       </form>
+      <NewTaskForm />
+      <RunPicker current={runId} />
       <nav className="team-filters" aria-label={`${t("web.workspace")} / ${t("web.knowledge")}`}>
         {(["workspace", "knowledge"] as const).map(id => <Button asChild variant="outline" key={id}>
           <Link to="/team/$section" params={{ section: id }} search={{ run: runId || undefined }} aria-current={section === id ? "page" : undefined}>{t(`web.${id}`)}</Link>
