@@ -7,7 +7,12 @@
  * Everything is real except the native client. No provider account, no live token, and no
  * operator tmux session is touched.
  *
- * Usage, from `engine/` after `npm run build`: npx tsx demo/team/scripts/result-demo.ts
+ * Run it through `result-demo.sh`, which is what makes it hermetic: the daemon reads
+ * OPENRIG_HOME once at module load, so the temp home, database and tmux socket must be in the
+ * environment before node starts. The wrapper also owns the cleanup that kills the seat and
+ * the tmux server and removes the scratch tree, on success and on failure alike.
+ *
+ * Usage, from `engine/` after `npm run build`: bash demo/team/scripts/result-demo.sh
  */
 import { execFile, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -23,9 +28,15 @@ import { unisolatedPolicyCapability } from "../../../packages/daemon/src/routes/
 import type { PlanBinding } from "../../../packages/daemon/src/contracts/team-control.js";
 
 const run = promisify(execFile), engine = realpathSync(new URL("../../..", import.meta.url).pathname);
-const scratch = realpathSync(mkdtempSync(join(tmpdir(), "mvp3-result-demo-")));
-process.env.OPENRIG_HOME = join(scratch, "home");
-process.env.TMUX_TMPDIR = join(scratch, "tmux"); mkdirSync(process.env.TMUX_TMPDIR, { recursive: true });
+// The home and the tmux socket are read before this module loads, so the wrapper has to have
+// set them. Running this file directly would put a candidate tree and a tmux server in the
+// operator's own ~/.openrig, which is exactly what this guard refuses.
+const home = process.env.OPENRIG_HOME ?? "";
+if (!home.startsWith(tmpdir()) || !process.env.OPENRIG_DB || !process.env.TMUX_TMPDIR) {
+  throw new Error("Run this through result-demo.sh: it sets a temp OPENRIG_HOME, OPENRIG_DB and TMUX_TMPDIR.");
+}
+const scratch = realpathSync(mkdtempSync(join(home, "..", "work-")));
+mkdirSync(process.env.TMUX_TMPDIR, { recursive: true });
 const tmux = (...args: string[]) => execFileSync("tmux", args,
   { encoding: "utf8", env: { ...process.env }, stdio: ["ignore", "pipe", "ignore"] }).trim();
 const git = (cwd: string, ...args: string[]): string =>
@@ -42,7 +53,7 @@ function repository(name: string): string {
   return root;
 }
 
-const repo = repository("project"), policy = unisolatedPolicyCapability(unisolatedWorkerRoots(process.env.OPENRIG_HOME).policyRevision);
+const repo = repository("project"), policy = unisolatedPolicyCapability(unisolatedWorkerRoots(home).policyRevision);
 const binding: PlanBinding = {
   artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
   planRef: "plan.md", planDigest: hashBytes("approved plan\n"), repository: { root: repo, identity: "git:" + "a".repeat(40) },
@@ -129,6 +140,8 @@ try {
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
   console.log("==> Done. The patch the agent wrote is in the owner's tree.");
 } finally {
+  // The seat's pane is the stub runner's parent, so killing the server ends it. This runs on
+  // every path, including a failure, so a refused demo leaves nothing running.
   try { tmux("kill-server"); } catch { /* the pane was already closed by the seat's stop */ }
   await daemon.deps.workflowRuntime?.closeManagedAttempts();
   daemon.db.close();

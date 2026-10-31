@@ -41,3 +41,5 @@ same diff and the exact command to copy.
 
 To watch the whole flow without a provider account or a live token, `bash
 engine/demo/team/run.sh` boots a daemon with the stub runner and starts a run end to end.
+`bash engine/demo/team/scripts/result-demo.sh` takes that same stub-runner run all the way
+to the patch, then applies it with `rig team apply` in a throwaway clone.
