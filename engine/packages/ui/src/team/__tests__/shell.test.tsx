@@ -20,7 +20,8 @@ function Shell({ language, theme = "dark", onTheme = () => {}, onSearch = () => 
   const [current, setCurrent] = React.useState<TeamSection>("overview");
   return <ShellFrame language={language} section={current} theme={theme} onTheme={onTheme}
     runId="RUN-0142" runPicker={runPicker} project="work-board" coordinator={{ state: "running", known: true }}
-    connection="shell.connected" notifications={2} onSelect={setCurrent} onSearch={onSearch}><p>content</p></ShellFrame>;
+    connection="shell.connected" notifications={2} hrefFor={section => `/team/${section}?run=RUN-0142`}
+    onSelect={setCurrent} onSearch={onSearch}><p>content</p></ShellFrame>;
 }
 
 async function show(locale: "en" | "zh-CN" = "en") {
@@ -35,6 +36,7 @@ describe("managed shell navigation", () => {
     const nav = screen.getByRole("navigation", { name: language.t("shell.appName") });
     const links = within(nav).getAllByRole("link");
     expect(links.map(link => link.textContent)).toEqual(TEAM_SECTIONS.map(section => language.t(`nav.${section}`)));
+    expect(links.map(link => link.getAttribute("href"))).toEqual(TEAM_SECTIONS.map(section => `/team/${section}?run=RUN-0142`));
     expect(links[0]!.getAttribute("aria-current")).toBe("page");
     expect(links.slice(1).every(link => link.getAttribute("aria-current") === null)).toBe(true);
     expect(TEAM_SECTIONS).toEqual(["overview", "workspace", "tasks", "reviews", "analytics", "settings"]);
