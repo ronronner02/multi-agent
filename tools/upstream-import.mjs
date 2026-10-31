@@ -114,6 +114,9 @@ export const PIN = Object.freeze({
     'packages/daemon/src/domain/restore-orchestrator.ts',
     'packages/daemon/src/domain/startup-orchestrator.ts',
     'packages/daemon/test/restore-orchestrator.test.ts',
+    // T038: regressions for managed projection and pre-launch attempt attachment.
+    'packages/daemon/test/claude-adapter-record-projection.test.ts',
+    'packages/daemon/test/startup-orchestrator.test.ts',
   ],
 });
 
@@ -180,6 +183,9 @@ const LOCAL_ENGINE_PATHS = [
   'packages/daemon/test/managed-native-startup.test.ts',
   'packages/daemon/test/worker-mailbox-bridge.test.ts',
   'packages/daemon/test/managed-native-policy.test.ts',
+  'packages/daemon/test/worker-control-isolation.test.ts',
+  'packages/daemon/test/worker-live-acceptance.test.ts',
+  'packages/daemon/test/fixtures/t038-live-daemon.mjs',
   'packages/daemon/test/native-session-contract.test.ts',
   'packages/daemon/test/native-channel-contract.test.ts',
   'packages/daemon/test/team-candidate-adoption.test.ts',

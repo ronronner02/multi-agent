@@ -392,7 +392,11 @@ function composeManagedLaunch(dependencies: {
     try { await guarded.record(event); } finally { if (event.phase === "blocked") endpoints.delete(event.attemptId); }
   } }, Date.now, randomUUID, admission);
   // `readHealthEvidence` is built by the control but not otherwise reachable from startup; the health reader reads it.
-  return { launcher, channel, endpoints, readHealthEvidence: guarded.readHealthEvidence };
+  // `managedAttempt` is filled in below, once the runtime it produces through exists: the deps
+  // object carries the resolver so a restart can ask this composition which attempt a seat
+  // re-adopts, from durable rows alone.
+  return { launcher, channel, endpoints, readHealthEvidence: guarded.readHealthEvidence } as
+    NonNullable<AppDeps["managedLaunch"]> & { readHealthEvidence: () => ManagedWorkerHealthEvidence };
 }
 
 /**
@@ -1659,7 +1663,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     teamControl: teamControlOptions,
     teamGovernance,
     readSeatMailboxCapability,
-    ...(managedLaunch ? { managedLaunch, nativeChannelState: managedLaunch.channel.read } : {}),
+    ...(managedLaunch ? { managedLaunch: { ...managedLaunch, ...(managedAttempt ? { managedAttempt } : {}) },
+      nativeChannelState: managedLaunch.channel.read } : {}),
     rigRepo,
     sessionRegistry,
     daemonLifecycleStore,
@@ -2035,6 +2040,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       runtime: () => workflowRuntime,
       owners: () => ({ chat: deps.chatRepo, delivery: deps.mailboxDelivery }),
     }) : undefined;
+    // T047 — the same resolver the orchestrator holds, reachable from the composed deps so a
+    // restart can ask this composition which attempt a seat re-adopts.
+    if (managedLaunch && managedAttempt) managedLaunch.managedAttempt = managedAttempt;
 
     // OPR.0.4.6.WF5 FR-2 class (b): the shared detection-time exception
     // ensurer — sweep + keepalive both call it; dedup by occurrence tags.

@@ -104,6 +104,7 @@ Two sessions may run at once, each in its own clone and branch. A track owns the
 - **T038 live grant (owner, 2026-10-23).** It covers daemon-mediated live probes of both installed clients, including resume and daemon restart. Limits:
   - the inherited T010 allowance of four native invocations, 150,000 reported tokens and 1,200 seconds in total, recorded in `live-allowance-before.json` of run `20261019T140631Z-t010-rev5-host-acceptance` and never reset;
   - at most three live sessions, including the Lead.
+  - **Re-acceptance allowance (owner, 2026-10-30):** a separate six native invocations, 150,000 reported tokens and 1,800 seconds, recorded as `live-allowance-t038-reacceptance.json` beside the spent T010 record, which stays as it is. Claude Code token counts are recorded unavailable.
 
   The owner provisions the host first. Stop when the allowance is spent or a containment or provenance proof fails. The grant covers nothing else.
 - Do not stash, reset or revert unless the owner asks. Commits carry no tool or AI attribution.

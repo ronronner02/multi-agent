@@ -80,7 +80,9 @@ export interface WorkerLaunchPreflight {
   /** Root-owned installed policy observed by the control preflight, bound to the approved fingerprint. */
   installedPolicy: WorkerLaunchPolicy;
   network: WorkerNetworkPolicy;
-  provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string };
+  provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string;
+    /** Present when an installed provider gateway, not a worker sign-in, satisfies this launch. */
+    gateway?: { client: WorkerClient; digest: string; model: string; baseUrl: string } };
   nativePolicy?: ManagedNativePolicy;
   mailbox?: ReturnType<WorkerMailboxBridge["endpoint"]>;
   previous?: ManagedSessionReceipt;
@@ -255,6 +257,12 @@ function refusalCode(error: unknown): string {
 function same(a: unknown, b: unknown): boolean { return canonicalJson(a) === canonicalJson(b); }
 function groups(value: number[]): number[] { return [...value].sort((a, b) => a - b); }
 const configHome = (client: WorkerClient) => "/home/worker/" + (client === "codex" ? ".codex" : ".claude");
+/**
+ * The gateway's credential file inside the sandbox, named exactly as the privileged launcher
+ * binds it (worker-launch.mjs, `GATEWAY_ENV_PATH`). A gateway launch always produces this mount
+ * and a launch without one never does, so the observed set can be held to it in both directions.
+ */
+export const GATEWAY_ENV_MOUNT: WorkerMount = Object.freeze({ source: "tmpfs", target: "/run/multi-agent-provider/provider.env", access: "rw" });
 /** Provisioned beside the pinned client; it keeps tools in the standard Responses request (see provision-host.sh). */
 export const codexModelCatalog = (toolchainDir: string) => toolchainDir + "/clients/codex-model-catalog.json";
 export interface WorkerLaunchPolicy extends ContextMountPolicy {
@@ -357,23 +365,57 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
         ? await this.admission.prepareAssignment({ ...preflight.assignment, context: attempt.context })
         : await prepareTeamAssignment({ ...preflight.assignment, context: attempt.context });
       requireFact(prepared.context.generatedHash === attempt.context.generatedHash, "managed_context_mismatch");
+      // Identity here is uid and gid, both from the launcher's own inspection; `checkContextProjection`
+      // holds the projection's worker gid to the same value. The manifest's `workerGroups` is deliberately
+      // not compared: it lists every group the worker belongs to, primary gid included, because the
+      // manifest uses it to decide which group class may read the projection. `preflight.worker.groups`
+      // is the *runtime* supplementary set and is empty on purpose — the launcher starts the client under
+      // `setpriv --clear-groups` (worker-launch-control.ts). Comparing the two asks a group-membership
+      // question of a supplementary-group answer, so it can never hold: the primary gid is always in one
+      // and never in the other. `verifyObservation` below is where the runtime set is checked, against
+      // the sandbox's own observed groups.
       requireFact(preflight.worker.uid !== preflight.control.uid && preflight.worker.uid > 0
-        && preflight.worker.uid === attempt.context.workerUid && same(groups(preflight.worker.groups), groups(attempt.context.workerGroups)),
+        && preflight.worker.uid === attempt.context.workerUid,
       "managed_worker_identity_mismatch");
       requireFact(policy.worker_identities.includes(preflight.worker.name), "managed_worker_identity_mismatch");
       requireFact(preflight.policyFingerprint === attempt.context.binding.policyFingerprint
         && preflight.policyRevision === attempt.context.binding.policyRevision && preflight.policyRevision === policy.policy_revision, "managed_policy_mismatch");
-      for (const root of [preflight.worker.home, preflight.worker.scratch, preflight.worker.tree]) {
-        requireFact(realpathSync(root) === root, "managed_worker_root_invalid");
-      }
+      // The tree is the one fact here the control can still resolve: it is control-staged and
+      // worker-owned through the control group (assignment_root/<worker> is 2770 with a control ACL),
+      // and it is the tree admission handed this attempt. `home` and `scratch` are not resolvable by
+      // this identity at all — both are worker-owned 0700 beneath a worker-owned 0700 parent — so a
+      // realpath here fails with EACCES on every provisioned host rather than proving anything.
+      //
+      // Their canonical form and their identity are the privileged launcher's to verify, and it does
+      // both: `openVerifiedDirectory` opens each O_NOFOLLOW and requires the descriptor's own path to
+      // be the expected one beneath the worker directory (worker-launch.mjs), and `resolveLaunchRequest`
+      // derives home and scratch from `paths.worker_root` rather than accepting them from this side.
+      // Re-resolving them here would only re-ask a question this identity cannot answer.
+      requireFact(realpathSync(preflight.worker.tree) === preflight.worker.tree, "managed_worker_root_invalid");
       requireFact(preflight.executable === policy.paths.toolchain_dir + "/clients/bin/" + (client === "codex" ? "codex" : "claude")
         && preflight.executableVersion.trim(), "managed_executable_unsupported");
       this.checkClientLock(client, preflight);
       for (const option of [input.model, input.effort]) requireFact(option === undefined
         || (option.length > 0 && option.length <= 256 && !option.startsWith("-") && !/[\x00-\x1f\x7f]/.test(option)), "managed_launch_option_invalid");
       requireFact(resumeToken === undefined || /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(resumeToken), "managed_resume_identity_mismatch");
-      requireFact(preflight.provider.status === "signed_in" && preflight.provider.client === client
-        && preflight.provider.home === preflight.worker.home && reference(preflight.provider.evidenceRef), "managed_provider_signin_required");
+      // A gateway is a provider in its own right (docs/amendments/2026-10-29): the installed file
+      // names this client, its digest is bound into the launch evidence, and the launcher injects
+      // the credential privileged-side. Only when there is no gateway does the worker's own
+      // sign-in decide, and then it decides exactly as before.
+      const gateway = preflight.provider.gateway;
+      // The gateway's own client field is the one that must match: `preflight.provider.client` is
+      // written by the control from the requested client, so comparing it would accept a gateway
+      // installed for a different client.
+      const gatewayProvider = gateway !== undefined && gateway.client === client
+        && preflight.provider.client === client
+        && reference(gateway.digest) && reference(gateway.baseUrl) && reference(gateway.model);
+      requireFact(gatewayProvider || (preflight.provider.status === "signed_in" && preflight.provider.client === client
+        && preflight.provider.home === preflight.worker.home && reference(preflight.provider.evidenceRef)), "managed_provider_signin_required");
+      // The gateway's model is the verified pin, not metadata (docs/amendments/2026-10-29, decision 6):
+      // the launch runs that model, and a caller naming a different one is refused rather than
+      // allowed to override the configuration the provider was admitted under.
+      requireFact(!gatewayProvider || input.model === undefined || input.model === gateway!.model, "managed_launch_option_invalid");
+      const model = input.model ?? (gatewayProvider ? gateway!.model : undefined);
       if (resumeToken !== undefined) {
         const previous = attempt.previous;
         requireFact(previous && preflight.previous && same(previous, preflight.previous), "managed_resume_identity_mismatch");
@@ -386,17 +428,27 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       } else requireFact(!attempt.previous && !preflight.previous && preflight.generation === 1, "managed_resume_identity_mismatch");
       const nativeArgv = client === "claude-code"
         ? [preflight.executable, "--permission-mode", "bypassPermissions",
-          ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
+          ...(model ? ["--model", model] : []), ...(input.effort ? ["--effort", input.effort] : []),
           ...(resumeToken ? ["--resume", resumeToken] : ["--session-id", this.sessionId()])]
         : [preflight.executable, "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false",
           "-c", "model_catalog_json=" + JSON.stringify(codexModelCatalog(policy.paths.toolchain_dir)),
-          ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
+          // A verified gateway replaces the built-in provider. The key is named by variable, so
+          // the command that is hashed and persisted never contains it.
+          ...(gatewayProvider ? ["-c", "model_provider=" + JSON.stringify("managed"),
+            "-c", "model_providers.managed.name=" + JSON.stringify("managed"),
+            "-c", "model_providers.managed.base_url=" + JSON.stringify(gateway!.baseUrl),
+            "-c", "model_providers.managed.env_key=" + JSON.stringify("MA_GATEWAY_API_KEY"),
+            "-c", "model_providers.managed.wire_api=" + JSON.stringify("responses")] : []),
+          ...(model ? ["-m", model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + JSON.stringify(input.effort)] : []),
           ...(resumeToken ? ["resume", resumeToken] : [])];
       const command: WorkerCommand = state.command = immutable({
         file: "/usr/bin/sudo", args: ["-n", "--", "/usr/local/libexec/multi-agent/worker-launch",
           ...(policy.policy_revision >= 5 ? ["--supervise"] : []),
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
           "--run", attempt.context.runId, "--attempt", attempt.attemptId, "--client-lock", preflight.clientLock.digest,
+          // The privileged launch re-reads the gateway and refuses unless it is these bytes, so the
+          // endpoint recorded here and the bearer injected there cannot come from two configurations.
+          ...(gatewayProvider ? ["--gateway", gateway!.digest] : []),
           ...(policy.policy_revision >= 5 ? ["--mailbox", `${preflight.mailbox!.dev}:${preflight.mailbox!.ino}`] : []), "--", ...nativeArgv],
         nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
       });
@@ -571,7 +623,9 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       && policy.sandbox.mailbox === "/run/multi-agent/mailbox.sock", "managed_mailbox_policy_mismatch");
     requireFact(mailbox && mailbox.path === mailboxRoot + "/" + p.worker.name + "/" + attempt.context.runId + "/" + attempt.attemptId + "/mailbox.sock"
       && Number.isSafeInteger(p.control.uid) && p.control.uid >= 0 && Number.isSafeInteger(p.control.gid) && p.control.gid! >= 0
-      && mailbox.uid === p.control.uid && mailbox.gid === p.control.gid
+      // The endpoint is control-owned but carries the worker's group, because bwrap resolves the
+      // socket as the worker and a control-group path would be untraversable for it.
+      && mailbox.uid === p.control.uid && mailbox.gid === p.worker.gid
       && Number.isSafeInteger(mailbox.dev) && mailbox.dev >= 0 && Number.isSafeInteger(mailbox.ino) && mailbox.ino > 0
       && typeof mailbox.generation === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(mailbox.generation),
     "managed_mailbox_identity_mismatch");
@@ -622,8 +676,16 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
       ...p.nativePolicy!.aliases.map(alias => ({ source: attempt.context.files.find(file => file.workerPath === alias.source)!.path,
         target: alias.target, access: "ro" as const })),
     );
+    // A gateway launch carries the bearer as a 0400 data file bubblewrap turns into this exact
+    // path, so the observation shows a `tmpfs` mount there at `rw` (measured against the sandbox's
+    // own mountinfo). The daemon records the `--gateway` digest on the command it started, and the
+    // launcher binds the file only when the admitted gateway's client is this client, so the
+    // presence of the flag is the fact to hold the mount to: required with it, refused without it.
+    const gatewayLaunch = command.args.includes("--gateway");
+    if (gatewayLaunch) expected.push(GATEWAY_ENV_MOUNT);
     for (const mount of expected) requireFact(b.mounts.filter(m => m.target === mount.target).length === 1
       && b.mounts.some(m => same(m, mount)), "managed_worker_mount_mismatch");
+    requireFact(gatewayLaunch === b.mounts.some(m => same(m, GATEWAY_ENV_MOUNT)), "managed_worker_mount_mismatch");
     const hostReadOnly = ["/usr", policy.paths.toolchain_dir, ...policy.sandbox.etc_ro_binds];
     requireFact(b.mounts.every(m => expected.some(e => same(e, m))
       || (m.access === "ro" && m.source === m.target && hostReadOnly.includes(m.target))

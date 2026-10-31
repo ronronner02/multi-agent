@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
+import { RestrictedWorkerLauncher, UNSUPPORTED_CLIENT_VERSION, GATEWAY_ENV_MOUNT, type WorkerClient, type WorkerLaunchControl, type WorkerLaunchEvent, type WorkerLaunchPreflight, type WorkerObservation, type WorkerQuiescenceReceipt } from "../src/adapters/worker-launch.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code-adapter.js";
 import { CodexRuntimeAdapter } from "../src/adapters/codex-runtime-adapter.js";
 import { ClaudeResumeAdapter } from "../src/adapters/claude-resume.js";
@@ -142,6 +142,61 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     const command = vi.mocked(f.control.start).mock.calls[0]![0];
     expect(command.args.slice(0, 4)).toEqual(["-n", "--", "/usr/local/libexec/multi-agent/worker-launch", "--worker"]);
     expect(command.args).not.toContain("--supervise");
+    expect(command.args).not.toContain("--gateway");
+  });
+
+  it("runs the verified gateway's pinned model and binds its digest into the privileged request", async () => {
+    // The pin is the configuration's, not a default: a launch admitted on the gateway selects that
+    // model and carries the digest the privileged re-read must match before it injects the bearer.
+    const f = fixture(client);
+    const digest = hashBytes("admitted gateway");
+    f.p.provider.gateway = { client, digest, model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    // A gateway launch binds its bearer file, so the observation it is verified against shows it.
+    f.observation.boundary.mounts.push({ ...GATEWAY_ENV_MOUNT });
+    expect(await f.launch()).toMatchObject({ ok: true });
+    const command = vi.mocked(f.control.start).mock.calls[0]![0];
+    const flag = client === "codex" ? "-m" : "--model";
+    expect(command.nativeArgv[command.nativeArgv.indexOf(flag) + 1]).toBe("pinned-model");
+    expect(command.args[command.args.indexOf("--gateway") + 1]).toBe(digest);
+  });
+
+  it("refuses a model override that disagrees with the verified gateway pin", async () => {
+    const f = fixture(client);
+    f.p.provider.gateway = { client, digest: hashBytes("admitted gateway"), model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    f.node.model = "other-model";
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_launch_option_invalid") });
+    expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  // F-1: the gateway's bearer file is a mount the launcher really creates, and the observation
+  // reports it. Its exact shape comes from the sandbox's own mountinfo: bubblewrap turns the
+  // inherited 0400 data descriptor into a fresh `tmpfs` file mount at the launcher's fixed path,
+  // which `workerMounts` names by type because the device belongs to no host mount.
+  it("accepts the gateway credential mount an admitted gateway launch actually reports", async () => {
+    const f = fixture(client);
+    f.p.provider.gateway = { client, digest: hashBytes("admitted gateway"), model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    f.observation.boundary.mounts.push({ ...GATEWAY_ENV_MOUNT });
+    expect(await f.launch()).toMatchObject({ ok: true, managedSession: expect.anything() });
+    expect(vi.mocked(f.control.start).mock.calls[0]![0].args).toContain("--gateway");
+  });
+
+  // The same mount on a launch that carries no `--gateway` is a mount this attempt never admitted,
+  // so accepting it would widen the boundary rather than verify it.
+  it("refuses the gateway credential mount on a launch without --gateway", async () => {
+    const f = fixture(client);
+    f.observation.boundary.mounts.push({ ...GATEWAY_ENV_MOUNT });
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
+    expect(vi.mocked(f.control.start).mock.calls[0]![0].args).not.toContain("--gateway");
+    expect(f.events.at(-1)).toMatchObject({ phase: "blocked", causeCode: "managed_worker_mount_mismatch" });
+  });
+
+  // And the converse: a gateway launch whose observation does not show the file is unproven,
+  // because nothing else in the receipt says the bearer reached the client.
+  it("refuses a gateway launch that reports no credential mount", async () => {
+    const f = fixture(client);
+    f.p.provider.gateway = { client, digest: hashBytes("admitted gateway"), model: "pinned-model", baseUrl: "https://gateway.example.test" };
+    expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
+    expect(vi.mocked(f.control.start).mock.calls[0]![0].args).toContain("--gateway");
   });
 
   it("confirms worker quiescence before reporting an initial boundary fault", async () => {
@@ -514,6 +569,35 @@ describe.each(["claude-code", "codex"] as const)("%s restricted native session",
     f.p.installedPolicy.paths.context_root += "-other";
     expect(await f.launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_context_mount_policy_mismatch") });
     expect(f.control.start).not.toHaveBeenCalled();
+  });
+
+  it("launches a manifest whose workerGroups lists the worker's own memberships", async () => {
+    // On a provisioned host the identity owner reports every group the worker belongs to, its
+    // primary gid included, and the manifest records that list because `locked()` reads it to
+    // decide which group class may see the projection. The preflight's `worker.groups` is a
+    // different fact — the *runtime* supplementary set, empty because the client starts under
+    // `setpriv --clear-groups` — so the two must never be compared as one. T038's live lane
+    // failed on exactly that comparison, so this pins the manifest shape that triggered it.
+    const f = fixture(client);
+    expect(f.context.workerGroups).toEqual([]);
+    // Rebuild the projection with the memberships the identity owner would supply, the same
+    // way `nextProjection` does, so the recorded hash covers them.
+    const { generatedHash, protocolVersion, workerDiscoveryRoots, ...input } = f.context;
+    const memberships = [f.context.projection.workerGid, process.getgid!()];
+    const root = join(input.projection.policy.paths.context_root, input.projection.worker, input.runId, "memberships");
+    const files = input.files.map(({ workerPath, ...file }) => ({ ...file, path: join(root, file.kind) }));
+    const context = projectContext({ ...input, workerGroups: memberships, projection: { ...input.projection, attemptId: "memberships" },
+      root, discoveryRoots: [root], files }, new Map(files.map((file, index) => [file.path, readFileSync(input.files[index]!.path)])));
+    expect(context.workerGroups).toEqual(memberships);
+    const observed = { discoveryRoots: [...context.workerDiscoveryRoots], files: context.files.map(({ workerPath, hash }) => ({ path: workerPath, hash })) };
+    f.p.assignment.context = context; f.p.assignment.observed = structuredClone(observed);
+    f.observation.context = structuredClone(observed);
+    f.observation.boundary.mounts.find(m => m.target === "/context")!.source = root;
+    // The control's observation names the attempt it observed, so it moves with the id.
+    f.observation.attemptId = "memberships";
+    const attempt = { ...f.attempt, attemptId: "memberships", context };
+    expect(await f.launcher.launch({ client, attempt })).toMatchObject({ ok: true });
+    expect(f.control.start).toHaveBeenCalledTimes(1);
   });
 
   it("refuses to reuse an old projection for a new attempt", async () => {

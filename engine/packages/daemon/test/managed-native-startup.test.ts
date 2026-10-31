@@ -920,8 +920,10 @@ describe("control-owned root inspection", () => {
       root: policy.paths.context_root + "/ma-worker1/run/attempt", mutableStateRoot: policy.paths.worker_root + "/ma-worker1/home",
       frameworkRoot: policy.paths.framework_dir, frameworkRevision: "fixture", workerUid: 61001, workerGroups: [],
       outputs: [], permissions: [], files: [], discoveryRoots: [], workerDiscoveryRoots: [], generatedHash: "sha256:" + "f".repeat(64), protocolVersion: null };
+    // Control-owned uid with the worker's group: the endpoint is created by control but must be
+    // reachable by the worker, whose client is what bwrap resolves the socket as.
     endpoint = { path: policy.paths.mailbox_root + "/ma-worker1/run/attempt/mailbox.sock", dev: 1, ino: 23,
-      uid: process.getuid!(), gid: process.getgid!(), generation: "generation-1" };
+      uid: process.getuid!(), gid: 61001, generation: "generation-1" };
     bridge = { binding: { socketPath: endpoint.path, workerId: "builder", sessionId: "builder@rig", runId: "run",
       attemptId: "attempt", rigId: "rig", taskId: "task", recipients: [] }, endpoint: () => Object.freeze({ ...endpoint }) };
     const fact = (path: string, sha256 = "sha256:" + "a".repeat(64)) => ({ path, realpath: path, uid: 0, gid: 0,
@@ -973,7 +975,8 @@ describe("control-owned root inspection", () => {
     context = { ...context, assignment: secondTask.assignment, role: "reviewer", client: "codex", workerUid: 61002,
       root: context.root.replace("ma-worker1", "ma-worker2").replace("/attempt", "/attempt-2"),
       projection: { ...context.projection, worker: "ma-worker2", workerGid: 61002, attemptId: "attempt-2" } };
-    endpoint = { ...endpoint, path: endpoint.path.replace("ma-worker1", "ma-worker2").replace("/attempt/", "/attempt-2/"), ino: 24, generation: "generation-2" };
+    endpoint = { ...endpoint, path: endpoint.path.replace("ma-worker1", "ma-worker2").replace("/attempt/", "/attempt-2/"),
+      gid: 61002, ino: 24, generation: "generation-2" };
     bridge = { endpoint: bridge.endpoint, binding: { ...bridge.binding, socketPath: endpoint.path, attemptId: "attempt-2", taskId: "review-task", workerId: "reviewer", sessionId: "reviewer@rig" } };
     reply.installed.executable.path = reply.installed.executable.realpath = reply.installed.executable.path.replace("/claude", "/codex");
     reply = { ...reply, worker: { name: "ma-worker2", uid: 61002, gid: 61002 }, provider: { client: "codex", status: "signed_out" },
@@ -1089,7 +1092,7 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     WHERE json_extract(payload, '$.action') = 'attempt.launch-intent' AND json_extract(payload, '$.attemptId') = ? ORDER BY seq DESC LIMIT 1`)
     .get(attemptId) as { ref: string }).ref;
 
-  const project = (attemptId: string) => {
+  const project = (attemptId: string, workerGroups: number[] = []) => {
     const base = join(policy.paths.context_root, "ma-worker1", "run", attemptId);
     const entries = [["framework", "pinned instructions"], ["plan", "approved plan\n"], ["role", JSON.stringify(roleConfiguration)], ...roleInstructionEntries("implementer")] as const;
     const files = entries.map(([kind, content]) => ({ path: join(base, kind), hash: hashBytes(content), kind, readOnly: true as const,
@@ -1100,16 +1103,17 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
         worker_identities: policy.worker_identities, paths: { context_root: policy.paths.context_root, framework_dir: policy.paths.framework_dir },
         sandbox: { context: "/context", framework: "/framework" } } },
       mutableStateRoot: join(policy.paths.worker_root, "ma-worker1", "home"), frameworkRoot: policy.paths.framework_dir,
-      frameworkRevision: FRAMEWORK_PIN.revision, workerUid, workerGroups: [], discoveryRoots: [base], files },
+      frameworkRevision: FRAMEWORK_PIN.revision, workerUid, workerGroups, discoveryRoots: [base], files },
     new Map(files.map((file, index) => [file.path, entries[index]![1]])));
   };
   let nativePolicyFor: Awaited<ReturnType<typeof buildManagedNativePolicy>>;
+  // Control-owned in uid, worker-group (that is how a provisioned host creates it), 0660.
   const endpoint = (attemptId: string) => ({ path: join(policy.paths.mailbox_root, "ma-worker1", "run", attemptId, "mailbox.sock"),
-    dev: 1, ino: 23, uid, gid, generation: "generation-1" });
+    dev: 1, ino: 23, uid, gid: workerGroup!, generation: "generation-1" });
   const bridgeFor = (input: Readonly<WorkerLaunchInput>) => ({ endpoint: () => Object.freeze(endpoint(input.attempt.attemptId)),
     binding: { socketPath: endpoint(input.attempt.attemptId).path, workerId: "builder", sessionId: "builder@rig", runId: "run",
       attemptId: input.attempt.attemptId, rigId: "rig", taskId: "task", recipients: [] } });
-  const mountInfo = (attempt: ContextManifest) => {
+  const mountInfo = (attempt: ContextManifest, gateway: boolean) => {
     const host = (source: string, target: string, access = "ro") => `8:1 ${source} ${target} ${access},nosuid - ext4 /dev/sda rw`;
     const managed = attempt.files.find(file => file.workerPath === "/context/native/claude/managed-settings.json")!.path;
     // [parent row, mount]; the 9p drivers mount sits below the masked tmpfs, as on a WSL host.
@@ -1117,16 +1121,23 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
       [1, "0:91 / /usr/lib/wsl ro - tmpfs tmpfs rw"], [0, host("/etc/hosts", "/etc/hosts")], [0, host(toolchain, toolchain)],
       [0, host(policy.paths.framework_dir, "/framework")], [0, host(attempt.root, "/context")], [0, "0:92 / /proc rw - proc proc rw"],
       [0, "0:93 / /dev rw - tmpfs tmpfs rw"], [9, "0:6 /null /dev/null rw - devtmpfs none rw"], [9, "0:94 / /dev/pts rw - devpts devpts rw"],
-      [0, "0:95 / /tmp rw - tmpfs tmpfs rw"], [0, "0:96 / /run rw - tmpfs tmpfs rw"], [13, host(policy.paths.egress_socket_dir, policy.paths.egress_socket_dir)],
+      [0, "0:95 / /tmp rw - tmpfs tmpfs rw"], [0, "0:96 / /run rw - tmpfs tmpfs rw"],
+      [13, host(policy.paths.egress_socket_dir, policy.paths.egress_socket_dir)],
       [13, "0:97 / /run/multi-agent ro - tmpfs tmpfs rw"], [15, host(endpoint(attempt.projection.attemptId).path, "/run/multi-agent/mailbox.sock")],
       [0, "0:98 / /etc/claude-code ro - tmpfs tmpfs rw"], [17, host(managed, "/etc/claude-code/managed-settings.json")],
       [0, host(join(policy.paths.worker_root, "ma-worker1/home"), "/home/worker", "rw")], [19, "0:99 / /home/worker/.multi-agent/mailbox rw - tmpfs tmpfs rw"],
       [20, "0:90 /bindfile//deleted /home/worker/.multi-agent/mailbox/bootstrap.json ro - tmpfs tmpfs rw"],
       [0, host(join(policy.paths.worker_root, "ma-worker1/scratch"), "/scratch", "rw")], [0, host(tree, "/work", "rw")]];
+    // Appended last so every parent index above keeps naming the row it names; the parent is the
+    // sandbox's own `/run` tmpfs, which is where bubblewrap puts the bound data file.
+    if (gateway) rows.push([13, "0:90 /bindfile//deleted /run/multi-agent-provider/provider.env rw - tmpfs tmpfs rw"]);
     return rows.map(([parent, row], index) => `${200 + index} ${200 + parent} ${row}`).join("\n") + "\n";
   };
   const snapshot = (attemptId: string, attempt: ContextManifest) => {
     const argv = intent(attemptId)!.command!.nativeArgv as string[];
+    // The privileged request is what decides the mount: a launch carrying `--gateway` binds the
+    // credential file, and the observation this fixture returns must show what it really binds.
+    const gateway = (intent(attemptId)!.command!.args as string[]).includes("--gateway");
     const managed = attempt.files.find(file => file.workerPath === "/context/native/claude/managed-settings.json")!;
     const value = { pane: { processId: PANE, processStart: String(30_000 + PANE) }, sandbox: { mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]" },
       lineage: [{ processId: RELAY, processStart: String(30_000 + RELAY), executable: realpathSync(join(toolchain, "node/bin/node")) },
@@ -1136,9 +1147,9 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
         executable: realpathSync(join(toolchain, "clients/lib/claude.exe")), cwd: "/work",
         environment: { HOME: "/home/worker", CLAUDE_CONFIG_DIR: "/home/worker/.claude" },
         mountNamespace: "mnt:[7]", userNamespace: "user:[8]", networkNamespace: "net:[9]", pidNamespace: "pid:[2]" },
-      mountInfo: mountInfo(attempt), stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })),
+      mountInfo: mountInfo(attempt, gateway), stdio: [0, 1, 2].map(fd => ({ fd, kind: "tty" })),
       files: [...attempt.files.map(file => ({ path: file.workerPath, hash: file.hash })), { path: "/etc/claude-code/managed-settings.json", hash: managed.hash }],
-      discoveryRoots: [...attempt.workerDiscoveryRoots], nativeSessions: [], mailbox: { uid, gid, dev: 1, ino: 23 },
+      discoveryRoots: [...attempt.workerDiscoveryRoots], nativeSessions: [], mailbox: { uid, gid: workerGroup!, dev: 1, ino: 23 },
       nativePolicy: { inventory: { selectedSource: "/etc/claude-code/managed-settings.json", managedDropIns: "absent", remotePolicy: "absent",
         platformPolicy: "not-applicable", nativeExceptions: "absent" } } };
     snapshotChange(value);
@@ -1267,6 +1278,16 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     expect(await launcher.checkReady({ attemptId: "attempt", deadline: now + 60_000, context })).toEqual({ ready: true });
   });
 
+  it("resolves the egress bind from its separate host filesystem", async () => {
+    processIo.stats.set("/proc/self/mountinfo",
+      "1 0 8:1 / / rw - ext4 /dev/sda rw\n2 1 0:20 / /run rw - tmpfs tmpfs rw\n");
+    snapshotChange = snapshot => {
+      const target = policy.paths.egress_socket_dir;
+      snapshot.mountInfo = snapshot.mountInfo.replace("8:1 " + target + " " + target, "0:20 /multi-agent-egress " + target);
+    };
+    expect(await launch()).toMatchObject({ ok: true });
+  });
+
   it.each(["remote-policy", "drop-in", "foreign-mount", "host-tmpfs", "mailbox", "native-restart", "pane-process"])(
     "quiesces and records a confirmed stop when %s drifts after readiness", async field => {
       expect(await launch()).toMatchObject({ ok: true });
@@ -1288,6 +1309,26 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     snapshotChange = s => { s.mountInfo = s.mountInfo.split("\n").filter((line: string) => !line.includes(" /usr/lib/wsl ro ")).join("\n"); };
     expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_worker_mount_mismatch") });
     expect(governance.getAttempt("attempt")?.state).toBe("stopped");
+  });
+
+  it("does not ask the control identity to resolve a worker-owned home or scratch", async () => {
+    // `home` and `scratch` are worker-owned 0700 beneath a worker-owned 0700 parent, so this
+    // process cannot traverse them: a realpath through them fails with EACCES on every
+    // provisioned host, before any client starts. Removing execute reproduces exactly that
+    // denial for an owner — note the path must be resolved *through* the directory, since
+    // resolving the directory itself needs only its parent's execute bit. The launch must
+    // still reach the privileged launcher, which verifies both paths itself
+    // (`openVerifiedDirectory`, O_NOFOLLOW).
+    const home = join(policy.paths.worker_root, "ma-worker1", "home");
+    const scratch = join(policy.paths.worker_root, "ma-worker1", "scratch");
+    chmodSync(home, 0o600); chmodSync(scratch, 0o600);
+    try {
+      if (process.getuid!() !== 0) {
+        expect(() => realpathSync(join(home, "marker"))).toThrow(/EACCES/);
+        expect(() => realpathSync(join(scratch, "marker"))).toThrow(/EACCES/);
+      }
+      expect(await launch()).toMatchObject({ ok: true });
+    } finally { chmodSync(home, 0o755); chmodSync(scratch, 0o755); }
   });
 
   it("resumes only from the exact receipt recorded for the stopped attempt", async () => {
@@ -1407,6 +1448,37 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_provider_signin_required") });
     expect(respawn).not.toHaveBeenCalled();
   });
+
+  // T038 gateway: a verified provider gateway is a provider in its own right
+  // (docs/amendments/2026-10-29). These cover the branch the sign-in tests above do not reach.
+  const gateway = { client: "claude-code" as const, digest: "sha256:" + "f".repeat(64),
+    model: "ds/claude-opus-5-5", baseUrl: "https://axonwell.example" };
+
+  it("admits a launch on a verified gateway while the worker home stays signed out", async () => {
+    inspectReply.provider.status = "signed_out";
+    inspectReply.provider.gateway = { ...gateway };
+    const result = await launch();
+    expect(result.ok).toBe(true);
+    expect(respawn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a gateway that does not name this client", { ...gateway, client: "codex" as const }],
+    ["a gateway without a digest reference", { ...gateway, digest: "" }],
+    ["a gateway whose model is not a reference", { ...gateway, model: "not a model!" }],
+  ])("still blocks a signed-out provider given %s", async (_case, broken) => {
+    inspectReply.provider.status = "signed_out";
+    inspectReply.provider.gateway = broken;
+    expect(await launch()).toMatchObject({ ok: false, error: expect.stringContaining("managed_provider_signin_required") });
+    expect(respawn).not.toHaveBeenCalled();
+  });
+
+  it("never lets a gateway override a provided sign-in decision it contradicts", async () => {
+    // `unknown` is not proof of a provider: only a validated gateway or `signed_in` admits a launch.
+    inspectReply.provider.status = "unknown";
+    inspectReply.provider.gateway = { ...gateway };
+    expect((await launch()).ok).toBe(true);
+  });
 });
 
 describe("production managed launch composition", () => {
@@ -1512,8 +1584,9 @@ describe("production managed launch composition", () => {
       expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(0);
       // Each path is its own attempt: a refusal blocks that attempt in the shared launcher.
       const register = (attemptId: string) => {
+        // Control-owned uid, and the group of the worker this projection declares (61001 below).
         const endpoint = { path: policy.paths.mailbox_root + "/ma-worker1/run/" + attemptId + "/mailbox.sock", dev: 1, ino: 23,
-          uid: process.getuid!(), gid: process.getgid!(), generation: "generation-1" };
+          uid: process.getuid!(), gid: 61001, generation: "generation-1" };
         launch.endpoints.set(attemptId, { endpoint: () => Object.freeze({ ...endpoint }), binding: { socketPath: endpoint.path, workerId: "builder",
           sessionId: "builder@rig", runId: "run", attemptId, rigId: "rig", taskId: "task", recipients: [] } });
         return attemptId;

@@ -486,9 +486,25 @@ function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: n
   }
   if (!within(anchor, path) || path === anchor) throw new Error("Managed attempt directory is outside the policy root");
   mkdirSync(path, { recursive: true, mode });
-  // Under a setgid parent the child already carries the parent's group; the explicit
-  // chmod keeps the mode exact without touching that group.
-  for (let p = path; p !== anchor; p = dirname(p)) chmodSync(p, mode);
+  // Nothing is chmod'ed here, and that is the whole point of this function.
+  //
+  // The control identity is never a member of the worker's group, so it cannot *set* the
+  // setgid bit: the kernel clears S_ISGID on chmod by a caller outside the file's group.
+  // Measured on the provisioned host as ma-control, beneath the 2750 control:ma-worker1
+  // anchor: mkdirSync(path, {mode: 0o2750}) yields 2750 control:ma-worker1, and a following
+  // chmodSync(path, 0o2750) yields 0750 — which the check below then refuses.
+  //
+  // What makes mkdir right is the anchor, and provisioning is what guarantees it: the
+  // context anchor is installed setgid with a default ACL of `d:u::rwx,d:g::r-x,d:m::r-x,
+  // d:o::---` (provision-host.sh), so a child inherits the worker's group and the requested
+  // mode under any umask; the mailbox anchor is installed setgid for the same reason. A
+  // directory this call cannot create that way is refused below rather than repaired.
+  for (let p = path; p !== anchor; p = dirname(p)) {
+    const observed = statSync(p);
+    if (observed.uid !== process.getuid!() || observed.gid !== gid || (observed.mode & 0o7777) !== mode) {
+      throw new Error("Managed attempt directory is not owned as the policy requires");
+    }
+  }
   const stat = statSync(path);
   // A directory that is not what was asked for is refused rather than repaired:
   // repairing it would be this code deciding what another owner's data should look like.
@@ -537,19 +553,22 @@ function ensureAttemptRoot(path: string, roots: { contextRoot: string; worker: s
 }
 
 /**
- * The mailbox directory, which is control-private rather than worker-readable.
+ * The mailbox directory: control-owned, grouped to the worker, and traversable only.
  *
- * The bridge and the privileged launcher both re-check this 0700, control-gid shape, so
- * it is created to exactly that here instead of being loosened for the worker.
+ * The launcher hands the endpoint to bubblewrap as the worker, so every level has to be
+ * traversable by that worker while no group or other bit may read or write it, and the
+ * endpoint itself is worker-group 0660. The per-worker anchor is installed setgid for the
+ * worker, so the levels created here inherit that group rather than the daemon's; the mode
+ * grants traversal and nothing else.
  */
-function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string; controlStateDir: string }): void {
+function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; worker: string; controlStateDir: string; workerGid: number }): void {
   // The launcher anchors its ancestry walk on `control_state_dir` and requires the
   // mailbox root to sit directly under it, so an inconsistent roots object is refused
   // here rather than discovered as a launch refusal later.
   if (roots.mailboxRoot !== join(roots.controlStateDir, "mailboxes")) {
     throw new Error("Managed mailbox root is not beneath the control state directory");
   }
-  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700, process.getgid!());
+  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o2710, roots.workerGid);
 }
 
 export class WorkflowRuntime {
@@ -1093,7 +1112,7 @@ export class WorkflowRuntime {
 
       const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
       ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId),
-        { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir });
+        { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir, workerGid });
       // A socket left by a daemon that died is still a file; the bridge refuses to
       // listen over one, so it is removed first. It can only ever be this attempt's,
       // because the path is built from the attempt id.

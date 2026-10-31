@@ -148,7 +148,13 @@ export class ClaudeCodeAdapter implements RuntimeAdapter {
       (e) => e.category === "runtime_resource" && e.resourceType === "claude_activity_hooks",
     );
     let activityOutcome: ActivityHookOutcome = { changed: false, delivered: false, sourceMissing: false, manifestUnavailable: false, settingsUnparseable: false };
-    try {
+    // A managed seat's working tree is the candidate, mounted rw at /work. Writing
+    // `.claude/settings.local.json` there would put a worker-writable native config source
+    // beside the fixed managed-settings mount, which is exactly the shadowing the managed
+    // launch refuses. The managed channel is delivered through that mount instead
+    // (`context-manifest.ts` writes the relay hook into managed-settings.json with
+    // `allowManagedHooksOnly: true`), so the cwd copy is not only unsafe but redundant.
+    if (!binding.managedAttempt) try {
       activityOutcome = this.reconcileClaudeActivityHooks(binding.cwd, activityEntries.length > 0);
     } catch (err) {
       // #226: delivery at '/' is still attempted (it works where '/' is writable); when it fails there, say why.
@@ -174,14 +180,24 @@ export class ClaudeCodeAdapter implements RuntimeAdapter {
   }
 
   async deliverStartup(files: ResolvedStartupFile[], binding: NodeBinding, sendInteractiveText?: (text: string) => Promise<void>): Promise<StartupDeliveryResult> {
+    // Trust/onboarding state lives in the daemon's own state directory, never the working tree,
+    // so it is provisioned for every seat, managed or not.
     try { this.ensureManagedBootstrap(binding); } catch (err) {
       console.error(`[openrig] claude bootstrap warning: ${(err as Error).message}`);
     }
 
-    // Best-effort: provision context collector for managed Claude sessions
-    try { this.ensureContextCollector(binding); } catch (err) {
-      // Log but don't fail — collector provisioning is best-effort
-      console.error(`[openrig] context collector provisioning warning: ${(err as Error).message}`);
+    // The context collector is the one legacy provisioning step that writes into the seat's
+    // working tree — `.openrig/context-collector.cjs` plus a statusLine entry in
+    // `.claude/settings.local.json`. For a managed attempt that tree is the candidate, mounted
+    // rw at /work, so those files would sit beside the fixed managed-settings mount as
+    // worker-writable native config: the shadowing the managed launch refuses. The managed
+    // channel does not need them — its relay hook ships inside managed-settings.json with
+    // `allowManagedHooksOnly: true` — so the step is skipped for a managed attempt.
+    if (!binding.managedAttempt) {
+      try { this.ensureContextCollector(binding); } catch (err) {
+        // Log but don't fail — collector provisioning is best-effort
+        console.error(`[openrig] context collector provisioning warning: ${(err as Error).message}`);
+      }
     }
 
     const warnings: string[] = [];

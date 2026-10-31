@@ -846,6 +846,74 @@ describe("StartupOrchestrator", () => {
     expect(sendText).toHaveBeenNthCalledWith(2, "r01-impl", "/rename impl");
   });
 
+  // The managed attempt must be resolved before any filesystem seam, not at the launch.
+  //
+  // `project()` and the pre-launch `deliverStartup()` both decide whether a seat is managed
+  // from `binding.managedAttempt`. Resolving the attempt at step 5 left both reading an
+  // unmanaged binding, so the legacy Claude writers they guard still wrote
+  // `.claude/settings.local.json` and `.openrig/context-collector.cjs` into the candidate;
+  // the candidate's own scope check then refused the whole launch as outside the task's
+  // write paths, and the managed lane never reached the launcher.
+  describe("the managed attempt is resolved before the projection and pre-launch delivery", () => {
+    const attempt = () => ({ attemptId: "attempt-1", deadline: Date.now() + 60_000,
+      context: { runId: "run" } as never });
+
+    it("hands both filesystem seams the managed binding", async () => {
+      const seed = seedSession();
+      const seen: Array<{ seam: string; managed: boolean }> = [];
+      const adapter = mockAdapter({
+        project: vi.fn(async (_plan, binding: NodeBinding) => {
+          seen.push({ seam: "project", managed: binding.managedAttempt !== undefined });
+          return { projected: [], skipped: [], failed: [] };
+        }),
+        deliverStartup: vi.fn(async (_files, binding: NodeBinding) => {
+          seen.push({ seam: "deliverStartup", managed: binding.managedAttempt !== undefined });
+          return { delivered: 0, failed: [] };
+        }),
+      });
+      const orch = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter: tmux,
+        readFile: () => "", sleep: async () => {},
+        readinessSettings: { resolveOne: () => ({ value: 30, source: "default", defaultValue: 30 }) } as unknown as Pick<SettingsStore, "resolveOne">,
+        managedAttempt: async () => attempt() as never });
+
+      const result = await orch.startNode(makeInput(seed, { adapter }));
+
+      expect(result.ok).toBe(true);
+      expect(seen).toEqual([
+        { seam: "project", managed: true },
+        { seam: "deliverStartup", managed: true },
+      ]);
+    });
+
+    it("resolves the attempt once, so a seat never produces two", async () => {
+      const seed = seedSession();
+      const resolve = vi.fn(async () => attempt() as never);
+      const orch = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter: tmux,
+        readFile: () => "", sleep: async () => {},
+        readinessSettings: { resolveOne: () => ({ value: 30, source: "default", defaultValue: 30 }) } as unknown as Pick<SettingsStore, "resolveOne">,
+        managedAttempt: resolve });
+
+      await orch.startNode(makeInput(seed));
+
+      expect(resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses before writing anything when resolution fails", async () => {
+      const seed = seedSession();
+      const project = vi.fn(async () => ({ projected: [], skipped: [], failed: [] }));
+      const orch = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter: tmux,
+        readFile: () => "", sleep: async () => {},
+        readinessSettings: { resolveOne: () => ({ value: 30, source: "default", defaultValue: 30 }) } as unknown as Pick<SettingsStore, "resolveOne">,
+        managedAttempt: async () => { throw new Error("outside-write-paths"); } });
+
+      const result = await orch.startNode(makeInput(seed, { adapter: mockAdapter({ project }) }));
+
+      expect(result).toMatchObject({ ok: false, startupStatus: "failed" });
+      expect(result.errors).toEqual(["Managed attempt attachment: outside-write-paths"]);
+      expect(project).not.toHaveBeenCalled();
+    });
+  });
+
   it("issues a selected startup challenge (oriented=missing, challenge in prompt)", async () => {
     const seed = seedSession();
     const sendText = vi.fn(async () => ({ ok: true as const }));

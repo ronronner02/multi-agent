@@ -128,7 +128,12 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     chat = new ChatRepository(db); current = true; prompt = "clear"; active = credentials;
     channel = null; promptReader = () => prompt;
     delivery = new MailboxDelivery(chat, () => promptReader(), () => channel);
-    bridge = new WorkerMailboxBridge({ socketPath: join(directory, "mailbox.sock"), workerId: "worker",
+    // The attempt directory as the producer lays it out: control-owned, setgid for the worker,
+    // traversal only, so the endpoint arrives at worker-group 0660.
+    const attemptDirectory = join(directory, "mailboxes", "worker", "run", "attempt");
+    mkdirSync(attemptDirectory, { recursive: true, mode: 0o2710 });
+    chmodSync(attemptDirectory, 0o2710);
+    bridge = new WorkerMailboxBridge({ socketPath: join(attemptDirectory, "mailbox.sock"), workerId: "worker",
       sessionId: worker.sessionId, runId: "run", attemptId: "attempt", rigId: "rig", taskId: "task", recipients: ["peer"] },
     delivery, chat, () => active, () => current);
     await bridge.listen();
@@ -243,7 +248,7 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
   it("does not readmit a socket after observing changed endpoint permissions", async () => {
     incoming(); chmodSync(bridge.binding.socketPath, 0o600);
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
-    if (existsSync(bridge.binding.socketPath)) chmodSync(bridge.binding.socketPath, 0o666);
+    if (existsSync(bridge.binding.socketPath)) chmodSync(bridge.binding.socketPath, 0o660);
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
     expect(pending()).toBe(1);
   });

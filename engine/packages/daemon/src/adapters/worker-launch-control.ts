@@ -194,7 +194,8 @@ interface RootInspection {
   installed: Record<"policy" | "launcher" | "executable" | "egress", InstalledFileFact>;
   network: { hostNamespace: string; profileFingerprint: string };
   clientLock: { client: string; version: string; digest: string; files: { path: string; sha256: string }[] };
-  provider: { client: string; status: WorkerLaunchPreflight["provider"]["status"] };
+  provider: { client: string; status: WorkerLaunchPreflight["provider"]["status"];
+    gateway?: NonNullable<WorkerLaunchPreflight["provider"]["gateway"]> };
 }
 
 /** Only the launcher's fixed refusal code is read; its message and any other output are never propagated. */
@@ -237,7 +238,9 @@ export async function inspectManagedWorker(
       || registration.taskId !== scope.task.assignment.taskId || registration.sessionId !== scope.sessionId
       || registration.attemptId !== attemptId || registration.socketPath !== mailbox.path
       || mailbox.path !== posix.join(paths.mailbox_root!, name, context.runId, attemptId, "mailbox.sock")
-      || mailbox.uid !== controlUid || mailbox.gid !== controlGid
+      // Control-owned in uid; the group is the worker's, because bwrap resolves the socket as the
+      // worker and a control-group endpoint would be unreachable for it.
+      || mailbox.uid !== controlUid || mailbox.gid !== context.projection.workerGid
       || !Number.isSafeInteger(mailbox.dev) || mailbox.dev < 0 || !Number.isSafeInteger(mailbox.ino) || mailbox.ino <= 0
       || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(mailbox.generation)) throw new Error();
     // The original repository binding is shared by the run, not a worker-specific mount selection.
@@ -260,8 +263,13 @@ export async function inspectManagedWorker(
     const facts = JSON.parse(output) as RootInspection;
     if (facts.schema !== "multi-agent-launch-preflight/v1"
       || !same(Object.keys(facts).sort(), ["clientLock", "control", "installed", "network", "provider", "roots", "schema", "worker"])
-      || !same(Object.keys(facts.provider).sort(), ["client", "status"]) || facts.provider.client !== context.client
+      // Gateway facts are additive and optional; when present they are validated strictly rather
+      // than trusted, because they decide whether a launch may proceed without a sign-in.
+      || !same(Object.keys(facts.provider).sort(), Object.hasOwn(facts.provider, "gateway")
+        ? ["client", "gateway", "status"] : ["client", "status"]) || facts.provider.client !== context.client
       || !["signed_in", "signed_out", "unknown"].includes(facts.provider.status)
+      || (Object.hasOwn(facts.provider, "gateway") && !same(Object.keys(facts.provider.gateway!).sort(),
+        ["baseUrl", "client", "digest", "model"]))
       || !same(Object.keys(facts.clientLock).sort(), ["client", "digest", "files", "version"]) || facts.clientLock.client !== context.client
       || facts.clientLock.digest !== lockDigest || facts.clientLock.version !== lockEntry.version
       || !Array.isArray(facts.clientLock.files) || facts.clientLock.files.length !== lockEntry.files.length
@@ -447,12 +455,25 @@ function reachableMounts(text: string): MountRow[] {
 
 /** Host binds are named by their path on the host root filesystem and kernel filesystems by type; anything else stays foreign. */
 function workerMounts(mountInfo: string): WorkerMount[] {
-  const host = reachableMounts(readFileSync("/proc/self/mountinfo", "utf8")), hostRoot = host.find(row => row.target === "/")?.device;
+  const host = reachableMounts(readFileSync("/proc/self/mountinfo", "utf8"));
   // A sandbox tmpfs, proc or devpts is a new instance; one on a host device is a host bind. Device nodes come from the host devtmpfs.
   const fresh = (row: MountRow) => row.type === "devtmpfs" || !host.some(entry => entry.device === row.device);
-  return reachableMounts(mountInfo).map(row => ({ target: row.target, access: row.access,
-    source: ["tmpfs", "proc", "devtmpfs", "devpts"].includes(row.type) && fresh(row) ? row.type
-      : row.device === hostRoot ? row.root : row.type + ":" + row.device + ":" + row.root }));
+  // A host bind's source is the path it occupies ON THE HOST. `root` is the path within the bound
+  // filesystem, so it must be joined to that filesystem's own host mount point: `/run` is a host
+  // tmpfs, so binding `/run/multi-agent-egress` reports root `/multi-agent-egress` on /run's device,
+  // and naming it by the root device alone (the old rule) could only name binds from `/` itself.
+  const hostPath = (row: MountRow): string | null => {
+    const owner = host.find(entry => entry.device === row.device);
+    if (!owner) return null;
+    const base = owner.target === "/" ? "" : owner.target;
+    return base + (row.root === "/" ? "" : row.root) || "/";
+  };
+  return reachableMounts(mountInfo).map(row => {
+    const bound = ["tmpfs", "proc", "devtmpfs", "devpts"].includes(row.type) && fresh(row) ? undefined : hostPath(row);
+    return { target: row.target, access: row.access,
+      source: bound ?? (["tmpfs", "proc", "devtmpfs", "devpts"].includes(row.type) && fresh(row) ? row.type
+        : row.type + ":" + row.device + ":" + row.root) };
+  });
 }
 
 /** False only once the exact process instance is gone; a reused PID is a different instance. */
@@ -587,7 +608,8 @@ export function createManagedLaunchControl(dependencies: ManagedWorkerScopeDepen
         generation: prior ? prior.identity!.generation + 1 : 1,
         policyFingerprint: context.binding.policyFingerprint, policyRevision: policy.policy_revision, installedPolicy: policy,
         network: { mode: policy.sandbox.network as WorkerNetworkPolicy["mode"], ...facts.network, preflightRef: evidenceRef },
-        provider: { status: facts.provider.status, client: input.client, home: facts.roots.home, evidenceRef },
+        provider: { status: facts.provider.status, client: input.client, home: facts.roots.home, evidenceRef,
+          ...(facts.provider.gateway ? { gateway: facts.provider.gateway } : {}) },
         nativePolicy: await buildManagedNativePolicy(context.client, policy.paths.toolchain_dir),
         mailbox, ...(claimed ? { previous: claimed } : {}),
         credentialValues: [options.credentials.ownerToken, ...options.credentials.workers?.map(worker => worker.token) ?? [], ...legacyTokens]

@@ -238,6 +238,29 @@ export class StartupOrchestrator {
     let appliedLaunch: AppliedLaunchObservation | undefined;
     const launchGeneration = this.sessionRegistry.currentOccupantTenure(input.nodeId)?.generationUuid;
 
+    // 0. Resolve the managed attempt before anything writes to the seat's working tree.
+    //
+    // Both filesystem seams that precede the launch — `project()` at step 2 and the
+    // pre-launch `deliverStartup()` at step 4 — are handed `input.binding`, and each
+    // decides whether the seat is managed from `binding.managedAttempt`. Resolving the
+    // attempt at the launch instead (step 5) left both reading an unmanaged binding, so
+    // the legacy writers they guard wrote into the candidate and the candidate's own
+    // scope check refused the launch as outside the task's write paths. Nothing had
+    // started by then, but the managed lane could never reach the launcher.
+    //
+    // Resolving first is what the producer already assumes: `admitForLaunch` places the
+    // candidate, and every later step reads the same attempt. A refusal here therefore
+    // happens before a single byte is written, which is stricter than before, not looser.
+    if (this.managedAttempt) try {
+      const attempt = await this.managedAttempt(input);
+      if (attempt) {
+        input = { ...input, binding: { ...input.binding, managedAttempt: attempt } };
+        deliveryInput.binding = input.binding;
+      }
+    } catch (error) {
+      return this.fail(input, "failed", [`Managed attempt attachment: ${(error as Error).message}`]);
+    }
+
     // 1. Mark pending
     this.sessionRegistry.updateStartupStatus(input.sessionId, "pending");
     const context = input.isRestore ? "restore" : "fresh_start";
@@ -326,21 +349,10 @@ export class StartupOrchestrator {
 
     // 5. Launch harness (unless skipped for legacy nodes)
     if (!input.skipHarnessLaunch) {
-      // T047: a seat with an admitted assignment launches under the attempt the producer made
-      // for it. Resolving immediately before the launch — after projection and pre-launch file
-      // delivery have already succeeded — is what makes the attachment true for a fresh launch,
-      // a restore and an instantiated pod member alike, without producing an attempt for a
-      // startup that never reaches the launcher. A seat whose task is not admitted resolves to
-      // no attempt and keeps its personal launch; a resolution failure refuses the launch.
-      if (this.managedAttempt) try {
-        const attempt = await this.managedAttempt(input);
-        if (attempt) {
-          input = { ...input, binding: { ...input.binding, managedAttempt: attempt } };
-          deliveryInput.binding = input.binding;
-        }
-      } catch (error) {
-        return this.fail(input, "failed", [`Managed attempt attachment: ${(error as Error).message}`]);
-      }
+      // T047: the seat's admitted attempt was resolved at step 0, before the projection
+      // and pre-launch delivery, so those seams saw the same managed binding the launch
+      // does. Resolving here instead would resolve it twice, and the second call would
+      // produce a second attempt for a seat that already has one.
       try {
         let launchResumeToken = input.resumeToken;
         let attemptedFreshFallback = false;
