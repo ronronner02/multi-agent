@@ -276,6 +276,129 @@ body:has(.team-shell) > #root { height: 100%; }
   width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto;
 }
 
+/* --- workspace (Focus) and reviews --------------------------------------- */
+.ui-workspace, .ui-reviews { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ui-subnav { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--ui-divider); }
+.ui-subnav button {
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent;
+  color: var(--ui-muted); font-size: 13px; padding: 6px 10px;
+}
+.ui-subnav button[aria-pressed="true"] { color: var(--ui-text); border-bottom-color: var(--ui-accent); }
+.ui-viewswitch-note { display: inline-flex; align-items: center; padding: 3px 8px; color: var(--ui-muted); font-size: 12px; border-left: 1px solid var(--ui-divider); }
+.ui-viewswitch-later { display: inline-flex; }
+.ui-viewswitch-later button { min-height: 28px; }
+
+.ui-focus { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ui-focus > [data-orientation] { display: flex; flex-direction: column; min-height: 0; }
+.ui-focus-bar { display: flex; align-items: center; gap: 8px; }
+.ui-agent-select { max-width: 420px; }
+.ui-identity {
+  display: grid; grid-template-columns: minmax(160px, auto) minmax(0, 1fr) auto; align-items: center; gap: 16px;
+}
+.ui-identity h2 { margin: 0; font-size: 20px; }
+.ui-identity-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.ui-identity-facts dt { color: var(--ui-muted); font-size: 11px; }
+.ui-identity-facts dd { margin: 2px 0 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ui-identity-actions { display: flex; gap: 8px; }
+.ui-focus [role="tablist"] { border-bottom: 1px solid var(--ui-divider); gap: 0; }
+.ui-focus [role="tab"] { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px 12px; font-size: 13px; }
+.ui-focus [role="tab"][data-state="active"] { background: transparent; border-bottom-color: var(--ui-accent); }
+.ui-focus [role="tabpanel"] { padding-top: 12px; min-width: 0; }
+.ui-execution { display: flex; flex-direction: column; min-width: 0; }
+.ui-output {
+  margin: 0; max-height: 420px; overflow: auto; padding: 10px 12px;
+  border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-canvas);
+  font-family: var(--ui-mono); font-size: 12px; white-space: pre-wrap;
+}
+.ui-checks { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); font-size: 13px; }
+.ui-empty-state { display: grid; gap: 4px; padding: 32px 16px; border: 1px dashed var(--ui-divider); border-radius: var(--ui-radius); text-align: center; }
+.ui-empty-state strong { font-size: 14px; font-weight: 600; }
+.ui-empty-state p { margin: 0; }
+.ui-diff-meta { margin: 0 0 8px; font-size: 12px; }
+
+.ui-reviews-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; min-width: 0; }
+.ui-reviews-main { min-width: 0; }
+.ui-reviews-main .ui-diff { grid-template-columns: minmax(200px, 264px) minmax(0, 1fr); }
+.ui-reviews-main .ui-code { padding-right: 8px; }
+.ui-reviews-inspector { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ui-gates { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ui-gates li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--ui-divider); font-size: 13px; }
+.ui-gates li:last-child { border-bottom: 0; }
+.ui-gate-state { color: var(--ui-muted); font-size: 12px; }
+.ui-gates li[data-state="passed"] .ui-gate-state { color: var(--ui-ok); }
+.ui-gates li[data-state="waiting"] .ui-gate-state { color: var(--ui-warn); }
+.ui-facts { margin: 0; }
+.ui-facts > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.ui-facts dt { color: var(--ui-muted); }
+.ui-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.ui-decision-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+@media (max-width: 1279px) {
+  .ui-reviews-body { grid-template-columns: minmax(0, 1fr); }
+  .ui-identity { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* --- diff (Workspace · Changes and Reviews share this) ------------------- */
+.team-shell {
+  --ui-add: rgb(74 222 128 / 0.12);
+  --ui-add-strong: #4ade80;
+  --ui-remove: rgb(248 113 113 / 0.12);
+  --ui-remove-strong: #f87171;
+}
+.team-shell[data-ui-theme="light"] {
+  --ui-add: rgb(22 163 74 / 0.1);
+  --ui-add-strong: #15803d;
+  --ui-remove: rgb(220 38 38 / 0.09);
+  --ui-remove-strong: #b91c1c;
+}
+.ui-diff {
+  display: grid; grid-template-columns: minmax(160px, 240px) minmax(0, 1fr); gap: 0;
+  border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface);
+  overflow: hidden;
+  /* The diff is the subject of both screens, so it gets a working height of its own rather than a
+   * sliver under the identity row. `min()` keeps it inside a short window. */
+  flex: 1 1 auto; min-height: min(520px, 52vh);
+}
+.ui-focus [role="tabpanel"], .ui-reviews-main { display: flex; flex-direction: column; min-height: 0; }
+.ui-diff-files {
+  list-style: none; margin: 0; padding: 6px; display: grid; align-content: start; gap: 2px;
+  border-right: 1px solid var(--ui-divider); overflow: auto; min-height: 0;
+}
+.ui-diff-files button {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; min-height: 32px; border: 1px solid transparent; background: transparent;
+  color: var(--ui-text); font-size: 13px; text-align: left;
+}
+.ui-diff-files button svg { width: 14px; height: 14px; color: var(--ui-muted); }
+.ui-diff-files button:hover { background: var(--ui-raised); }
+.ui-diff-files button[aria-pressed="true"] { background: var(--ui-raised); border-color: var(--ui-accent); }
+.ui-diff-path { display: grid; min-width: 0; }
+/* A long path wraps rather than ellipsizing into an ambiguous name beside its counts. */
+.ui-diff-path > span { overflow-wrap: anywhere; font-family: var(--ui-mono); font-size: 12px; }
+.ui-diff-path small { font-size: 11px; }
+.ui-diff-counts { display: inline-flex; gap: 6px; font-family: var(--ui-mono); font-size: 11px; white-space: nowrap; }
+.ui-diff-counts [data-count="added"] { color: var(--ui-add-strong); }
+.ui-diff-counts [data-count="removed"] { color: var(--ui-remove-strong); }
+.ui-diff-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.ui-diff-head {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-bottom: 1px solid var(--ui-divider); background: var(--ui-raised); font-size: 12px;
+}
+.ui-diff-head code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-diff-head .ui-state { margin-left: auto; }
+.ui-diff-body { overflow: auto; font-family: var(--ui-mono); font-size: 12px; line-height: 20px; flex: 1 1 auto; min-height: 0; }
+.ui-hunk + .ui-hunk { border-top: 1px solid var(--ui-divider); }
+.ui-hunk-head { padding: 4px 12px; color: var(--ui-muted); background: var(--ui-raised); font-size: 11px; white-space: pre; }
+.ui-diff-line { display: grid; grid-template-columns: 44px 44px 18px minmax(0, 1fr); align-items: baseline; }
+.ui-diff-line[data-kind="add"] { background: var(--ui-add); }
+.ui-diff-line[data-kind="remove"] { background: var(--ui-remove); }
+.ui-diff-line[data-kind="note"] { color: var(--ui-muted); }
+.ui-ln { padding: 0 8px; color: var(--ui-muted); text-align: right; font-variant-numeric: tabular-nums; user-select: none; }
+.ui-marker { color: var(--ui-muted); user-select: none; }
+.ui-diff-line[data-kind="add"] .ui-marker { color: var(--ui-add-strong); }
+.ui-diff-line[data-kind="remove"] .ui-marker { color: var(--ui-remove-strong); }
+.ui-code { padding-right: 12px; white-space: pre; overflow-wrap: normal; color: var(--ui-text); }
+
 @media (prefers-reduced-motion: reduce) {
   .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

@@ -118,7 +118,7 @@ function ActiveTasks({ read }: { read?: TeamOwnerRead }) {
           .map(key => <th key={key} scope="col">{t(key)}</th>)}</tr></thead>
         <tbody>{tasks.map(task => <tr key={task.qitemId} data-task-id={task.taskId}>
           <td><code>{task.taskId}</code></td>
-          <td className="team-muted">{DASH}</td>
+          <td className="team-muted">{task.title ?? DASH}</td>
           <td>{t(`role.${task.role}`)}</td>
           <td><span className="ui-state" data-state={task.queueState}>{t(`status.queue.${task.queueState}`)}</span></td>
           <td>{verifiedLabel(task, DASH)}</td>

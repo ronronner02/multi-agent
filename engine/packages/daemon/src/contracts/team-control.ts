@@ -247,6 +247,17 @@ export interface TeamReviewView {
   qitemId: string;
   role: TeamRole;
   queueState: TeamQueueState;
+  /**
+   * The first line of the task body, shortened for display, or `null` when the
+   * row carries no body text. It is the task's own words, never a summary.
+   */
+  title: string | null;
+  /**
+   * The assignment's declared dependencies. `[]` is a recorded "none", and
+   * `null` means the row's assignment could not be read — the two stay distinct
+   * so a client never renders an unreadable assignment as no dependencies.
+   */
+  dependencies: string[] | null;
   criteria: TeamCriteriaProgress;
   currentCandidateDigest: string | null;
   rounds: number;

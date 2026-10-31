@@ -30,6 +30,8 @@ import { foldReviewState, type Entry } from "./domain/review-evidence.js";
 const LOG_BODY_LIMIT = 2000;
 /** How many log records one read returns; the plan requires bounded structured logs. */
 const LOG_RECORD_LIMIT = 200;
+/** A task title is one display line, not the whole body: the body can be 256 KiB. */
+const TASK_TITLE_LIMIT = 80;
 
 export interface TeamReadModelDeps {
   db: Database.Database;
@@ -72,11 +74,14 @@ export class TeamReadModel {
     return this.deps.readTaskRows(runId).map((row) => {
       const state = foldReviewState(row.taskId, this.reviewEntries(runId, row.taskId));
       const criteria = this.criteria(row.qitemId, state.currentManifestDigest);
+      const identity = this.identity(row.qitemId);
       return {
         taskId: row.taskId,
         qitemId: row.qitemId,
         role: row.role as TeamReviewView["role"],
         queueState: row.queueState as TeamReviewView["queueState"],
+        title: identity.title,
+        dependencies: identity.dependencies,
         criteria,
         currentCandidateDigest: state.currentManifestDigest,
         rounds: state.rounds.length,
@@ -90,6 +95,36 @@ export class TeamReadModel {
           : null,
       };
     });
+  }
+
+  /**
+   * The task's own words: its title and its declared dependencies.
+   *
+   * Both are read from the rows that already own them — the queue item's body and
+   * the authority row's assignment — rather than added to `readTaskRows`, which
+   * two hosts build. An assignment that will not parse is `null`, not `[]`: an
+   * unreadable assignment is missing evidence, and an empty list would claim the
+   * task was recorded with no dependencies.
+   */
+  private identity(qitemId: string): { title: string | null; dependencies: string[] | null } {
+    const row = this.deps.db
+      .prepare(`SELECT q.body AS body, a.assignment_json AS assignmentJson
+        FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+        WHERE a.qitem_id = ?`)
+      .get(qitemId) as { body: string | null; assignmentJson: string | null } | undefined;
+    if (!row) return { title: null, dependencies: null };
+    const firstLine = (row.body ?? "").split("\n").map((line) => line.trim()).find((line) => line.length > 0) ?? "";
+    const title = firstLine ? [...firstLine].slice(0, TASK_TITLE_LIMIT).join("") : null;
+    let dependencies: string[] | null = null;
+    if (row.assignmentJson) {
+      try {
+        const assignment = (JSON.parse(row.assignmentJson) as { dependencies?: unknown }).dependencies;
+        dependencies = Array.isArray(assignment) ? assignment.filter((entry): entry is string => typeof entry === "string") : null;
+      } catch {
+        // Covered by the `null` initializer: an unreadable assignment has no list.
+      }
+    }
+    return { title, dependencies };
   }
 
   /**
