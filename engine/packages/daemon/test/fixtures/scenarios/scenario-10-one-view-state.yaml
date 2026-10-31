@@ -13,19 +13,9 @@
 # destinationSession is <pod>-<member>@<rig>), so each DECLARES the field carrying
 # the shared truth. Per A-N1 the mapping is the only scenario-facing form; it
 # lowers to the runner-internal seam.
-#
-# WHAT tui_socket CONTRIBUTES, stated honestly: its own coherence, asserted
-# separately below — NOT membership in the equality. MEASURED at source: both of
-# the control socket's OBSERVE verbs return UI/registry state
-# (`state` -> {screen, drill, viewTab}; `commands` -> the command registry), so
-# the shipped socket carries NO daemon truth to compare. Folding it into the
-# equality could only pass by comparing something trivially equal, which would be
-# a false green. The gap is a TUI finding (the state query would need to expose
-# the rig/queue view it renders), not something this scenario can paper over.
 scenario: one-view-state-consistency
 topology: ./topo-stub-baton.yaml
 env:
-  tui: true
   # give the queue a real item so both surfaces have a rig to agree about; an
   # all-empty comparison would pass without proving anything
   queue:
@@ -36,12 +26,6 @@ env:
       claim: true
 steps:
   - up: {}
-  # the TUI is live and coherent at this instant (its own state, its own claim)
-  - expect:
-      surface: tui_socket
-      within: 20s
-      match:
-        ok: true
   # THE INVARIANT: ps and queue name the same rig set
   - expect:
       surface: ps

@@ -81,10 +81,4 @@ describe("S19 A8 — consumption trace: the surfaces read the SERVED state (no r
     expect(src).toContain("activityState");
     expect(src).toMatch(/Legacy fallback/);
   });
-
-  it("tui hydrate prefers the served display over its inline mixing (which survives only as fallback)", () => {
-    const src = readFileSync(join(repoRoot, "packages", "tui", "src", "hydrate.ts"), "utf8");
-    expect(src).toContain("activityState");
-    expect(src.indexOf("activityState?.display")).toBeGreaterThan(-1);
-  });
 });

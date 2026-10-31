@@ -37,7 +37,6 @@ export const EXPECT_SURFACES = [
   "scope",
   "pane",
   "transcript",
-  "tui_socket",
   "policy_provenance",
 ] as const;
 
@@ -81,8 +80,6 @@ export type ValidationErrorCode =
   | "STUB_SCRIPTS_NOT_A_MAP"
   | "STUB_SCRIPT_PATH_INVALID"
   | "SCOPE_MISSION_MISSING"
-  | "TUI_NOT_DECLARED"
-  | "ENV_TUI_NOT_BOOLEAN"
   | "EXPECT_MATCH_MODE_MISSING"
   | "EXPECT_MATCH_MODE_AMBIGUOUS"
   | "WITHIN_NOT_A_DURATION"
@@ -181,7 +178,7 @@ export function validateScenario(
   };
 }
 
-/** Shape-check the delta env fields (D1 stub_scripts, D7 tui). Pure shape only —
+/** Shape-check the delta env fields (D1 stub_scripts). Pure shape only —
  *  the stub_scripts KEY CONTRACT (each key resolves to exactly one runtime:stub
  *  member) needs the parsed topology and is enforced at the pipeline boundary. */
 function validateEnvBlock(
@@ -208,17 +205,11 @@ function validateEnvBlock(
       }
     }
   }
-  if (env.tui !== undefined && typeof env.tui !== "boolean") {
-    push("ENV_TUI_NOT_BOOLEAN", "env.tui: must be a boolean (true opts the scenario into TUI provisioning)", "env.tui");
-  }
 }
 
 /** Teaching cross-requirements between declared env and the surfaces steps read:
  *  a scope expect needs env.scope_mission (the shipped `rig scope audit` read has
- *  --mission as a requiredOption); a tui_socket expect needs env.tui:true (the
- *  control socket exists only inside a provisioned TUI — without the opt-in the
- *  read would race a socket that never listens). Load-time teaching beats a
- *  runtime surprise. */
+ *  --mission as a requiredOption). Load-time teaching beats a runtime surprise. */
 function validateEnvStepCrossRequirements(
   env: Record<string, unknown> | undefined,
   steps: unknown[],
@@ -240,13 +231,6 @@ function validateEnvStepCrossRequirements(
         "env.scope_mission",
       );
     }
-  }
-  if (surfacesRead.has("tui_socket") && env?.tui !== true) {
-    push(
-      "TUI_NOT_DECLARED",
-      "env.tui: true is required when any step expects the tui_socket surface — the control socket exists only inside the TUI the pipeline provisions on opt-in",
-      "env.tui",
-    );
   }
 }
 

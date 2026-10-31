@@ -75,14 +75,10 @@ test("CLI preparation fails when a source glob would have no matches", () => {
   }
 });
 
-test("TUI preparation requires the compiled entry and rejects unknown workspaces", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "openrig-build-tui-"));
+test("preparation rejects unknown workspaces", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "openrig-build-unknown-"));
   try {
-    assert.throws(() => prepareWorkspaceBuild(root, "tui"), /ENOENT/);
-    mkdirSync(path.join(root, "packages/tui/dist"), { recursive: true });
-    writeFileSync(path.join(root, "packages/tui/dist/main.js"), "entry");
-    prepareWorkspaceBuild(root, "tui", process.platform);
-    if (process.platform !== "win32") assert.equal(statSync(path.join(root, "packages/tui/dist/main.js")).mode & 0o111, 0o111);
+    assert.throws(() => prepareWorkspaceBuild(root, "tui"), /Unknown workspace/);
     assert.throws(() => prepareWorkspaceBuild(root, "other"), /Unknown workspace/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

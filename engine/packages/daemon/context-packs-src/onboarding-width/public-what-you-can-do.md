@@ -57,8 +57,7 @@ one command away. Your memory of the fleet is a claim about the past.
   the path in the help text.
 - **`rig health`** — inspect bounded, explainable findings for the current seat, one stable seat,
   a rig, or the local instance; `rig health explain <finding-id>` shows the exact window, source,
-  freshness, rule, evidence, confidence, and next inspection. Use the TUI's HEALTH tab for the
-  same records when a human also needs to see them. Empty output is never a healthy assertion,
+  freshness, rule, evidence, confidence, and next inspection. Empty output is never a healthy assertion,
   list/explain never mutate, and diagnostic presentation remains explicit opt-in policy.
   INFO is a severity; Unknown and stale describe assessment or freshness, not a healthy result.
 - **`rig health diagnosis show <qitem-id>`** — inspect a retained diagnosis alongside current
@@ -132,22 +131,16 @@ unseen — which makes messages the one delivery channel that never gets skipped
   opens a focused `openrig kernel` space. It opens where the caller is: Terminal gets a window and
   Ghostty a tab; from Claude Desktop, iTerm or VS Code on a Mac it opens a new Ghostty or Terminal
   window, and only then say that clicking macOS's Allow is fine. Herdr is visible only in a
-  terminal the person can see; switching the shared TUI to `:terminals` does not open one. Over
+  terminal the person can see. Over
   SSH, in CI or with no display, the command returns a definite no-window result with the reason
   and an attach command: relay that command exactly. When the daemon runs on a non-default tmux
   server, attach commands carry `-L <name>` or `-S <path>`; from inside tmux run them as
   `env -u TMUX <tmuxAttachCommand>`. Inspect the result and visible content, or
   say what cannot be verified. On a desktop, do not finish by printing a command for the person to
-  type. Only if the window cannot open, `rig tui --shared` is the dashboard-only fallback; explain
-  the failure. `--provider herdr` or `--provider cmux` adds tiles inside a workspace that is
+  type. The team dashboard is the Web UI at `/team`. `--provider herdr` or `--provider cmux` adds
+  tiles inside a workspace that is
   already visible, without opening a window; in `--json` output, `reusedWorkspace` with no new
   tiles means an existing view was reused, which is success.
-  In the TUI, **TERMINALS** keeps Saved views prominent and Derived groups collapsed until
-  expanded. Names load before detailed readiness. Select a view to inspect its members,
-  layout and pages; preview is passive. Saved membership requires deliberate setup.
-  **Open terminals ▸** opens the inspected plan through the same desktop launcher, herdr or plain
-  tmux, so the TUI must run on the daemon's desktop; when no window was attempted it shows the
-  preview and attach commands. Help or a side trip returns to the same preview.
 - **`rig walk <seat> --through <files> --pace <n>`** — deliver context pieces through
   file-backed terminal paste. When the current native generation record resolves, the complete
   piece and its matching Claude/Codex turn closure must arrive before pacing onward, including
@@ -279,7 +272,7 @@ relay is a reason to inspect the available routing, not to surrender judgment to
 - **`rig workflow show` / `trace`** — what this instance is, and every step, actor and exit that
   got it here.
 - **`rig workflow revise <instance>`** — compare the bound graph with current authored
-  inputs before changing a progressed run. Ordinary show and TUI inspection distinguish
+  inputs before changing a progressed run. Ordinary show distinguishes
   source-only edits (such as a catalog address) from executable changes. Preview names
   changed steps, incompatibilities and an exact apply command. Supported revisions preserve
   completed/live steps, receipts, required obligations and child custody; new work must
@@ -320,7 +313,7 @@ operator greets the person, asks the goal once and recommends one of three teams
 Claude Code builder and a Codex reviewer), `workshop` (a rig bundle: a lead, a builder, QA and a
 reviewer) or `factory` (seven agents). It fits the team to the providers on the machine, launches
 on a yes and hands the goal to the team's lead, which makes one light mission and slice for
-continuing work. While explaining the choices it shows each team's graph in the shared TUI. After
+continuing work. While explaining the choices it draws each team's graph in the conversation. After
 a launch it gives each seat's attach command, names the dashboard as the overview and the lead as
 the place to talk, and asks whether the person can see the team. **If you are the agent installing
 OpenRig for someone**, show them the one-command install's `--dry-run` preview first
@@ -420,30 +413,6 @@ version, from checking the environment to a useful report to the OpenRig team.
   ignore. A pass is not "ready": local credential availability is not proof that a provider accepts
   the credential or that an agent can work.
   **`rig preflight`** asks whether this machine can run OpenRig at all.
-- **Bare `rig`** — the same TUI for first setup, daemon-down startup and ordinary work.
-  After a successful daemon read it opens the ordinary work views, even when no rig is running;
-  press **S** for Startup. Slow or unverified detection does not mean stopped.
-  A late observation never takes navigation away after you have chosen another route.
-  **?** Help, **w** Skip and **L** Local reading remain usable during slow probes or loading,
-  and when the daemon is down or unverified. Local reading shows selected disk intent with
-  provenance and read errors; it does not substitute for live queue, execution or topology data.
-  These reading controls do not start a daemon or resume seats; skipping an already accepted
-  operation does not cancel it.
-  In startup, Enter starts only the selected daemon; then choose rigs and individual seats,
-  with kernel recommended first. Previously occupied seats default to their authoritative conversation.
-  Missing history, ambiguous identity and unavailable authentication have distinct explanations;
-  a fresh conversation requires a separate named confirmation. Declining launches nothing.
-  **o** opens the existing native terminal here to handle its prompts; detach to return.
-  If a fresh start paused before context delivery, **c** finishes that same occupant’s context.
-  **r** refreshes actual state and **d** expands diagnostics. **S** returns to startup from work.
-  Ordinary views keep the navigator usable through page/rig changes and slow or failed reads.
-  Topology offers rig selection first, then loads that rig before unrelated fleet details.
-  While a new page loads, useful prior content can remain under its original scope label with
-  no action targets. First visits retain navigation and local loading/error feedback.
-  During refresh or failure, previously loaded content in the same scope stays useful, with its last
-  successful read time and Retry. A failed Feed source retains its contribution while healthy
-  sources update; confirmed denial, empty results or removals clear affected content. Late responses cannot
-  replace another page or project's data, and surviving selection and scroll stay in place.
 - **`rig crash-cart`** — the read-only daemon verdict and saved-state discovery used by that UI.
   An unavailable runtime, unauthorized endpoint or unreadable state is not an empty instance.
 - **`rig snapshot`** — take a restore point **before** the risky thing. `snapshot list` shows what
@@ -521,8 +490,8 @@ scheme, and nothing downstream can see it.
 
 - **`rig scope mission ls` / `show` / `create`** — what work exists, what a mission is for, and how
   to open one so it gets a stable dot-ID rather than being a bare folder nothing can address. In
-  `rig tui`, **PROJECTS** → choose a project → mission → slice shows the work story with row
-  drill-in, current source and Escape back. Project IDs and roots distinguish equal display
+  the Web UI, **PROJECTS** → choose a project → mission → slice shows the work story with row
+  drill-in, current source and back. Project IDs and roots distinguish equal display
   names; an unavailable project read does not substitute another project's work.
   The mission overview puts outcomes, current work/owner, blockers, next dependencies and
   readable slice boxes before process prose. Accepted required proof judgments determine
@@ -532,7 +501,7 @@ scheme, and nothing downstream can see it.
   publication. Unknown owners and eligibility stay unknown. Narrow views keep boxes and scroll.
   Malformed mission or slice sources stay visible as local unavailable entries while healthy
   neighbors remain readable. Open the affected source to inspect it, then refresh after correction.
-- **TUI Feed** — inspect **Human requests** separately from **Updates**, with the scope shown as
+- **Feed** — inspect **Human requests** separately from **Updates**, with the scope shown as
   **Instance / All humans**. Explorer lists these categories; their entries appear in the
   content pane. Human destinations and explicit human blockers show the recipient,
   relevant project, needed decision and work it unblocks; agent priority alone is not a human
@@ -808,48 +777,11 @@ your circumstances is configuration, and the ones that are not, another agent ca
   `both` sets which harnesses it installs and checks; one not chosen reads `skipped`, never failed.
 - **`rig usage series`** — what a seat's token curve has looked like over time: climbing steadily,
   reset, or stopped reporting entirely. The last one is a signal, not a gap.
-- **`rig tui`** — the interactive view over rigs, pods, seats and specs. `rig` and `rig tui` open
-  the status dashboard, not a conversation with an agent: talk to the operator through
-  `rig terminal open saved:kernel --window`, which opens the dashboard and conversations together.
-  Open it as the step after install or start, and whenever the person wants their agents back
-  (see `rig terminal open` above); do not finish by showing a table or suggesting a command for
-  the person to type.
-  Only if the window cannot open, `rig tui --shared` is the dashboard-only fallback:
-  it attaches to the existing kernel terminal; Ctrl-b then d detaches, and no missing
-  seat or terminal is implicitly launched. Explain the failure and help with the
-  chosen fallback. Plain `rig tui` remains a separate dashboard.
-  On an empty command line every typed command reaches the line whole and `j`/`k` move the
-  selection; the footer toggle is `F`, and a selected Scopes view's mini-requirements and
-  narrative keys are `M` and `N`.
-  Open the instance row for one continuous cross-rig agent table with pod separators and material
-  `RECENT` transitions; drill into a rig, mission, slice, or agent without losing the owning
-  identity. Use the mission's workflow/packet view and Specs purpose/source to understand work.
-  In **Specs**, kind groups start collapsed and expand explicitly. Selection previews purpose,
-  contents and provenance; Enter opens details. A rig spec opens as a graph with **Launch**, which
-  asks for a working folder and then runs the real `rig up`.
-  **View current source** reads disk within the explicitly configured readable roots. Relative
-  Markdown links resolve against that source; headings open with a labelled starting point.
-  Escape or `back` restores the caller's selection and scroll. Detail uses the full width on
-  narrow terminals. The TUI command `read <root>/<path>#heading` also opens a named source;
-  missing, denied, binary, truncated and missing-heading results stay explicit. HTTP(S) links
-  show a selectable destination without opening a browser; `v` enables terminal text selection.
-  Tab completes commands and snapshot arguments; Recent opens original events. **System** opens
-  to instance **Health**, with **Configuration** and **Connections** beneath it. Contextual Health
-  remains available in the owning rig or agent view. **Configuration** browses instance/work
-  roots, context, display, waiting, recovery, activity and advanced settings;
-  Slack and people are one category. Select a category, use right/left to change panes,
-  Enter for full value/default/source/scope, `/` to search labels and keys, and Escape or `back`
-  to return. Long detail scrolls; `v` enables terminal text selection. `refresh` reads the current
-  view again without changing settings or verifying delivery. Sources & coverage names exclusions,
-  daemon/CLI identity and the client timezone separately. Resolved settings do not prove runtime
-  adoption. Direct `config` and `connections` commands remain; Connections inspects gateway
-  services and human routes. Dated verification does not prove delivery. `timezone` gives
-  persistent local-time guidance.
-  **?** opens full-screen Help with command grammar and examples; Escape returns to the caller.
-  **`rig tui commands`** lists everything it can do without launching it. The web UI is off by
-  default; `rig config set ui.enabled true` plus a daemon stop and start turns it on. **`rig ui
-  open`** is unmaintained, best-effort, and replaced by the TUI, so never diagnose product
-  behaviour from the web UI. The TUI plus Slack are the human surface; the CLI plus terminal are the agent surface.
+- **`rig tui`** — retired on 2026-10-31. The verb still runs so older instructions do not hit
+  "unknown command": it prints the Web UI dashboard address and exits non-zero. The team dashboard
+  is the Web UI the daemon serves at `/team`; `rig config set ui.enabled true` plus a daemon stop
+  and start turns it on. **`rig ui open`** is unmaintained, best-effort. The Web UI plus Slack are
+  the human surface; the CLI plus terminal are the agent surface.
 - **`rig mcp serve`** — how an agent that speaks MCP rather than shell drives OpenRig, and which
   operations are exposed that way. Relevant the moment a tool you are integrating cannot run a
   shell command.

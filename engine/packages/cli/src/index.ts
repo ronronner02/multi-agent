@@ -174,7 +174,7 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
     .name("rig")
     .description("CLI for the OpenRig local control plane")
     .version(CLI_VERSION)
-    .addHelpText("after", "\nThe OpenRig TUI and operator (after install, and whenever the person wants their agents):\n  rig terminal open saved:kernel --window\n  Opens a new desktop terminal itself: TUI | advisor | operator.\n  An installing agent can run this from its shell on the daemon's desktop.\n  Start a stopped daemon with rig daemon start.\n  Herdr needs a terminal the person can see; TUI navigation does not open one.\n  Over headless SSH, give the exact connection/attach command for a new terminal/tab.\n  Only if the window cannot open: rig tui --shared is the dashboard-only fallback.\n");
+    .addHelpText("after", "\nThe OpenRig operator (after install, and whenever the person wants their agents):\n  rig terminal open saved:kernel --window\n  Opens a new desktop terminal itself: advisor | operator.\n  An installing agent can run this from its shell on the daemon's desktop.\n  Start a stopped daemon with rig daemon start.\n  Herdr needs a terminal the person can see.\n  Over headless SSH, give the exact connection/attach command for a new terminal/tab.\n  The team dashboard is the Web UI at <daemon-url>/team.\n");
 
   program.addCommand(startCommand(depsOverride?.startDeps));
   program.addCommand(daemonCommand(depsOverride?.daemonDeps));
@@ -187,6 +187,7 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
   program.addCommand(exportCommand(depsOverride?.exportDeps));
   program.addCommand(importCommand(depsOverride?.importDeps));
   program.addCommand(uiCommand(depsOverride?.uiDeps));
+  // The retired terminal UI: kept as a stub so `rig tui` names the Web UI instead of failing as unknown.
   program.addCommand(tuiCommand());
   // MVP slices 2 and 3 - the owner starts team work from a goal, then reads and applies the result.
   program.addCommand(teamCommand(depsOverride?.teamStartDeps));
@@ -286,18 +287,9 @@ export function isDirectRun(argv1 = process.argv[1], moduleUrl = import.meta.url
 
 // Slice 15 — the shared CLI error/exit path (re-exported for bin-wrapper + tests).
 export { runProgram, wantsJsonOutput } from "./cli-error.js";
-// Slice 17 — the bare-rig front door (re-exported so the PUBLIC bin-wrapper
-// path owns bare TTY invocations too, not just direct entry runs).
-export { runFrontDoor } from "./front-door.js";
 
 // Only parse when executed directly (not imported for testing)
 if (isDirectRun()) {
-  // Slice-17 mini-req 7 — bare `rig` in a real terminal opens the TUI; any
-  // arg or a non-TTY stream falls through to the normal program unchanged.
-  const { runFrontDoor } = await import("./front-door.js");
-  const owned = await runFrontDoor(process.argv);
-  if (!owned) {
-    const { runProgram: runProgramDirect } = await import("./cli-error.js");
-    await runProgramDirect(createProgram(), process.argv);
-  }
+  const { runProgram: runProgramDirect } = await import("./cli-error.js");
+  await runProgramDirect(createProgram(), process.argv);
 }

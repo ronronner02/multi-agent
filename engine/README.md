@@ -73,9 +73,10 @@ the **operator** fills the first page; from 120, the dashboard and operator shar
 it equally. The advisor has a separate tab or tmux window.
 An installing agent can run it from its shell on the daemon's
 desktop; the person copies nothing. It uses Herdr when installed, otherwise
-the same layout in plain tmux, and preserves existing conversations. `rig tui`
-is the team dashboard. Installation is finished when you are talking to the
-operator; if you choose to talk later, that handoff remains pending.
+the same layout in plain tmux, and preserves existing conversations. The team
+dashboard is the Web UI at `/team`. Installation is finished when you are
+talking to the operator; if you choose to talk later, that handoff remains
+pending.
 
 If setup stops, read the named step: missing tools and selected-provider logins
 need their specific setup action. A harness permission rule, sandbox or automatic
@@ -126,7 +127,7 @@ rig up starter --cwd . --plan
 rig up starter --cwd .
 ```
 
-To see your agents, use `rig terminal open saved:kernel --window`. If that window cannot open, `rig tui --shared` is the named dashboard-only fallback; it does not show the operator conversation. The installing agent should resolve or explain the window failure, not finish by suggesting a command for you to type. Closing a viewing terminal does not mean you should relaunch the team.
+To see your agents, use `rig terminal open saved:kernel --window`. The installing agent should resolve or explain the window failure, not finish by suggesting a command for you to type. Closing a viewing terminal does not mean you should relaunch the team.
 
 Check project-seat readiness with `rig ps --nodes --rig starter` and resolve any authentication, trust or permission prompt before assigning work. If a seat stopped at such a prompt before its startup context arrived, `rig ps` shows the `rig seat continue <seat>` command that delivers it once the prompt is answered. Then give the builder one bounded outcome from your repository:
 
@@ -314,11 +315,9 @@ Hono HTTP daemon
 - **MCP**: Tools so agents can manage their own topology (`rig_up`, `rig_ps`, `rig_send`, `rig_chatroom_send`, etc.)
 - **Runtimes**: Native Claude Code and Codex sessions, terminal nodes, and Pi and Oh My Pi via RPC runners.
 
-## Terminal UI and Workspaces
+## Web UI and Workspaces
 
-The TUI shows the team's coordination state; herdr and cmux show the actual agent terminals alongside it. Use `rig tui commands` to list the TUI's command-bar navigation, or [try the interactive TUI tour](https://openrig.dev/tour/workspace).
-
-![OpenRig TUI topology graph showing seven agent seats grouped into product, development, and QA pods](assets/ui/screenshots/tui-topology.png)
+The Web UI at `/team` shows the team's coordination state; herdr and cmux show the actual agent terminals alongside it. The terminal UI that earlier releases shipped has been retired.
 
 *Captured from the interactive TUI demo using fictional project data.*
 

@@ -1,7 +1,4 @@
 import { describe, it, expect, afterEach } from "vitest";
-import net from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { prepareHermeticEnv, type HermeticScaffold } from "./helpers/hermetic-env.js";
@@ -39,41 +36,6 @@ describe("surface readers — reserved-proof defense-in-depth + dispatch (pure)"
 
   it("readSurface(unknown surface) throws (never silently skips)", async () => {
     await expect(readSurface("database" as never, ctx)).rejects.toThrow();
-  });
-});
-
-describe("surface readers — tui_socket `state` query (fake unix socket)", () => {
-  const dirs: string[] = [];
-  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
-
-  it("connects, sends exactly `state`, and parses the one-line JSON reply", async () => {
-    // Keep the socket path SHORT (sun_path ~104-byte cap): tmpdir + short name.
-    const d = mkdtempSync(join(tmpdir(), "ts-"));
-    dirs.push(d);
-    const sockPath = join(d, "t.sock");
-    const stateReply = { ok: true, instanceId: "i1", state: { ok: true, screen: "rigs", drill: [], viewTab: "graph" } };
-    let received = "";
-    const server = net.createServer((conn) => {
-      conn.on("data", (b) => {
-        received += b.toString();
-        if (received.includes("\n") || received.trim() === "state") {
-          conn.write(JSON.stringify(stateReply) + "\n");
-        }
-      });
-    });
-    await new Promise<void>((r) => server.listen(sockPath, r));
-    try {
-      const ctx: SurfaceContext = {
-        rigBin: RIG_BIN,
-        readEnv: { OPENRIG_TUI_SOCKET: sockPath },
-        baseUrl: "http://127.0.0.1:1",
-      };
-      const observed = await readSurface("tui_socket", ctx);
-      expect(observed).toEqual(stateReply);
-      expect(received.trim()).toBe("state"); // sent exactly the OBSERVE verb, no mutation
-    } finally {
-      await new Promise<void>((r) => server.close(() => r()));
-    }
   });
 });
 

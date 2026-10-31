@@ -48,6 +48,5 @@ Setup complete. Next:
 
   export PATH="$ENGINE/node_modules/.bin:\$PATH"
   ./scripts/start.sh    # start the daemon in managed mode
-  rig tui               # open the dashboard
 
 EOF

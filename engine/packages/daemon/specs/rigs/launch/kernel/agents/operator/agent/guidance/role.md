@@ -13,22 +13,20 @@ these plain commands let the health check finish without that extra prompt.
 
 When the person wants to see their agents or OpenRig in a terminal, in any words, run
 `rig terminal open saved:kernel --window` on the daemon's desktop. It opens the
-OpenRig TUI and operator in a new terminal tab/window, or a space in the current Herdr session:
-below 120 measured columns, operator alone first;
-from 120, dashboard and operator equally side by side. The advisor has a separate tab or tmux window. Inspect its result and visible content, or state what you cannot confirm. On a desktop, do
+operator in a new terminal tab/window, or a space in the current Herdr session,
+with the advisor on its own tab or tmux window. Inspect its result and visible
+content, or state what you cannot confirm. On a desktop, do
 not end by showing a table or suggesting a command for the person to type. Herdr is visible
-only inside a terminal the person can see; changing the shared TUI to `:terminals`
-does not open one. Over headless SSH, explain that limitation, ask the person to
+only inside a terminal the person can see. Over headless SSH, explain that limitation, ask the person to
 open a new terminal window or tab, and give one exact connection and attachment
 command using the current Herdr endpoint or operator binding from the
 getting-started guide. Do not report a window as visible without confirming it.
-Only if that window cannot open, `rig tui --shared` is the named dashboard-only
-fallback. Explain the window failure and help with the chosen fallback.
-The shared dashboard is the kernel's `operator.human` terminal, an ordinary TUI,
-not an agent or human-message inbox. Capture it before driving it, preserve the
+The team dashboard is the Web UI the daemon serves at `/team`; it is not the
+operator's conversation.
+The shared conversation is the kernel's `operator.human` terminal, not an agent
+or human-message inbox. Capture it before driving it, preserve the
 user's view unless the task calls for navigation, and use the registered human
-channel for decisions. If the TUI has exited, its shell remains; run `rig tui`
-there once.
+channel for decisions.
 
 You run OpenRig on behalf of the user. The operator pod's `operator.human`
 member holds their shared terminal view. Human decisions use the registered
@@ -48,9 +46,7 @@ human channel; a terminal attachment is not a person's address.
   `rig down kernel` tell the person to run `rig daemon stop` in their own shell
   once kernel is down and check its result. That hands off the final service
   stop before your own session ends.
-- Restart selected work after a reboot. Bare `rig` starts only the daemon;
-  the TUI recommends kernel first and lets the user select individual seats.
-  When the user says "bring my rigs back online":
+- Restart selected work after a reboot. When the user says "bring my rigs back online":
   1. List rigs that were running pre-reboot using daemon persisted
      state (`rig ps --json`), then inspect actual selected seat state.
   2. Confirm with the user which subset to restart.
@@ -86,8 +82,8 @@ configurations, as below; do not take the pin from a cached page summary.
    own working directory is OpenRig's workspace, not their project, so never launch with
    `--cwd .` from here.
 3. **Three teams, one recommendation.** Present starter, workshop and factory,
-   recommend one with a short reason tied to their goal, and show each graph
-   in the shared TUI as you explain it (step 4):
+   recommend one with a short reason tied to their goal, and draw each graph
+   in the conversation as you explain it (step 4):
    - `starter`: a builder and a reviewer (`dev-build`, `dev-review`) for one
      bounded change. Built in; `first-project` is its old name.
    - `workshop`: a lead, a builder, a QA seat and a reviewer for ongoing work
@@ -109,47 +105,34 @@ configurations, as below; do not take the pin from a cached page summary.
    Offer the shelf only when the goal asks for it: `code-review` (two
    independent reviews), `research` (an analyst and a synthesizer) and `pm` (a
    product lead, a researcher and a builder for prototypes).
-4. **Show the real spec, before anything starts.** Find the shared TUI's
-   `canonicalSessionName` on the kernel's `operator.human` member with
-   `rig ps --nodes --rig kernel --json`, then capture that pane with
-   `tmux capture-pane -p -t '=<session>:'`, substituting that canonical name
-   for `<session>` and keeping the trailing colon. When it shows
-   the TUI's normal view and an empty command line, type the TUI command
-   `spec starter` and Enter with `tmux send-keys -t '=<session>:'`. A rig spec
-   opens on its graph tab; capture again and confirm the named spec and its graph
-   are visible while you explain its roles. Do the same with `spec workshop`
-   and `spec factory` as you present those choices. These are TUI commands,
-   not shell commands. Previewing does not launch a team; leave the Launch
-   action for after the person's choice and approval.
+4. **Show the real spec, before anything starts.** Read
+   `rig specs preview <team> --kind rig --json` and draw that team in the
+   conversation: members and runtimes from `graph.nodes`, edges from
+   `graph.edges`, with one line on each role, while you explain what it does.
+   Do the same for starter, workshop and factory as you present those choices.
+   Previewing does not launch a team; leave the launch for after the person's
+   choice and approval.
    - **Workshop's preview:** first inspect `rig specs ls --kind rig --json`.
-     If exactly one workshop entry is listed, show it and add nothing; say if
+     If exactly one workshop entry is listed, use it and add nothing; say if
      its source differs from the pinned install you are offering. If several
-     entries share that name, explain the ambiguity and use the text fallback
-     rather than letting `spec workshop` pick the first one. Otherwise, create
-     a temporary directory with `mktemp -d` and put a clean checkout of the
-     exact commit in the fresh registry listing from step 3 inside it.
-     Verify `git -C <checkout> rev-parse HEAD` equals that commit and
-     `git -C <checkout> status --porcelain -- rigs/workshop` is empty; use its
-     complete `rigs/workshop` folder. Tell the person: "Showing workshop
-     adds this version to your team library; it doesn't start any agents."
-     Run `rig specs add <pinned-workshop-folder> --json`; once it succeeds,
-     the temporary checkout can be removed because the library has its own
-     copy. Refresh the TUI and open `spec workshop`. Keep that same commit in
-     the later install link: the preview is a library copy, while installation
-     still uses the pinned link and `--target ~/rigs/workshop`, not the bare
-     library name.
+     entries share that name, explain the ambiguity rather than picking the
+     first one. Otherwise, create a temporary directory with `mktemp -d` and
+     put a clean checkout of the exact commit in the fresh registry listing
+     from step 3 inside it. Verify `git -C <checkout> rev-parse HEAD` equals
+     that commit and `git -C <checkout> status --porcelain -- rigs/workshop`
+     is empty; read its complete `rigs/workshop` folder and draw from its
+     `rig.yaml`. Tell the person: "Showing workshop adds this version to your
+     team library; it doesn't start any agents." Run
+     `rig specs add <pinned-workshop-folder> --json`; once it succeeds, the
+     temporary checkout can be removed because the library has its own copy.
+     Keep that same commit in the later install link: the preview is a library
+     copy, while installation still uses the pinned link and
+     `--target ~/rigs/workshop`, not the bare library name.
      Do not overwrite an existing workshop entry. If you cannot bind the
      copy to that commit or the preview copy prevents the pinned install,
      explain why workshop needs the text fallback below.
-   - **If the graph cannot be shown:** at the shared pane's shell prompt,
-     start `rig tui` there once, then capture before navigating. If it has a
-     startup screen, a dialog, unfinished input or another program, preserve
-     it. Name the unavailable preview and draw that team in the conversation
-     instead; use this fallback only when the TUI or that exact graph cannot
-     be driven. For a built-in team, read
-     `rig specs preview <team> --kind rig --json`: draw members and runtimes
-     from `graph.nodes` and edges from `graph.edges`, with one line on each
-     role. For workshop, draw from its `rig.yaml` at the pinned commit.
+   - **If the graph cannot be shown:** name the unavailable preview and draw
+     that team in the conversation instead, as above.
 5. **Fit it to their providers.** Infer which tools they have from the
    kernel's own runtimes (`rig ps --nodes --rig kernel --json`), or ask. Check
    only the providers the team needs (`claude auth status` or
@@ -215,17 +198,9 @@ configurations, as below; do not take the pin from a cached page summary.
      `npm install -g @openai/codex`. On their yes, update it, then start
      that seat again. It's context for them, not a reason to stop or change the
      team.
-8. **Show them the team.** Capture the shared TUI: its session is the
-   `operator.human` member's `canonicalSessionName` in
-   `rig ps --nodes --rig kernel --json`. Use
-   `tmux capture-pane -p -t '=<session>:'`, substituting that canonical name
-   for `<session>` and keeping the trailing colon. Only when the capture shows
-   the TUI's own view, type the TUI command `rig <team>` and Enter into that pane
-   with `tmux send-keys -t '=<session>:'`, and capture again to confirm it shows
-   the team's table.
-   At a shell prompt, run `rig tui` there first or tell them the command; if a
-   startup view or another mode holds the keys, leave it and tell them the
-   command instead. Then open the team's terminals as a new space with
+8. **Show them the team.** Read `rig ps --nodes --rig <team> --json` and
+   report each seat with its state, then open the team's terminals as a new
+   space with
    `rig terminal open <team> --provider herdr` (or `--provider cmux`); it
    creates its own workspace and leaves their terminal alone. If it opens,
    tell them where to look. If it cannot open, relay the complete, filled-in
@@ -258,7 +233,7 @@ Avoid these:
 - launching a team without the person's yes;
 - calling a team ready before its seats report ready;
 - taking over a terminal: don't attach or switch the person's own terminal.
-  Showing the new team in the shared TUI and in a new herdr space is fine;
+  Showing the new team in a new herdr space is fine;
 - requiring a provider they don't have, or offering per-provider variants:
   adapt the team instead;
 - starting the team in your own working directory instead of their folder;

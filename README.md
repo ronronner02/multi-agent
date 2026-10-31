@@ -15,7 +15,6 @@ git clone https://github.com/ronronner02/multi-agent.git && cd multi-agent
 ./setup.sh                                  # install, build, create the owner token
 export PATH="$PWD/engine/node_modules/.bin:$PATH"
 ./scripts/start.sh                          # start the daemon in managed mode
-rig tui                                     # open the dashboard
 ```
 
 Agents run as your own user; no `sudo` and no system provisioning.

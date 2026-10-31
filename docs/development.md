@@ -49,9 +49,9 @@ Run these from `engine/`. They are the retained upstream baseline (see `docs/ups
 | Command | Purpose |
 | --- | --- |
 | `npm ci` | Clean install. Runs only the approved install scripts (`allowScripts`). |
-| `npm run build` | Build every workspace (daemon, ui, cli, tui). |
+| `npm run build` | Build every workspace (daemon, ui, cli). |
 | `npm run lint` | Type-check every workspace (`tsc --noEmit`). |
-| `npm test` | Repository checks (`scripts/*.test.mjs`, docs/skill mirrors, context packs), then daemon/cli/tui Vitest. |
+| `npm test` | Repository checks (`scripts/*.test.mjs`, docs/skill mirrors, context packs), then daemon/cli Vitest. |
 | `npm run test:ui` | Web UI Vitest. |
 | `node packages/cli/scripts/check-abi.mjs` | Native SQLite addon/ABI check. |
 
@@ -73,7 +73,7 @@ The following ran on Ubuntu 26.04.1 / WSL2 6.18.33.2 with Node v24.21.0 / npm 11
 | `node packages/cli/scripts/check-abi.mjs` | Exit 0 (SQLite 3.53.4, ABI 137) |
 | `npm run build` | Exit 0 (24 s) |
 | `npm run lint` | Exit 0 (20 s) |
-| `npm test` | **Exit 1 (260 s).** Repository checks: 290 passed, 0 failed. daemon: 15,055 passed, **4 failed**, 5 skipped, 5 todo. cli: 4,238 passed, **2 failed**, 5 skipped. tui: 931 passed. |
+| `npm test` | **Exit 1 (260 s).** Repository checks: 290 passed, 0 failed. daemon: 15,055 passed, **4 failed**, 5 skipped, 5 todo. cli: 4,238 passed, **2 failed**, 5 skipped. (Recorded before the terminal UI was retired; its 931 tests are no longer part of this run.) |
 | `npm run test:ui` | Exit 0; 1,739 passed, 1 skipped (26 s) |
 | `node --test engine/test/project-baseline.test.mjs` | 22/22 |
 

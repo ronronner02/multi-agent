@@ -56,7 +56,7 @@ describe("buildDeclarativeNormalizer — lowering onto the seam", () => {
 
   it("distinguishes the declarative mapping from the legacy surface list", () => {
     expect(isEqualsMapping({ ps: { pluck: "name" } })).toBe(true);
-    expect(isEqualsMapping(["tui_socket", "ps", "queue"])).toBe(false);
+    expect(isEqualsMapping(["ps", "queue"])).toBe(false);
   });
 
   it("two surfaces that genuinely disagree do NOT normalize equal (the pin has teeth)", () => {

@@ -5,7 +5,6 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI_DIR="$REPO_ROOT/packages/cli"
 DAEMON_DIR="$REPO_ROOT/packages/daemon"
 UI_DIR="$REPO_ROOT/packages/ui"
-TUI_DIR="$REPO_ROOT/packages/tui"
 SUBSTANCE_SURFACE_ROOTS=()
 
 echo "=== OpenRig Package Build ==="
@@ -13,27 +12,23 @@ echo "Repo root: $REPO_ROOT"
 echo ""
 
 # 1. Clean previous build artifacts
-echo "[1/6] Cleaning previous artifacts..."
-rm -rf "$CLI_DIR/daemon" "$CLI_DIR/ui" "$CLI_DIR/tui"
+echo "[1/5] Cleaning previous artifacts..."
+rm -rf "$CLI_DIR/daemon" "$CLI_DIR/ui"
 
 # 2. Build daemon
-echo "[2/6] Building daemon..."
+echo "[2/5] Building daemon..."
 (cd "$DAEMON_DIR" && npm run build)
 
 # 3. Build UI
-echo "[3/6] Building UI..."
+echo "[3/5] Building UI..."
 (cd "$UI_DIR" && npm run build)
 
-# 4. Build TUI
-echo "[4/6] Building TUI..."
-(cd "$TUI_DIR" && npm run build)
-
 # 5. Build CLI
-echo "[5/6] Building CLI..."
+echo "[4/5] Building CLI..."
 (cd "$CLI_DIR" && npm run build)
 
-# 6. Assemble: copy daemon + UI + TUI into CLI package
-echo "[6/6] Assembling package..."
+# 5. Assemble: copy daemon + UI into CLI package
+echo "[5/5] Assembling package..."
 
 # OPR.0.4.4.11 FR-6 — deploy-identity stamp. Computed ONCE here (the runtime
 # worktree is at the SHA — available at build), then written as the compiled
@@ -145,11 +140,7 @@ rm -rf "$CLI_DIR/node_modules/@openrig/daemon"
 mkdir -p "$CLI_DIR/ui/dist"
 cp -r "$UI_DIR/dist/"* "$CLI_DIR/ui/dist/"
 
-# TUI: dist (public openrig-tui bin declared by the CLI package)
-mkdir -p "$CLI_DIR/tui/dist"
-cp -r "$TUI_DIR/dist/"* "$CLI_DIR/tui/dist/"
-
-# The CLI and TUI import daemon code as @openrig/daemon/<subpath>. That package is not published, so
+# The CLI imports daemon code as @openrig/daemon/<subpath>. That package is not published, so
 # rewrite those specifiers in the staged JS to the daemon/dist copy shipped above (#66). Fails the
 # build on an unmapped or unstaged subpath and on any daemon import left afterwards.
 node "$REPO_ROOT/scripts/rewrite-daemon-imports.mjs"
@@ -164,6 +155,5 @@ echo "Daemon specs:    $(find "$CLI_DIR/daemon/specs" -type f 2>/dev/null | wc -
 echo "Daemon policies: $(find "$CLI_DIR/daemon/policies" -type f 2>/dev/null | wc -l | tr -d ' ') files"
 echo "Daemon docs:     $(find "$CLI_DIR/daemon/docs" -type f 2>/dev/null | wc -l | tr -d ' ') files"
 echo "UI dist:         $(find "$CLI_DIR/ui/dist" -type f | wc -l | tr -d ' ') files"
-echo "TUI dist:        $(find "$CLI_DIR/tui/dist" -type f | wc -l | tr -d ' ') files"
 echo ""
 echo "Ready to publish: cd packages/cli && npm publish --access public"

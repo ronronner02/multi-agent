@@ -31,7 +31,7 @@ function fixture(files) {
   return { root, cliDir, daemonPackageJsonPath, read };
 }
 
-test("rewrites static, side-effect, re-export and dynamic imports in nested CLI and TUI paths", () => {
+test("rewrites static, side-effect, re-export and dynamic imports in nested CLI paths", () => {
   const f = fixture({
     "dist/commands/attention.js": [
       'import { a } from "@openrig/daemon/attention";',
@@ -41,11 +41,10 @@ test("rewrites static, side-effect, re-export and dynamic imports in nested CLI 
       "",
     ].join("\n"),
     "dist/bin-wrapper.js": 'const c = await import( "@openrig/daemon/crash-cart" );\n',
-    "tui/dist/views/health.js": 'import { a } from "@openrig/daemon/attention";\n',
   });
   try {
     const result = rewriteDaemonImports({ cliDir: f.cliDir, daemonPackageJsonPath: f.daemonPackageJsonPath });
-    assert.deepEqual(result, { rewritten: 6, files: 3 });
+    assert.deepEqual(result, { rewritten: 5, files: 2 });
     assert.equal(f.read("dist/commands/attention.js"), [
       'import { a } from "../../daemon/dist/attention-surface.js";',
       "import '../../daemon/dist/crash-cart-surface.js';",
@@ -54,7 +53,6 @@ test("rewrites static, side-effect, re-export and dynamic imports in nested CLI 
       "",
     ].join("\n"));
     assert.equal(f.read("dist/bin-wrapper.js"), 'const c = await import( "../daemon/dist/crash-cart-surface.js" );\n');
-    assert.equal(f.read("tui/dist/views/health.js"), 'import { a } from "../../../daemon/dist/attention-surface.js";\n');
   } finally {
     rmSync(f.root, { recursive: true, force: true });
   }

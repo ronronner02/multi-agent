@@ -36,7 +36,7 @@ function fixture(failed: boolean): SetupDeps {
 }
 
 function expectConversationRoute(text: string): void {
-  expect(text).toContain("Show the person OpenRig: open the OpenRig TUI and operator for them now");
+  expect(text).toContain("Show the person OpenRig: open the operator for them now");
   expect(text).toContain("On a Mac, offer Ghostty once");
   expect(text).toContain("rig setup --ghostty");
   expect(text).toContain("--no-ghostty");

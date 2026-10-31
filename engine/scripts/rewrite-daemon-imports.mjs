@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Packaging step (build-package.sh): point the CLI's and TUI's compiled imports of
+// Packaging step (build-package.sh): point the CLI's compiled imports of
 // `@openrig/daemon/<subpath>` at the daemon copy the CLI package already ships in
 // `daemon/dist`, so the published package has no dependency on the unpublished
 // `@openrig/daemon` and any package manager can install it (#66).
@@ -106,7 +106,7 @@ export function rewriteDaemonImports({ cliDir, daemonPackageJsonPath }) {
 
   let rewritten = 0;
   let files = 0;
-  const roots = [join(cliDir, "dist"), join(cliDir, "tui", "dist")];
+  const roots = [join(cliDir, "dist")];
   for (const file of roots.flatMap(javascriptFiles)) {
     const text = readFileSync(file, "utf8");
     const { output, count } = rewriteSource(text, file, targetFor);

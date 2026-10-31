@@ -1,5 +1,5 @@
 // Browser boundary on a real Node listener (@hono/node-server) and the real WebSocket upgrade
-// path (@hono/node-ws), plus real CLI/TUI/daemon-to-daemon request constructors. Inert handlers only.
+// path (@hono/node-ws), plus real CLI/daemon-to-daemon request constructors. Inert handlers only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import http from "node:http";
 import net from "node:net";
@@ -13,7 +13,6 @@ import { terminalAuthMiddleware } from "../src/routes/terminal-ws.js";
 import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
 import { remoteJsonRequest } from "../src/domain/hosts/remote-daemon-http.js";
 import { DaemonClient as CliDaemonClient } from "../../cli/src/client.js";
-import { DaemonClient as TuiDaemonClient } from "../../tui/src/daemon-client.js";
 
 const SELF = "openrig-vm.taile8a08.ts.net";
 type Server = ReturnType<typeof serve>;
@@ -170,15 +169,6 @@ describe("real request constructors against the real route table on a real liste
       expect(res.data.code).toBe("untrusted_host");
       expect(res.data.error).toContain("OPENRIG_ALLOWED_HOSTS");
     }
-  });
-
-  it("TUI client read path carries the refusal sentence; normal reads pass", async () => {
-    const ok = new TuiDaemonClient({ baseUrl: `http://127.0.0.1:${port}` } as never);
-    await expect(ok.healthFindings(5)).resolves.toBeDefined();
-    const named = new TuiDaemonClient({ baseUrl: `http://127.0.0.1:${port}`, headers: { Host: "unlisted.example" } } as never);
-    const err = await named.healthFindings(5).then(() => null, (e: Error) => e.message);
-    console.log(`TUI-READ-REFUSAL ${err ?? "no refusal (Host override not honoured)"}`);
-    if (err) expect(err).toContain("OPENRIG_ALLOWED_HOSTS");
   });
 
   it("daemon-to-daemon remoteJsonRequest (no Origin) reaches the daemon by IP and localhost", async () => {

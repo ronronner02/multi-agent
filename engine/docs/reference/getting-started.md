@@ -1,17 +1,17 @@
 # Getting started: meet the kernel, then make one useful change
 
 Install OpenRig, use a working provider login, and meet the kernel operator with
-the advisor and TUI beside it. No starter team is needed to reach that view.
+the advisor beside it. No starter team is needed to reach that view.
 Tell the operator what you want to do, then choose a project team for a bounded
 change you can exercise. Reuse the accounts and terminal tools you already have.
 
-After installation and sign-in, your agent opens the **OpenRig TUI and operator** for you. The path is `rig daemon start` (if stopped),
+After installation and sign-in, your agent opens the **operator** for you. The path is `rig daemon start` (if stopped),
 then `rig terminal open saved:kernel --window`. The second command opens the
 desktop window itself. An agent can run it from its shell on the daemon's
 desktop; it does not need to type into your current terminal. See
 [Open the kernel conversations](#open-the-kernel-conversations).
-`rig tui` is the team dashboard; installation ends when you are talking to the
-operator in the OpenRig view.
+The team dashboard is the Web UI at `/team`; installation ends when you are
+talking to the operator in the OpenRig view.
 
 ## Before you start
 
@@ -181,9 +181,7 @@ startup or missing-seat problems.
 already exist: ordinary daemon startup skips a managed kernel, and
 `OPENRIG_NO_KERNEL=1` skips automatic kernel startup. If neither runtime is
 authenticated, kernel boot reports `auth_blocked`. Do not restart or recreate an
-existing kernel merely to open its view. The startup TUI (`rig`) offers its own
-kernel setup and individual-seat recovery; it does not automatically boot agents
-when it starts the daemon.
+existing kernel merely to open its view.
 
 ## Open the kernel conversations
 
@@ -280,10 +278,10 @@ view named `kernel` still takes precedence.
 Inspect `opened`, `absent`, `degraded`, `window` and any notes. Confirm the new
 surface visibly shows the operator, with the dashboard and advisor reachable,
 and that the original terminal remains intact. The person sees Herdr only in a terminal they can see.
-Creating its workspace or switching the shared TUI to `:terminals` does not open
-that terminal. A created window or successful CLI response alone is not visual
-confirmation. A partial view remains partial. If the shared TUI tile shows a
-shell, the installing agent starts `rig tui` in that new tile.
+Creating its workspace does not open that terminal. A created window or
+successful CLI response alone is not visual confirmation. A partial view remains
+partial. If the operator tile shows a shell, the installing agent starts the
+operator conversation in that tile.
 
 Opening the view can happen while the kernel finishes starting. Report its actual
 state; do not start or restore seats just to obtain a view. If the kernel is absent
@@ -325,8 +323,8 @@ rig terminal open saved:kernel --provider cmux --json
 ```
 
 Use `rig terminal status --json` to inspect provider availability and liveness.
-For the first desktop handoff, use `--window`. Only if the window cannot open,
-`rig tui --shared` is the dashboard-only fallback, not the operator's conversation.
+For the first desktop handoff, use `--window`. The team dashboard is the Web UI
+at `/team`, not the operator's conversation.
 
 ### Talk to the operator in any terminal
 
@@ -372,8 +370,8 @@ filled-in command.
 
 The kernel's operator takes the person's goal and project folder, helps them choose and start a team, and hands the
 goal to the team's lead. The person can type the goal in the operator's pane (attach with the command
-[above](#talk-to-the-operator-in-any-terminal)), or the agent that installed OpenRig sends it. The `rig tui --shared`
-fallback shows the dashboard, not this conversation. If the operator needs attention, use the
+[above](#talk-to-the-operator-in-any-terminal)), or the agent that installed OpenRig sends it. The Web UI at
+`/team` shows the dashboard, not this conversation. If the operator needs attention, use the
 [recovery routes](#incomplete-setup-and-restart).
 
 **Agents:** the `rigs` skill's step 2 has the exact `rig send` to the operator and says when installation is finished.
@@ -493,21 +491,16 @@ After install, and whenever the person wants their agents again, the installing 
 `rig terminal open saved:kernel --window` and checks the result. It does not
 finish by suggesting a dashboard command for the person to type.
 
-**Only if that window cannot open**, `rig tui --shared` is the dashboard-only
-fallback. Explain the window failure and help with this fallback if chosen;
-it does not show the advisor or operator conversation.
-
-A fresh kernel runs the ordinary TUI in its existing `operator-human` terminal.
-This command attaches another client to that terminal. **Ctrl-b, then d**
-detaches without quitting the TUI; return with the same command and the view
+A fresh kernel runs the operator conversation in its existing `operator-human`
+terminal. This command attaches another client to that terminal. **Ctrl-b, then
+d** detaches without quitting it; return with the same command and the view
 stays where it was. Another authorized agent can capture or operate that same
 pane. It should tell you before changing your view. The terminal is not a
 human inbox and does not prove anyone is watching it.
 
-Plain `rig tui` remains an independent local view. If an older kernel or a TUI
-you quit shows a shell, run `rig tui` in that shell once. `--shared` does not
-start or replace a terminal, so a missing binding is reported with recovery
-guidance rather than creating a second kernel.
+The team dashboard is the Web UI at `/team`. It does not start or replace a
+terminal, so a missing binding is reported with recovery guidance rather than
+creating a second kernel.
 
 Herdr users follow the same launch and task path. To place the managed team in
 Herdr, use `rig terminal open starter --provider herdr`; for the shared
@@ -591,10 +584,10 @@ the lifecycle API without booting a new kernel, then stop the remaining rigs.
 | "Readiness timeout after 30s — harness did not become interactive" | The harness took longer than the readiness window. Raise it for the next launch with `rig config set runtime.readiness_timeout_seconds <1-600>`, then relaunch that seat. |
 | Daemon is healthy, kernel is still starting | Read `rig status` and `rig ps --nodes --rig kernel`; kernel readiness is separate. |
 | Kernel seats fail within a second of the first start, and tmux reports "server exited unexpectedly" | Check that your tmux can capture a pane, then start the failed seats again; see the tmux check below this table. |
-| Shared terminal is absent | Inspect the existing kernel binding and recovery state; use standalone `rig tui` while resolving it. |
-| Viewing terminal was closed | Open the conversations again with `rig terminal open saved:kernel --window`; `rig tui --shared` is only the dashboard fallback if that window cannot open. Do not relaunch the team. |
+| Shared terminal is absent | Inspect the existing kernel binding and recovery state; use the Web UI at `/team` while resolving it. |
+| Viewing terminal was closed | Open the conversations again with `rig terminal open saved:kernel --window`. Do not relaunch the team. |
 | Daemon restarted but tmux survived | Re-read `rig status` and the existing queue; a daemon restart is not a fresh project. |
-| Host reboot lost tmux sessions | Open `rig`, start the daemon if needed (press **S** if it opens on the work views), and select the existing rig and seats. Resume is the default; a fresh conversation needs a separate decision. |
+| Host reboot lost tmux sessions | Start the daemon if needed, then select the existing rig and seats. Resume is the default; a fresh conversation needs a separate decision. |
 | Launch reports no usable snapshot | Inspect the existing rig and retained project files, then follow the same-seat recovery below. |
 | Work is waiting on a prompt or decision | Read the row, transition and named prompt; preserve the obligation until the missing decision arrives. |
 
@@ -644,51 +637,22 @@ one. Hand the goal and project folder to the ready
 operator rather than implementing the project during installation. `rig status`
 points back here while no rigs are registered.
 
-### Use the startup and work TUI
+### Use the Web UI
 
-Type `rig` in an ordinary terminal to open the startup and work TUI. It shows
-the daemon address; **d** expands the selected instance path and diagnostics.
-If the daemon is stopped, press Enter
-to start that daemon, then choose the rigs and seats you want. Kernel is
-recommended first; selecting its operator does not start every kernel seat.
-The same view is available with **S** from ordinary TUI work.
-**?** opens Help even while connection checks are pending. **w** skips startup;
-**Esc** goes back, or leaves startup from its first page. These choices do not
-start a daemon or a seat. **L** opens local reading before or after connecting:
-choose configured Specs, project intent, projects, or missions and slices, then
-select a directory or file. **r** reads the selected source again; **Esc** returns.
-Local reading uses this machine's configured workspace paths and file allowlist,
-including when the selected daemon address is remote. It shows disk provenance,
-missing or denied sources, binary files and the 1 MiB text truncation boundary.
-These disk snapshots may change after reading and do not supply live queue,
-execution or topology state. Once connected, the TUI opens the ordinary work
-views by itself unless you have already pressed a key; **S** returns to startup.
-A stalled live read does not prevent Help or local reading.
-When terminal transport is unavailable, **t** starts the empty terminal service
-so recovery choices can be inspected. It launches no seats.
-
-For a previously occupied seat, Enter attempts its previous conversation.
-If history is unavailable, read the reason. **f** opens a separate fresh-start
-decision for that named seat; **Esc** declines without launching it. A confirmed
-fresh conversation receives the configured context and retains the old history,
-but does not resume that history. Authentication or runtime failures require
-repair of that prerequisite. **o** opens the existing native terminal here; detach
-to return (tmux defaults to Ctrl-b, then d). Decide native trust/auth prompts
-there. If a fresh start paused before context delivery, **c** finishes that
-delivery to the same occupant (from a shell, `rig seat continue <seat>` does the
-same). **r** reads actual state again; **d** expands details.
+The team dashboard is the Web UI the daemon serves at `/team`. It shows the
+runs that exist, so you never have to type an id, and it carries the "New task"
+form. Turn it on with `rig config set ui.enabled true`, then stop and start the
+daemon (`rig daemon stop`, `rig daemon start`). The run view shows a finished
+task's diff and the exact `rig team apply` command to copy.
 
 ## Kernel framing (what `rig setup` does and does not do)
 
-Explicit CLI daemon startup retains its automatic kernel behavior. The TUI
-starts the daemon with kernel auto-boot disabled so the user can select seats:
+Explicit CLI daemon startup retains its automatic kernel behavior.
 
 - `rig setup` installs/verifies the runtime; it does not start the daemon or the
   kernel.
 - Starting the daemon (`rig daemon start`, or implicitly via `rig up` or `rig context add`) is what
   boots the kernel rig in the background.
-- Starting it from bare `rig` prepares no agents automatically. The TUI offers
-  kernel setup and individual seat selection after connecting.
 - **Kernel readiness is a distinct signal from daemon health.** The daemon's HTTP
   health binds early; the kernel can still be booting or a kernel agent can be
   unhealthy while the daemon is up. `rig status` surfaces kernel readiness

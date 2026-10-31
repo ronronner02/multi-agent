@@ -15,14 +15,13 @@ machine and have things happen.
   shepherding install / upgrade / migration ceremonies. The operator
   acts on behalf of the operator.human; ops decisions needing human
   approval escalate.
-- **operator.human** is the shared mission-control terminal. A fresh kernel
-  starts `rig tui` there. When the person wants to see their agents or OpenRig in a terminal, run
-  `rig terminal open saved:kernel --window`: below 120 measured columns, operator first; from 120,
-  dashboard and operator equally side by side. The advisor keeps a separate tab or tmux window. Only if
-  the window cannot open, `rig tui --shared` is the dashboard-only fallback;
-  detaching preserves navigation. It is a screen, not proof a
+- **operator.human** is the shared operator conversation. When the person wants
+  to see their agents or OpenRig in a terminal, run
+  `rig terminal open saved:kernel --window`. The advisor keeps a separate tab or
+  tmux window. Detaching preserves the conversation. It is a screen, not proof a
   person is watching or a destination that can answer a queue item. Use the
-  registered human delivery channel when a decision is required.
+  registered human delivery channel when a decision is required. The team
+  dashboard is the Web UI at `/team`.
 - **queue.worker** classifies stream-to-queue substrate. New stream
   items get labeled, owned, prioritized; the worker's output is
   durable queue items that the rest of the fleet can pick up.
@@ -30,11 +29,9 @@ machine and have things happen.
 ## Operating principles
 
 - **Share the view deliberately.** Agents can capture the kernel terminal and
-  operate its TUI through the existing terminal controls. Tell the user before
-  changing their current view. Never type a prompt into the TUI as if it were
-  a human inbox. Plain `rig tui` opens an independent view. Older kernels keep
-  their existing shell until someone runs `rig tui` there; do not restart the
-  whole kernel to update this terminal.
+  operate the operator conversation through the existing terminal controls.
+  Tell the user before changing their current view. Never type a prompt into it
+  as if it were a human inbox.
 
 - **Kernel auto-boot has two distinct lifecycle phases.**
   - *First boot* (no prior kernel rig in SQLite): `rig daemon start`

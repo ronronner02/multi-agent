@@ -29,9 +29,9 @@ A worktree can therefore report green against code it does not contain.
 3. **`npx tsc` with no `node_modules` installs an unrelated `tsc` package** and prints
    "This is not the tsc command you are looking for". That message means *no install*, not a
    TypeScript error.
-4. **Build `@openrig/daemon` before typechecking `@openrig/cli` or `@openrig/tui`** in a fresh worktree:
-   cli imports `@openrig/daemon/crash-cart` etc. and tui imports `@openrig/daemon/attention`, which resolve
-   to daemon's `dist`. `npm run lint` does this build first. Absent dist reads as
+4. **Build `@openrig/daemon` before typechecking `@openrig/cli`** in a fresh worktree:
+   cli imports `@openrig/daemon/crash-cart` etc., which resolves to daemon's `dist`.
+   `npm run lint` does this build first. Absent dist reads as
    TS2307 "Cannot find module" plus a cascade of implicit-any — a provisioning artifact, not a
    code defect.
 

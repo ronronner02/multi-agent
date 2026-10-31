@@ -54,7 +54,6 @@ test("package proof: the tarball ships the daemon surfaces and no packaged JS im
   try {
     const listing = execFileSync("tar", ["-tzf", tgzPath], { encoding: "utf8" });
     assert.match(listing, /^package\/dist\/bin-wrapper\.js$/m, "the tarball must ship the `rig` bin");
-    assert.match(listing, /^package\/tui\/dist\/main\.js$/m, "the tarball must ship the `openrig-tui` bin");
     assert.doesNotMatch(listing, /^package\/node_modules\//m, "the tarball must not bundle node_modules");
     for (const surface of DAEMON_SURFACES) {
       assert.match(listing, new RegExp(`^package/${surface.replace(/[.]/g, "\\.")}$`, "m"),
@@ -74,8 +73,7 @@ test("package proof: the tarball ships the daemon surfaces and no packaged JS im
       }
     };
     walk(join(extract, "package", "dist"));
-    walk(join(extract, "package", "tui", "dist"));
-    assert.deepEqual(left, [], "no packaged cli/tui JS may import @openrig/daemon");
+    assert.deepEqual(left, [], "no packaged cli JS may import @openrig/daemon");
   } finally {
     rmSync(tgzPath, { force: true });
     rmSync(extract, { recursive: true, force: true });

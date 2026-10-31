@@ -125,14 +125,9 @@ describe("authored evidence scenarios (expressibility)", () => {
       queue: { pluck: "destinationSession", rig: true },
     });
 
-    // tui_socket is asserted SEPARATELY on its own coherence, deliberately not
-    // folded into the equality: both of the shipped control socket's OBSERVE
-    // verbs return UI/registry state, so it carries no daemon truth to compare
-    // and including it could only pass by comparing something trivially equal.
-    const tuiStep = expects.find((e) => e.surface === "tui_socket")!;
-    expect(tuiStep).toBeDefined();
-    expect(tuiStep.match).toEqual({ ok: true });
-    expect(equalsStep.equals).not.toHaveProperty("tui_socket");
+    // The retired TUI surface is no longer asserted here: the scenario compares
+    // the two daemon-truth surfaces only.
+    expect(expects.some((e) => e.surface === "tui_socket")).toBe(false);
   });
 });
 
