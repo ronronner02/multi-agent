@@ -27,6 +27,12 @@ const INSTALLED_CLIENT_LOCK = '/etc/multi-agent/client-lock.json';
 // The owner's provider gateway is a runtime dependency, like the client lock, so it is separate
 // from the policy and changing it does not bump policy_revision (docs/amendments/2026-10-29).
 const INSTALLED_PROVIDER_GATEWAY = '/etc/multi-agent/provider-gateway.json';
+// The pane-ancestry check authenticates each intermediate hop by its executable. `/proc/<pid>/exe`
+// reports the RESOLVED image, so the expected value must be resolved too: this host's `/usr/bin/sudo`
+// is an alternatives symlink to sudo-rs at `/usr/lib/cargo/bin/sudo`, and comparing the literal path
+// refused every managed observation with `sandbox-control-unverified`. Resolved once here, the same
+// way every locked client image is resolved before comparison.
+const SUDO_EXECUTABLE = (() => { try { return realpathSync('/usr/bin/sudo'); } catch { return '/usr/bin/sudo'; } })();
 export const CLIENT_LOCK_SCHEMA = 'multi-agent-client-lock/v1';
 const CLIENT_ENTRYPOINTS = Object.freeze({ 'claude-code': 'clients/bin/claude', codex: 'clients/bin/codex' });
 // Provider sign-in is evidenced by these files' metadata in the worker home; their bytes are never opened.
@@ -1051,7 +1057,7 @@ export function startSandbox(input, stdio, workerUid) {
       handles.push(openSync('/proc/' + pid, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW));
       anchor = '/proc/self/fd/' + handles[0];
       const current = stat(), status = readFileSync(anchor + '/status', 'utf8');
-      const field = name => status.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim().split(/\s+/).map(Number);
+      const field = name => status.match(new RegExp('^' + name + ':[ \\t]*(.*)$', 'm'))?.[1].trim().split(/\s+/).map(Number);
       const uids = field('Uid'), pids = field('NSpid');
       if (current.parent !== child.pid || !uids || uids.length !== 4 || uids.some(uid => uid !== workerUid)
         || !pids || pids[0] !== pid || pids.length < 2 || pids.at(-1) !== 1) throw new Error();
@@ -1099,7 +1105,7 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
   };
   const status = anchor => {
     const raw = readFileSync(anchor + '/status', 'utf8');
-    const field = name => raw.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim().split(/\s+/).map(Number);
+    const field = name => raw.match(new RegExp('^' + name + ':[ \\t]*(.*)$', 'm'))?.[1].trim().split(/\s+/).map(Number);
     return { uids: field('Uid'), pids: field('NSpid') };
   };
   const uidMatches = (anchor, uid) => {
@@ -1211,7 +1217,7 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
           const anchor = pin('/proc/' + hop, directory), value = stat(anchor);
           if (hop === query.pane.processId) {
             if (value.start !== query.pane.processStart || ['Z', 'X'].includes(value.state)) throw new Error();
-          } else if (depth >= 2 || readlinkSync(anchor + '/exe') !== '/usr/bin/sudo') throw new Error();
+          } else if (depth >= 2 || readlinkSync(anchor + '/exe') !== SUDO_EXECUTABLE) throw new Error();
           ancestry.push({ anchor, processId: hop, processStart: value.start });
           hop = value.parent;
         }
@@ -1250,12 +1256,24 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
         }
         const native = current.anchor, initialNative = stat(native);
         if (initialNative.start !== current.processStart) throw new Error();
+        // Read to EOF, not with one readSync: a procfs file such as `/proc/<pid>/mountinfo` returns a
+        // SHORT read (measured 4009 of 5743 bytes), and truncating it drops the tail of the mount list.
+        // That silently removed `/home/worker`, `/scratch` and `/work` from the observed mounts, which
+        // the daemon refused as `managed_worker_mount_mismatch`. The limit is still enforced while reading.
         const bounded = (file, limit) => {
           const fd = openSync(file, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_CLOEXEC);
           try {
-            const buffer = Buffer.alloc(limit + 1), length = readSync(fd, buffer, 0, buffer.length, 0);
-            if (length > limit) throw new Error();
-            return buffer.subarray(0, length);
+            const chunks = []; let total = 0, offset = 0;
+            for (;;) {
+              const chunk = Buffer.alloc(Math.min(65_536, limit + 1 - total));
+              const length = readSync(fd, chunk, 0, chunk.length, offset);
+              if (length === 0) break;
+              chunks.push(chunk.subarray(0, length));
+              total += length; offset += length;
+              if (total > limit) throw new Error();
+              if (chunk.length === 0) break;
+            }
+            return Buffer.concat(chunks, total);
           } finally { closeSync(fd); }
         };
         // Pin each component so a pathname replacement cannot redirect a privileged read.
@@ -1297,7 +1315,11 @@ export function openSandboxControl(selector, rawArgv, workerUid) {
               readdirSync(rootPath(posix.dirname(target))), remotePolicy) } };
         }
         const rawStatus = bounded(native + '/status', 65_536).toString('utf8');
-        const field = name => rawStatus.match(new RegExp('^' + name + ':\\s*(.*)$', 'm'))?.[1].trim();
+        // Only spaces and tabs separate the field name from its values. `\s*` would also match the
+        // newline, so a field with NO values (`Groups:` is empty under `setpriv --clear-groups`)
+        // captured the NEXT line instead: measured as `[NaN, <nspid>, <nstgid>]` for a native whose
+        // groups are correctly empty, which the daemon refused as `managed_worker_boundary_mismatch`.
+        const field = name => rawStatus.match(new RegExp('^' + name + ':[ \\t]*(.*)$', 'm'))?.[1].trim();
         const numbers = name => (field(name) ?? '').split(/\s+/).filter(Boolean).map(Number);
         const argvBytes = bounded(native + '/cmdline', 65_536);
         if (!argvBytes.length || argvBytes.at(-1) !== 0) throw new Error();

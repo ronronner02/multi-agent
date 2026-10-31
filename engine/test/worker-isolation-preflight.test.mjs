@@ -914,6 +914,67 @@ describe('offline: supervisor control', { skip: process.platform !== 'linux' }, 
     assert.equal(JSON.stringify(result).includes('authorization'), false);
   });
 
+  test('authenticates an alternatives-symlinked sudo hop by its resolved executable', { timeout: 6_000 }, async t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'sandbox-sudo-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    mkdirSync(path.join(root, 'bin')); mkdirSync(path.join(root, 'alternatives'));
+    symlinkSync(process.execPath, path.join(root, 'alternatives/sudo'));
+    symlinkSync('../alternatives/sudo', path.join(root, 'bin/sudo'));
+    const original = fs.realpathSync;
+    let resolved;
+    fs.realpathSync = (file, ...args) => original(file === '/usr/bin/sudo' ? path.join(root, 'bin/sudo') : file, ...args);
+    syncBuiltinESMExports();
+    try {
+      resolved = await import('../config/isolation/worker-launch.mjs?alternatives-sudo=' + path.basename(root));
+    } finally { fs.realpathSync = original; syncBuiltinESMExports(); }
+    const { selector, argv } = await fixture(t);
+    const control = resolved.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    // This process is the intermediate executable; its parent stands in for the terminal pane.
+    const terminal = { processId: process.ppid, processStart: startOf(process.ppid) };
+    assert.deepEqual(control.snapshot(query({ pane: terminal }), [SHELL]).pane, terminal);
+  });
+
+  test('snapshot keeps an empty Groups field separate from the following status line', { timeout: 6_000 }, async t => {
+    const { selector, argv } = await fixture(t);
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const initial = control.snapshot(query(), [SHELL]);
+    const status = Buffer.from(readFileSync('/proc/' + initial.process.processId + '/status', 'utf8')
+      .replace(/^Groups:[^\n]*$/m, 'Groups:\t '));
+    const original = fs.readSync;
+    fs.readSync = (fd, buffer, offset, length, position) => readlinkSync('/proc/self/fd/' + fd).endsWith('/status')
+      ? status.copy(buffer, offset, position, position + length) : original(fd, buffer, offset, length, position);
+    syncBuiltinESMExports();
+    try {
+      const result = control.snapshot(query(), [SHELL]);
+      assert.deepEqual(result.process.groups, []);
+      assert.deepEqual(result.process.uids, initial.process.uids);
+      assert.deepEqual(result.process.namespacePids, initial.process.namespacePids);
+    } finally { fs.readSync = original; syncBuiltinESMExports(); }
+  });
+
+  test('snapshot reads mountinfo to EOF after a short procfs read', { timeout: 6_000 }, async t => {
+    const { selector, argv } = await fixture(t);
+    const control = workerLaunch.openSandboxControl(selector, argv, process.getuid());
+    t.after(() => control.close());
+    const initial = control.snapshot(query(), [SHELL]);
+    const expected = readFileSync('/proc/' + initial.process.processId + '/mountinfo', 'utf8');
+    const original = fs.readSync;
+    let reads = 0;
+    fs.readSync = (fd, buffer, offset, length, position) => {
+      if (readlinkSync('/proc/self/fd/' + fd).endsWith('/mountinfo')) {
+        reads++; length = Math.min(length, 17);
+      }
+      return original(fd, buffer, offset, length, position);
+    };
+    syncBuiltinESMExports();
+    try {
+      assert.equal(control.snapshot(query(), [SHELL]).mountInfo, expected);
+      assert.ok(reads > 1);
+    } finally { fs.readSync = original; syncBuiltinESMExports(); }
+  });
+
   test('authority opening ignores a descriptor that vanished after enumeration', { timeout: 6_000 }, async t => {
     const { selector, argv } = await fixture(t);
     const original = fs.readdirSync;

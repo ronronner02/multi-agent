@@ -1271,6 +1271,16 @@ describe.skipIf(!workerGroup)("control-owned managed launch lifecycle", () => {
     expect(await launcher.checkReady({ attemptId: "attempt", deadline: now + 60_000, context })).toEqual({ ready: true });
   });
 
+  it("resolves the egress bind from its separate host filesystem", async () => {
+    processIo.stats.set("/proc/self/mountinfo",
+      "1 0 8:1 / / rw - ext4 /dev/sda rw\n2 1 0:20 / /run rw - tmpfs tmpfs rw\n");
+    snapshotChange = snapshot => {
+      const target = policy.paths.egress_socket_dir;
+      snapshot.mountInfo = snapshot.mountInfo.replace("8:1 " + target + " " + target, "0:20 /multi-agent-egress " + target);
+    };
+    expect(await launch()).toMatchObject({ ok: true });
+  });
+
   it.each(["remote-policy", "drop-in", "foreign-mount", "host-tmpfs", "mailbox", "native-restart", "pane-process"])(
     "quiesces and records a confirmed stop when %s drifts after readiness", async field => {
       expect(await launch()).toMatchObject({ ok: true });

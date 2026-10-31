@@ -455,12 +455,25 @@ function reachableMounts(text: string): MountRow[] {
 
 /** Host binds are named by their path on the host root filesystem and kernel filesystems by type; anything else stays foreign. */
 function workerMounts(mountInfo: string): WorkerMount[] {
-  const host = reachableMounts(readFileSync("/proc/self/mountinfo", "utf8")), hostRoot = host.find(row => row.target === "/")?.device;
+  const host = reachableMounts(readFileSync("/proc/self/mountinfo", "utf8"));
   // A sandbox tmpfs, proc or devpts is a new instance; one on a host device is a host bind. Device nodes come from the host devtmpfs.
   const fresh = (row: MountRow) => row.type === "devtmpfs" || !host.some(entry => entry.device === row.device);
-  return reachableMounts(mountInfo).map(row => ({ target: row.target, access: row.access,
-    source: ["tmpfs", "proc", "devtmpfs", "devpts"].includes(row.type) && fresh(row) ? row.type
-      : row.device === hostRoot ? row.root : row.type + ":" + row.device + ":" + row.root }));
+  // A host bind's source is the path it occupies ON THE HOST. `root` is the path within the bound
+  // filesystem, so it must be joined to that filesystem's own host mount point: `/run` is a host
+  // tmpfs, so binding `/run/multi-agent-egress` reports root `/multi-agent-egress` on /run's device,
+  // and naming it by the root device alone (the old rule) could only name binds from `/` itself.
+  const hostPath = (row: MountRow): string | null => {
+    const owner = host.find(entry => entry.device === row.device);
+    if (!owner) return null;
+    const base = owner.target === "/" ? "" : owner.target;
+    return base + (row.root === "/" ? "" : row.root) || "/";
+  };
+  return reachableMounts(mountInfo).map(row => {
+    const bound = ["tmpfs", "proc", "devtmpfs", "devpts"].includes(row.type) && fresh(row) ? undefined : hostPath(row);
+    return { target: row.target, access: row.access,
+      source: bound ?? (["tmpfs", "proc", "devtmpfs", "devpts"].includes(row.type) && fresh(row) ? row.type
+        : row.type + ":" + row.device + ":" + row.root) };
+  });
 }
 
 /** False only once the exact process instance is gone; a reused PID is a different instance. */
