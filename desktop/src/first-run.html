@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>Multi-Agent</title>
+    <style>
+      :root {
+        --bg: #151619;
+        --surface: #1c1d21;
+        --line: #2c2d34;
+        --text: #ededf0;
+        --muted: #999ba6;
+        --accent: #818cf8;
+        --ok: #34d399;
+        --bad: #f87171;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: var(--bg); }
+      body {
+        font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+        font-size: 14px; color: var(--text);
+        display: flex; align-items: center; justify-content: center;
+        min-height: 100vh; padding: 40px 32px;
+      }
+      section { width: 100%; max-width: 620px; }
+      h1 { font-size: 24px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); margin: 0 0 28px; line-height: 1.55; }
+      .panel {
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: 6px; padding: 20px;
+      }
+      .panel p { margin: 0 0 12px; line-height: 1.6; }
+      .panel p:last-child { margin-bottom: 0; }
+      .muted { color: var(--muted); }
+      code {
+        font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px;
+        background: #24252b; border: 1px solid var(--line); border-radius: 4px;
+        padding: 1px 5px; color: var(--text);
+      }
+      .actions { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+      button {
+        font: inherit; font-size: 13px; height: 32px; padding: 0 14px;
+        border-radius: 6px; border: 1px solid var(--line);
+        background: #24252b; color: var(--text); cursor: pointer;
+      }
+      button:hover:not(:disabled) { border-color: #3a3b44; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #14151a; font-weight: 600; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      pre#log {
+        margin: 20px 0 0; max-height: 200px; overflow: auto;
+        background: #101114; border: 1px solid var(--line); border-radius: 6px;
+        padding: 12px; font-family: "Cascadia Mono", Consolas, monospace;
+        font-size: 11.5px; line-height: 1.5; color: var(--muted); white-space: pre-wrap;
+      }
+      pre#log:empty { display: none; }
+    </style>
+  </head>
+  <body>
+    <section>
+      <h1 id="title">Setting up Multi-Agent</h1>
+      <p class="sub" id="subtitle">The engine runs inside Windows Subsystem for Linux. This window starts it for you.</p>
+      <div class="panel" id="panel"></div>
+      <div class="actions" id="actions"></div>
+      <pre id="log"></pre>
+    </section>
+    <script>
+      const api = window.multiAgentDesktop;
+      const BUSY = ['checking', 'installing', 'cloning', 'starting', 'pairing'];
+
+      const PANELS = {
+        checking: () => '<p>Checking Windows Subsystem for Linux and looking for the engine…</p>',
+        installing: () => '<p>Windows is installing WSL. Approve the elevation prompt, then restart Windows when it finishes.</p>',
+        reboot: () => '<p><strong>Restart Windows.</strong></p><p class="muted">WSL needs one restart to finish installing. Open Multi-Agent again afterwards; it picks up where it left off.</p>',
+        'wsl-missing': () => '<p>This app needs <strong>Windows Subsystem for Linux</strong>, which is not installed.</p>'
+          + '<p class="muted">Setup takes a few minutes and asks for administrator approval. It needs Windows 11 or Windows 10 version 2004 or later.</p>',
+        'no-distro': () => '<p>Windows Subsystem for Linux is installed, but no Linux distribution is set up.</p>'
+          + '<p class="muted">The install adds Ubuntu, which the engine runs in.</p>',
+        wsl1: () => '<p>Your Linux distribution runs on <strong>WSL version 1</strong>, but the engine needs version 2.</p>'
+          + '<p class="muted">Installing again upgrades it. Your files inside the distribution are kept.</p>',
+        'no-repo': () => '<p>The engine is not installed in your Linux distribution yet.</p>'
+          + '<p class="muted">This downloads <code>github.com/ronronner02/multi-agent</code> to <code>~/multi-agent</code>, then installs and builds it. It needs a network connection and takes a few minutes.</p>',
+        cloning: () => '<p>Downloading the engine and running its setup. This takes a few minutes.</p>',
+        starting: () => '<p>Starting the local runtime…</p>',
+        pairing: () => '<p>Connecting this window to the local runtime…</p>',
+        'start-failed': () => '<p>The local runtime did not answer on <code>127.0.0.1:7433</code>.</p>'
+          + '<p class="muted">The setup output below says why. Retrying is safe.</p>',
+        unknown: () => '<p>The check did not finish.</p><p class="muted">Retrying is safe; nothing has been changed.</p>',
+        ready: () => '<p>The team view is loading.</p>',
+      };
+
+      const BUTTONS = {
+        'wsl-missing': [['Install WSL', 'install-wsl', true]],
+        'no-distro': [['Install WSL', 'install-wsl', true]],
+        wsl1: [['Upgrade to WSL 2', 'install-wsl', true]],
+        'no-repo': [['Download and set up', 'clone-repo', true]],
+        'start-failed': [['Retry', 'retry', true]],
+        unknown: [['Retry', 'retry', true]],
+      };
+
+      function render(next) {
+        if (!next) return;
+        document.getElementById('title').textContent = next.phase === 'ready' ? 'Opening Multi-Agent' : 'Setting up Multi-Agent';
+        document.getElementById('panel').innerHTML = (PANELS[next.phase] || PANELS.unknown)();
+
+        const actions = document.getElementById('actions');
+        actions.innerHTML = '';
+        const busy = BUSY.includes(next.phase);
+        for (const [label, action, primary] of BUTTONS[next.phase] || []) {
+          const button = document.createElement('button');
+          button.textContent = label;
+          if (primary) button.className = 'primary';
+          button.disabled = busy;
+          button.addEventListener('click', async () => {
+            for (const other of actions.querySelectorAll('button')) other.disabled = true;
+            render(await api.run(action));
+          });
+          actions.appendChild(button);
+        }
+
+        const log = document.getElementById('log');
+        log.textContent = (next.log || []).join('\n');
+        log.scrollTop = log.scrollHeight;
+      }
+
+      document.addEventListener('desktop-status', event => render(event.detail));
+      if (api) {
+        api.status().then(status => render(status));
+        api.onStatus(render);
+      }
+    </script>
+  </body>
+</html>

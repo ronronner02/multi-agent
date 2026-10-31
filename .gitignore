@@ -20,3 +20,7 @@
 graphify-out/
 .graphify/
 # spec-first:end
+
+# desktop app build output and dependencies
+desktop/dist/
+desktop/node_modules/

@@ -5,9 +5,21 @@ export class OwnerReadError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
 }
 
+/**
+ * The anti-forgery token a desktop window paired for us before this document loaded. The
+ * window performs the pairing exchange itself, so the page starts already paired and never
+ * asks the owner for a code; a browser without that hand-off returns null and pairs normally.
+ */
+export function desktopCredential(): string | null {
+  try {
+    const value = window.sessionStorage.getItem("multi-agent.desktop.csrf");
+    return value && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+  } catch { return null; }
+}
+
 function usePairedBrowser() {
-  const credential = useRef<string | null>(null);
-  const [paired, setPaired] = useState(false);
+  const credential = useRef<string | null>(desktopCredential());
+  const [paired, setPaired] = useState(credential.current !== null);
   const sockets = useRef(new Set<WebSocket>());
   const loopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(window.location.hostname);
   const closeTerminals = useCallback(() => {

@@ -216,6 +216,14 @@ describe("managed control authority on the shared application", () => {
           expect(response.status, path).toBe(200);
           continue;
         }
+        // The managed team view is built from the same bundle and is served at /team, so the
+        // bundle's assets are reachable in managed mode. The pages are not: `/` and every
+        // legacy route still refuse, and no page body carries the legacy surface or a token.
+        if (path.startsWith("/assets/")) {
+          expect(response.status, path).toBe(200);
+          expect(body, path).not.toContain("legacy-page-secret");
+          continue;
+        }
         expect(response.status, path).toBe(404);
         expect(body, path).not.toContain("Legacy administration");
         expect(body, path).not.toContain("legacyAdministration");

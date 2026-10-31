@@ -482,6 +482,15 @@ function isUiAssetRequestPath(requestPath: string): boolean {
     || relativePath === "manifest.webmanifest";
 }
 
+/**
+ * KTD22 keeps legacy pages out of managed mode, but the managed team view ships in the same
+ * bundle. Only what that view needs is reachable: its own route and the bundle's assets.
+ * Every other page, `/` and `/index.html` included, keeps the managed-mode refusal.
+ */
+function isManagedUiRequestPath(requestPath: string): boolean {
+  return requestPath === "/team" || requestPath.startsWith("/team/") || isUiAssetRequestPath(requestPath);
+}
+
 export function createApp(deps: AppDeps): Hono {
   // Hard runtime invariant: all domain services must share the same db handle.
   if (deps.rigRepo.db !== deps.eventBus.db) {
@@ -1051,7 +1060,7 @@ export function createApp(deps: AppDeps): Hono {
       return c.notFound();
     }
 
-    if (daemonModeOf(deps.rigRepo.db) === "managed") {
+    if (daemonModeOf(deps.rigRepo.db) === "managed" && !isManagedUiRequestPath(requestPath)) {
       c.header("X-OpenRig-Web-UI", "off");
       return c.text("Legacy pages are inactive in a managed-mode daemon.", 404);
     }
@@ -1075,7 +1084,10 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     const indexHtml = fs.readFileSync(uiIndexPath, "utf-8");
-    const tokenScript = deps.terminalBearerToken
+    // The legacy token script hands the terminal bearer to whoever loads a page. A managed
+    // daemon serves its team view to any local process, so that page must never carry the
+    // bearer: the managed UI authenticates through the paired owner session instead.
+    const tokenScript = deps.terminalBearerToken && daemonModeOf(deps.rigRepo.db) !== "managed"
       ? `<script>if(!window.localStorage.getItem("openrig.terminalBearerToken"))window.localStorage.setItem("openrig.terminalBearerToken",${JSON.stringify(deps.terminalBearerToken)})</script>`
       : "";
     const injected = tokenScript ? indexHtml.replace("</head>", `${tokenScript}</head>`) : indexHtml;

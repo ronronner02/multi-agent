@@ -7,6 +7,9 @@ lives in `engine/`; it builds on OpenRig and adds owner-governed team runs.
 
 Requires Linux or WSL2, with `git`, `tmux`, and Node.js 22 or 24.
 
+On Windows, install `Multi-Agent Setup.exe` instead and open it from the Start menu: the
+desktop app sets up WSL, the engine and the Web UI for you (`desktop/README.md`).
+
 ```bash
 git clone https://github.com/ronronner02/multi-agent.git && cd multi-agent
 ./setup.sh                                  # install, build, create the owner token
