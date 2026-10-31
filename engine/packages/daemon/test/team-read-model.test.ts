@@ -254,6 +254,30 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     expect(filled.read.workflow.current).toBeDefined();
   });
 
+  it("publishes each attempt's own recorded usage and recording time", async () => {
+    // The run's usage is a cumulative projection of these rows, so a reader that only sees the
+    // total cannot say which attempt spent what or when. Both facts are read from the row that
+    // already holds them, and an unobserved metric stays null with its producer's reason.
+    seedTask("run", "T001", "", "seat-a", "2026-10-26T09:30:00.000Z");
+    db.prepare(`UPDATE team_attempts SET usage_json = ? WHERE id = 'attempt-T001'`).run(JSON.stringify({
+      activeMs: 754_000, inputTokens: { value: 120_000, reason: null }, outputTokens: { value: 30_000, reason: null },
+      costUsd: { value: null, reason: "not reported" } }));
+
+    const body = (await (await request("/api/team-control/runs/run/read")).json()) as {
+      read: { attempts: Array<{ attemptId: string; createdAt: string;
+        usage: { activeMs: number; inputTokens: { value: number | null }; outputTokens: { value: number | null };
+          costUsd: { value: number | null; reason: string | null } } }> };
+    };
+    expect(body.read.attempts[0]).toMatchObject({
+      attemptId: "attempt-T001", createdAt: "2026-10-26T09:30:00.000Z",
+      usage: { activeMs: 754_000, inputTokens: { value: 120_000 }, outputTokens: { value: 30_000 },
+        costUsd: { value: null, reason: "not reported" } },
+    });
+    // The run's total still refuses to publish a cost one attempt never reported.
+    const run = (await (await request("/api/team-control/runs/run")).json()) as { run: { usage: { costUsd: { value: number | null } } } };
+    expect(run.run.usage.costUsd.value).toBeNull();
+  });
+
   it("bounds, redacts and correlates log records, and reports an explicit replay gap", async () => {
     seedTask("run", "T001", "", "seat-a", new Date(Date.now() - 1000).toISOString());
     // A log line carrying a credential pattern and a terminal control sequence,

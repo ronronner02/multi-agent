@@ -117,6 +117,25 @@ describe("KTD26 system health", () => {
     expect(health.lights.database.evidenceRef).toBe("database-read-only");
     db.close();
   });
+  it("publishes the isolation level the daemon resolved, and nothing when it composed none", async () => {
+    const sources = {
+      database: () => ok("db"), queueMailbox: () => ok("queue"), controlTmux: () => ok("tmux"),
+      workerBoundary: () => ok("worker"), sandboxNetwork: () => ok("network"), clients: () => ok("clients"),
+    };
+    // The level is a fact the process decided, so a client reads it from the daemon rather than
+    // from a config file the daemon may have overridden at startup.
+    expect((await readSystemHealth({ ...sources, isolation: "none" })).runtime).toEqual({ isolation: "none" });
+    expect((await readSystemHealth({ ...sources, isolation: "hardened" })).runtime).toEqual({ isolation: "hardened" });
+    // A host that composes no runtime block says nothing rather than naming a default.
+    expect((await readSystemHealth(sources)).runtime).toBeUndefined();
+    expect((await readSystemHealthBounded(undefined)).runtime).toBeUndefined();
+  });
+  it("rejects a runtime block naming a level the launch chain cannot have", async () => {
+    const sources = { database: () => ok("db"), queueMailbox: () => ok("queue"), controlTmux: () => ok("tmux"),
+      workerBoundary: () => ok("worker"), sandboxNetwork: () => ok("network"), clients: () => ok("clients") };
+    const invalid = { ...(await readSystemHealth(sources)), runtime: { isolation: "chroot" } };
+    expect((await readSystemHealthBounded(() => invalid as never)).lights.database.reason).toBe("health_invalid_result");
+  });
   it("exposes only the owner-authenticated query", async () => {
     const db = createDb(":memory:");
     migrate(db, ALL_MIGRATIONS);
