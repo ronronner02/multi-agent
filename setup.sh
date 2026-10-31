@@ -8,6 +8,9 @@ ENGINE="$REPO_ROOT/engine"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/multi-agent"
 OWNER_ENV="$CONFIG_DIR/owner.env"
 
+# shellcheck source=scripts/node-env.sh
+. "$REPO_ROOT/scripts/node-env.sh"
+
 die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
@@ -15,7 +18,7 @@ die() {
 
 command -v git >/dev/null || die "git is required. Install it with: sudo apt-get install git"
 command -v tmux >/dev/null || die "tmux is required. Install it with: sudo apt-get install tmux"
-command -v node >/dev/null || die "Node.js 22 or 24 is required. Install it with nvm: nvm install 22"
+command -v node >/dev/null || die "Node.js 22 or 24 is required and none was found on PATH, in nvm, fnm, Volta or /usr/local/bin. Install it with nvm: nvm install 22"
 command -v npm >/dev/null || die "npm is required; it ships with Node.js."
 
 node_major="$(node -p 'process.versions.node.split(".")[0]')"

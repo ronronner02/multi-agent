@@ -136,8 +136,10 @@ export function probeRepoArgv(distro, repoPath) {
 /**
  * Every command that runs project code uses `bash -lc`, because that is the shell a fresh
  * WSL terminal is: it loads the distro profile, which is where a version manager puts
- * `node` on PATH. `./setup.sh` requires Node 22/24 and reports a missing one itself; the
- * app never guesses at a Node location.
+ * `node` on PATH. A non-interactive login shell skips the part of ~/.bashrc where nvm and
+ * fnm add themselves, so every command that runs project code sources
+ * `scripts/node-env.sh`, which finds Node 22/24 in the usual install locations. `./setup.sh`
+ * still reports a missing Node itself.
  */
 const LOGIN_SHELL = "bash";
 const LOGIN_FLAG = "-lc";
@@ -158,13 +160,13 @@ export function startArgv(distro, repoPath) {
  */
 export function enableUiArgv(distro, repoPath) {
   return ["-d", distro, "-e", LOGIN_SHELL, LOGIN_FLAG,
-    'cd "$1/engine" || exit 1; exec node_modules/.bin/rig config set ui.enabled true', "enable-ui", repoPath];
+    '. "$1/scripts/node-env.sh"; cd "$1/engine" || exit 1; exec node_modules/.bin/rig config set ui.enabled true', "enable-ui", repoPath];
 }
 
 /** `rig daemon stop`, the "Stop engine" menu action. */
 export function stopEngineArgv(distro, repoPath) {
   return ["-d", distro, "-e", LOGIN_SHELL, LOGIN_FLAG,
-    'cd "$1/engine" || exit 1; exec node_modules/.bin/rig daemon stop', "stop", repoPath];
+    '. "$1/scripts/node-env.sh"; cd "$1/engine" || exit 1; exec node_modules/.bin/rig daemon stop', "stop", repoPath];
 }
 
 /** `git clone` + `./setup.sh`, in one streamed command, only when the user asks for it. */

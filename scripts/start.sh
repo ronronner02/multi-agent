@@ -5,6 +5,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OWNER_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/multi-agent/owner.env"
+# shellcheck source=node-env.sh
+. "$REPO_ROOT/scripts/node-env.sh"
 
 [ -f "$OWNER_ENV" ] || {
   echo "error: $OWNER_ENV is missing. Run ./setup.sh first." >&2
