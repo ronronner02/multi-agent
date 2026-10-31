@@ -179,7 +179,7 @@ describe('offline: import and verification', () => {
       importInto(result, dir);
       assert.equal(readFileSync(path.join(dir, 'LICENSE'), 'utf8'), 'Apache License');
       assert.equal(readlinkSync(path.join(dir, 'packages/daemon/help.md')), '../../docs/reference/help.md');
-      assert.deepEqual(verifyTree(result, dir, { local: [], adapted: [] }), { missing: [], changed: [], adapted: [], extra: [] });
+      assert.deepEqual(verifyTree(result, dir, { local: [], adapted: [], removed: [] }), { missing: [], changed: [], adapted: [], removed: [], extra: [] });
     }));
 
   test('refuses to overwrite any existing file', () =>
@@ -201,7 +201,7 @@ describe('offline: import and verification', () => {
       writeFileSync(path.join(dir, 'license-copy'), 'Apache License');
       rmSync(path.join(dir, 'LICENSE'));
       symlinkSync('license-copy', path.join(dir, 'LICENSE'));
-      assert.deepEqual(verifyTree(result, dir, { local: ['license-copy'], adapted: [] }).changed, ['LICENSE', 'packages/daemon/help.md', 'scripts/run.sh']);
+      assert.deepEqual(verifyTree(result, dir, { local: ['license-copy'], adapted: [], removed: [] }).changed, ['LICENSE', 'packages/daemon/help.md', 'scripts/run.sh']);
     }));
 
   test('reports an executable file replaced by a symlink to identical bytes', () =>
@@ -212,7 +212,7 @@ describe('offline: import and verification', () => {
       writeFileSync(path.join(dir, 'run-copy.sh'), '#!/bin/sh\n', { mode: 0o755 });
       rmSync(path.join(dir, 'scripts/run.sh'));
       symlinkSync('../run-copy.sh', path.join(dir, 'scripts/run.sh'));
-      assert.deepEqual(verifyTree(result, dir, { local: ['run-copy.sh'], adapted: [] }).changed, ['scripts/run.sh']);
+      assert.deepEqual(verifyTree(result, dir, { local: ['run-copy.sh'], adapted: [], removed: [] }).changed, ['scripts/run.sh']);
     }));
 
   test('sets recorded modes even under a restrictive umask', () =>
@@ -239,7 +239,7 @@ describe('offline: import and verification', () => {
         mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
         writeFileSync(path.join(dir, rel), 'local fixture');
       }
-      const tree = verifyTree(result, dir, { local: ['local/owned.ts', 'config/isolation/'], adapted: [] });
+      const tree = verifyTree(result, dir, { local: ['local/owned.ts', 'config/isolation/'], adapted: [], removed: [] });
       assert.deepEqual(tree.missing, []);
       assert.deepEqual(tree.changed, []);
       assert.deepEqual(tree.extra.sort(), [
@@ -255,10 +255,11 @@ describe('offline: import and verification', () => {
       writeFileSync(path.join(dir, 'scripts/run.sh'), 'adapted');
       rmSync(path.join(dir, 'docs/reference/help.md'));
       writeFileSync(path.join(dir, 'stray.txt'), 'x');
-      assert.deepEqual(verifyTree(result, dir, { local: [], adapted: ['scripts/run.sh'] }), {
+      assert.deepEqual(verifyTree(result, dir, { local: [], adapted: ['scripts/run.sh'], removed: [] }), {
         missing: ['docs/reference/help.md'],
         changed: ['LICENSE'],
         adapted: ['scripts/run.sh'],
+        removed: [],
         extra: ['stray.txt'],
       });
     }));
@@ -276,6 +277,9 @@ describe('pinned: engine/ matches the audited upstream archive', () => {
     const tree = verifyTree(result, engineRoot, { files: gitListedFiles(engineRoot) });
     assert.deepEqual({ missing: tree.missing, changed: tree.changed, extra: tree.extra }, { missing: [], changed: [], extra: [] });
     assert.deepEqual(tree.adapted.sort(), [...PIN.adapted].sort(), 'every declared adaptation must still differ from upstream');
+    // Every path the import once carried and we deleted is still gone: a re-appearing
+    // file would silently re-enter the tree outside the approved import set.
+    assert.deepEqual(tree.removed.sort(), result.manifest.filter((m) => PIN.removed.some((entry) => (entry.endsWith('/') ? m.path.startsWith(entry) : m.path === entry))).map((m) => m.path).sort(), 'every declared removal must still be absent');
   });
 });
 

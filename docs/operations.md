@@ -23,7 +23,7 @@ The table and the boundary description below apply to `workers.isolation: harden
 
 | Identity | Purpose | Notes |
 | --- | --- | --- |
-| Owner login (for example `leo`) | Owner TUI, owner browser, owner terminal host | The only approval authority. Never used for agent sessions. |
+| Owner login (for example `leo`) | Owner browser, owner terminal host | The only approval authority. Never used for agent sessions. |
 | `ma-control` | Daemon / control plane | Owns `/var/lib/multi-agent/control` (mode `0700`). May run exactly one sudo command: the worker launcher. |
 | `ma-worker1`..`ma-worker3` | Managed coding sessions (lead, implementer, reviewer) | System accounts, `nologin` shell, no supplementary groups, no sudo. |
 
@@ -286,5 +286,5 @@ This runs at project wrap-up or when the owner asks; tasks do not run it.
 - The binding is read from the repository at the moment of the request: the canonical root, the plan artifact's exact bytes, and the commit they are approved at. A repository with no commit is refused, because the contract cannot name an identity for it.
 - The endpoint proposes the implementation approval for that binding and records the owner's own control session as the decision, then creates the task. A run whose approval or task is refused keeps its row, so the refusal is readable instead of silent.
 - Under `workers.isolation: none` the daemon has no installed policy, so a new binding is approved against the unisolated roots' revision, a fingerprint naming the isolation mode, and the clients the daemon may start by name. Dispatch then refuses a binding built for any other mode, which is the same check that already guards a launch.
-- `rig team start "<goal>"` calls the endpoint with the owner credential and prints the run id plus the TUI and Web commands that watch it. The Web UI's "New task" form and run list call the same endpoint.
+- `rig team start "<goal>"` calls the endpoint with the owner credential and prints the run id plus the Web UI command that watches it. The Web UI's "New task" form and run list call the same endpoint.
 - `engine/demo/team/run.sh` proves the flow without a provider account: it seeds the demo rig, boots a managed daemon with the compiled stub runner, starts a run, and reads the created task back from the run's own projection.

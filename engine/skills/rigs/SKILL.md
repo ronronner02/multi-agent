@@ -1,6 +1,6 @@
 ---
 name: rigs
-description: Use when a person in their own Claude Code or Codex session mentions OpenRig, rigs or the rig command, or wants a team of coding agents (Claude Code, Codex) on their project. That includes installing, setting up, starting or updating OpenRig, seeing, getting back to or re-attaching to their OpenRig agents (including bringing a stopped team back), TUI or operator, starting or sharing a team, and joining this session to one. Operating a running rig from inside it (fleet recovery, seat handover, watchdog wakes, in-rig upgrades) is the openrig-skills skill.
+description: Use when a person in their own Claude Code or Codex session mentions OpenRig, rigs or the rig command, or wants a team of coding agents (Claude Code, Codex) on their project. That includes installing, setting up, starting or updating OpenRig, seeing, getting back to or re-attaching to their OpenRig agents (including bringing a stopped team back), the operator, starting or sharing a team, and joining this session to one. Operating a running rig from inside it (fleet recovery, seat handover, watchdog wakes, in-rig upgrades) is the openrig-skills skill.
 ---
 
 # rigs: your route into OpenRig
@@ -36,7 +36,7 @@ guidance in `AGENTS.md` or `CLAUDE.md` plus the team's skills and plugins. Say s
 - **Start OpenRig:** `rig daemon status`, and `rig daemon start` if it isn't running. `rig preflight` and `rig doctor`
   don't start it. Starting it also starts OpenRig's own team, the kernel, whose operator sets up the person's team.
   Keep it.
-- **Show them OpenRig, the handoff:** once OpenRig is running, open the OpenRig TUI and operator for the person. Say
+- **Show them OpenRig, the handoff:** once OpenRig is running, open the operator for the person. Say
   you're opening it, then run `rig terminal open saved:kernel --window` on the daemon's desktop. This is the next step
   after installing or starting OpenRig, and the way back whenever they want their agents or OpenRig again. Don't wait
   to be asked or for particular words. If they've said not now, give them that command for later. It opens a view
@@ -49,15 +49,13 @@ guidance in `AGENTS.md` or `CLAUDE.md` plus the team's skills and plugins. Say s
     `echo $TERM_PROGRAM $__CFBundleIdentifier` tells you where you run. `herdr`, `Apple_Terminal` or `ghostty`, or
     `tmux` with `com.apple.Terminal` or `com.mitchellh.ghostty`, mean no macOS prompt, so don't mention one. `tmux`
     with anything else (iTerm, VS Code) can prompt, so say Allow is fine first.
-  - **Layout:** under 120 columns the operator fills the first page; from 120, the dashboard and operator share it. The
-    advisor has its own tab or tmux window.
+  - **Layout:** the operator fills the first page. The advisor has its own tab or tmux window.
 
   Then tell the person in a sentence or two where it opened and that the operator is ready for what they want to
-  build. Don't list agents or statuses (the TUI shows them), and don't suggest a command for them to type.
+  build. Don't list agents or statuses (the Web UI shows them), and don't suggest a command for them to type.
   Preserve the current terminal. If OpenRig's notes say it couldn't confirm the view, say so plainly. If it's already
-  open, point them to it rather than opening another. Only if the window cannot open, `rig tui --shared` is the
-  dashboard-only fallback; explain the failure and help with the chosen fallback. Herdr is visible only in a terminal
-  the person can see; switching the shared TUI to `:terminals` does not open one. No and headless/SSH use are valid
+  open, point them to it rather than opening another. The team dashboard is the Web UI at `/team`. Herdr is
+  visible only in a terminal the person can see. No and headless/SSH use are valid
   background outcomes. Provider-only `--provider herdr` or `--provider cmux` is for an existing provider workspace,
   not the first desktop window.
 - **If the window can't open, or over headless SSH:** say plainly that no visible terminal was opened, and ask the

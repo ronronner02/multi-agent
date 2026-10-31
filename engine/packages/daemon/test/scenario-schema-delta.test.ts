@@ -11,7 +11,6 @@ import {
 //   D1  env.stub_scripts shape (per-seat script map; key CONTRACT vs the topology
 //       is pipeline-level — see scenario-pipeline delta tests)
 //   D3  env.scope_mission teaching requirement for scope expects
-//   D7  env.tui opt-in + tui_socket teaching requirement
 
 const errOf = (r: ValidationResult, code: string) =>
   (r as { ok: false; errors: { code: string; message: string; path: string }[] }).errors.find(
@@ -100,25 +99,10 @@ describe("D3 — scope expects require env.scope_mission (rig scope audit --miss
   });
 });
 
-describe("D7 — env.tui opt-in gates the tui_socket surface", () => {
-  const tuiStep = { expect: { surface: "tui_socket", match: {} } };
-
-  it("teaches when a tui_socket expect exists without env.tui:true", () => {
-    const doc = { ...BASE, steps: [tuiStep] };
-    const r = validateScenario(doc);
-    const e = errOf(r, "TUI_NOT_DECLARED")!;
-    expect(e).toBeDefined();
-    expect(e.message).toContain("env.tui");
-  });
-
-  it("rejects a non-boolean env.tui", () => {
-    const doc = { ...BASE, env: { tui: "yes" }, steps: [tuiStep] };
-    expect(errCodes(validateScenario(doc))).toContain("ENV_TUI_NOT_BOOLEAN");
-  });
-
-  it("accepts tui_socket expects when env.tui is true", () => {
-    const doc = { ...BASE, env: { tui: true }, steps: [tuiStep] };
-    expect(validateScenario(doc).ok).toBe(true);
+describe("D7 — the retired TUI surface is no longer an expectable surface", () => {
+  it("rejects a tui_socket expect as an unknown surface", () => {
+    const doc = { ...BASE, steps: [{ expect: { surface: "tui_socket", match: {} } }] };
+    expect(errCodes(validateScenario(doc))).toContain("UNKNOWN_EXPECT_SURFACE");
   });
 });
 

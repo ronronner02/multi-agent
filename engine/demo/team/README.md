@@ -25,6 +25,6 @@ npx tsx demo/team/scripts/start-team-demo.ts     # creates rig "team-demo"
 rig team start "Say hello from the demo team"
 ```
 
-`rig team start` prints the run id and the TUI and Web commands that watch it.
+`rig team start` prints the run id and the Web UI command that watches it.
 The task's repository is the rig's seat cwd, so the plan artifact it approves is
 `plan.md` at that path; `demo/team/` carries one for the demo.

@@ -163,5 +163,3 @@ after an upgrade it can still hold the previous version's note.
 - **A launched team still writes into its working folder;** the operator now says what changes before you agree.
 - **After a restart, `rig status` shows `Kernel: skipped` whatever the kernel seats' state.** Read them with
   `rig ps --nodes --rig kernel --full`.
-- **`rig tui --shared` still attaches on the default tmux server,** so it can't find the dashboard when the daemon runs
-  on a non-default tmux socket. Use `rig tui` there instead.

@@ -27,12 +27,12 @@ paths before a change, and [test-layers.md](test-layers.md) to choose checks.
 
 ## Repository surfaces
 
-The npm workspaces are `packages/daemon`, `packages/cli`, `packages/tui`, and `packages/ui`
+The npm workspaces are `packages/daemon`, `packages/cli`, `packages/i18n`, and `packages/ui`
 ([root package manifest](../../package.json)). The daemon provides the SQLite-backed HTTP
-services; CLI, TUI and MCP clients consume them. Runtime adapters include Claude Code, Codex,
+services; CLI, Web UI and MCP clients consume them. Runtime adapters include Claude Code, Codex,
 Pi, OMP, terminal and stub implementations under `packages/daemon/src/adapters/`.
 
-The CLI package contains the assembled daemon, TUI and web UI. User reference documents ship
+The CLI package contains the assembled daemon and web UI. User reference documents ship
 from `docs/reference/`; this as-built tree is developer documentation. The assembly is in
 [scripts/build-package.sh](../../scripts/build-package.sh), with the published file list in
 [packages/cli/package.json](../../packages/cli/package.json).
@@ -82,9 +82,6 @@ their contents.
 | [topology.md](ui/topology.md) | Web topology views. |
 | [project-and-for-you.md](ui/project-and-for-you.md) | Project and attention surfaces. |
 | [library-specs-and-design-system.md](ui/library-specs-and-design-system.md) | Library/spec views and design-system pointers. |
-
-For the terminal UI, start at `packages/tui/src/main.ts`, its HTTP client
-`packages/tui/src/daemon-client.ts`, and the TUI sections of [test-layers.md](test-layers.md).
 
 ## Derive the document inventory
 

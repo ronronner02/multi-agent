@@ -142,16 +142,13 @@ it("maps attributed mission outcomes to their exact bound project and keeps curr
 });
 
 
-it("carries failed-reader coverage through Attention and retains only missing health items in the TUI", async () => {
+it("carries failed-reader coverage through Attention and reports the failed source honestly", async () => {
   let failed = false;
   const f = fixture(health => [{ name: "passive-reader", read: () => {
     if (failed) throw new Error("fixture_window_unavailable");
     return [{ ...health, episodeKey: "other-episode", scope: { type: "instance", instanceId: "other" } }];
   } }]);
   try {
-    const { retainAttentionSources } = await import("../../tui/src/attention/source-continuity.js");
-    const { attentionLines } = await import("../../tui/src/attention/attention-model.js");
-    const { createViewState, emptySnapshot } = await import("../../tui/src/state.js");
     const first = await f.read();
     expect(first.items.filter(i => i.id.startsWith("health:"))).toHaveLength(2);
     failed = true;
@@ -162,38 +159,15 @@ it("carries failed-reader coverage through Attention and retains only missing he
     expect(fresh).toHaveLength(1);
     expect(fresh[0]!.at).toBe(f.health.lastObservedAt);
     expect(current.sources.find(s => s.source === "health")).toMatchObject({ state: "unavailable", detail: expect.stringContaining("passive-reader: unavailable — fixture_window_unavailable") });
-    const merged = retainAttentionSources(current, first);
-    expect(merged.retained).toBe(true);
-    expect(merged.read.items.filter(i => i.id.startsWith("health:"))).toHaveLength(2);
-    expect(merged.read.items.find(i => i.id === fresh[0]!.id)).toEqual(fresh[0]);
-    const view = createViewState({ instanceId: "fixture" }).get();
-    const text = attentionLines(view, { ...emptySnapshot(), attentionRead: merged.read }, 120).map(l => l.text).join(" ");
-    expect(text).toContain("feed is incomplete");
-    expect(text).toContain("passive-reader: unavailable");
-    expect(text).toContain("fixture_window_unavailable");
-    const oldDetail = await f.read(fresh[0]!.id);
-    const newDetail = { ...oldDetail, detail: { ...oldDetail.detail!, lines: ["New detail from working reader"] } };
-    expect(retainAttentionSources(newDetail, oldDetail).read.detail!.lines).toEqual(["New detail from working reader"]);
     failed = false;
     expect((await f.read()).sources.find(s => s.source === "health")?.state).toBe("available");
   } finally { f.db.close(); }
 });
 
-it("shows bounded health coverage as partial without reviving items outside a successful window", async () => {
+it("shows bounded health coverage as partial", async () => {
   const f = fixture(() => [{ read: () => [], coverage: () => [{ source: "bounded-reader", evaluatedAt: "fixture", unit: "families", limit: 200, total: 206, evaluated: 200, omitted: 6, partial: true, order: "busiest first" }] }]);
   try {
-    const { retainAttentionSources } = await import("../../tui/src/attention/source-continuity.js");
-    const { attentionLines } = await import("../../tui/src/attention/attention-model.js");
-    const { createViewState, emptySnapshot } = await import("../../tui/src/state.js");
     const current = await f.read();
     expect(current.sources.find(s => s.source === "health")).toMatchObject({ state: "partial", detail: expect.stringContaining("bounded-reader: partial — evaluated 200 of 206 families; 6 omitted") });
-    const empty = { ...current, items: [] };
-    const merged = retainAttentionSources(empty, current);
-    expect(merged.retained).toBe(false);
-    expect(merged.read.items).toEqual([]);
-    const text = attentionLines(createViewState({ instanceId: "fixture" }).get(), { ...emptySnapshot(), attentionRead: merged.read }, 120).map(l => l.text).join(" ");
-    expect(text).toContain("feed is incomplete");
-    expect(text).toContain("bounded-reader: partial");
-    expect(text).toContain("Unknown: a required source is unavailable or partial.");
   } finally { f.db.close(); }
 });

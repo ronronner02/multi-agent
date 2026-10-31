@@ -3,7 +3,7 @@
 This is the contributor-facing statement of which checks BLOCK a change and which are
 advisory. Every pull request to `main` runs `.github/workflows/tests.yml` on a clean GitHub
 runner: build and packaging, typecheck, the repository scripts (`npm run test:repo`), each
-workspace's test suite (daemon, cli, tui and ui) on macOS without ambient credentials or
+workspace's test suite (daemon, cli and ui) on macOS without ambient credentials or
 external network, and an installed-package scenario (`scripts/run-pr-scenarios.sh`). The root
 `package.json` scripts below run the same build, typecheck, repository and test checks locally,
 with one difference: `npm test` does not include the UI suite, which CI runs as
@@ -18,10 +18,10 @@ Locally, `npm test` builds only the daemon, and `test:workspaces` and `test:ui` 
 
 | Gate | Command | Covers |
 |---|---|---|
-| Typecheck | `npm run lint` | daemon + **ui** + cli + tui tsconfigs — UI typecheck STAYS blocking |
+| Typecheck | `npm run lint` | daemon + **ui** + cli tsconfigs — UI typecheck STAYS blocking |
 | Build | `npm run build` | all workspaces — the UI dist ships in the package, so its build STAYS blocking |
 | Repo scripts | `npm run test:repo` | daemon build, script self-tests, first-run reference check, docs guard, skill mirror check, context-pack generation check |
-| Unit tests | `npm run test:workspaces` | `packages/daemon` + `packages/cli` + `packages/tui` |
+| Unit tests | `npm run test:workspaces` | `packages/daemon` + `packages/cli` |
 | UI unit tests | `npm run test:ui` | `packages/ui` vitest. NOT part of `npm test`, but every pull request runs it as `package-tests (ui)` (the `package-tests` matrix in `.github/workflows/tests.yml`) |
 | Installed-package scenario | CI only: `scripts/run-pr-scenarios.sh` | the installed package, a daemon restart and a seeded durability failure. The script refuses to run outside GitHub Actions unless given `--remote` with `DOCKER_HOST=ssh://…` |
 | Package file lists | CI only | records each package's published file list (`npm pack --dry-run`) |

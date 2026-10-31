@@ -50,15 +50,11 @@ route remain the source for result/error shape and side effects.
 
 ## Entry points and practical routes
 
-Bare `rig` opens the TUI, the status dashboard rather than an agent conversation, when both
-stdin and stdout are terminals. Arguments,
-pipes, and redirected streams follow normal CLI parsing.
-[`runFrontDoor` and `openMissionControl`](../../packages/cli/src/front-door.ts)
-own the entry behavior; [`tuiCommand`](../../packages/cli/src/commands/tui.ts)
-owns explicit TUI options; `rig terminal open saved:kernel --window` opens a terminal view
-of the OpenRig TUI, the operator and the advisor (in a new tab or window, or the current
-Herdr session), and `rig tui --shared` is the dashboard-only fallback when that view cannot open. A daemon-down transport result can still open the
-recovery cockpit; it is not automatically a reason to exit before rendering.
+[`tuiCommand`](../../packages/cli/src/commands/tui.ts) owns the retired `rig tui` verb; it
+prints the Web UI dashboard address and exits non-zero. `rig terminal open saved:kernel
+--window` opens a terminal view of the operator and the advisor (in a new tab or window, or the
+current Herdr session). The terminal UI was retired on 2026-10-31; the team dashboard is the Web
+UI at `/team`.
 
 | Need | Start here |
 |---|---|
@@ -216,8 +212,7 @@ Root: `rig`; declared option: `-V, --version`.
 
 | Invocation | Aliases | Declared options |
 |---|---|---|
-| `rig tui` | — | `--shared` |
-| `rig tui commands` | — | `--json` |
+| `rig tui` | — | retired: prints the Web UI URL, exits non-zero |
 
 ### package
 
@@ -875,7 +870,7 @@ Root: `rig`; declared option: `-V, --version`.
 
 A `rig seat stop` that successfully kills the current session records that it
 was intentionally stopped. With other healthy members running, the rig's `lifecycleState` in
-`rig ps` and the TUI stays `running`; the stopped member no longer makes it
+`rig ps` stays `running`; the stopped member no longer makes it
 `degraded`. Stopping every member
 leaves the rig `stopped`. Node JSON exposes `intentionallyStopped` in compact,
 `--full`, and `--fields` output.

@@ -55,8 +55,6 @@ export const PIN = Object.freeze({
     'packages/daemon/src/routes/events.ts',
     'packages/daemon/src/routes/terminal-ws.ts',
     'packages/daemon/test/terminal-ws-route.test.ts',
-    'packages/tui/src/attention/attention-model.ts',
-    'packages/tui/src/terminals/terminal-model.ts',
     'packages/daemon/src/index.ts',
     'packages/daemon/src/startup.ts',
     'packages/daemon/src/adapters/tmux.ts',
@@ -90,24 +88,12 @@ export const PIN = Object.freeze({
     'packages/daemon/test/tmux-parent-env-hook-native.test.ts',
     // T041 passes the shared worker launcher into the resume adapter, so the startup assertion follows it.
     'packages/daemon/test/s03-bound-launch.test.ts',
-    'packages/tui/package.json',
     'packages/ui/package.json',
     'packages/ui/src/App.tsx',
     'packages/ui/src/routes.tsx',
     'packages/ui/src/globals.css',
     'packages/ui/src/lib/theme.ts',
     'packages/ui/src/lib/status-colors.ts',
-    'packages/tui/src/theme.ts',
-    'packages/tui/src/main.ts',
-    'packages/tui/src/input.ts',
-    'packages/tui/src/types.ts',
-    'packages/tui/src/state.ts',
-    'packages/tui/src/render.ts',
-    'packages/tui/src/demo-data.ts',
-    'packages/tui/src/daemon-client.ts',
-    'packages/tui/src/hydrate.ts',
-    'packages/tui/src/live-events.ts',
-    'packages/tui/src/live.ts',
     'packages/cli/src/config-store.ts',
     'packages/cli/test/config-store-extended.test.ts',
     // T047: the landed launch attachment adapts the startup and restore orchestrators.
@@ -116,6 +102,57 @@ export const PIN = Object.freeze({
     'packages/daemon/test/restore-orchestrator.test.ts',
     // The smoke lane runs the team decisions suite that lives under src/.
     'packages/ui/vitest.config.ts',
+    // The owner retired the terminal UI on 2026-10-31. These imported files lost
+    // their TUI wiring (launch path, help text, kernel startup action, scenario
+    // surface) or became the `rig tui` stub that names the Web UI instead.
+    'packages/cli/src/bin-wrapper.ts',
+    'packages/cli/src/commands/setup.ts',
+    'packages/cli/src/commands/terminal.ts',
+    'packages/cli/src/commands/tui.ts',
+    'packages/cli/test/setup-output.test.ts',
+    'packages/cli/test/setup.test.ts',
+    'packages/daemon/specs/rigs/launch/kernel/rig.yaml',
+    'packages/daemon/specs/rigs/launch/kernel/rig-claude-only.yaml',
+    'packages/daemon/specs/rigs/launch/kernel/rig-codex-only.yaml',
+    'packages/daemon/test/attention.test.ts',
+    'packages/daemon/test/browser-boundary-listener.test.ts',
+    'packages/daemon/test/fixtures/scenarios/scenario-10-one-view-state.yaml',
+    'packages/daemon/test/helpers/scenario-pipeline.ts',
+    'packages/daemon/test/helpers/scenario-schema.ts',
+    'packages/daemon/test/helpers/scenario-surfaces.ts',
+    'packages/daemon/test/scenario-normalizer.test.ts',
+    'packages/daemon/test/scenario-pipeline.test.ts',
+    'packages/daemon/test/scenario-schema-delta.test.ts',
+    'packages/daemon/test/scenario-surfaces.test.ts',
+    'packages/test-system/scenarios/one-view-state-after-mutation-storm.yaml',
+    'scripts/build-package.sh',
+    'scripts/build-testbed-cli-pack.test.mjs',
+    'scripts/prepare-workspace-build.mjs',
+    'scripts/prepare-workspace-build.test.mjs',
+    'scripts/rewrite-daemon-imports.mjs',
+    'scripts/rewrite-daemon-imports.test.mjs',
+  ],
+  // Imported paths removed on purpose; verify reports them as removed rather than
+  // missing. A trailing slash removes a whole subtree. The owner retired the
+  // terminal UI on 2026-10-31: the Web UI and the desktop app are the product.
+  // The TUI package subtree goes with its CLI launch path, its client-side
+  // command dump, its packaging test and the scenario helpers that spawned it.
+  removed: [
+    'packages/tui/',
+    'packages/cli/src/front-door.ts',
+    'packages/cli/src/local-reading.ts',
+    'packages/cli/src/shared-tui.ts',
+    'packages/cli/test/front-door.test.ts',
+    'packages/cli/test/local-reading.test.ts',
+    'packages/cli/test/shared-tui.test.ts',
+    'packages/cli/test/terminal-window-tui-preview.test.ts',
+    'packages/cli/test/tui-command.test.ts',
+    'packages/cli/test/tui-commands-dump.test.ts',
+    'packages/daemon/scripts/probe-health-calibration.mjs',
+    'packages/daemon/scripts/probe-passive-ceremony.mjs',
+    'packages/daemon/test/helpers/scenario-tui.ts',
+    'packages/daemon/test/scenario-tui.test.ts',
+    'scripts/test-tui-package.mjs',
   ],
 });
 
@@ -203,12 +240,6 @@ const LOCAL_ENGINE_PATHS = [
   'packages/i18n/src/display-width.ts',
   'packages/i18n/test/catalog-parity.test.ts',
   'packages/i18n/test/display-width.test.ts',
-  'packages/tui/test/terminal-render.test.ts',
-  'packages/tui/test/team-layout.test.ts',
-  'packages/tui/test/team-language.test.ts',
-  'packages/tui/test/team-controls.test.ts',
-  'packages/tui/test/team-projection.test.ts',
-  'packages/tui/src/icons.ts',
   'packages/ui/public/skins/shuimo-danqing/shuimo-danqing-loop.mp4',
   'packages/ui/public/skins/shuimo-danqing/sm-paper-grain-strong.webp',
   'packages/ui/public/skins/shuimo-danqing/sm-paper-grain.webp',
@@ -430,13 +461,14 @@ function walk(root, rel = '') {
   return out;
 }
 
-export function verifyTree(audit, dest, { local = LOCAL_ENGINE_PATHS, adapted = PIN.adapted, files = walk(dest) } = {}) {
+export function verifyTree(audit, dest, { local = LOCAL_ENGINE_PATHS, adapted = PIN.adapted, removed = PIN.removed, files = walk(dest) } = {}) {
   const expected = new Map(audit.manifest.map((m) => [m.path, m]));
-  const result = { missing: [], changed: [], adapted: [], extra: [] };
+  const isRemoved = (rel) => removed.some((entry) => (entry.endsWith('/') ? rel.startsWith(entry) : rel === entry));
+  const result = { missing: [], changed: [], adapted: [], removed: [], extra: [] };
   for (const [rel, m] of expected) {
     const target = path.join(dest, rel);
     if (!lstatExists(target)) {
-      result.missing.push(rel);
+      (isRemoved(rel) ? result.removed : result.missing).push(rel);
       continue;
     }
     const st = lstatSync(target);

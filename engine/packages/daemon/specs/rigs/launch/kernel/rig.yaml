@@ -37,13 +37,6 @@ pods:
         runtime: terminal
         profile: none
         cwd: "."
-        startup:
-          actions:
-            - type: send_text
-              value: rig tui
-              phase: after_ready
-              applies_on: [fresh_start]
-              idempotent: true
       - id: agent
         agent_ref: "local:agents/operator/agent"
         runtime: codex

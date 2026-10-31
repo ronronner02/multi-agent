@@ -2,11 +2,10 @@
  * Slice 51-02 (L2 test-system) — the shipped-surface READERS.
  *
  * For an `expect` step, the runner reads the named surface via the SHIPPED `rig`
- * invocation (or the TUI control socket) and returns the observable to assert on.
+ * invocation and returns the observable to assert on.
  * Reads only — never a direct DB poke (the honesty guarantee). Shape traps handled
  * per the verify-at-source record (ps/queue/stream are BARE ARRAYS; queue uses
- * --full so `body` is not blanked; tui_socket is a unix socket, send exactly
- * `state`; policy provenance is `policy effective`).
+ * --full so `body` is not blanked; policy provenance is `policy effective`).
  *
  * RESERVED surfaces (PM lock amendment, ruling row qitem-20260811092250-a80735bc):
  * `proof` has NO shipped read verb, so the VALIDATOR now rejects it at load
@@ -16,7 +15,6 @@
  * need explicit success signals).
  */
 
-import net from "node:net";
 import { runRig } from "./scenario-daemon.js";
 import type { ExpectSurface } from "./scenario-schema.js";
 
@@ -98,8 +96,6 @@ export async function readSurface(
       return jsonRig(transcriptReadArgv(requireSeat(surface, opts), opts.transcriptTail), ctx);
     case "policy_provenance":
       return jsonRig(["policy", "effective", "--json"], ctx);
-    case "tui_socket":
-      return readTuiSocket(ctx, opts);
     default:
       // Defense-in-depth: a RESERVED value (e.g. "proof") smuggled past the
       // validator by a cast still fails loud and named, never fabricated.
@@ -123,46 +119,4 @@ async function jsonRig(args: string[], ctx: SurfaceContext): Promise<unknown> {
   } catch {
     throw new Error(`\`rig ${args.join(" ")}\` did not return valid JSON: ${r.stdout.slice(0, 200)}`);
   }
-}
-
-/**
- * Query the TUI control socket's OBSERVE verb: connect, send exactly `state`, and
- * parse the one-line JSON reply. Sending any other line is a MUTATION — the reader
- * sends only `state`. Path from OPENRIG_TUI_SOCKET (the scenario helper sets it
- * when a TUI is up).
- */
-function readTuiSocket(ctx: SurfaceContext, opts: ReadSurfaceOptions): Promise<unknown> {
-  const sockPath = ctx.readEnv.OPENRIG_TUI_SOCKET;
-  if (!sockPath) {
-    return Promise.reject(
-      new Error("tui_socket read requires OPENRIG_TUI_SOCKET (the TUI control socket path)"),
-    );
-  }
-  const timeoutMs = opts.timeoutMs ?? 5000;
-  return new Promise((resolve, reject) => {
-    const conn = net.createConnection(sockPath);
-    let buf = "";
-    const timer = setTimeout(() => {
-      conn.destroy();
-      reject(new Error("tui_socket `state` query timed out"));
-    }, timeoutMs);
-    conn.on("connect", () => conn.write("state\n"));
-    conn.on("data", (b) => {
-      buf += b.toString();
-      const nl = buf.indexOf("\n");
-      if (nl < 0) return;
-      clearTimeout(timer);
-      const line = buf.slice(0, nl);
-      conn.end();
-      try {
-        resolve(JSON.parse(line));
-      } catch {
-        reject(new Error(`tui_socket reply was not JSON: ${line.slice(0, 120)}`));
-      }
-    });
-    conn.on("error", (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-  });
 }

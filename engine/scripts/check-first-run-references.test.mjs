@@ -39,13 +39,14 @@ test("prose starting with rig is not a shell example; fenced examples still are"
 });
 
 test("printed prose after a command's default action is not another verb", () => {
+  // The retired terminal UI keeps a default action and no subcommands, which is the shape
+  // this test pins: a sentence after the verb is prose, not a nested command.
   const p = program();
-  const tui = new Command("tui").option("--shared").action(() => { throw new Error("must not execute"); });
-  tui.addCommand(new Command("commands")); p.addCommand(tui);
-  assert.equal(commandReference("rig tui --shared joins the existing view",p,{prose:true}).verbs,"rig tui");
+  const tui = new Command("tui").action(() => { throw new Error("must not execute"); });
+  p.addCommand(tui);
+  assert.equal(commandReference("rig tui prints the dashboard address",p,{prose:true}).verbs,"rig tui");
   assert.equal(commandReference("rig tui opens an independent view",p,{prose:true}).verbs,"rig tui");
-  assert.equal(commandReference("rig tui commands",p).verbs,"rig tui commands");
-  assert.match(commandReference("rig tui commnads",p).error,/unknown verb/);
+  assert.match(commandReference("rig queue lsst",p).error,/unknown verb/);
   assert.match(commandReference("rig queue lsst",p,{prose:true}).error,/unknown verb/);
 });
 

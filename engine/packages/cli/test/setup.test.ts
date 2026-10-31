@@ -253,7 +253,7 @@ describe("rig setup", () => {
     expect(out).toContain("rig send dev-build@starter");
     expect(out).toContain("rig queue list --destination dev-build@starter");
     expect(out).not.toContain("rig queue list --rig");
-    expect(out).toContain("rig tui --shared");
+    expect(out).toContain("The team dashboard is the Web UI at <daemon-url>/team");
     expect(out).toContain("rig context get reference/getting-started.md");
     // no magic mega-command - the path is existing verbs only
     expect(out).not.toMatch(/rig (journey|onboarding)\b/);
