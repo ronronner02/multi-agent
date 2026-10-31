@@ -1,7 +1,7 @@
-import type { TeamOwnerRead, TeamReviewView, TeamRun } from "@openrig/daemon/team-control";
+import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun } from "@openrig/daemon/team-control";
 
-/** One run and one task builder, shared by the Workspace and Reviews tests: the two screens read
- * the same projection, so a fixture that drifted between them would hide a real disagreement. */
+/** One run, task and attempt builder, shared by the Workspace, Reviews and Analytics tests: they
+ * read the same projection, so a fixture that drifted between them would hide a real disagreement. */
 
 export const run: TeamRun = {
   id: "RUN-0142", rigId: "work-board", bindingDigest: "binding", state: "approved", stateReason: null,
@@ -19,6 +19,14 @@ export function task(overrides: Partial<TeamReviewView> = {}): TeamReviewView {
   return { taskId: "T-102", qitemId: "q-T-102", role: "implementer", queueState: "done", title: "Status filter",
     dependencies: [], criteria: { verified: null, total: null, source: null }, currentCandidateDigest: `sha256:${"c".repeat(64)}`,
     rounds: 1, openP0P1: 1, reviewAvailable: true, acceptance: null, ...overrides };
+}
+
+/** An attempt whose usage the producer never observed, which is the state a fresh attempt is in. */
+export function attempt(overrides: Partial<TeamAttemptView> = {}): TeamAttemptView {
+  return { attemptId: "a1", runId: run.id, taskId: "T-102", qitemId: "q-T-102", role: "implementer", provider: "claude",
+    state: "stopped", unknownReason: null, session: null, createdAt: "2026-10-31T00:00:00.000Z",
+    usage: { activeMs: 0, inputTokens: { value: null, reason: "not reported" }, outputTokens: { value: null, reason: "not reported" },
+      costUsd: { value: null, reason: "not reported" } }, ...overrides };
 }
 
 export function read(overrides: Partial<TeamOwnerRead> = {}): TeamOwnerRead {

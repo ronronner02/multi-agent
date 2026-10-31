@@ -175,7 +175,10 @@ describe("version-bound owner decisions", () => {
 
   it("offers only a verified read-only session for native requests", async () => {
     const read = fixture(); read.approvals[0] = { ...read.approvals[0]!, kind: "native", action: "native-tool", payload: { attemptId: "attempt" } };
-    read.attempts = [{ attemptId: "attempt", runId: read.run.id, taskId: "T020", qitemId: "qitem", role: "implementer", provider: "codex", state: "running", session: "session", unknownReason: null }];
+    read.attempts = [{ attemptId: "attempt", runId: read.run.id, taskId: "T020", qitemId: "qitem", role: "implementer", provider: "codex", state: "running", session: "session", unknownReason: null,
+      createdAt: "2026-10-31T00:00:00.000Z",
+      usage: { activeMs: 0, inputTokens: { value: null, reason: "not reported" },
+        outputTokens: { value: null, reason: "not reported" }, costUsd: { value: null, reason: "not reported" } } }];
     const mounted = await mountDecisions(read);
     expect(screen.queryByRole("button", { name: "Approve", exact: true })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open session", exact: true }));

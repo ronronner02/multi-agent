@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { createInterfaceI18n, type InterfaceI18n, type InterfaceLanguage } from "@openrig/i18n";
+import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import { CheckCircle2, ChartColumn, ChevronDown, House, LayoutGrid, Moon, Search, Settings as SettingsIcon, SquareCheck, Sun } from "lucide-react";
-import { version } from "../../package.json";
 import { Card } from "../components/ui/card.js";
 import { Button } from "../components/ui/button.js";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
-import { NewTaskForm, RunSelect } from "./new-task.js";
+import { RunSelect } from "./new-task.js";
 import { Overview } from "./overview.js";
 import { TasksScreen } from "./tasks.js";
 import { WorkspaceScreen } from "./workspace/workspace-screen.js";
 import type { BrowseState } from "./workspace/workspace-view.js";
 import { ReviewsScreen } from "./reviews.js";
 import { BottomPanel, type TerminalTarget } from "./bottom-panel.js";
-import { RunStepper } from "./run-stepper.js";
-import { SystemStatus } from "./system-status.js";
+import { AnalyticsScreen } from "./analytics.js";
+import { SettingsScreen } from "./settings.js";
+import { useThemePreference, type TeamTheme } from "./theme.js";
 import "./team.css";
 
 export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
@@ -39,30 +39,9 @@ export function teamSection(pathname: string): TeamSection {
   return (TEAM_SECTIONS as readonly string[]).includes(raw) ? (raw as TeamSection) : "overview";
 }
 
-export const TEAM_THEME_KEY = "openrig.teamTheme";
-export type TeamTheme = "dark" | "light";
-
-export function readTeamTheme(): TeamTheme {
-  try {
-    return localStorage.getItem(TEAM_THEME_KEY) === "light" ? "light" : "dark";
-  } catch {
-    return "dark";
-  }
-}
-
-export function writeTeamTheme(theme: TeamTheme): void {
-  try {
-    localStorage.setItem(TEAM_THEME_KEY, theme);
-  } catch {
-    // The choice still applies to this load when storage is unavailable.
-  }
-}
-
 const NAV_ICONS = {
   overview: House, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: SettingsIcon,
 } as const;
-
-const USAGE_LABELS = ["costUsd", "inputTokens", "outputTokens"] as const;
 
 export function Pairing() {
   const { t } = useTranslation();
@@ -172,34 +151,6 @@ export function ShellFrame({ language, section, theme, onTheme, runId, runPicker
   </div>;
 }
 
-function SettingsScreen({ language, theme, onTheme }: {
-  language: InterfaceI18n; theme: TeamTheme; onTheme: (theme: TeamTheme) => void;
-}) {
-  const { t } = useTranslation();
-  const { read } = useTeamRun("");
-  return <>
-    <PageHeader title={t("settings.title")} />
-    <Card className="team-card" role="region" aria-label={t("settings.appearance")}>
-      <h2>{t("settings.appearance")}</h2>
-      <div className="ui-field">
-        <label>{t("language.label")}<select value={language.language} onChange={event => void language.changeLanguage(event.target.value as InterfaceLanguage)}>
-          <option value="zh-CN">{t("language.zh-CN")}</option><option value="en">{t("language.en")}</option></select></label>
-        <label>{t("settings.theme")}<select value={theme} onChange={event => onTheme(event.target.value as TeamTheme)}>
-          <option value="dark">{t("settings.theme.dark")}</option><option value="light">{t("settings.theme.light")}</option></select></label>
-      </div>
-      <p className="team-muted">{t("settings.themeHelp")}</p>
-    </Card>
-    <Card className="team-card" role="region" aria-label={t("settings.connection")}>
-      <h2>{t("settings.connection")}</h2><p className="team-muted"><code>v{version}</code></p>
-      <Pairing />
-    </Card>
-    <Card className="team-card" role="region" aria-label={t("settings.plan")}>
-      <h2>{t("settings.plan")}</h2>
-      <p className="team-muted">{read.data?.run.binding.planRef ?? t("web.noRun")}</p>
-    </Card>
-  </>;
-}
-
 function ManagedShell({ language }: { language: InterfaceI18n }) {
   const { t } = useTranslation();
   const { paired } = useOwnerSession();
@@ -210,13 +161,12 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   const navigate = useNavigate();
   const data = useTeamRun(runId);
   const [now, setNow] = useState(Date.now);
-  const [theme, setTheme] = useState<TeamTheme>(readTeamTheme);
+  const { preference, theme, setPreference } = useThemePreference();
   const [workspaceBrowse, setWorkspaceBrowse] = useState<BrowseState & { runId: string }>({ runId, path: "", source: "" });
   const [knowledgeBrowse, setKnowledgeBrowse] = useState<BrowseState & { runId: string }>({ runId, path: "", source: "target" });
   const [evidenceTab, setEvidenceTab] = useState("logs");
   const [target, setTarget] = useState<TerminalTarget>(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(timer); }, []);
-  useEffect(() => { writeTeamTheme(theme); }, [theme]);
 
   const read = data.read.data;
   const error = data.read.error ?? data.events.error ?? data.health.error;
@@ -231,14 +181,16 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
     to: "/team/$section", params: { section: next }, search: { run: runId || undefined, q: query || undefined },
   });
 
-  return <ShellFrame language={language} section={section} theme={theme} onTheme={setTheme}
+  return <ShellFrame language={language} section={section} theme={theme} onTheme={() => setPreference(theme === "dark" ? "light" : "dark")}
     runId={runId} runPicker={paired ? <RunSelect current={runId} /> : undefined}
     project={read?.run.rigId ?? ""} coordinator={{ state: coordinator?.state ?? "unknown", known: !!coordinator }}
     connection={connection} notifications={pending?.length}
     hrefFor={next => `/team/${next}${runId ? `?run=${encodeURIComponent(runId)}` : ""}`}
     onSelect={go} onSearch={query => go("tasks", query)}>
     {!paired && section !== "settings" && <Pairing />}
-    {section === "settings" ? <SettingsScreen language={language} theme={theme} onTheme={setTheme} /> : <>
+    {section === "settings" ? <SettingsScreen language={language} theme={preference} onTheme={setPreference}
+      connection={connection} isolation={data.health.data?.runtime?.isolation ?? null}
+      address={window.location.origin} planRef={read?.run.binding.planRef} /> : <>
       {!runId && <Card className="team-card ui-empty" role="status"><strong>{t("shell.noRun")}</strong>
         <p className="team-muted">{t("web.discovery")}</p></Card>}
       {section === "overview" && <Overview read={read} run={read?.run} now={now}
@@ -253,17 +205,7 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
         evidence={{ tab: evidenceTab, onTab: setEvidenceTab, target, onTarget: setTarget }} />}
       {section === "reviews" && <ReviewsScreen read={read} runId={runId} available={paired && !error && fresh}
         refresh={() => data.read.refetch({ throwOnError: true })} />}
-      {section === "analytics" && <>
-        <PageHeader title={t("nav.analytics")} subtitle={runId || undefined} />
-        <RunStepper workflow={read?.workflow} />
-        <SystemStatus run={read?.run} health={data.health.data} available={paired && !error && fresh} now={now} />
-        <Card className="team-card" role="region" aria-label={t("web.usage")}><h2>{t("web.usage")}</h2>
-          <dl className="team-facts">{USAGE_LABELS.map(name => <div key={name}>
-            <dt>{t(name === "costUsd" ? "web.cost" : name === "inputTokens" ? "web.inputTokens" : "web.outputTokens")}</dt>
-            <dd>{read?.run.usage[name].value ?? t("web.unknown")}<small>{read?.run.usage[name].reason}</small></dd>
-          </div>)}</dl>
-        </Card>
-      </>}
+      {section === "analytics" && <AnalyticsScreen read={read} runId={runId} />}
     </>}
   </ShellFrame>;
 }

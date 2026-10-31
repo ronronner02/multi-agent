@@ -245,11 +245,6 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell [role="tab"] { flex: 1 0 auto; padding: 6px 9px; font-size: 12px; }
 .team-shell [aria-pressed="true"], .team-shell [role="tab"][data-state="active"] { color: var(--ui-text); background: var(--ui-raised); border-color: var(--ui-accent); }
 .team-shell .team-facts > div, .team-shell .team-detail-facts > div { border-bottom: 1px solid var(--ui-divider); }
-.team-shell .team-health-dot { border-radius: 50%; }
-.team-shell .team-health-ok { color: var(--ui-ok); }
-.team-shell .team-health-degraded { color: var(--ui-warn); }
-.team-shell .team-health-failed { color: var(--ui-error); }
-.team-shell .team-health-unknown { color: var(--ui-muted); }
 
 /* --- surviving evidence surfaces ---------------------------------------- */
 .team-shell .team-card pre { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -262,12 +257,8 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .team-detail-facts dt { color: var(--ui-muted); }
 .team-shell .team-detail-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; }
 .team-shell .team-search { display: grid; gap: 8px; margin-bottom: 10px; }
-.team-shell .team-stepper ol { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin: 8px 0; padding: 0; list-style: none; }
-.team-shell .team-stepper li { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ui-muted); font-size: 12px; text-align: center; }
-.team-shell .team-stage-number { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--ui-divider); border-radius: 50%; }
 .team-shell .team-decisions ul, .team-shell .team-attempts { margin: 0; padding: 0; list-style: none; }
 .team-shell .team-decisions li, .team-shell .team-attempts li { padding: 8px 0; border-bottom: 1px solid var(--ui-divider); overflow-wrap: anywhere; }
-.team-shell .team-health-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; background: currentColor; }
 .team-shell .team-log-filters, .team-shell .team-terminal-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
 .team-shell .team-terminal-viewport { width: 100%; overflow: hidden; margin-top: 12px; }
 .team-shell .team-terminal-screen { width: max-content; background: #0c0a09; }
@@ -402,6 +393,61 @@ body:has(.team-shell) > #root { height: 100%; }
 .ui-diff-line[data-kind="remove"] .ui-marker { color: var(--ui-remove-strong); }
 .ui-code { padding-right: 12px; white-space: pre; overflow-wrap: normal; color: var(--ui-text); min-width: 0; }
 
+/* --- analytics ---------------------------------------------------------- */
+.ui-analytics, .ui-settings { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ui-range { display: flex; align-items: center; gap: 8px; color: var(--ui-muted); font-size: 13px; white-space: nowrap; }
+.ui-range select { width: auto; min-width: 132px; }
+.ui-analytics-note { margin: -8px 0 0; font-size: 12px; }
+.ui-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.ui-analytics-grid > .ui-panel { display: flex; flex-direction: column; }
+.ui-analytics-grid .ui-chart { margin-top: auto; }
+.ui-chart { display: block; width: 100%; height: auto; overflow: visible; }
+.ui-chart-grid { stroke: var(--ui-divider); stroke-width: 1; }
+.ui-chart-axis { stroke: var(--ui-divider); stroke-width: 1; }
+.ui-chart-tick { fill: var(--ui-muted); font: 11px var(--ui-sans); font-variant-numeric: tabular-nums; }
+.ui-chart-label { fill: var(--ui-text); font: 12px var(--ui-sans); }
+.ui-chart-line { fill: none; stroke: var(--ui-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ui-chart-point { fill: var(--ui-accent); }
+.ui-chart-bar { fill: var(--ui-accent-soft); stroke: var(--ui-accent); stroke-width: 1; }
+.ui-legend { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; }
+.ui-legend-key { width: 14px; height: 2px; border-radius: 1px; background: var(--ui-accent); }
+.ui-analytics .ui-table td:first-child { color: var(--ui-text); }
+
+/* --- settings ----------------------------------------------------------- */
+.ui-settings-body { display: grid; grid-template-columns: minmax(160px, 200px) minmax(0, 1fr); gap: 24px; align-items: start; min-width: 0; }
+.ui-sections { display: grid; gap: 2px; align-content: start; }
+.ui-sections button {
+  justify-content: flex-start; text-align: left; border-color: transparent; background: transparent;
+  color: var(--ui-muted); font-size: 13px; padding: 7px 10px;
+}
+.ui-sections button:hover { background: var(--ui-raised); }
+.ui-sections button[aria-pressed="true"] { background: var(--ui-accent-soft); border-color: transparent; color: var(--ui-text); }
+.ui-settings-pane { display: flex; flex-direction: column; gap: 16px; min-width: 0; max-width: 720px; }
+.ui-settings-pane .ui-facts > div { align-items: flex-start; padding: 10px 0; }
+/* The value and its one-line explanation stack, so the explanation is a caption under the fact
+ * rather than a sentence running off the same row. */
+.ui-settings-pane .ui-facts dd { display: grid; gap: 2px; justify-items: end; text-align: right; }
+.ui-settings-pane .ui-facts dd > small { text-align: right; }
+.ui-settings-pane .ui-facts dd[data-runtime="connection"] { display: flex; align-items: center; gap: 8px; }
+.ui-themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.ui-theme-option {
+  display: flex; align-items: center; gap: 8px; justify-content: flex-start;
+  min-height: 48px; padding: 10px 12px; border: 1px solid var(--ui-divider); background: var(--ui-surface); color: var(--ui-text);
+}
+.ui-theme-option svg { width: 16px; height: 16px; color: var(--ui-muted); flex-shrink: 0; }
+.ui-theme-option[aria-checked="true"] { border-color: var(--ui-accent); background: var(--ui-accent-soft); }
+.ui-theme-option[aria-checked="true"] svg { color: var(--ui-accent); }
+.ui-radio { width: 12px; height: 12px; border: 1px solid var(--ui-muted); border-radius: 50%; flex-shrink: 0; }
+.ui-radio[data-checked="true"] { border-color: var(--ui-accent); background: radial-gradient(circle, var(--ui-accent) 0 45%, transparent 50%); }
+.ui-sessions { list-style: none; margin: 8px 0 16px; padding: 0; }
+.ui-sessions li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--ui-divider);
+}
+.ui-sessions li:last-child { border-bottom: 0; }
+.ui-sessions strong { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.ui-sessions button { min-height: 28px; padding: 3px 10px; font-size: 12px; }
+
 @media (prefers-reduced-motion: reduce) {
   .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -410,6 +456,10 @@ body:has(.team-shell) > #root { height: 100%; }
   .ui-overview-grid, .ui-overview-foot, .ui-tasks-body { grid-template-columns: minmax(0, 1fr); }
   .ui-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ui-detail { position: static; }
+  .ui-analytics-grid { grid-template-columns: minmax(0, 1fr); }
+  .ui-settings-body { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ui-sections { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--ui-divider); }
+  .ui-settings-pane { max-width: none; }
 }
 @media (max-width: 767px) {
   .team-shell { grid-template-columns: minmax(0, 1fr); }
@@ -423,4 +473,6 @@ body:has(.team-shell) > #root { height: 100%; }
   .ui-summary dl > div:nth-child(odd) { border-left: 0; padding-left: 0; }
   .ui-board { grid-template-columns: minmax(0, 1fr); }
   .ui-field { grid-template-columns: minmax(0, 1fr); }
+  .ui-themes { grid-template-columns: minmax(0, 1fr); }
+  .ui-sessions li { grid-template-columns: minmax(0, 1fr) auto; }
 }
