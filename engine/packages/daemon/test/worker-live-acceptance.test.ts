@@ -46,7 +46,10 @@ function requireInstalled(): void {
   }
 }
 
-interface Allowance { native_invocations_attempted: number; maximum_native_invocations: number }
+interface Allowance {
+  native_invocations_attempted: number; maximum_native_invocations: number;
+  reported_tokens: number; maximum_reported_tokens: number; deadline: string | null;
+}
 
 /** The allowance as recorded, or undefined when the owner has not provisioned it. */
 function allowance(): Allowance | undefined {
@@ -64,16 +67,15 @@ function allowance(): Allowance | undefined {
  * the same database and re-reads the recorded session state, which is the restart claim
  * without a second provider call.
  */
-function phase(name: "produce" | "fresh" | "restart", client: "claude-code" | "codex", home: string): {
+function phase(name: "produce" | "fresh" | "resume" | "restart", client: "claude-code" | "codex", home: string): {
   status: number | null; result: Record<string, unknown>; raw: string } {
   const daemon = join(repoRoot, "engine/packages/daemon");
   const script = join(daemon, "test/fixtures/t038-live-daemon.mjs");
-  // The `tsx` binary, not `node --import tsx`: the sources import `./x.js` for `./x.ts`, which
-  // only the tsx loader's own resolution rewrites, and it must resolve from the package root.
+  // The fixture imports the rebuilt dist tree; it never mixes source and stale emitted modules.
   const run = spawnSync(SUDO, ["-n", "-u", CONTROL, "--", "/usr/bin/env", "HOME=" + home,
     "PATH=/opt/multi-agent/toolchain/node/bin:/usr/bin:/bin",
-    join(repoRoot, "engine/node_modules/.bin/tsx"), script, name, client],
-  { encoding: "utf8", timeout: 900_000, cwd: daemon });
+    NODE, script, name, client],
+  { encoding: "utf8", timeout: 900_000, cwd: daemon, stdio: ["ignore", "pipe", "pipe"] });
   const raw = (run.stdout ?? "") + (run.stderr ?? "");
   const line = raw.split("\n").find(entry => entry.startsWith("T038-RESULT "));
   if (!line) return { status: run.status, result: {}, raw };
@@ -126,29 +128,47 @@ describe.skipIf(!installed)("the daemon-mediated lane", () => {
     } finally { clean(directory); }
   }, 900_000);
 
-  it("starts a real native client through the same chain, and records its receipt", () => {
-    if (!LIVE) {
-      // Not a skip of a claim: the provider-call half is allowance-gated by the owner's grant,
-      // and this suite must not spend it as a side effect of an ordinary run.
-      const recorded = allowance();
-      expect(recorded === undefined || recorded.native_invocations_attempted <= recorded.maximum_native_invocations).toBe(true);
-      return;
-    }
+  const liveHomes = new Map<string, string>();
+  let priorLiveFailure = false;
+  it.skipIf(!LIVE).each([
+    ["fresh", "claude-code"], ["fresh", "codex"],
+    ["resume", "claude-code"], ["resume", "codex"],
+  ] as const)("%s %s through the production chain with an exact receipt", (name, client) => {
     requireInstalled();
+    expect(priorLiveFailure, "stop the matrix after a failed live phase").toBe(false);
     expect(existsSync(GATEWAY), "a provider gateway or per-worker sign-in must be installed").toBe(true);
     const recorded = allowance()!;
     expect(recorded.native_invocations_attempted, "the allowance must have room for this call")
       .toBeLessThan(recorded.maximum_native_invocations);
-    const directory = home();
+    expect(recorded.reported_tokens).toBeLessThan(recorded.maximum_reported_tokens);
+    expect(recorded.deadline, "the live runner must open the owner-approved window").toBeTruthy();
+    expect(Date.parse(recorded.deadline!)).toBeGreaterThan(Date.now());
+    let directory = process.env.T038_LIVE_HOME ?? liveHomes.get(client);
+    if (!directory) {
+      expect(name, "resume requires the home retained by its fresh phase").toBe("fresh");
+      directory = home();
+      liveHomes.set(client, directory);
+    }
+    // Retain live homes and receipts until the owner-controlled stop and cleanup, not while clients still run.
     try {
-      const fresh = phase("fresh", "claude-code", directory);
-      expect(fresh.result.error).toBeUndefined();
-      expect(fresh.result.launch).toMatchObject({ ok: true, managedSession: expect.anything() });
-      // The restart re-reads the recorded session on a second daemon: no provider call, and the
-      // receipt it finds is the one the fresh launch wrote.
-      const restart = phase("restart", "claude-code", directory);
-      expect(restart.result.error).toBeUndefined();
-      expect(restart.result.restart).toMatchObject({ sameAttempt: true });
-    } finally { clean(directory); }
+      const previous = name === "resume" ? JSON.parse(readFileSync(join(directory, "state.json"), "utf8")) : undefined;
+      const result = phase(name, client, directory);
+      expect(result.result.error).toBeUndefined();
+      expect(result.result.launch).toMatchObject({ ok: true, managedSession: expect.anything() });
+      if (previous) {
+        expect(result.result.launch).toMatchObject({ resumeToken: previous.resumeToken,
+          managedSession: { identity: { nativeSessionId: previous.receipt.identity.nativeSessionId,
+            generation: previous.receipt.identity.generation + 1 } } });
+      }
+    } catch (error) { priorLiveFailure = true; throw error; }
+  }, 900_000);
+
+  it.skipIf(!LIVE).each(["claude-code", "codex"] as const)("restarts the daemon with a live %s session", client => {
+    expect(priorLiveFailure, "stop the matrix after a failed live phase").toBe(false);
+    const directory = process.env.T038_LIVE_HOME ?? liveHomes.get(client);
+    expect(directory, "restart requires a retained live home").toBeDefined();
+    const restarted = phase("restart", client, directory!);
+    expect(restarted.result.error).toBeUndefined();
+    expect(restarted.result.restart).toMatchObject({ sameAttempt: true, liveIdentityObserved: true });
   }, 900_000);
 });

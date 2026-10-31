@@ -25,7 +25,9 @@ const DB = join(HOME_DIR, "daemon.sqlite");
 const REPO = join(HOME_DIR, "repo");
 const WORK = join(HOME_DIR, "work");
 const STATE = join(HOME_DIR, "state.json");
-const RUN = "run", TASK = "task", SEAT = "builder@rig";
+const RUN = "run", TASK = "task";
+const WORKER = client === "codex" ? "ma-worker2" : "ma-worker1";
+const SEAT = client === "codex" ? "builder-codex@rig" : "builder@rig";
 
 mkdirSync(HOME_DIR, { recursive: true, mode: 0o700 });
 mkdirSync(WORK, { recursive: true, mode: 0o700 });
@@ -59,10 +61,10 @@ const teamControl = {
   readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: fingerprint, verifiedProviders: ["claude", "codex"] }),
 };
 
-const { createDaemon } = await import("/home/leo/src/multi-agent/engine/packages/daemon/src/startup.ts");
-const { RigRepository } = await import("/home/leo/src/multi-agent/engine/packages/daemon/src/domain/rig-repository.ts");
-const { SessionRegistry } = await import("/home/leo/src/multi-agent/engine/packages/daemon/src/domain/session-registry.ts");
-const { hashBinding } = await import("/home/leo/src/multi-agent/engine/packages/daemon/src/domain/plan-governance.ts");
+const { createDaemon } = await import(new URL("../../dist/startup.js", import.meta.url).href);
+const { RigRepository } = await import(new URL("../../dist/domain/rig-repository.js", import.meta.url).href);
+const { SessionRegistry } = await import(new URL("../../dist/domain/session-registry.js", import.meta.url).href);
+const { hashBinding } = await import(new URL("../../dist/domain/plan-governance.js", import.meta.url).href);
 
 const daemon = await createDaemon({ dbPath: DB, managedMode: true, teamControl });
 const { db, deps } = daemon;
@@ -111,7 +113,9 @@ try {
   // line would die with "This account is currently not available" before the launcher ran. The
   // daemon's own service has a real shell; this only restores what the account is missing.
   if (!(await deps.tmuxAdapter.hasSession(SEAT))) {
-    execFileSync("tmux", ["new-session", "-d", "-s", "t038-keepalive", "-c", realpathSync(WORK), "--", "sleep", "1800"]);
+    if (!(await deps.tmuxAdapter.hasSession("t038-keepalive"))) {
+      execFileSync("tmux", ["new-session", "-d", "-s", "t038-keepalive", "-c", realpathSync(WORK), "--", "sleep", "1800"]);
+    }
     execFileSync("tmux", ["set-option", "-g", "remain-on-exit", "on"]);
     execFileSync("tmux", ["set-option", "-g", "default-shell", "/bin/sh"]);
     execFileSync("tmux", ["new-session", "-d", "-s", SEAT, "-c", realpathSync(WORK), "--", "/usr/bin/true"]);
@@ -133,23 +137,38 @@ try {
   out.task = { qitemId: task.qitemId, role: task.assignment.role };
 
   const prior = readState();
+  if (phase === "restart") {
+    if (!prior?.receipt?.identity) throw new Error("restart requires a recorded live receipt");
+    const recorded = governance.getAttempt(prior.attemptId), identity = prior.receipt.identity;
+    const raw = readFileSync("/proc/" + identity.processId + "/stat", "utf8");
+    const fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
+    out.restart = {
+      sameAttempt: recorded?.attemptId === prior.attemptId,
+      liveIdentityObserved: fields[19] === identity.processStart && !["Z", "X"].includes(fields[0])
+        && Object.entries(identity).every(([key, value]) => recorded?.identity?.[key] === value),
+      recordedAttemptId: recorded?.attemptId ?? null,
+      recordedState: recorded?.state ?? null,
+      recordedContextHash: prior.receipt.contextHash ?? null,
+    };
+    if (!out.restart.sameAttempt || !out.restart.liveIdentityObserved) throw new Error("restart live identity is unconfirmed");
+  } else {
   const resumeToken = phase === "resume" ? prior?.resumeToken : undefined;
   const attemptId = resumeToken && prior?.attemptId ? prior.attemptId : `attempt-${Date.now()}`;
   const previous = resumeToken ? prior?.receipt : undefined;
 
   // A resume re-enters the attempt it recorded: same attempt id, same projection, exact receipt.
-  const admitted = runtime.admitForLaunch(RUN, { attemptId, worker: "ma-worker1", assignment: task.assignment,
+  const admitted = runtime.admitForLaunch(RUN, { attemptId, worker: WORKER, assignment: task.assignment,
     outputs: task.outputs ?? [], permissions: task.permissions ?? [],
     context: { binding, runId: RUN, role: task.assignment.role } });
   const produced = await runtime.produceManagedAttempt(RUN, {
-    attemptId, worker: "ma-worker1", assignment: task.assignment,
+    attemptId, worker: WORKER, assignment: task.assignment,
     outputs: task.outputs ?? [], permissions: task.permissions ?? [],
     role: task.assignment.role, client, candidate: admitted.candidate, sessionId: SEAT,
     rigId: "rig", taskId: task.assignment.taskId, recipients: ["lead@rig"],
     deadline: Date.now() + 900_000, isCurrent: () => true,
     ...(previous ? { previous } : {}),
     delivery: deps.mailboxDelivery, chat: deps.chatRepo ?? deps.chat,
-    context: { client, discoveryRoots: [], mutableStateRoot: "/var/lib/multi-agent/workers/ma-worker1/scratch" },
+    context: { client, discoveryRoots: [], mutableStateRoot: "/var/lib/multi-agent/workers/" + WORKER + "/scratch" },
     frameworkFiles: [{ path: "skills/using-spec-first/SKILL.md",
       source: "/opt/multi-agent/framework/skills/using-spec-first/SKILL.md" }],
   });
@@ -159,22 +178,7 @@ try {
     deadline: produced.attempt.deadline };
   out.candidate = admitted.candidate;
 
-  if (phase === "restart") {
-    // A second daemon process on the same database: the receipt the fresh launch recorded must
-    // still name the same attempt and the same context, read from durable state alone. No
-    // client starts here, so this phase spends none of the allowance.
-    const prior = readState();
-    if (!prior?.attemptId) throw new Error("restart requires a recorded receipt from an earlier fresh phase");
-    const recorded = governance.getAttempt(prior.attemptId);
-    out.restart = {
-      sameAttempt: prior.attemptId === attemptId,
-      recordedAttemptId: recorded?.attemptId ?? null,
-      recordedState: recorded?.state ?? null,
-      contextHash: produced.attempt.context.generatedHash,
-      recordedContextHash: prior.receipt?.contextHash ?? null,
-    };
-    if (!out.restart.sameAttempt) throw new Error("restart produced a different attempt id");
-  } else if (phase !== "produce") {
+  if (phase !== "produce") {
     // The production entry point, not `adapter.launchHarness` directly. `startNode` is what takes
     // the seat's lifecycle lease from the delivery guard, and a pane write without that lease is
     // refused as a legacy operation (`managed_control_required`) — which is correct, and is why
@@ -204,6 +208,7 @@ try {
     if (result.ok && tokenRow?.resume_token) {
       writeFileSync(STATE, JSON.stringify({ attemptId, resumeToken: tokenRow.resume_token, receipt }, null, 1));
     }
+  }
   }
 } catch (error) {
   out.error = String(error?.stack ?? error);
