@@ -169,6 +169,39 @@ describe("StartupOrchestrator", () => {
     expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining(makeIdentityAction().value));
   });
 
+  it.each(["claude-code", "codex"])("starts durable work without an identity action for %s", async runtime => {
+    const seed = seedSession();
+    const result = await createOrchestrator().startNode(makeInput(seed, {
+      adapter: mockAdapter({ runtime }), includeDurableObligations: true,
+    }));
+    expect(result).toMatchObject({ ok: true, startupStatus: "ready" });
+    expect(tmux.sendText).toHaveBeenCalledTimes(1);
+    expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining("rig whoami --json"));
+    expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining("rig queue list --destination r01-impl --state pending,in-progress,blocked"));
+    expect(tmux.sendKeys).toHaveBeenCalledWith("r01-impl", ["Enter"]);
+  });
+
+  it("does not add a durable-work prompt when it was not requested or when resuming", async () => {
+    const seed = seedSession();
+    await createOrchestrator().startNode(makeInput(seed));
+    await createOrchestrator().startNode(makeInput(seed, {
+      resumeToken: "existing", isRestore: true, includeDurableObligations: true,
+    }));
+    expect(tmux.sendText).not.toHaveBeenCalled();
+  });
+
+  it("bundles the first startup file with standalone durable-work instructions", async () => {
+    const seed = seedSession();
+    await createOrchestrator({ readFile: () => "Read the assigned plan." }).startNode(makeInput(seed, {
+      includeDurableObligations: true,
+      resolvedStartupFiles: [{ path: "role.md", absolutePath: "/fixture/role.md", ownerRoot: "/fixture",
+        deliveryHint: "send_text", required: true, appliesOn: ["fresh_start"] }],
+    }));
+    expect(tmux.sendText).toHaveBeenCalledTimes(1);
+    expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining("Read the assigned plan."));
+    expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining("rig whoami --json"));
+  });
+
   it("persists the authored context before a native gate and exposes only the matching continuation", async () => {
     const seed = seedSession(); const orch = createOrchestrator();
     const action = makeAction({ type: "send_text", value: "configured role and durable queue instructions" });
