@@ -187,8 +187,10 @@ export function teamStartRoutes(
     // The task exists, so the agent that has to do it starts now. This runs after the response
     // is built rather than inside the request: opening a seat's terminal and waiting for its
     // client to become ready is a launch, and a launch is not what a start request waits on.
-    // A dispatch that refuses is reported by the seat's own startup state, not invented here.
-    if (options.dispatch) void options.dispatch(run.id, taskId).catch(() => undefined);
+    // A refusal inside the launch is recorded in the seat's startup state. One before it (no
+    // resolvable seat, no terminal) leaves the seat pending, so it is logged rather than lost.
+    if (options.dispatch) void options.dispatch(run.id, taskId).catch(error =>
+      console.warn(`team start: launch for run=${run.id} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id, rigId: rig.id, approvalId: approval.id,
       taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat, state: governance.getRun(run.id).state }, 201);
   });
