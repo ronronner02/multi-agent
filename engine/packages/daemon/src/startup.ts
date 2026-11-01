@@ -1137,13 +1137,14 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN: process.env.OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN,
   });
   // KTD22: one governance owner serves the app and the managed launch chain, which only managed attempts reach.
-  const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, teamControl.readPolicyCapability);
   // MVP slice 2 — what a new run's binding is approved against. Under `hardened` that is the
   // caller's own reader, unchanged. Under `workers.isolation: none` nothing is installed, so
   // the daemon states the unisolated roots' revision instead of reading a policy file that
   // does not exist on such a host; dispatch then refuses a binding built for any other mode.
   const runPolicyCapability = teamControl.readPolicyCapability
     ?? (unisolated ? () => unisolatedPolicyCapability(unisolatedWorkerRoots(OPENRIG_HOME).policyRevision) : undefined);
+  // Governance checks each task against the same reader the start route approved the run with.
+  const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, runPolicyCapability);
   // MVP — the roots in force for this daemon. Under `hardened` they are the installed policy's,
   // read at use so a re-provisioned host is picked up; under `none` they are the daemon's own
   // state tree, so nothing in the launch path ever reads `/etc/multi-agent`.
