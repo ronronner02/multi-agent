@@ -168,6 +168,35 @@ describe("workers.isolation: none launches a managed worker as the current user"
     expect(daemon.deps.runtimeAdapters!["claude-code"]!.workerLauncher).toBe(daemon.deps.managedLaunch!.launcher);
   });
 
+  it.each([
+    ["claude-code", "claude", "--permission-mode", undefined],
+    ["claude-code", "claude", "--permission-mode", "existing-session"],
+    ["codex", "codex", "-a", undefined],
+    ["codex", "codex", "-a", "existing-session"],
+  ] as const)("includes the %s executable %s before %s (resume: %s)", async (client, executable, firstFlag, resumeToken) => {
+    // Capture before submission: exercise the default argv without starting a paid client.
+    const sendText = vi.fn(async (_pane: string, _text: string) => ({ ok: false as const, code: "fixture_captured" }));
+    const sendKeys = vi.fn();
+    const native = new DirectWorkerLauncher({
+      resolvePane: async () => seatPane,
+      resolveAssignedTree: () => repo,
+      tmuxServer: () => "fixture",
+      tmux: { sendText, sendKeys, getPanePid: vi.fn(), getPaneCommand: vi.fn(), capturePaneScreen: vi.fn() },
+    });
+    vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch").mockImplementation(input => native.launch({
+      ...input, client, resumeToken, model: "fixture-model", effort: "high",
+      attempt: { ...input.attempt, context: { ...input.attempt.context, client } },
+    }));
+    await launch();
+    expect(sendText).toHaveBeenCalledTimes(1);
+    const line = sendText.mock.calls[0]![1];
+    expect(line).toContain(` && exec '${executable}' '${firstFlag}'`);
+    expect(line).toContain("'--model' 'fixture-model' '--effort' 'high'");
+    if (resumeToken) expect(line).toContain(`'${client === "claude-code" ? "--resume" : "resume"}' '${resumeToken}'`);
+    else if (client === "claude-code") expect(line).toContain("'--session-id'");
+    expect(sendKeys).not.toHaveBeenCalled();
+  });
+
   it("produces and launches the attempt into a worktree this user owns, and records the receipt", async () => {
     const result = await launch();
     const errors = result.ok ? [] : result.errors;

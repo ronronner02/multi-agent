@@ -141,9 +141,9 @@ export class DirectWorkerLauncher implements WorkerLauncher {
     const model = input.model ? ["--model", input.model] : [];
     const effort = input.effort ? ["--effort", input.effort] : [];
     return client === "claude-code"
-      ? ["--permission-mode", "bypassPermissions", ...model, ...effort,
+      ? ["claude", "--permission-mode", "bypassPermissions", ...model, ...effort,
           ...(input.resumeToken ? ["--resume", input.resumeToken] : ["--session-id", sessionId])]
-      : ["-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false", ...model, ...effort,
+      : ["codex", "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false", ...model, ...effort,
           ...(input.resumeToken ? ["resume", input.resumeToken] : [])];
   }
 
