@@ -19,6 +19,7 @@ import { AnalyticsScreen } from "./analytics.js";
 import { SettingsScreen } from "./settings.js";
 import { useThemePreference, type TeamTheme } from "./theme.js";
 import "./team.css";
+import "../skins/shuimo-danqing/skin.css";
 
 export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
 
@@ -93,6 +94,22 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   </header>;
 }
 
+function InkBackdrop() {
+  const [motion, setMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setMotion(!query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return <div className="team-backdrop" aria-hidden="true">
+    {motion && <video autoPlay muted loop playsInline preload="none" tabIndex={-1}
+      src="/skins/shuimo-danqing/shuimo-danqing-loop.mp4" />}
+  </div>;
+}
+
 /**
  * The app shell itself: sidebar, command strip and the destination's content. It holds no data
  * and no router, so the same frame serves the web app and the desktop wrapper.
@@ -106,6 +123,7 @@ export function ShellFrame({ language, section, theme, onTheme, runId, runPicker
 }) {
   const { t } = useTranslation();
   return <div className="team-shell" lang={language.language} data-ui-theme={theme} data-testid="team-shell">
+    {theme === "ink" && <InkBackdrop />}
     <aside className="ui-sidebar">
       <div className="ui-brand"><span className="ui-monogram" aria-hidden="true">M</span><span>{t("shell.appName")}</span></div>
       <div className="ui-project">

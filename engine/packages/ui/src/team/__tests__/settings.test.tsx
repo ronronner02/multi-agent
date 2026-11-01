@@ -1,12 +1,12 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import { OwnerSessionProvider } from "../../hooks/useOwnerSession.js";
 import { SETTINGS_SECTIONS, SettingsScreen } from "../settings.js";
-import { TEAM_THEME_KEY, readTeamThemePreference, resolveTeamTheme, writeTeamTheme } from "../theme.js";
+import { TEAM_THEME_KEY, readTeamThemePreference, resolveTeamTheme, useThemePreference, writeTeamTheme } from "../theme.js";
 
 /**
  * Slice C — Settings.
@@ -70,9 +70,32 @@ describe("appearance", () => {
     const language = await show({ onTheme });
     const group = screen.getByRole("radiogroup", { name: language.t("settings.theme") });
     expect([...group.querySelectorAll("[data-theme-option]")].map(option => option.getAttribute("data-theme-option")))
-      .toEqual(["dark", "light", "system"]);
+      .toEqual(["dark", "light", "ink", "system"]);
     fireEvent.click(within(group).getByRole("radio", { name: language.t("settings.theme.light") }));
     expect(onTheme).toHaveBeenCalledWith("light");
+  });
+
+  it("selects Ink as an explicit appearance without removing System", async () => {
+    const onTheme = vi.fn();
+    const language = await show({ theme: "ink", onTheme });
+    const ink = screen.getByRole("radio", { name: language.t("settings.theme.ink") });
+    expect(ink.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(ink);
+    expect(onTheme).toHaveBeenCalledWith("ink");
+    expect(screen.getByRole("radio", { name: language.t("settings.theme.system") })).toBeTruthy();
+  });
+
+  it("retains Ink across a remount and ignores the OS palette", () => {
+    const first = renderHook(useThemePreference);
+    act(() => first.result.current.setPreference("ink"));
+    expect(first.result.current.theme).toBe("ink");
+    expect(localStorage.getItem(TEAM_THEME_KEY)).toBe("ink");
+    first.unmount();
+    const second = renderHook(useThemePreference);
+    expect(second.result.current.preference).toBe("ink");
+    expect(second.result.current.theme).toBe("ink");
+    expect(resolveTeamTheme("ink", true)).toBe("ink");
+    expect(resolveTeamTheme("ink", false)).toBe("ink");
   });
 
   it("stores and reads the preference, resolving system through the OS", () => {

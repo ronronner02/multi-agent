@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Brush, Monitor, Moon, Sun } from "lucide-react";
 import type { InterfaceI18n, InterfaceLanguage } from "@openrig/i18n";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
@@ -41,8 +41,8 @@ function stamp(ms: number, locale: string): string {
   return Number.isNaN(date.getTime()) ? DASH : date.toLocaleString(locale, { dateStyle: "short", timeStyle: "short" });
 }
 
-/** One icon per theme option, so the three choices read at a glance rather than by label alone. */
-const THEME_ICONS = { dark: Moon, light: Sun, system: Monitor } as const;
+/** One icon per theme option, so choices read at a glance rather than by label alone. */
+const THEME_ICONS = { dark: Moon, light: Sun, ink: Brush, system: Monitor } as const;
 
 function Appearance({ language, theme, onTheme }: {
   language: InterfaceI18n; theme: TeamThemePreference; onTheme: (theme: TeamThemePreference) => void;
