@@ -14,14 +14,14 @@ import type { TeamTheme } from "../theme.js";
  * evidence rather than on a blank page.
  */
 
-function Shell({ language, theme = "dark", onTheme = () => {}, onSearch = () => {}, runPicker }: {
+function Shell({ language, theme = "dark", onTheme = () => {}, onSearch = () => {}, runPicker, coordinator = { state: "running", known: true }, connection = "shell.connected", snapshotAge = null }: {
   language: InterfaceI18n; theme?: TeamTheme; onTheme?: (theme: TeamTheme) => void; onSearch?: (query: string) => void;
-  runPicker?: React.ReactNode;
+  runPicker?: React.ReactNode; coordinator?: { state: "running" | "stopped" | "unknown"; known: boolean }; connection?: string; snapshotAge?: number | null;
 }) {
   const [current, setCurrent] = React.useState<TeamSection>("overview");
   return <ShellFrame language={language} section={current} theme={theme} onTheme={onTheme}
-    runId="RUN-0142" runPicker={runPicker} project="work-board" coordinator={{ state: "running", known: true }}
-    connection="shell.connected" notifications={2} hrefFor={section => `/team/${section}?run=RUN-0142`}
+    runId="RUN-0142" runPicker={runPicker} project="work-board" coordinator={coordinator}
+    connection={connection} snapshotAge={snapshotAge} notifications={2} hrefFor={section => `/team/${section}?run=RUN-0142`}
     onSelect={setCurrent} onSearch={onSearch}><p>content</p></ShellFrame>;
 }
 
@@ -41,6 +41,33 @@ describe("managed shell navigation", () => {
     expect(links[0]!.getAttribute("aria-current")).toBe("page");
     expect(links.slice(1).every(link => link.getAttribute("aria-current") === null)).toBe(true);
     expect(TEAM_SECTIONS).toEqual(["overview", "workspace", "tasks", "reviews", "analytics", "settings"]);
+  });
+
+  it.each(["en", "zh-CN"] as const)("opens Reviews from the notification button (%s)", async locale => {
+    const language = await show(locale);
+    fireEvent.click(screen.getByRole("button", { name: `${language.t("shell.notifications")}: 2` }));
+    expect(screen.getByRole("link", { name: language.t("nav.reviews") }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it.each(["stopped", "unknown"] as const)("shows the coordinator's observed %s state instead of idle", async state => {
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    render(<I18nextProvider i18n={language.instance}><Shell language={language} coordinator={{ state, known: true }} /></I18nextProvider>);
+    expect(document.querySelector(".ui-coordinator")?.textContent).toContain(language.t(`status.attempt.${state}`));
+    expect(document.querySelector(".ui-coordinator")?.textContent).not.toContain(language.t("shell.idle"));
+  });
+
+  it.each(["web.stale", "web.disconnected", "web.error", "web.notFound"])("makes %s visible above retained content", async connection => {
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    render(<I18nextProvider i18n={language.instance}><Shell language={language} connection={connection} snapshotAge={12} /></I18nextProvider>);
+    expect(screen.getByRole("alert").textContent).toContain(language.t(connection as "web.stale"));
+    expect(screen.getByRole("alert").textContent).toContain(language.t("shell.snapshotWarning"));
+    expect(screen.getByText(language.t("shell.snapshotAge", { seconds: 12 }))).toBeTruthy();
+    expect(screen.getByText("content")).toBeTruthy();
+  });
+
+  it("keeps the warning out of a connected view", async () => {
+    await show();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("maps the retired destinations onto the destination that owns their evidence", () => {

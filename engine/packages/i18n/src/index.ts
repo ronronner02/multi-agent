@@ -24,6 +24,7 @@ export const MESSAGE_PARAMETERS = {
   // Slice A's progress and board counters. They interpolate in both catalogs, so they belong
   // here; a key that is not declared is one a caller can mistype without the type noticing.
   "overview.verified": ["verified", "total"],
+  "shell.snapshotAge": ["seconds"],
   "tasks.count": ["count"],
   "tasks.criteriaOf": ["verified", "total"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
