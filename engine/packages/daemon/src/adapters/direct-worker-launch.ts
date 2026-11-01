@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parseAttemptIdentity } from "../contracts/team-control.js";
+import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
 import { hashBytes } from "../domain/plan-governance.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, ReadinessResult } from "../domain/runtime-adapter.js";
 import type { TmuxAdapter } from "./tmux.js";
@@ -126,7 +127,13 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       if (await this.deps.tmux.getPanePid(receipt.identity.paneId) !== receipt.identity.processId) {
         return { ready: false, code: "managed_identity_changed" };
       }
-      return { ready: true };
+      // The injected stub runner has no native composer. Production always uses the screen probe.
+      if (this.deps.command) return { ready: true };
+      const paneContent = await this.deps.tmux.capturePaneScreen(receipt.identity.paneId);
+      const paneCommand = await this.deps.tmux.getPaneCommand(receipt.identity.paneId);
+      const probe = assessNativeResumeProbe({ runtime: receipt.client, paneContent, paneCommand,
+        claudeResumeIdentityVerified: false });
+      return probe.status === "resumed" ? { ready: true } : { ready: false, code: probe.code, reason: probe.detail };
     } catch {
       return { ready: false, code: "managed_observation_unavailable" };
     }
