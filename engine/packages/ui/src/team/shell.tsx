@@ -7,7 +7,7 @@ import { Card } from "../components/ui/card.js";
 import { Button } from "../components/ui/button.js";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
-import { RunSelect } from "./new-task.js";
+import { RunSelect, NoRunCard } from "./new-task.js";
 import { Overview } from "./overview.js";
 import { TasksScreen } from "./tasks.js";
 import { WorkspaceScreen } from "./workspace/workspace-screen.js";
@@ -191,8 +191,7 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
     {section === "settings" ? <SettingsScreen language={language} theme={preference} onTheme={setPreference}
       connection={connection} isolation={data.health.data?.runtime?.isolation ?? null}
       address={window.location.origin} planRef={read?.run.binding.planRef} /> : <>
-      {!runId && <Card className="team-card ui-empty" role="status"><strong>{t("shell.noRun")}</strong>
-        <p className="team-muted">{t("web.discovery")}</p></Card>}
+      {!runId && <NoRunCard />}
       {section === "overview" && <Overview read={read} run={read?.run} now={now}
         onInspect={() => go("workspace")} onOpenTasks={() => go("tasks")} />}
       {section === "tasks" && <TasksScreen read={read} runId={runId} query={searchParams.q} />}

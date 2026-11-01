@@ -34,6 +34,19 @@ export function RunSelect({ current }: { current: string }) {
   </select>;
 }
 
+/**
+ * What every screen shows before a run is selected: say so, and put the start form right here.
+ * On a fresh install there is no run to pick, so this form is how the owner creates the first one.
+ */
+export function NoRunCard() {
+  const { t } = useTranslation();
+  return <>
+    <Card className="team-card ui-empty" role="status"><strong>{t("shell.noRun")}</strong>
+      <p className="team-muted">{t("shell.noRunHint")}</p></Card>
+    <NewTaskForm />
+  </>;
+}
+
 export function NewTaskForm() {
   const { t } = useTranslation(), session = useOwnerSession(), navigate = useNavigate(), cache = useQueryClient();
   const [goal, setGoal] = useState("");
