@@ -42,6 +42,7 @@ When a task finishes, `rig team diff <run-id>` prints its patch and `rig team ap
 same diff and the exact command to copy.
 
 To watch the whole flow without a provider account or a live token, `bash
-engine/demo/team/run.sh` boots a daemon with the stub runner and starts a run end to end.
+engine/demo/team/run.sh` boots a daemon with the stub runner, starts a run, and waits for the
+launch: the daemon opens the seat's terminal and the runner comes up in it.
 `bash engine/demo/team/scripts/result-demo.sh` takes that same stub-runner run all the way
 to the patch, then applies it with `rig team apply` in a throwaway clone.
