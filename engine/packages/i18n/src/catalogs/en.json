@@ -443,6 +443,7 @@
   "settings.theme": "Theme",
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
+  "settings.theme.ink": "Ink",
   "settings.themeHelp": "Dark is the default; light suits a bright room.",
   "settings.connection": "Connection",
   "settings.plan": "Current plan",

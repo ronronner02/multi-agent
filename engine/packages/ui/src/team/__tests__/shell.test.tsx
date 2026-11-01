@@ -1,10 +1,12 @@
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import { ShellFrame, TEAM_SECTIONS, teamSection, type TeamSection } from "../shell.js";
 import type { TeamTheme } from "../theme.js";
+
+afterEach(() => vi.unstubAllGlobals());
 
 /**
  * Slice A — the shell's six destinations.
@@ -32,6 +34,35 @@ async function show(locale: "en" | "zh-CN" = "en") {
 }
 
 describe("managed shell navigation", () => {
+  it.each(["dark", "light"] as const)("does not load the Ink backdrop in %s", async theme => {
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    render(<I18nextProvider i18n={language.instance}><Shell language={language} theme={theme} /></I18nextProvider>);
+    expect(document.querySelector(".team-backdrop")).toBeNull();
+    expect(document.querySelector("video")).toBeNull();
+  });
+
+  it.each([true, false])("keeps paper but removes video when reduced motion is enabled (initial: %s)", async reduced => {
+    const listeners = new Set<() => void>();
+    const query = { matches: reduced, addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) };
+    vi.stubGlobal("matchMedia", vi.fn(() => query));
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    const view = render(<I18nextProvider i18n={language.instance}><Shell language={language} theme="ink" /></I18nextProvider>);
+    expect(document.querySelector(".team-shell")?.getAttribute("data-ui-theme")).toBe("ink");
+    expect(document.querySelector(".team-backdrop")?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelector("video") === null).toBe(reduced);
+    act(() => { query.matches = false; listeners.forEach(fn => fn()); });
+    const video = document.querySelector("video")!;
+    expect(video.getAttribute("src")).toBe("/skins/shuimo-danqing/shuimo-danqing-loop.mp4");
+    expect(video.autoplay && video.muted && video.loop && video.playsInline).toBe(true);
+    expect(video.tabIndex).toBe(-1);
+    act(() => { query.matches = true; listeners.forEach(fn => fn()); });
+    expect(document.querySelector("video")).toBeNull();
+    expect(document.querySelector(".team-backdrop")).not.toBeNull();
+    view.unmount();
+    expect(listeners.size).toBe(0);
+  });
+
   it.each(["en", "zh-CN"] as const)("shows exactly the six destinations in order (%s)", async locale => {
     const language = await show(locale);
     const nav = screen.getByRole("navigation", { name: language.t("shell.appName") });

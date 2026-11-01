@@ -3,14 +3,14 @@ import { useEffect, useState } from "react";
 /**
  * Slice C — the appearance preference.
  *
- * `system` is a stored choice, not a third palette: it resolves through the OS's
+ * `system` is a stored choice, not a palette: it resolves through the OS's
  * `prefers-color-scheme` each time that query changes, so a reader who leaves the machine on
- * automatic gets the theme their desktop is already using. Only `dark` and `light` reach the
- * shell, which is why the shell's own tokens need no third block.
+ * automatic gets the theme their desktop is already using. Dark, light and ink are explicit
+ * palettes; an explicit choice stays pinned when the OS changes.
  */
 
 export const TEAM_THEME_KEY = "openrig.teamTheme";
-export const TEAM_THEME_PREFERENCES = ["dark", "light", "system"] as const;
+export const TEAM_THEME_PREFERENCES = ["dark", "light", "ink", "system"] as const;
 export type TeamThemePreference = (typeof TEAM_THEME_PREFERENCES)[number];
 export type TeamTheme = Exclude<TeamThemePreference, "system">;
 
@@ -33,7 +33,7 @@ export function writeTeamTheme(preference: TeamThemePreference): void {
   }
 }
 
-/** The palette a preference resolves to. `system` follows the OS; the other two are explicit. */
+/** The palette a preference resolves to. Only `system` follows the OS. */
 export function resolveTeamTheme(preference: TeamThemePreference, prefersDark: boolean): TeamTheme {
   return preference === "system" ? (prefersDark ? "dark" : "light") : preference;
 }
