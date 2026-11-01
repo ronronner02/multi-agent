@@ -22,6 +22,11 @@ const STAGE_GROUPS = [
   { label: "progress.verify", stages: ["integration-verification", "delivery-decision"] },
 ] as const;
 
+const STAGE_LABELS = {
+  "setup-checks": "web.stage.setup", "plan-approved": "web.stage.plan", "assignments-derived": "web.stage.assignments",
+  execution: "web.stage.execution", review: "web.stage.review", "integration-verification": "web.stage.integration", "delivery-decision": "web.stage.delivery",
+} as const;
+
 /** Sum of verified criteria, or null when no task published a criteria record. */
 export function verifiedChecks(tasks: readonly TeamReviewView[]): { verified: number; total: number } | null {
   let verified = 0, total = 0, known = false;
@@ -103,7 +108,37 @@ function Progress({ read }: { read?: TeamOwnerRead }) {
         <small>{t(`web.stageState.${state}` as "web.stageState.complete")}</small>
       </li>;
     })}</ol>
+    <RunDetails read={read} />
   </Card>;
+}
+
+function RunDetails({ read }: { read?: TeamOwnerRead }) {
+  const { t } = useTranslation();
+  const run = read?.run, limits = run?.binding.limits;
+  const facts = [
+    { label: "web.runState", value: run ? t(`status.run.${run.state}`) : DASH },
+    { label: "web.plan", value: run?.binding.planRef ?? DASH },
+    { label: "web.binding", value: run?.bindingDigest ?? DASH },
+    { label: "overview.sessionLimit", value: limits?.maxSessions ?? DASH },
+    { label: "overview.activeLimit", value: limits ? `${limits.maxActiveMs / 1_000} s` : DASH },
+    { label: "overview.retryLimit", value: run ? `${run.retriesUsed} / ${run.binding.limits.maxRetries}` : DASH },
+    { label: "overview.reviewLimit", value: run ? `${run.reviewRoundsUsed} / ${run.binding.limits.maxReviewRounds}` : DASH },
+  ];
+  return <details className="ui-run-details">
+    <summary>{t("overview.runDetails")}</summary>
+    <p className="team-muted">{t("web.stageEvidence")}</p>
+    <ol className="ui-stage-details">{Object.entries(STAGE_LABELS).map(([stage, label]) => {
+      const state = read?.workflow.stages.find(item => item.stage === stage)?.state ?? "unavailable";
+      return <li key={stage} data-run-stage={stage} data-state={state}>
+        <span className="ui-dot" data-state={state} aria-hidden="true" /><span>{t(label)}</span>
+        <small>{t(`web.stageState.${state}`)}</small>
+      </li>;
+    })}</ol>
+    <dl className="team-facts">{facts.map(fact => <div key={fact.label}>
+      <dt>{t(fact.label as "web.runState")}</dt><dd>{fact.value}</dd>
+    </div>)}</dl>
+    {run?.stateReason && <p className="team-muted">{run.stateReason}</p>}
+  </details>;
 }
 
 function ActiveTasks({ read }: { read?: TeamOwnerRead }) {
@@ -127,7 +162,7 @@ function ActiveTasks({ read }: { read?: TeamOwnerRead }) {
   </Card>;
 }
 
-function Attention({ read, onOpenTasks }: { read?: TeamOwnerRead; onOpenTasks: () => void }) {
+function Attention({ read, onOpenTasks, onOpenReviews }: { read?: TeamOwnerRead; onOpenTasks: () => void; onOpenReviews: () => void }) {
   const { t } = useTranslation();
   const approvals = read?.approvals.filter(item => item.state === "pending") ?? [];
   const blocked = read?.tasks.filter(task => task.queueState === "blocked") ?? [];
@@ -145,7 +180,10 @@ function Attention({ read, onOpenTasks }: { read?: TeamOwnerRead; onOpenTasks: (
           <span><strong><code>{task.taskId}</code> {t("status.queue.blocked")}</strong><small>{t(`role.${task.role}`)}</small></span>
         </li>)}
       </ul>}
-    <Button variant="ghost" onClick={onOpenTasks}>{t("overview.viewAllTasks")}<ArrowRight aria-hidden="true" /></Button>
+    <div className="ui-decision-actions">
+      {approvals.length > 0 && <Button variant="outline" onClick={onOpenReviews}>{t("overview.viewReviews")}<ArrowRight aria-hidden="true" /></Button>}
+      <Button variant="ghost" onClick={onOpenTasks}>{t("overview.viewAllTasks")}<ArrowRight aria-hidden="true" /></Button>
+    </div>
   </Card>;
 }
 
@@ -184,8 +222,8 @@ function RecentEvents({ read }: { read?: TeamOwnerRead }) {
   </Card>;
 }
 
-export function Overview({ read, run, onInspect, onOpenTasks }: {
-  read?: TeamOwnerRead; run?: TeamRun; now: number; onInspect: () => void; onOpenTasks: () => void;
+export function Overview({ read, run, onInspect, onOpenTasks, onOpenReviews }: {
+  read?: TeamOwnerRead; run?: TeamRun; now: number; onInspect: () => void; onOpenTasks: () => void; onOpenReviews: () => void;
 }) {
   const { t } = useTranslation();
   return <div className="ui-overview">
@@ -202,7 +240,7 @@ export function Overview({ read, run, onInspect, onOpenTasks }: {
     <Progress read={read} />
     <div className="ui-overview-grid">
       <ActiveTasks read={read} />
-      <Attention read={read} onOpenTasks={onOpenTasks} />
+      <Attention read={read} onOpenTasks={onOpenTasks} onOpenReviews={onOpenReviews} />
     </div>
     <div className="ui-overview-foot">
       <Fleet read={read} />

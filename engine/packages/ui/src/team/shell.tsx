@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import { CheckCircle2, ChartColumn, ChevronDown, House, LayoutGrid, Moon, Search, Settings as SettingsIcon, SquareCheck, Sun } from "lucide-react";
+import type { TeamAttemptView } from "@openrig/daemon/team-control";
+import { Bell, TriangleAlert, CheckCircle2, ChartColumn, ChevronDown, House, LayoutGrid, Moon, Search, Settings as SettingsIcon, SquareCheck, Sun } from "lucide-react";
 import { Card } from "../components/ui/card.js";
 import { Button } from "../components/ui/button.js";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
@@ -96,9 +97,9 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
  * The app shell itself: sidebar, command strip and the destination's content. It holds no data
  * and no router, so the same frame serves the web app and the desktop wrapper.
  */
-export function ShellFrame({ language, section, theme, onTheme, runId, runPicker, project, coordinator, connection, notifications, hrefFor, onSelect, onSearch, children }: {
+export function ShellFrame({ language, section, theme, onTheme, runId, runPicker, project, coordinator, connection, snapshotAge, notifications, hrefFor, onSelect, onSearch, children }: {
   language: InterfaceI18n; section: TeamSection; theme: TeamTheme; onTheme: (theme: TeamTheme) => void;
-  runId: string; runPicker?: ReactNode; project: string; coordinator: { state: string; known: boolean }; connection: string;
+  runId: string; runPicker?: ReactNode; project: string; coordinator: { state: TeamAttemptView["state"]; known: boolean }; connection: string; snapshotAge?: number | null;
   notifications: number | undefined; hrefFor: (section: TeamSection) => string;
   onSelect: (section: TeamSection) => void; onSearch: (query: string) => void;
   children: ReactNode;
@@ -114,7 +115,7 @@ export function ShellFrame({ language, section, theme, onTheme, runId, runPicker
       </div>
       <div className="ui-coordinator">
         <span className="ui-dot" data-state={coordinator.known ? coordinator.state : "unknown"} aria-hidden="true" />
-        <span>{t("shell.coordinator")} · {coordinator.known ? t(coordinator.state === "running" ? "shell.active" : "shell.idle") : t("web.unknown")}</span>
+        <span>{t("shell.coordinator")} · {coordinator.known ? t(coordinator.state === "running" ? "shell.active" : `status.attempt.${coordinator.state}`) : t("web.unknown")}</span>
       </div>
       <nav className="ui-nav" aria-label={t("shell.appName")}>
         {TEAM_SECTIONS.map(id => {
@@ -141,12 +142,19 @@ export function ShellFrame({ language, section, theme, onTheme, runId, runPicker
         <GlobalSearch onSearch={onSearch} />
         <div className="ui-top-meta">
           <span className="ui-status" role="status"><span className="ui-dot" data-state={connection === "shell.connected" ? "ok" : "unknown"} aria-hidden="true" />{t(connection as "shell.connected")}</span>
-          <span className="ui-bell" aria-label={`${t("shell.notifications")}: ${notifications ?? "—"}`}>
-            <span aria-hidden="true">◔</span>{notifications !== undefined && notifications > 0 && <span className="ui-badge">{notifications}</span>}
-          </span>
+          <button type="button" className="ui-bell" onClick={() => onSelect("reviews")} aria-label={`${t("shell.notifications")}: ${notifications ?? "—"}`}>
+            <Bell aria-hidden="true" />{notifications !== undefined && notifications > 0 && <span className="ui-badge">{notifications}</span>}
+          </button>
         </div>
       </header>
-      <main className="ui-main">{children}</main>
+      <main className="ui-main">
+        {["web.stale", "web.disconnected", "web.error", "web.notFound"].includes(connection) && <div className="ui-snapshot-warning">
+          <TriangleAlert aria-hidden="true" />
+          <div><p role="alert"><strong>{t(connection as "web.stale")}</strong> · {t("shell.snapshotWarning")}</p>
+            {snapshotAge != null && <small>{t("shell.snapshotAge", { seconds: snapshotAge })}</small>}</div>
+        </div>}
+        {children}
+      </main>
     </div>
   </div>;
 }
@@ -175,8 +183,8 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   const fresh = age !== null && now - readAt <= 5_000;
   const connection = !paired ? "web.pairRequired" : error instanceof OwnerReadError ? (error.status === 404 ? "web.notFound" : "web.error")
     : error instanceof TypeError ? "web.disconnected" : error ? "web.error" : !runId ? "web.noRun" : age === null ? "web.loading" : fresh ? "shell.connected" : "web.stale";
-  const pending = paired && fresh ? read?.approvals.filter(item => item.state === "pending") : undefined;
-  const coordinator = read?.attempts.find(attempt => attempt.role === "lead");
+  const pending = paired && !error && fresh ? read?.approvals.filter(item => item.state === "pending") : undefined;
+  const coordinator = read?.attempts.filter(attempt => attempt.role === "lead").at(-1);
   const go = (next: TeamSection, query?: string) => void navigate({
     to: "/team/$section", params: { section: next }, search: { run: runId || undefined, q: query || undefined },
   });
@@ -184,7 +192,7 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
   return <ShellFrame language={language} section={section} theme={theme} onTheme={() => setPreference(theme === "dark" ? "light" : "dark")}
     runId={runId} runPicker={paired ? <RunSelect current={runId} /> : undefined}
     project={read?.run.rigId ?? ""} coordinator={{ state: coordinator?.state ?? "unknown", known: !!coordinator }}
-    connection={connection} notifications={pending?.length}
+    connection={connection} snapshotAge={runId ? age : null} notifications={pending?.length}
     hrefFor={next => `/team/${next}${runId ? `?run=${encodeURIComponent(runId)}` : ""}`}
     onSelect={go} onSearch={query => go("tasks", query)}>
     {!paired && section !== "settings" && <Pairing />}
@@ -193,7 +201,7 @@ function ManagedShell({ language }: { language: InterfaceI18n }) {
       address={window.location.origin} planRef={read?.run.binding.planRef} /> : <>
       {!runId && <NoRunCard />}
       {section === "overview" && <Overview read={read} run={read?.run} now={now}
-        onInspect={() => go("workspace")} onOpenTasks={() => go("tasks")} />}
+        onInspect={() => go("workspace")} onOpenTasks={() => go("tasks")} onOpenReviews={() => go("reviews")} />}
       {section === "tasks" && <TasksScreen read={read} runId={runId} query={searchParams.q} />}
       {section === "workspace" && <WorkspaceScreen read={read} runId={runId} health={data.health.data}
         available={paired && !error && fresh} replay={data.events.data?.events}

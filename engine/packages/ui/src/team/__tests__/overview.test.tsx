@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun } from "@openrig/daemon/team-control";
@@ -48,10 +48,10 @@ function read(overrides: Partial<TeamOwnerRead> = {}): TeamOwnerRead {
     tasks: [], attempts: [], approvals: [], logs: [], replay: { retainedFrom: 1, latestSeq: 1 }, ...overrides };
 }
 
-async function show(value: TeamOwnerRead | undefined, locale: "en" | "zh-CN" = "en"): Promise<InterfaceI18n> {
+async function show(value: TeamOwnerRead | undefined, locale: "en" | "zh-CN" = "en", onOpenReviews = () => {}): Promise<InterfaceI18n> {
   const language = await createInterfaceI18n({ preference: { read: () => locale, write() {} } });
   render(<I18nextProvider i18n={language.instance}>
-    <Overview read={value} run={value?.run} now={Date.now()} onInspect={() => {}} onOpenTasks={() => {}} />
+    <Overview read={value} run={value?.run} now={Date.now()} onInspect={() => {}} onOpenTasks={() => {}} onOpenReviews={onOpenReviews} />
   </I18nextProvider>);
   return language;
 }
@@ -119,6 +119,35 @@ describe("overview progress", () => {
   });
 });
 
+describe("overview run details", () => {
+  it.each(["en", "zh-CN"] as const)("keeps all seven stages and binding limits in a collapsed disclosure (%s)", async locale => {
+    const value = read();
+    const language = await show(value, locale);
+    const details = screen.getByText(language.t("overview.runDetails")).closest("details")!;
+    expect(details).toBeTruthy();
+    expect(details.hasAttribute("open")).toBe(false);
+    fireEvent.click(within(details).getByText(language.t("overview.runDetails")));
+    expect(details.hasAttribute("open")).toBe(true);
+    expect([...details.querySelectorAll("[data-run-stage]")].map(row => [row.getAttribute("data-run-stage"), row.getAttribute("data-state")]))
+      .toEqual(value.workflow.stages.map(item => [item.stage, item.state]));
+    expect(within(details).getByText(run.binding.planRef)).toBeTruthy();
+    expect(within(details).getByText(run.bindingDigest)).toBeTruthy();
+    expect(within(details).getByText(language.t(`status.run.${run.state}`))).toBeTruthy();
+    const fact = (key: string) => within(details).getByText(language.t(key as "overview.sessionLimit")).parentElement!.querySelector("dd")!.textContent;
+    expect(fact("overview.sessionLimit")).toBe("3");
+    expect(fact("overview.activeLimit")).toBe("60 s");
+    expect(fact("overview.retryLimit")).toBe("0 / 1");
+    expect(fact("overview.reviewLimit")).toBe("0 / 2");
+  });
+
+  it("marks missing stage evidence unavailable and missing limits unknown", async () => {
+    const language = await show(undefined);
+    const details = screen.getByText(language.t("overview.runDetails")).closest("details")!;
+    expect(details.querySelectorAll('[data-run-stage][data-state="unavailable"]')).toHaveLength(7);
+    expect(within(details).getAllByText("\u2014")).toHaveLength(7);
+  });
+});
+
 describe("overview panels", () => {
   it("lists active tasks with a dash for the title the read model does not publish", async () => {
     const language = await show(read({ tasks: [task("T-101", "done", 2, 2), task("T-104", "blocked", null, null)] }));
@@ -130,14 +159,17 @@ describe("overview panels", () => {
     expect(within(rows[1]!).queryByText("0")).toBeNull();
   });
 
-  it("queues pending approvals and blocked tasks as needs-attention items", async () => {
+  it.each(["en", "zh-CN"] as const)("links pending approvals to Reviews and keeps blocked tasks visible (%s)", async locale => {
     const value = read({ tasks: [task("T-104", "blocked", null, null)], approvals: [{
       id: "A-1", runId: run.id, kind: "orchestrator", action: "scope-change", payload: { reason: "API contract expanded" },
       payloadDigest: "p", targetDigest: "t", bindingDigest: "b", state: "pending", entityVersion: 1,
       expiresAt: "2026-11-01T00:00:00.000Z", decisionActor: null, awaitingDecision: true }] });
-    const language = await show(value);
+    const onOpenReviews = vi.fn();
+    const language = await show(value, locale, onOpenReviews);
     const attention = screen.getByRole("region", { name: language.t("overview.needsAttention") });
     expect(attention.querySelectorAll("[data-attention]")).toHaveLength(2);
+    fireEvent.click(within(attention).getByRole("button", { name: language.t("overview.viewReviews") }));
+    expect(onOpenReviews).toHaveBeenCalledTimes(1);
     expect(attention.querySelector('[data-attention="approval"]')?.textContent).toContain("API contract expanded");
     expect(attention.querySelector('[data-attention="blocked"]')?.textContent).toContain("T-104");
   });
