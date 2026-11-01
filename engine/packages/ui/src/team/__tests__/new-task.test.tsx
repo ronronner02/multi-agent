@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nextProvider } from "react-i18next";
 import { createInterfaceI18n } from "@openrig/i18n";
 import { OwnerReadError } from "../../hooks/useOwnerSession.js";
-import { NewTaskForm, RunSelect } from "../new-task.js";
+import { NewTaskForm, NoRunCard, RunSelect } from "../new-task.js";
 
 /**
  * MVP slice 2 — the Web UI "New task" form.
@@ -88,4 +88,13 @@ it("does not call the daemon until the browser is paired", async () => {
   expect(screen.getByRole("button", { name: language.t("web.startTask") }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("status").textContent).toBe(language.t("web.pairRequired"));
   expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it.each(["en", "zh-CN"] as const)("offers the start form when no run is selected, so a fresh install can begin (%s)", async locale => {
+  const language = await show(<NoRunCard />, locale);
+  const status = screen.getByRole("status");
+  expect(status.textContent).toContain(language.t("shell.noRun"));
+  expect(status.textContent).toContain(language.t("shell.noRunHint"));
+  expect(screen.getByRole("region", { name: language.t("web.newTask") })).toBeTruthy();
+  expect(screen.getByLabelText(language.t("web.goal"))).toBeTruthy();
 });
