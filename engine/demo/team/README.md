@@ -13,7 +13,7 @@ A small rig for trying the managed team flow on a fresh machine. It is what
 `rig up` boots real agents. The MVP demo wants the *managed* half instead: a run,
 a plan approval and a task that a worker can pick up. `start-team-demo.ts` writes
 exactly the rows `rig up` would write for a one-seat rig — a rig, its node and the
-node's session — and stops there. Nothing launches, so nothing needs a provider
+node's session — and stops there. Nothing launches, so seeding needs no provider
 account or a live token.
 
 ## Run it
@@ -25,6 +25,8 @@ npx tsx demo/team/scripts/start-team-demo.ts     # creates rig "team-demo"
 rig team start "Say hello from the demo team"
 ```
 
-`rig team start` prints the run id and the Web UI command that watches it.
+`rig team start` prints the run id and the Web UI command that watches it, and it
+starts the agent: the seat has no terminal yet, so the daemon opens one for it and
+launches the client into it. There is no step between the start and the launch.
 The task's repository is the rig's seat cwd, so the plan artifact it approves is
 `plan.md` at that path; `demo/team/` carries one for the demo.
