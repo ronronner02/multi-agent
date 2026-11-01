@@ -26,6 +26,9 @@ notes/*
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/developing-openrig/
+# A launch provisions this file into the seat's own cwd, so a seat that sits inside this
+# repo (demo/team) writes one too; the rules above only cover the engine root.
+**/.claude/settings.local.json
 .agents/*
 !.agents/skills/
 .agents/skills/*

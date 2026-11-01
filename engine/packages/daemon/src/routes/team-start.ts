@@ -12,7 +12,8 @@ import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapabil
 import { roleConfiguration } from "../domain/role-configuration.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { Rig } from "../domain/types.js";
-import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
+import { teamControlAuthentication, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
+import type { TeamControlOptions } from "./team-control.js";
 
 /**
  * MVP slice 2 — the owner starts team work.
@@ -28,12 +29,6 @@ import { teamControlAuthentication, type TeamControlCredentials, type TeamContro
  * the owner's control session as `decisionActor`, and splitting the two would leave an
  * approved run with no task and no second client to create one.
  */
-
-export interface TeamStartOptions {
-  credentials: TeamControlCredentials;
-  /** The plan capability a new binding is approved against; absent leaves starting unavailable. */
-  readPolicyCapability?: () => ProviderPolicyCapability | null;
-}
 
 /** The plan artifact and write scope a start request uses when it names none. */
 export const DEFAULT_PLAN_REF = "plan.md";
@@ -86,6 +81,20 @@ function firstAgentNode(rigRepo: RigRepository, rigId: string) {
   return rigRepo.getRig(rigId)?.nodes.find(entry => entry.runtime && entry.runtime !== "terminal") ?? null;
 }
 
+/**
+ * The address a node's task routes to when the request names no seat.
+ *
+ * A node's registered session is the address a launch resolves, so it is preferred. Only a
+ * node with no session falls back to the canonical `{member}@{rig}` derivation, which
+ * replaces the dot in the logical id the way every other seat name does.
+ */
+function defaultSeat(rigRepo: RigRepository, node: { id: string; logicalId: string }, rigName: string): string {
+  const registered = rigRepo.db.prepare(
+    "SELECT session_name FROM sessions WHERE node_id = ? ORDER BY created_at DESC, id DESC LIMIT 1")
+    .get(node.id) as { session_name: string } | undefined;
+  return registered?.session_name || `${node.logicalId.replace(/\./g, "-")}@${rigName}`;
+}
+
 function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
   return { id: run.id, rigId: run.rigId, rigName: rigRepo.getRig(run.rigId)?.rig.name ?? run.rigId,
     state: run.state, planRef: run.binding.planRef, createdAt: run.createdAt };
@@ -94,7 +103,7 @@ function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
 export function teamStartRoutes(
   governance: PlanGovernance,
   rigRepo: RigRepository,
-  options: TeamStartOptions,
+  options: TeamControlOptions,
   legacyTokens: readonly (string | null | undefined)[],
 ): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
@@ -138,7 +147,7 @@ export function teamStartRoutes(
       rig = match;
     }
     const node = firstAgentNode(rigRepo, rig.id);
-    const seat = v.seat === undefined ? node && `${node.logicalId}@${rig.name}` : text(v.seat, "seat", 256);
+    const seat = v.seat === undefined ? (node ? defaultSeat(rigRepo, node, rig.name) : null) : text(v.seat, "seat", 256);
     if (!seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
     const repository = v.repository === undefined ? {} : object(v.repository, "repository");
     const root = repository.root === undefined ? node?.cwd ?? null : text(repository.root, "repository.root", 4096);
@@ -175,6 +184,11 @@ export function teamStartRoutes(
     if (created.status !== "accepted") {
       return c.json({ code: "start_refused", runId: run.id, error: created.reason ?? "The task was refused." }, 409);
     }
+    // The task exists, so the agent that has to do it starts now. This runs after the response
+    // is built rather than inside the request: opening a seat's terminal and waiting for its
+    // client to become ready is a launch, and a launch is not what a start request waits on.
+    // A dispatch that refuses is reported by the seat's own startup state, not invented here.
+    if (options.dispatch) void options.dispatch(run.id, taskId).catch(() => undefined);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id, rigId: rig.id, approvalId: approval.id,
       taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat, state: governance.getRun(run.id).state }, 201);
   });

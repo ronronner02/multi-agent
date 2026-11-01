@@ -366,6 +366,7 @@ export class StartupOrchestrator {
               const receiptSession = input.sessionName ?? input.binding.tmuxSession;
               if (receiptSession) this.eventBus.emit({ type: "managed.attempt.receipt",
                 rigId: input.rigId, nodeId: input.nodeId, sessionId: input.sessionId,
+                runId: launchResult.managedSession.runId,
                 sessionName: receiptSession, receipt: launchResult.managedSession });
             }
             if (input.adapter.runtime === "claude-code" && launchResumeToken?.trim()) {

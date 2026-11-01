@@ -855,6 +855,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {
     credentials: teamOptions.credentials,
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
+    ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
   }, [deps.missionControlBearerToken, deps.terminalBearerToken]));
 
   app.get("/healthz", (c) => {

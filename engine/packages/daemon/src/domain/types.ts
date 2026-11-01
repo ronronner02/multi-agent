@@ -225,8 +225,10 @@ export type RigEvent =
   | { type: "node.startup_failed"; rigId: string; nodeId: string; error: string; sessionId?: string; freshContextPending?: boolean; submissionDiagnostics?: StartupSubmissionDiagnostic[] }
   // T047 — the exact receipt a successful managed launch returned. A native-token resume must
   // present this receipt again (U5), and the launch-intent check compares its hash, so the bytes
-  // are recorded verbatim and never reconstructed. Append-only run evidence.
-  | { type: "managed.attempt.receipt"; rigId: string; nodeId: string; sessionId: string;
+  // are recorded verbatim and never reconstructed. Append-only run evidence. The run id is carried
+  // on the event itself because a run's own replay is read by that field: a launch is that run's
+  // evidence, not only its seat's.
+  | { type: "managed.attempt.receipt"; rigId: string; nodeId: string; sessionId: string; runId: string;
       sessionName: string; receipt: import("./runtime-adapter.js").ManagedSessionReceipt }
   // OPR.0.4.3.06 — startup proof (challenge-verified orientation). Append-only.
   // `node.startup_challenged` freezes this launch's challenge ground truth

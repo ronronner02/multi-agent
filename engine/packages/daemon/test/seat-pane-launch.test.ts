@@ -1,0 +1,212 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type Database from "better-sqlite3";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createDaemon } from "../src/startup.js";
+import { hashBytes } from "../src/domain/plan-governance.js";
+import type { PlanBinding } from "../src/contracts/team-control.js";
+
+// MVP — a fresh install starts the agent a start request puts work on.
+//
+// The seat is created exactly as `demo/team/scripts/start-team-demo.ts` creates it: a rig, a
+// node and a session row, and nothing else. No tmux session exists and no binding records a
+// pane, so this is the state a friend following the README is in. The start request is the
+// real owner endpoint, the dispatch is the one startup composes, and the launch is the real
+// direct launcher in a real tmux server with the compiled stub runner in place of the native
+// client. Nothing is written by hand between the start and the launch.
+
+const ownerToken = "owner-fixture";
+const SEAT = "dev-impl@team-demo";
+const STUB_RUNNER = new URL("../dist/adapters/stub-runner.js", import.meta.url).pathname;
+
+const git = (cwd: string, ...args: string[]): string =>
+  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+function repository(parent: string): string {
+  const root = realpathSync(mkdtempSync(join(parent, "repo-")));
+  git(root, "init", "--quiet", "--initial-branch=main");
+  git(root, "config", "user.email", "test@example.invalid");
+  git(root, "config", "user.name", "test");
+  mkdirSync(join(root, "src"));
+  writeFileSync(join(root, "src", "base.ts"), "export const base = 1;\n");
+  writeFileSync(join(root, "plan.md"), "approved plan\n");
+  git(root, "add", ".");
+  git(root, "commit", "--quiet", "-m", "base");
+  return root;
+}
+
+/** A projection is sealed read-only, so every directory is opened before removal. */
+function writable(path: string): void {
+  try { chmodSync(path, 0o755); } catch { return; }
+  for (const entry of readdirSync(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    try { if (entry.isDirectory()) writable(child); else chmodSync(child, 0o644); } catch { /* already gone */ }
+  }
+}
+
+describe("a start request launches the seat it put work on", () => {
+  let directory: string, repo: string, db: Database.Database, savedEnv: Record<string, string | undefined>;
+  let daemon: Awaited<ReturnType<typeof createDaemon>>;
+  let nodeId: string;
+
+  /** A tmux server of this test's own, so nothing touches the operator's sessions. */
+  const tmuxRun = (...args: string[]): string =>
+    execFileSync("tmux", args, { encoding: "utf8", env: { ...process.env, TMUX_TMPDIR: join(directory, "tmux") } });
+
+  const start = (body: unknown) => daemon.app.fetch(new Request("http://127.0.0.1/api/team-control/runs", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + ownerToken },
+    body: JSON.stringify(body),
+  }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+
+  const receipts = () => db.prepare(
+    "SELECT payload FROM events WHERE type = 'managed.attempt.receipt' ORDER BY seq DESC").all() as Array<{ payload: string }>;
+
+  beforeEach(async () => {
+    directory = realpathSync(mkdtempSync(join(tmpdir(), "seat-pane-")));
+    mkdirSync(join(directory, "tmux"), { recursive: true });
+    savedEnv = { OPENRIG_HOME: process.env.OPENRIG_HOME, TMUX_TMPDIR: process.env.TMUX_TMPDIR };
+    process.env.OPENRIG_HOME = join(directory, "home");
+    process.env.TMUX_TMPDIR = join(directory, "tmux");
+    repo = repository(directory);
+    const binding: PlanBinding = {
+      artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
+      planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
+      repository: { root: repo, identity: "git:" + "a".repeat(40) },
+      readPaths: ["src"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
+      policyRevision: 4, policyFingerprint: hashBytes("workers.isolation:none"),
+      limits: { maxSessions: 1, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 1 },
+    };
+    daemon = await createDaemon({ dbPath: join(directory, "seat-pane.db"), managedMode: true,
+      teamControl: { credentials: { ownerToken }, resolveBinding: () => structuredClone(binding),
+        readPolicyCapability: () => ({ policyRevision: 4, policyFingerprint: binding.policyFingerprint,
+          verifiedProviders: ["claude", "codex"] }) },
+      cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
+      directLaunchCommand: facts => [process.execPath, STUB_RUNNER,
+        "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"] });
+    db = daemon.db;
+    // The demo seed's rows and nothing else: a rig, one implementer node, one registered seat.
+    const rig = daemon.deps.rigRepo.createRig("team-demo", repo);
+    nodeId = daemon.deps.rigRepo.addNode(rig.id, "dev.impl", { role: "implementer", runtime: "claude-code", cwd: repo }).id;
+    daemon.deps.sessionRegistry.registerSession(nodeId, SEAT);
+    // Startup composes the dispatch for an unisolated managed daemon, so the start request below
+    // reaches a real launch without this test wiring one.
+    expect(daemon.deps.teamControl!.dispatch).toBeTypeOf("function");
+  });
+
+  afterEach(async () => {
+    try { tmuxRun("kill-server"); } catch { /* already gone */ }
+    await daemon?.deps.workflowRuntime?.closeManagedAttempts();
+    if (db?.open) db.close();
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    if (existsSync(directory)) { writable(directory); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  /** Every session on this test's own server; none at all while the server does not exist. */
+  const sessions = (): string[] => {
+    try { return tmuxRun("list-sessions", "-F", "#{session_name}").split("\n").filter(Boolean); }
+    catch { return []; }
+  };
+
+  it("opens the seat's terminal, launches the runner into it and records the launch receipt", async () => {
+    // The seat has no terminal before the start: no tmux session, no recorded pane.
+    expect(sessions()).toEqual([]);
+    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)).toBeNull();
+
+    const response = await start({ goal: "Say hello from the demo team" });
+    expect(response.status).toBe(201);
+    const receipt = await response.json() as { runId: string; rigId: string; seat: string; taskId: string };
+    // The seat the task routes to is the one the seed registered, not an address derived from
+    // the node's logical id.
+    expect(receipt.seat).toBe(SEAT);
+
+    // The dispatch runs after the response is built, so the launch is awaited here rather than
+    // inside the request. The receipt is recorded before readiness, so the seat being ready is
+    // what says the launch finished.
+    await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
+    const ready = () => db.prepare("SELECT 1 FROM events WHERE type = 'node.startup_ready'").get();
+    await vi.waitFor(() => expect(ready()).toBeDefined(), { timeout: 60_000 });
+
+    // The daemon created the terminal itself, and recorded the pane the way every binding is.
+    const pane = tmuxRun("list-panes", "-t", `=${SEAT}:`, "-F", "#{pane_id} #{pane_current_path}").trim();
+    const [paneId, paneCwd] = pane.split(" ");
+    expect(paneId).toMatch(/^%[0-9]+$/);
+    // The launch moved the pane into the task's candidate, which is where the runner works.
+    expect(paneCwd).toContain(join("state", "workers", "assignments", "local"));
+    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)).toMatchObject({
+      attachmentType: "tmux", tmuxSession: SEAT, tmuxPane: paneId });
+
+    // The launch receipt is run evidence for this run, and names the identity the pane runs under.
+    const event = JSON.parse(receipts()[0]!.payload) as { runId: string;
+      receipt: { attemptId: string; identity: { paneId: string; processId: number }; workerUid: number } };
+    expect(event.runId).toBe(receipt.runId);
+    expect(event.receipt.identity.paneId).toBe(paneId);
+    expect(event.receipt.workerUid).toBe(process.getuid!());
+    expect(event.receipt.identity.processId).toBeGreaterThan(0);
+
+    // The stub runner is what came up in that pane, and the seat is ready. The candidate is a
+    // real git worktree under the unisolated roots, and the sidecar is the runner's own write.
+    const tree = daemon.deps.workflowRuntime!.assignedTreeFor(receipt.runId, { taskId: receipt.taskId });
+    expect(JSON.parse(String(readFileSync(join(tree, ".openrig", "stub", "state.json"))))).toMatchObject({ ready: true });
+    expect(git(tree, "rev-parse", "--is-inside-work-tree").trim()).toBe("true");
+    expect(statSync(tree).uid).toBe(process.getuid!());
+    const session = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
+    expect(daemon.deps.sessionRegistry.getSessionsForRig(receipt.rigId)
+      .find(row => row.id === session.sessionId)!.startupStatus).toBe("ready");
+  }, 90_000);
+
+  it("launches once for a seat, so a second start does not open a second client", async () => {
+    expect((await start({ goal: "First goal" })).status).toBe(201);
+    await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
+    expect((await start({ goal: "Second goal" })).status).toBe(201);
+    // Give the second dispatch the same window the first had to do its work.
+    await new Promise(resolve => setTimeout(resolve, 1_000));
+    expect(receipts()).toHaveLength(1);
+    expect(sessions()).toEqual([SEAT]);
+  }, 90_000);
+});
+
+describe("workers.isolation: hardened", () => {
+  // The hardened path is unchanged, so it composes no dispatcher: an agent there starts through
+  // the privileged launcher under a policy this daemon does not own. That needs the installed
+  // policy to boot, which is a host-provisioning fact rather than a repository one, so this
+  // skips where it is absent instead of reporting a code defect.
+  const provisioned = existsSync("/etc/multi-agent/worker-policy.json");
+
+  it.skipIf(!provisioned)("refuses an unbound seat instead of opening a terminal for it", async () => {
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), "seat-pane-hardened-")));
+    const repo = repository(directory);
+    const binding: PlanBinding = {
+      artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
+      planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
+      repository: { root: repo, identity: "git:" + "a".repeat(40) },
+      readPaths: ["src"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
+      policyRevision: 5, policyFingerprint: hashBytes("policy"),
+      limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
+    };
+    const hardened = await createDaemon({ dbPath: join(directory, "hardened.db"), managedMode: true,
+      workersIsolation: "hardened",
+      teamControl: { credentials: { ownerToken }, resolveBinding: () => structuredClone(binding),
+        readPolicyCapability: () => ({ policyRevision: 5, policyFingerprint: binding.policyFingerprint,
+          verifiedProviders: ["claude", "codex"] }) },
+      tmuxExec: async () => "", cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
+    try {
+      // No dispatcher is composed, and the launcher it does build refuses a seat with no pane.
+      expect(hardened.deps.teamControl!.dispatch).toBeUndefined();
+      expect(() => hardened.deps.managedLaunch!.launcher).not.toThrow();
+      const { resolveManagedWorkerSeat } = await import("../src/adapters/worker-launch-control.js");
+      expect(() => resolveManagedWorkerSeat({ runId: "run", binding, assignment: { taskId: "task", role: "implementer",
+        paths: ["src"], dependencies: [] }, role: "implementer", client: "claude-code" },
+      { db: hardened.db, governance: hardened.deps.teamGovernance!, queue: hardened.deps.queueRepo!,
+        options: hardened.deps.teamControl!, rigRepo: hardened.deps.rigRepo, sessions: hardened.deps.sessionRegistry }))
+        .toThrow("managed_launch_seat_unverified");
+    } finally {
+      hardened.db.close();
+      writable(directory);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
