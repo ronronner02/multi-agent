@@ -488,7 +488,8 @@ export class StartupOrchestrator {
     // its standalone prompt after the post-launch contract files below.
     const consumedActions = new Set<StartupAction>();
     let challengeOnlyPrompt: string | null = null;
-    if (continuityOutcome === "fresh" && identityAction) {
+    // Task dispatch has no authored identity action, but still needs its first work prompt.
+    if (continuityOutcome === "fresh" && (identityAction || input.includeDurableObligations)) {
       const initialPrompt = await this.deliverInitialSessionPrompt(deliveryInput, identityAction, postLaunchFiles, challenge?.promptBlock ?? null, input.includeDurableObligations);
       if (!initialPrompt.ok) {
         errors.push(initialPrompt.error);
@@ -736,7 +737,7 @@ export class StartupOrchestrator {
 
   private async deliverInitialSessionPrompt(
     input: StartupDeliveryInput,
-    identityAction: StartupAction,
+    identityAction: StartupAction | null,
     postLaunchFiles: ResolvedStartupFile[],
     challengeBlock: string | null,
     includeDurableObligations = false,
@@ -747,7 +748,7 @@ export class StartupOrchestrator {
     }
 
     const firstSendTextIndex = postLaunchFiles.findIndex((file) => file.deliveryHint === "send_text");
-    let prompt = identityAction.value;
+    let prompt = identityAction?.value ?? "";
     let remainingFiles = postLaunchFiles;
 
     if (firstSendTextIndex !== -1) {
@@ -755,7 +756,7 @@ export class StartupOrchestrator {
       try {
         const content = this.readFile(firstSendText.absolutePath);
         if (content.length > 0) {
-          prompt = `${identityAction.value}\n\n${content}`;
+          prompt = [prompt, content].filter(Boolean).join("\n\n");
           remainingFiles = postLaunchFiles.filter((_, index) => index !== firstSendTextIndex);
         }
       } catch {
@@ -764,7 +765,7 @@ export class StartupOrchestrator {
       }
     }
 
-    if (includeDurableObligations) prompt += `\n\nThis is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`;
+    if (includeDurableObligations) prompt = [prompt, `This is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`].filter(Boolean).join("\n\n");
 
     // OPR.0.4.3.06 — the per-launch orientation challenge rides along with the
     // identity prompt (after the contract) so no extra send is added.

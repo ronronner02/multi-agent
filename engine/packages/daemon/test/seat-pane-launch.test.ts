@@ -130,6 +130,11 @@ describe("a start request launches the seat it put work on", () => {
     const ready = () => db.prepare("SELECT 1 FROM events WHERE type = 'node.startup_ready'").get();
     await vi.waitFor(() => expect(ready()).toBeDefined(), { timeout: 60_000 });
 
+    // Empty startup actions must still deliver the queued-work instruction through real tmux.
+    const terminal = tmuxRun("capture-pane", "-p", "-J", "-S", "-100", "-t", `=${SEAT}:`);
+    expect(terminal).toContain("rig whoami --json");
+    expect(terminal).toContain(`rig queue list --destination ${SEAT} --state pending,in-progress,blocked`);
+
     // The daemon created the terminal itself, and recorded the pane the way every binding is.
     const pane = tmuxRun("list-panes", "-t", `=${SEAT}:`, "-F", "#{pane_id} #{pane_current_path}").trim();
     const [paneId, paneCwd] = pane.split(" ");

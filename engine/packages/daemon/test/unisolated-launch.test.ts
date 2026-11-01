@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import type { PlanBinding, TeamTaskAuthority } from "../src/contracts/team-control.js";
 import { RestrictedWorkerLauncher } from "../src/adapters/worker-launch.js";
+import type { StartupInput } from "../src/domain/startup-orchestrator.js";
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import { createDaemon, selectIsolation } from "../src/startup.js";
 
@@ -151,14 +152,14 @@ describe("workers.isolation: none launches a managed worker as the current user"
   });
 
   /** Launch the seat through the daemon's own adapter, exactly as a restore would. */
-  const launch = () => daemon.deps.startupOrchestrator!.startNode({
+  const launch = (overrides: Partial<StartupInput> = {}) => daemon.deps.startupOrchestrator!.startNode({
     rigId: "rig", nodeId, sessionId,
     binding: { id: "binding-1", nodeId, tmuxSession: "builder@rig", tmuxWindow: null, tmuxPane: seatPane,
       cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: repo },
     adapter: daemon.deps.runtimeAdapters!["claude-code"]!,
     plan: { runtime: "claude-code", cwd: repo, entries: [], diagnostics: [], conflicts: [], noOps: [] },
     resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "builder@rig",
-    includeDurableObligations: false,
+    includeDurableObligations: false, ...overrides,
   });
 
   it("boots managed mode with no /etc/multi-agent and selects the direct launcher", () => {
@@ -195,6 +196,64 @@ describe("workers.isolation: none launches a managed worker as the current user"
     if (resumeToken) expect(line).toContain(`'${client === "claude-code" ? "--resume" : "resume"}' '${resumeToken}'`);
     else if (client === "claude-code") expect(line).toContain("'--session-id'");
     expect(sendKeys).not.toHaveBeenCalled();
+  });
+
+  const trustScreen = "Accessing workspace:\n/fixture\n1. Yes, I trust this folder\n2. No, exit";
+  const readyScreen = "Claude Code v2.1.0\n\u276f \n? for shortcuts";
+
+  function nativeScreen(paneContent: string, paneCommand = "claude") {
+    const terminal = {
+      sendText: vi.fn(async () => ({ ok: true as const })),
+      sendKeys: vi.fn(async () => ({ ok: true as const })),
+      getPanePid: vi.fn(async () => process.pid),
+      getPaneCommand: vi.fn(async () => paneCommand),
+      capturePaneScreen: vi.fn(async () => paneContent),
+    };
+    // Terminal I/O is substituted; the native launch has no command override.
+    const native = new DirectWorkerLauncher({ tmux: terminal, resolvePane: async () => seatPane,
+      resolveAssignedTree: () => repo, tmuxServer: () => "/tmp/fixture/default" });
+    return { native, terminal };
+  }
+
+  it.each([
+    ["claude-code", trustScreen, "trust_gate"],
+    ["claude-code", "You are running in Bypass Permissions mode.\n\u276f No, exit\n  Yes, I accept\nEnter to confirm \u00b7 Esc to cancel", "bypass_consent_gate"],
+    ["codex", "Do you trust the contents of this directory?\n\u203a 1. Yes, continue\n  2. No, quit", "trust_gate"],
+  ] as const)("keeps %s behind a native gate (case %#)", async (client, screen, code) => {
+    const { native } = nativeScreen(screen, client === "codex" ? "codex" : "claude");
+    const launcher = daemon.deps.managedLaunch!.launcher;
+    vi.spyOn(launcher, "launch").mockImplementation(input => native.launch({ ...input, client,
+      attempt: { ...input.attempt, context: { ...input.attempt.context, client } } }));
+    vi.spyOn(launcher, "checkReady").mockImplementation(attempt => native.checkReady(attempt));
+    const sent = vi.spyOn(daemon.deps.tmuxAdapter!, "sendText");
+    const result = await launch({ includeDurableObligations: true });
+    expect(result).toMatchObject({ ok: false, startupStatus: "attention_required" });
+    expect(sent).not.toHaveBeenCalled();
+    expect(daemon.deps.startupOrchestrator!.canContinueFresh(nodeId, sessionId)).toBe(true);
+    const attempt = vi.mocked(launcher.launch).mock.calls[0]![0].attempt;
+    expect(await native.checkReady(attempt)).toMatchObject({ ready: false, code });
+  });
+
+  it.each([
+    ["claude-code", "claude", "", false],
+    ["claude-code", "claude", "Starting...", false],
+    ["claude-code", "claude.exe", readyScreen, true],
+    ["codex", "codex", "", false],
+    ["codex", "codex", "OpenAI Codex (v0.160.0)\n\u203a Implement the task", true],
+  ] as const)("checks the %s composer rather than only its PID (command=%s, case %#)", async (client, command, screen, ready) => {
+    const observedLaunch = vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch");
+    expect((await launch()).ok).toBe(true);
+    const input = observedLaunch.mock.calls[0]![0];
+    const attempt = { ...input.attempt, context: { ...input.attempt.context, client } };
+    const { native, terminal } = nativeScreen(screen, command);
+    const launched = await native.launch({ ...input, client, attempt });
+    expect(launched, JSON.stringify(launched)).toMatchObject({ ok: true });
+    expect(await native.checkReady(attempt)).toMatchObject({ ready });
+    terminal.getPanePid.mockResolvedValue(process.pid + 1);
+    expect(await native.checkReady(attempt)).toEqual({ ready: false, code: "managed_identity_changed" });
+    terminal.getPanePid.mockResolvedValue(process.pid);
+    terminal.capturePaneScreen.mockRejectedValue(new Error("fixture capture failed"));
+    expect(await native.checkReady(attempt)).toEqual({ ready: false, code: "managed_observation_unavailable" });
   });
 
   it("produces and launches the attempt into a worktree this user owns, and records the receipt", async () => {
