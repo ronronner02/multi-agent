@@ -81,6 +81,7 @@ import { readClaudeSelfReportEvidence } from "./adapters/claude-code-adapter.js"
 import { SeatStructuralActivityService } from "./domain/seat-structural-activity-service.js";
 import { deriveSelfHostIdSource, SeatIdentityReconciler, reconcileSelfHostIdentity } from "./domain/seat-identity-reconciler.js";
 import { SeatIdentityStore, SelfHostIdentityStore } from "./domain/seat-identity-store.js";
+import { ensureSeatPane, seatForTask } from "./domain/seat-pane.js";
 import { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
 import { randomUUID } from "node:crypto";
 import { setSelfHostId, setSelfHostIdSource } from "./domain/hosts/fanout-contract.js";
@@ -415,6 +416,9 @@ function composeManagedLaunch(dependencies: {
  */
 function composeDirectLaunch(dependencies: {
   rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
+  /** The environment a launched seat's shell gets, so a seat pane this daemon opens matches one it launched. */
+  sessionEnv?: Record<string, string | undefined>;
+  runtimeSessionEnv?: Record<string, Record<string, string | undefined>>;
   /** The workflow runtime a managed launch must be admitted through. Read at launch, not at composition. */
   workflowRuntime: () => WorkflowRuntime | undefined;
   /** The client command the unisolated launch types into the seat's pane. */
@@ -431,22 +435,11 @@ function composeDirectLaunch(dependencies: {
   const launcher = new DirectWorkerLauncher({
     tmux,
     // The seat is the task's recorded destination: exactly one live session on the run's rig,
-    // bound to one tmux pane. A missing or ambiguous seat refuses rather than guessing.
-    resolvePane: async (runId, taskId) => {
-      const rows = sessions.db.prepare(`
-        SELECT q.destination_session AS sessionName
-        FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
-        WHERE a.run_id = ? AND a.task_id = ? LIMIT 2`).all(runId, taskId) as Array<{ sessionName: string }>;
-      if (rows.length !== 1) throw new Error("direct_launch_seat_unresolved");
-      const sessionName = rows[0]!.sessionName;
-      const session = sessions.findResumeContextByName(sessionName);
-      const live = session ? sessions.getLatestLiveSessions(session.rigId).filter(entry => entry.sessionName === sessionName) : [];
-      const node = session ? rigRepo.getRig(session.rigId)?.nodes.find(entry => entry.id === session.nodeId) : undefined;
-      if (!session || live.length !== 1 || live[0]!.sessionId !== session.sessionId || live[0]!.nodeId !== session.nodeId
-        || node?.binding?.attachmentType !== "tmux" || node.binding.tmuxSession !== sessionName
-        || !/^%[0-9]+$/.test(node.binding.tmuxPane ?? "")) throw new Error("direct_launch_seat_unresolved");
-      return node.binding.tmuxPane!;
-    },
+    // bound to one tmux pane. A fresh install never runs `rig up`, so under `none` a seat with
+    // no terminal at all gets one here — the one owner of "where does this seat live" — and
+    // that pane is recorded exactly as any other binding is. A missing or ambiguous seat still
+    // refuses rather than guessing.
+    resolvePane: async (runId, taskId) => ensureSeatPane(dependencies, seatForTask(sessions, runId, taskId)),
     resolveAssignedTree: (runId, assignment) => {
       const runtime = dependencies.workflowRuntime();
       if (!runtime) throw new Error("direct_launch_runtime_unavailable");
@@ -1161,7 +1154,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       })()
     : managedWorkerRoots;
   const managedLaunch = managed ? (unisolated
-    ? composeDirectLaunch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
+    ? composeDirectLaunch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter, sessionEnv: launchSessionEnv, runtimeSessionEnv,
         workflowRuntime: () => workflowRuntime,
         ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}) })
     : composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
@@ -3139,6 +3132,16 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     processCensus: snapshotProcessCensus,
   });
   deps.periodicSnapshotScheduler = periodicSnapshotScheduler;
+
+  // MVP — what a new task starts. Under `workers.isolation: none` nothing else ever launches
+  // the agent a start request puts work on, so the start request dispatches it. Under hardened
+  // isolation an agent starts through the privileged launcher, and the start keeps its
+  // existing behaviour.
+  if (managed && unisolated) {
+    const { composeTaskDispatch } = await import("./domain/task-dispatch.js");
+    deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
+      startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv });
+  }
 
   // OPR.0.4.3.21 — daemon event-loop health instrumentation. Constructed once
   // per daemon and wired into deps so `/healthz` can surface wedge evidence

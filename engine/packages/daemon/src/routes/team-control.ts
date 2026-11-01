@@ -22,6 +22,14 @@ export interface TeamControlOptions {
    * unavailable rather than serving a partial or invented projection.
    */
   readModel?: TeamReadModel;
+  /**
+   * MVP — what starts the agent that has to do a new task.
+   *
+   * Absent under hardened isolation, where an agent starts through the privileged launcher
+   * and a start request keeps its existing behaviour. Composed only when
+   * `workers.isolation: none`, where nothing else ever launches the seat.
+   */
+  dispatch?: (runId: string, taskId: string) => Promise<void>;
 }
 
 export function teamControlRoutes(

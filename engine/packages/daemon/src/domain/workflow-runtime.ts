@@ -1122,8 +1122,17 @@ export class WorkflowRuntime {
         permissions: [...input.permissions], context,
         nativePolicy, workerGid, frameworkFiles: input.frameworkFiles, resume: resumed });
 
-      const socketPath = resolve(roots.mailboxRoot, worker, runId, attemptId, "mailbox.sock");
-      ensureMailboxDirectory(resolve(roots.mailboxRoot, worker, runId, attemptId),
+      // An endpoint's path has to fit AF_UNIX's 108 bytes, and it is built from two UUIDs. A
+      // provisioned host installs its mailbox root deep enough to afford that; the unisolated
+      // root sits under the user's home, where two UUIDs do not. An attempt id is already unique
+      // per attempt, so the run segment is what an unisolated endpoint can leave out — nothing
+      // else reaches this directory, and the launcher that requires the four-segment shape is
+      // not composed on this host.
+      const mailboxDirectory = this.sameIdentity
+        ? resolve(roots.mailboxRoot, worker, attemptId)
+        : resolve(roots.mailboxRoot, worker, runId, attemptId);
+      const socketPath = resolve(mailboxDirectory, "mailbox.sock");
+      ensureMailboxDirectory(mailboxDirectory,
         { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir }, this.sameIdentity);
       // A socket left by a daemon that died is still a file; the bridge refuses to
       // listen over one, so it is removed first. It can only ever be this attempt's,

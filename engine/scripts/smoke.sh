@@ -22,6 +22,7 @@ npm run test -w packages/daemon -- \
   test/scope-extension.test.ts \
   test/owner-session.test.ts \
   test/unisolated-launch.test.ts \
+  test/seat-pane-launch.test.ts \
   test/team-start.test.ts \
   test/team-result.test.ts \
   test/user-settings-routes.test.ts \
