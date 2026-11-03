@@ -106,6 +106,44 @@ describe("rig team start", () => {
   });
 });
 
+describe("rig team continue", () => {
+  it("reads the current version and continues the named task with the owner credential", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => new Response(JSON.stringify(
+      init?.method === "POST" ? { ok: true, startupStatus: "ready", message: "Delivered existing context" } : { run: { entityVersion: 7 } },
+    ), { status: 200 })) as unknown as typeof fetch;
+    const result = await run(["team", "continue", "run/1", "--task", "task/1", "--json"], deps(fetchImpl));
+    const calls = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+    expect(calls.map(([url]) => url)).toEqual([
+      "http://127.0.0.1:7433/api/team-control/runs/run%2F1",
+      "http://127.0.0.1:7433/api/team-control/runs/run%2F1/tasks/task%2F1/continue",
+    ]);
+    expect(calls.every(([, init]) => new Headers(init.headers).get("authorization") === "Bearer owner-token")).toBe(true);
+    expect(JSON.parse(String(calls[1]![1].body))).toEqual({ protocolVersion: "1.0", expectedEntityVersion: 7 });
+    expect(JSON.parse(result.lines[0]!)).toMatchObject({ ok: true, startupStatus: "ready" });
+  });
+
+  it("resolves the run's only implementer task without a legacy request", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => new Response(JSON.stringify(
+      String(url).endsWith("/read") ? { read: { tasks: [{ taskId: "task-1", role: "implementer" }] } }
+        : init?.method === "POST" ? { ok: true, message: "Delivered" } : { run: { entityVersion: 3 } },
+    ), { status: 200 })) as unknown as typeof fetch;
+    const result = await run(["team", "continue", "run-1"], deps(fetchImpl));
+    expect(result.lines).toContain("Delivered");
+    const calls = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+    expect(calls).toHaveLength(3);
+    expect(calls.every(([url]) => url.includes("/api/team-control/"))).toBe(true);
+    expect(calls[2]![0]).toContain("/tasks/task-1/continue");
+  });
+
+  it("reports a refused continuation without retrying or restarting the seat", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => new Response(JSON.stringify(
+      init?.method === "POST" ? { code: "control_conflict", error: "The run changed" } : { run: { entityVersion: 3 } },
+    ), { status: init?.method === "POST" ? 409 : 200 })) as unknown as typeof fetch;
+    await expect(run(["team", "continue", "run-1", "--task", "task-1"], deps(fetchImpl))).rejects.toMatchObject({ code: "control_conflict" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("team command registration", () => {
   it("is reachable as `rig team start` and takes the goal as its one argument", () => {
     const command = teamCommand(deps(vi.fn() as unknown as typeof fetch));

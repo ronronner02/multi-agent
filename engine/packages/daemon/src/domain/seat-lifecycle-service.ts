@@ -413,16 +413,16 @@ export class SeatLifecycleService {
   /** Finish context delivery to the same fresh occupant after its native gate.
    * This never launches a process or replays an uncertain/finished delivery.
    */
-  async continueFreshStartup(seatRef: string) {
+  async continueFreshStartup(seatRef: string, assertContinuation?: () => void) {
     const resolved = this.resolveSeat(seatRef);
     if ("code" in resolved) return resolved;
     const guard = this.tmuxAdapter.deliveryGuard;
     return guard
-      ? guard.lifecycle([resolved.nodeId], () => this.continueFreshStartupUnchecked(seatRef))
-      : this.continueFreshStartupUnchecked(seatRef);
+      ? guard.lifecycle([resolved.nodeId], () => this.continueFreshStartupUnchecked(seatRef, assertContinuation))
+      : this.continueFreshStartupUnchecked(seatRef, assertContinuation);
   }
 
-  private async continueFreshStartupUnchecked(seatRef: string) {
+  private async continueFreshStartupUnchecked(seatRef: string, assertContinuation?: () => void) {
     const resolved = this.resolveSeat(seatRef);
     if ("code" in resolved) return resolved;
     const seat = this.describe(resolved);
@@ -437,7 +437,14 @@ export class SeatLifecycleService {
     if (!pane.ok || pane.pane !== binding.tmuxPane) return { ok: false as const, code: "binding_changed", message: "The managed terminal binding changed; context was not delivered." };
     const adapter = node.runtime ? this.runtimeAdapters[node.runtime] : undefined;
     if (!adapter) return { ok: false as const, code: "runtime_adapter_missing", message: "The configured runtime adapter is unavailable." };
-    const ready = await adapter.checkReady({ ...binding, cwd: node.cwd ?? "." });
+    const managedBinding = this.startupOrchestrator.pendingManagedBinding(node.id, session.id);
+    if (managedBinding && (managedBinding.tmuxPane !== binding.tmuxPane || managedBinding.tmuxSession !== binding.tmuxSession)) {
+      return { ok: false as const, code: "binding_changed", message: "The admitted managed terminal binding changed." };
+    }
+    const startupBinding = managedBinding ?? { ...binding, cwd: node.cwd ?? ".", model: node.model ?? undefined,
+      effort: node.effort ?? undefined, codexConfigProfile: node.codexConfigProfile ?? undefined };
+    assertContinuation?.();
+    const ready = await adapter.checkReady(startupBinding);
     if (!ready.ready) return { ok: false as const, code: "attention_required", message: ready.reason ?? "Resolve the native prerequisite first." };
     const startup = this.readStartupContext(node.id, node.cwd ?? ".");
     if (!startup.ok) return startup.refusal;
@@ -446,9 +453,10 @@ export class SeatLifecycleService {
     // records pending before its first await, consuming the retained permission.
     if (this.latestSession(node.id)?.id !== session.id || this.sessionRegistry.getBindingForNode(node.id)?.tmuxPane !== pane.pane
       || !this.startupOrchestrator.canContinueFresh(node.id, session.id)) return { ok: false as const, code: "continuation_unavailable", message: "Startup changed during the readiness check. Refresh." };
+    assertContinuation?.();
     const result = await this.startupOrchestrator.startNode({
       rigId: seat.rigId, nodeId: node.id, sessionId: session.id,
-      binding: { ...binding, cwd: node.cwd ?? ".", model: node.model ?? undefined, effort: node.effort ?? undefined, codexConfigProfile: node.codexConfigProfile ?? undefined },
+      binding: startupBinding, assertContinuation,
       adapter, plan: startup.context.plan, resolvedStartupFiles: startup.context.resolvedStartupFiles,
       startupActions: startup.context.startupActions, isRestore: false,
       sessionName: session.session_name, skipHarnessLaunch: true, continueFreshStartup: true, includeDurableObligations: true, allowFreshFallback: false,
