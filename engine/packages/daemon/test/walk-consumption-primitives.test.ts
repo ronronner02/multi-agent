@@ -33,7 +33,7 @@ import { createFullTestDb } from "./helpers/test-app.js";
 function mockTmux(overrides?: Partial<{
   hasSession: (name: string) => Promise<boolean>;
   sendText: (target: string, text: string) => Promise<TmuxResult>;
-  sendKeys: (target: string, keys: string[]) => Promise<TmuxResult>;
+  sendKeys: (target: string, keys: string[], beforeInput?: () => void) => Promise<TmuxResult>;
   capturePaneContent: (paneId: string, lines?: number) => Promise<string | null>;
 }>): TmuxAdapter {
   return {
@@ -96,6 +96,25 @@ describe("SessionTransport submitOnly — the guarded bare-Enter retry", () => {
     expect(sendText).not.toHaveBeenCalled();                       // nothing typed — ever
     expect(sendKeys).toHaveBeenCalledTimes(1);
     expect(sendKeys).toHaveBeenCalledWith("dev-impl@my-rig", ["Enter"]);
+  });
+
+  it("passes submit-only authority to the final input boundary", async () => {
+    let authorized = true, submitted = false;
+    const beforeInput = () => { if (!authorized) throw new Error("Continuation conflict: approval expired"); };
+    const sendKeys = vi.fn(async (_target: string, _keys: string[], check?: () => void) => {
+      await Promise.resolve();
+      authorized = false;
+      try { check?.(); } catch (error) { return { ok: false as const, code: "guard_target_unknown" as const, message: (error as Error).message }; }
+      submitted = true;
+      return { ok: true as const };
+    });
+    const transport = makeTransport(mockTmux({ sendKeys,
+      capturePaneContent: async () => `❯ ${STAGED_PIECE.slice(0, 50)}\n  paste again to expand`,
+    }));
+    const result = await transport.send("dev-impl@my-rig", "", { submitOnly: true, expectedStagedText: STAGED_PIECE, beforeInput });
+    expect(submitted).toBe(false);
+    expect(result).toMatchObject({ ok: false, reason: "submit_failed" });
+    expect(sendKeys).toHaveBeenCalledWith("dev-impl@my-rig", ["Enter"], beforeInput);
   });
 
   it("REFUSES (staged_mismatch) when the pane shows something else — a bare Enter at a permission prompt would approve it", async () => {

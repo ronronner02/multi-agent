@@ -286,6 +286,19 @@ export class PlanGovernance {
     return this.queue.getById(qitemId)?.state ?? null;
   }
 
+  assertTaskContinuation(runId: string, taskId: string, version: number, currentBinding: unknown, attemptId: string): void {
+    const run = this.getRun(runId), task = this.findTask(runId, taskId);
+    if (!task) throw new Error("Task not found");
+    const latest = this.getLatestTaskAttempt(task.qitemId);
+    if (run.entityVersion !== version || hashBinding(currentBinding) !== run.bindingDigest
+      || !["pending", "in-progress"].includes(this.queueState(task.qitemId) ?? "")
+      || (latest && (latest.id !== attemptId || latest.state !== "running"))) {
+      throw new Error("Continuation conflict: the run, task or attempt changed");
+    }
+    const reason = this.eligibility({ run, now: this.clock().toISOString() }, attemptId);
+    if (reason) throw new Error(`Continuation conflict: ${reason}`);
+  }
+
   getAttempt(id: string): TeamAttempt | null {
     const row = this.db.prepare(`SELECT id, run_id AS runId, qitem_id AS qitemId, role, provider, identity_json AS identityJson,
       unknown_reason AS unknownReason, state, usage_json AS usageJson, entity_version AS entityVersion FROM team_attempts WHERE id = ?`)
@@ -919,7 +932,7 @@ export class PlanGovernance {
     return this.reconcile(ctx, currentBinding) ? this.eligibility(ctx, reconcilingAttemptId) : "Plan, repository or policy binding changed";
   }
 
-  private eligibility(ctx: CommandContext, reconcilingAttemptId?: string): string | null {
+  private eligibility(ctx: Pick<CommandContext, "run" | "now">, reconcilingAttemptId?: string): string | null {
     if (ctx.run.state !== "approved") return `Run is closed to dispatch (${ctx.run.state})`;
     if (!this.db.prepare(`SELECT id FROM team_approvals WHERE run_id = ? AND kind = 'orchestrator' AND action = 'implementation'
       AND binding_digest = ? AND state = 'approved' AND expires_at > ?`).get(ctx.run.id, ctx.run.bindingDigest, ctx.now)) return "Implementation approval is not active";
