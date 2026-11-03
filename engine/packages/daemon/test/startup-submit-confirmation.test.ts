@@ -39,8 +39,12 @@ describe("startup prompt submission", () => {
       deliveryGuard: guard,
       probeSession: vi.fn(async () => ({ state: "present" as const })),
       listPanes: vi.fn(async () => []),
-      sendText: vi.fn(async (_name: string, text: string) => { composer += text; return { ok: true as const }; }),
-      sendKeys: vi.fn(async (_name: string, keys: string[]) => {
+      sendText: vi.fn(async (_name: string, text: string, beforeInput?: () => void) => {
+        try { beforeInput?.(); } catch (error) { return { ok: false as const, message: (error as Error).message }; }
+        composer += text; return { ok: true as const };
+      }),
+      sendKeys: vi.fn(async (_name: string, keys: string[], beforeInput?: () => void) => {
+        try { beforeInput?.(); } catch (error) { return { ok: false as const, message: (error as Error).message }; }
         expect(keys).toEqual(["Enter"]);
         if (typeof lostEnters === "number" ? ++enters > lostEnters : !lostEnters.has(++enters)) { submitted.push(composer); composer = ""; }
         return { ok: true as const }; // successful tmux command can still leave input staged
@@ -198,6 +202,24 @@ describe("startup prompt submission", () => {
       expect(f.tmux.capturePaneContent).not.toHaveBeenCalled();
       expect(f.tmux.sendKeys).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("rechecks managed continuation at the staged retry's final input boundary", async () => {
+    const f = fixture(1);
+    let authorized = true;
+    const send = f.tmux.sendKeys.getMockImplementation()!;
+    f.tmux.sendKeys.mockImplementationOnce(send).mockImplementationOnce(async (...args) => {
+      await Promise.resolve();
+      authorized = false;
+      return send(...args);
+    });
+    const result = await f.start({ assertContinuation: () => {
+      if (!authorized) throw new Error("Continuation conflict: original approval expired");
+    } });
+    expect(f.tmux.sendKeys).toHaveBeenCalledTimes(2);
+    expect(f.submitted).toEqual([]);
+    expect(f.composer()).toContain("OpenRig session identity");
+    expect(result).toMatchObject({ ok: false, startupStatus: "failed" });
   });
 
   it("retries only Enter when the initial startup paste is still staged", async () => {

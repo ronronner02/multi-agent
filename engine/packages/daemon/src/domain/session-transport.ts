@@ -913,6 +913,8 @@ export interface SendOpts {
   // caller's `text` argument must be empty in this mode.
   submitOnly?: boolean;
   expectedStagedText?: string;
+  /** Internal submit-only authority, rechecked by tmux immediately before Enter. */
+  beforeInput?: () => void;
   /** Internal startup caller needs a bounded view of an expanded multiline composer. */
   submitOnlyCaptureLines?: 50 | 200;
   /** Internal startup only: require complete visible composer identity before Enter. */
@@ -1752,7 +1754,9 @@ export class SessionTransport {
       if (targetFailure) return targetFailure;
       const submitResult = await this.runStage(
         "session_transport.submit",
-        () => this.tmuxAdapter.sendKeys(sessionName, ["Enter"]),
+        () => opts.beforeInput
+          ? this.tmuxAdapter.sendKeys(sessionName, ["Enter"], opts.beforeInput)
+          : this.tmuxAdapter.sendKeys(sessionName, ["Enter"]),
         (result) => result.ok ? "ok" : "failed",
       );
       if (!submitResult.ok) {

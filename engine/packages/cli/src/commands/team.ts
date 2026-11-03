@@ -158,6 +158,30 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     return execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=no"], { cwd, encoding: "utf8" }).trim() !== "";
   }
 
+  cmd.command("continue <run-id>")
+    .description("deliver pending startup instructions after resolving the native prerequisite")
+    .option("--task <id>", "task to continue (default: the run's only implementer task)")
+    .option("--json", "print the continuation result as JSON")
+    .action(async (runId: string, options: { task?: string; json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required", "No owner credential. Run ./setup.sh or set MULTI_AGENT_OWNER_TOKEN.");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable", "The daemon is not running or healthy.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}`;
+      const task = options.task ?? await firstTask(client, runId, headers);
+      const run = await client.get<{ run?: { entityVersion: number } }>(path, { headers });
+      if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+        throw new TeamCommandError("continuation_unavailable", "The current run version could not be read.");
+      }
+      const result = await client.post<{ ok?: boolean; error?: string; message?: string; code?: string }>(
+        `${path}/tasks/${encodeURIComponent(task)}/continue`,
+        { protocolVersion: "1.0", expectedEntityVersion: run.data.run!.entityVersion }, { headers });
+      if (result.status !== 200 || !result.data?.ok) throw new TeamCommandError(result.data?.code ?? "continuation_unavailable",
+        result.data?.message ?? result.data?.error ?? "Continuation was refused. Resolve the native prerequisite and refresh the run.");
+      console.log(options.json ? JSON.stringify(result.data) : result.data.message ?? "Startup instructions delivered to the existing conversation.");
+    });
+
   cmd.command("diff <run-id>")
     .description("print a finished task's patch")
     .option("--task <id>", "the task whose result to read (default: the run's only implementer task)")

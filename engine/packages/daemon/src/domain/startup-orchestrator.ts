@@ -82,6 +82,8 @@ export interface StartupInput {
   preserveStartupContext?: boolean;
   /** Continue the same fresh occupant after a prerequisite, without another harness launch. */
   continueFreshStartup?: boolean;
+  /** Recheck the owner-approved managed task after asynchronous readiness and before input. */
+  assertContinuation?: () => void;
   /** Deliberate fresh replacement retains the seat’s durable destination obligations. */
   includeDurableObligations?: boolean;
   /** Readiness timeout in ms (defaults to runtime.readiness_timeout_seconds). */
@@ -161,6 +163,7 @@ export class StartupOrchestrator {
   private readinessSettings: Pick<SettingsStore, "resolveOne">;
   private listProcesses: NativeProcessLister | undefined;
   private managedAttempt: StartupOrchestratorDeps["managedAttempt"];
+  private pendingManagedBindings = new Map<string, { sessionId: string; binding: NodeBinding }>();
 
   constructor(deps: StartupOrchestratorDeps) {
     if (deps.db !== deps.sessionRegistry.db) throw new Error("StartupOrchestrator: sessionRegistry must share the same db handle");
@@ -213,6 +216,7 @@ export class StartupOrchestrator {
     if (guard && !guard.ownsLifecycle(input.nodeId)) {
       return guard.lifecycle([input.nodeId], () => this.startNodeWithWarnings(input, warnings));
     }
+    if (!input.continueFreshStartup) this.pendingManagedBindings.delete(input.nodeId);
     try {
       input = { ...input, binding: new NativePermissionStore(this.db).apply(input.binding, input.adapter.runtime) };
     } catch (error) {
@@ -469,6 +473,9 @@ export class StartupOrchestrator {
     // The adapter returned the exact enforcing value it inserted, and readiness
     // proved this managed launch became live. Persistence is deliberately
     // best-effort: observation failure yields UNKNOWN, never a failed launch.
+    try { input.assertContinuation?.(); }
+    catch (error) { return this.fail(input, "failed", [(error as Error).message]); }
+
     if (appliedLaunch && launchGeneration) {
       this.appliedLaunchStore.recordGeneration(launchGeneration, appliedLaunch);
     }
@@ -489,7 +496,7 @@ export class StartupOrchestrator {
     const consumedActions = new Set<StartupAction>();
     let challengeOnlyPrompt: string | null = null;
     // Task dispatch has no authored identity action, but still needs its first work prompt.
-    if (continuityOutcome === "fresh" && (identityAction || input.includeDurableObligations)) {
+    if (continuityOutcome === "fresh" && (identityAction || input.includeDurableObligations || input.binding.managedAttempt)) {
       const initialPrompt = await this.deliverInitialSessionPrompt(deliveryInput, identityAction, postLaunchFiles, challenge?.promptBlock ?? null, input.includeDurableObligations);
       if (!initialPrompt.ok) {
         errors.push(initialPrompt.error);
@@ -609,6 +616,7 @@ export class StartupOrchestrator {
     }
 
     // 8. Mark ready
+    this.pendingManagedBindings.delete(input.nodeId);
     this.sessionRegistry.updateStartupStatus(input.sessionId, "ready", new Date().toISOString());
     const submission = deliveryInput.submissionWarnings.length
       ? { status: deliveryInput.stagedSubmissionWarning ? "staged" as const : "unverified" as const,
@@ -625,6 +633,11 @@ export class StartupOrchestrator {
    * Any newer pending/ready/failure event consumes that permission, including a
    * daemon loss during delivery: uncertain delivery is never blindly replayed.
    */
+  pendingManagedBinding(nodeId: string, sessionId: string): NodeBinding | undefined {
+    const pending = this.pendingManagedBindings.get(nodeId);
+    return pending?.sessionId === sessionId && this.canContinueFresh(nodeId, sessionId) ? pending.binding : undefined;
+  }
+
   canContinueFresh(nodeId: string, sessionId: string): boolean {
     return hasPendingFreshStartup(this.db, nodeId, sessionId);
   }
@@ -671,8 +684,14 @@ export class StartupOrchestrator {
     freshContextPending = false,
     recovery?: string,
   ): StartupResult {
+    this.pendingManagedBindings.delete(input.nodeId);
     if (status === "attention_required" && freshContextPending && input.binding.tmuxSession) {
-      errors.push(`After resolving it in ${input.binding.tmuxSession}, run: rig seat continue ${shellQuote(input.binding.tmuxSession)}`);
+      const attempt = input.binding.managedAttempt;
+      if (attempt) this.pendingManagedBindings.set(input.nodeId, { sessionId: input.sessionId, binding: input.binding });
+      const command = attempt
+        ? `rig team continue ${shellQuote(attempt.context.runId)} --task ${shellQuote(attempt.context.assignment.taskId)}`
+        : `rig seat continue ${shellQuote(input.binding.tmuxSession)}`;
+      errors.push(`After resolving it in ${input.binding.tmuxSession}, run: ${command}`);
     }
     this.sessionRegistry.updateStartupStatus(input.sessionId, status);
     this.eventBus.emit({
@@ -765,7 +784,18 @@ export class StartupOrchestrator {
       }
     }
 
-    if (includeDurableObligations) prompt = [prompt, `This is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`].filter(Boolean).join("\n\n");
+    if (binding.managedAttempt) {
+      const { runId, assignment, outputs, permissions } = binding.managedAttempt.context;
+      const task = this.db.prepare(`SELECT q.body FROM team_queue_authority a
+        JOIN queue_items q ON q.qitem_id = a.qitem_id
+        WHERE a.run_id = ? AND a.task_id = ? AND q.destination_session = ?`).get(runId, assignment.taskId, binding.tmuxSession) as
+        { body: string } | undefined;
+      if (!task) return { ok: false, error: "The managed task is no longer assigned to this seat." };
+      prompt = [prompt, `Managed task ${assignment.taskId} for run ${runId}`, task.body,
+        `Assignment: ${JSON.stringify(assignment)}`, `Outputs: ${JSON.stringify(outputs)}`,
+        `Permissions: ${JSON.stringify(permissions)}`,
+        "Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished."].filter(Boolean).join("\n\n");
+    } else if (includeDurableObligations) prompt = [prompt, `This is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`].filter(Boolean).join("\n\n");
 
     // OPR.0.4.3.06 — the per-launch orientation challenge rides along with the
     // identity prompt (after the contract) so no extra send is added.
@@ -853,13 +883,21 @@ export class StartupOrchestrator {
     const sendOrder = ++input.sendOrder;
     const tmuxSession = input.binding.tmuxSession!;
     input.lastSubmissionConfirmed = false;
-    const textResult = await this.tmuxAdapter.sendText(tmuxSession, text);
+    try { input.assertContinuation?.(); }
+    catch (error) { return { error: (error as Error).message }; }
+    const textResult = input.assertContinuation
+      ? await this.tmuxAdapter.sendText(tmuxSession, text, input.assertContinuation)
+      : await this.tmuxAdapter.sendText(tmuxSession, text);
     if (!textResult.ok) {
       return { error: (textResult as { message?: string }).message ?? "unknown" };
     }
 
     await this.sleep(200);
-    const submitResult = await this.tmuxAdapter.sendKeys(tmuxSession, ["Enter"]);
+    try { input.assertContinuation?.(); }
+    catch (error) { return { error: (error as Error).message }; }
+    const submitResult = input.assertContinuation
+      ? await this.tmuxAdapter.sendKeys(tmuxSession, ["Enter"], input.assertContinuation)
+      : await this.tmuxAdapter.sendKeys(tmuxSession, ["Enter"]);
     if (!submitResult.ok) {
       return { error: (submitResult as { message?: string }).message ?? "unknown" };
     }
@@ -897,12 +935,17 @@ export class StartupOrchestrator {
       diagnostic.retry = "threw"; // Replaced when the transport returns normally.
       const retry = await this.sessionTransport.send(tmuxSession, "", {
         submitOnly: true,
+        ...(input.assertContinuation ? { beforeInput: input.assertContinuation } : {}),
         expectedStagedText: text,
         submitOnlyCaptureLines: STARTUP_SUBMIT_CAPTURE_LINES,
         requireFullStagedText: true,
         onStartupMismatch: (evidence) => { diagnostic.observations.push({ ...evidence, phase: "guarded_retry" }); },
       });
       diagnostic.retry = retry.ok ? "ok" : "refused_or_failed";
+      if (!retry.ok) {
+        try { input.assertContinuation?.(); }
+        catch (error) { return { error: (error as Error).message }; }
+      }
       phase = "after_retry";
       await this.sleep(200);
       const after = await this.tmuxAdapter.capturePaneContent(tmuxSession, STARTUP_SUBMIT_CAPTURE_LINES);
