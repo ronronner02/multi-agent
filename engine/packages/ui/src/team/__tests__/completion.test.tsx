@@ -19,7 +19,7 @@ const evidence = { validated: true, manifestDigest: "sha256:" + "a".repeat(64), 
   baseIdentifier: "b".repeat(40), fileCount: 3, changedPaths: ["src/result.ts"], outsideAssignment: [], reasons: [] };
 
 function completion(overrides: Partial<TaskCompletion> = {}): TaskCompletion {
-  return { taskId: "task", role: "implementer", subjectTaskId: "task", queueState: "in-progress",
+  return { taskId: "task", qitemId: "qitem-1", role: "implementer", subjectTaskId: "task", queueState: "in-progress",
     taskVersion: 2, actorSession: "builder@rig", attempt: { attemptId: "attempt-1", entityVersion: 1, state: "stopped", observed: true },
     openAttempts: 0, blockedReason: null, findingsRequired: false, evidence, ...overrides };
 }
@@ -73,4 +73,19 @@ it("treats a task that already has a terminal outcome as nothing left to record"
   await screen.findByRole("region", { name: language.t("completion.title") });
   expect(await screen.findByText(language.t("completion.alreadyRecorded"))).toBeTruthy();
   expect(screen.queryByRole("button", { name: language.t("completion.markDone") })).toBeNull();
+});
+
+it("records the outcome against the task's queue row, not the id the run gave it", async () => {
+  // `tasks/outcome` resolves the task through `team_queue_authority.qitem_id`, so a request that
+  // names the run's task id is refused as an unknown entity and the owner action never lands.
+  const language = await show(completion({ taskId: "task", qitemId: "qitem-20261104141331-f68bd4a3" }));
+  await screen.findByRole("region", { name: language.t("completion.title") });
+  const done = await screen.findByRole("button", { name: language.t("completion.markDone") }) as HTMLButtonElement;
+  done.click();
+  await screen.findByText(language.t("completion.recorded"));
+  const outcome = mocks.request.mock.calls.find((call: unknown[]) => String(call[0]).endsWith("/tasks/outcome"))!;
+  const [path, init] = outcome as [string, RequestInit];
+  expect(path).toBe("/runs/run/tasks/outcome");
+  const body = JSON.parse(String(init.body)) as { actionId: string; runId: string; payload: { state: string } };
+  expect(body).toMatchObject({ runId: "run", actionId: "qitem-20261104141331-f68bd4a3", payload: { state: "done" } });
 });

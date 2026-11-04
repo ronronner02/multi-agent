@@ -28,6 +28,12 @@ export interface CompletionEvidence {
 
 export interface TaskCompletion {
   taskId: string; role: "lead" | "implementer" | "reviewer"; subjectTaskId: string;
+  /**
+   * The queue row the outcome command keys on. The completion read addresses a task by the id
+   * the run gave it (`task-1`); `tasks/outcome` addresses the same task by its durable queue
+   * row, and a request that names the task id there is refused as an unknown entity.
+   */
+  qitemId: string;
   queueState: string | null; taskVersion: number; actorSession: string | null;
   attempt: { attemptId: string; entityVersion: number; state: string; observed: boolean } | null;
   openAttempts: number; blockedReason: string | null; findingsRequired: boolean;
@@ -70,7 +76,8 @@ export function CompletionPanel({ runId, taskId, onRecorded }: {
     setBusy(true);
     try {
       const run = await session.request<{ run: { entityVersion: number } }>(`/runs/${encodeURIComponent(runId)}`);
-      const request = { protocolVersion: "1.0", runId, actionId: completion.taskId, expectedEntityVersion: run.run.entityVersion,
+      // The outcome command addresses the task by its queue row, not by the id the run gave it.
+      const request = { protocolVersion: "1.0", runId, actionId: completion.qitemId, expectedEntityVersion: run.run.entityVersion,
         idempotencyKey: crypto.randomUUID(),
         payload: { expectedTaskVersion: completion.taskVersion, state,
           ...(state === "done" ? { closureReason: "no-follow-on" } : {}),
