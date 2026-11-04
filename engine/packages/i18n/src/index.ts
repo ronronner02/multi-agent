@@ -30,6 +30,10 @@ export const MESSAGE_PARAMETERS = {
   // C2's review-round line: a blocking finding count, so it is declared here like every
   // other key that interpolates.
   "reviews.blockingFindings": ["count"],
+  // MVP — the completion panel names the review task a completion created and the task a
+  // review reopened, so both carry the task id they name.
+  "completion.reviewCreated": ["taskId"],
+  "completion.reworkOpened": ["taskId"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS
