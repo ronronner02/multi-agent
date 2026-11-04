@@ -13,6 +13,7 @@ import {
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
+import type { LeadTask } from "./lead-proposal.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
@@ -472,6 +473,84 @@ export class PlanGovernance {
     return graph.ok ? tasks : graph.reason;
   }
 
+  /**
+   * C3 — whether a seat on this rig declares the implementer role.
+   *
+   * The seat is the latest session registered for a node, which is the address a launch
+   * resolves; the role is that node's. A seat the rig does not have, or one that declares
+   * another role, is not an implementer seat.
+   */
+  private implementerSeat(rigId: string, seat: string): boolean {
+    const row = this.db.prepare(`SELECT n.role AS role FROM sessions s JOIN nodes n ON n.id = s.node_id
+      WHERE n.rig_id = ? AND s.session_name = ? ORDER BY s.created_at DESC, s.id DESC LIMIT 1`).get(rigId, seat) as
+      { role: string | null } | undefined;
+    return row?.role === "implementer";
+  }
+
+  /**
+   * C3 — record the owner decision a lead's decomposition becomes.
+   *
+   * The lead cannot admit work, and nothing it writes is admitted by the daemon: this records
+   * one pending approval carrying the exact task batch the daemon read from the lead's own
+   * candidate tree. The owner approves it through the same `approvals/decide` path C1 growth
+   * uses, and the batch is admitted by `applyLeadProposal`. Unlike growth, the plan binding is
+   * unchanged — the tasks stay inside the scope the owner already approved — so nothing is
+   * suspended and no implementation approval is reissued.
+   */
+  proposeLeadTasks(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, leadTasks: readonly LeadTask[]): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("run.lead-proposal-requested", raw, owner, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.state !== "approved") return deny("A lead proposal requires an approved run");
+      // The lead's seats and paths are its proposal; everything else about each task is the
+      // run's own vocabulary, exactly as a growth task gets it.
+      const batch = this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
+        assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
+        outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
+        destinationSession: task.seat })), owner.sessionId);
+      if (typeof batch === "string") return deny(batch);
+      // A lead chooses seats from its roster, and the roster lists roles too. The batch this
+      // boundary builds is always implementer work, so a seat that declares another role would
+      // be handed an implementer assignment: refuse it here rather than at the launch.
+      const notImplementer = batch.find(task => !this.implementerSeat(ctx.run.rigId, task.destinationSession));
+      if (notImplementer) return deny(`Seat ${notImplementer.destinationSession} is not an implementer seat on this rig`);
+      const payload = jsonValue({ change: "lead-proposal", tasks: batch }) as JsonObject;
+      const targetDigest = hashBytes(canonicalJson(payload)), expiresAt = timestamp(object(object(ctx.request.payload, "payload").leadProposal, "leadProposal").expiresAt, "expiresAt");
+      if (expiresAt <= ctx.now) return deny("Approval expiry must be in the future");
+      if (this.db.prepare(`SELECT id FROM team_approvals WHERE run_id=? AND action='scope-change'
+        AND target_digest=? AND binding_digest=? AND state<>'expired'`).get(ctx.run.id, targetDigest, ctx.run.bindingDigest)) {
+        return deny("An approval for this exact operation is already recorded");
+      }
+      this.db.prepare(`INSERT INTO team_approvals
+        (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,created_at,updated_at)
+        VALUES (?,?,'orchestrator','scope-change',?,?,?,?,'pending',?,?,?)`).run(ctx.request.actionId, ctx.run.id,
+        canonicalJson(payload), targetDigest, targetDigest, ctx.run.bindingDigest, expiresAt, ctx.now, ctx.now);
+      return { status: "accepted", value: this.getApproval(ctx.request.actionId), observedBy: owner.sessionId };
+    });
+  }
+
+  /**
+   * C3 — admit an owner-approved lead decomposition.
+   *
+   * Runs inside the decision command, so the approval and every task it carries commit
+   * together. The batch is re-validated against the run's own binding and rows here rather
+   * than trusted from the approval row, exactly as run growth does, and each task goes through
+   * the one admission write.
+   */
+  private applyLeadProposal(ctx: CommandContext, approval: TeamApproval, owner: ControlActor): Result {
+    const tasks = this.growthTasks(ctx, ctx.run.binding, approval.payload.tasks);
+    if (typeof tasks === "string") throw new Error("Lead task admission conflict: " + tasks);
+    for (const task of tasks) {
+      const taskId = task.assignment.taskId;
+      const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } });
+      if (result.status !== "accepted") throw new Error("Lead task admission conflict: " + result.reason);
+      this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
+        valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
+    }
+    return { status: "accepted", value: { ...this.getApproval(approval.id), addedTasks: tasks.map(task => task.assignment.taskId) },
+      effectMayStart: true, observedBy: owner.sessionId };
+  }
+
   private applyRunGrowth(ctx: CommandContext, approval: TeamApproval, owner: ControlActor): Result {
     const binding = parsePlanBinding(approval.payload.binding);
     const tasks = this.growthTasks(ctx, binding, approval.payload.tasks);
@@ -531,6 +610,10 @@ export class PlanGovernance {
       const approval = this.getApproval(ctx.request.actionId);
       if (!approval || approval.runId !== ctx.run.id) throw new Error("Approval not found in this run");
       const growth = approval.action === "scope-change" && approval.payload.change === "run-growth";
+      // C3 — a lead's decomposition is a batch inside the binding the owner already approved,
+      // so it is decided against the current binding exactly like any other decision; only its
+      // admission differs from growth's, which also replaces the binding.
+      const lead = approval.action === "scope-change" && approval.payload.change === "lead-proposal";
       if (growth) {
         if (ctx.run.state !== "invalidated" || approval.bindingDigest !== ctx.run.bindingDigest) return deny("Run growth no longer matches the suspended binding");
         if (hashBinding(currentBinding) !== hashBinding(approval.payload.binding)) {
@@ -563,6 +646,7 @@ export class PlanGovernance {
         .run(v.decision, owner.sessionId, ctx.now, approval.id, approval.entityVersion);
       if (updated.changes !== 1) throw new Error("Approval version conflict");
       if (growth && v.decision === "approved") return this.applyRunGrowth(ctx, approval, owner);
+      if (lead && v.decision === "approved") return this.applyLeadProposal(ctx, approval, owner);
       if (approval.action === "implementation" && v.decision === "approved") {
         ctx.run.state = "approved";
         ctx.run.stateReason = null;
