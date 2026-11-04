@@ -259,7 +259,7 @@ describe("the owner retry reads the recorded classification", () => {
     // The seat still carries the poisoned native token until the continuation decides about it.
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBe("poisoned-native-session");
     const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
-    const started: Array<{ resumeToken?: string }> = [];
+    const started: Array<{ resumeToken?: string; continueSessionId?: string }> = [];
     // A recorded, live binding makes the dispatch resolve the seat's existing terminal instead
     // of opening one, so this case observes the launch decision and nothing about tmux.
     const nodeId = sessions.findResumeContextByName("builder@rig-1")!.nodeId;
@@ -267,17 +267,20 @@ describe("the owner retry reads the recorded classification", () => {
     const dispatch = composeTaskDispatch({
       rigRepo: new RigRepository(db), sessions,
       tmux: { listPanes: async () => [{ id: "%1" }] } as never,
-      startupOrchestrator: { startNode: async (input: { resumeToken?: string }) => {
-        started.push({ resumeToken: input.resumeToken });
+      startupOrchestrator: { startNode: async (input: { resumeToken?: string; continueSessionId?: string }) => {
+        started.push({ resumeToken: input.resumeToken, continueSessionId: input.continueSessionId });
         return { ok: true, startupStatus: "ready", continuityOutcome: "fresh" };
       } } as never,
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
+      // This run has room, so the limit is not what decides this case.
+      maxSessions: () => 2, liveSessions: () => 0,
     });
     sessions.updateStartupStatus(seat.sessionId, "pending");
     await dispatch("run-1", "task-1");
     expect(started).toHaveLength(1);
     // A fresh session: the token is gone, and the tree the attempt was admitted to is unchanged.
     expect(started[0]!.resumeToken).toBeUndefined();
+    expect(started[0]!.continueSessionId).toBeUndefined();
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createDaemon } from "../src/startup.js";
 import { hashBytes } from "../src/domain/plan-governance.js";
 import { StartupOrchestrator } from "../src/domain/startup-orchestrator.js";
@@ -36,6 +36,18 @@ function repository(parent: string): string {
   git(root, "add", ".");
   git(root, "commit", "--quiet", "-m", "base");
   return root;
+}
+
+/**
+ * Where the daemon writes an attempt's turn text.
+ *
+ * It lives in the unisolated worker's mutable state, which sits beside the candidate root:
+ * `.../state/workers/assignments/local/<run>-<task>` and `.../state/workers/homes/local/scratch`.
+ * The candidate the launch actually used is the anchor, so this reads the daemon's own layout
+ * rather than rebuilding a home the test guessed.
+ */
+function turnPromptDir(candidate: string): string {
+  return join(dirname(dirname(dirname(candidate))), "homes", "local", "scratch", "turns");
 }
 
 /** A projection is sealed read-only, so every directory is opened before removal. */
@@ -85,7 +97,7 @@ describe("a start request launches the seat it put work on", () => {
           verifiedProviders: ["claude", "codex"] }) },
       cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
       directLaunchCommand: facts => [process.execPath, STUB_RUNNER,
-        "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"] });
+        "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor", "--turn"] });
     db = daemon.db;
     // The demo seed's rows and nothing else: a rig, one implementer node, one registered seat.
     const rig = daemon.deps.rigRepo.createRig("team-demo", repo);
@@ -131,40 +143,51 @@ describe("a start request launches the seat it put work on", () => {
     const ready = () => db.prepare("SELECT 1 FROM events WHERE type = 'node.startup_ready'").get();
     await vi.waitFor(() => expect(ready()).toBeDefined(), { timeout: 60_000 });
 
-    // Empty startup actions must still deliver the queued-work instruction through real tmux.
-    const terminal = tmuxRun("capture-pane", "-p", "-J", "-S", "-100", "-t", `=${SEAT}:`);
-    expect(terminal).toContain(`Managed task ${receipt.taskId} for run ${receipt.runId}`);
-    expect(terminal).toContain("Say hello from the demo team");
-    expect(terminal).toContain('"paths":["src"]');
-    expect(terminal).not.toContain("rig whoami");
-    expect(terminal).not.toContain("rig queue list");
-    expect(terminal).not.toContain(ownerToken);
+    // Empty startup actions must still deliver the queued-work instruction. A managed Claude
+    // attempt is one headless turn, so its prompt is written before the launch and fed on
+    // stdin, and the turn ends by itself — which is why the pane is already dead here. The
+    // prompt is asserted where the daemon wrote it, and the pane keeps the turn's own exit.
+    const launchEvent = JSON.parse(receipts()[0]!.payload) as { runId: string;
+      receipt: { attemptId: string; identity: { paneId: string; processId: number }; workerUid: number } };
+    // The turn ends by itself, and the held pane keeps its own exit status — the evidence the
+    // completion sweep classifies. The launch returns once the turn has started, so the end is
+    // waited for rather than assumed to have already happened.
+    await vi.waitFor(() => expect(tmuxRun("display-message", "-p", "-t", launchEvent.receipt.identity.paneId,
+      "#{pane_dead}|#{pane_dead_status}").trim()).toBe("1|0"), { timeout: 30_000 });
+    // The turn's own text is the file the launcher fed it, and it carries the same facts the
+    // interactive prompt did: the task, its body, the assignment and the instruction files.
+    const prompt = readFileSync(join(turnPromptDir(
+      daemon.deps.workflowRuntime!.assignedTreeFor(receipt.runId, { taskId: receipt.taskId })),
+      `${launchEvent.receipt.attemptId}.prompt`), "utf8");
+    expect(prompt).toContain(`Managed task ${receipt.taskId} for run ${receipt.runId}`);
+    expect(prompt).toContain("Say hello from the demo team");
+    expect(prompt).toContain('"paths":["src"]');
     // KTD28 keeps the core and the charter out of the brief, so the projection is the only
     // place they exist and the prompt is the only place the client can be told where it is.
     // An implementer attempt names exactly those two, at the path an unisolated client opens.
-    expect(terminal).toContain("Read these files before you start work");
-    expect(terminal).toMatch(/^- \/.*\/state\/workers\/context\/local\/[^/]+\/[^/]+\/core$/m);
-    expect(terminal).toMatch(/^- \/.*\/state\/workers\/context\/local\/[^/]+\/[^/]+\/charter$/m);
+    expect(prompt).toContain("Read these files before you start work");
+    expect(prompt).toMatch(/^- \/.*\/state\/workers\/context\/local\/[^/]+\/[^/]+\/core$/m);
+    expect(prompt).toMatch(/^- \/.*\/state\/workers\/context\/local\/[^/]+\/[^/]+\/charter$/m);
     // The mount path only exists inside a sandbox; naming it to an unisolated client would
     // point at a directory that is not there.
-    expect(terminal).not.toMatch(/^- \/context\//m);
+    expect(prompt).not.toMatch(/^- \/context\//m);
+    expect(prompt).not.toContain("rig whoami");
+    expect(prompt).not.toContain("rig queue list");
+    expect(prompt).not.toContain(ownerToken);
 
     // The daemon created the terminal itself, and recorded the pane the way every binding is.
-    const pane = tmuxRun("list-panes", "-t", `=${SEAT}:`, "-F", "#{pane_id} #{pane_current_path}").trim();
-    const [paneId, paneCwd] = pane.split(" ");
+    // The pane is read by id: a turn that has ended leaves no current path to report, and the
+    // candidate it worked in is asserted below from the tree the launch actually used.
+    const paneId = tmuxRun("list-panes", "-t", `=${SEAT}:`, "-F", "#{pane_id}").trim();
     expect(paneId).toMatch(/^%[0-9]+$/);
-    // The launch moved the pane into the task's candidate, which is where the runner works.
-    expect(paneCwd).toContain(join("state", "workers", "assignments", "local"));
     expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)).toMatchObject({
       attachmentType: "tmux", tmuxSession: SEAT, tmuxPane: paneId });
 
     // The launch receipt is run evidence for this run, and names the identity the pane runs under.
-    const event = JSON.parse(receipts()[0]!.payload) as { runId: string;
-      receipt: { attemptId: string; identity: { paneId: string; processId: number }; workerUid: number } };
-    expect(event.runId).toBe(receipt.runId);
-    expect(event.receipt.identity.paneId).toBe(paneId);
-    expect(event.receipt.workerUid).toBe(process.getuid!());
-    expect(event.receipt.identity.processId).toBeGreaterThan(0);
+    expect(launchEvent.runId).toBe(receipt.runId);
+    expect(launchEvent.receipt.identity.paneId).toBe(paneId);
+    expect(launchEvent.receipt.workerUid).toBe(process.getuid!());
+    expect(launchEvent.receipt.identity.processId).toBeGreaterThan(0);
 
     // The stub runner is what came up in that pane, and the seat is ready. The candidate is a
     // real git worktree under the unisolated roots, and the sidecar is the runner's own write.
@@ -183,132 +206,39 @@ describe("a start request launches the seat it put work on", () => {
       body: JSON.stringify({ protocolVersion: "1.0", expectedEntityVersion: version }),
     }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
 
-  it("continues the same managed attempt after trust without opening legacy or worker owner access", async () => {
-    const adapter = daemon.deps.runtimeAdapters!["claude-code"]!;
-    const readiness = vi.spyOn(adapter, "checkReady").mockResolvedValueOnce({ ready: false, code: "trust_gate" });
-    const response = await start({ goal: "Write a hello-world file in src" });
-    const run = await response.json() as { runId: string; taskId: string };
-    const context = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
-    await vi.waitFor(() => expect(daemon.deps.startupOrchestrator!.canContinueFresh(nodeId, context.sessionId)).toBe(true), { timeout: 60_000 });
-    const original = JSON.parse(receipts()[0]!.payload).receipt;
+  /**
+   * A managed Claude attempt is one headless turn, and that changes what a continuation is.
+   *
+   * Measured on the installed 2.1.296 build: `-p` skips the workspace-trust dialog, so the gate
+   * this route exists to clear cannot appear, and the prompt is read from stdin before the
+   * client starts rather than typed into a composer. The route therefore refuses a managed
+   * attempt by name instead of pretending to deliver a prompt nothing is waiting for, and the
+   * owner's answer is a new attempt on the same candidate tree.
+   */
+  it("refuses to continue a managed attempt, because a headless turn has no staged prompt", async () => {
+    const run = await (await start({ goal: "Write a hello-world file in src" })).json() as { runId: string; taskId: string };
+    await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
     const version = daemon.deps.teamGovernance!.getRun(run.runId).entityVersion;
     daemon.deps.teamControl!.credentials.workers = [{ token: "worker-fixture", sessionId: SEAT, runId: run.runId }];
+    // The route stays owner-only and keeps its authority checks.
     expect((await continueTask(run.runId, run.taskId, version, "")).status).toBe(401);
     expect((await continueTask(run.runId, run.taskId, version, "worker-fixture")).status).toBe(403);
     expect((await continueTask(run.runId, "wrong-task", version)).status).toBe(404);
     expect((await continueTask(run.runId, run.taskId, version - 1)).status).toBe(409);
     expect((await continueTask(run.runId, run.taskId, 0)).status).toBe(400);
-    const continued = await Promise.all([continueTask(run.runId, run.taskId, version), continueTask(run.runId, run.taskId, version)]);
-    expect(continued.map(response => response.status).sort()).toEqual([200, 409]);
-    const result = continued.find(response => response.status === 200)!;
-    expect(await result.json()).toMatchObject({ ok: true, seat: SEAT, startupStatus: "ready" });
-    expect(result.status).toBe(200);
+    // A managed attempt is not continuable: nothing was left staged, so nothing can be delivered.
+    const refused = await continueTask(run.runId, run.taskId, version);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ code: "continuation_unavailable" });
     expect(receipts()).toHaveLength(1);
-    expect(readiness.mock.calls.slice(1).every(([binding]) => binding.managedAttempt?.attemptId === original.attemptId)).toBe(true);
-    expect(Number(tmuxRun("display-message", "-p", "-t", original.identity.paneId, "#{pane_pid}").trim())).toBe(original.identity.processId);
-    const terminal = tmuxRun("capture-pane", "-p", "-J", "-S", "-200", "-t", `=${SEAT}:`);
-    expect(terminal).toContain("Write a hello-world file in src");
-    expect(terminal).not.toContain("rig whoami");
-    expect(terminal).not.toContain("rig queue list");
-    expect((await continueTask(run.runId, run.taskId, version)).status).toBe(409);
-    for (const path of ["/api/seat/continue/" + encodeURIComponent(SEAT), "/api/whoami", "/api/queue/list"]) {
-      const legacy = await daemon.app.fetch(new Request("http://127.0.0.1" + path, {
-        method: path.includes("continue") ? "POST" : "GET", headers: { Authorization: "Bearer " + ownerToken },
-      }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
-      expect(legacy.status).toBe(403);
-      expect(await legacy.json()).toMatchObject({ code: "managed_control_required" });
-    }
+    // The seat's own work is unaffected: the attempt ran as a turn and the candidate is there.
+    const receipt = JSON.parse(receipts()[0]!.payload) as { receipt: { attemptId: string } };
+    const tree = daemon.deps.workflowRuntime!.assignedTreeFor(run.runId, { taskId: run.taskId });
+    expect(git(tree, "rev-parse", "--is-inside-work-tree").trim()).toBe("true");
+    const prompt = readFileSync(join(turnPromptDir(tree), `${receipt.receipt.attemptId}.prompt`), "utf8");
+    expect(prompt).toContain("Write a hello-world file in src");
   }, 90_000);
 
-  it("rechecks run authority after asynchronous readiness before delivering continued work", async () => {
-    const adapter = daemon.deps.runtimeAdapters!["claude-code"]!;
-    const readiness = vi.spyOn(adapter, "checkReady").mockResolvedValueOnce({ ready: false, code: "trust_gate" });
-    const run = await (await start({ goal: "Do not deliver after cancellation" })).json() as { runId: string; taskId: string };
-    const context = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
-    await vi.waitFor(() => expect(daemon.deps.startupOrchestrator!.canContinueFresh(nodeId, context.sessionId)).toBe(true), { timeout: 60_000 });
-    let release!: () => void;
-    readiness.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve({ ready: true }); }));
-    const governance = daemon.deps.teamGovernance!;
-    const version = governance.getRun(run.runId).entityVersion;
-    const continuation = continueTask(run.runId, run.taskId, version);
-    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
-    governance.cancelRun({ protocolVersion: "1.0", runId: run.runId, actionId: "cancel",
-      expectedEntityVersion: version, idempotencyKey: "cancel-during-readiness", payload: { reason: "Cancel before context delivery" } }, { kind: "owner", sessionId: "owner-control" });
-    release();
-    expect((await continuation).status).toBe(409);
-    expect(tmuxRun("capture-pane", "-p", "-J", "-S", "-200", "-t", `=${SEAT}:`)).not.toContain("Do not deliver after cancellation");
-    expect(receipts()).toHaveLength(1);
-  }, 90_000);
-
-  it.each(["paste", "Enter"])("rechecks managed continuation at the final %s boundary", async boundary => {
-    const adapter = daemon.deps.runtimeAdapters!["claude-code"]!;
-    vi.spyOn(adapter, "checkReady").mockResolvedValueOnce({ ready: false, code: "trust_gate" });
-    const goal = "Do not submit after write-boundary cancellation";
-    const run = await (await start({ goal })).json() as { runId: string; taskId: string };
-    const context = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
-    await vi.waitFor(() => expect(daemon.deps.startupOrchestrator!.canContinueFresh(nodeId, context.sessionId)).toBe(true), { timeout: 60_000 });
-    const governance = daemon.deps.teamGovernance!;
-    const version = governance.getRun(run.runId).entityVersion;
-    let rejected: unknown;
-    const beforeWrite = (beforeInput?: () => void) => () => {
-      governance.cancelRun({ protocolVersion: "1.0", runId: run.runId, actionId: "cancel",
-        expectedEntityVersion: version, idempotencyKey: "cancel-at-write", payload: { reason: "Cancel at the terminal write boundary" } }, { kind: "owner", sessionId: "owner-control" });
-      try { beforeInput?.(); } catch (error) { rejected = error; throw error; }
-    };
-    const tmux = daemon.deps.tmuxAdapter;
-    if (boundary === "paste") {
-      const sendText = tmux.sendText.bind(tmux);
-      vi.spyOn(tmux, "sendText").mockImplementationOnce((target, text, beforeInput, options) =>
-        sendText(target, text, beforeWrite(beforeInput), options));
-    } else {
-      const sendKeys = tmux.sendKeys.bind(tmux);
-      vi.spyOn(tmux, "sendKeys").mockImplementationOnce((target, keys, beforeInput) =>
-        sendKeys(target, keys, beforeWrite(beforeInput)));
-    }
-    const response = await continueTask(run.runId, run.taskId, version);
-    expect(rejected).toBeInstanceOf(Error);
-    expect(response.status).toBe(409);
-    expect(receipts()).toHaveLength(1);
-    if (boundary === "paste") expect(tmuxRun("capture-pane", "-p", "-J", "-S", "-200", "-t", `=${SEAT}:`)).not.toContain(goal);
-  }, 90_000);
-
-  it("keeps persisted pending startup unavailable after its in-memory owner is replaced", async () => {
-    const adapter = daemon.deps.runtimeAdapters!["claude-code"]!;
-    vi.spyOn(adapter, "checkReady").mockResolvedValueOnce({ ready: false, code: "trust_gate" });
-    const goal = "Do not reconstruct the previous managed attempt";
-    const run = await (await start({ goal })).json() as { runId: string; taskId: string };
-    const context = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
-    const original = daemon.deps.startupOrchestrator!;
-    await vi.waitFor(() => expect(original.pendingManagedBinding(nodeId, context.sessionId)).toBeDefined(), { timeout: 60_000 });
-    const replacement = new StartupOrchestrator({ db, sessionRegistry: daemon.deps.sessionRegistry,
-      eventBus: daemon.deps.eventBus, tmuxAdapter: daemon.deps.tmuxAdapter, readFile: path => readFileSync(path, "utf8") });
-    daemon.deps.startupOrchestrator = replacement;
-    expect(replacement.canContinueFresh(nodeId, context.sessionId)).toBe(true);
-    expect(replacement.pendingManagedBinding(nodeId, context.sessionId)).toBeUndefined();
-    const response = await continueTask(run.runId, run.taskId, daemon.deps.teamGovernance!.getRun(run.runId).entityVersion);
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ code: "continuation_unavailable" });
-    expect(tmuxRun("capture-pane", "-p", "-J", "-S", "-200", "-t", `=${SEAT}:`)).not.toContain(goal);
-    expect(receipts()).toHaveLength(1);
-  }, 90_000);
-
-  it.each(["plan", "approval", "deadline"])("refuses managed continuation when its %s changes", async kind => {
-    const adapter = daemon.deps.runtimeAdapters!["claude-code"]!;
-    vi.spyOn(adapter, "checkReady").mockResolvedValueOnce({ ready: false, code: "trust_gate" });
-    const run = await (await start({ goal: "Keep changed authority out of the native prompt" })).json() as { runId: string; taskId: string };
-    const context = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
-    const startup = daemon.deps.startupOrchestrator!;
-    await vi.waitFor(() => expect(startup.canContinueFresh(nodeId, context.sessionId)).toBe(true));
-    const version = daemon.deps.teamGovernance!.getRun(run.runId).entityVersion;
-    if (kind === "plan") writeFileSync(join(repo, "plan.md"), "changed plan\n");
-    if (kind === "approval") db.prepare("UPDATE team_approvals SET expires_at = ? WHERE run_id = ?").run("2000-01-01T00:00:00.000Z", run.runId);
-    const now = kind === "deadline" ? vi.spyOn(Date, "now").mockReturnValue(startup.pendingManagedBinding(nodeId, context.sessionId)!.managedAttempt!.deadline + 1) : null;
-    try {
-      expect((await continueTask(run.runId, run.taskId, version)).status).toBe(409);
-      expect(tmuxRun("capture-pane", "-p", "-J", "-S", "-200", "-t", `=${SEAT}:`)).not.toContain("Keep changed authority out of the native prompt");
-      expect(receipts()).toHaveLength(1);
-    } finally { now?.mockRestore(); }
-  }, 90_000);
 
   it("launches once for a seat, so a second start does not open a second client", async () => {
     expect((await start({ goal: "First goal" })).status).toBe(201);

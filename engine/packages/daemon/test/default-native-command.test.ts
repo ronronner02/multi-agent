@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -80,12 +80,32 @@ it.each([
       plan: { runtime, cwd: repo, entries: [], diagnostics: [], conflicts: [], noOps: [] },
       resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "dev-impl@fixture", includeDurableObligations: false,
     });
+    // A headless turn reports the client it could not start and ends by itself, so the pane is
+    // read once it has ended rather than while it is still starting. An interactive client is
+    // still running at this point, exactly as before.
+    if (runtime === "claude-code") {
+      await vi.waitFor(() => expect(tmux("display-message", "-p", "-t", pane, "#{pane_dead}").trim()).toBe("1"), { timeout: 30_000 });
+    }
     const output = tmux("capture-pane", "-p", "-J", "-S", "-100", "-t", pane);
-    expect(output).toContain(`exec '${executable}' '${firstFlag}'`);
-    expect(output).toContain(`${executable}: not found`);
+    // Claude Code is one headless turn now: the pane execs the readable view, which starts the
+    // client with its own flags and the prompt on stdin. The client is still named on the pane's
+    // command line, and this shell still cannot find it.
+    if (runtime === "claude-code") {
+      expect(output).toContain("agent-turn-view.mjs");
+      expect(output).toContain(`'-p' '--permission-mode' 'bypassPermissions'`);
+      // The turn's view reports a client that is not installed the way a shell does, which is
+      // also the line the classifier names as a missing executable.
+      expect(output).toContain(`${executable}: command not found`);
+    } else {
+      expect(output).toContain(`exec '${executable}' '${firstFlag}'`);
+      expect(output).toContain(`${executable}: not found`);
+    }
     expect(output).not.toContain("exec: --: invalid option");
-    // Missing installation is not successful readiness; this fixture proves command submission.
-    expect(result.ok).toBe(false);
+    // Missing installation is not successful readiness for an interactive client, which never
+    // becomes the pane's process. A headless turn is different in one way that matters here: the
+    // pane execs the turn's view, the view starts, and the client it could not find is reported
+    // and classified — so the turn ran and failed rather than failing to launch.
+    expect(result.ok).toBe(runtime === "claude-code");
   } finally {
     try { tmux("kill-server"); } catch { /* The isolated server may already be gone. */ }
     await daemon?.deps.workflowRuntime?.closeManagedAttempts();
