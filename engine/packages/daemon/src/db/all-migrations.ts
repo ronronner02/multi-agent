@@ -113,6 +113,7 @@ import { ownerSessionsSchema } from "./migrations/105_owner_sessions.js";
 import { managedAttemptInputsSchema } from "./migrations/106_managed_attempt_inputs.js";
 import { scopeExtensionsSchema } from "./migrations/105_scope_extensions.js";
 import { reviewLoopSchema } from "./migrations/107_review_loop.js";
+import { cancellationSchema } from "./migrations/108_cancellation.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -220,4 +221,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   managedAttemptInputsSchema,
   scopeExtensionsSchema,
   reviewLoopSchema,
+  cancellationSchema,
 ];
