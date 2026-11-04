@@ -150,6 +150,7 @@ import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 import { teamStartRoutes } from "./routes/team-start.js";
 import { teamResultRoutes } from "./routes/team-result.js";
+import { teamCompletionRoutes } from "./routes/team-completion.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
@@ -279,6 +280,13 @@ export interface AppDeps {
   gatewaySubsystem?: import("./domain/gateway/gateway-subsystem.js").GatewaySubsystem;
   periodicSnapshotScheduler?: import("./domain/periodic-snapshot-scheduler.js").PeriodicSnapshotScheduler;
   workflowRuntime?: WorkflowRuntime;
+  /**
+   * MVP — the owner of "an attempt ended". A direct launch records a receipt and nothing closed
+   * the attempt, so no task could be observed to finish. Startup composes it; index.ts starts
+   * its sweep after the HTTP surface is ready. Absent (tests, legacy callers) leaves attempts
+   * exactly as they were recorded.
+   */
+  attemptCompletion?: import("./domain/attempt-completion.js").AttemptCompletion;
   /**
    * Absolute path to the daemon's bundled built-in workflow-specs
    * directory. Used by `GET /api/workflow/specs` to
@@ -843,6 +851,13 @@ export function createApp(deps: AppDeps): Hono {
   // MVP slice 3 — the finished task's patch, served to the owner so `rig team apply` and the
   // Web UI can hand the result back. Absent a runtime there are no candidate trees to read.
   app.route("/api/team-control", teamResultRoutes(teamGovernance, {
+    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
+  }));
+  // MVP — the owner's completion read: the attempt the daemon observed stop, and the evidence it
+  // could verify about the candidate. The owner action forwards both to `tasks/outcome`, so the
+  // write contract is the one C2 already owns.
+  app.route("/api/team-control", teamCompletionRoutes(teamGovernance, {
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
   }));

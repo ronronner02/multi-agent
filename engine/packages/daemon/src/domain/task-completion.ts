@@ -1,0 +1,130 @@
+import type { TeamRole, TeamTaskAuthority } from "../contracts/team-control.js";
+
+/**
+ * MVP — the completion path's evidence half.
+ *
+ * The owner's outcome command needs evidence, and the owner cannot read a worker's tree: the
+ * daemon can. This module states, from the candidate the runtime already computes for
+ * `rig team apply` and the diff view, what the daemon can check for itself. `validated` is a
+ * derived fact, never a caller's claim, which is R18 read literally: an attempt that ended, or a
+ * candidate that exists, is not by itself evidence the work was done where it was allowed.
+ */
+
+/** What the daemon could verify about a task's candidate, as the owner action records it. */
+export interface TaskCompletionEvidence {
+  /** True only when every check below passed. The C2 loop reads exactly this field. */
+  validated: boolean;
+  manifestDigest: string | null;
+  base: "commit" | "snapshot" | null;
+  baseIdentifier: string | null;
+  /** How many files the candidate's manifest holds, so the owner sees its size, not only its hash. */
+  fileCount: number;
+  /** The paths the candidate moves, read from the candidate's own patch. */
+  changedPaths: string[];
+  /** Changed paths the assignment does not cover. Any entry makes `validated` false. */
+  outsideAssignment: string[];
+  /** Why `validated` is false, in the daemon's own words. Empty exactly when it is true. */
+  reasons: string[];
+}
+
+/** The manifest the runtime serves, narrowed to the fields the evidence reads. */
+export interface CandidateFacts {
+  base: "commit" | "snapshot";
+  baseIdentifier: string;
+  files: ReadonlyArray<{ path: string }>;
+  manifestDigest: string;
+  patch: string;
+}
+
+/**
+ * The paths a unified diff moves, from its own headers.
+ *
+ * The patch is the candidate's own computation — the same bytes `rig team apply` replays — so
+ * this reads the deliverable rather than walking the tree a second time.
+ */
+export function changedPaths(patch: string): string[] {
+  const paths: string[] = [];
+  for (const line of patch.split("\n")) {
+    const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+    if (match) paths.push(match[2]!);
+  }
+  return paths;
+}
+
+const covers = (path: string, paths: readonly string[]) =>
+  paths.some(owned => path === owned || path.startsWith(owned + "/"));
+
+/**
+ * What the daemon can state about one task's candidate.
+ *
+ * `manifest` is `null` when the runtime holds no readable candidate for the task: an attempt
+ * that never launched, a tree the control could not adopt, or one already released. That is
+ * reported as its own reason instead of as an empty candidate, because the two mean different
+ * things to the owner.
+ */
+export function taskCompletionEvidence(input: {
+  role: TeamRole;
+  assignmentPaths: readonly string[];
+  manifest: CandidateFacts | null;
+  unavailableReason?: string;
+}): TaskCompletionEvidence {
+  const empty: TaskCompletionEvidence = { validated: false, manifestDigest: null, base: null, baseIdentifier: null,
+    fileCount: 0, changedPaths: [], outsideAssignment: [], reasons: [] };
+  if (!input.manifest) {
+    return { ...empty, reasons: [input.unavailableReason ?? "The task's candidate could not be read"] };
+  }
+  const { manifest } = input;
+  const paths = changedPaths(manifest.patch);
+  const outside = paths.filter(path => !covers(path, input.assignmentPaths));
+  const reasons: string[] = [];
+  // The snapshot lane has no base commit to diff, so the daemon cannot say what moved. A
+  // reviewer's candidate is the implementer's tree, which this reads the same way.
+  if (manifest.base === "snapshot") reasons.push("The candidate has no base commit to diff against");
+  if (manifest.base === "commit" && paths.length === 0) reasons.push("The candidate moves no path");
+  if (outside.length) reasons.push(`${outside.length} changed path(s) fall outside the assignment`);
+  return { validated: reasons.length === 0, manifestDigest: manifest.manifestDigest, base: manifest.base,
+    baseIdentifier: manifest.baseIdentifier, fileCount: manifest.files.length, changedPaths: paths,
+    outsideAssignment: outside, reasons };
+}
+
+/**
+ * The task whose candidate a task's evidence describes.
+ *
+ * A reviewer task owns no tree: its assignment's `reviewOf` names the implementer task whose
+ * candidate it was admitted to read, so the evidence the owner records for a review is that
+ * candidate's. Every other role is its own subject.
+ */
+export function evidenceSubject(task: Pick<TeamTaskAuthority, "assignment">, taskId: string): string {
+  return task.assignment.role === "reviewer" && task.assignment.reviewOf !== undefined
+    ? task.assignment.reviewOf : taskId;
+}
+
+/** The attempt an outcome may be recorded against: the task's latest, stopped, with an identity. */
+export interface CompletionAttempt {
+  attemptId: string;
+  entityVersion: number;
+  state: string;
+  observed: boolean;
+}
+
+/**
+ * Whether the owner's action can be recorded now, and if not, why.
+ *
+ * These are the same preconditions `recordTaskOutcome` enforces, stated early so the UI shows
+ * one sentence instead of a refusal the owner has to decode. The command still re-checks them
+ * inside its transaction; this is a read, never an authority.
+ */
+export function completionBlockedReason(input: {
+  queueState: string | null;
+  attempt: CompletionAttempt | null;
+  openAttempts: number;
+  actorSession: string | null;
+}): string | null {
+  if (!input.queueState) return "The task has no queue row";
+  if (!["pending", "in-progress", "blocked"].includes(input.queueState)) return "The task already has a terminal outcome";
+  if (!input.attempt) return "The task has no recorded attempt yet";
+  if (input.attempt.state !== "stopped" || !input.attempt.observed) return "The attempt has not been observed to stop";
+  if (input.openAttempts > 0) return "Another attempt of this task is still unresolved";
+  if (!input.actorSession) return "The task's seat is not recorded";
+  return null;
+}
