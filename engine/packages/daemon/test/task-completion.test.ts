@@ -262,9 +262,9 @@ describe("MVP — the completion path", () => {
     expect(created.status).toBe("accepted");
     receipt("attempt-lead", "lead@rig", 4444);
     const owner = completion();
-    owner.sweep();
+    await owner.sweep();
     alive = false;
-    owner.sweep();
+    await owner.sweep();
     const tree = runtime.candidateFor("run", "lead-task").root;
     const proposal = JSON.stringify({ tasks: [{ taskId: "task-2", seat: "builder@rig", paths: ["src/a.ts"],
       dependencies: [], body: "Implement a.ts" }] });

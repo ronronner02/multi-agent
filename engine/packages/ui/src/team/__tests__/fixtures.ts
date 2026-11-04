@@ -27,7 +27,7 @@ export function attempt(overrides: Partial<TeamAttemptView> = {}): TeamAttemptVi
   return { attemptId: "a1", runId: run.id, taskId: "T-102", qitemId: "q-T-102", role: "implementer", provider: "claude",
     state: "stopped", unknownReason: null, session: null, createdAt: "2026-10-31T00:00:00.000Z",
     usage: { activeMs: 0, inputTokens: { value: null, reason: "not reported" }, outputTokens: { value: null, reason: "not reported" },
-      costUsd: { value: null, reason: "not reported" } }, ...overrides };
+      costUsd: { value: null, reason: "not reported" } }, failure: null, ...overrides };
 }
 
 export function read(overrides: Partial<TeamOwnerRead> = {}): TeamOwnerRead {
