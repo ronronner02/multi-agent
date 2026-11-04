@@ -75,6 +75,17 @@ describe("rig team start", () => {
     expect(JSON.parse(String(init.body))).toMatchObject({ seat: "dev@demo", reviewerSeat: "rev@demo" });
   });
 
+  // C3 — the lead is opt-in, and a start with one points the owner at the proposal verb.
+  it("names the lead seat and points at the proposal the owner has to decide", async () => {
+    const withLead = { ...receipt, leadSeat: "lead@demo" };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(withLead), { status: 201 })) as unknown as typeof fetch;
+    const result = await run(["team", "start", "Add a health endpoint", "--lead", "lead@demo"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    const init = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls[0]![1];
+    expect(JSON.parse(String(init.body))).toEqual({ goal: "Add a health endpoint", lead: "lead@demo" });
+    expect(result.lines.join("\n")).toContain("rig team proposal run-1 task-1");
+  });
+
   it("uses the owner token ./setup.sh wrote when this shell has none", async () => {
     // The README's quick start: start.sh loads owner.env into the daemon only, so a fresh
     // shell has the daemon running and no credential of its own.
@@ -152,11 +163,65 @@ describe("rig team continue", () => {
   });
 });
 
+describe("rig team proposal", () => {
+  const proposal = { tasks: [
+    { taskId: "task-2", seat: "a@demo", paths: ["src/a.ts"], dependencies: [], body: "First" },
+    { taskId: "task-3", seat: "b@demo", paths: ["src/b.ts"], dependencies: ["task-2"], body: "Second" } ] };
+  /** A daemon answering the proposal read, the run read, the proposal write and the decision. */
+  const daemon = (decision = "approved") => vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "POST" && url.endsWith("/proposal")) {
+      return new Response(JSON.stringify({ status: "accepted", runId: "run-1", entityVersion: 9, replayed: false,
+        effectMayStart: false, reason: null, value: { id: "proposal-1", entityVersion: 1 } }), { status: 200 });
+    }
+    if (init?.method === "POST" && url.endsWith("/approvals/decide")) {
+      return new Response(JSON.stringify({ status: "accepted", runId: "run-1", entityVersion: 10, replayed: false,
+        effectMayStart: true, reason: null, value: { addedTasks: decision === "approved" ? ["task-2", "task-3"] : [] } }), { status: 200 });
+    }
+    if (url.endsWith("/proposal")) return new Response(JSON.stringify({ protocolVersion: "1.0", proposal }), { status: 200 });
+    return new Response(JSON.stringify({ protocolVersion: "1.0", run: { entityVersion: 8 } }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  it("reads the batch and admits nothing without --decide", async () => {
+    const fetchImpl = daemon();
+    const result = await run(["team", "proposal", "run-1", "task-1"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    expect(result.lines.join("\n")).toContain("The lead proposed 2 implementer task(s)");
+    expect(result.lines.join("\n")).toContain("--decide approved");
+    // One read only: a proposal that has not been decided is not written anywhere.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("records the owner decision for the batch the daemon read", async () => {
+    const fetchImpl = daemon();
+    const result = await run(["team", "proposal", "run-1", "task-1", "--decide", "approved"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    expect(result.lines.join("\n")).toContain("2 task(s) admitted and dispatched: task-2, task-3");
+    const calls = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+    const decision = JSON.parse(String(calls.at(-1)![1].body)) as { actionId: string; payload: { approvalVersion: number; decision: string } };
+    expect(calls.at(-1)![0]).toContain("/approvals/decide");
+    expect(decision).toMatchObject({ actionId: "proposal-1", payload: { approvalVersion: 1, decision: "approved" } });
+  });
+
+  it("rejects --decide values other than approved and rejected, before any request", async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    await expect(run(["team", "proposal", "run-1", "task-1", "--decide", "maybe"], deps(fetchImpl)))
+      .rejects.toMatchObject({ code: "lead_decision_invalid" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
 describe("team command registration", () => {
   it("is reachable as `rig team start` and takes the goal as its one argument", () => {
     const command = teamCommand(deps(vi.fn() as unknown as typeof fetch));
     const start = command.commands.find(entry => entry.name() === "start")!;
     expect(start.description()).toMatch(/create a run and a task/);
     expect(start.registeredArguments.map(argument => argument.name())).toEqual(["goal"]);
+  });
+
+  it("registers `rig team proposal` as the owner's read and decision of a lead's batch", () => {
+    const command = teamCommand(deps(vi.fn() as unknown as typeof fetch));
+    const proposal = command.commands.find(entry => entry.name() === "proposal")!;
+    expect(proposal.registeredArguments.map(argument => argument.name())).toEqual(["run-id", "task-id"]);
+    expect(proposal.options.map(option => option.long)).toContain("--decide");
   });
 });

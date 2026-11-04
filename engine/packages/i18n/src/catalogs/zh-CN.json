@@ -65,6 +65,8 @@
   "web.rigDefault": "当前唯一的活动 rig",
   "web.startTask": "开始任务",
   "web.startRefused": "启动被拒绝。请检查计划与 rig 后重试。",
+  "web.leadSeat": "负责人席位（可选）",
+  "web.leadSeatHint": "先提出任务的席位",
   "web.pending": "不可用",
   "web.laterPage": "此页面由后续任务实现。",
   "web.readOnly": "只读证据",

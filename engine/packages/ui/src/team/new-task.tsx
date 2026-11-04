@@ -51,6 +51,7 @@ export function NewTaskForm() {
   const { t } = useTranslation(), session = useOwnerSession(), navigate = useNavigate(), cache = useQueryClient();
   const [goal, setGoal] = useState("");
   const [rig, setRig] = useState("");
+  const [lead, setLead] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<"refused" | "unavailable" | null>(null);
   return <Card className="team-card" role="region" aria-label={t("web.newTask")}>
@@ -62,10 +63,11 @@ export function NewTaskForm() {
       try {
         const receipt = await session.request<TeamStartReceipt>("/runs", { method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: goal.trim(), ...(rig.trim() ? { rig: rig.trim() } : {}) }) });
+          body: JSON.stringify({ goal: goal.trim(), ...(rig.trim() ? { rig: rig.trim() } : {}),
+            ...(lead.trim() ? { lead: lead.trim() } : {}) }) });
         if (!receipt?.runId) throw new Error("The start returned no run.");
         await cache.invalidateQueries({ queryKey: runsKey });
-        setGoal(""); setRig("");
+        setGoal(""); setRig(""); setLead("");
         await navigate({ to: "/team/$section", params: { section: "overview" }, search: { run: receipt.runId } });
       } catch (error) {
         setFailure(error instanceof OwnerReadError && error.status < 500 ? "refused" : "unavailable");
@@ -75,6 +77,9 @@ export function NewTaskForm() {
         maxLength={262_144} required disabled={!session.paired} /></label>
       <label>{t("web.rig")}<input value={rig} onChange={event => setRig(event.target.value)}
         autoComplete="off" placeholder={t("web.rigDefault")} disabled={!session.paired} /></label>
+      {/* C3 — optional: a run with no lead seat is exactly the pre-C3 start. */}
+      <label>{t("web.leadSeat")}<input value={lead} onChange={event => setLead(event.target.value)}
+        autoComplete="off" placeholder={t("web.leadSeatHint")} disabled={!session.paired} /></label>
       <Button type="submit" variant="outline" disabled={busy || !session.paired || !goal.trim()}>{t("web.startTask")}</Button>
     </form>
     {!session.paired && <p role="status">{t("web.pairRequired")}</p>}

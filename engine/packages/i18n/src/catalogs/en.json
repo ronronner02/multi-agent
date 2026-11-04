@@ -65,6 +65,8 @@
   "web.rigDefault": "The only active rig",
   "web.startTask": "Start task",
   "web.startRefused": "The start was refused. Check the plan and the rig, then try again.",
+  "web.leadSeat": "Lead seat (optional)",
+  "web.leadSeatHint": "A seat that proposes the tasks first",
   "web.pending": "Unavailable",
   "web.laterPage": "This page belongs to a later task.",
   "web.readOnly": "Read-only evidence",
