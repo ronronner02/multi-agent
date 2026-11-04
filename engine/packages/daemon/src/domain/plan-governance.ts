@@ -332,6 +332,23 @@ export class PlanGovernance {
     return this.queue.getById(qitemId)?.state ?? null;
   }
 
+  /** MVP — the seat the queue recorded for a task, which an owner observation must identify. */
+  taskSeat(qitemId: string): string | null {
+    return this.queue.getById(qitemId)?.destinationSession ?? null;
+  }
+
+  /**
+   * MVP — attempts of a task that are not observed stopped.
+   *
+   * The owner outcome command refuses while any attempt of the task is unresolved, so the
+   * completion read states the same number instead of leaving the owner to infer it.
+   */
+  openAttemptCount(qitemId: string): number {
+    const row = this.db.prepare("SELECT count(*) AS count FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped'")
+      .get(qitemId) as { count: number };
+    return row.count;
+  }
+
   assertTaskContinuation(runId: string, taskId: string, version: number, currentBinding: unknown, attemptId: string): void {
     const run = this.getRun(runId), task = this.findTask(runId, taskId);
     if (!task) throw new Error("Task not found");
