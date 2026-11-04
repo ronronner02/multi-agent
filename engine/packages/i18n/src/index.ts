@@ -27,6 +27,9 @@ export const MESSAGE_PARAMETERS = {
   "shell.snapshotAge": ["seconds"],
   "tasks.count": ["count"],
   "tasks.criteriaOf": ["verified", "total"],
+  // C2's review-round line: a blocking finding count, so it is declared here like every
+  // other key that interpolates.
+  "reviews.blockingFindings": ["count"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS

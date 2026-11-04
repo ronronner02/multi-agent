@@ -67,6 +67,10 @@ export function taskDecision(approvals: readonly TeamApproval[], task: TeamRevie
 /**
  * What the review record says. The read model publishes the round count and the open P0/P1 count,
  * not each finding's text, so this names both and never invents a finding to fill the panel.
+ *
+ * C2 adds the run's own review rounds: each one names the reviewer task that produced it, the
+ * verdict the loop acted on, and how many findings were blocking. A task with no recorded round
+ * still says so rather than drawing an empty table that could read as a clean pass.
  */
 function Finding({ task }: { task: TeamReviewView | undefined }) {
   const { t } = useTranslation();
@@ -79,6 +83,14 @@ function Finding({ task }: { task: TeamReviewView | undefined }) {
       <div><dt>{t("web.openP0P1")}</dt><dd data-testid="open-p0p1">{task.openP0P1}</dd></div>
       <div><dt>{t("reviews.candidateDigest")}</dt><dd><code title={fullDigest(task.currentCandidateDigest)}>{shortDigest(task.currentCandidateDigest)}</code></dd></div>
     </dl>
+    {task.verdicts.length > 0 && <ul className="ui-verdicts" aria-label={t("reviews.rounds")}>
+      {task.verdicts.map(round => <li key={`${round.reviewerTaskId}:${round.round}`} data-round={round.round}
+        data-verdict={round.verdict} data-testid={`review-verdict-${round.round}`}>
+        <code>{round.reviewerTaskId}</code>
+        <span>{t(round.verdict === "approved" ? "reviews.verdictApproved" : "reviews.verdictChangesRequired")}</span>
+        <span className="team-muted">{t("reviews.blockingFindings", { count: round.blocking })}</span>
+      </li>)}
+    </ul>}
   </>;
 }
 
