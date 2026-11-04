@@ -55,7 +55,10 @@ export function bindingForGoal(input: { root: string; planRef: string; writePath
     planRef: input.planRef, planDigest, repository: { root, identity: "git:" + head },
     readPaths: input.writePaths, writePaths: input.writePaths, roles: ["lead", "implementer", "reviewer"],
     policyRevision: input.policy.policyRevision, policyFingerprint: input.policy.policyFingerprint,
-    limits: { maxSessions: 1, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 1 },
+    // C2: two review rounds, which is the contract's ceiling for the unconditional ones. One
+    // is not enough for the loop to ever approve a candidate: a first round that finds a P0/P1
+    // spends it on the rework, so the round that would close the task could never start.
+    limits: { maxSessions: 1, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
   };
 }
 
@@ -156,6 +159,13 @@ export function teamStartRoutes(
     const node = firstAgentNode(rigRepo, rig.id);
     const seat = v.seat === undefined ? (node ? defaultSeat(rigRepo, node, rig.name) : null) : text(v.seat, "seat", 256);
     if (!seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
+    // C2 — the seat every review round of this run routes to. A start that names none keeps
+    // the pre-C2 behaviour: an implementer completes and the run creates no review.
+    const reviewerSeat = v.reviewerSeat === undefined ? null : text(v.reviewerSeat, "reviewerSeat", 256);
+    if (reviewerSeat === seat) {
+      return c.json({ code: "reviewer_seat_invalid",
+        error: "The reviewer seat must differ from the implementer's seat; a seat cannot review its own candidate." }, 400);
+    }
     const repository = v.repository === undefined ? {} : object(v.repository, "repository");
     const root = repository.root === undefined ? node?.cwd ?? null : text(repository.root, "repository.root", 4096);
     if (!root) return c.json({ code: "repository_required", error: "The rig's agent seat has no working directory; name the repository." }, 400);
@@ -169,7 +179,7 @@ export function teamStartRoutes(
       return c.json({ code: "repository_unreadable",
         error: "The plan artifact or the repository's commit could not be read: " + (error as Error).message }, 400);
     }
-    const run = governance.createRun({ id: randomUUID(), rigId: rig.id, binding });
+    const run = governance.createRun({ id: randomUUID(), rigId: rig.id, binding, reviewerSeat });
     const bindingDigest = hashBinding(binding);
     const request = (actionId: string, payload: unknown) => ({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id,
       actionId, expectedEntityVersion: governance.getRun(run.id).entityVersion, idempotencyKey: randomUUID(), payload });
@@ -199,7 +209,8 @@ export function teamStartRoutes(
     if (options.dispatch) void options.dispatch(run.id, taskId).catch(error =>
       console.warn(`team start: launch for run=${run.id} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id, rigId: rig.id, approvalId: approval.id,
-      taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat, state: governance.getRun(run.id).state }, 201);
+      taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat, reviewerSeat,
+      state: governance.getRun(run.id).state }, 201);
   });
 
   app.onError((error, c) => {

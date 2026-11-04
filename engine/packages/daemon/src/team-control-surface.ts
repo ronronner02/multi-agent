@@ -12,6 +12,9 @@ import type { PlanGovernance } from "./domain/plan-governance.js";
 import type { EventBus } from "./domain/event-bus.js";
 import { foldReviewState, type Entry } from "./domain/review-evidence.js";
 
+/** C2 — the shape a review round's durable verdict carries, for a client that renders it. */
+export type { ReviewFinding, ReviewVerdictRecord } from "./domain/review-evidence.js";
+
 /**
  * T052 — the managed owner read projections.
  *
@@ -84,11 +87,17 @@ export class TeamReadModel {
         dependencies: identity.dependencies,
         criteria,
         currentCandidateDigest: state.currentManifestDigest,
-        rounds: state.rounds.length,
+        rounds: state.rounds.length + state.verdicts.length,
         openP0P1: state.openP0P1,
+        // C2 — the run's own review rounds, so a client can show the verdict that sent the
+        // task back or approved it. A run that never used the loop publishes `[]`.
+        verdicts: state.verdicts.map(verdict => ({ round: verdict.round, reviewerTaskId: verdict.reviewerTaskId,
+          verdict: verdict.verdict, candidateDigest: verdict.candidateDigest, findings: verdict.findings.length,
+          blocking: verdict.findings.filter(finding => finding.severity === "P0" || finding.severity === "P1").length,
+          recordedAt: verdict.recordedAt })),
         // A review record exists once at least one round was recorded; until then
         // the task has no review to read, and a crashed round cannot be faked.
-        reviewAvailable: state.rounds.length > 0,
+        reviewAvailable: state.rounds.length + state.verdicts.length > 0,
         acceptance: state.acceptance
           ? { manifestDigest: state.acceptance.manifestDigest, passed: state.acceptance.passed,
               reason: state.acceptance.reason, recordedAt: state.acceptance.recordedAt }
@@ -172,7 +181,7 @@ export class TeamReadModel {
     const rows = this.deps.db
       .prepare(`SELECT json_extract(payload, '$.action') AS action, payload FROM events
         WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
-          AND json_extract(payload, '$.action') IN ('review.candidate', 'review.rework', 'review.recorded', 'review.retry', 'review.acceptance')
+          AND json_extract(payload, '$.action') IN ('review.candidate', 'review.rework', 'review.recorded', 'review.retry', 'review.acceptance', 'review.verdict')
         ORDER BY seq`)
       .all(runId, taskId) as Array<{ action: string; payload: string }>;
     const entries: Entry[] = [];
@@ -181,6 +190,7 @@ export class TeamReadModel {
       if (row.action === "review.recorded") entries.push({ kind: "review", record: payload as never });
       else if (row.action === "review.retry") entries.push({ kind: "retry", record: payload as never });
       else if (row.action === "review.acceptance") entries.push({ kind: "acceptance", record: payload as never });
+      else if (row.action === "review.verdict") entries.push({ kind: "verdict", record: payload as never });
       else entries.push({ kind: "candidate", identity: payload as never });
     }
     return entries;

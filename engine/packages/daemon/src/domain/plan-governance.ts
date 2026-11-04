@@ -13,6 +13,8 @@ import {
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
+import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
+import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
 import type { EventBus, NotifyRegister } from "./event-bus.js";
 import type { QueueRepository, QueueState } from "./queue-repository.js";
@@ -126,6 +128,26 @@ interface Result {
   observedBy?: string;
   taskId?: string;
   attemptId?: string;
+  /** C2 — the implementer task a review sent back, which the route dispatches next. */
+  reworkTaskId?: string;
+  /** C2 — the reviewer task a completion created, which the route dispatches next. */
+  reviewTaskId?: string;
+}
+
+/**
+ * C2 — one review round's recorded verdict, as the durable `review.verdict` event carries it.
+ *
+ * `taskId` is the implementer under review and `reviewerTaskId` is the run's own reviewer
+ * task, so a reader can tell the two apart without joining the assignment rows.
+ */
+export interface ReviewOutcome {
+  taskId: string;
+  reviewerTaskId: string;
+  round: number;
+  candidateDigest: string | null;
+  verdict: "approved" | "changes-required";
+  findings: ReviewFinding[];
+  recordedAt: string;
 }
 
 const deny = (reason: string): Result => ({ status: "denied", reason });
@@ -214,12 +236,15 @@ export class PlanGovernance {
     this.rigs = new RigRepository(db);
   }
 
-  createRun(input: { id: string; rigId: string; binding: unknown }): TeamRun {
+  createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null }): TeamRun {
     this.assertStandalone();
     if (daemonModeOf(this.db) === "legacy") throw new Error("A legacy-mode daemon cannot register managed authority; restart in managed mode");
     const id = text(input.id, "runId", 256);
     const rigId = text(input.rigId, "rigId", 256);
     const binding = parsePlanBinding(input.binding);
+    // C2 — the seat every review round of this run routes to. A start that names none keeps
+    // the pre-C2 behaviour: an implementer task completes and no review task is created.
+    const reviewerSeat = input.reviewerSeat === undefined || input.reviewerSeat === null ? null : text(input.reviewerSeat, "reviewerSeat", 256);
     const bindingDigest = hashBinding(binding);
     return this.events.withNotifyEnvelope((register) => {
       if (this.db.prepare("SELECT id FROM team_runs WHERE id = ?").get(id)) {
@@ -229,8 +254,8 @@ export class PlanGovernance {
       }
       this.rigs.assertNoPendingDeletion(rigId);
       const now = this.clock().toISOString();
-      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, now, now);
+      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, state, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, now, now);
       const run = this.getRun(id);
       this.emit(run, register, "run.created", { bindingDigest, state: "pending" });
       return run;
@@ -251,8 +276,9 @@ export class PlanGovernance {
 
   getRun(id: string): TeamRun {
     const row = this.db.prepare(`SELECT id, rig_id AS rigId, binding_json AS bindingJson, binding_digest AS bindingDigest,
-      state, state_reason AS stateReason, entity_version AS entityVersion, active_ms AS activeMs, accounted_at AS accountedAt,
-      retries_used AS retriesUsed, review_rounds_used AS reviewRoundsUsed, created_at AS createdAt, updated_at AS updatedAt
+      reviewer_seat AS reviewerSeat, state, state_reason AS stateReason, entity_version AS entityVersion,
+      active_ms AS activeMs, accounted_at AS accountedAt, retries_used AS retriesUsed,
+      review_rounds_used AS reviewRoundsUsed, created_at AS createdAt, updated_at AS updatedAt
       FROM team_runs WHERE id = ?`).get(id) as (Omit<TeamRun, "binding" | "usage"> & { bindingJson: string }) | undefined;
     if (!row) throw new Error("Run not found");
     const { bindingJson, ...run } = row;
@@ -630,7 +656,17 @@ export class PlanGovernance {
 
   private writeTask(ctx: CommandContext): Result {
     const task = taskDefinition(ctx.run.binding, ctx.request.payload, ctx.request.actionId);
-    if (typeof task === "string") return deny(task);
+    return typeof task === "string" ? deny(task) : this.admitTask(ctx, task);
+  }
+
+  /**
+   * C2 — the one admission write, for a definition the caller already validated.
+   *
+   * `createTask` and run growth both reach it through `writeTask`; the review loop reaches
+   * it with a reviewer assignment it derived from the run's own records, so there is one
+   * queue write and one authority row per task no matter which path admitted it.
+   */
+  private admitTask(ctx: CommandContext, task: Exclude<ReturnType<typeof taskDefinition>, string>): Result {
     const { assignment, outputs, permissions, sourceSession, destinationSession, body } = task;
     const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id=?")
       .get(ctx.run.id) as { count: number };
@@ -692,6 +728,13 @@ export class PlanGovernance {
     // The dependency gate inside the queue write reads this row's evidence in the
     // same transaction, so outcome evidence must be durable BEFORE the state write.
     const evidence = v.evidence === undefined ? task.evidence : jsonValue(object(v.evidence, "evidence"));
+    // C2 — a reviewer's completion is a review, not another reviewable candidate. Its
+    // findings are validated before anything is written, so a P0/P1 with no failing scenario
+    // refuses the whole outcome instead of recording a round nothing can act on. The verdict
+    // itself is emitted with the rest of this command's writes, after the outcome is recorded.
+    const review = observedOutcome && task.assignment.role === "reviewer" && v.state === "done"
+      ? this.reviewOutcome(task, evidence as JsonObject | null) : null;
+    if (typeof review === "string") return deny(review);
     const changed = this.db.prepare(`UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ?
       WHERE qitem_id = ? AND entity_version = ?`).run(evidence === null ? null : canonicalJson(evidence), task.qitemId, task.entityVersion);
     if (changed.changes !== 1) throw new Error("Task version conflict");
@@ -699,8 +742,142 @@ export class PlanGovernance {
       state: v.state as QueueState, transitionNote, closureReason: optionalText("closureReason"),
       closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") }));
     for (const event of updated.persistedEvents) ctx.register(event);
+    // C2 — an implementer that completed with validated evidence gets its review task now,
+    // through the same admission path a start and a run growth use. A run that named no
+    // reviewer seat keeps the pre-C2 behaviour: the completion stands and no review exists,
+    // and so does a refusal the loop itself decided (no second seat to route to).
+    if (observedOutcome && task.assignment.role === "implementer" && v.state === "done"
+      && (evidence as JsonObject | null)?.validated === true) {
+      const review = this.createReview(ctx, this.getTask(task.qitemId)!);
+      if (typeof review === "string") {
+        // A run-level refusal: the binding's `maxReviewRounds` covers no further round, so
+        // the completion that would start one is denied rather than recorded without it.
+        if (review === "review limit exhausted") return deny(review);
+      } else {
+        return { status: "observed", value: { ...this.getTask(task.qitemId), review }, taskId: task.assignment.taskId,
+          attemptId: v.attemptId as string, observedBy: observedBy ?? undefined, effectMayStart: true, reviewTaskId: review.reviewerTaskId };
+      }
+    }
+    // A completed review is recorded and then acted on: an approving round closes the task,
+    // and a cited P0/P1 reopens it for rework. The round was charged when its reviewer task
+    // was admitted, so nothing here spends the counter twice.
+    if (review) {
+      this.emit(ctx.run, ctx.register, "review.verdict", jsonValue(review.record) as JsonObject, review.record.taskId);
+      if (review.record.verdict === "approved") {
+        return { status: "observed", value: { ...this.getTask(task.qitemId), review: review.record },
+          taskId: task.assignment.taskId, attemptId: v.attemptId as string, observedBy: observedBy ?? undefined };
+      }
+      const rework = this.startRework(ctx, review.record);
+      if (typeof rework === "string") return deny(rework);
+      return { status: "observed", value: { ...this.getTask(task.qitemId), review: review.record },
+        taskId: task.assignment.taskId, attemptId: v.attemptId as string, observedBy: observedBy ?? undefined,
+        effectMayStart: true, reworkTaskId: review.record.taskId };
+    }
     return { status: observedOutcome ? "observed" : "accepted", value: this.getTask(task.qitemId), taskId: task.assignment.taskId,
       attemptId: observedOutcome ? v.attemptId as string : undefined, observedBy: observedBy ?? undefined };
+  }
+
+  /**
+   * C2 — what a completed reviewer task's evidence says about the implementer it names.
+   *
+   * The reviewer task is the run's own row, so the implementer it reviews comes from that
+   * row's `reviewOf` link, never from the request. Returns the round it will record, or the
+   * reason it refused; a refusal is decided before any write, so a refused review leaves the
+   * reviewer task pending rather than closing it with findings nobody could act on.
+   */
+  private reviewOutcome(reviewer: TeamTaskAuthority, evidence: JsonObject | null): { record: ReviewOutcome } | string {
+    const reviewedTaskId = reviewer.assignment.reviewOf;
+    if (reviewedTaskId === undefined) return "A reviewer task must name the task it reviews";
+    const implementer = this.findTask(reviewer.runId, reviewedTaskId);
+    if (!implementer || implementer.assignment.role !== "implementer") return "A review must name this run's implementer task";
+    let findings: ReviewFinding[];
+    try { findings = recordedFindings(evidence ?? {}); }
+    catch (error) { return (error as Error).message; }
+    const round = this.reviewRound(reviewer.runId, reviewedTaskId) + 1;
+    const record: ReviewOutcome = { taskId: reviewedTaskId, reviewerTaskId: reviewer.assignment.taskId, round,
+      candidateDigest: typeof evidence?.manifestDigest === "string" ? evidence.manifestDigest : null,
+      verdict: reviewVerdict(findings), findings, recordedAt: this.clock().toISOString() };
+    // A blocking review reopens the implementer, so its precondition is checked here — before
+    // any write — rather than left to fail after the reviewer task was already recorded done.
+    if (record.verdict === "changes-required") {
+      const state = this.queue.getById(implementer.qitemId)?.state;
+      if (state !== "done" && state !== "handed-off") return "The reviewed task is not a completed task";
+    }
+    return { record };
+  }
+
+  /** C2 — how many review rounds the durable log already holds for one implementer task. */
+  private reviewRound(runId: string, taskId: string): number {
+    const row = this.db.prepare(`SELECT count(*) AS count FROM events WHERE type = 'team.control'
+      AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
+      AND json_extract(payload, '$.action') = 'review.verdict'`).get(runId, taskId) as { count: number };
+    return row.count;
+  }
+
+  /**
+   * C2 — send a reviewed implementer task back for rework.
+   *
+   * The round was charged to `review_rounds_used` when the run admitted its reviewer task, so
+   * this only reopens the implementer's terminal queue row. A review with no blocking finding
+   * never reaches here; the caller closes the task instead.
+   */
+  private startRework(ctx: CommandContext, record: ReviewOutcome): { effectMayStart: boolean } | string {
+    const task = this.findTask(ctx.run.id, record.taskId)!;
+    const item = this.queue.getById(task.qitemId);
+    // Only a task the run recorded as completed is reviewable, and only a closure the queue
+    // guards (`done`, `handed-off`) reopens — deliberately, and with the reason it reopens for.
+    if (!item || (item.state !== "done" && item.state !== "handed-off")) return "The reviewed task is not a completed task";
+    const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+      qitemId: task.qitemId, actorSession: ctx.run.id, state: "pending", reopen: true,
+      transitionNote: `Review round ${record.round} returned ${blockingFindings(record.findings).length} blocking finding(s)`,
+    }));
+    for (const event of updated.persistedEvents) ctx.register(event);
+    return { effectMayStart: true };
+  }
+
+  /**
+   * C2 — create the reviewer task for an implementer that just completed with validated
+   * evidence.
+   *
+   * Runs inside the outcome command, so the implementer's `done` and the reviewer task commit
+   * together. A run that named no reviewer seat keeps the pre-C2 behaviour: the completion
+   * stands and no review is created. The round is derived from the run's own recorded
+   * reviewer tasks, so a replayed completion finds the task it already admitted instead of
+   * creating a second one. Returns the reviewer task id, which the route dispatches to that
+   * seat, or the reason nothing was created.
+   */
+  private createReview(ctx: CommandContext, implementer: TeamTaskAuthority): { reviewerTaskId: string; round: number } | string {
+    const seat = ctx.run.reviewerSeat;
+    if (seat === null) return "No reviewer seat is recorded for this run";
+    const implementerSeat = this.queue.getById(implementer.qitemId)?.destinationSession;
+    if (!implementerSeat || implementerSeat === seat) return "The reviewer seat must differ from the implementer's seat";
+    if (ctx.run.reviewRoundsUsed >= ctx.run.binding.limits.maxReviewRounds) {
+      this.block(ctx, "review limit exhausted");
+      return "review limit exhausted";
+    }
+    const round = this.reviewRounds(ctx.run.id, implementer.assignment.taskId) + 1;
+    const taskId = reviewerTaskId(implementer.assignment.taskId, round);
+    if (this.findTask(ctx.run.id, taskId)) return { reviewerTaskId: taskId, round };
+    const assignment = { taskId, role: "reviewer" as const, reviewOf: implementer.assignment.taskId,
+      paths: [...implementer.assignment.paths], dependencies: [] };
+    const task = taskDefinition(ctx.run.binding, { assignment, outputs: [], permissions: [...roleConfiguration.reviewer.permissions],
+      sourceSession: implementer.assignment.taskId, destinationSession: seat,
+      body: reviewBody({ implementerTaskId: implementer.assignment.taskId, round,
+        candidateDigest: typeof implementer.evidence?.manifestDigest === "string" ? implementer.evidence.manifestDigest : null }) },
+      taskId);
+    if (typeof task === "string") return task;
+    const written = this.admitTask(ctx, task);
+    if (written.status !== "accepted") return written.reason ?? "The reviewer task was refused";
+    ctx.run.reviewRoundsUsed += 1;
+    return { reviewerTaskId: taskId, round };
+  }
+
+  /** C2 — how many reviewer tasks the run has admitted for one implementer, from its own rows. */
+  private reviewRounds(runId: string, implementerTaskId: string): number {
+    const row = this.db.prepare(`SELECT count(*) AS count FROM team_queue_authority WHERE run_id = ?
+      AND json_extract(assignment_json, '$.role') = 'reviewer'
+      AND json_extract(assignment_json, '$.reviewOf') = ?`).get(runId, implementerTaskId) as { count: number };
+    return row.count;
   }
 
   recordAttempt(raw: ControlRequest<unknown>, currentBinding: unknown): ControlReceipt {
@@ -981,13 +1158,16 @@ export class PlanGovernance {
       if (changed.changes !== 1) throw new Error("Run entity version conflict");
       const value = result.value === undefined ? null : jsonValue(result.value);
       const receipt: ControlReceipt = { status: result.status, runId: run.id, entityVersion: run.entityVersion,
-        replayed: false, effectMayStart: result.effectMayStart ?? false, value, reason: result.reason ?? null };
+        replayed: false, effectMayStart: result.effectMayStart ?? false, value,
+        ...(result.reworkTaskId === undefined ? {} : { reworkTaskId: result.reworkTaskId }),
+        ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }), reason: result.reason ?? null };
       this.db.prepare(`INSERT INTO team_control_requests (run_id, idempotency_key, request_digest, response_json, created_at)
         VALUES (?, ?, ?, ?, ?)`).run(run.id, request.idempotencyKey, requestDigest, canonicalJson(receipt), ctx.now);
       this.emit(run, register, result.status === "denied" ? `${action}.denied` : action,
         { actionId: request.actionId, status: receipt.status, reason: receipt.reason, valueDigest: hashBytes(canonicalJson(value)),
           ...(result.observedBy === undefined ? {} : { observedBy: result.observedBy }) }, result.taskId, result.attemptId);
-      return receipt;
+      return { ...receipt, ...(result.reworkTaskId === undefined ? {} : { reworkTaskId: result.reworkTaskId }),
+        ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }) };
     });
   }
 

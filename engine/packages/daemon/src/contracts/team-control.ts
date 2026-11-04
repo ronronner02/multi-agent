@@ -104,6 +104,12 @@ export interface TeamRun {
   rigId: string;
   binding: PlanBinding;
   bindingDigest: string;
+  /**
+   * MVP slice C2 — the seat this run's review tasks route to, or `null` when the start
+   * named none. A null seat is not "no reviewer": it is the pre-C2 behaviour, where an
+   * implementer task completes and the run creates no review.
+   */
+  reviewerSeat: string | null;
   state: TeamRunState;
   stateReason: string | null;
   entityVersion: number;
@@ -269,9 +275,27 @@ export interface TeamReviewView {
   currentCandidateDigest: string | null;
   rounds: number;
   openP0P1: number;
+  /**
+   * MVP slice C2 — the run's own review rounds for this task, oldest first. A round's
+   * `verdict` is what the loop acted on: `changes-required` reopened the task, `approved`
+   * closed it. Empty for a run that never used the loop.
+   */
+  verdicts: TeamReviewVerdict[];
   /** Availability of the review record itself; a crashed or missing round is unavailable, never passing. */
   reviewAvailable: boolean;
   acceptance: { manifestDigest: string; passed: boolean; reason: string; recordedAt: string } | null;
+}
+
+/** One review round the run recorded, as a client renders it. */
+export interface TeamReviewVerdict {
+  round: number;
+  reviewerTaskId: string;
+  verdict: "approved" | "changes-required";
+  candidateDigest: string | null;
+  /** How many findings the round recorded, and how many of them were P0/P1. */
+  findings: number;
+  blocking: number;
+  recordedAt: string;
 }
 
 export interface TeamAttemptView {
@@ -368,6 +392,13 @@ export interface ControlReceipt<T = unknown> {
   effectMayStart: boolean;
   value: T | null;
   reason: string | null;
+  /**
+   * MVP slice C2 — the task a completion just created and the route must dispatch: the
+   * reviewer task an implementer's validated completion admitted, or the implementer task a
+   * review's blocking findings sent back. Absent on every other receipt.
+   */
+  reviewTaskId?: string;
+  reworkTaskId?: string;
 }
 
 export interface TeamControlEvent {
@@ -423,6 +454,8 @@ export interface TeamStartReceipt {
   taskId: string;
   qitemId: string;
   seat: string;
+  /** C2 — the seat review rounds route to, or `null` when the start named none. */
+  reviewerSeat: string | null;
   state: TeamRunState;
 }
 
