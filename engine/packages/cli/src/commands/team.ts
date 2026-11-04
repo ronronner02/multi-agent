@@ -25,7 +25,7 @@ export interface TeamStartDeps {
   fetchImpl?: typeof fetch;
 }
 
-interface StartReceipt { runId: string; rigId: string; taskId: string; seat: string; state: string }
+interface StartReceipt { runId: string; rigId: string; taskId: string; seat: string; leadSeat?: string | null; state: string }
 
 /** The result the daemon serves for one finished task; the shape `TeamTaskResult` publishes. */
 interface TeamTaskResult {
@@ -84,6 +84,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .description("create a run and a task from a goal, then print how to watch it")
     .option("--rig <id-or-name>", "rig to run the work on (default: the only active rig)")
     .option("--seat <session>", "seat that takes the task (default: the rig's first agent node)")
+    .option("--lead <session>", "seat that takes a lead task first and proposes the implementer tasks (omit for none)")
     .option("--reviewer <session>", "seat every review round routes to (omit to create no review task)")
     .option("--repository <path>", "repository the plan and the work belong to (default: the seat's cwd)")
     .option("--plan <path>", "plan artifact, relative to the repository (default: plan.md)")
@@ -100,6 +101,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (!daemonStatusGuard(status)) return;
       const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
       const body = { goal, ...(opts.rig ? { rig: String(opts.rig) } : {}), ...(opts.seat ? { seat: String(opts.seat) } : {}),
+        ...(opts.lead ? { lead: String(opts.lead) } : {}),
         ...(opts.reviewer ? { reviewerSeat: String(opts.reviewer) } : {}),
         ...(opts.repository ? { repository: { root: String(opts.repository), ...(opts.plan ? { planRef: String(opts.plan) } : {}) } }
           : opts.plan ? { repository: { planRef: String(opts.plan) } } : {}),
@@ -116,6 +118,11 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       const base = getDaemonUrl(status);
       console.log(`Run:  ${receipt.runId}`);
       console.log(`Task: ${receipt.taskId} on ${receipt.seat}`);
+      if (receipt.leadSeat) {
+        console.log("");
+        console.log("The lead proposes the implementer tasks. Read and decide them:");
+        console.log(`  rig team proposal ${receipt.runId} ${receipt.taskId}`);
+      }
       console.log("");
       console.log("Watch it:");
       console.log(`  ${base}/team?run=${encodeURIComponent(receipt.runId)}   (after rig config set ui.enabled true)`);
@@ -192,6 +199,79 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (result.status !== 200 || !result.data?.ok) throw new TeamCommandError(result.data?.code ?? "continuation_unavailable",
         result.data?.message ?? result.data?.error ?? "Continuation was refused. Resolve the native prerequisite and refresh the run.");
       console.log(options.json ? JSON.stringify(result.data) : result.data.message ?? "Startup instructions delivered to the existing conversation.");
+    });
+
+  /**
+   * MVP slice C3 — the owner's read of a lead's decomposition, and the decision it becomes.
+   *
+   * The lead cannot admit work: it writes one file into its own candidate tree, and the daemon
+   * reads it at that boundary. This verb asks the daemon to read it, shows the exact batch, and
+   * records the owner's decision. Nothing the lead wrote reaches the run without that decision,
+   * and the tasks it admits then run, complete and get reviewed through the paths C1, C2 and
+   * the completion slice already own.
+   *
+   * `--decide` is the owner action: it records the pending approval carrying the batch the
+   * daemon just read, then decides it through the same `approvals/decide` route the Web UI's
+   * decision card uses. Without it the verb only reads, so a proposal can be inspected first.
+   */
+  cmd.command("proposal <run-id> <task-id>")
+    .description("read the lead task's proposed implementer tasks, and decide them as the owner")
+    .option("--decide <decision>", "record the owner decision: approved or rejected")
+    .option("--json", "print the daemon's answer as JSON")
+    .action(async (runId: string, taskId: string, options: { decide?: string; json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required",
+        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      if (options.decide !== undefined && options.decide !== "approved" && options.decide !== "rejected") {
+        throw new TeamCommandError("lead_decision_invalid", "--decide takes approved or rejected.");
+      }
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+        "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token };
+      const runPath = `${BASE}/runs/${encodeURIComponent(runId)}`, path = `${runPath}/tasks/${encodeURIComponent(taskId)}/proposal`;
+      const read = await client.get<{ proposal?: { tasks: Array<{ taskId: string; seat: string; paths: string[]; dependencies: string[]; body: string }> };
+        code?: string; error?: string }>(path, { headers });
+      if (read.status !== 200 || !read.data.proposal) {
+        throw new TeamCommandError(read.data.code ?? "lead_proposal_unreadable",
+          read.data.error ?? "The daemon did not answer the proposal read.");
+      }
+      const tasks = read.data.proposal.tasks;
+      if (options.json && options.decide === undefined) { console.log(JSON.stringify(read.data.proposal)); return; }
+      console.log(`The lead proposed ${tasks.length} implementer task(s):`);
+      for (const task of tasks) console.log(`  ${task.taskId} on ${task.seat}: ${task.paths.join(", ")}`);
+      if (options.decide === undefined) {
+        console.log("");
+        console.log("Run the same command with --decide approved (or rejected) to record the owner decision.");
+        return;
+      }
+      const run = await client.get<{ run?: { entityVersion: number } }>(runPath, { headers });
+      if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+        throw new TeamCommandError("control_unavailable", "The current run version could not be read.");
+      }
+      const request = (actionId: string, expectedEntityVersion: number, payload: unknown) => ({ protocolVersion: "1.0", runId,
+        actionId, expectedEntityVersion, idempotencyKey: crypto.randomUUID(), payload });
+      const proposed = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
+        value?: { id?: string; entityVersion?: number } | null }>(path,
+        request(crypto.randomUUID(), run.data.run!.entityVersion, {}), { headers });
+      if (proposed.status !== 200 || proposed.data.status !== "accepted" || !proposed.data.value?.id) {
+        throw new TeamCommandError(proposed.data.code ?? "lead_proposal_refused",
+          proposed.data.reason ?? proposed.data.error ?? "The daemon refused the proposal.");
+      }
+      const decided = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
+        value?: { addedTasks?: string[] } | null }>(`${runPath}/approvals/decide`,
+        request(proposed.data.value.id, (await client.get<{ run: { entityVersion: number } }>(runPath, { headers })).data.run.entityVersion,
+          { approvalVersion: proposed.data.value.entityVersion, decision: options.decide }), { headers });
+      if (decided.status !== 200 || decided.data.status !== "accepted") {
+        throw new TeamCommandError(decided.data.code ?? "lead_decision_refused",
+          decided.data.reason ?? decided.data.error ?? "The daemon refused the decision.");
+      }
+      if (options.json) { console.log(JSON.stringify(decided.data)); return; }
+      const added = decided.data.value?.addedTasks ?? [];
+      console.log("");
+      console.log(added.length ? `Approved; ${added.length} task(s) admitted and dispatched: ${added.join(", ")}.`
+        : "Rejected; no task was admitted.");
     });
 
   cmd.command("diff <run-id>")

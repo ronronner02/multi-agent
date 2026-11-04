@@ -50,8 +50,21 @@ it.each(["en", "zh-CN"] as const)("starts a run from the goal and opens it (%s)"
   expect(mocks.request).toHaveBeenCalledTimes(1);
 });
 
-it("reports a refused start and stays on the form", async () => {
-  mocks.request.mockRejectedValue(new OwnerReadError(409, "start_refused"));
+// C3 — the lead is opt-in. The form sends it only when the owner filled it in, so an empty
+// field is exactly the pre-C3 start rather than a start naming the empty string.
+it.each([["", false], ["lead@demo", true]] as const)("sends the optional lead seat only when named (%s)", async (lead, sent) => {
+  mocks.request.mockResolvedValue({ protocolVersion: "1.0", runId: "run-9", rigId: "rig", approvalId: "a",
+    taskId: "task-1", qitemId: "q", seat: lead || "dev@demo", leadSeat: sent ? lead : null, state: "approved" });
+  const language = await show(<NewTaskForm />);
+  fireEvent.change(screen.getByLabelText(language.t("web.goal")), { target: { value: "Add a health endpoint" } });
+  if (lead) fireEvent.change(screen.getByLabelText(language.t("web.leadSeat")), { target: { value: lead } });
+  fireEvent.click(screen.getByRole("button", { name: language.t("web.startTask") }));
+  await waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
+  expect(JSON.parse(mocks.request.mock.calls[0]![1].body)).toEqual(sent
+    ? { goal: "Add a health endpoint", lead } : { goal: "Add a health endpoint" });
+});
+
+it("reports a refused start and stays on the form", async () => {  mocks.request.mockRejectedValue(new OwnerReadError(409, "start_refused"));
   const language = await show(<NewTaskForm />);
   fireEvent.change(screen.getByLabelText(language.t("web.goal")), { target: { value: "Add a health endpoint" } });
   fireEvent.click(screen.getByRole("button", { name: language.t("web.startTask") }));
