@@ -1,0 +1,123 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import type Database from "better-sqlite3";
+import type { ScopedAssignment, TeamRole } from "../contracts/team-control.js";
+import { attemptInstructionFiles, type ContextManifest } from "../integrations/framework/context-manifest.js";
+import { blockingFindings } from "./review-loop.js";
+import type { ReviewFinding } from "./review-evidence.js";
+
+/**
+ * MVP — one attempt is one headless turn.
+ *
+ * Measured on the installed Claude Code 2.1.296 before this module existed: the managed
+ * launch started the client *interactively* and the startup orchestrator typed the task
+ * prompt into its composer. A finished agent then waited at its prompt and never exited, so
+ * the completion sweep never saw the process end, the attempt never became `stopped`, and the
+ * owner's outcome action was refused. Nothing about the attempt was wrong except that it was
+ * a session rather than a turn.
+ *
+ * The owner's decision is that an attempt is one non-interactive turn (`claude -p`), and that
+ * a rework or a lead revision is a **new attempt** that continues the same conversation with
+ * `--resume`. This module owns the two facts both ends of that launch must agree on: the text
+ * of the turn, and where it is written so it can be fed on stdin without quoting it into a
+ * shell command.
+ */
+
+/**
+ * Where an attempt's turn text is written.
+ *
+ * It sits in the attempt's mutable state rather than its projection: the projection is the
+ * sealed, read-only record of what the attempt must obey, and the prompt is a launch input.
+ * It is not written into the candidate tree either, because the tree is the deliverable and
+ * the completion evidence counts every path that moved.
+ */
+export function agentTurnPromptPath(manifest: ContextManifest): string {
+  return join(manifest.mutableStateRoot, "turns", manifest.projection.attemptId + ".prompt");
+}
+
+/** Write the turn's text and return its path. The file is private to the daemon's user. */
+export function writeAgentTurnPrompt(manifest: ContextManifest, text: string): string {
+  const path = agentTurnPromptPath(manifest);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text, { mode: 0o600 });
+  return path;
+}
+
+export interface ManagedTurnPromptInput {
+  /** The seat's authored identity text, when the launch has one. Empty for a dispatched task. */
+  identity: string;
+  /** The first `send_text` post-launch file, already read. Empty when there is none. */
+  bundle: string;
+  runId: string;
+  assignment: ScopedAssignment;
+  taskBody: string;
+  outputs: readonly string[];
+  permissions: readonly string[];
+  /** The projected instruction files this attempt must read, at the path its client can open. */
+  instructions: { path: string }[];
+  /** What this attempt continues, when it is a rework or a lead revision. */
+  continuation: string | null;
+}
+
+/**
+ * The text a managed attempt's client receives.
+ *
+ * KTD28 keeps the core and the role's charter out of the brief, so they reach the client only
+ * through its projection; naming those files is therefore part of the launch, not a second
+ * brief. The prompt states where the attempt's instructions are, never what they say.
+ *
+ * A continuation states why this attempt exists. Without it a resumed agent reads the original
+ * brief again and has no way to know that a reviewer's blocking finding, or the owner's
+ * rejection of its proposal, is the work.
+ */
+export function managedTurnPrompt(input: ManagedTurnPromptInput): string {
+  const instructions = input.instructions;
+  return [input.identity, input.bundle, `Managed task ${input.assignment.taskId} for run ${input.runId}`, input.taskBody,
+    `Assignment: ${JSON.stringify(input.assignment)}`, `Outputs: ${JSON.stringify(input.outputs)}`,
+    `Permissions: ${JSON.stringify(input.permissions)}`,
+    ...(instructions.length === 0 ? [] : ["Read these files before you start work; they are this attempt's role instructions and run context, and they are read-only:",
+      ...instructions.map(file => `- ${file.path}`)]),
+    "Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished.",
+    ...(input.continuation === null ? [] : [input.continuation])].filter(Boolean).join("\n\n");
+}
+
+/** The instruction files an attempt is told to read, from its own manifest. */
+export function turnInstructions(manifest: ContextManifest): { path: string }[] {
+  return attemptInstructionFiles(manifest);
+}
+
+/**
+ * Why this attempt is a continuation, or null when it continues nothing.
+ *
+ * Both answers come from the run's own durable log rather than from a second record: a review
+ * round's blocking findings are the `review.verdict` event that reopened the implementer, and a
+ * rejected proposal's reason is the `approval.decided` event the owner's decision emitted. An
+ * attempt that has neither is a plain continuation — a retry after a failure the classifier
+ * called resume-safe — and says nothing about why.
+ */
+export function continuationNote(db: Database.Database, runId: string, taskId: string, role: TeamRole): string | null {
+  if (role === "reviewer") return null;
+  if (role === "lead") {
+    // The decision's own event carries the reason the owner gave; the payload is the event's
+    // `payload` object, so the note and the task are one level down.
+    const row = db.prepare(`SELECT json_extract(payload, '$.payload.note') AS note FROM events
+      WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'approval.decided'
+        AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.payload.taskId') = ?
+      ORDER BY seq DESC LIMIT 1`).get(runId, taskId) as { note: string | null } | undefined;
+    if (!row) return null;
+    return row.note
+      ? `This continues your earlier attempt. The owner rejected the proposal you wrote and gave this reason:\n\n${row.note}\n\nWrite a revised lead-proposal.json that answers it. The owner reads and decides the revised proposal as before.`
+      : "This continues your earlier attempt. The owner rejected the proposal you wrote. Write a revised lead-proposal.json; the owner reads and decides it as before.";
+  }
+  const row = db.prepare(`SELECT payload FROM events
+    WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'review.verdict'
+      AND json_extract(payload, '$.payload.taskId') = ? AND json_extract(payload, '$.payload.verdict') = 'changes-required'
+    ORDER BY seq DESC LIMIT 1`).get(taskId) as { payload: string } | undefined;
+  if (!row) return null;
+  const record = (JSON.parse(row.payload) as { payload: { round: number; findings: ReviewFinding[] } }).payload;
+  const blocking = blockingFindings(record.findings);
+  if (blocking.length === 0) return null;
+  return [`This continues your earlier attempt. The reviewer's round ${record.round} returned the work for rework, with ${blocking.length} blocking finding(s):`,
+    ...blocking.map(finding => `- ${finding.id} (${finding.severity}, ${finding.citation}) in ${finding.file}: ${finding.scenario ?? finding.category}`),
+    "Fix these in the same worktree. The candidate keeps every file your earlier attempt wrote."].join("\n");
+}

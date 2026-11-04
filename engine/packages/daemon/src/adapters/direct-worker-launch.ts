@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseAttemptIdentity } from "../contracts/team-control.js";
+import { agentTurnPromptPath } from "../domain/agent-turn.js";
 import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
 import { hashBytes } from "../domain/plan-governance.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, ReadinessResult } from "../domain/runtime-adapter.js";
@@ -50,12 +52,22 @@ export interface DirectLaunchFacts {
   attemptId: string;
   runId: string;
   taskId: string;
+  /** Where this turn's prompt was written; absent for a client that is not a headless turn. */
+  promptPath?: string;
 }
 
 /** The shells a pane falls back to; anything else is the client the launch started. */
 const SHELL_COMMANDS = new Set(["bash", "fish", "nu", "sh", "tmux", "zsh"]);
 /** How long the client may take to become the pane's foreground process. */
 const READY_WINDOW_MS = 60_000;
+/**
+ * How long a headless turn may take to show it started before readiness gives up on it.
+ *
+ * A turn that ends before readiness is checked is a valid, fast turn, not a launch failure: the
+ * pane's dead flag and its exit status are that turn's own evidence, and the sweep records the
+ * stop from them. Only a pane whose command is still the shell is "not yet ready".
+ */
+const TURN_START_WINDOW_MS = 30_000;
 
 /** `/proc/<pid>/stat`, read past the parenthesised command name. */
 function processFacts(pid: number): { groupId: number; start: string } {
@@ -85,10 +97,13 @@ export class DirectWorkerLauncher implements WorkerLauncher {
     try {
       const pane = await this.deps.resolvePane(attempt.context.runId, attempt.context.assignment.taskId);
       const tree = this.deps.resolveAssignedTree(attempt.context.runId, attempt.context.assignment);
-      const sessionId = input.resumeToken ?? randomUUID();
+      // A fresh attempt opens a conversation; a continuation keeps the one it is given.
+      const sessionId = input.continueSessionId ?? input.resumeToken ?? randomUUID();
+      const promptPath = client === "claude-code" ? agentTurnPromptPath(attempt.context) : undefined;
       const facts: DirectLaunchFacts = { client, tree, pane, sessionId, attemptId: attempt.attemptId,
-        runId: attempt.context.runId, taskId: attempt.context.assignment.taskId };
-      const argv = this.deps.command ? this.deps.command(facts) : this.nativeArgs(client, input, sessionId);
+        runId: attempt.context.runId, taskId: attempt.context.assignment.taskId, ...(promptPath ? { promptPath } : {}) };
+      const argv = this.deps.command ? this.deps.command(facts)
+        : this.nativeArgs(client, input, sessionId);
       // T033 — hold the pane before the client starts. Measured on tmux 3.6: without this, the
       // client exiting destroys the pane (and a seat's only pane destroys its session), leaving
       // no exit status and no output for the completion sweep to classify. With it, the pane
@@ -106,19 +121,35 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       }
       // The pane already belongs to this seat, so the launch changes only what runs in it:
       // the admitted tree as the working directory, then the client as the foreground process.
-      const line = "cd " + shellQuote(tree) + " && exec " + argv.map(shellQuote).join(" ");
+      //
+      // A turn's identity is read before the line is submitted, because `exec` keeps the
+      // process: the pid tmux started the pane with is the pid the client runs under, and its
+      // start tick is unchanged by the exec. Reading it afterwards loses the identity of a turn
+      // that ends immediately — measured on the installed build, a `-p` turn can exit before
+      // the launch observes it — and an attempt with no identity is one the owner can never
+      // record. An interactive client keeps the original order: it stays alive, so nothing is
+      // lost by reading its identity once it is known to be running.
+      const beforeSubmit = promptPath ? await this.paneIdentity(pane) : null;
+      if (promptPath && beforeSubmit === null) return this.refuse("managed_identity_unobserved");
+      const line = "cd " + shellQuote(tree) + " && exec "
+        + this.turnCommand(argv, promptPath, this.deps.command !== undefined).map(shellQuote).join(" ")
+        // The turn's text is fed on stdin, so its length and quoting never reach this line.
+        + (promptPath ? " < " + shellQuote(promptPath) : "");
       const typed = await this.deps.tmux.sendText(pane, line);
       if (!typed.ok) return this.refuse(typed.code);
       const submitted = await this.deps.tmux.sendKeys(pane, ["Enter"]);
       if (!submitted.ok) return this.refuse(submitted.code);
-      const ready = await this.waitForClient(pane, attempt.deadline);
+      // A headless turn is ready once it is the pane's process or has already ended; the
+      // interactive client is ready once it is the pane's foreground process.
+      const ready = promptPath
+        ? await this.waitForTurn(pane, attempt.deadline)
+        : await this.waitForClient(pane, attempt.deadline);
       if (!ready) return this.refuse("managed_readiness_unknown");
-      const pid = await this.deps.tmux.getPanePid(pane);
-      if (pid === null) return this.refuse("managed_identity_unobserved");
-      const identity = processFacts(pid);
+      const identity = beforeSubmit ?? await this.paneIdentity(pane);
+      if (identity === null) return this.refuse("managed_identity_unobserved");
       const receipt: ManagedSessionReceipt = {
         identity: parseAttemptIdentity({ nativeSessionId: sessionId, tmuxServer: this.deps.tmuxServer(), paneId: pane,
-          processId: pid, processStart: identity.start, generation: (attempt.previous?.identity.generation ?? 0) + 1,
+          processId: identity.processId, processStart: identity.start, generation: (attempt.previous?.identity.generation ?? 0) + 1,
           policyFingerprint: attempt.context.binding.policyFingerprint }),
         attemptId: attempt.attemptId, runId: attempt.context.runId, client,
         contextHash: attempt.context.generatedHash, observedContextHash: attempt.context.generatedHash,
@@ -149,25 +180,76 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       const paneCommand = await this.deps.tmux.getPaneCommand(receipt.identity.paneId);
       const probe = assessNativeResumeProbe({ runtime: receipt.client, paneContent, paneCommand,
         claudeResumeIdentityVerified: false });
+      // A headless turn has no composer to probe, and a turn that already ended is a valid, fast
+      // turn: its exit status is the sweep's evidence, not a launch failure. What the probe is
+      // still read for is the one thing a turn can also hit — a positive gate that needs the
+      // owner (a bypass-consent prompt, a refused login, a resume it cannot honour). Anything
+      // else is the turn doing its work.
+      if (receipt.client === "claude-code") {
+        const gated = probe.status === "attention_required" || probe.code === "login_required"
+          || probe.code === "no_conversation_found" || probe.code === "trust_gate" || probe.code === "mcp_gate";
+        return gated ? { ready: false, code: probe.code, reason: probe.detail } : { ready: true };
+      }
       return probe.status === "resumed" ? { ready: true } : { ready: false, code: probe.code, reason: probe.detail };
     } catch {
       return { ready: false, code: "managed_observation_unavailable" };
     }
   }
 
+  /** The pane's own process and its start tick, or null when tmux cannot name one. */
+  private async paneIdentity(pane: string): Promise<{ processId: number; groupId: number; start: string } | null> {
+    const pid = await this.deps.tmux.getPanePid(pane);
+    if (pid === null) return null;
+    const facts = processFacts(pid);
+    return { processId: pid, groupId: facts.groupId, start: facts.start };
+  }
+
   private refuse(code: string): HarnessLaunchResult {
     return { ok: false, error: "Direct launch blocked: " + code, recovery: "attention_required" };
   }
 
-  /** The native argv, matching the hardened launcher so a seat behaves the same either way. */
+  /**
+   * The process the pane `exec`s for one turn.
+   *
+   * A headless turn's stream is JSON, so the readable view sits in front of it: the pane runs
+   * the shipped formatter, which starts the client, forwards stdin from the attempt's prompt
+   * file and exits with the client's own status. A client that is not a turn (Codex, or an
+   * injected command) is started directly, exactly as before.
+   *
+   * `exec` stays on the process the pane ends up in, so the pane's exit status is the client's
+   * own — T033's classifier reads that status, and a wrapper that swallowed it would turn every
+   * failed turn into a successful one.
+   */
+  private turnCommand(argv: string[], promptPath: string | undefined, injected: boolean): string[] {
+    // An injected command is already the caller's own program (a stub, a fixture), so it is
+    // started as given: wrapping it would make the pane's exit status the wrapper's.
+    if (!promptPath || injected) return argv;
+    const view = fileURLToPath(new URL("../../assets/agent-turn-view.mjs", import.meta.url));
+    return [process.execPath, view, ...argv];
+  }
+
+  /**
+   * The native argv, matching the hardened launcher so a seat behaves the same either way.
+   *
+   * Claude Code runs one headless turn (`-p`): the process exits when the turn ends, which is
+   * what lets the completion sweep, the session slot and T033's exit classification work at
+   * all. The prompt is fed on stdin from the file the daemon wrote, so its length and its
+   * quoting never reach the shell line. `stream-json --verbose` is the only mode the installed
+   * build streams in — measured 2.1.296: `text` prints nothing until the turn ends — and a
+   * small formatter turns each event into a readable line in the pane.
+   *
+   * Codex is unchanged and stays interactive; it is a residual of this slice.
+   */
   private nativeArgs(client: WorkerClient, input: WorkerLaunchInput, sessionId: string): string[] {
     const model = input.model ? ["--model", input.model] : [];
     const effort = input.effort ? ["--effort", input.effort] : [];
-    return client === "claude-code"
-      ? ["claude", "--permission-mode", "bypassPermissions", ...model, ...effort,
-          ...(input.resumeToken ? ["--resume", input.resumeToken] : ["--session-id", sessionId])]
-      : ["codex", "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false", ...model, ...effort,
-          ...(input.resumeToken ? ["resume", input.resumeToken] : [])];
+    if (client === "claude-code") {
+      return ["claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose",
+        ...model, ...effort,
+        ...(input.continueSessionId || input.resumeToken ? ["--resume", sessionId] : ["--session-id", sessionId])];
+    }
+    return ["codex", "-a", "never", "-s", "danger-full-access", "-c", "check_for_update_on_startup=false", ...model, ...effort,
+      ...(input.resumeToken ? ["resume", input.resumeToken] : [])];
   }
 
   /** Ready once the client, not a shell, is the pane's foreground process. */
@@ -178,6 +260,35 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       if (command !== null && !SHELL_COMMANDS.has(command)) return true;
       if (this.now() >= limit) return false;
       await this.sleep(250);
+    }
+  }
+
+  /**
+   * Ready once the headless turn is the pane's process, or has already ended.
+   *
+   * A turn that finished before this was asked is the fast case the interactive path could
+   * never have: the pane is dead and holds its exit status, which is exactly what the sweep
+   * classifies. The pane always `exec`s the turn's view, so a pane whose command is still the
+   * shell is the only state that means the turn has not started; anything else — the view
+   * running, or the pane dead — is a turn that began.
+   */
+  /**
+   * Ready once the headless turn is the pane's process, or has already ended.
+   *
+   * A turn that finished before this was asked is the fast case the interactive path could
+   * never have: the pane is dead and holds its exit status, which is exactly what the sweep
+   * classifies. The pane always `exec`s the turn's view, so "the shell is still the pane's
+   * command" is the only state that means the turn has not started; anything else — the view
+   * running, or the pane dead — is a turn that began.
+   */
+  private async waitForTurn(pane: string, deadline: number): Promise<boolean> {
+    const limit = Math.min(deadline, this.now() + TURN_START_WINDOW_MS);
+    for (;;) {
+      if ((await this.deps.tmux.getPaneExit?.(pane))?.dead) return true;
+      const command = await this.deps.tmux.getPaneCommand(pane);
+      if (command !== null && !SHELL_COMMANDS.has(command)) return true;
+      if (this.now() >= limit) return false;
+      await this.sleep(50);
     }
   }
 }

@@ -33,7 +33,7 @@ export class TerminalAdapter implements RuntimeAdapter {
 
   async launchHarness(
     _binding: NodeBinding,
-    opts: { name: string; resumeToken?: string; forkSource?: import("../domain/runtime-adapter.js").ForkSource },
+    opts: { name: string; resumeToken?: string; continueSessionId?: string; forkSource?: import("../domain/runtime-adapter.js").ForkSource },
   ): Promise<HarnessLaunchResult> {
     if (opts.forkSource) {
       return {

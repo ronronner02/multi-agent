@@ -24,7 +24,17 @@ import { resolveReadinessTimeoutMs } from "./readiness-timeout.js";
 import { SettingsStore } from "./user-settings/settings-store.js";
 import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
-import { attemptInstructionFiles } from "../integrations/framework/context-manifest.js";
+import { continuationNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
+
+/**
+ * MVP — whether this launch starts a headless turn rather than an interactive session.
+ *
+ * Claude Code only: Codex still starts interactively and is a residual of this slice. A managed
+ * attempt is the only thing that gets a turn; a personal seat keeps its interactive launch.
+ */
+function isHeadlessTurn(input: Pick<StartupInput, "binding" | "adapter">): boolean {
+  return input.binding.managedAttempt !== undefined && input.adapter.runtime === "claude-code";
+}
 
 // Expanded startup text can put the current input marker above 50 scrollback lines.
 const STARTUP_SUBMIT_CAPTURE_LINES = 200;
@@ -57,6 +67,15 @@ export interface StartupInput {
   sessionName?: string;
   /** Resume token for restore path. Mutually exclusive with forkSource. */
   resumeToken?: string;
+  /**
+   * MVP — the conversation this launch continues, when a task reopens on the same seat.
+   *
+   * A rework, a lead revision and a resume-safe retry are continuations of a conversation the
+   * run already recorded, not of an attempt: the next attempt is new, and the client opens
+   * `--resume` on this session id. `resumeToken` stays what it was — the exact native identity
+   * a restore re-enters — so the two are never the same decision.
+   */
+  continueSessionId?: string;
   /** Runtime-native type for resumeToken (for example claude_id or codex_id). */
   resumeType?: string;
   /**
@@ -346,6 +365,18 @@ export class StartupOrchestrator {
       } catch (error) {
         return this.fail(input, "failed", [`Managed attempt attachment: ${(error as Error).message}`]);
       }
+      // MVP — a managed Claude attempt is one headless turn, so its prompt is written to the
+      // attempt's own state *before* the client starts and the launcher feeds it on stdin.
+      // Typing it afterwards is impossible: measured on the installed build, a `-p` client can
+      // finish before readiness is even observed. A failure here is a launch failure, not a
+      // warning, because a turn with no prompt would work on nothing.
+      if (input.binding.managedAttempt && input.adapter.runtime === "claude-code") {
+        try {
+          writeAgentTurnPrompt(input.binding.managedAttempt.context, await this.managedTurnText(deliveryInput, postLaunchFiles));
+        } catch (error) {
+          return this.fail(input, "failed", [`Managed turn prompt: ${(error as Error).message}`]);
+        }
+      }
       try {
         let launchResumeToken = input.resumeToken;
         let attemptedFreshFallback = false;
@@ -360,6 +391,7 @@ export class StartupOrchestrator {
           const launchResult = await input.adapter.launchHarness(input.binding, {
             name: input.sessionName ?? input.binding.tmuxSession ?? "",
             resumeToken: launchResumeToken,
+            ...(input.continueSessionId ? { continueSessionId: input.continueSessionId } : {}),
             ...(input.forkSource && !launchResumeToken ? { forkSource: input.forkSource } : {}),
           });
           if (launchResult.ok) {
@@ -497,7 +529,11 @@ export class StartupOrchestrator {
     const consumedActions = new Set<StartupAction>();
     let challengeOnlyPrompt: string | null = null;
     // Task dispatch has no authored identity action, but still needs its first work prompt.
-    if (continuityOutcome === "fresh" && (identityAction || input.includeDurableObligations || input.binding.managedAttempt)) {
+    // A managed Claude attempt already has it: its turn was written before the launch and is
+    // fed on stdin, so nothing is typed into a client that is not waiting for input.
+    if (isHeadlessTurn(input)) {
+      // The turn owns its prompt; the pane has nothing to paste into.
+    } else if (continuityOutcome === "fresh" && (identityAction || input.includeDurableObligations || input.binding.managedAttempt)) {
       const initialPrompt = await this.deliverInitialSessionPrompt(deliveryInput, identityAction, postLaunchFiles, challenge?.promptBlock ?? null, input.includeDurableObligations);
       if (!initialPrompt.ok) {
         errors.push(initialPrompt.error);
@@ -686,7 +722,10 @@ export class StartupOrchestrator {
     recovery?: string,
   ): StartupResult {
     this.pendingManagedBindings.delete(input.nodeId);
-    if (status === "attention_required" && freshContextPending && input.binding.tmuxSession) {
+    // A headless turn has no staged prompt to continue: its text was written before the launch
+    // and fed on stdin, so there is nothing an operator's later `continue` could deliver. The
+    // owner clears the gate and starts the task again, which is a new attempt on the same tree.
+    if (status === "attention_required" && freshContextPending && !isHeadlessTurn(input) && input.binding.tmuxSession) {
       const attempt = input.binding.managedAttempt;
       if (attempt) this.pendingManagedBindings.set(input.nodeId, { sessionId: input.sessionId, binding: input.binding });
       const command = attempt
@@ -755,6 +794,35 @@ export class StartupOrchestrator {
     return actions.find((action) => isSessionIdentityAction(action) && action.appliesOn.includes(context)) ?? null;
   }
 
+  /**
+   * The text a managed Claude attempt's turn receives.
+   *
+   * It is built from the same facts the interactive prompt used — the identity action, the
+   * first `send_text` post-launch file, the task body, the assignment, the outputs and the
+   * permissions — and the files this attempt projected, which is the only place KTD28's core
+   * and the role's charter live. What changes is where it goes: a headless turn cannot be typed
+   * into, so it is written before the launch and fed on stdin. Nothing is consumed from
+   * `postLaunchFiles`: the adapter still delivers them, and this text only names them.
+   */
+  private async managedTurnText(input: StartupDeliveryInput, postLaunchFiles: ResolvedStartupFile[]): Promise<string> {
+    const attempt = input.binding.managedAttempt!;
+    const { runId, assignment, outputs, permissions } = attempt.context;
+    const task = this.db.prepare(`SELECT q.body FROM team_queue_authority a
+      JOIN queue_items q ON q.qitem_id = a.qitem_id
+      WHERE a.run_id = ? AND a.task_id = ? AND q.destination_session = ?`).get(runId, assignment.taskId, input.binding.tmuxSession) as
+      { body: string } | undefined;
+    if (!task) throw new Error("The managed task is no longer assigned to this seat.");
+    const identityAction = this.extractSessionIdentityAction(input.startupActions, input.isRestore ? "restore" : "fresh_start");
+    const firstSendText = postLaunchFiles.find(file => file.deliveryHint === "send_text");
+    let bundle = "";
+    if (firstSendText) {
+      try { bundle = this.readFile(firstSendText.absolutePath); } catch { /* the adapter reports its own read failure */ }
+    }
+    return managedTurnPrompt({ identity: identityAction?.value ?? "", bundle, runId, assignment, taskBody: task.body,
+      outputs, permissions, instructions: turnInstructions(attempt.context),
+      continuation: continuationNote(this.db, runId, assignment.taskId, assignment.role) });
+  }
+
   private async deliverInitialSessionPrompt(
     input: StartupDeliveryInput,
     identityAction: StartupAction | null,
@@ -785,24 +853,7 @@ export class StartupOrchestrator {
       }
     }
 
-    if (binding.managedAttempt) {
-      const { runId, assignment, outputs, permissions } = binding.managedAttempt.context;
-      const task = this.db.prepare(`SELECT q.body FROM team_queue_authority a
-        JOIN queue_items q ON q.qitem_id = a.qitem_id
-        WHERE a.run_id = ? AND a.task_id = ? AND q.destination_session = ?`).get(runId, assignment.taskId, binding.tmuxSession) as
-        { body: string } | undefined;
-      if (!task) return { ok: false, error: "The managed task is no longer assigned to this seat." };
-      // KTD28 keeps the core and the role's charter out of the brief, so they reach the client
-      // only through its projection. Naming those files is therefore part of the launch, not a
-      // second brief: the prompt states where the attempt's instructions are, never what they say.
-      const instructions = attemptInstructionFiles(binding.managedAttempt.context);
-      prompt = [prompt, `Managed task ${assignment.taskId} for run ${runId}`, task.body,
-        `Assignment: ${JSON.stringify(assignment)}`, `Outputs: ${JSON.stringify(outputs)}`,
-        `Permissions: ${JSON.stringify(permissions)}`,
-        ...(instructions.length === 0 ? [] : ["Read these files before you start work; they are this attempt's role instructions and run context, and they are read-only:",
-          ...instructions.map(file => `- ${file.path}`)]),
-        "Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished."].filter(Boolean).join("\n\n");
-    } else if (includeDurableObligations) prompt = [prompt, `This is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`].filter(Boolean).join("\n\n");
+    if (includeDurableObligations) prompt = [prompt, `This is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`].filter(Boolean).join("\n\n");
 
     // OPR.0.4.3.06 — the per-launch orientation challenge rides along with the
     // identity prompt (after the contract) so no extra send is added.

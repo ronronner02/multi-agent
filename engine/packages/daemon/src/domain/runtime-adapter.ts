@@ -205,7 +205,7 @@ export interface RuntimeAdapter {
    */
   launchHarness(
     binding: NodeBinding,
-    opts: { name: string; resumeToken?: string; forkSource?: ForkSource },
+    opts: { name: string; resumeToken?: string; continueSessionId?: string; forkSource?: ForkSource },
   ): Promise<HarnessLaunchResult>;
 
   /** Check if the runtime harness is responsive and ready. */
