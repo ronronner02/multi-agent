@@ -71,6 +71,13 @@ export function unisolatedPolicyCapability(policyRevision: number): ProviderPoli
   return { policyRevision, policyFingerprint: hashBytes("workers.isolation:none"), verifiedProviders: ["claude", "codex"] };
 }
 
+/** Re-read source and policy without replacing the scope or limits the owner approved. */
+export function refreshPlanBinding(binding: PlanBinding, policy: ProviderPolicyCapability): PlanBinding {
+  const current = bindingForGoal({ root: binding.repository.root, planRef: binding.planRef, writePaths: binding.writePaths, policy });
+  return { ...binding, repository: current.repository, planDigest: current.planDigest,
+    policyRevision: current.policyRevision, policyFingerprint: current.policyFingerprint };
+}
+
 function writePaths(value: unknown): string[] {
   if (!Array.isArray(value) || !value.length) throw new TeamContractError("writePaths");
   return value.map(entry => relativePath(entry, "writePaths"));

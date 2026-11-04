@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { validateDependencyGraph } from "./workflow-runtime.js";
 import { applyTaskEdit, readTaskEdit } from "./task-edit.js";
 import { LeadWakePolicy } from "./lead-wake-policy.js";
 import { RigRepository } from "./rig-repository.js";
@@ -161,6 +162,25 @@ function actorIdentity(actor: ControlActor, ownerOnly = false): ControlActor {
   if (v.kind !== "owner" && v.kind !== "worker") throw new TeamContractError("actor.kind");
   if (ownerOnly && v.kind !== "owner") throw new Error("An authenticated owner control session is required");
   return { kind: v.kind, sessionId: text(v.sessionId, "actor.sessionId", 256) };
+}
+
+function taskDefinition(binding: import("../contracts/team-control.js").PlanBinding, payload: unknown, taskId?: string) {
+  const v = object(payload, "task"), assignment = parseAssignment(v.assignment);
+  if (taskId !== undefined && assignment.taskId !== taskId) throw new TeamContractError("assignment.taskId");
+  if (!binding.roles.includes(assignment.role)) return "Assignment role is outside the binding";
+  const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
+  const covers = (paths: string[], entry: string) => paths.some(path => entry === path || entry.startsWith(path + "/"));
+  if (assignment.paths.some(path => !covers(allowed, path))) return "Assignment path is outside the binding";
+  const inputs = parseTaskInputs(v);
+  if (inputs.outputs.some(path => !covers(assignment.paths, path) || !covers(binding.writePaths, path))) {
+    return "An output is outside the assignment's reviewable write paths";
+  }
+  if (inputs.permissions.some(permission => !roleConfiguration[assignment.role].permissions.includes(permission))) {
+    return "A permission is outside the assignment role's vocabulary";
+  }
+  if (typeof v.body !== "string" || !v.body.trim() || v.body.length > 262_144) throw new TeamContractError("task.body");
+  return { assignment, ...inputs, body: v.body, sourceSession: text(v.sourceSession, "sourceSession"),
+    destinationSession: text(v.destinationSession, "destinationSession") };
 }
 
 function cumulativeMetric(usages: UsageEvidence[], key: "inputTokens" | "outputTokens" | "costUsd"): UsageMetric {
@@ -362,11 +382,83 @@ export class PlanGovernance {
     return new ScopeExtensions(this.db).projection(this.getRun(runId), task);
   }
 
+  proposeRunGrowth(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("run.growth-requested", raw, owner, ctx => {
+      if (ctx.run.state !== "invalidated") return deny("Run growth requires a suspended plan-change request");
+      const binding = parsePlanBinding(currentBinding), v = object(ctx.request.payload, "growth");
+      if (binding.repository.root !== ctx.run.binding.repository.root || binding.planRef !== ctx.run.binding.planRef
+        || canonicalJson(binding.limits) !== canonicalJson(ctx.run.binding.limits)
+        || canonicalJson(binding.roles) !== canonicalJson(ctx.run.binding.roles)) return deny("Run growth preserves the repository, roles and limits");
+      if (hashBinding(binding) === ctx.run.bindingDigest) return deny("The replacement plan binding has not changed");
+      const tasks = this.growthTasks(ctx, binding, v.tasks, owner.sessionId);
+      if (typeof tasks === "string") return deny(tasks);
+      const payload = jsonValue({ change: "run-growth", binding, tasks }) as JsonObject;
+      const targetDigest = hashBytes(canonicalJson(payload)), expiresAt = timestamp(v.expiresAt, "expiresAt");
+      if (expiresAt <= ctx.now) return deny("Approval expiry must be in the future");
+      if (this.db.prepare(`SELECT id FROM team_approvals WHERE run_id=? AND action='scope-change'
+        AND target_digest=? AND binding_digest=? AND state<>'expired'`).get(ctx.run.id, targetDigest, ctx.run.bindingDigest)) {
+        return deny("An approval for this exact operation is already recorded");
+      }
+      this.db.prepare(`INSERT INTO team_approvals
+        (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,created_at,updated_at)
+        VALUES (?,?,'orchestrator','scope-change',?,?,?,?,'pending',?,?,?)`).run(ctx.request.actionId, ctx.run.id,
+        canonicalJson(payload), targetDigest, targetDigest, ctx.run.bindingDigest, expiresAt, ctx.now, ctx.now);
+      return { status: "accepted", value: this.getApproval(ctx.request.actionId), observedBy: owner.sessionId };
+    });
+  }
+
+  private growthTasks(ctx: CommandContext, binding: import("../contracts/team-control.js").PlanBinding,
+    value: unknown, sourceSession?: string) {
+    if (!Array.isArray(value) || !value.length || value.length > 100) throw new TeamContractError("growth.tasks");
+    const tasks = [];
+    for (const input of value) {
+      const value = object(input, "task"), role = parseAssignment(value.assignment).role;
+      const task = taskDefinition(binding, { ...value, ...(sourceSession ? { sourceSession,
+        outputs: value.outputs ?? [], permissions: value.permissions ?? [...roleConfiguration[role].permissions] } : {}) });
+      if (typeof task === "string") return task;
+      tasks.push(task);
+    }
+    const existing = (this.db.prepare("SELECT assignment_json AS assignment FROM team_queue_authority WHERE run_id=?")
+      .all(ctx.run.id) as Array<{ assignment: string }>).map(row => parseAssignment(JSON.parse(row.assignment)));
+    const covers = (path: string) => binding.writePaths.some(root => path === root || path.startsWith(root + "/"));
+    if (existing.some(task => task.role !== "reviewer" && task.paths.some(path => !covers(path)))) {
+      return "The replacement binding must preserve existing task scopes";
+    }
+    const graph = validateDependencyGraph([...existing, ...tasks.map(task => task.assignment)]);
+    return graph.ok ? tasks : graph.reason;
+  }
+
+  private applyRunGrowth(ctx: CommandContext, approval: TeamApproval, owner: ControlActor): Result {
+    const binding = parsePlanBinding(approval.payload.binding);
+    const tasks = this.growthTasks(ctx, binding, approval.payload.tasks);
+    if (typeof tasks === "string") throw new Error("Run growth admission conflict: " + tasks);
+    this.invalidateUnused(ctx, false, approval.id);
+    ctx.run.binding = binding; ctx.run.bindingDigest = hashBinding(binding);
+    ctx.run.state = "approved"; ctx.run.stateReason = null;
+    const payload = { bindingDigest: ctx.run.bindingDigest };
+    this.db.prepare(`INSERT INTO team_approvals
+      (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,decision_actor,created_at,updated_at)
+      VALUES (?,?,'orchestrator','implementation',?,?,?,?,'approved',?,?,?,?)`).run(randomUUID(), ctx.run.id,
+      canonicalJson(payload), hashBytes(canonicalJson(payload)), ctx.run.bindingDigest, ctx.run.bindingDigest,
+      approval.expiresAt, owner.sessionId, ctx.now, ctx.now);
+    for (const task of tasks) {
+      const taskId = task.assignment.taskId;
+      const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } });
+      if (result.status !== "accepted") throw new Error("Run growth admission conflict: " + result.reason);
+      this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
+        valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
+    }
+    return { status: "accepted", value: { ...this.getApproval(approval.id), addedTasks: tasks.map(task => task.assignment.taskId) },
+      effectMayStart: true, observedBy: owner.sessionId };
+  }
+
   requestApproval(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
     const requester = actorIdentity(actor);
     return this.command("approval.requested", raw, requester, (ctx) => {
       const approval = approvalPayload(ctx.request.payload);
       if (approval.action === "scope-extension") return deny("Only candidate staging creates scope extensions");
+      if (approval.payload.change === "run-growth") return deny("Only suspended run growth creates replacement proposals");
       if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       const v = object(ctx.request.payload, "approval");
       const expiresAt = timestamp(v.expiresAt, "expiresAt");
@@ -393,9 +485,17 @@ export class PlanGovernance {
   decideApproval(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
     const owner = actorIdentity(actor, true);
     return this.command("approval.decided", raw, owner, (ctx) => {
-      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
       const approval = this.getApproval(ctx.request.actionId);
       if (!approval || approval.runId !== ctx.run.id) throw new Error("Approval not found in this run");
+      const growth = approval.action === "scope-change" && approval.payload.change === "run-growth";
+      if (growth) {
+        if (ctx.run.state !== "invalidated" || approval.bindingDigest !== ctx.run.bindingDigest) return deny("Run growth no longer matches the suspended binding");
+        if (hashBinding(currentBinding) !== hashBinding(approval.payload.binding)) {
+          this.invalidateUnused(ctx);
+          return deny("The proposed plan, repository or policy binding changed");
+        }
+        if (ctx.run.activeMs >= ctx.run.binding.limits.maxActiveMs) return deny("Active wall-clock budget exhausted");
+      } else if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
       if (approval.kind === "native") return deny("A native prompt is a configuration fault, not an owner approval action");
       const v = object(ctx.request.payload, "decision");
       if (approval.state !== "pending") {
@@ -404,7 +504,7 @@ export class PlanGovernance {
       }
       if (integer(v.approvalVersion, "approvalVersion", 1) !== approval.entityVersion) throw new Error("Approval version conflict");
       if (v.decision !== "approved" && v.decision !== "rejected") throw new TeamContractError("decision");
-      const blockedEscalation = ctx.run.state === "blocked" && isEscalation(approval);
+      const blockedEscalation = growth || ctx.run.state === "blocked" && isEscalation(approval);
       if (ctx.run.state !== "pending" && ctx.run.state !== "approved" && !blockedEscalation) return deny("Run is closed to decisions");
       if (v.decision === "approved" && approval.action !== "implementation" && !blockedEscalation) {
         const reason = this.eligibility(ctx);
@@ -419,6 +519,7 @@ export class PlanGovernance {
         updated_at = ? WHERE id = ? AND entity_version = ? AND state = 'pending'`)
         .run(v.decision, owner.sessionId, ctx.now, approval.id, approval.entityVersion);
       if (updated.changes !== 1) throw new Error("Approval version conflict");
+      if (growth && v.decision === "approved") return this.applyRunGrowth(ctx, approval, owner);
       if (approval.action === "implementation" && v.decision === "approved") {
         ctx.run.state = "approved";
         ctx.run.stateReason = null;
@@ -521,47 +622,27 @@ export class PlanGovernance {
   }
 
   createTask(raw: ControlRequest<unknown>, currentBinding: unknown): ControlReceipt {
-    return this.command("task.created", raw, null, (ctx) => {
+    return this.command("task.created", raw, null, ctx => {
       const reason = this.boundEligibility(ctx, currentBinding);
-      if (reason) return deny(reason);
-      const v = object(ctx.request.payload, "task");
-      const assignment = parseAssignment(v.assignment);
-      if (assignment.taskId !== ctx.request.actionId) throw new TeamContractError("assignment.taskId");
-      if (!ctx.run.binding.roles.includes(assignment.role)) return deny("Assignment role is outside the binding");
-      const paths = assignment.role === "reviewer" ? [...ctx.run.binding.readPaths, ...ctx.run.binding.writePaths] : ctx.run.binding.writePaths;
-      const covers = (entry: string) => paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
-      if (assignment.paths.some((entry) => !covers(entry))) return deny("Assignment path is outside the binding");
-      const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id = ?").get(ctx.run.id) as { count: number };
-      if (count.count >= 100) return deny("Managed task limit reached");
-      // T053: the task's declared production inputs are required and validated here, where the
-      // assignment's own paths and the role's installed vocabulary are known. A refused task
-      // reaches neither array, so it leaves no credential and no capability behind.
-      const inputs = parseTaskInputs(v);
-      const declares = (entry: string) => assignment.paths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
-      // An output is something the task produces, so it has to be writable. A reviewer's
-      // assignment covers the binding's read paths too, and an output under one of those would
-      // describe a write the approval never granted.
-      const writable = (entry: string) => ctx.run.binding.writePaths.some((allowed) => entry === allowed || entry.startsWith(`${allowed}/`));
-      if (inputs.outputs.some((entry) => !declares(entry) || !writable(entry))) return deny("An output is outside the assignment's reviewable write paths");
-      if (inputs.permissions.some((entry) => !roleConfiguration[assignment.role].permissions.includes(entry))) {
-        return deny("A permission is outside the assignment role's vocabulary");
-      }
-      const body = v.body;
-      if (typeof body !== "string" || !body.trim() || body.length > 262_144) throw new TeamContractError("task.body");
-      const sourceSession = text(v.sourceSession, "sourceSession");
-      const destinationSession = text(v.destinationSession, "destinationSession");
-      const created = withQueueWrite(this.db, { operation: "create" }, () => this.queue.createWithinTransaction({ sourceSession,
-        destinationSession, body, targetRepo: ctx.run.binding.repository.root, nudge: false }));
-      ctx.register(created.persistedEvent);
-      this.db.prepare(`INSERT INTO team_queue_authority
-        (qitem_id, run_id, task_id, assignment_json, outputs_json, permissions_json) VALUES (?, ?, ?, ?, ?, ?)`)
-        .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment),
-          canonicalJson(inputs.outputs), canonicalJson(inputs.permissions));
-      // Minted in the same transaction as the assignment: the producer's bridge and every
-      // later send for this seat must read one value, and a refused task leaves none.
-      ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
-      return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
+      return reason ? deny(reason) : this.writeTask(ctx);
     });
+  }
+
+  private writeTask(ctx: CommandContext): Result {
+    const task = taskDefinition(ctx.run.binding, ctx.request.payload, ctx.request.actionId);
+    if (typeof task === "string") return deny(task);
+    const { assignment, outputs, permissions, sourceSession, destinationSession, body } = task;
+    const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id=?")
+      .get(ctx.run.id) as { count: number };
+    if (count.count >= 100) return deny("Managed task limit reached");
+    const created = withQueueWrite(this.db, { operation: "create" }, () => this.queue.createWithinTransaction({
+      sourceSession, destinationSession, body, targetRepo: ctx.run.binding.repository.root, nudge: false }));
+    ctx.register(created.persistedEvent);
+    this.db.prepare(`INSERT INTO team_queue_authority
+      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json) VALUES (?,?,?,?,?,?)`)
+      .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions));
+    ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
+    return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
   }
 
   transitionTask(raw: ControlRequest<unknown>, currentBinding: unknown): ControlReceipt {
@@ -893,9 +974,10 @@ export class PlanGovernance {
       const result = apply(ctx);
       this.syncClock(ctx);
       const changed = this.db.prepare(`UPDATE team_runs SET state = ?, state_reason = ?, entity_version = ?, active_ms = ?,
-        accounted_at = ?, retries_used = ?, review_rounds_used = ?, updated_at = ? WHERE id = ? AND entity_version = ?`)
+        accounted_at = ?, retries_used = ?, review_rounds_used = ?, updated_at = ?, binding_json = ?, binding_digest = ?
+        WHERE id = ? AND entity_version = ?`)
         .run(run.state, run.stateReason, run.entityVersion, run.activeMs, run.accountedAt, run.retriesUsed,
-          run.reviewRoundsUsed, ctx.now, run.id, request.expectedEntityVersion);
+          run.reviewRoundsUsed, ctx.now, canonicalJson(run.binding), run.bindingDigest, run.id, request.expectedEntityVersion);
       if (changed.changes !== 1) throw new Error("Run entity version conflict");
       const value = result.value === undefined ? null : jsonValue(result.value);
       const receipt: ControlReceipt = { status: result.status, runId: run.id, entityVersion: run.entityVersion,
@@ -951,12 +1033,12 @@ export class PlanGovernance {
     return null;
   }
 
-  private invalidateUnused(ctx: CommandContext, preserveEscalations = false): void {
+  private invalidateUnused(ctx: CommandContext, preserveEscalations = false, exceptApprovalId = ""): void {
     this.db.prepare(`UPDATE team_approvals SET state = 'invalidated', entity_version = entity_version + 1, updated_at = ?
-      WHERE run_id = ? AND state IN ('pending', 'approved') AND NOT EXISTS
+      WHERE run_id = ? AND id <> ? AND state IN ('pending', 'approved') AND NOT EXISTS
         (SELECT 1 FROM team_approval_consumptions c WHERE c.approval_id = team_approvals.id)
         AND (? = 0 OR kind <> 'orchestrator' OR action NOT IN ('scope-change', 'limit-increase'))`)
-      .run(ctx.now, ctx.run.id, preserveEscalations ? 1 : 0);
+      .run(ctx.now, ctx.run.id, exceptApprovalId, preserveEscalations ? 1 : 0);
   }
 
   private expireApprovals(ctx: CommandContext): void {
