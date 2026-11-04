@@ -34,6 +34,16 @@ interface TeamTaskResult {
   files: Array<{ path: string; hash: string; tracked: boolean }>; patch: string;
 }
 
+/** The completion read the owner action forwards: what the daemon observed and could verify. */
+interface TaskCompletion {
+  taskId: string; role: "lead" | "implementer" | "reviewer"; subjectTaskId: string;
+  queueState: string | null; taskVersion: number; actorSession: string | null;
+  attempt: { attemptId: string; entityVersion: number; state: string; observed: boolean } | null;
+  openAttempts: number; blockedReason: string | null; findingsRequired: boolean;
+  evidence: { validated: boolean; manifestDigest: string | null; base: string | null; baseIdentifier: string | null;
+    fileCount: number; changedPaths: string[]; outsideAssignment: string[]; reasons: string[] };
+}
+
 const BASE = "/api/team-control";
 
 /**
@@ -223,6 +233,80 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       }
       console.log(`Applied ${result.taskId} (${result.attemptId ?? "no recorded attempt"}) to ${target}.`);
       for (const file of files) console.log(`  ${file}`);
+    });
+
+  /**
+   * MVP — the owner's one completion action.
+   *
+   * Agents cannot complete a task: an outcome is an owner observation, and R18 keeps acceptance
+   * on validated evidence rather than on a process that exited. So this verb reads the
+   * completion the daemon already computed — the attempt it observed stop and what it could
+   * verify about the candidate — and sends exactly that to `tasks/outcome`. It invents no
+   * evidence: a candidate the daemon could not validate is refused here, before the write, so
+   * the refusal names the check that failed instead of a control error.
+   *
+   * `--findings` carries a reviewer's report, which is the evidence a review round acts on. It
+   * is read from a file rather than typed, because it is JSON the reviewer wrote.
+   */
+  cmd.command("done <run-id> <task-id>")
+    .description("record an owner-observed outcome for a task whose attempt has stopped")
+    .option("--failed", "record the task as failed instead of done")
+    .option("--findings <path>", "reviewer findings JSON (required for a reviewer task)")
+    .option("--note <text>", "transition note recorded with the outcome")
+    .option("--json", "print the daemon's receipt as JSON")
+    .action(async (runId: string, taskId: string, options: { failed?: boolean; findings?: string; note?: string; json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required",
+        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+        "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}`;
+      const read = await client.get<{ completion?: TaskCompletion; code?: string; error?: string }>(
+        `${path}/tasks/${encodeURIComponent(taskId)}/completion`, { headers });
+      const completion = read.data.completion;
+      if (read.status !== 200 || !completion) {
+        throw new TeamCommandError(read.data.code ?? "team_completion_unavailable",
+          read.data.error ?? "The daemon did not answer the completion read.");
+      }
+      if (completion.blockedReason) throw new TeamCommandError("team_completion_blocked", completion.blockedReason);
+      const state = options.failed ? "failed" : "done";
+      // A reviewer's report is the review; without it the round has nothing to act on, and the
+      // daemon would record a completion that cannot start the loop.
+      const findings = options.findings === undefined ? undefined : JSON.parse(readFileSync(options.findings, "utf8")) as unknown;
+      if (completion.findingsRequired && state === "done" && findings === undefined) {
+        throw new TeamCommandError("team_findings_required",
+          `${taskId} is a reviewer task; pass its report with --findings <path>.`);
+      }
+      // The owner's own evidence is what the daemon could verify. A completion the daemon could
+      // not validate is still recordable as `failed`, which is how a candidate that missed its
+      // assignment is reported rather than accepted.
+      if (state === "done" && !completion.evidence.validated) {
+        throw new TeamCommandError("team_evidence_unvalidated",
+          `${taskId} is not validated: ${completion.evidence.reasons.join("; ")}. Record it with --failed, or fix the candidate.`);
+      }
+      const evidence = { ...completion.evidence, ...(findings === undefined ? {} : { findings }) };
+      const body = { protocolVersion: "1.0", runId, actionId: completion.taskId,
+        expectedEntityVersion: (await client.get<{ run: { entityVersion: number } }>(path, { headers })).data.run.entityVersion,
+        idempotencyKey: crypto.randomUUID(),
+        payload: { expectedTaskVersion: completion.taskVersion, state,
+          ...(state === "done" ? { closureReason: "no-follow-on" } : {}),
+          ...(options.note === undefined ? {} : { transitionNote: options.note }),
+          actorSession: completion.actorSession, attemptId: completion.attempt!.attemptId,
+          expectedAttemptVersion: completion.attempt!.entityVersion, evidence } };
+      const result = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
+        reviewTaskId?: string; reworkTaskId?: string }>(`${path}/tasks/outcome`, body, { headers });
+      if (result.status !== 200 || result.data.status === "denied") {
+        throw new TeamCommandError(result.data.code ?? "team_outcome_refused",
+          result.data.reason ?? result.data.error ?? "The daemon refused the outcome.");
+      }
+      if (options.json) { console.log(JSON.stringify(result.data)); return; }
+      console.log(`Recorded ${taskId} as ${state}.`);
+      console.log(`  candidate: ${completion.evidence.manifestDigest ?? "unavailable"} (${completion.evidence.fileCount} file(s), ${completion.evidence.validated ? "validated" : "not validated"})`);
+      for (const changed of completion.evidence.changedPaths) console.log(`  ${changed}`);
+      if (result.data.reviewTaskId) console.log(`Review: ${result.data.reviewTaskId} was created and routed to the reviewer seat.`);
+      if (result.data.reworkTaskId) console.log(`Rework: ${result.data.reworkTaskId} was reopened.`);
     });
 
   return cmd;

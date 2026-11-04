@@ -7,6 +7,7 @@ import { Card } from "../components/ui/card.js";
 import { RunGrowthForm } from "./run-growth.js";
 import { NewTaskForm } from "./new-task.js";
 import { ResultPanel } from "./result-panel.js";
+import { CompletionPanel } from "./completion.js";
 import { TaskEditControls } from "./task-edit/task-edit-dialog.js";
 
 /**
@@ -120,6 +121,9 @@ function Detail({ read, runId, task, onClose }: { read?: TeamOwnerRead; runId: s
           <span className="ui-state" data-state={attempt.state}>{t(`status.attempt.${attempt.state}`)}</span>
         </li>)}</ul>}
       {runId && <div className="ui-detail-actions"><TaskEditControls key={`${runId}:${task.taskId}`} runId={runId} taskId={task.taskId} /></div>}
+      {/* The owner action comes before the result: a task is completed first, and its patch is
+          readable only once it has an outcome. */}
+      {runId && <CompletionPanel key={`${runId}:${task.taskId}:completion`} runId={runId} taskId={task.taskId} />}
       {runId && <ResultPanel runId={runId} taskId={task.taskId} />}
     </>}
   </Card>;
