@@ -860,7 +860,8 @@ export function createApp(deps: AppDeps): Hono {
   // write contract is the one C2 already owns.
   app.route("/api/team-control", teamCompletionRoutes(teamGovernance, {
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
-    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
+    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime,
+      readLeadProposal: (runId: string, taskId: string) => deps.workflowRuntime!.leadProposalFor(runId, taskId) } : {}),
   }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,

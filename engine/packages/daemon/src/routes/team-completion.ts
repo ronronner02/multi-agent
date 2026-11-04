@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { TEAM_CONTROL_VERSION, parseProtocolVersion } from "../contracts/team-control.js";
 import type { PlanGovernance } from "../domain/plan-governance.js";
-import { completionBlockedReason, evidenceSubject, taskCompletionEvidence,
+import { completionBlockedReason, evidenceSubject, leadCompletionEvidence, taskCompletionEvidence,
   type CandidateFacts, type TaskCompletionEvidence } from "../domain/task-completion.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
 
@@ -27,12 +27,25 @@ export function teamCompletionRoutes(governance: PlanGovernance, options: {
   legacyTokens: readonly (string | null | undefined)[];
   /** The runtime that owns the candidate trees; absent leaves the evidence unavailable. */
   runtime?: { candidateManifestFor(runId: string, taskId: string): CandidateFacts };
+  /**
+   * C3 — the daemon's own reading of a lead's decomposition. Separate from `runtime` so a host
+   * that composes candidate reads still says truthfully that it cannot read a proposal, rather
+   * than reporting every lead completion as unvalidated.
+   */
+  readLeadProposal?: (runId: string, taskId: string) => readonly unknown[];
 }): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
   const route = "/runs/:runId/tasks/:taskId/completion";
   app.use(route, teamControlAuthentication(() => options.credentials, options.legacyTokens));
   app.use(route, bodyLimit({ maxSize: 65_536,
     onError: c => c.json({ code: "invalid_team_contract", error: "The completion read exceeds its size limit." }, 413) }));
+  /** A lead's proposal as the completion read needs it: its task count, or null when unreadable. */
+  const proposalFor = (runId: string, taskId: string) => {
+    try {
+      const tasks = options.readLeadProposal?.(runId, taskId);
+      return tasks ? { taskCount: tasks.length } : null;
+    } catch { return null; }
+  };
   app.get(route, (c) => {
     const runId = c.req.param("runId"), taskId = c.req.param("taskId");
     if (c.get("controlActor").kind !== "owner" || (c.get("controlRunId") !== null && c.get("controlRunId") !== runId)) {
@@ -52,13 +65,22 @@ export function teamCompletionRoutes(governance: PlanGovernance, options: {
     let evidence: TaskCompletionEvidence;
     try {
       const manifest = options.runtime ? options.runtime.candidateManifestFor(runId, subject) : null;
-      evidence = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths,
-        manifest, ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }) });
+      // C3 — a lead's deliverable is its decomposition, not a code change, so its evidence is
+      // its own rule: the only path the candidate moves must be the proposal, and that file
+      // must be one the boundary accepts. The read is the daemon's, never the owner's claim.
+      evidence = task.assignment.role === "lead"
+        ? leadCompletionEvidence({ manifest, proposal: options.readLeadProposal ? proposalFor(runId, taskId) : null,
+            ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }) })
+        : taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths,
+            manifest, ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }) });
     } catch (error) {
       // A candidate the control cannot read is missing evidence, not a crash. The reason is the
       // daemon's own, so the owner sees one sentence instead of an internal message.
-      evidence = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest: null,
-        unavailableReason: "The task's candidate is not on disk" });
+      const unavailableReason = "The task's candidate is not on disk";
+      evidence = task.assignment.role === "lead"
+        ? leadCompletionEvidence({ manifest: null, proposal: null, unavailableReason })
+        : taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest: null,
+            unavailableReason });
     }
     c.header("Cache-Control", "no-store");
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, completion: {

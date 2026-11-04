@@ -1287,7 +1287,8 @@ export class WorkflowRuntime {
     frameworkFiles: readonly { path: string; source: string }[];
     /** True when the projection root already exists: rebuild from its own recorded bytes. */
     resume: boolean;
-  }): ContextManifest {    const { roots, root, role, client } = input;
+  }): ContextManifest {
+    const { roots, root, role, client } = input;
     const frameworkRoot = roots.frameworkRoot;
     // The projection holds more than instructions: the plan the approval bound, the
     // role configuration, the pinned framework entries, and — KTD28 — the shared core

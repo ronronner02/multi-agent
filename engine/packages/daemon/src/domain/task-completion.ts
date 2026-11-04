@@ -1,4 +1,5 @@
 import type { TeamRole, TeamTaskAuthority } from "../contracts/team-control.js";
+import { LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
 
 /**
  * MVP — the completion path's evidence half.
@@ -82,6 +83,47 @@ export function taskCompletionEvidence(input: {
   if (manifest.base === "snapshot") reasons.push("The candidate has no base commit to diff against");
   if (manifest.base === "commit" && paths.length === 0) reasons.push("The candidate moves no path");
   if (outside.length) reasons.push(`${outside.length} changed path(s) fall outside the assignment`);
+  return { validated: reasons.length === 0, manifestDigest: manifest.manifestDigest, base: manifest.base,
+    baseIdentifier: manifest.baseIdentifier, fileCount: manifest.files.length, changedPaths: paths,
+    outsideAssignment: outside, reasons };
+}
+
+/**
+ * C3 — what a lead's candidate is evidence of.
+ *
+ * A lead's deliverable is its decomposition, not a code change: its assignment paths are the
+ * run's scope, which is what its proposed tasks must stay inside, and its one output is
+ * `lead-proposal.json` at the root of its own tree. Applying the implementer rule would call
+ * that file outside the assignment and refuse every lead completion, so the role gets its own:
+ * the candidate is validated exactly when the only path it moves is the proposal and that file
+ * is a decomposition the boundary would accept.
+ *
+ * `proposal` is the daemon's own reading of that file, through the same boundary every other
+ * worker-written file goes through. `null` means the read failed or the file was not there,
+ * which is reported as its own reason rather than as an empty candidate.
+ */
+export function leadCompletionEvidence(input: {
+  manifest: CandidateFacts | null;
+  proposal: { taskCount: number } | null;
+  unavailableReason?: string;
+}): TaskCompletionEvidence {
+  const empty: TaskCompletionEvidence = { validated: false, manifestDigest: null, base: null, baseIdentifier: null,
+    fileCount: 0, changedPaths: [], outsideAssignment: [], reasons: [] };
+  if (!input.manifest) {
+    return { ...empty, reasons: [input.unavailableReason ?? "The task's candidate could not be read"] };
+  }
+  const { manifest } = input;
+  const paths = changedPaths(manifest.patch);
+  const reasons: string[] = [];
+  if (manifest.base === "snapshot") reasons.push("The candidate has no base commit to diff against");
+  // Everything but the proposal is a write the lead has no permission for. It is reported as
+  // outside the assignment so the owner sees what moved, exactly as an implementer's is.
+  const outside = paths.filter(path => path !== LEAD_PROPOSAL_PATH);
+  if (outside.length) reasons.push(`${outside.length} changed path(s) are not the lead's proposal`);
+  if (manifest.base === "commit" && !paths.includes(LEAD_PROPOSAL_PATH)) {
+    reasons.push(`The candidate does not write ${LEAD_PROPOSAL_PATH}`);
+  }
+  if (input.proposal === null) reasons.push("The lead's proposal is missing or unreadable");
   return { validated: reasons.length === 0, manifestDigest: manifest.manifestDigest, base: manifest.base,
     baseIdentifier: manifest.baseIdentifier, fileCount: manifest.files.length, changedPaths: paths,
     outsideAssignment: outside, reasons };
