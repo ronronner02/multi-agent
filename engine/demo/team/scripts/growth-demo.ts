@@ -23,7 +23,7 @@ const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMod
   teamControl: { credentials: { ownerToken } },
   cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
   directLaunchCommand: facts => [process.execPath, stub, "--session-name", facts.taskId,
-    "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"],
+    "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor", "--turn"],
 });
 async function api(path: string, payload?: unknown) {
   const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control" + path, {

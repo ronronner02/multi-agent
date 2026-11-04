@@ -67,7 +67,7 @@ const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMod
     readPolicyCapability: () => policy },
   cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
   directLaunchCommand: facts => [process.execPath, stub,
-    "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"] });
+    "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor", "--turn"] });
 const governance = daemon.deps.teamGovernance!;
 let serial = 0;
 const command = (actionId: string, payload: unknown) => ({ protocolVersion: "1.0", runId: "run", actionId,
