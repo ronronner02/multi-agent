@@ -29,6 +29,7 @@ npm run test -w packages/daemon -- \
   test/run-growth.test.ts \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
+  test/team-cancellation.test.ts \
   test/team-result.test.ts \
   test/user-settings-routes.test.ts \
   --maxWorkers=2
