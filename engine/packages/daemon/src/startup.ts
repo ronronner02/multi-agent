@@ -3157,6 +3157,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();
         return policy ? refreshPlanBinding(run.binding, policy) : run.binding;
       } });
+    // T017 (cancellation half) — the owner's cancel stops the work. Dispatch closure is the
+    // governance eligibility check that already refuses every command outside `approved`;
+    // this owner adds the two things nothing did: end the processes the run launched, and
+    // record the observation once the sweep above has seen them end.
+    const { composeCancellation } = await import("./domain/team-cancellation.js");
+    deps.teamControl!.cancellation = composeCancellation({ db, governance: teamGovernance });
   }
 
   // OPR.0.4.3.21 — daemon event-loop health instrumentation. Constructed once
