@@ -21,7 +21,7 @@ export const SEAT_UNRESOLVED = "direct_launch_seat_unresolved";
 
 export interface SeatPaneDependencies {
   rigRepo: Pick<RigRepository, "getRig">;
-  sessions: Pick<SessionRegistry, "findResumeContextByName" | "getLatestLiveSessions" | "updateBinding">;
+  sessions: Pick<SessionRegistry, "db" | "findResumeContextByName" | "getLatestLiveSessions" | "updateBinding">;
   tmux: Pick<TmuxAdapter, "createSession" | "listPanes" | "deliveryGuard">;
   /** The environment a launched seat's shell gets, exactly as `NodeLauncher` gives it. */
   sessionEnv?: Record<string, string | undefined>;
@@ -78,6 +78,14 @@ async function createSeatSession(dependencies: SeatPaneDependencies, sessionName
   if (!created.ok) throw new Error(SEAT_UNRESOLVED);
   const observed = await observeSolePane(tmux, sessionName);
   if (!observed.ok) throw new Error(SEAT_UNRESOLVED);
+  // MVP — a pane id is only unique within one tmux server's lifetime. When the last client exits,
+  // tmux stops its server, and the next server numbers its panes from `%0` again. A binding left
+  // on a dead seat therefore names the *new* seat's pane, and every reader that resolves a seat
+  // by pane id — the delivery guard's target lookup among them — finds two candidates and refuses
+  // the launch. The binding belongs to the pane that was just created, so any other node still
+  // claiming this exact pane is stale by construction and is released before this one is written.
+  sessions.db.prepare("UPDATE bindings SET tmux_pane = NULL WHERE tmux_pane = ? AND node_id <> ?")
+    .run(observed.pane, seat.node.id);
   sessions.updateBinding(seat.node.id, { attachmentType: "tmux", tmuxSession: sessionName, tmuxPane: observed.pane });
   // The seat's guard target is its binding, so the lease that opened this terminal now owns
   // the new one; without this the next input would refuse as a changed target.

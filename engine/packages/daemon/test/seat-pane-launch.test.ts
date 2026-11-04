@@ -310,6 +310,35 @@ describe("a start request launches the seat it put work on", () => {
     expect(receipts()).toHaveLength(1);
     expect(sessions()).toEqual([SEAT]);
   }, 90_000);
+
+  it("gives a reused pane id to the seat that just created it, so the next launch resolves one seat", async () => {
+    // A pane id is unique only within one tmux server's lifetime. A server whose last client
+    // exits is gone, and the next server numbers its panes from `%0` again — so a dead seat's
+    // binding names the new seat's pane. Two seats resolving to one pane makes the delivery
+    // guard's target lookup ambiguous, and the launch that opened the pane is refused. The seat
+    // that created the pane is the one it belongs to, so it takes it.
+    const first = await (await start({ goal: "First seat's work" })).json() as { runId: string; taskId: string };
+    await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
+    const firstPane = daemon.deps.sessionRegistry.getBindingForNode(nodeId)!.tmuxPane;
+    expect(firstPane).toMatch(/^%[0-9]+$/);
+    // A second seat on the same server, in its own session.
+    const rigId = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!.rigId;
+    const second = daemon.deps.rigRepo.addNode(rigId, "dev.reviewer", { role: "reviewer", runtime: "claude-code", cwd: repo });
+    daemon.deps.sessionRegistry.registerSession(second.id, "dev-reviewer@team-demo");
+    // The first seat's terminal is gone, exactly as it is when its client exits, and its
+    // binding is left naming the pane that no longer exists — which is the state a later launch
+    // has to cope with, not one it may assume away.
+    tmuxRun("kill-session", "-t", `=${SEAT}:`);
+    // The second seat's launch is what opens a fresh terminal, and it reuses the first pane id.
+    const { ensureSeatPane } = await import("../src/domain/seat-pane.js");
+    const pane = await ensureSeatPane({ rigRepo: daemon.deps.rigRepo, sessions: daemon.deps.sessionRegistry,
+      tmux: daemon.deps.tmuxAdapter, sessionEnv: {} }, "dev-reviewer@team-demo");
+    expect(pane).toBe(firstPane);
+    // One pane, one seat: the binding that names it is the seat that created it, so the delivery
+    // guard's target lookup resolves one node instead of refusing an ambiguous pair.
+    expect(daemon.db.prepare("SELECT node_id FROM bindings WHERE tmux_pane = ?").all(pane)).toEqual([{ node_id: second.id }]);
+    void first;
+  }, 90_000);
 });
 
 describe("workers.isolation: hardened", () => {
