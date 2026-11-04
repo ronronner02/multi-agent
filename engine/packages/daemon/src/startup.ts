@@ -148,7 +148,7 @@ import { WhoamiService } from "./domain/whoami-service.js";
 import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
-import { unisolatedPolicyCapability } from "./routes/team-start.js";
+import { refreshPlanBinding, unisolatedPolicyCapability } from "./routes/team-start.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
 import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
@@ -1180,7 +1180,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       : composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
           ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) })),
     // MVP slice 2 — the capability a start request approves its binding against.
-    ...(runPolicyCapability ? { readPolicyCapability: runPolicyCapability } : {}) };
+    ...(runPolicyCapability ? { readPolicyCapability: runPolicyCapability } : {}),
+    ...(unisolated && !teamControl.resolveBinding && runPolicyCapability ? { resolveBinding: run => {
+      const policy = runPolicyCapability();
+      if (!policy) throw new Error("Current policy capability is unavailable");
+      return refreshPlanBinding(run.binding, policy);
+    } } : {}) };
   // T053 — the seat capability a managed send must reuse. `createApp` builds the mailbox
   // owner when none is supplied, so this rides the deps slot rather than constructing it
   // twice: one owner, one seat table.

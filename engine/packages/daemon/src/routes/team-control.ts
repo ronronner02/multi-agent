@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
-  TEAM_CONTROL_VERSION, TeamContractError, object, parseControlRequest, parseProtocolVersion,
+  TEAM_CONTROL_VERSION, TeamContractError, object, parseControlRequest, parsePlanBinding, parseProtocolVersion,
   type TeamRun, type TeamSystemHealth,
 } from "../contracts/team-control.js";
-import type { PlanGovernance, ProviderPolicyCapability } from "../domain/plan-governance.js";
+import { hashBinding, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
 } from "../middleware/auth-bearer-token.js";
@@ -15,7 +15,7 @@ import type { SessionRegistry } from "../domain/session-registry.js";
 import type { StartupOrchestrator } from "../domain/startup-orchestrator.js";
 import { seatForTask } from "../domain/seat-pane.js";
 import { seatLifecycleService } from "./seat.js";
-import { bindingForGoal } from "./team-start.js";
+import { refreshPlanBinding } from "./team-start.js";
 
 export interface TeamControlOptions {
   credentials: TeamControlCredentials;
@@ -96,8 +96,8 @@ export function teamControlRoutes(
         throw new Error("Continuation conflict: the admitted authority or occupant changed");
       }
       governance.assertTaskContinuation(runId, taskId, body.expectedEntityVersion as number,
-        bindingForGoal({ root: run.binding.repository.root, planRef: run.binding.planRef,
-          writePaths: run.binding.writePaths, policy }), attempt.attemptId);
+        refreshPlanBinding(run.binding, policy), attempt.attemptId);
+      if (hashBinding(attempt.context.binding) !== run.bindingDigest) throw new Error("Continuation conflict: the attempt has an earlier plan binding");
     };
     assertContinuation();
     const result = await seatLifecycleService(c).continueFreshStartup(seat, assertContinuation);
@@ -157,6 +157,19 @@ export function teamControlRoutes(
     const page = options.readModel.replay(c.req.param("runId"), afterSeq, limit);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: c.req.param("runId"), ...page });
   });
+  app.post("/runs/:runId/growth", async c => {
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== c.req.param("runId")) return c.json({ code: "control_scope_denied" }, 403);
+    const run = governance.getRun(request.runId), input = object(request.payload, "growth");
+    const proposed = parsePlanBinding({ ...run.binding, writePaths: input.writePaths });
+    proposed.readPaths = [...new Set([...run.binding.readPaths, ...proposed.writePaths])];
+    if (!options.resolveBinding) return c.json({ code: "current_binding_unavailable" }, 503);
+    let binding: unknown;
+    try { binding = options.resolveBinding({ ...run, binding: proposed }); }
+    catch { return c.json({ code: "current_binding_unavailable" }, 503); }
+    const receipt = governance.proposeRunGrowth(request, c.get("controlActor"), binding);
+    return c.json(receipt, receipt.status === "denied" ? 403 : 200);
+  });
   app.get("/runs/:runId/tasks/:taskId/edit", c => {
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     return c.json(governance.taskForEdit(c.req.param("runId"), c.req.param("taskId")));
@@ -187,10 +200,19 @@ export function teamControlRoutes(
           return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503);
         }
         let binding: unknown;
-        try { binding = options.resolveBinding(governance.getRun(request.runId)); }
+        try {
+          const run = governance.getRun(request.runId), approval = action === "approvals/decide" ? governance.getApproval(request.actionId) : null;
+          binding = options.resolveBinding(approval?.action === "scope-change" && approval.payload.change === "run-growth"
+            ? { ...run, binding: parsePlanBinding(approval.payload.binding) } : run);
+        }
         catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
         receipt = action === "approvals/decide" ? governance.decideApproval(request, actor, binding)
           : governance.ownerCommand(action === "tasks/retry" ? "retry" : action, request, actor, binding);
+      }
+      if (receipt.effectMayStart && options.dispatch) {
+        const addedTasks = (receipt.value as { addedTasks: string[] }).addedTasks;
+        for (const taskId of addedTasks) void options.dispatch(request.runId, taskId).catch(error =>
+          console.warn(`team growth: launch for run=${request.runId} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
       }
       return c.json(receipt, receipt.status === "denied" ? 403 : receipt.status === "pending-execution" ? 202 : 200);
     });
