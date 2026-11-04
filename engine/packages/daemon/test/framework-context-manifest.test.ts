@@ -57,6 +57,16 @@ it("includes current read-only Lead protocol, roster and instructions on every a
   chmodSync(roster.path, 0o644); writeFileSync(roster.path, content); chmodSync(roster.path, 0o440); roster.hash = hashBytes(content);
   const second = createContextManifest(input); expect(second.generatedHash).not.toBe(first.generatedHash); expect(second.lead!.roster[0]!.mailbox).toBe("run/reassigned"); expect(first.lead!.roster[0]!.mailbox).toBe("run/backend");
 });
+// C3: the run instructions are prose the lead reads, so they may span lines. Every other lead
+// field stays an identifier or an address.
+it("projects multi-line Lead run instructions and still refuses control bytes", () => {
+  const { input } = leadFixture(), run = input.files.find(f => f.kind === "run")!;
+  const prose = "Goal: implement the modules.\n\nWrite your decomposition to lead-proposal.json.\nThe owner approves it.";
+  input.lead!.instructions = prose; rewrite(run, prose);
+  expect(readFileSync(createContextManifest(input).files.find(f => f.kind === "run")!.path, "utf8")).toBe(prose);
+  input.lead!.instructions = "bad\u0000bytes"; rewrite(run, input.lead!.instructions);
+  expect(() => createContextManifest(input)).toThrow();
+});
 it.each(["missing", "protocol", "roster", "instructions", "role"])("blocks incomplete or stale Lead activation context: %s", kind => {
   const { input } = leadFixture(); if (kind === "missing") input.files = input.files.filter(f => f.kind !== "protocol");
   else if (kind === "role") { input.lead!.roster[0]!.role = "toString" as "implementer"; const f = input.files.find(f => f.kind === "roster")!, content = JSON.stringify(input.lead!.roster); chmodSync(f.path, 0o644); writeFileSync(f.path, content); chmodSync(f.path, 0o440); f.hash = hashBytes(content); }
