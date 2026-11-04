@@ -34,6 +34,8 @@ export const MESSAGE_PARAMETERS = {
   // review reopened, so both carry the task id they name.
   "completion.reviewCreated": ["taskId"],
   "completion.reworkOpened": ["taskId"],
+  // T017 — a stop the daemon could not observe says how many attempts are still alive.
+  "workspace.stopUnresolved": ["count"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS
@@ -66,6 +68,7 @@ export const STATUS_LABEL_KEYS = {
     pending: "status.run.pending",
     approved: "status.run.approved",
     cancel_requested: "status.run.cancel_requested",
+    canceled: "status.run.canceled",
     invalidated: "status.run.invalidated",
     blocked: "status.run.blocked",
   },

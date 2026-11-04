@@ -309,5 +309,63 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (result.data.reworkTaskId) console.log(`Rework: ${result.data.reworkTaskId} was reopened.`);
     });
 
+  /**
+   * T017 — the owner's cancel, from the terminal.
+   *
+   * The daemon does the stopping: it records the intent, ends the processes this run launched
+   * and reports what it observed. So this verb prints the daemon's own outcome — `canceled`
+   * when every attempt was seen to end, `cancel_requested` with the attempts that are still
+   * alive otherwise — and never claims a stop it did not see.
+   */
+  cmd.command("cancel <run-id>")
+    .description("stop a run: record the cancellation and end the agents it launched")
+    .option("--reason <text>", "why the run is being canceled", "Owner requested cancellation from the CLI")
+    .option("--json", "print the daemon's receipt as JSON")
+    .action(async (runId: string, options: { reason: string; json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required",
+        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+        "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}`;
+      const run = await client.get<{ run?: { entityVersion: number } }>(path, { headers });
+      if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+        throw new TeamCommandError("team_run_unavailable", "The current run version could not be read.");
+      }
+      const receipt = await client.post<CancelReceipt>(`${path}/cancel`, { protocolVersion: "1.0", runId, actionId: runId,
+        expectedEntityVersion: run.data.run!.entityVersion, idempotencyKey: crypto.randomUUID(),
+        payload: { reason: options.reason } }, { headers });
+      if (receipt.status !== 200 && receipt.status !== 202) {
+        throw new TeamCommandError(receipt.data?.code ?? "team_cancel_refused",
+          receipt.data?.reason ?? receipt.data?.error ?? "The daemon refused the cancellation.");
+      }
+      const value = receipt.data.value;
+      if (options.json) { console.log(JSON.stringify(receipt.data)); return; }
+      if (value?.state === "canceled") {
+        console.log(`Canceled ${runId}.`);
+        for (const attempt of value.attempts ?? []) {
+          console.log(`  process ${attempt.processId}:${attempt.processStart} ${attempt.outcome}` +
+            `${attempt.escalated ? " (SIGKILL after the grace period)" : ""}`);
+        }
+        for (const taskId of value.canceledTasks ?? []) console.log(`  task ${taskId} canceled`);
+        console.log("  the candidate and its evidence are kept; rig team diff and rig team apply still read them");
+        return;
+      }
+      console.log(`Cancellation of ${runId} is recorded but not yet observed.`);
+      for (const attemptId of value?.unresolvedAttempts ?? []) console.log(`  still alive: ${attemptId}`);
+      if (receipt.data.reason) console.log(`  ${receipt.data.reason}`);
+      console.log("  run 'rig team cancel' again once the attempts end to record the outcome");
+    });
+
   return cmd;
+}
+
+/** The cancel route's receipt, narrowed to what this verb prints. */
+interface CancelReceipt {
+  status: "accepted" | "pending-execution" | "conflict" | "denied" | "observed"; reason: string | null;
+  code?: string; error?: string;
+  value?: { state?: string; canceledTasks?: string[]; unresolvedAttempts?: string[];
+    attempts?: Array<{ processId: number; processStart: string; outcome: string; escalated: boolean }> } | null;
 }

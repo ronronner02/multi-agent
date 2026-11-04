@@ -65,16 +65,16 @@ export function isTerminal(state: string | undefined): boolean {
 
 /**
  * Pause and Stop are run controls, but they act on the agent in front of the owner. Once its task
- * is terminal there is nothing left to pause, so both are disabled with the reason on the wrapper:
- * a disabled button swallows pointer events, and a control that silently does nothing is worse
- * than one that says why.
+ * is terminal, or the run has stopped for good, there is nothing left to pause, so both are
+ * disabled with the reason on the wrapper: a disabled button swallows pointer events, and a
+ * control that silently does nothing is worse than one that says why.
  */
 function RunControls({ task, run, available, onPause, onStop }: {
   task: TeamReviewView | undefined; run: TeamRun | undefined; available: boolean;
   onPause: (trigger: HTMLElement) => void; onStop: (trigger: HTMLElement) => void;
 }) {
   const { t } = useTranslation();
-  const finished = isTerminal(task?.queueState);
+  const finished = isTerminal(task?.queueState) || run?.state === "canceled";
   const disabled = !available || !run || finished;
   const reason = finished ? t("workspace.finished") : t("workspace.controlUnavailable");
   return <TooltipProvider delayDuration={150}>
@@ -203,7 +203,14 @@ export function WorkspaceFocus({ read, runId, attempts, available, replay, onPau
   </div>;
 }
 
-/** Pause and Stop both ask first; the question names the run and what the action will do. */
+/**
+ * Pause and Stop both ask first; the question names the run and what the action will do.
+ *
+ * A stop reports what the daemon observed, not only that it accepted the request. The cancel
+ * receipt carries the run's own outcome: `canceled` once every attempt the run recorded has
+ * ended, or `cancel_requested` naming the attempts that are still alive. Saying "requested" for
+ * a stop the daemon has already seen is the kind of quiet mismatch this dialog exists to avoid.
+ */
 export function RunControlDialog({ action, run, trigger, available, onClose }: {
   action: "pause" | "stop" | null; run: TeamRun | undefined; trigger: HTMLElement | null; available: boolean;
   onClose: () => void;
@@ -212,16 +219,19 @@ export function RunControlDialog({ action, run, trigger, available, onClose }: {
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [unresolved, setUnresolved] = useState(0);
   if (!action || !run) return null;
   const submit = async () => {
     setBusy(true);
     const payload = action === "pause" ? {} : { reason: t("workspace.stopReason") };
     try {
-      const receipt = await request<{ status: string; reason: string | null }>(
+      const receipt = await request<{ status: string; reason: string | null;
+        value?: { state?: string; unresolvedAttempts?: string[] } | null }>(
         `/runs/${encodeURIComponent(run.id)}/${action === "pause" ? "pause" : "cancel"}`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(10_000),
+        { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(30_000),
           body: JSON.stringify({ protocolVersion: "1.0", runId: run.id, actionId: run.id,
             expectedEntityVersion: run.entityVersion, idempotencyKey: crypto.randomUUID(), payload }) });
+      setUnresolved(receipt.value?.unresolvedAttempts?.length ?? 0);
       setMessage(receipt.status === "denied" ? "team.denied" : receipt.status === "conflict" ? "team.conflict"
         : receipt.status === "observed" ? "team.observed" : "team.requested");
     } catch (error) {
@@ -233,6 +243,7 @@ export function RunControlDialog({ action, run, trigger, available, onClose }: {
     trigger={trigger} onClose={onClose}>
     <p className="team-muted"><code>{run.id}</code> · {t(`status.run.${run.state}`)}</p>
     {message && <p role={["team.conflict", "web.unacknowledged", "team.denied"].includes(message) ? "alert" : "status"}>{t(message as "team.observed")}</p>}
+    {message === "team.requested" && unresolved > 0 && <p className="team-muted">{t("workspace.stopUnresolved", { count: unresolved })}</p>}
     <Button variant="outline" disabled={!available || busy || message !== null} onClick={() => void submit()}>
       {t(action === "pause" ? "workspace.pause" : "workspace.stop")}
     </Button>

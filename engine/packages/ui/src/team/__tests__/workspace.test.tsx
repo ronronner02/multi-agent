@@ -169,6 +169,33 @@ describe("focus screen", () => {
     expect(JSON.parse(mocks.request.mock.calls[0]![1].body).payload).toEqual({ reason: language.t("workspace.stopReason") });
     expect(await screen.findByText(language.t("team.requested"))).toBeTruthy();
   });
+
+  it("reports a stop the daemon observed as observed, not as requested", async () => {
+    // T017: the cancel receipt carries the run's own outcome. A stop the daemon has already
+    // seen must not be shown as still in flight — that is the mismatch this dialog prevents.
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    mocks.request.mockResolvedValue({ status: "observed", reason: null,
+      value: { state: "canceled", attempts: [{ processId: 4242, processStart: "77", outcome: "stopped", escalated: false }],
+        unresolvedAttempts: [], canceledTasks: ["T-102"] } });
+    render(<I18nextProvider i18n={language.instance}><div className="team-shell">
+      <RunControlDialog action="stop" run={run} trigger={null} available onClose={() => {}} />
+    </div></I18nextProvider>);
+    fireEvent.click(screen.getByRole("button", { name: language.t("workspace.stop") }));
+    expect(await screen.findByText(language.t("team.observed"))).toBeTruthy();
+    expect(screen.queryByText(language.t("workspace.stopUnresolved", { count: 1 }))).toBeNull();
+  });
+
+  it("names the attempts a stop could not end instead of claiming they stopped", async () => {
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    mocks.request.mockResolvedValue({ status: "pending-execution", reason: "Termination was not observed for 1 attempt(s)",
+      value: { state: "cancel_requested", unresolvedAttempts: ["attempt-1"], canceledTasks: [] } });
+    render(<I18nextProvider i18n={language.instance}><div className="team-shell">
+      <RunControlDialog action="stop" run={run} trigger={null} available onClose={() => {}} />
+    </div></I18nextProvider>);
+    fireEvent.click(screen.getByRole("button", { name: language.t("workspace.stop") }));
+    expect(await screen.findByText(language.t("team.requested"))).toBeTruthy();
+    expect(await screen.findByText(language.t("workspace.stopUnresolved", { count: 1 }))).toBeTruthy();
+  });
 });
 
 describe("workspace frame", () => {
