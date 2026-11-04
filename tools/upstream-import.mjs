@@ -161,6 +161,10 @@ const DEST = path.join(repoRoot, 'engine');
 const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'multi-agent', `openrig-${PIN.commit}.tar.gz`);
 // Application-owned files are exact entries; only a trailing slash grants a directory subtree.
 const LOCAL_ENGINE_PATHS = [
+  'packages/daemon/test/run-growth.test.ts',
+  'packages/ui/src/team/run-growth.tsx',
+  'packages/ui/src/team/__tests__/run-growth.test.tsx',
+  'demo/team/scripts/growth-demo.ts',
   'packages/daemon/src/domain/task-edit.ts',
   'packages/daemon/test/task-edit.test.ts',
   'packages/ui/src/team/task-edit/task-edit-dialog.tsx',
