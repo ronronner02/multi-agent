@@ -107,4 +107,43 @@ describe("MVP slice 2 — the owner starts team work", () => {
     expect(governance.listRuns()).toEqual([]);
     expect(db.prepare("SELECT count(*) AS count FROM queue_items").get()).toEqual({ count: 0 });
   });
+
+  /**
+   * C3 — the lead is opt-in, and a start without one is exactly the pre-C3 start.
+   *
+   * With a lead the run's first task is the lead's own: it carries the lead role and its
+   * permission vocabulary, so the launch path projects the protocol, roster and run
+   * instructions for it. A rig with no implementer seat has nobody to delegate to, which is a
+   * refusal at the start rather than a lead that can propose nothing.
+   */
+  it("starts the run with a lead task when the owner names a lead seat", async () => {
+    db.prepare(`INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES ('builder', 'rig', 'builder', 'implementer', 'claude-code', ?)`)
+      .run(directory);
+    db.prepare("INSERT INTO sessions (id, node_id, session_name) VALUES ('s-builder', 'builder', 'builder@demo')").run();
+    const response = await start({ goal: "Add a health endpoint", lead: "dev@demo", reviewerSeat: "builder@demo" });
+    expect(response.status).toBe(201);
+    const receipt = await response.json() as Record<string, string>;
+    expect(receipt).toMatchObject({ taskId: "task-1", seat: "dev@demo", leadSeat: "dev@demo" });
+    const task = governance.findTask(receipt.runId!, "task-1")!;
+    expect(task.assignment).toEqual({ taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] });
+    expect(task.permissions).toEqual(["request-assignment", "record-evaluation", "propose-acceptance", "yield"]);
+    expect(db.prepare("SELECT destination_session AS seat FROM queue_items WHERE qitem_id = ?").get(receipt.qitemId!))
+      .toEqual({ seat: "dev@demo" });
+  });
+
+  it("refuses a lead with no implementer seat, and a lead that is also the reviewer", async () => {
+    const empty = await start({ goal: "Add a health endpoint", lead: "dev@demo" });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ code: "lead_roster_empty" });
+    const sameSeat = await start({ goal: "Add a health endpoint", lead: "dev@demo", reviewerSeat: "dev@demo" });
+    expect(sameSeat.status).toBe(400);
+    expect(await sameSeat.json()).toMatchObject({ code: "lead_seat_invalid" });
+    expect(db.prepare("SELECT count(*) AS count FROM team_runs").get()).toEqual({ count: 0 });
+  });
+
+  it("keeps the pre-C3 start unchanged when no lead is named", async () => {
+    const receipt = await (await start({ goal: "Add a health endpoint" })).json() as Record<string, string>;
+    expect(receipt.leadSeat).toBeNull();
+    expect(governance.findTask(receipt.runId!, "task-1")!.assignment.role).toBe("implementer");
+  });
 });

@@ -26,6 +26,7 @@ npm run test -w packages/daemon -- \
   test/seat-pane-launch.test.ts \
   test/unisolated-start-policy.test.ts \
   test/team-start.test.ts \
+  test/team-lead.test.ts \
   test/run-growth.test.ts \
   test/review-loop.test.ts \
   test/task-completion.test.ts \

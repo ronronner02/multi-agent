@@ -1,0 +1,211 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Hono } from "hono";
+import type Database from "better-sqlite3";
+import { createDb } from "../src/db/connection.js";
+import { migrate } from "../src/db/migrate.js";
+import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { EventBus } from "../src/domain/event-bus.js";
+import { QueueRepository } from "../src/domain/queue-repository.js";
+import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
+import { leadInstructions, leadRoster, parseLeadProposal, LEAD_PROPOSAL_PATH } from "../src/domain/lead-proposal.js";
+import { teamLeadRoutes, PROPOSAL_WINDOW_MS } from "../src/routes/team-lead.js";
+import { teamControlRoutes } from "../src/routes/team-control.js";
+import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
+import type { TeamControlEnv } from "../src/middleware/auth-bearer-token.js";
+import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
+
+/**
+ * MVP slice C3 — a lead proposes implementer tasks and the owner decides them.
+ *
+ * The lead cannot admit work: it writes one file into its own candidate tree, the daemon reads
+ * it at that boundary, and the batch becomes an owner decision carrying the exact tasks. These
+ * tests drive the real route and the real governance owner against a repository on disk, so
+ * what they assert is that nothing the lead wrote reaches the run without the owner's approval.
+ */
+
+const owner = { kind: "owner", sessionId: "owner" } as const;
+const worker = { kind: "worker", sessionId: "worker" } as const;
+const peer = { incoming: { socket: { remoteAddress: "127.0.0.1" } } };
+const policy = unisolatedPolicyCapability(1);
+
+describe("C3 — the lead's decomposition is an owner decision", () => {
+  let root: string, db: Database.Database, governance: PlanGovernance, binding: PlanBinding, serial: number;
+  let app: Hono<TeamControlEnv>, proposal: unknown;
+  const dispatch = vi.fn(async () => {});
+  const command = (actionId: string, payload: unknown): ControlRequest<unknown> => ({
+    protocolVersion: "1.0", runId: "run", actionId, payload,
+    expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: `request-${++serial}`,
+  });
+  const post = (path: string, request: ControlRequest<unknown>, token = "fixture-owner") => app.request(`/runs/run/tasks/task-1/${path}`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  }, peer);
+  /** The owner decision, on the route C1 and C2 already own. */
+  const decide = (request: ControlRequest<unknown>) => app.request("/runs/run/approvals/decide", {
+    method: "POST", headers: { Authorization: "Bearer fixture-owner", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  }, peer);
+  const get = (path: string, token = "fixture-owner") => app.request(`/runs/run/tasks/task-1/${path}`,
+    { headers: { Authorization: `Bearer ${token}` } }, peer);
+  /** A proposal request, with the expiry that states the owner's decision window. */
+  const proposalRequest = (actionId: string) => command(actionId,
+    { leadProposal: { expiresAt: new Date(Date.parse("2026-11-04T00:00:00.000Z") + PROPOSAL_WINDOW_MS).toISOString() } });
+  /** A lead task on its own seat, plus two implementer seats the lead may choose from. */
+  const seat = (nodeId: string, role: string, seatName: string) => {
+    db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES (?, 'rig', ?, ?, 'claude-code', ?)")
+      .run(nodeId, nodeId, role, root);
+    db.prepare("INSERT INTO sessions (id, node_id, session_name) VALUES (?, ?, ?)").run(`s-${nodeId}`, nodeId, seatName);
+  };
+  const task = (taskId: string, seatName: string, paths: string[], dependencies: string[] = []) =>
+    ({ taskId, seat: seatName, paths, dependencies, body: `Implement ${taskId}` });
+  beforeEach(() => {
+    serial = 0; dispatch.mockClear();
+    root = mkdtempSync(join(tmpdir(), "team-lead-"));
+    execFileSync("git", ["init", "-q", root]);
+    writeFileSync(join(root, "plan.md"), "Approved goal.\n");
+    execFileSync("git", ["-C", root, "add", "plan.md"]);
+    execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
+    binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy });
+    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
+    seat("lead-node", "lead", "lead@rig"); seat("a-node", "implementer", "a@rig");
+    seat("b-node", "implementer", "b@rig"); seat("rev-node", "reviewer", "reviewer@rig");
+    const bus = new EventBus(db);
+    governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);
+    governance.createRun({ id: "run", rigId: "rig", binding, reviewerSeat: "reviewer@rig" });
+    governance.requestApproval(command("initial", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding), expiresAt: "2026-11-05T00:00:00.000Z" }), owner);
+    governance.decideApproval(command("initial", { approvalVersion: 1, decision: "approved" }), owner, binding);
+    expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig", body: "Approved goal." }), binding).status)
+      .toBe("accepted");
+    proposal = { tasks: [task("task-2", "a@rig", ["src/a.ts"]), task("task-3", "b@rig", ["src/b.ts"], ["task-2"])] };
+    // Both route groups, as the daemon mounts them: the proposal route records the decision and
+    // `approvals/decide` is the one path that acts on it.
+    app = new Hono<TeamControlEnv>();
+    app.route("/", teamLeadRoutes(governance, { credentials: { ownerToken: "fixture-owner",
+      workers: [{ token: "fixture-worker", runId: "run", sessionId: "worker" }] },
+      readPolicyCapability: () => policy,
+      runtime: { leadProposalFor: () => parseLeadProposal(proposal) } }));
+    app.route("/", teamControlRoutes(governance, { credentials: { ownerToken: "fixture-owner",
+      workers: [{ token: "fixture-worker", runId: "run", sessionId: "worker" }] },
+      readPolicyCapability: () => policy,
+      // The current binding, read the way the daemon reads it before a decision.
+      resolveBinding: run => ({ ...run.binding, planDigest: hashBytes(readFileSync(join(root, "plan.md"))) }),
+      dispatch }), []);
+  });
+  afterEach(() => { db.close(); rmSync(root, { recursive: true, force: true }); });
+
+  it("reads the lead's proposal and admits nothing until the owner approves it", async () => {
+    const read = await get("proposal");
+    expect(read.status).toBe(200);
+    expect((await read.json() as { proposal: { tasks: unknown[] } }).proposal.tasks).toHaveLength(2);
+    // The read is not an admission: the run still holds only the lead's task.
+    expect(db.prepare("SELECT count(*) AS n FROM team_queue_authority").get()).toEqual({ n: 1 });
+
+    const requested = await post("proposal", proposalRequest("proposal"));
+    expect(requested.status).toBe(200);
+    const receipt = await requested.json() as { status: string; value: { id: string; payload: { change: string; tasks: unknown[] } } };
+    expect(receipt.status).toBe("accepted");
+    expect(receipt.value.payload.change).toBe("lead-proposal");
+    expect(receipt.value.payload.tasks).toHaveLength(2);
+    // A recorded decision is still not an admission.
+    expect(db.prepare("SELECT count(*) AS n FROM team_queue_authority").get()).toEqual({ n: 1 });
+    expect(governance.findTask("run", "task-2")).toBeNull();
+  });
+
+  it("admits the approved batch through the same path a start uses, and keeps the binding", async () => {
+    const requested = await (await post("proposal", proposalRequest("proposal"))).json() as { value: { id: string; entityVersion: number } };
+    const decided = await decide(command(requested.value.id, { approvalVersion: 1, decision: "approved" }));
+    expect(decided.status).toBe(200);
+    const receipt = await decided.json() as { status: string; value: { addedTasks: string[] } };
+    expect(receipt.value.addedTasks).toEqual(["task-2", "task-3"]);
+    expect(governance.findTask("run", "task-2")?.assignment).toEqual({ taskId: "task-2", role: "implementer", paths: ["src/a.ts"], dependencies: [] });
+    expect(governance.findTask("run", "task-3")?.assignment.dependencies).toEqual(["task-2"]);
+    // A lead's decomposition stays inside the approved plan, so the binding never moved.
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", bindingDigest: hashBinding(binding) });
+    expect(db.prepare("SELECT count(*) AS n FROM team_queue_authority").get()).toEqual({ n: 3 });
+    // The route dispatches the tasks it admitted: nothing else would start them.
+    expect(dispatch.mock.calls).toEqual([["run", "task-2"], ["run", "task-3"]]);
+  });
+
+  it("records a rejection without admitting anything or changing the binding", async () => {
+    const requested = await (await post("proposal", proposalRequest("proposal"))).json() as { value: { id: string } };
+    expect((await decide(command(requested.value.id, { approvalVersion: 1, decision: "rejected" }))).status).toBe(200);
+    expect(governance.getApproval(requested.value.id)).toMatchObject({ state: "rejected", decisionActor: "owner-control" });
+    expect(governance.findTask("run", "task-2")).toBeNull();
+    expect(governance.getRun("run").bindingDigest).toBe(hashBinding(binding));
+  });
+
+  it("refuses a proposal from a worker and from a run whose task is not a lead task", async () => {
+    // The read and the decision are both owner-only: the file is worker-written content and
+    // the decision is the owner's.
+    expect((await get("proposal", "fixture-worker")).status).toBe(403);
+    expect((await post("proposal", proposalRequest("proposal"), "fixture-worker")).status).toBe(403);
+    expect(governance.listApprovals("run").some(item => item.payload.change === "lead-proposal")).toBe(false);
+  });
+
+  it("refuses a batch the approved plan does not cover, before recording anything", async () => {
+    proposal = { tasks: [task("task-2", "a@rig", ["outside/a.ts"])] };
+    expect((await post("proposal", proposalRequest("proposal"))).status).toBe(403);
+    expect(governance.listApprovals("run").filter(item => item.payload.change === "lead-proposal")).toEqual([]);
+    expect(governance.findTask("run", "task-2")).toBeNull();
+  });
+
+  it("refuses a seat that does not declare the implementer role", async () => {
+    proposal = { tasks: [task("task-2", "reviewer@rig", ["src/a.ts"])] };
+    expect((await post("proposal", proposalRequest("proposal"))).status).toBe(403);
+    expect(governance.findTask("run", "task-2")).toBeNull();
+  });
+
+  it("reports a lead that wrote nothing as a named refusal, not a crash", async () => {
+    app = teamLeadRoutes(governance, { credentials: { ownerToken: "fixture-owner" },
+      runtime: { leadProposalFor: () => { throw new Error(`The lead wrote no proposal at ${LEAD_PROPOSAL_PATH}`); } } });
+    const read = await get("proposal");
+    expect(read.status).toBe(409);
+    expect(await read.json()).toMatchObject({ code: "lead_proposal_unreadable" });
+  });
+
+  it("validates the proposal shape at the boundary that reads worker-written data", () => {
+    expect(parseLeadProposal(proposal)).toHaveLength(2);
+    expect(() => parseLeadProposal({ tasks: [] })).toThrow();
+    expect(() => parseLeadProposal({ tasks: [{ taskId: "t", seat: "a@rig", paths: [], dependencies: [], body: "x" }] })).toThrow();
+    expect(() => parseLeadProposal({ tasks: [task("t", "a@rig", ["/etc/passwd"])] })).toThrow();
+    expect(() => parseLeadProposal({ tasks: [task("t", "a@rig", ["src/../outside"])] })).toThrow();
+    expect(() => parseLeadProposal({ tasks: [task("t", "a@rig", ["src"]), task("t", "b@rig", ["src/b"])] })).toThrow();
+    expect(() => parseLeadProposal({ tasks: [{ ...task("t", "a@rig", ["src"]), extra: true }] })).toThrow();
+  });
+
+  it("builds the roster from the rig's seats whose role the approval covers", () => {
+    expect(leadRoster(db, { rigId: "rig", roles: binding.roles, excludeSeat: "lead@rig" }))
+      .toEqual([{ member: "a@rig", role: "implementer", mailbox: "a@rig" },
+        { member: "b@rig", role: "implementer", mailbox: "b@rig" },
+        { member: "reviewer@rig", role: "reviewer", mailbox: "reviewer@rig" }]);
+    expect(leadRoster(db, { rigId: "rig", roles: ["implementer"], excludeSeat: "lead@rig" }).map(member => member.member))
+      .toEqual(["a@rig", "b@rig"]);
+  });
+
+  it("states the proposal path and shape in the run instructions", () => {
+    const instructions = leadInstructions("Implement the approved modules.\nSecond line.");
+    expect(instructions).toContain(LEAD_PROPOSAL_PATH);
+    expect(instructions).toContain('"tasks"');
+    expect(instructions).toContain("The owner approves the exact batch");
+    // The goal's control characters are flattened: the manifest carries prose, not bytes.
+    expect(instructions).not.toContain("\nSecond line");
+  });
+
+  it("replays an identical decision instead of admitting a second batch", async () => {
+    const request = proposalRequest("proposal");
+    const first = await (await post("proposal", request)).json() as { value: { id: string } };
+    expect((await post("proposal", request)).status).toBe(200);
+    const decision = command(first.value.id, { approvalVersion: 1, decision: "approved" });
+    expect((await decide(decision)).status).toBe(200);
+    expect((await decide(decision)).status).toBe(200);
+    expect(db.prepare("SELECT count(*) AS n FROM team_queue_authority").get()).toEqual({ n: 3 });
+    expect(hashBytes(readFileSync(join(root, "plan.md")))).toBe(binding.planDigest);
+  });
+});
