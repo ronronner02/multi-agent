@@ -102,6 +102,36 @@ describe("tasks board grouping", () => {
     expect(screen.queryByRole("region", { name: language.t("tasks.detail") })).toBeNull();
   });
 
+  it("shows a failed attempt's recorded reason code, owner action and retry decision", async () => {
+    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // T033 — the attempt publishes the one KTD20 decision the classifier recorded with its stop.
+    const published = { tasks: [task("T-301", "failed")], attempts: [
+      { attemptId: "attempt-auth", runId: "RUN-1", taskId: "T-301", qitemId: "q-T-301", role: "implementer",
+        provider: "claude", state: "stopped", unknownReason: null, session: "builder@rig", createdAt: "2026-10-14T00:00:00.000Z",
+        usage: { activeMs: 0, inputTokens: { value: null, reason: "none" }, outputTokens: { value: null, reason: "none" },
+          costUsd: { value: null, reason: "none" } },
+        failure: { reasonCode: "agent_error.provider_auth_or_access", resumeSafe: true, retryEligible: false,
+          ownerAction: "Sign the client in or repair its provider access, then start a new task." } },
+      // A running attempt has no decision, so nothing about a failure is invented for it.
+      { attemptId: "attempt-live", runId: "RUN-1", taskId: "T-301", qitemId: "q-T-301", role: "implementer",
+        provider: "claude", state: "running", unknownReason: null, session: "builder@rig", createdAt: "2026-10-14T00:00:00.000Z",
+        usage: { activeMs: 0, inputTokens: { value: null, reason: "none" }, outputTokens: { value: null, reason: "none" },
+          costUsd: { value: null, reason: "none" } }, failure: null },
+    ] } as unknown as TeamOwnerRead;
+    render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}>
+      <TasksScreen read={published} runId="RUN-1" />
+    </I18nextProvider></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /T-301/ }));
+    const detail = screen.getByRole("region", { name: language.t("tasks.detail") });
+    expect(within(detail).getByText("agent_error.provider_auth_or_access")).toBeTruthy();
+    expect(within(detail).getByText(/Sign the client in/)).toBeTruthy();
+    expect(within(detail).getByText(language.t("tasks.failureNotRetried"))).toBeTruthy();
+    // The running attempt shows its state and no reason code at all.
+    expect(detail.querySelector('[data-reason-code]')).toBeTruthy();
+    expect(detail.querySelectorAll("[data-reason-code]")).toHaveLength(1);
+  });
+
   it("switches to the list view and filters by the shell's search query", async () => {
     const language = await show("en", "T-10");
     const board = document.querySelector(".ui-board")!;

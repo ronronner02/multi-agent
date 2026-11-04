@@ -119,6 +119,15 @@ function Detail({ read, runId, task, onClose }: { read?: TeamOwnerRead; runId: s
           <code>{attempt.attemptId}</code>
           <span>{attempt.provider}</span>
           <span className="ui-state" data-state={attempt.state}>{t(`status.attempt.${attempt.state}`)}</span>
+          {/* T033 — a failed attempt carries the one KTD20 decision the classifier recorded with
+              its stop, so the owner reads why it failed and what to do instead of inferring it.
+              An attempt still running, or one that ended cleanly, publishes no code. */}
+          {attempt.failure && <span className="ui-failure" data-reason-code={attempt.failure.reasonCode}>
+            <code>{attempt.failure.reasonCode}</code>
+            <span className="team-muted">{attempt.failure.ownerAction}</span>
+            <span className="team-muted">{attempt.failure.retryEligible
+              ? t("tasks.failureRetryable") : t("tasks.failureNotRetried")}</span>
+          </span>}
         </li>)}</ul>}
       {runId && <div className="ui-detail-actions"><TaskEditControls key={`${runId}:${task.taskId}`} runId={runId} taskId={task.taskId} /></div>}
       {/* The owner action comes before the result: a task is completed first, and its patch is

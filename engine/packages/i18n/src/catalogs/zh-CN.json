@@ -452,6 +452,8 @@
   "settings.plan": "当前计划",
   "tasks.noDependencies": "\u65e0",
   "tasks.criteriaSourceQueue": "\u8bc1\u636e\uff1a\u7531\u961f\u5217\u8bb0\u5f55",
+  "tasks.failureRetryable": "\u6b64\u6545\u969c\u5141\u8bb8\u91cd\u8bd5",
+  "tasks.failureNotRetried": "\u4e0d\u91cd\u8bd5",
   "workspace.title": "\u667a\u80fd\u4f53\u5de5\u4f5c\u533a",
   "workspace.subtitle": "\u4e13\u6ce8\u89c6\u56fe \u00b7 \u4e00\u6b21\u67e5\u770b\u4e00\u4e2a\u667a\u80fd\u4f53",
   "workspace.layout": "\u5de5\u4f5c\u533a\u5e03\u5c40",
