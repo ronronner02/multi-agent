@@ -110,6 +110,23 @@ const approve = () => { const button = screen.getByRole("button", { name: "Appro
 const confirm = () => fireEvent.click(screen.getByRole("button", { name: "Send confirmed decision" }));
 
 describe("version-bound owner decisions", () => {
+  it.each(["approved", "rejected"] as const)("permits only the replacement proposal on a suspended run: %s", async decision => {
+    const read = fixture(); read.run.state = "invalidated";
+    read.approvals[0] = { ...read.approvals[0]!, action: "scope-change",
+      payload: { change: "run-growth", binding: { ...read.run.binding, planDigest: "replacement-plan" },
+        tasks: [{ assignment: { taskId: "added-task", role: "implementer", paths: ["src/added.ts"], dependencies: [] },
+          body: "<script>not executable</script>", destinationSession: "new-seat" }] } };
+    const mounted = await mountDecisions(read);
+    fireEvent.click(screen.getByRole("button", { name: decision === "approved" ? "Approve" : "Reject", exact: true }));
+    const dialog = await screen.findByRole("dialog");
+    for (const text of ["replacement-plan", "added-task", "src/added.ts", "new-seat"]) expect(dialog.textContent).toContain(text);
+    expect(dialog.querySelector("script")).toBeNull();
+    confirm(); await waitFor(() => expect(mounted.post).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(mounted.post.mock.calls[0]![1].body as string)).toMatchObject({
+      expectedEntityVersion: read.run.entityVersion, payload: { decision, approvalVersion: 2 },
+    });
+  });
+
   it("shows exact scope as inert text, coalesces clicks, and waits for observed state", async () => {
     let resolve!: (value: Response) => void;
     const post = vi.fn((_url: string, _init: RequestInit) => new Promise<Response>(done => { resolve = done; }));
