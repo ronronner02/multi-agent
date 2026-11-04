@@ -85,6 +85,10 @@ export function teamCompletionRoutes(governance: PlanGovernance, options: {
     c.header("Cache-Control", "no-store");
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, completion: {
       taskId, role: task.assignment.role, subjectTaskId: subject, queueState: item,
+      // The queue row this task's outcome is recorded against. `tasks/outcome` keys on it, so
+      // the owner action needs it to address the task it just read the evidence for; the task
+      // id alone is the run's name for the work, not the row's identity.
+      qitemId: task.qitemId,
       taskVersion: task.entityVersion, actorSession: session, attempt: completion, openAttempts,
       blockedReason: completionBlockedReason({ queueState: item, actorSession: session, attempt: completion, openAttempts }),
       // A reviewer's completion is a review: its findings are the evidence the loop acts on, so

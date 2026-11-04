@@ -21,7 +21,7 @@ const evidence = { validated: true, manifestDigest: "sha256:" + "a".repeat(64), 
   baseIdentifier: "b".repeat(40), fileCount: 3, changedPaths: ["src/result.ts"], outsideAssignment: [], reasons: [] };
 
 const completion = (overrides: Record<string, unknown> = {}) => ({
-  taskId: "task", role: "implementer", subjectTaskId: "task", queueState: "in-progress", taskVersion: 2,
+  taskId: "task", qitemId: "qitem-1", role: "implementer", subjectTaskId: "task", queueState: "in-progress", taskVersion: 2,
   actorSession: "builder@rig", attempt: { attemptId: "attempt-1", entityVersion: 1, state: "stopped", observed: true },
   openAttempts: 0, blockedReason: null, findingsRequired: false, evidence, ...overrides,
 });
@@ -79,7 +79,9 @@ describe("rig team done", () => {
     const calls = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
     const [url, init] = calls.find(([path, request]) => request.method === "POST")!;
     expect(url).toBe("http://127.0.0.1:7433/api/team-control/runs/run-1/tasks/outcome");
-    expect(JSON.parse(String(init.body))).toMatchObject({ runId: "run-1", actionId: "task", expectedEntityVersion: 7,
+    // The outcome command addresses the task by its queue row. Sending the run's task id
+    // instead is refused as an unknown entity, so the owner action could never record anything.
+    expect(JSON.parse(String(init.body))).toMatchObject({ runId: "run-1", actionId: "qitem-1", expectedEntityVersion: 7,
       payload: { expectedTaskVersion: 2, state: "done", closureReason: "no-follow-on", actorSession: "builder@rig",
         attemptId: "attempt-1", expectedAttemptVersion: 1, evidence } });
     expect(result.lines.join("\n")).toContain("Recorded task as done.");

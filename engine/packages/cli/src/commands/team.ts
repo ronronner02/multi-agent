@@ -37,6 +37,12 @@ interface TeamTaskResult {
 /** The completion read the owner action forwards: what the daemon observed and could verify. */
 interface TaskCompletion {
   taskId: string; role: "lead" | "implementer" | "reviewer"; subjectTaskId: string;
+  /**
+   * The queue row the outcome command keys on. The completion read addresses a task by the id
+   * the run gave it (`task-1`); `tasks/outcome` addresses the same task by its durable queue
+   * row, and a request that names the task id there is refused as an unknown entity.
+   */
+  qitemId: string;
   queueState: string | null; taskVersion: number; actorSession: string | null;
   attempt: { attemptId: string; entityVersion: number; state: string; observed: boolean } | null;
   openAttempts: number; blockedReason: string | null; findingsRequired: boolean;
@@ -380,7 +386,8 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
           `${taskId} is not validated: ${completion.evidence.reasons.join("; ")}. Record it with --failed, or fix the candidate.`);
       }
       const evidence = { ...completion.evidence, ...(findings === undefined ? {} : { findings }) };
-      const body = { protocolVersion: "1.0", runId, actionId: completion.taskId,
+      // The outcome command addresses the task by its queue row, not by the id the run gave it.
+      const body = { protocolVersion: "1.0", runId, actionId: completion.qitemId,
         expectedEntityVersion: (await client.get<{ run: { entityVersion: number } }>(path, { headers })).data.run.entityVersion,
         idempotencyKey: crypto.randomUUID(),
         payload: { expectedTaskVersion: completion.taskVersion, state,
