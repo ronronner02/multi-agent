@@ -101,6 +101,27 @@ function attemptsFromEvidence(now: () => Date, evidence: ManagedWorkerHealthEvid
     checkedAt: evidence.observedAt || checkedAt(now), evidenceRef: attempt.evidenceRef,
   }]));
 }
+
+/**
+ * T033 — the health projection of an attempt, carrying the KTD20 decision the classifier
+ * recorded with its stop.
+ *
+ * This is the same read the owner's Tasks screen makes, through the governance owner, so a
+ * health light and a task card cannot disagree about why an attempt failed. An attempt still
+ * running, or one that ended cleanly, has no code and says so with `null` rather than a guess.
+ * The caller names which attempts it publishes, so this never invents a scope of its own.
+ */
+export function attemptsFromRecords(now: () => Date, records: ReadonlyArray<{
+  id: string; runId: string; provider: "claude" | "codex"; state: string;
+  failure: { reasonCode: string; resumeSafe: boolean } | null;
+}>): Record<string, TeamAttemptHealth> {
+  return Object.fromEntries(records.map(attempt => [attempt.id, {
+    attemptId: attempt.id, runId: attempt.runId, worker: null,
+    client: attempt.provider === "codex" ? "codex" as const : "claude-code" as const, state: attempt.state,
+    reasonCode: attempt.failure?.reasonCode ?? null, resumeSafe: attempt.failure?.resumeSafe ?? null,
+    checkedAt: checkedAt(now), evidenceRef: "team_attempts:" + attempt.id,
+  }]));
+}
 function validAttempts(value: unknown): value is Record<string, TeamAttemptHealth> {
   return !!value && typeof value === "object" && !Array.isArray(value)
     && Object.entries(value).every(([key, entry]) => !!entry && typeof entry === "object"

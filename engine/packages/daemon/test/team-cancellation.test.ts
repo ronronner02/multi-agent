@@ -127,7 +127,7 @@ describe("T017 — the owner's cancel stops the work", () => {
     // The sweep reads the receipt and, once the process is gone, records the attempt stopped.
     sweep = async () => {
       const { composeAttemptCompletion } = await import("../src/domain/attempt-completion.js");
-      composeAttemptCompletion({ db, governance, alive: () => live !== null, log: () => {},
+      await composeAttemptCompletion({ db, governance, alive: () => live !== null, log: () => {},
         currentBinding: () => structuredClone(binding),
         sessions: { findResumeContextByName: () => null, updateStartupStatus: () => {} } }).sweep();
     };

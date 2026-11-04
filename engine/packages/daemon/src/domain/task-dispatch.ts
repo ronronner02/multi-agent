@@ -4,6 +4,7 @@ import type { RuntimeAdapter, NodeBinding } from "./runtime-adapter.js";
 import type { StartupOrchestrator } from "./startup-orchestrator.js";
 import type { TmuxAdapter } from "../adapters/tmux.js";
 import { ensureSeatPane, seatForTask } from "./seat-pane.js";
+import { parseAttemptClassification } from "./attempt-failure.js";
 
 /**
  * MVP — the launch an owner's start produces.
@@ -62,6 +63,11 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
         ...(node.codexConfigProfile ? { codexConfigProfile: node.codexConfigProfile } : {}) };
       // A seat this dispatch serves has never launched, so it holds no saved startup context.
       // Its agent starts with the role and plan it is given, which is what the task carries.
+      // T033 — a task reopened by an eligible retry whose failure was `resume_safe: false` must
+      // not continue the poisoned conversation. The seat's saved native token is cleared before
+      // the launch, so the client starts a fresh session in the same candidate tree and keeps
+      // every file the failed attempt wrote. Nothing else about the tree changes.
+      if (resumeUnsafe(dependencies, runId, taskId)) dependencies.sessions.clearResumeToken(session.id);
       await dependencies.startupOrchestrator.startNode({ rigId: context.rigId, nodeId: node.id, sessionId: session.id,
         binding, adapter,
         plan: { runtime: adapter.runtime, cwd: node.cwd, entries: [], startup: { files: [], actions: [] },
@@ -72,4 +78,29 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       starting.delete(session.id);
     }
   };
+}
+
+/**
+ * T033 — whether the task's most recent ended attempt is one KTD20 says must not be resumed.
+ *
+ * A dispatch is about to start this seat's client, and a seat can carry a saved native token
+ * from the attempt that just failed. `resume_safe: false` is the classifier's answer that the
+ * conversation is poisoned, so the next launch has to be a fresh session on the same tree. An
+ * attempt with no classification is not unsafe by default — there is no failure to continue —
+ * so this asks the stored decision rather than guessing at one.
+ */
+function resumeUnsafe(dependencies: TaskDispatchDependencies, runId: string, taskId: string): boolean {
+  const row = dependencies.sessions.db.prepare(`
+    SELECT a.failure_json AS failureJson
+    FROM team_attempts a JOIN team_queue_authority q ON q.qitem_id = a.qitem_id
+    WHERE q.run_id = ? AND q.task_id = ? AND a.state = 'stopped'
+    ORDER BY a.rowid DESC LIMIT 1`).get(runId, taskId) as { failureJson: string | null } | undefined;
+  if (!row?.failureJson) return false;
+  try {
+    return !parseAttemptClassification(JSON.parse(row.failureJson)).resumeSafe;
+  } catch {
+    // A stored classification that disagrees with its own code is refused rather than acted on;
+    // the safe answer for a continuation is not to resume a conversation nothing vouched for.
+    return true;
+  }
 }

@@ -941,6 +941,23 @@ export class TmuxAdapter {
     }
   }
 
+  /**
+   * T033 — hold a pane whose process ends, so the end leaves evidence behind.
+   *
+   * Measured on tmux 3.6: without `remain-on-exit`, a pane's foreground process exiting
+   * destroys the pane (and a seat's only pane destroys its session), so nothing is left to
+   * read — no exit status and no output. With it, the pane stays dead and `pane_dead_status`
+   * and the last screen lines survive. A launched managed client therefore sets this before it
+   * starts, and the completion sweep reads the evidence it preserves.
+   *
+   * It is a write to a managed seat's terminal, so it goes through the same guard and lease
+   * every other input write does; the pane's own option is set, never the server's.
+   */
+  async holdPaneOnExit(paneId: string): Promise<boolean> {
+    const result = await this.guardedInput(paneId, (pane) => this.setRemainOnExitUnchecked(pane, true));
+    return result.ok;
+  }
+
   /** Seat-handover cutover: set the pane-scoped `remain-on-exit` so the pane SURVIVES (goes dead, not
    *  destroyed) when the retiree process exits — holding its scrollback for the successor's respawn.
    *  Set to `on` BEFORE the retiree is signalled to exit (else the pane is destroyed on exit and there
@@ -949,6 +966,15 @@ export class TmuxAdapter {
     const exact = exactTarget(paneTarget, "pane");
     try {
       this.assertMutationAllowed();
+      return await this.setRemainOnExitUnchecked(exact, on);
+    } catch (err) {
+      return classifyWriteError(err);
+    }
+  }
+
+  private async setRemainOnExitUnchecked(paneTarget: string, on: boolean): Promise<TmuxResult> {
+    const exact = exactTarget(paneTarget, "pane");
+    try {
       await this.run(["tmux", "set-option", "-p", "-t", exact, "remain-on-exit", on ? "on" : "off"],
         `tmux set-option -p -t ${shellQuote(exact)} remain-on-exit ${on ? "on" : "off"}`);
       return { ok: true };
@@ -1022,6 +1048,49 @@ export class TmuxAdapter {
       return output.trim() === "1";
     } catch (error) {
       return isNoServerError(error) || isPaneAbsenceError(error);
+    }
+  }
+
+  /**
+   * T033 — the exit status tmux recorded for a pane whose process ended, as one read.
+   *
+   * `pane_dead` and `pane_dead_status` are tmux's own record of a pane's foreground process
+   * ending, measured on tmux 3.6: a client that exits 7 reports `1` and `7`, and a client that
+   * is signalled reports `1` and an empty status. So `code` is null for a signal, and `dead:
+   * false` is the answer for a pane that still has a live process — never a guessed status.
+   * A pane that cannot be read at all is null: that is no evidence, not a clean exit.
+   */
+  async getPaneExit(paneId: string): Promise<{ dead: boolean; code: number | null } | null> {
+    const exact = exactTarget(paneId, "pane");
+    try {
+      const output = await this.run(["tmux", "display-message", "-p", "-t", exact, "#{pane_dead}|#{pane_dead_status}"],
+        `tmux display-message -p -t ${shellQuote(exact)} "#{pane_dead}|#{pane_dead_status}"`);
+      const [dead = "", status = ""] = output.trim().split("|");
+      if (dead !== "0" && dead !== "1") return null;
+      // An empty status is a signal and an unreadable one is unknown; neither invents a number.
+      const code = /^\d+$/.test(status.trim()) ? Number(status.trim()) : null;
+      return { dead: dead === "1", code };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * T033 — the pane's last lines, bounded, for the classifier's text fingerprints.
+   *
+   * Measured on tmux 3.6, a client that exits from the alternate screen leaves nothing behind
+   * on the primary screen, so this can legitimately be null or hold only the shell's echo. The
+   * classifier therefore treats a missing tail as no evidence rather than as a clean exit.
+   */
+  async capturePaneTail(paneId: string, lines: number): Promise<string | null> {
+    const exact = exactTarget(paneId, "pane");
+    const count = Math.max(1, Math.min(200, Math.floor(lines)));
+    try {
+      const output = await this.run(["tmux", "capture-pane", "-p", "-J", "-t", exact, "-S", `-${count}`],
+        `tmux capture-pane -p -J -t ${shellQuote(exact)} -S -${count}`);
+      return output.length === 0 ? null : output;
+    } catch {
+      return null;
     }
   }
 

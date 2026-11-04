@@ -125,60 +125,60 @@ describe("MVP — the completion path", () => {
     if (existsSync(directory)) { writable(directory); rmSync(directory, { recursive: true, force: true }); }
   });
 
-  it("admits the attempt a launch receipt names, then records it stopped when its process is gone", () => {
+  it("admits the attempt a launch receipt names, then records it stopped when its process is gone", async () => {
     receipt("attempt-1", "builder@rig", 4242);
     const owner = completion();
-    owner.sweep();
+    await owner.sweep();
     // The receipt is the observation that the client runs, and the attempt now names the task.
     expect(governance.getAttempt("attempt-1")).toMatchObject({ state: "running", qitemId: governance.findTask("run", "task")!.qitemId,
       identity: { processId: 4242, processStart: "process-start-1" } });
     // A second sweep over the same receipt records nothing twice.
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-1")?.entityVersion).toBe(1);
     // The process ends: the next sweep observes it and stops the attempt.
     alive = false;
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-1")?.state).toBe("stopped");
     // A stopped attempt is not re-observed, so a later sweep is a no-op.
     const version = governance.getAttempt("attempt-1")!.entityVersion;
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-1")?.entityVersion).toBe(version);
   });
 
-  it("puts the seat whose client ended back to never-launched, so the next dispatch starts it", () => {
+  it("puts the seat whose client ended back to never-launched, so the next dispatch starts it", async () => {
     // A `ready` seat is what tells the dispatcher "this seat already has an agent". It stays
     // true only while one runs: a seat whose client exited and keeps it would make the rework
     // dispatch and the reviewer's second round start nothing, and the task would wait forever.
     expect(seatStatus("builder@rig")).toBe("ready");
     receipt("attempt-1", "builder@rig", 4242);
     const owner = completion();
-    owner.sweep();
+    await owner.sweep();
     expect(seatStatus("builder@rig")).toBe("ready");
     alive = false;
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-1")?.state).toBe("stopped");
     expect(seatStatus("builder@rig")).toBe("pending");
   });
 
-  it("reads only receipts it has not already read, so a tick does not rescan the log", () => {
+  it("reads only receipts it has not already read, so a tick does not rescan the log", async () => {
     // A receipt for a seat with no live task is read once and not retried: the owner action
     // refuses that task by name, so repeating the refusal every second would cost the daemon
     // more the longer it runs and tell nobody anything new.
     const owner = completion();
     receipt("attempt-orphan", "nobody@rig", 4242);
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-orphan")).toBeNull();
     // A receipt appended later is still read: the sweep resumes where it stopped.
     receipt("attempt-1", "builder@rig", 4242);
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-1")?.state).toBe("running");
     expect(governance.getAttempt("attempt-orphan")).toBeNull();
   });
 
-  it("leaves a live process running, and never attaches a receipt to a seat with no single live task", () => {
+  it("leaves a live process running, and never attaches a receipt to a seat with no single live task", async () => {
     receipt("attempt-1", "builder@rig", 4242);
     const owner = completion();
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-1")?.state).toBe("running");
     // A second task on the same seat makes the seat ambiguous; its receipt stays unrecorded
     // rather than being attached to a guess.
@@ -186,7 +186,7 @@ describe("MVP — the completion path", () => {
       paths: ["src"], dependencies: [] }, outputs: [], permissions: [...roleConfiguration.implementer.permissions],
       sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Second task." }), binding);
     receipt("attempt-2", "builder@rig", 4343);
-    owner.sweep();
+    await owner.sweep();
     expect(governance.getAttempt("attempt-2")).toBeNull();
     // The first attempt keeps its own identity: the ambiguity does not disturb what was recorded.
     expect(governance.getAttempt("attempt-1")?.state).toBe("running");
@@ -195,9 +195,9 @@ describe("MVP — the completion path", () => {
   it("states the candidate's own evidence, and validates only a non-empty in-scope candidate", async () => {
     receipt("attempt-1", "builder@rig", 4242);
     const owner = completion();
-    owner.sweep();
+    await owner.sweep();
     alive = false;
-    owner.sweep();
+    await owner.sweep();
     // The launch admitted the task's candidate; nothing has been written into it yet.
     const tree = runtime.candidateFor("run", "task").root;
 
@@ -225,9 +225,9 @@ describe("MVP — the completion path", () => {
   it("starts the C2 loop from the owner action, using only the evidence the daemon computed", async () => {
     receipt("attempt-1", "builder@rig", 4242);
     const owner = completion();
-    owner.sweep();
+    await owner.sweep();
     alive = false;
-    owner.sweep();
+    await owner.sweep();
     writeFileSync(join(runtime.candidateFor("run", "task").root, "src", "result.ts"), "export const result = 42;\n");
     const read = await (await request("/api/team-control/runs/run/tasks/task/completion")).json() as {
       completion: { actorSession: string; attempt: { attemptId: string; entityVersion: number }; evidence: Record<string, unknown> } };
