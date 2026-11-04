@@ -3147,6 +3147,16 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const { composeTaskDispatch } = await import("./domain/task-dispatch.js");
     deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
       startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv });
+    // MVP — the other end of that dispatch. A direct launch's receipt names the client process
+    // the seat runs, and nothing wrote or closed the attempt from it, so a task could never be
+    // observed to finish. This owner admits the attempt when its receipt lands and records it
+    // stopped when the process it named is gone. It decides no outcome: the owner action does.
+    const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
+    deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
+      currentBinding: runId => {
+        const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();
+        return policy ? refreshPlanBinding(run.binding, policy) : run.binding;
+      } });
   }
 
   // OPR.0.4.3.21 — daemon event-loop health instrumentation. Constructed once
