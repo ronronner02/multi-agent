@@ -308,3 +308,40 @@ A task can only be completed by an owner observation, so the loop above needs tw
 - The owner action is `POST /runs/:runId/tasks/outcome` — unchanged — with the attempt, the actor session and that evidence. The CLI wraps it as `rig team done <run-id> <task-id>` (`--failed`, `--findings <path>`, `--note`), and the Web UI's Tasks screen shows the same panel with "Mark done" and "Mark failed". Neither invents evidence: the done action is refused while the daemon's own check fails, and a reviewer task needs its findings.
 - Agents cannot complete a task, and nothing in this path lets them: there is no agent-facing endpoint and no credential change. R18 still holds — an attempt that ended, or a candidate that exists, accepts nothing by itself.
 - `engine/demo/team/scripts/review-demo.ts` now proves the whole path: the implementer's client ends, the daemon observes the stop and validates the candidate, the owner records the outcome, and the C2 loop runs to approval — with no attempt or outcome recorded by hand.
+
+## Classifying a failed attempt (T033)
+Every attempt that ends gets exactly one KTD20 reason code, a `resume_safe` flag and a retry decision, recorded with the stop. One pure classifier (`engine/packages/daemon/src/domain/attempt-failure.ts`) makes that decision, and every consumer reads it instead of re-deriving eligibility: the owner retry, the Tasks screen, the health projection and the continuation that decides fresh versus resume.
+- **Where the evidence comes from.** A direct launch sets the seat pane's `remain-on-exit` before the client starts, so a client that exits leaves the pane dead instead of destroying it (measured on tmux 3.6: without that option the pane, and a seat's only pane its session, is gone, with no exit status and no output). The completion sweep reads tmux's own `pane_dead` and `pane_dead_status` once, at the moment it records the stop, plus the pane's last lines.
+- **How it decides.** A canceled run is `canceled` whatever the exit said. Otherwise a non-zero exit or a signal sends the last lines through a small set of fingerprints, each taken from output this repository already has evidence for. An exit status of 0 is a finished turn, so nothing it printed is the failure. A non-zero exit with nothing recognisable is `agent_error.unknown`. No exit record at all is no evidence, so no code is recorded — and an attempt with no code is never retried.
+- **What it never does.** It adds no attempt and no unit of budget. It never retries an unknown code. A stored classification that disagrees with its own code's eligibility is refused when it is read, so a row cannot grant a retry KTD20 does not allow.
+- **The owner retry.** `POST /runs/:runId/tasks/retry` refuses a code outside the eligible set, naming the owner action, and refuses an attempt with no classification. An eligible retry spends `maxRetries` exactly once; a second one is refused as `Retry limit exhausted`.
+- **`resume_safe: false`.** The dispatch that starts a reopened task clears the seat's saved native token first, so the next launch is a fresh native session in the same candidate tree, with every file the failed attempt wrote still there.
+- `engine/demo/team/scripts/failure-demo.ts` proves both halves with a client that really fails: a refused connection is classified, retried once, fails again, and the second retry is refused on budget; a rejected key is classified and refused at once with the owner action.
+
+| Reason code | Retry eligible | Owner action |
+| --- | --- | --- |
+| `runtime_offline` | yes | Start the runtime again, then retry the task. |
+| `daemon_recovery` | yes | The daemon restarted during the attempt; retry the task. |
+| `run_timeout` | yes | The attempt reached the run's time budget; retry the task while budget remains. |
+| `no_progress` | yes (`resume_safe: false`) | Retry with a narrower task, which starts a fresh session on the same tree. |
+| `agent_error.provider_network` | yes | The provider was unreachable; retry the task. |
+| `start_timeout` | no | The client never became ready; repair the client or the seat, then start a new task. |
+| `environment_prepare_failed` | no | The attempt's environment could not be prepared; repair it, then start a new task. |
+| `resume_rejected` | no (`resume_safe: false`) | The provider rejected the resumed session; the next attempt starts a fresh session on the same tree. |
+| `agent_blocked` | no | The agent stopped on a decision it could not make; resolve it, then start a new task. |
+| `canceled` | no | The owner canceled the run; start a new run if the work is still needed. |
+| `agent_error.provider_auth_or_access` | no | Sign the client in or repair its provider access, then start a new task. |
+| `agent_error.provider_quota` | no | The provider account is out of quota; add quota or wait for its reset, then start a new task. |
+| `agent_error.provider_rate_limit` | no | The provider is rate-limiting this account; wait for the window, then start a new task. |
+| `agent_error.provider_server_error` | no | The provider returned a server error; start a new task once its status is clear. |
+| `agent_error.provider_invalid_request` | no (`resume_safe: false`) | The provider refused the request; fix the task or its model, and the next attempt starts a fresh session on the same tree. |
+| `agent_error.model_unavailable` | no | The requested model is unavailable to this client; choose another model, then start a new task. |
+| `agent_error.context_overflow` | no (`resume_safe: false`) | The conversation outgrew the model's context; the next attempt starts a fresh session on the same tree. |
+| `agent_error.missing_config` | no | The client is missing configuration it needs; repair it, then start a new task. |
+| `agent_error.missing_executable` | no | The client executable is not on the seat's path; install it, then start a new task. |
+| `agent_error.unsupported_version` | no | The client build is not the one this daemon supports; install the supported build, then start a new task. |
+| `agent_error.process_failure` | no | The client process failed; inspect its output, then start a new task. |
+| `agent_error.unparseable_output` | no | The client's output could not be read; inspect it, then start a new task. |
+| `agent_error.unknown` | no | The daemon could not classify this failure, so it is not retried; inspect the attempt's output. |
+
+- `start_timeout` is the one code in the vocabulary this slice does not yet produce: `team_attempts` records no attempt phase, so there is no readiness state to time out against. The code and its owner action are in place for the slice that records phases.

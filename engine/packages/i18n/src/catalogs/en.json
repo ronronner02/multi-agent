@@ -452,6 +452,8 @@
   "settings.plan": "Current plan",
   "tasks.noDependencies": "None",
   "tasks.criteriaSourceQueue": "Evidence: recorded by the queue",
+  "tasks.failureRetryable": "Retry is allowed for this failure",
+  "tasks.failureNotRetried": "Not retried",
   "workspace.title": "Agent workspace",
   "workspace.subtitle": "Focus view \u00b7 one agent at a time",
   "workspace.layout": "Workspace layout",
