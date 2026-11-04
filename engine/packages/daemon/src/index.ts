@@ -379,6 +379,11 @@ export async function startServer(port?: number) {
       }
       if (!monitorsStarted) {
         monitorsStarted = true;
+        // MVP — observe the end of a direct-launched attempt. The sweep admits each launch
+        // receipt's attempt and records it stopped when the process it named is gone; it never
+        // decides an outcome, which stays the owner's action. A managed daemon composes it too,
+        // because `workers.isolation: none` is the mode a managed daemon runs this path under.
+        deps.attemptCompletion?.start();
         // P7 — lifecycle heartbeat (advances last-seen). A write failure logs and
         // continues (the render degrades to an older last-seen honestly); the
         // store guards not-stopped so a tick can never pass stopped_at.
@@ -417,6 +422,7 @@ export async function startServer(port?: number) {
       ["periodic-snapshot", () => deps.periodicSnapshotScheduler?.stop()],
       ["gateway", () => deps.gatewaySubsystem?.stop()],
       ["wake-ladder", () => wakeLadderScheduler?.stop()],
+      ["attempt-completion", () => deps.attemptCompletion?.stop()],
       ["event-loop-monitor", () => eventLoopMonitor.stop()],
       ["connections", () => Promise.all(servers.map((srv) => closeHttpServer(srv)))],
       ["recorder", async () => {
