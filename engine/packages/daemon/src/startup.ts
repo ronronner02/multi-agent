@@ -3171,8 +3171,22 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // existing behaviour.
   if (managed && unisolated) {
     const { composeTaskDispatch } = await import("./domain/task-dispatch.js");
+    // MVP — the run's live-session count and its limit, asked before a client starts. Both are
+    // read from the run's own rows and binding, so the dispatcher cannot disagree with the
+    // governance gate that enforces the same limit when the launch's receipt is registered.
+    const liveSessions = (runId: string) => (db.prepare(
+      "SELECT count(*) AS count FROM team_attempts WHERE run_id = ? AND state IN ('running', 'unknown')")
+      .get(runId) as { count: number }).count;
+    const maxSessions = (runId: string) => teamGovernance.getRun(runId).binding.limits.maxSessions;
     deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
-      startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv });
+      startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv,
+      liveSessions, maxSessions });
+    // MVP — a task admitted while the run was at its limit used to wait forever: nothing tried
+    // it again. A freed slot now starts the run's next pending task through the same dispatch,
+    // as internal scheduling over the durable queue rather than an owner verb.
+    const { composePendingDispatch } = await import("./domain/pending-dispatch.js");
+    const dispatchPending = composePendingDispatch({ db, dispatch: () => deps.teamControl?.dispatch,
+      liveSessions, maxSessions });
     // MVP — the other end of that dispatch. A direct launch's receipt names the client process
     // the seat runs, and nothing wrote or closed the attempt from it, so a task could never be
     // observed to finish. This owner admits the attempt when its receipt lands and records it
@@ -3187,6 +3201,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       paneExit: paneId => tmuxAdapter.getPaneExit(paneId),
       paneTail: (paneId, lines) => tmuxAdapter.capturePaneTail(paneId, lines),
       releasePane: paneId => tmuxAdapter.respawnPane(paneId),
+      dispatchPending,
       currentBinding: runId => {
         const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();
         return policy ? refreshPlanBinding(run.binding, policy) : run.binding;
