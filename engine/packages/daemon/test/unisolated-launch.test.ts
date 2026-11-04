@@ -182,7 +182,7 @@ describe("workers.isolation: none launches a managed worker as the current user"
       resolvePane: async () => seatPane,
       resolveAssignedTree: () => repo,
       tmuxServer: () => "fixture",
-      tmux: { sendText, sendKeys, getPanePid: vi.fn(), getPaneCommand: vi.fn(), capturePaneScreen: vi.fn() },
+      tmux: { sendText, sendKeys, getPanePid: vi.fn(async () => process.pid), getPaneCommand: vi.fn(), capturePaneScreen: vi.fn() },
     });
     vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch").mockImplementation(input => native.launch({
       ...input, client, resumeToken, model: "fixture-model", effort: "high",
@@ -191,7 +191,16 @@ describe("workers.isolation: none launches a managed worker as the current user"
     await launch();
     expect(sendText).toHaveBeenCalledTimes(1);
     const line = sendText.mock.calls[0]![1];
-    expect(line).toContain(` && exec '${executable}' '${firstFlag}'`);
+    // Claude Code is one headless turn; the pane execs the readable view of it, which starts
+    // the client. The client's own flags are unchanged and the prompt is fed on stdin.
+    const executablePart = client === "claude-code" ? "agent-turn-view.mjs" : `'${executable}'`;
+    expect(line).toContain(" && exec ");
+    expect(line).toContain(executablePart);
+    if (client === "claude-code") {
+      expect(line).toContain("'-p'");
+      expect(line).toContain("'--output-format' 'stream-json' '--verbose'");
+      expect(line).toMatch(/ < '/);
+    } else expect(line).toContain(`'${executable}' '${firstFlag}'`);
     expect(line).toContain("'--model' 'fixture-model' '--effort' 'high'");
     if (resumeToken) expect(line).toContain(`'${client === "claude-code" ? "--resume" : "resume"}' '${resumeToken}'`);
     else if (client === "claude-code") expect(line).toContain("'--session-id'");
@@ -235,9 +244,13 @@ describe("workers.isolation: none launches a managed worker as the current user"
   });
 
   it.each([
-    ["claude-code", "claude", "", false],
-    ["claude-code", "claude", "Starting...", false],
+    // A Claude Code turn has no composer to probe: a pane that is not at a gate is ready, and a
+    // turn that has already ended is a valid fast turn rather than a launch failure.
+    ["claude-code", "claude", "", true],
+    ["claude-code", "claude", "Starting...", true],
     ["claude-code", "claude.exe", readyScreen, true],
+    // The one screen a turn can also hit is a gate the owner must clear.
+    ["claude-code", "claude", "Not logged in\nRun /login", false],
     ["codex", "codex", "", false],
     ["codex", "codex", "OpenAI Codex (v0.160.0)\n\u203a Implement the task", true],
   ] as const)("checks the %s composer rather than only its PID (command=%s, case %#)", async (client, command, screen, ready) => {

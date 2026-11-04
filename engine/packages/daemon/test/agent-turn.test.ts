@@ -1,0 +1,366 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type Database from "better-sqlite3";
+import { createDb } from "../src/db/connection.js";
+import { migrate } from "../src/db/migrate.js";
+import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { EventBus } from "../src/domain/event-bus.js";
+import { QueueRepository } from "../src/domain/queue-repository.js";
+import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
+import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
+import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
+import { composePendingDispatch, pendingTasks } from "../src/domain/pending-dispatch.js";
+import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
+import { agentTurnPromptPath, continuationNote, managedTurnPrompt } from "../src/domain/agent-turn.js";
+import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
+import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
+
+/**
+ * MVP — one attempt is one headless turn.
+ *
+ * The first live run could not complete a task: the managed launch started the client
+ * interactively, so a finished agent waited at its prompt and never exited. These tests pin the
+ * three facts that make a turn work and the two continuations it creates: the command the pane
+ * runs, the slot a stopped attempt frees, and the reason a rework or a lead revision carries.
+ */
+
+const owner = { kind: "owner", sessionId: "owner-control" } as const;
+const policy = unisolatedPolicyCapability(1);
+
+/** A manifest-shaped fixture: the launcher reads only these fields. */
+function manifest(attemptId: string): ContextManifest {
+  return {
+    runId: "run", assignment: { taskId: "task-1", role: "implementer", paths: ["src/a.ts"], dependencies: [] },
+    outputs: ["src/a.ts"], permissions: [], role: "implementer", client: "claude-code",
+    binding: { policyFingerprint: "sha256:" + "b".repeat(64) } as ContextManifest["binding"],
+    root: "/context", mutableStateRoot: "/scratch",
+    frameworkRoot: "/framework", frameworkRevision: "pin", workerUid: 1000, workerGroups: [],
+    discoveryRoots: [], files: [], workerDiscoveryRoots: [], generatedHash: "sha256:" + "a".repeat(64),
+    protocolVersion: null, instructionVersions: { core: "1", charter: "1" },
+    projection: { worker: "local", attemptId, controlUid: 1000, workerGid: 1000,
+      policy: { policy_revision: 4, worker_identities: ["local"], paths: { context_root: "/context", framework_dir: "/framework" },
+        sandbox: { context: "/context", framework: "/framework" } } },
+    sameIdentity: true,
+  } as ContextManifest;
+}
+
+describe("the managed turn's command line", () => {
+  /**
+   * The pane's pid is read for the receipt's identity, so it has to be a real process: the
+   * launcher reads `/proc/<pid>/stat` for its start tick and group. The test's own pid is that
+   * process, and it is alive for the whole case.
+   */
+  const tmux = () => ({ sendText: vi.fn(async () => ({ ok: true as const })), sendKeys: vi.fn(async () => ({ ok: true as const })),
+    getPanePid: vi.fn(async () => process.pid), getPaneCommand: vi.fn(async () => "node"),
+    capturePaneScreen: vi.fn(async () => ""), getPaneExit: vi.fn(async () => ({ dead: false, code: null })) });
+  const launch = async (opts: { resumeToken?: string; continueSessionId?: string } = {}) => {
+    const terminal = tmux();
+    const launcher = new DirectWorkerLauncher({ tmux: terminal, resolvePane: async () => "%1",
+      resolveAssignedTree: () => "/tree", tmuxServer: () => "/tmp/fixture" });
+    const result = await launcher.launch({ client: "claude-code", resumeToken: opts.resumeToken,
+      ...(opts.continueSessionId ? { continueSessionId: opts.continueSessionId } : {}),
+      attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context: manifest("attempt-1") } });
+    return { result, terminal, line: terminal.sendText.mock.calls[0]?.[1] ?? "" };
+  };
+
+  it("runs one headless turn: -p, the readable view, and the prompt fed on stdin", async () => {
+    const { result, line } = await launch();
+    expect(result, JSON.stringify(result)).toMatchObject({ ok: true });
+    expect(line).toContain(" && exec ");
+    // The pane execs the view, which starts the client: the exit status stays the turn's own.
+    expect(line).toContain("agent-turn-view.mjs");
+    expect(line).toContain("'-p'");
+    expect(line).toContain("'--permission-mode' 'bypassPermissions'");
+    // Measured on the installed build: `text` prints nothing until the turn ends, and
+    // `stream-json` without `--verbose` is refused. This is the only mode that streams.
+    expect(line).toContain("'--output-format' 'stream-json' '--verbose'");
+    // A fresh attempt opens a conversation.
+    expect(line).toContain("'--session-id'");
+    expect(line).not.toContain("'--resume'");
+    // The prompt is a file on stdin, so its length and quoting never reach the shell line.
+    expect(line).toMatch(/ < '\/scratch\/turns\/attempt-1\.prompt'$/);
+  });
+
+  it("continues a conversation with --resume when the seat hands one over", async () => {
+    const { line } = await launch({ continueSessionId: "11111111-2222-3333-4444-555555555555" });
+    expect(line).toContain("'--resume' '11111111-2222-3333-4444-555555555555'");
+    expect(line).not.toContain("'--session-id'");
+  });
+
+  it("writes the turn's prompt where the launcher reads it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-turn-"));
+    try {
+      const path = agentTurnPromptPath({ ...manifest("attempt-1"), mutableStateRoot: dir } as ContextManifest);
+      expect(path).toBe(join(dir, "turns", "attempt-1.prompt"));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("states the task, its assignment and the instruction files it must read", () => {
+    const text = managedTurnPrompt({ identity: "", bundle: "", runId: "run",
+      assignment: { taskId: "task-1", role: "implementer", paths: ["src/a.ts"], dependencies: [] },
+      taskBody: "Implement the scoped module", outputs: ["src/a.ts"], permissions: ["write-assigned-tree"],
+      instructions: [{ path: "/context/core" }, { path: "/context/charter" }], continuation: null });
+    expect(text).toContain("Managed task task-1 for run run");
+    expect(text).toContain("Implement the scoped module");
+    expect(text).toContain('"paths":["src/a.ts"]');
+    expect(text).toContain("Read these files before you start work");
+    expect(text).toContain("- /context/core");
+    expect(text).toContain("- /context/charter");
+    // A plain continuation says nothing about why; the reason is the continuation's own job.
+    expect(text).not.toContain("continues your earlier attempt");
+  });
+});
+
+describe("what a continuation is told", () => {
+  let root: string, db: Database.Database, governance: PlanGovernance, binding: PlanBinding, serial = 0;
+  const command = (actionId: string, payload: unknown): ControlRequest<unknown> => ({
+    protocolVersion: "1.0", runId: "run", actionId, payload,
+    expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: `request-${++serial}`,
+  });
+  beforeEach(() => {
+    serial = 0;
+    root = mkdtempSync(join(tmpdir(), "agent-turn-continuation-"));
+    execFileSync("git", ["init", "-q", root]);
+    writeFileSync(join(root, "plan.md"), "Approved goal.\n");
+    execFileSync("git", ["-C", root, "add", "plan.md"]);
+    execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
+    binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy });
+    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
+    for (const [nodeId, role, seatName] of [["lead-node", "lead", "lead@rig"], ["a-node", "implementer", "a@rig"],
+      ["rev-node", "reviewer", "reviewer@rig"]] as const) {
+      db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES (?, 'rig', ?, ?, 'claude-code', ?)")
+        .run(nodeId, nodeId, role, root);
+      db.prepare("INSERT INTO sessions (id, node_id, session_name) VALUES (?, ?, ?)").run(`s-${nodeId}`, nodeId, seatName);
+    }
+    const bus = new EventBus(db);
+    governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);
+    governance.createRun({ id: "run", rigId: "rig", binding, reviewerSeat: "reviewer@rig" });
+    governance.requestApproval(command("initial", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding), expiresAt: "2026-11-05T00:00:00.000Z" }), owner);
+    governance.decideApproval(command("initial", { approvalVersion: 1, decision: "approved" }), owner, binding);
+  });
+  afterEach(() => { db.close(); rmSync(root, { recursive: true, force: true }); });
+
+  it("carries the reviewer's blocking findings into the implementer's rework", () => {
+    // The durable record of a round is the `review.verdict` event; nothing else stores findings.
+    const event = { type: "team.control", protocolVersion: "1.0", eventId: "e1", rigId: "rig", runId: "run",
+      taskId: "task-1", attemptId: null, entityId: "run", entityVersion: 2, action: "review.verdict",
+      payload: { taskId: "task-1", reviewerTaskId: "task-1-review-1", round: 1, verdict: "changes-required",
+        candidateDigest: null, recordedAt: "2026-11-04T00:00:00.000Z", findings: [
+          { id: "R1-1", severity: "P1", citation: "KTD8", category: "correctness", file: "src/a.ts",
+            scenario: "the exported constant keeps the stale value" },
+          // A residual never extends the loop, so it is not something to fix.
+          { id: "R1-2", severity: "P3", citation: "KTD8", category: "style", file: "src/a.ts", scenario: "naming" },
+        ] } };
+    db.prepare("INSERT INTO events (rig_id, node_id, type, payload) VALUES ('rig', 'a-node', 'team.control', ?)").run(JSON.stringify(event));
+    const note = continuationNote(db, "run", "task-1", "implementer")!;
+    expect(note).toContain("returned the work for rework");
+    expect(note).toContain("R1-1");
+    expect(note).toContain("the exported constant keeps the stale value");
+    expect(note).not.toContain("R1-2");
+    // A reviewer's own attempt is not a rework of anything.
+    expect(continuationNote(db, "run", "task-1", "reviewer")).toBeNull();
+  });
+
+  it("carries the owner's rejection reason into the lead's revision", () => {
+    expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig", body: "Approved goal." }), binding).status)
+      .toBe("accepted");
+    // The lead's own completion is the owner's action; its deliverable is the proposal.
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitemId);
+    const request = command("proposal-request", { leadProposal: { expiresAt: "2030-01-01T00:00:00.000Z" } });
+    const proposed = governance.proposeLeadTasks(request, owner, binding,
+      [{ taskId: "task-2", seat: "a@rig", paths: ["src/a.ts"], dependencies: [], body: "Implement task-2" }]);
+    expect(proposed.status).toBe("accepted");
+    const decided = governance.decideApproval(command((proposed.value as { id: string }).id, {
+      approvalVersion: 1, decision: "rejected", reason: "Split this into smaller tasks that one agent can finish." }), owner, binding);
+    expect(decided.status).toBe("accepted");
+    // The rejection is the lead's next piece of work: the task is open again and the route
+    // dispatches it, so the next attempt resumes the conversation that wrote the proposal.
+    expect(governance.queueState(qitemId)).toBe("pending");
+    expect(decided.revisionTaskId).toBe("task-1");
+    expect(decided.effectMayStart).toBe(true);
+    const note = continuationNote(db, "run", "task-1", "lead")!;
+    expect(note).toContain("The owner rejected the proposal you wrote");
+    expect(note).toContain("Split this into smaller tasks that one agent can finish.");
+    expect(note).toContain("lead-proposal.json");
+  });
+
+  it("records a rejection with no reason and still reopens the lead", () => {
+    expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig", body: "Approved goal." }), binding).status)
+      .toBe("accepted");
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitemId);
+    const proposed = governance.proposeLeadTasks(command("proposal-request", { leadProposal: { expiresAt: "2030-01-01T00:00:00.000Z" } }),
+      owner, binding, [{ taskId: "task-2", seat: "a@rig", paths: ["src/a.ts"], dependencies: [], body: "Implement task-2" }]);
+    governance.decideApproval(command((proposed.value as { id: string }).id, { approvalVersion: 1, decision: "rejected" }), owner, binding);
+    expect(governance.queueState(qitemId)).toBe("pending");
+    // With nothing said, the revision asks for a revised proposal and invents no reason.
+    const note = continuationNote(db, "run", "task-1", "lead");
+    expect(note).not.toBeNull();
+    expect(note!).toContain("The owner rejected the proposal you wrote.");
+    expect(note!).not.toContain("reason:");
+  });
+});
+
+describe("a freed slot dispatches the run's next task", () => {
+  let root: string, db: Database.Database, governance: PlanGovernance, binding: PlanBinding, serial = 0;
+  const command = (actionId: string, payload: unknown): ControlRequest<unknown> => ({
+    protocolVersion: "1.0", runId: "run", actionId, payload,
+    expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: `request-${++serial}`,
+  });
+  const admit = (taskId: string, seatName: string, dependencies: string[] = []) =>
+    governance.createTask(command(taskId, { assignment: { taskId, role: "implementer", paths: [`src/${taskId}.ts`], dependencies },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: seatName, body: `Implement ${taskId}` }), binding);
+  beforeEach(() => {
+    serial = 0;
+    root = mkdtempSync(join(tmpdir(), "pending-dispatch-"));
+    execFileSync("git", ["init", "-q", root]);
+    writeFileSync(join(root, "plan.md"), "Approved goal.\n");
+    execFileSync("git", ["-C", root, "add", "plan.md"]);
+    execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
+    // Two seats and two slots: the second task must wait for the first attempt to stop.
+    binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy });
+    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
+    for (const [nodeId, seatName] of [["a-node", "a@rig"], ["b-node", "b@rig"]] as const) {
+      db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES (?, 'rig', ?, 'implementer', 'claude-code', ?)")
+        .run(nodeId, nodeId, root);
+      db.prepare("INSERT INTO sessions (id, node_id, session_name) VALUES (?, ?, ?)").run(`s-${nodeId}`, nodeId, seatName);
+    }
+    const bus = new EventBus(db);
+    governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);
+    governance.createRun({ id: "run", rigId: "rig", binding });
+    governance.requestApproval(command("initial", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding), expiresAt: "2026-11-05T00:00:00.000Z" }), owner);
+    governance.decideApproval(command("initial", { approvalVersion: 1, decision: "approved" }), owner, binding);
+  });
+  afterEach(() => { db.close(); rmSync(root, { recursive: true, force: true }); });
+
+  const live = (runId: string) => (db.prepare("SELECT count(*) AS n FROM team_attempts WHERE run_id = ? AND state <> 'stopped'")
+    .get(runId) as { n: number }).n;
+
+  it("starts the second task only after the first attempt stops, at the run's limit", async () => {
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    // Two independent tasks on two seats: the dependency gate is not what this case is about,
+    // and the slot is. Each task names its own write path so their claims do not overlap.
+    expect(admit("task-2", "b@rig").status).toBe("accepted");
+    // Two tasks, one slot. The run's own binding allows two, so this case states the limit the
+    // scheduler is given rather than rewriting the binding a launch would also read.
+    const limit = () => 1;
+    const started: string[] = [];
+    const pending = composePendingDispatch({ db, dispatch: () => async (runId, taskId) => {
+      // A dispatch that starts nothing leaves the slot free; one that starts records the attempt
+      // the way a launch receipt would.
+      started.push(taskId);
+      const qitemId = governance.findTask(runId, taskId)!.qitemId;
+      db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+        state, usage_json, active_ms, created_at, updated_at) VALUES (?, ?, ?, 'implementer', 'claude',
+        ?, NULL, 'running', '{"activeMs":0,"inputTokens":{"value":null,"reason":"unobserved"},"outputTokens":{"value":null,"reason":"unobserved"},"costUsd":{"value":null,"reason":"unobserved"}}', 0, '2026-11-04T00:00:00.000Z', '2026-11-04T00:00:00.000Z')`)
+        .run(`attempt-${taskId}`, runId, qitemId, JSON.stringify({ nativeSessionId: taskId, tmuxServer: "/tmp/tmux", paneId: "%1",
+          processId: process.pid, processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }));
+    }, liveSessions: live, maxSessions: limit });
+    // Nothing dispatches while the run has no live attempt and no slot is used yet: the first
+    // task starts.
+    await pending("run");
+    expect(started).toEqual(["task-1"]);
+    // The slot is taken, so the second task waits — this is the bug the first live run found.
+    await pending("run");
+    expect(started, JSON.stringify({ live: live("run"), pending: pendingTasks(db, "run") })).toEqual(["task-1"]);
+    // The first attempt stops and its seat is released; the sweep asks again.
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = 'attempt-task-1'").run();
+    await pending("run");
+    expect(started).toEqual(["task-1", "task-2"]);
+  });
+
+  it("dispatches nothing for a run that is not approved", async () => {
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    expect(admit("task-2", "b@rig").status).toBe("accepted");
+    const started: string[] = [];
+    const pending = composePendingDispatch({ db, dispatch: () => async (_runId, taskId) => { started.push(taskId); },
+      liveSessions: () => 0, maxSessions: () => 2 });
+    await pending("run");
+    expect(started).toEqual(["task-1", "task-2"]);
+    // A canceled run keeps its queue as the cancel left it: dispatch closure is the gate every
+    // command that admits work already reads, and this owner reads the same one.
+    started.length = 0;
+    governance.cancelRun(command("cancel-run", { reason: "The owner stopped the run" }), owner);
+    await pending("run");
+    expect(started).toEqual([]);
+  });
+
+  it("leaves a task alone until its owner records the outcome, and resumes it after a reopen", async () => {
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    const started: string[] = [];
+    const pending = composePendingDispatch({ db, dispatch: () => async (_runId, taskId) => {
+      started.push(taskId);
+      db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+        state, usage_json, active_ms, created_at, updated_at) VALUES (?, 'run', ?, 'implementer', 'claude',
+        ?, NULL, 'running', '{"activeMs":0,"inputTokens":{"value":null,"reason":"unobserved"},"outputTokens":{"value":null,"reason":"unobserved"},"costUsd":{"value":null,"reason":"unobserved"}}', 0, '2026-11-04T00:00:00.000Z', '2026-11-04T00:00:00.000Z')`)
+        .run(`attempt-${taskId}`, governance.findTask("run", taskId)!.qitemId,
+          JSON.stringify({ nativeSessionId: taskId, tmuxServer: "/tmp/tmux", paneId: "%1", processId: process.pid,
+            processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }));
+    }, liveSessions: () => 0, maxSessions: () => 2 });
+    await pending("run");
+    expect(started).toEqual(["task-1"]);
+    // The turn ended, but the owner has not recorded the outcome. The work may be done, so a
+    // second attempt is not this scheduler's decision to make.
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = 'attempt-task-1'").run();
+    await pending("run");
+    expect(started).toEqual(["task-1"]);
+    // A completion that sends the task back for rework reopens it, and that is a new attempt.
+    // The reopen is written by the run's own rework path with its own note; this test drives
+    // the same write the review loop makes, through the governance owner that owns it.
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitemId);
+    const rework = (governance as unknown as { startRework: (...args: unknown[]) => unknown }).startRework;
+    const ctx = { run: governance.getRun("run"), register: () => {}, request: {}, now: "2026-11-04T00:00:00.000Z" };
+    // The governance owner writes the queue inside the command's own transaction; a direct
+    // call has to stand in one for the same grant to hold.
+    const result = db.transaction(() => rework.call(governance, ctx, { taskId: "task-1", reviewerTaskId: "task-1-review-1",
+      round: 1, candidateDigest: null, verdict: "changes-required", recordedAt: "2026-11-04T00:00:00.000Z",
+      findings: [{ id: "R1-1", severity: "P1", citation: "KTD8", category: "correctness", file: "src/task-1.ts",
+        scenario: "the value is stale" }] }))();
+    expect(result).toMatchObject({ effectMayStart: true });
+    expect(governance.queueState(qitemId)).toBe("pending");
+    expect(pendingTasks(db, "run")).toEqual(["task-1"]);
+    await pending("run");
+    expect(started).toEqual(["task-1", "task-1"]);
+  });
+
+  it("names only pending tasks with no live attempt", () => {    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    expect(admit("task-2", "b@rig").status).toBe("accepted");
+    expect(pendingTasks(db, "run")).toEqual(["task-1", "task-2"]);
+    db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+      state, usage_json, active_ms, created_at, updated_at) VALUES ('attempt-task-1', 'run', ?, 'implementer', 'claude',
+      ?, NULL, 'running', '{"activeMs":0,"inputTokens":{"value":null,"reason":"unobserved"},"outputTokens":{"value":null,"reason":"unobserved"},"costUsd":{"value":null,"reason":"unobserved"}}', 0, '2026-11-04T00:00:00.000Z', '2026-11-04T00:00:00.000Z')`)
+      .run(governance.findTask("run", "task-1")!.qitemId, JSON.stringify({ nativeSessionId: "task", tmuxServer: "/tmp/tmux", paneId: "%1", processId: process.pid,
+        processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }));
+    expect(pendingTasks(db, "run")).toEqual(["task-2"]);
+  });
+
+  it("asks the sweep to dispatch once it has recorded a stop", async () => {
+    const dispatchPending = vi.fn(async () => {});
+    const completion = composeAttemptCompletion({ db, governance, sessions: { findResumeContextByName: () => null,
+      updateStartupStatus: () => {} }, currentBinding: () => binding, dispatchPending, intervalMs: 60_000 });
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    // An attempt the sweep will observe gone: its identity names no live process.
+    db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+      state, usage_json, active_ms, created_at, updated_at) VALUES ('attempt-gone', 'run', ?, 'implementer', 'claude',
+      ?, NULL, 'running', '{"activeMs":0,"inputTokens":{"value":null,"reason":"unobserved"},"outputTokens":{"value":null,"reason":"unobserved"},"costUsd":{"value":null,"reason":"unobserved"}}',
+      0, '2026-11-04T00:00:00.000Z', '2026-11-04T00:00:00.000Z')`)
+      .run(qitemId, JSON.stringify({ nativeSessionId: "gone", tmuxServer: "/tmp/tmux", paneId: "%1", processId: 999_999_999,
+        processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }));
+    await completion.sweep();
+    expect(governance.getAttempt("attempt-gone")?.state).toBe("stopped");
+    expect(dispatchPending).toHaveBeenCalledWith("run");
+    completion.stop();
+  });
+});
