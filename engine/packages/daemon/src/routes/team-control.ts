@@ -1,8 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
   TEAM_CONTROL_VERSION, TeamContractError, object, parseControlRequest, parsePlanBinding, parseProtocolVersion,
-  type TeamRun, type TeamSystemHealth,
+  type ControlActor, type ControlRequest, type TeamRun, type TeamSystemHealth,
 } from "../contracts/team-control.js";
 import { hashBinding, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import {
@@ -11,6 +11,7 @@ import {
 import { readSystemHealthBounded } from "../domain/system-health.js";
 import { ScopeExtensionError } from "../domain/scope-extension.js";
 import type { TeamReadModel } from "../team-control-surface.js";
+import type { Cancellation } from "../domain/team-cancellation.js";
 import type { SessionRegistry } from "../domain/session-registry.js";
 import type { StartupOrchestrator } from "../domain/startup-orchestrator.js";
 import { seatForTask } from "../domain/seat-pane.js";
@@ -35,6 +36,14 @@ export interface TeamControlOptions {
    * `workers.isolation: none`, where nothing else ever launches the seat.
    */
   dispatch?: (runId: string, taskId: string) => Promise<void>;
+  /**
+   * T017 (cancellation half) — what turns the owner's cancel into a stopped run.
+   *
+   * `cancelRun` records the intent; this ends the processes the run launched and records the
+   * observation, so the response says whether the stop was seen rather than only that it was
+   * requested. Absent (a daemon composed without it) keeps the intent-only behaviour.
+   */
+  cancellation?: Cancellation;
 }
 
 export function teamControlRoutes(
@@ -191,9 +200,15 @@ export function teamControlRoutes(
         return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
       }
       const actor = c.get("controlActor");
+      if (action === "cancel") {
+        // T017 — the owner's cancel stops the work, not only records that it was asked for.
+        // The intent is written first and durably; only then are this run's own client
+        // processes signalled, and the receipt reports what was observed. Without a composed
+        // cancellation owner the intent-only command runs, as it did before this slice.
+        return cancelRun(c, governance, options.cancellation, request, actor);
+      }
       let receipt;
       if (action === "approvals/request") receipt = governance.requestApproval(request, actor);
-      else if (action === "cancel") receipt = governance.cancelRun(request, actor);
       else if (action === "tasks/outcome") receipt = governance.recordTaskOutcome(request, actor);
       else {
         if (!options.resolveBinding) {
@@ -235,4 +250,30 @@ export function teamControlRoutes(
     return c.json({ code: "control_persistence_failed", error: "The control action was not acknowledged." }, 500);
   });
   return app;
+}
+
+/**
+ * T017 — the owner's cancel, as the route answers it.
+ *
+ * Three steps in one request, in this order and no other: the intent is recorded, the
+ * processes this run launched are ended, and the observation is recorded. A refusal at the
+ * first step is the route's answer unchanged (403); after it, the answer is `observed` with
+ * the run's own outcome, or `pending-execution` naming what is still alive. The status code
+ * follows the receipt the way every other action's does.
+ */
+async function cancelRun(c: Context<TeamControlEnv>, governance: PlanGovernance, cancellation: Cancellation | undefined,
+  request: ControlRequest<unknown>, actor: ControlActor) {
+  const intent = cancellation ? cancellation.request(request.runId, request, actor) : governance.cancelRun(request, actor);
+  // A denied intent is the answer: nothing was signalled, so there is nothing to observe.
+  if (intent.status === "denied") return c.json(intent, 403);
+  if (!cancellation) return c.json(intent, intent.status === "pending-execution" ? 202 : 200);
+  const stopped = await cancellation.stop(request.runId, actor);
+  // The stop's own observation replaces the intent's placeholder reason: `canceled` says the
+  // work ended, and `cancel_requested` says what is still holding it open. The version is the
+  // run's as it stands now, because the observation is a second write on top of the intent.
+  const receipt = { ...intent, entityVersion: governance.getRun(request.runId).entityVersion,
+    status: stopped.state === "canceled" ? "observed" as const : "pending-execution" as const,
+    value: { state: stopped.state, attempts: stopped.attempts, unresolvedAttempts: stopped.unresolvedAttempts,
+      canceledTasks: stopped.canceledTasks }, reason: stopped.reason };
+  return c.json(receipt, stopped.state === "canceled" ? 200 : 202);
 }

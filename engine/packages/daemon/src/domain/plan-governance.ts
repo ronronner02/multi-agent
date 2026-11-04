@@ -579,11 +579,75 @@ export class PlanGovernance {
   cancelRun(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
     return this.command("run.cancel-requested", raw, actorIdentity(actor, true), (ctx) => {
       const reason = text(object(ctx.request.payload, "cancellation").reason, "cancellation.reason");
+      // A canceled run is already at rest: its attempts ended and its tasks closed, so a second
+      // request would reopen nothing and could only rewrite the recorded outcome.
+      if (ctx.run.state === "canceled") return deny("Run is already canceled");
       ctx.run.state = "cancel_requested";
       ctx.run.stateReason = reason;
       this.invalidateUnused(ctx);
       return { status: "pending-execution", value: { state: "cancel_requested" }, reason: "Termination has not been observed" };
     });
+  }
+
+  /**
+   * T017 (cancellation half) — record that the cancellation came to rest, or say what did not.
+   *
+   * `cancelRun` records the owner's intent and says in its own reason that termination has not
+   * been observed. This is the observation: once every attempt the run recorded has ended and no
+   * launch is outstanding, the run is `canceled` and every task still open is closed with it.
+   *
+   * Nothing is deleted. The candidate trees, the attempts and the evidence stay exactly as they
+   * were, so a canceled run's work is still reviewable and `rig team apply` still reads it — the
+   * owner asked for the work to stop, not for the record of it to disappear.
+   *
+   * While anything is unresolved the run stays `cancel_requested` and this says which attempts
+   * are still alive, so the owner sees an outcome that was not observed instead of a stop that
+   * was assumed.
+   */
+  observeCancellation(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
+    return this.command("run.cancel-observed", raw, actorIdentity(actor, true), (ctx) => {
+      if (ctx.run.state !== "cancel_requested") return deny(`Run is not awaiting cancellation (${ctx.run.state})`);
+      const unresolved = this.unresolvedAttempts(ctx.run.id);
+      if (unresolved.length) {
+        return { status: "pending-execution", value: { state: "cancel_requested", unresolvedAttempts: unresolved },
+          reason: `Termination was not observed for ${unresolved.length} attempt(s): ${unresolved.join(", ")}` };
+      }
+      ctx.run.state = "canceled";
+      const canceled = this.cancelOpenTasks(ctx);
+      return { status: "observed", value: { state: "canceled", canceledTasks: canceled, reason: ctx.run.stateReason } };
+    });
+  }
+
+  /** The attempts of one run that no observation has ended, as the ids a reader can act on. */
+  private unresolvedAttempts(runId: string): string[] {
+    const rows = this.db.prepare("SELECT id FROM team_attempts WHERE run_id = ? AND state IN ('running', 'unknown') ORDER BY rowid")
+      .all(runId) as Array<{ id: string }>;
+    return [...rows.map(row => row.id),
+      ...this.nativeLaunchIntents(runId).filter(intent => intent.state === "admitted").map(intent => intent.attemptId)];
+  }
+
+  /**
+   * Close every task of a canceled run that is still open.
+   *
+   * A task that already reached a terminal state keeps it: a candidate the owner accepted is
+   * still accepted. `canceled` is the queue's own terminal state, written through the same
+   * update the rework path uses, so the transition log and the dependency gate see it.
+   */
+  private cancelOpenTasks(ctx: CommandContext): string[] {
+    const rows = this.db.prepare("SELECT qitem_id AS qitemId FROM team_queue_authority WHERE run_id = ? ORDER BY task_id")
+      .all(ctx.run.id) as Array<{ qitemId: string }>;
+    const canceled: string[] = [];
+    for (const row of rows) {
+      const item = this.queue.getById(row.qitemId);
+      if (!item || !["pending", "in-progress", "blocked"].includes(item.state)) continue;
+      const updated = withQueueWrite(this.db, { operation: "update", qitemId: row.qitemId }, () => this.queue.updateWithinTransaction({
+        qitemId: row.qitemId, actorSession: ctx.run.id, state: "canceled",
+        transitionNote: "Run canceled; the owner observed every attempt end",
+      }));
+      for (const event of updated.persistedEvents) ctx.register(event);
+      canceled.push(this.getTask(row.qitemId)!.assignment.taskId);
+    }
+    return canceled;
   }
 
   ownerCommand(operation: TeamOwnerCommand, raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
