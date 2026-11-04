@@ -36,7 +36,7 @@ export type JsonObject = { [key: string]: JsonValue };
 export type ApprovalKind = "orchestrator" | "native";
 export type ApprovalAction = "implementation" | "commit" | "push" | "pr-create" | "merge" | "release" | "deploy" | "scope-change" | "limit-increase" | "native-tool" | "scope-extension";
 export type ApprovalState = "pending" | "approved" | "rejected" | "expired" | "invalidated";
-export type TeamRunState = "pending" | "approved" | "cancel_requested" | "invalidated" | "blocked";
+export type TeamRunState = "pending" | "approved" | "cancel_requested" | "canceled" | "invalidated" | "blocked";
 export type AttemptState = "running" | "stopped" | "unknown";
 export type TeamOwnerCommand = "pause" | "resume" | "retry";
 
