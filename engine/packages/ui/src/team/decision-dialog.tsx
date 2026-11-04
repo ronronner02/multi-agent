@@ -39,6 +39,10 @@ export function DecisionDialog({ approval, run, decision, trigger, available, bu
   ] as const;
   return <OwnerDialog title={t("team.confirm")} description={t(decision === "approved" ? "action.approve" : "action.reject")} trigger={trigger} onClose={onClose}>
     <dl className="team-detail-facts">{fields.map(([label, item]) => <div key={label}><dt>{t(label)}</dt><dd><code>{value(item)}</code></dd></div>)}</dl>
+    {approval.action === "scope-change" && approval.payload.change === "run-growth" && <>
+      <h3>{t("web.binding")}</h3><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(approval.payload.binding, null, 2)}</pre>
+      <h3>{t("edit.addTask")}</h3><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(approval.payload.tasks, null, 2)}</pre>
+    </>}
     {message && <p role={["team.requested", "team.observed", "web.otherDecision"].includes(message) ? "status" : "alert"}>{t(message)}</p>}
     {reason && <p role="alert">{reason}</p>}
     {!available && !["team.observed", "web.otherDecision"].includes(message) && <p role="alert">{t("web.confirmAgain")}</p>}

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { LayoutGrid, List as ListIcon, Plus } from "lucide-react";
 import { Button } from "../components/ui/button.js";
 import { Card } from "../components/ui/card.js";
+import { RunGrowthForm } from "./run-growth.js";
 import { NewTaskForm } from "./new-task.js";
 import { ResultPanel } from "./result-panel.js";
 import { TaskEditControls } from "./task-edit/task-edit-dialog.js";
@@ -129,6 +130,7 @@ export function TasksScreen({ read, runId, query }: { read?: TeamOwnerRead; runI
   const [view, setView] = useState<"board" | "list">("board");
   const [selected, setSelected] = useState<string>();
   const [showNew, setShowNew] = useState(false);
+  const [showGrowth, setShowGrowth] = useState(false);
   const needle = (query ?? "").toLowerCase();
   const tasks = (read?.tasks ?? []).filter(task => !needle || task.taskId.toLowerCase().includes(needle));
   const task = tasks.find(item => item.qitemId === selected);
@@ -142,10 +144,12 @@ export function TasksScreen({ read, runId, query }: { read?: TeamOwnerRead; runI
           <button type="button" aria-pressed={view === "board"} onClick={() => setView("board")}><LayoutGrid aria-hidden="true" />{t("tasks.board")}</button>
           <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}><ListIcon aria-hidden="true" />{t("tasks.list")}</button>
         </div>
+        <Button variant="outline" onClick={() => setShowGrowth(value => !value)} disabled={!runId || !read?.tasks.length}>{t("edit.addTask")}</Button>
         <Button className="ui-primary" onClick={() => setShowNew(value => !value)} disabled={!runId}><Plus aria-hidden="true" />{t("web.newTask")}</Button>
       </div>
     </header>
     {showNew && <NewTaskForm />}
+    {showGrowth && read?.tasks[0] && <RunGrowthForm key={runId} runId={runId} anchorTaskId={read.tasks[0].taskId} />}
     <div className={"ui-tasks-body" + (task ? "" : " ui-tasks-body-solo")}>
       <div className="ui-tasks-main">
         {view === "board" ? <Board groups={groupTasks(tasks)} selected={selected} onSelect={setSelected} />

@@ -38,7 +38,8 @@ export function DecisionCard({ read, available, now, refresh, onOpenSession }: {
   }, [available, paired, read, t]);
   const pending = read?.approvals.filter(item => item.state === "pending");
   const enabled = (item: TeamApproval) => available && paired && !!read && item.runId === read.run.id
-    && item.bindingDigest === read.run.bindingDigest && !["invalidated", "cancel_requested"].includes(read.run.state)
+    && item.bindingDigest === read.run.bindingDigest && read.run.state !== "cancel_requested"
+    && (read.run.state !== "invalidated" || item.action === "scope-change" && item.payload.change === "run-growth")
     && item.state === "pending" && Date.parse(item.expiresAt) > now;
   const current = (entry: Decision) => enabled(entry.approval) && !!read && (read.run.entityVersion === entry.run.entityVersion || entry.message === "web.unacknowledged")
     && read.run.binding.planDigest === entry.run.binding.planDigest && read.approvals.some(item => item.id === entry.approval.id
