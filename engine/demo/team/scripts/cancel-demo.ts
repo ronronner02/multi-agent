@@ -47,15 +47,18 @@ for (const args of [["init", "-q"], ["config", "user.name", "Demo"], ["config", 
   execFileSync("git", ["-C", repository, ...args], { stdio: "ignore" });
 }
 const { createDaemon } = await import("../../../packages/daemon/src/startup.js");
-const stub = new URL("../../../packages/daemon/dist/adapters/stub-runner.js", import.meta.url).pathname;
+const idle = new URL("./idle-client.mjs", import.meta.url).pathname;
 const resistant = new URL("./resistant-client.mjs", import.meta.url).pathname;
-/** Which client the next launch starts: the ordinary stub, or the one that ignores SIGTERM. */
-let client = stub;
+/**
+ * Which client the next launch starts: one that holds the pane until signalled, or one that
+ * ignores SIGTERM. A managed agent is a turn that ends by itself, so it has nothing to cancel;
+ * this demo is about a process that is still working when the owner asks for it.
+ */
+let client = idle;
 const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMode: true, workersIsolation: "none",
   teamControl: { credentials: { ownerToken } },
   cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
-  directLaunchCommand: facts => [process.execPath, client, "--session-name", facts.taskId,
-    "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"],
+  directLaunchCommand: () => [process.execPath, client],
 });
 async function api(path: string, payload?: unknown) {
   const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control" + path, {

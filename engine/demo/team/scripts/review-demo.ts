@@ -45,7 +45,7 @@ const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMod
   teamControl: { credentials: { ownerToken } },
   cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
   directLaunchCommand: facts => [process.execPath, stub, "--session-name", facts.taskId,
-    "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"],
+    "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor", "--turn"],
 });
 async function api(path: string, payload?: unknown) {
   const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control" + path, {
@@ -124,7 +124,8 @@ try {
     const qitemId = governance.findTask(runId, taskId)!.qitemId;
     const recorded = () => (daemon.db.prepare("SELECT count(*) AS n FROM team_attempts WHERE qitem_id = ?")
       .get(qitemId) as { n: number }).n;
-    tmux("send-keys", "-t", paneOf(seat), "C-c");
+    // A stub turn ends by itself now, so nothing is signalled into the pane: the demo waits
+    // for the process to end exactly as the daemon does.
     const deadline = Date.now() + 30_000;
     for (;;) {
       if (recorded() === attempts) {
@@ -186,8 +187,10 @@ try {
     assert.equal(attempts().length, count, `The daemon's sweep must admit ${count} attempt(s) from the launch receipts`);
   };
   await waitForAttempts(1);
-  assert.equal(attempts()[0]!.state, "running", "the observed client must be recorded running");
-  console.log(`Attempt ${attempts()[0]!.id} admitted from the launch receipt and recorded running.`);
+  // The agent is one headless turn: it reads its prompt, works and exits by itself. The demo's
+  // own edit below is the work that turn produces, and the daemon observes the turn end exactly
+  // as it observes a real client's exit.
+  console.log(`Attempt ${attempts()[0]!.id} admitted from the launch receipt; the turn runs and ends.`);
 
   console.log("==> The implementer finishes its candidate; the daemon observes the attempt stop");
   writeFileSync(join(tree, "src", "a.ts"), "export const a = 1; // round one\n");

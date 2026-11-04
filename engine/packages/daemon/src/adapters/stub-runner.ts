@@ -33,6 +33,15 @@ export interface StubRunnerArgs {
   launchId: string;
   posture: "floor" | "full_bypass" | "auto";
   resumeToken?: string;
+  /**
+   * MVP — a stub turn, not an idling stub session.
+   *
+   * The demos stand in for a managed agent, and a managed Claude agent is now one headless
+   * turn: it reads its prompt, works and exits. A stub that idled forever would prove the
+   * opposite of what the demos exist to show, so `--turn` makes it read stdin, say what it
+   * read and end.
+   */
+  turn?: boolean;
 }
 
 /** Parse the runner argv (the flags buildStubRunnerCommand emits). Pure. */
@@ -49,7 +58,7 @@ export function parseStubRunnerArgs(argv: string[]): StubRunnerArgs {
   if (!cwd) throw new Error("stub-runner: --cwd is required");
   if (!launchId) throw new Error("stub-runner: --launch-id is required");
   const posture = postureRaw === "full_bypass" ? "full_bypass" : "floor";
-  return { sessionName, cwd, launchId, posture, resumeToken: get("--session") };
+  return { sessionName, cwd, launchId, posture, resumeToken: get("--session"), turn: argv.includes("--turn") };
 }
 
 function writeSidecar(cwd: string, state: StubRunnerState): void {
@@ -277,6 +286,18 @@ export function resolveStubActivityEndpoint(env: NodeJS.ProcessEnv): { baseUrl: 
  *  escalation). MUST stay byte-identical to the literal in precompact-hook.mjs. */
 export const STUB_CLOCK_ANNOUNCEMENT = "OPENRIG_TEST_CLOCK_NOW active — timestamps are injected";
 
+/** Read the turn's prompt from stdin, bounded, without waiting forever on an open pipe. */
+function readStubTurnPrompt(): string {
+  try {
+    // The daemon feeds the prompt file on stdin and closes it, so this returns at once. A
+    // terminal-attached stub has no piped stdin, and reading it would block the seat, so only
+    // a file descriptor that is a pipe or a regular file is read.
+    const stat = nodeFs.fstatSync(0);
+    if (!stat.isFIFO() && !stat.isFile()) return "";
+    return nodeFs.readFileSync(0, "utf-8").slice(0, 4_096);
+  } catch { return ""; }
+}
+
 export async function runStubRunner(args: StubRunnerArgs): Promise<void> {
   // PRD §5 (no wall-clock in the stub's OWN behavior): the runner's own stamps honor
   // the same A3-R3 injectable clock the compaction assets use — OPENRIG_TEST_CLOCK_NOW
@@ -374,6 +395,19 @@ export async function runStubRunner(args: StubRunnerArgs): Promise<void> {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(`${STUB_RUNNER_ERROR_MARKER} script execution failed: ${(err as Error).message}`);
+    if (args.turn) { process.exitCode = 1; return; }
+  }
+
+  // MVP — a stub turn reads the prompt it was given and ends, exactly as a managed headless
+  // client does: the pane's exit status is the turn's own, and the completion sweep sees the
+  // process end. The first line of the prompt is reported so a demo can show it was delivered.
+  if (args.turn) {
+    const prompt = readStubTurnPrompt();
+    // eslint-disable-next-line no-console
+    console.log(`[stub] turn ${args.launchId}: ${prompt.split("\n").find(line => line.trim()) ?? "(no prompt)"}`);
+    // eslint-disable-next-line no-console
+    console.log(STUB_RUNNER_EXIT_MARKER);
+    return;
   }
 
   // Keep the Node event loop alive so the process IDLES as the pane's live
