@@ -127,6 +127,31 @@ export interface RetryRecord {
 }
 
 /**
+ * MVP slice C2 — one review round's verdict from the run's own review task.
+ *
+ * The full review ledger (`recordReview` above) binds a round to a candidate identity, a
+ * delta packet and the convergence gate; that is the review *protocol*. The MVP loop is
+ * bounded by the run's own `maxReviewRounds` counter instead, so it records the same facts
+ * it can actually derive: which implementer task was reviewed, by which reviewer task, in
+ * which round, and what the reviewer found. Findings use the same normalization, so a P0/P1
+ * without a failing scenario is refused here too.
+ *
+ * `candidateDigest` is the tree the reviewer was mounted on, when the run recorded one.
+ * `null` says "this round did not record a tree digest" rather than inventing one.
+ */
+export interface ReviewVerdictRecord {
+  runId: string;
+  /** The implementer task this verdict is about. */
+  taskId: string;
+  reviewerTaskId: string;
+  round: number;
+  candidateDigest: string | null;
+  verdict: "approved" | "changes-required";
+  findings: ReviewFinding[];
+  recordedAt: string;
+}
+
+/**
  * Integrated acceptance for one candidate (R18/AE10).
  *
  * Recorded rather than handed to a verdict function, so it survives restart and a
@@ -163,6 +188,14 @@ export interface ReviewState {
   previousOpenP0P1: number;
   /** Classes open earlier and absent from the following round. */
   closedP0P1: string[];
+  /**
+   * MVP slice C2 — the run's own review rounds for this task, in round order.
+   *
+   * Separate from `rounds`, which folds the review *protocol*'s candidate-bound records. A
+   * run that uses the MVP loop records verdicts here instead, and `openP0P1` above counts
+   * this task's open P0/P1 from whichever of the two last spoke.
+   */
+  verdicts: ReviewVerdictRecord[];
 }
 
 export type ProgressGate =
@@ -402,7 +435,8 @@ export type Entry =
   | { kind: "candidate"; identity: CandidateIdentity }
   | { kind: "review"; record: ReviewRecord }
   | { kind: "retry"; record: RetryRecord }
-  | { kind: "acceptance"; record: AcceptanceRecord };
+  | { kind: "acceptance"; record: AcceptanceRecord }
+  | { kind: "verdict"; record: ReviewVerdictRecord };
 
 /**
  * Fold the durable log for one task.
@@ -414,6 +448,7 @@ export type Entry =
 export function foldReviewState(taskId: string, entries: ReadonlyArray<Entry>): ReviewState {
   const rounds: Array<{ round: number; manifestDigest: string; findings: ReviewFinding[];
     recordedAt: string; reportDigest: string | null }> = [];
+  const verdicts: ReviewVerdictRecord[] = [];
   const retries: RetryRecord[] = [];
   let acceptance: AcceptanceRecord | null = null;
   let currentManifestDigest: string | null = null;
@@ -425,11 +460,13 @@ export function foldReviewState(taskId: string, entries: ReadonlyArray<Entry>): 
       currentManifestDigest = entry.identity.manifestDigest;
     } else if (entry.kind === "retry") retries.push(entry.record);
     else if (entry.kind === "acceptance") acceptance = entry.record;
+    else if (entry.kind === "verdict") verdicts.push(entry.record);
     else rounds.push({ round: entry.record.round, manifestDigest: entry.record.candidate.manifestDigest,
       findings: entry.record.findings, recordedAt: entry.record.recordedAt,
       reportDigest: entry.record.reportDigest ?? null });
   }
   rounds.sort((left, right) => left.round - right.round);
+  verdicts.sort((left, right) => left.round - right.round);
   const latest = rounds.at(-1);
   const earlier = rounds.at(-2);
   const closed = new Set<string>();
@@ -446,9 +483,13 @@ export function foldReviewState(taskId: string, entries: ReadonlyArray<Entry>): 
     const elapsed = Date.parse(next.recordedAt) - Date.parse(round.recordedAt);
     return Number.isFinite(elapsed) && elapsed >= 0 ? [elapsed] : [];
   });
-  return { taskId, rounds, acceptance, currentManifestDigest, retries,
+  // The MVP loop's verdicts carry findings but no candidate identity, so they fold into
+  // the open count here rather than into `rounds`; a task that recorded both keeps the
+  // protocol's own answer, which is the stricter one.
+  const latestVerdict = verdicts.at(-1);
+  return { taskId, rounds, acceptance, currentManifestDigest, retries, verdicts,
     longestRoundMs: intervals.length ? Math.max(...intervals) : null,
-    openP0P1: latest ? openClasses(latest.findings).length : 0,
+    openP0P1: latest ? openClasses(latest.findings).length : latestVerdict ? openClasses(latestVerdict.findings).length : 0,
     previousOpenP0P1: earlier ? openClasses(earlier.findings).length : 0,
     closedP0P1: [...closed].sort() };
 }
@@ -696,7 +737,7 @@ export class ReviewEvidenceLedger {
   state(runId: string, taskId: string): ReviewState {
     const rows = this.deps.db.prepare(`SELECT json_extract(payload, '$.action') AS action, payload FROM events
       WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
-        AND json_extract(payload, '$.action') IN ('review.candidate', 'review.rework', 'review.recorded', 'review.retry', 'review.acceptance') ORDER BY seq`)
+        AND json_extract(payload, '$.action') IN ('review.candidate', 'review.rework', 'review.recorded', 'review.retry', 'review.acceptance', 'review.verdict') ORDER BY seq`)
       .all(runId, taskId) as Array<{ action: string; payload: string }>;
     const entries: Entry[] = [];
     for (const row of rows) {
@@ -704,6 +745,7 @@ export class ReviewEvidenceLedger {
       if (row.action === "review.recorded") entries.push({ kind: "review", record: payload as unknown as ReviewRecord });
       else if (row.action === "review.retry") entries.push({ kind: "retry", record: payload as unknown as RetryRecord });
       else if (row.action === "review.acceptance") entries.push({ kind: "acceptance", record: payload as unknown as AcceptanceRecord });
+      else if (row.action === "review.verdict") entries.push({ kind: "verdict", record: payload as unknown as ReviewVerdictRecord });
       else entries.push({ kind: "candidate", identity: payload as unknown as CandidateIdentity });
     }
     return foldReviewState(taskId, entries);

@@ -210,9 +210,13 @@ export function teamControlRoutes(
           : governance.ownerCommand(action === "tasks/retry" ? "retry" : action, request, actor, binding);
       }
       if (receipt.effectMayStart && options.dispatch) {
-        const addedTasks = (receipt.value as { addedTasks: string[] }).addedTasks;
-        for (const taskId of addedTasks) void options.dispatch(request.runId, taskId).catch(error =>
-          console.warn(`team growth: launch for run=${request.runId} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
+        // C1 dispatches a growth's added tasks; C2 dispatches the task a completion created
+        // (a reviewer task) and the implementer a review sent back for rework. One receipt
+        // never carries both, so the two paths cannot start the same task twice.
+        const addedTasks = (receipt.value as { addedTasks?: string[] } | null)?.addedTasks ?? [];
+        const next = [receipt.reviewTaskId, receipt.reworkTaskId].filter((taskId): taskId is string => taskId !== undefined);
+        for (const taskId of [...addedTasks, ...next]) void options.dispatch(request.runId, taskId).catch(error =>
+          console.warn(`team control: launch for run=${request.runId} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
       }
       return c.json(receipt, receipt.status === "denied" ? 403 : receipt.status === "pending-execution" ? 202 : 200);
     });
