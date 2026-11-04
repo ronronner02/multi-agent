@@ -229,7 +229,8 @@ export function teamControlRoutes(
         // (a reviewer task) and the implementer a review sent back for rework. One receipt
         // never carries both, so the two paths cannot start the same task twice.
         const addedTasks = (receipt.value as { addedTasks?: string[] } | null)?.addedTasks ?? [];
-        const next = [receipt.reviewTaskId, receipt.reworkTaskId].filter((taskId): taskId is string => taskId !== undefined);
+        const next = [receipt.reviewTaskId, receipt.reworkTaskId, receipt.revisionTaskId]
+          .filter((taskId): taskId is string => taskId !== undefined);
         for (const taskId of [...addedTasks, ...next]) void options.dispatch(request.runId, taskId).catch(error =>
           console.warn(`team control: launch for run=${request.runId} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
       }
