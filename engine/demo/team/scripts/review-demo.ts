@@ -8,10 +8,16 @@ import { join } from "node:path";
  * MVP slice C2 — the review loop, end to end, with no live client.
  *
  * One implementer seat and one reviewer seat, both played by the compiled stub runner. The
- * owner starts a run, the implementer completes with validated evidence, and the daemon
- * creates the `reviewOf`-bound reviewer task and launches it on the reviewer seat. The
- * reviewer's first round finds a P1, which sends the implementer back for rework and spends
- * one round; the second round approves, which closes the task.
+ * owner starts a run and the daemon launches the implementer; the agent finishes, the daemon
+ * observes the attempt end and computes what it can verify about the candidate, and the owner's
+ * one action records the outcome. The daemon then creates the `reviewOf`-bound reviewer task and
+ * launches it on the reviewer seat. The reviewer's first round finds a P1, which sends the
+ * implementer back for rework and spends one round; the second round approves, which closes the
+ * task.
+ *
+ * Nothing here records an attempt or an outcome by hand: the attempt is admitted from the
+ * launch's own receipt, its end is the client process ending, and the evidence is the
+ * candidate's own manifest. The owner action supplies only the decision.
  *
  * Everything is real except the native client: the routes, the governance owner, the queue,
  * the candidate trees and the dispatch chain. The scratch home, database and tmux socket are
@@ -59,6 +65,9 @@ function writable(path: string): void {
     if (entry.isDirectory()) writable(child); else chmodSync(child, 0o600);
   }
 }
+const tmux = (...args: string[]) => execFileSync("tmux", args,
+  { encoding: "utf8", env: { ...process.env }, stdio: ["ignore", "pipe", "ignore"] }).trim();
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let failed = true;
 try {
   const governance = daemon.deps.teamGovernance!;
@@ -78,63 +87,119 @@ try {
   let implementerTree: string | undefined, reviewerTree: string | undefined;
   const waitForLaunches = async (count: number) => {
     const deadline = Date.now() + 60_000;
-    while (launches().n < count && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
+    while (launches().n < count && Date.now() < deadline) await sleep(100);
     assert.equal(launches().n, count, `Launch ${count} must reach the composed dispatch path`);
   };
-  const settleLaunches = async (...seats: string[]) => {
-    const pending = (seat: string) => (daemon.db.prepare(
-      "SELECT count(*) AS n FROM sessions WHERE session_name = ? AND startup_status = 'pending'").get(seat) as { n: number }).n;
+  /**
+   * Wait for the seats a dispatch just started to reach their client.
+   *
+   * A launch runs after the request that admitted the task returns, so the demo waits for the
+   * seats it just dispatched to report `ready` before reading anything that depends on them. A
+   * seat that is not being launched stays out of this list: an ended attempt correctly leaves its
+   * seat at `pending`, waiting to be started again.
+   */
+  const waitForReady = async (...seats: string[]) => {
+    const ready = (seat: string) => (daemon.db.prepare(
+      "SELECT count(*) AS n FROM sessions WHERE session_name = ? AND startup_status = 'ready'").get(seat) as { n: number }).n;
     const deadline = Date.now() + 60_000;
-    while (seats.some(pending) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
-    for (const seat of seats) assert.equal(pending(seat), 0, `Seat ${seat} must settle before the demo reads its candidate`);
-    // The stub runner's own scratch (`.openrig/stub/*`) is the client's state, not the
-    // deliverable: the candidate scope check would read it as a change outside the task's
-    // paths. The seat has settled, so removing it touches nothing that is still running.
+    while (seats.some(seat => !ready(seat)) && Date.now() < deadline) await sleep(100);
+    for (const seat of seats) assert.equal(ready(seat), 1, `Seat ${seat} must come up before the demo reads its candidate`);
+  };
+  /** The pane the seat's client runs in, from the binding the launch recorded. */
+  const paneOf = (seat: string) => {
+    const context = daemon.deps.sessionRegistry.findResumeContextByName(seat);
+    const binding = context ? daemon.deps.sessionRegistry.getBindingForNode(context.nodeId) : null;
+    assert.ok(binding?.tmuxPane, `Seat ${seat} must have a recorded pane`);
+    return binding.tmuxPane!;
+  };
+  /**
+   * The agent finishes: the seat's client process ends, exactly as a native client that
+   * completed its turn would. The daemon's own sweep is what turns that into a stopped attempt.
+   *
+   * `attempts` is how many this task's own history must hold by now. Waiting for that count as
+   * well as the stop is what makes a rework round wait for *its* attempt: the task already has
+   * the previous round's stopped attempt behind it, so a stop alone would match the old one.
+   */
+  const finishSeat = async (seat: string, taskId: string, attempts: number) => {
+    const qitemId = governance.findTask(runId, taskId)!.qitemId;
+    const recorded = () => (daemon.db.prepare("SELECT count(*) AS n FROM team_attempts WHERE qitem_id = ?")
+      .get(qitemId) as { n: number }).n;
+    tmux("send-keys", "-t", paneOf(seat), "C-c");
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      if (recorded() === attempts) {
+        const { completion } = await api(`/runs/${runId}/tasks/${taskId}/completion`);
+        if (completion.attempt?.state === "stopped") return;
+      }
+      if (Date.now() > deadline) {
+        assert.fail(`The daemon must observe ${seat}'s attempt ${attempts} stop (holds ${recorded()})`);
+      }
+      await sleep(100);
+    }
+  };
+  /** The stub runner's scratch is the client's state, not the deliverable. */
+  const clearClientScratch = () => {
     for (const tree of [implementerTree, reviewerTree]) if (tree) rmSync(join(tree, ".openrig"), { recursive: true, force: true });
   };
+  /**
+   * The owner's one action. It supplies the decision and the reviewer's report; the attempt and
+   * the evidence are the daemon's own, read from the completion route exactly as the Web UI and
+   * `rig team done` read them.
+   */
+  const complete = async (taskId: string, state: "done" | "failed", findings?: unknown) => {
+    const { completion } = await api(`/runs/${runId}/tasks/${taskId}/completion`);
+    assert.equal(completion.blockedReason, null, `task ${taskId} must be recordable: ${completion.blockedReason}`);
+    assert.ok(completion.attempt, `task ${taskId} must have an observed attempt`);
+    return api(`/runs/${runId}/tasks/outcome`, await command(governance.findTask(runId, taskId)!.qitemId, {
+      expectedTaskVersion: completion.taskVersion, state, ...(state === "done" ? { closureReason: "no-follow-on" } : {}),
+      actorSession: completion.actorSession, attemptId: completion.attempt.attemptId,
+      expectedAttemptVersion: completion.attempt.entityVersion,
+      evidence: { ...completion.evidence, ...(findings === undefined ? {} : { findings }) },
+    }));
+  };
+  /**
+   * Re-launch a seat, so a rework round gets its own attempt.
+   *
+   * Nothing here resets the seat: the daemon's own attempt-end observation already returned it
+   * to the state a start leaves a never-launched seat in, so the composed dispatch starts a
+   * fresh client under the seat's lifecycle lease, exactly as a start does.
+   */
+  const relaunch = (taskId: string) => daemon.deps.teamControl!.dispatch!(runId, taskId);
 
   console.log("==> The owner starts a run with an implementer seat and a reviewer seat");
   const start = await api("/runs", { goal: "Implement the first scoped module", seat: "impl@review-demo",
     reviewerSeat: "reviewer@review-demo", writePaths: ["src/a.ts"] });
   const runId = start.runId;
   assert.equal(start.reviewerSeat, "reviewer@review-demo");
+  // The daemon's completion owner is what a managed daemon starts after its HTTP surface is up.
+  daemon.deps.attemptCompletion!.start();
   await waitForLaunches(1);
   const tree = daemon.deps.workflowRuntime!.assignedTreeFor(runId, { taskId: "task-1" });
   implementerTree = tree;
-  // The stub runner's scratch (`.openrig/stub/*`) is the client's own state, not the
-  // deliverable. It lives inside the candidate tree, where the scope check would read it as
-  // a change outside the task's paths — so the seat settles first and the scratch is removed
-  // before anything reads the candidate.
-  await settleLaunches("impl@review-demo");
-
-  /**
-   * The owner observes one task's stopped attempt and records its outcome. Production records
-   * the attempt through the control surface before the outcome; the demo does the same two
-   * writes, so nothing about the review loop is stubbed.
-   */
-  const metric = { value: null, reason: "not reported" }, usage = { activeMs: 0, inputTokens: metric, outputTokens: metric, costUsd: metric };
-  const observe = async (taskId: string, state: "done" | "failed", evidence: Record<string, unknown>) => {
-    const task = governance.findTask(runId, taskId)!;
-    const seat = daemon.deps.queueRepo!.getById(task.qitemId)!.destinationSession;
-    const attemptId = `${taskId}-attempt-${crypto.randomUUID().slice(0, 8)}`;
-    const binding = governance.getRun(runId).binding;
-    const recorded = governance.recordAttempt(await command(attemptId, { qitemId: task.qitemId, role: task.assignment.role,
-      provider: "claude", state: "stopped", unknownReason: null, usage,
-      identity: { nativeSessionId: attemptId, tmuxServer: process.env.TMUX_TMPDIR!, paneId: "%1", processId: 4242,
-        processStart: "demo-process-start", generation: 1, policyFingerprint: binding.policyFingerprint } }), binding);
-    assert.equal(recorded.status, "observed", "attempt: " + recorded.reason);
-    return api(`/runs/${runId}/tasks/outcome`, await command(task.qitemId, { expectedTaskVersion: governance.getTask(task.qitemId)!.entityVersion,
-      state, ...(state === "done" ? { closureReason: "no-follow-on" } : {}), actorSession: seat, attemptId,
-      expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion, evidence }));
+  await waitForReady("impl@review-demo");
+  // The receipt is the launch's own evidence: the daemon's sweep admits the attempt from it,
+  // and the attempt names the client process the seat runs.
+  const attempts = () => daemon.db.prepare("SELECT id, state FROM team_attempts ORDER BY rowid").all() as Array<{ id: string; state: string }>;
+  const waitForAttempts = async (count: number) => {
+    const deadline = Date.now() + 30_000;
+    while (attempts().length < count && Date.now() < deadline) await sleep(100);
+    assert.equal(attempts().length, count, `The daemon's sweep must admit ${count} attempt(s) from the launch receipts`);
   };
+  await waitForAttempts(1);
+  assert.equal(attempts()[0]!.state, "running", "the observed client must be recorded running");
+  console.log(`Attempt ${attempts()[0]!.id} admitted from the launch receipt and recorded running.`);
 
-  console.log("==> The implementer finishes its candidate with validated evidence");
+  console.log("==> The implementer finishes its candidate; the daemon observes the attempt stop");
   writeFileSync(join(tree, "src", "a.ts"), "export const a = 1; // round one\n");
-  const completed = await observe("task-1", "done", { validated: true, manifestDigest: `sha256:${"a".repeat(64)}` });
-  assert.equal(completed.reviewTaskId, "task-1-review-1", "the completion must admit its reviewer task");
+  await finishSeat("impl@review-demo", "task-1", 1);
+  clearClientScratch();
+  const first = await complete("task-1", "done");
+  assert.equal(first.reviewTaskId, "task-1-review-1", "the completion must admit its reviewer task");
+  console.log("The daemon validated the candidate and the owner recorded the outcome; the review task exists.");
+
   reviewerTree = daemon.deps.workflowRuntime!.assignedTreeFor(runId, { taskId: "task-1-review-1", reviewOf: "task-1" });
   await waitForLaunches(2);
-  await settleLaunches("impl@review-demo", "reviewer@review-demo");
+  await waitForReady("reviewer@review-demo");
   let state = (await read()).read;
   const review1 = state.tasks.find((task: { taskId: string }) => task.taskId === "task-1-review-1");
   assert.equal(review1?.role, "reviewer");
@@ -144,7 +209,9 @@ try {
   console.log("==> The reviewer's first round finds a P1: the implementer goes back for rework");
   const findings = [{ id: "R1-1", severity: "P1", citation: "KTD8", category: "correctness", file: "src/a.ts",
     scenario: "the exported constant keeps the stale value after the owner's clarification" }];
-  const reviewed = await observe("task-1-review-1", "done", { findings, manifestDigest: `sha256:${"a".repeat(64)}` });
+  await finishSeat("reviewer@review-demo", "task-1-review-1", 1);
+  clearClientScratch();
+  const reviewed = await complete("task-1-review-1", "done", findings);
   assert.equal(reviewed.reworkTaskId, "task-1", "blocking findings must reopen the implementer");
   state = (await read()).read;
   assert.equal(state.tasks.find((task: { taskId: string }) => task.taskId === "task-1")?.queueState, "pending");
@@ -152,12 +219,24 @@ try {
   console.log("Rework round recorded: task-1 is pending again, review_rounds_used is 1.");
 
   console.log("==> The implementer's second candidate fixes the finding");
+  // The rework is a new launch, so it gets its own attempt: the daemon's attempt-end
+  // observation returned the seat to "never launched" when the client ended, so the dispatch
+  // starts a fresh one and the sweep admits its attempt from the new receipt.
+  await relaunch("task-1");
+  await waitForReady("impl@review-demo");
   writeFileSync(join(tree, "src", "a.ts"), "export const a = 2; // reworked\n");
-  const reworked = await observe("task-1", "done", { validated: true, manifestDigest: `sha256:${"b".repeat(64)}` });
+  await finishSeat("impl@review-demo", "task-1", 2);
+  clearClientScratch();
+  const reworked = await complete("task-1", "done");
   assert.equal(reworked.reviewTaskId, "task-1-review-2");
 
+  await waitForLaunches(3);
+  await relaunch("task-1-review-2");
+  await waitForReady("reviewer@review-demo");
   console.log("==> The reviewer's second round approves: the task is done");
-  const approved = await observe("task-1-review-2", "done", { findings: [], manifestDigest: `sha256:${"b".repeat(64)}` });
+  await finishSeat("reviewer@review-demo", "task-1-review-2", 1);
+  clearClientScratch();
+  const approved = await complete("task-1-review-2", "done", []);
   assert.equal(approved.reworkTaskId, undefined, "an approving review must not reopen the implementer");
   state = (await read()).read;
   const implementer = state.tasks.find((task: { taskId: string }) => task.taskId === "task-1");
@@ -166,11 +245,12 @@ try {
   assert.deepEqual(implementer?.verdicts.map((round: { round: number; verdict: string }) => [round.round, round.verdict]),
     [[1, "changes-required"], [2, "approved"]]);
   console.log("Task task-1 is done, with two recorded rounds: changes-required then approved.");
-  console.log("C2 demo passed.");
+  console.log("C2 demo passed. No attempt or outcome was recorded by hand.");
   failed = false;
 } catch (error) {
   console.error(error);
 } finally {
+  daemon.deps.attemptCompletion?.stop();
   try { execFileSync("tmux", ["kill-server"], { stdio: "ignore" }); } catch { /* The private server may already be stopped. */ }
   await daemon.deps.workflowRuntime?.closeManagedAttempts();
   daemon.db.close(); writable(scratch); rmSync(scratch, { recursive: true, force: true });
