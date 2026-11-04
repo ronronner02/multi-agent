@@ -200,6 +200,13 @@ describe("rig team proposal", () => {
     const decision = JSON.parse(String(calls.at(-1)![1].body)) as { actionId: string; payload: { approvalVersion: number; decision: string } };
     expect(calls.at(-1)![0]).toContain("/approvals/decide");
     expect(decision).toMatchObject({ actionId: "proposal-1", payload: { approvalVersion: 1, decision: "approved" } });
+    // The proposal write carries the expiry the daemon's contract requires. An empty payload is
+    // refused as a malformed request, so a decision that never states one can never be recorded.
+    const proposalWrite = calls.find(([url, init]) => init?.method === "POST" && url.endsWith("/proposal"))!;
+    const written = JSON.parse(String(proposalWrite[1].body)) as { payload: { leadProposal?: { expiresAt?: string } } };
+    const expiresAt = written.payload.leadProposal?.expiresAt;
+    expect(typeof expiresAt).toBe("string");
+    expect(new Date(expiresAt!).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("rejects --decide values other than approved and rejected, before any request", async () => {

@@ -47,6 +47,15 @@ interface TaskCompletion {
 const BASE = "/api/team-control";
 
 /**
+ * How long an undecided lead proposal stays decidable.
+ *
+ * The daemon owns the refusal (`run.lead-proposal-requested` refuses an expiry that is not in
+ * the future); this is the window the owner's verb asks for, and it matches the route's own
+ * one-day constant so a proposal read and decided in a working session never expires between.
+ */
+const PROPOSAL_WINDOW_MS = 86_400_000;
+
+/**
  * The owner token `./setup.sh` wrote.
  *
  * `./scripts/start.sh` sources this file into the daemon's own process, so a fresh shell
@@ -252,9 +261,13 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       }
       const request = (actionId: string, expectedEntityVersion: number, payload: unknown) => ({ protocolVersion: "1.0", runId,
         actionId, expectedEntityVersion, idempotencyKey: crypto.randomUUID(), payload });
+      // The daemon re-reads the batch from the lead's own tree and needs only the expiry the
+      // approval is held under. Sending an empty payload is refused as a malformed request, so
+      // the window is stated here, one day, the same window a start's approval is given.
+      const expiresAt = new Date(Date.now() + PROPOSAL_WINDOW_MS).toISOString();
       const proposed = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
         value?: { id?: string; entityVersion?: number } | null }>(path,
-        request(crypto.randomUUID(), run.data.run!.entityVersion, {}), { headers });
+        request(crypto.randomUUID(), run.data.run!.entityVersion, { leadProposal: { expiresAt } }), { headers });
       if (proposed.status !== 200 || proposed.data.status !== "accepted" || !proposed.data.value?.id) {
         throw new TeamCommandError(proposed.data.code ?? "lead_proposal_refused",
           proposed.data.reason ?? proposed.data.error ?? "The daemon refused the proposal.");
