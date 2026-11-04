@@ -15,7 +15,7 @@ import { Overview, compactTokens, observedCost, stageGroupState, verifiedChecks 
 
 const run: TeamRun = {
   id: "RUN-0142", rigId: "work-board", bindingDigest: "binding", state: "approved", stateReason: null,
-  entityVersion: 3, activeMs: 0, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 0,
+  entityVersion: 3, activeMs: 0, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 0, reviewerSeat: null,
   usage: { activeMs: 0, inputTokens: { value: null, reason: "Not published" }, outputTokens: { value: null, reason: "Not published" }, costUsd: { value: null, reason: "Not published" } },
   createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T00:00:00.000Z",
   binding: { artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
@@ -27,7 +27,7 @@ const run: TeamRun = {
 function task(id: string, state: TeamReviewView["queueState"], verified: number | null, total: number | null): TeamReviewView {
   return { taskId: id, qitemId: `q-${id}`, role: "implementer", queueState: state, title: null, dependencies: [],
     criteria: { verified, total, source: verified === null ? null : "team_queue_authority.evidence_json" },
-    currentCandidateDigest: null, rounds: 0, openP0P1: 0, reviewAvailable: false, acceptance: null };
+    currentCandidateDigest: null, rounds: 0, openP0P1: 0, verdicts: [], reviewAvailable: false, acceptance: null };
 }
 
 /** An attempt whose usage no producer observed, which is the state a fresh attempt is in. */

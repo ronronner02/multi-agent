@@ -516,6 +516,10 @@
   "reviews.approve": "Approve candidate",
   "reviews.confirmDecision": "This records your decision on the task's pending approval. It does not apply or deploy the candidate.",
   "reviews.noOpenFindings": "No open findings are recorded for the latest review round.",
+  "reviews.rounds": "Review rounds",
+  "reviews.verdictApproved": "Approved",
+  "reviews.verdictChangesRequired": "Changes required",
+  "reviews.blockingFindings": "{{count}} blocking findings",
   "workspace.finished": "This task has finished, so there is nothing to pause or stop.",
   "workspace.controlUnavailable": "Run controls need a live, connected snapshot."
 ,

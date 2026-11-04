@@ -67,6 +67,14 @@ describe("rig team start", () => {
     expect(result.lines.join("\n")).toContain("http://127.0.0.1:7433/team?run=run-1");
   });
 
+  it("names the reviewer seat so the run's review rounds have somewhere to go", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(receipt), { status: 201 })) as unknown as typeof fetch;
+    const result = await run(["team", "start", "Add a health endpoint", "--seat", "dev@demo", "--reviewer", "rev@demo"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    const init = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls[0]![1];
+    expect(JSON.parse(String(init.body))).toMatchObject({ seat: "dev@demo", reviewerSeat: "rev@demo" });
+  });
+
   it("uses the owner token ./setup.sh wrote when this shell has none", async () => {
     // The README's quick start: start.sh loads owner.env into the daemon only, so a fresh
     // shell has the daemon running and no credential of its own.

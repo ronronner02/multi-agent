@@ -89,6 +89,28 @@ describe("reviews screen", () => {
     expect(screen.queryByTestId("open-p0p1")).toBeNull();
   });
 
+  it("shows each review round's verdict from the run's own records (C2)", async () => {
+    const language = await show(read({ tasks: [task({ rounds: 2, openP0P1: 0, verdicts: [
+      { round: 1, reviewerTaskId: "T-102-review-1", verdict: "changes-required", candidateDigest: `sha256:${"d".repeat(64)}`,
+        findings: 2, blocking: 1, recordedAt: "2026-10-31T00:10:00.000Z" },
+      { round: 2, reviewerTaskId: "T-102-review-2", verdict: "approved", candidateDigest: `sha256:${"c".repeat(64)}`,
+        findings: 0, blocking: 0, recordedAt: "2026-10-31T00:20:00.000Z" },
+    ] })] }));
+    const first = await screen.findByTestId("review-verdict-1");
+    expect(first.getAttribute("data-verdict")).toBe("changes-required");
+    expect(first.textContent).toContain("T-102-review-1");
+    expect(first.textContent).toContain(language.t("reviews.verdictChangesRequired"));
+    expect(first.textContent).toContain(language.t("reviews.blockingFindings", { count: 1 }));
+    expect(screen.getByTestId("review-verdict-2").getAttribute("data-verdict")).toBe("approved");
+    expect(screen.getByTestId("review-verdict-2").textContent).toContain(language.t("reviews.verdictApproved"));
+  });
+
+  it("draws no round list when the run recorded none, so an empty list never reads as a pass", async () => {
+    await show(read());
+    expect(await screen.findByTestId("open-p0p1")).toBeTruthy();
+    expect(document.querySelector(".ui-verdicts")).toBeNull();
+  });
+
   it("says the candidate is pending while the task is still running", async () => {
     const language = await show(read({ tasks: [task({ queueState: "in-progress" })] }));
     expect((await screen.findByTestId("review-pending")).textContent).toContain(language.t("reviews.candidatePendingTitle"));

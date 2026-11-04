@@ -27,6 +27,7 @@ npm run test -w packages/daemon -- \
   test/unisolated-start-policy.test.ts \
   test/team-start.test.ts \
   test/run-growth.test.ts \
+  test/review-loop.test.ts \
   test/team-result.test.ts \
   test/user-settings-routes.test.ts \
   --maxWorkers=2

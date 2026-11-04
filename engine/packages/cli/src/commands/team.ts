@@ -74,6 +74,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .description("create a run and a task from a goal, then print how to watch it")
     .option("--rig <id-or-name>", "rig to run the work on (default: the only active rig)")
     .option("--seat <session>", "seat that takes the task (default: the rig's first agent node)")
+    .option("--reviewer <session>", "seat every review round routes to (omit to create no review task)")
     .option("--repository <path>", "repository the plan and the work belong to (default: the seat's cwd)")
     .option("--plan <path>", "plan artifact, relative to the repository (default: plan.md)")
     .option("--write <path...>", "repository-relative paths the task may write (default: src)")
@@ -89,6 +90,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (!daemonStatusGuard(status)) return;
       const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
       const body = { goal, ...(opts.rig ? { rig: String(opts.rig) } : {}), ...(opts.seat ? { seat: String(opts.seat) } : {}),
+        ...(opts.reviewer ? { reviewerSeat: String(opts.reviewer) } : {}),
         ...(opts.repository ? { repository: { root: String(opts.repository), ...(opts.plan ? { planRef: String(opts.plan) } : {}) } }
           : opts.plan ? { repository: { planRef: String(opts.plan) } } : {}),
         ...(opts.write ? { writePaths: (opts.write as string[]) } : {}) };
