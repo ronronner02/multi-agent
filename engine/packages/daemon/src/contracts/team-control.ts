@@ -416,6 +416,11 @@ export interface ControlReceipt<T = unknown> {
    */
   reviewTaskId?: string;
   reworkTaskId?: string;
+  /**
+   * MVP — the lead task a rejected proposal reopened and the route must dispatch: the lead's
+   * revision, resumed on the conversation that wrote the rejected proposal. Absent elsewhere.
+   */
+  revisionTaskId?: string;
 }
 
 export interface TeamControlEvent {

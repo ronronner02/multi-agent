@@ -134,6 +134,8 @@ interface Result {
   reworkTaskId?: string;
   /** C2 — the reviewer task a completion created, which the route dispatches next. */
   reviewTaskId?: string;
+  /** MVP — the lead task a rejected proposal reopened, which the route dispatches next. */
+  revisionTaskId?: string;
 }
 
 /**
@@ -554,6 +556,49 @@ export class PlanGovernance {
       effectMayStart: true, observedBy: owner.sessionId };
   }
 
+  /**
+   * MVP — reopen the lead's task after the owner rejected its proposal.
+   *
+   * The rejection is the reason the lead's next attempt exists, so it is recorded as the
+   * decision's own event payload rather than a second table: the launch reads the newest
+   * `approval.decided` for the task and states the reason in the resumed turn's prompt. The
+   * lead task is reopened through the transition the rework path already uses, so its
+   * transition log and the dependency gate keep working exactly as they do for a rework.
+   *
+   * A task that is no longer terminal has already been reopened by a concurrent decision, and
+   * a run that is not `approved` dispatches nothing; neither is an error of this decision.
+   */
+  private startLeadRevision(ctx: CommandContext, approval: TeamApproval, reason: unknown, owner: ControlActor): Result {
+    // The run has exactly one lead task, and a lead proposal only exists because that task
+    // wrote it; reading it from the run's own rows keeps the revision attached to the seat that
+    // proposed rather than to whatever the approval payload happens to name.
+    const row = this.db.prepare(`SELECT task_id AS taskId FROM team_queue_authority
+      WHERE run_id = ? AND json_extract(assignment_json, '$.role') = 'lead' LIMIT 2`).all(ctx.run.id) as Array<{ taskId: string }>;
+    const taskId = row.length === 1 ? row[0]!.taskId : null;
+    if (taskId === null) return { status: "accepted", value: this.getApproval(approval.id), observedBy: owner.sessionId };
+    const task = this.findTask(ctx.run.id, taskId);
+    if (!task || task.assignment.role !== "lead") return deny("The proposal's task is not this run's lead task");
+    // The reason is owner prose that reaches an agent's prompt, so it is bounded and refused
+    // rather than truncated: a revision asked for in a sentence nobody can read is worse than
+    // a rejection that says nothing.
+    const note = reason === undefined || reason === null ? null : text(reason, "reason", 4_096);
+    // Recorded even when the owner said nothing: the event is what the lead's next attempt
+    // reads to learn that its proposal was refused, and "no reason given" is still an answer.
+    this.emit(ctx.run, ctx.register, "approval.decided", { actionId: approval.id, status: "accepted",
+      reason: null, valueDigest: hashBytes(canonicalJson(null)), observedBy: owner.sessionId, taskId, note },
+      taskId);
+    const item = this.queue.getById(task.qitemId);
+    if (item && (item.state === "done" || item.state === "handed-off")) {
+      const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+        qitemId: task.qitemId, actorSession: ctx.run.id, state: "pending", reopen: true,
+        transitionNote: "The owner rejected the lead's proposal; the lead revises it",
+      }));
+      for (const event of updated.persistedEvents) ctx.register(event);
+    }
+    return { status: "accepted", value: { ...this.getApproval(approval.id), revisionTaskId: taskId },
+      effectMayStart: true, observedBy: owner.sessionId, revisionTaskId: taskId };
+  }
+
   private applyRunGrowth(ctx: CommandContext, approval: TeamApproval, owner: ControlActor): Result {
     const binding = parsePlanBinding(approval.payload.binding);
     const tasks = this.growthTasks(ctx, binding, approval.payload.tasks);
@@ -650,6 +695,12 @@ export class PlanGovernance {
       if (updated.changes !== 1) throw new Error("Approval version conflict");
       if (growth && v.decision === "approved") return this.applyRunGrowth(ctx, approval, owner);
       if (lead && v.decision === "approved") return this.applyLeadProposal(ctx, approval, owner);
+      // MVP — a rejected lead proposal is the lead's next piece of work, not the end of the
+      // conversation. With headless turns the owner can no longer type a revision request into
+      // the lead's terminal, so the rejection itself carries the reason and reopens the lead
+      // task; the dispatch that already follows an `effectMayStart` receipt starts its next
+      // attempt, which resumes the lead's conversation and is told what the owner refused.
+      if (lead && v.decision === "rejected") return this.startLeadRevision(ctx, approval, v.reason, owner);
       if (approval.action === "implementation" && v.decision === "approved") {
         ctx.run.state = "approved";
         ctx.run.stateReason = null;
@@ -1343,14 +1394,16 @@ export class PlanGovernance {
       const receipt: ControlReceipt = { status: result.status, runId: run.id, entityVersion: run.entityVersion,
         replayed: false, effectMayStart: result.effectMayStart ?? false, value,
         ...(result.reworkTaskId === undefined ? {} : { reworkTaskId: result.reworkTaskId }),
-        ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }), reason: result.reason ?? null };
+        ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }),
+        ...(result.revisionTaskId === undefined ? {} : { revisionTaskId: result.revisionTaskId }), reason: result.reason ?? null };
       this.db.prepare(`INSERT INTO team_control_requests (run_id, idempotency_key, request_digest, response_json, created_at)
         VALUES (?, ?, ?, ?, ?)`).run(run.id, request.idempotencyKey, requestDigest, canonicalJson(receipt), ctx.now);
       this.emit(run, register, result.status === "denied" ? `${action}.denied` : action,
         { actionId: request.actionId, status: receipt.status, reason: receipt.reason, valueDigest: hashBytes(canonicalJson(value)),
           ...(result.observedBy === undefined ? {} : { observedBy: result.observedBy }) }, result.taskId, result.attemptId);
       return { ...receipt, ...(result.reworkTaskId === undefined ? {} : { reworkTaskId: result.reworkTaskId }),
-        ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }) };
+        ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }),
+        ...(result.revisionTaskId === undefined ? {} : { revisionTaskId: result.revisionTaskId }) };
     });
   }
 

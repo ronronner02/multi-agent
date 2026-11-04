@@ -232,8 +232,9 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
   cmd.command("proposal <run-id> <task-id>")
     .description("read the lead task's proposed implementer tasks, and decide them as the owner")
     .option("--decide <decision>", "record the owner decision: approved or rejected")
+    .option("--reason <text>", "with --decide rejected: why, which the lead's revision is told")
     .option("--json", "print the daemon's answer as JSON")
-    .action(async (runId: string, taskId: string, options: { decide?: string; json?: boolean }) => {
+    .action(async (runId: string, taskId: string, options: { decide?: string; reason?: string; json?: boolean }) => {
       const token = ownerToken(deps());
       if (!token) throw new TeamCommandError("control_auth_required",
         "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
@@ -281,7 +282,8 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       const decided = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
         value?: { addedTasks?: string[] } | null }>(`${runPath}/approvals/decide`,
         request(proposed.data.value.id, (await client.get<{ run: { entityVersion: number } }>(runPath, { headers })).data.run.entityVersion,
-          { approvalVersion: proposed.data.value.entityVersion, decision: options.decide }), { headers });
+          { approvalVersion: proposed.data.value.entityVersion, decision: options.decide,
+            ...(options.reason === undefined ? {} : { reason: options.reason }) }), { headers });
       if (decided.status !== 200 || decided.data.status !== "accepted") {
         throw new TeamCommandError(decided.data.code ?? "lead_decision_refused",
           decided.data.reason ?? decided.data.error ?? "The daemon refused the decision.");
