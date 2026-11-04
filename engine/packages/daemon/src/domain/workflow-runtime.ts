@@ -25,9 +25,11 @@ import {
   snapshotCandidateRecorded,
   sourceFingerprint,
   verifySourceUnchanged,
+  readWorkspacePath,
   type CandidateWorkspace,
   type WorkspaceBase,
 } from "./team-workspace.js";
+import { LEAD_PROPOSAL_PATH, parseLeadProposal, type LeadTask } from "./lead-proposal.js";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/team-control.js";
@@ -420,7 +422,11 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
   }
   const claimed = new Map<string, string>();
   for (const task of tasks) {
-    if (task.role === "reviewer") continue;
+    // C3 — the lead writes no assigned tree: its permission vocabulary has no
+    // `write-assigned-tree`, and its one output is its own decomposition. C2's reviewer is
+    // exempt for the same reason, so neither contributes a claim another task could conflict
+    // with; their dependency edges still count.
+    if (task.role === "reviewer" || task.role === "lead") continue;
     for (const path of task.paths) {
       const normalized = normalizeClaim(path);
       for (const [owned, owner] of claimed) {
@@ -807,6 +813,26 @@ export class WorkflowRuntime {
   candidateManifestFor(runId: string, taskId: string): ReturnType<typeof candidateManifest> {
     const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
     return candidateManifest({ ...workspace, checkScope: undefined });
+  }
+
+  /**
+   * C3 — the decomposition a lead wrote, read at the boundary that owns worker-written data.
+   *
+   * The lead's only output is this one file in its own candidate tree, so the read goes
+   * through `readWorkspacePath` — the same pinned, no-follow, size-bounded reader every other
+   * read of worker output uses — and never through a second reader of the tree. A lead that
+   * wrote nothing, or wrote something that is not the shape the protocol states, refuses here
+   * with a reason the owner can act on. What the caller does with the batch is not this
+   * method's decision: the governance owner validates it against the approved binding and
+   * records an owner decision.
+   */
+  leadProposalFor(runId: string, taskId: string): LeadTask[] {
+    const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
+    const read = readWorkspacePath(workspace.root, LEAD_PROPOSAL_PATH, () => false);
+    if (read.kind !== "file") throw new Error("The lead wrote no proposal at " + LEAD_PROPOSAL_PATH);
+    let value: unknown;
+    try { value = JSON.parse(read.content); } catch { throw new Error("The lead's proposal is not valid JSON"); }
+    return parseLeadProposal(value);
   }
 
   /**
@@ -1261,8 +1287,7 @@ export class WorkflowRuntime {
     frameworkFiles: readonly { path: string; source: string }[];
     /** True when the projection root already exists: rebuild from its own recorded bytes. */
     resume: boolean;
-  }): ContextManifest {
-    const { roots, root, role, client } = input;
+  }): ContextManifest {    const { roots, root, role, client } = input;
     const frameworkRoot = roots.frameworkRoot;
     // The projection holds more than instructions: the plan the approval bound, the
     // role configuration, the pinned framework entries, and — KTD28 — the shared core
@@ -1325,6 +1350,13 @@ export class WorkflowRuntime {
         write("plan", readFileSync(join(input.binding.repository.root, input.binding.planRef), "utf8"), "plan"),
         write("role", canonicalJson(roleConfiguration), "role"),
         ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
+        // C3 — a lead activation's roster and run instructions. The protocol entry is already
+        // written above: `roleInstructionEntries("lead")` projects it as this role's charter,
+        // and the manifest requires exactly one. A member role adds nothing here.
+        ...(input.context.lead ? [
+          write("roster", canonicalJson(input.context.lead.roster), "roster"),
+          write("run", input.context.lead.instructions, "run"),
+        ] : []),
       ];
       // Sealed only after the entries exist: the manifest refuses a projection root its
       // own owner could still write to, which is what stops anything being added to a

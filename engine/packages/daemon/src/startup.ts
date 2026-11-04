@@ -149,6 +149,7 @@ import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
 import { refreshPlanBinding, unisolatedPolicyCapability } from "./routes/team-start.js";
+import { leadActivation } from "./domain/lead-proposal.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
 import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
@@ -569,12 +570,21 @@ function composeManagedAttemptAttachment(dependencies: {
         unknown as import("./integrations/framework/context-manifest.js").ContextManifest });
     let produced: Awaited<ReturnType<WorkflowRuntime["produceManagedAttempt"]>>;
     try {
+      // C3 — a lead activation carries its protocol, roster and run instructions, and nothing
+      // else does. The roster is the rig's seats whose role the approval covers, and the
+      // instructions are the daemon's own words about where the decomposition goes; both are
+      // read-only entries the manifest projects, so the lead cannot rewrite what it must obey.
+      const lead = assignment.role === "lead" ? leadActivation(dependencies.db, {
+        rigId: run.rigId, roles: run.binding.roles, seat, activationId: attemptId,
+        goal: (dependencies.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(task.qitemId) as { body: string }).body,
+      }) : undefined;
       produced = await runtime.produceManagedAttempt(row.runId, {
         attemptId, worker, assignment, outputs, permissions,
         role: assignment.role, client, candidate: admitted.candidate, sessionId: seat,
         rigId: run.rigId, taskId: row.taskId, recipients: row.sourceSession ? [row.sourceSession] : [],
         deadline, isCurrent: () => true, ...(previous ? { previous } : {}),
-        delivery, chat, context: { client, discoveryRoots: [], mutableStateRoot: identity.scratch },
+        delivery, chat, context: { client, discoveryRoots: [], mutableStateRoot: identity.scratch,
+          ...(lead ? { lead } : {}) },
         // Every managed attempt routes substantial work through the pinned framework, so its
         // entry governor is the one pinned file the manifest always binds. The full framework
         // tree is already mounted read-only at `/framework`; this entry is the attempt's

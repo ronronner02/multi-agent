@@ -10,6 +10,7 @@ import {
 } from "../contracts/team-control.js";
 import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import { roleConfiguration } from "../domain/role-configuration.js";
+import { leadRoster } from "../domain/lead-proposal.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { Rig } from "../domain/types.js";
 import { teamControlAuthentication, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
@@ -58,7 +59,14 @@ export function bindingForGoal(input: { root: string; planRef: string; writePath
     // C2: two review rounds, which is the contract's ceiling for the unconditional ones. One
     // is not enough for the loop to ever approve a candidate: a first round that finds a P0/P1
     // spends it on the rework, so the round that would close the task could never start.
-    limits: { maxSessions: 1, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
+    //
+    // C3: two live sessions, which is the fewest that lets a lead run hand over. The lead's own
+    // attempt is live while it reads the goal and writes its decomposition, and the task that
+    // then runs is the next one; with one, a second seat could never start while the first was
+    // still recorded running. Three would be the review loop's ceiling as well, but a review
+    // round starts only after the implementer's attempt is observed stopped, so the slice never
+    // needs it and this stays at the smallest number that works.
+    limits: { maxSessions: 2, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
   };
 }
 
@@ -157,14 +165,33 @@ export function teamStartRoutes(
       rig = match;
     }
     const node = firstAgentNode(rigRepo, rig.id);
+    // C3 — an opt-in lead. Without a lead seat the start is exactly the pre-C3 start: one
+    // implementer task on the named (or default) seat. With one, the run's first task is the
+    // lead's, and the lead's context carries the protocol, roster and run instructions the
+    // manifest owner builds; the implementer seats then come from the lead's own proposal, so
+    // this request names none and there is no single implementer seat to compare against.
+    const leadSeat = v.lead === undefined ? null : text(v.lead, "lead", 256);
     const seat = v.seat === undefined ? (node ? defaultSeat(rigRepo, node, rig.name) : null) : text(v.seat, "seat", 256);
-    if (!seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
+    if (leadSeat === null && !seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
     // C2 — the seat every review round of this run routes to. A start that names none keeps
     // the pre-C2 behaviour: an implementer completes and the run creates no review.
     const reviewerSeat = v.reviewerSeat === undefined ? null : text(v.reviewerSeat, "reviewerSeat", 256);
-    if (reviewerSeat === seat) {
+    // The lead runs first and decides nothing about its own work, so a lead that is also the
+    // reviewer seat would be asked to review the tasks it proposed. This is checked before the
+    // implementer comparison below, which does not apply to a run whose lead chooses the seats.
+    if (leadSeat !== null && leadSeat === reviewerSeat) {
+      return c.json({ code: "lead_seat_invalid",
+        error: "The lead seat must differ from the reviewer's seat; a lead does not review its own decomposition." }, 400);
+    }
+    if (leadSeat === null && reviewerSeat !== null && reviewerSeat === seat) {
       return c.json({ code: "reviewer_seat_invalid",
         error: "The reviewer seat must differ from the implementer's seat; a seat cannot review its own candidate." }, 400);
+    }
+    // A lead with no member to delegate to can propose nothing, and the activation's manifest
+    // refuses an empty roster. Say so here rather than letting the launch fail later.
+    if (leadSeat !== null && !leadRoster(rigRepo.db, { rigId: rig.id, roles: ["implementer"], excludeSeat: leadSeat }).length) {
+      return c.json({ code: "lead_roster_empty",
+        error: "No implementer seat exists for the lead to propose work to; add one to the rig, or start without a lead." }, 400);
     }
     const repository = v.repository === undefined ? {} : object(v.repository, "repository");
     const root = repository.root === undefined ? node?.cwd ?? null : text(repository.root, "repository.root", 4096);
@@ -193,10 +220,13 @@ export function teamStartRoutes(
       return c.json({ code: "start_refused", runId: run.id, error: decided.reason ?? "The plan was not approved." }, 409);
     }
     const taskId = "task-1";
+    const assignment = leadSeat === null
+      ? { taskId, role: "implementer" as const, paths: scope, dependencies: [] }
+      : { taskId, role: "lead" as const, paths: scope, dependencies: [] };
+    const taskSeat = leadSeat ?? seat;
     const created = governance.createTask(request(taskId, {
-      assignment: { taskId, role: "implementer", paths: scope, dependencies: [] },
-      outputs: [], permissions: [...roleConfiguration.implementer.permissions],
-      sourceSession: actor.sessionId, destinationSession: seat, body: goal,
+      assignment, outputs: [], permissions: [...roleConfiguration[assignment.role].permissions],
+      sourceSession: actor.sessionId, destinationSession: taskSeat, body: goal,
     }), binding);
     if (created.status !== "accepted") {
       return c.json({ code: "start_refused", runId: run.id, error: created.reason ?? "The task was refused." }, 409);
@@ -209,7 +239,7 @@ export function teamStartRoutes(
     if (options.dispatch) void options.dispatch(run.id, taskId).catch(error =>
       console.warn(`team start: launch for run=${run.id} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id, rigId: rig.id, approvalId: approval.id,
-      taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat, reviewerSeat,
+      taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat: taskSeat, reviewerSeat, leadSeat,
       state: governance.getRun(run.id).state }, 201);
   });
 

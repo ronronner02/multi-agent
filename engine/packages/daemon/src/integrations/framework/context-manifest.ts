@@ -260,7 +260,14 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
     charter: charterFile ? instructionVersion(readFileSync(charterFile.path, "utf8")) : "" };
   if (spec.role === "lead") {
     if (!spec.lead || !["protocol", "roster", "run"].every(k => kinds.filter(v => v === k).length === 1)) throw new Error("Lead activation context is incomplete");
-    text(spec.lead.activationId, "activationId"); text(spec.lead.instructions, "runInstructions");
+    // C3 — run instructions are prose the lead reads, so they may span lines; every other
+    // lead field is an identifier or an address and keeps `text`'s stricter rule. Control
+    // characters other than a line break and a tab are still refused.
+    if (typeof spec.lead.instructions !== "string" || !spec.lead.instructions.trim()
+      || spec.lead.instructions.length > 8_192 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(spec.lead.instructions)) {
+      throw new Error("Lead run instructions are missing or malformed");
+    }
+    text(spec.lead.activationId, "activationId");
     if (!spec.lead.roster.length || new Set(spec.lead.roster.map(m => m.member)).size !== spec.lead.roster.length) throw new Error("Invalid roster");
     for (const m of spec.lead.roster) { text(m.member, "member"); text(m.mailbox, "mailbox"); if (!spec.binding.roles.includes(m.role)) throw new Error("Invalid roster role"); }
     const content = (kind: ContextFile["kind"]) => readFileSync(spec.files.find(f => f.kind === kind)!.path, "utf8");

@@ -456,6 +456,12 @@ export interface TeamStartReceipt {
   seat: string;
   /** C2 — the seat review rounds route to, or `null` when the start named none. */
   reviewerSeat: string | null;
+  /**
+   * C3 — the seat the run's first task belongs to, or `null` for a start with no lead.
+   * A non-null value means `taskId` is the lead's task, and `seat` names it too: there is
+   * one task at start either way, and this says which role it carries.
+   */
+  leadSeat: string | null;
   state: TeamRunState;
 }
 

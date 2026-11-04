@@ -149,6 +149,7 @@ import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 import { teamStartRoutes } from "./routes/team-start.js";
+import { teamLeadRoutes } from "./routes/team-lead.js";
 import { teamResultRoutes } from "./routes/team-result.js";
 import { teamCompletionRoutes } from "./routes/team-completion.js";
 
@@ -872,6 +873,14 @@ export function createApp(deps: AppDeps): Hono {
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
   }, [deps.missionControlBearerToken, deps.terminalBearerToken]));
+  // MVP slice C3 — the owner's read of a lead's decomposition and the decision it becomes. The
+  // read is the daemon's own reading of the file the lead wrote; the write records an owner
+  // decision, never an admission.
+  app.route("/api/team-control", teamLeadRoutes(teamGovernance, {
+    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
+    ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
+  }));
 
   app.get("/healthz", (c) => {
     // OPR.0.4.3.21 — enrich the health surface with event-loop wedge evidence
