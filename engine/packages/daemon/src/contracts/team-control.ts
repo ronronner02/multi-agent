@@ -166,6 +166,21 @@ export interface TeamAttempt {
   state: AttemptState;
   usage: UsageEvidence;
   entityVersion: number;
+  /**
+   * T033 — the KTD20 decision recorded when this attempt was observed stopped, or null for an
+   * attempt that ended without one (a clean exit, or a row written before T033). Its shape is
+   * owned by `domain/attempt-failure.ts`; the fields are repeated here because this is the
+   * contract every reader consumes.
+   */
+  failure: AttemptFailure | null;
+}
+
+/** The one classification of an ended attempt: its reason code, resume safety and retry eligibility. */
+export interface AttemptFailure {
+  reasonCode: string;
+  resumeSafe: boolean;
+  retryEligible: boolean;
+  ownerAction: string;
 }
 
 export interface ApprovalConsumption {
@@ -312,6 +327,8 @@ export interface TeamAttemptView {
   createdAt: string;
   /** The attempt's own recorded usage. A metric is `null` with a reason until its producer observed it. */
   usage: UsageEvidence;
+  /** T033 — the KTD20 decision for this attempt, or null while it runs or when it ended cleanly. */
+  failure: AttemptFailure | null;
 }
 
 /** One bounded, redacted log or exit record correlated to its task and attempt. */

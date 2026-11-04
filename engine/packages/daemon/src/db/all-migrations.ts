@@ -114,6 +114,7 @@ import { managedAttemptInputsSchema } from "./migrations/106_managed_attempt_inp
 import { scopeExtensionsSchema } from "./migrations/105_scope_extensions.js";
 import { reviewLoopSchema } from "./migrations/107_review_loop.js";
 import { cancellationSchema } from "./migrations/108_cancellation.js";
+import { attemptFailureSchema } from "./migrations/110_attempt_failure.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -222,4 +223,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   scopeExtensionsSchema,
   reviewLoopSchema,
   cancellationSchema,
+  attemptFailureSchema,
 ];
