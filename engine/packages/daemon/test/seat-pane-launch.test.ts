@@ -139,6 +139,15 @@ describe("a start request launches the seat it put work on", () => {
     expect(terminal).not.toContain("rig whoami");
     expect(terminal).not.toContain("rig queue list");
     expect(terminal).not.toContain(ownerToken);
+    // KTD28 keeps the core and the charter out of the brief, so the projection is the only
+    // place they exist and the prompt is the only place the client can be told where it is.
+    // An implementer attempt names exactly those two, at the path an unisolated client opens.
+    expect(terminal).toContain("Read these files before you start work");
+    expect(terminal).toMatch(/^- \/.*\/state\/workers\/context\/local\/[^/]+\/[^/]+\/core$/m);
+    expect(terminal).toMatch(/^- \/.*\/state\/workers\/context\/local\/[^/]+\/[^/]+\/charter$/m);
+    // The mount path only exists inside a sandbox; naming it to an unisolated client would
+    // point at a directory that is not there.
+    expect(terminal).not.toMatch(/^- \/context\//m);
 
     // The daemon created the terminal itself, and recorded the pane the way every binding is.
     const pane = tmuxRun("list-panes", "-t", `=${SEAT}:`, "-F", "#{pane_id} #{pane_current_path}").trim();

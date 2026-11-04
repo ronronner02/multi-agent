@@ -278,6 +278,26 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
     protocolVersion: spec.role === "lead" ? LEAD_PROTOCOL_VERSION : null, instructionVersions };
   return immutable({ ...mapped, generatedHash: hashBytes(canonicalJson({ ...mapped, bindingDigest: hashBinding(spec.binding) })) });
 }
+/**
+ * The instruction files an attempt must read before it works, at the path its client can open.
+ *
+ * KTD28 puts the core and the role's charter in the projection rather than in the task brief,
+ * so the brief cannot displace them; the Lead's protocol, roster and run instructions are the
+ * same kind of entry. The projection is the only place those bytes live, and the launch is the
+ * only place a client can be told where they are, so this is the one list the prompt names.
+ * The plan and role configuration stay out: they are the daemon's own record of the approval,
+ * not something the worker is asked to follow.
+ *
+ * The path is the mount path a sandboxed worker sees, or the host path when the worker is the
+ * daemon's own user and no mount stands between them. Naming the mount path to an unisolated
+ * client would point it at a `/context` that does not exist on the host.
+ */
+export function attemptInstructionFiles(manifest: ContextManifest): { kind: ContextFile["kind"]; path: string }[] {
+  const order: ContextFile["kind"][] = ["core", "charter", "protocol", "roster", "run"];
+  return order.flatMap(kind => manifest.files.filter(file => file.kind === kind)
+    .map(file => ({ kind, path: manifest.sameIdentity ? file.path : file.workerPath })));
+}
+
 export function verifyEffectiveContext(manifest: ContextManifest, observed: ContextObservation): string {
   const { generatedHash, protocolVersion, instructionVersions: recorded, ...input } = manifest;
   if (protocolVersion !== (input.role === "lead" ? LEAD_PROTOCOL_VERSION : null)) throw new Error("Protocol version changed");
