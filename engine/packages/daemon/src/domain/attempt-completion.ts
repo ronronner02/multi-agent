@@ -46,6 +46,13 @@ export interface AttemptCompletionDependencies {
   paneTail?: (paneId: string, lines: number) => Promise<string | null>;
   /** T033 — put a held pane back to a live shell once its exit evidence has been read. */
   releasePane?: (paneId: string) => Promise<unknown>;
+  /**
+   * MVP — start the run's next pending task now that this attempt's seat and slot are free.
+   *
+   * Absent means nothing dispatches on a freed slot, which is what every pre-MVP caller
+   * (a test, or a daemon under hardened isolation) wants.
+   */
+  dispatchPending?: (runId: string) => Promise<void>;
   intervalMs?: number;
   log?: (message: string) => void;
 }
@@ -187,6 +194,12 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           continue;
         }
         releaseSeat(attempt.qitemId);
+        // MVP — the seat and its session slot are free now, so the run's next pending task can
+        // start. A dispatch failure is logged and left for the next freed slot: it must not stop
+        // the rest of the sweep, and a task that cannot start yet is not an error of this one.
+        try { await dependencies.dispatchPending?.(attempt.runId); } catch (error) {
+          log(`team completion: dispatch after attempt ${attempt.id} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
       } catch (error) {
         // A run or attempt that moved under the sweep is re-read on the next tick; one failed
         // observation must not stop the others.

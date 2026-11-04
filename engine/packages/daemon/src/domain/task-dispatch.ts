@@ -30,6 +30,10 @@ export interface TaskDispatchDependencies {
   runtimeAdapters: Record<string, RuntimeAdapter>;
   sessionEnv?: Record<string, string | undefined>;
   runtimeSessionEnv?: Record<string, Record<string, string | undefined>>;
+  /** The run's live-session limit, as its binding states it. */
+  maxSessions: (runId: string) => number;
+  /** How many of the run's attempts are live right now, read the way governance counts them. */
+  liveSessions: (runId: string) => number;
 }
 
 export type TaskDispatch = (runId: string, taskId: string) => Promise<void>;
@@ -51,6 +55,11 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     // dispatch's to overwrite. `starting` covers the window before that state is recorded.
     if (!context || !session || !node?.cwd || !adapter || session.startupStatus !== "pending"
       || starting.has(session.id)) return;
+    // MVP — the run's live-session limit is asked *before* the client starts. The governance
+    // gate that already enforces it runs when the launch's receipt is registered, a second
+    // later: by then the client is running, and a refused registration leaves an attempt nothing
+    // observes ending. A task over the limit stays pending and the next freed slot dispatches it.
+    if (dependencies.liveSessions(runId) >= dependencies.maxSessions(runId)) return;
     starting.add(session.id);
     try {
       await ensureSeatPane(dependencies, seat);
@@ -67,12 +76,20 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       // not continue the poisoned conversation. The seat's saved native token is cleared before
       // the launch, so the client starts a fresh session in the same candidate tree and keeps
       // every file the failed attempt wrote. Nothing else about the tree changes.
-      if (resumeUnsafe(dependencies, runId, taskId)) dependencies.sessions.clearResumeToken(session.id);
+      const unsafe = resumeUnsafe(dependencies, runId, taskId);
+      if (unsafe) dependencies.sessions.clearResumeToken(session.id);
+      // MVP — a task this seat already ran is a continuation, not a fresh start: the rework
+      // after a review, the lead's revision after a rejection, or a retry the classifier called
+      // resume-safe. Its next attempt continues that conversation, so the agent still holds the
+      // tree, the brief and what it was told to fix. The token is the run's own record of it.
+      const continueSessionId = !unsafe && session.resumeToken && session.resumeType === "claude_id"
+        ? session.resumeToken : undefined;
       await dependencies.startupOrchestrator.startNode({ rigId: context.rigId, nodeId: node.id, sessionId: session.id,
         binding, adapter,
         plan: { runtime: adapter.runtime, cwd: node.cwd, entries: [], startup: { files: [], actions: [] },
           conflicts: [], noOps: [], diagnostics: [] },
         resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: seat,
+        ...(continueSessionId ? { continueSessionId } : {}),
         includeDurableObligations: true, allowFreshFallback: false });
     } finally {
       starting.delete(session.id);
