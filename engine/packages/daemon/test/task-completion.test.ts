@@ -14,7 +14,7 @@ import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { composeAttemptCompletion, processIdentityAlive } from "../src/domain/attempt-completion.js";
-import { changedPaths, taskCompletionEvidence } from "../src/domain/task-completion.js";
+import { changedPaths, leadCompletionEvidence, taskCompletionEvidence } from "../src/domain/task-completion.js";
 import { reviewerTaskId } from "../src/domain/review-loop.js";
 import { roleConfiguration } from "../src/domain/role-configuration.js";
 import type { PlanBinding } from "../src/contracts/team-control.js";
@@ -243,8 +243,58 @@ describe("MVP — the completion path", () => {
     expect(governance.findTask("run", reviewerTaskId("task", 1))?.assignment).toMatchObject({ role: "reviewer", reviewOf: "task" });
   });
 
-  it("refuses the completion read to a worker credential", async () => {
-    const workerApp = createTestApp(db, { appDeps: { teamGovernance: governance, workflowRuntime: runtime,
+  /**
+   * C3 — a lead task's completion is recordable.
+   *
+   * This is the reachable defect the implementer rule causes: the lead's assignment paths are
+   * the run's scope, so its proposal at the tree's root is "outside the assignment" and every
+   * lead task stays open forever. The route now uses the lead's own rule, and the whole owner
+   * action runs: the read validates, the outcome records, and no review task is created.
+   */
+  it("records a lead task done on its proposal, and starts no review", async () => {
+    db.prepare(`INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES ('lead-node', 'rig', 'lead', 'lead', 'codex', ?)`)
+      .run(repo);
+    const leadSeat = new SessionRegistry(db).registerSession("lead-node", "lead@rig");
+    new SessionRegistry(db).updateStartupStatus(leadSeat.id, "ready");
+    const created = governance.createTask(command("lead-task", { assignment: { taskId: "lead-task", role: "lead",
+      paths: ["src"], dependencies: [] }, outputs: [], permissions: [...roleConfiguration.lead.permissions],
+      sourceSession: "owner-control", destinationSession: "lead@rig", body: "Decompose the goal." }), binding);
+    expect(created.status).toBe("accepted");
+    receipt("attempt-lead", "lead@rig", 4444);
+    const owner = completion();
+    owner.sweep();
+    alive = false;
+    owner.sweep();
+    const tree = runtime.candidateFor("run", "lead-task").root;
+    const proposal = JSON.stringify({ tasks: [{ taskId: "task-2", seat: "builder@rig", paths: ["src/a.ts"],
+      dependencies: [], body: "Implement a.ts" }] });
+
+    // A lead that has written nothing yet is not validated, and says why.
+    let body = await (await request("/api/team-control/runs/run/tasks/lead-task/completion")).json() as {
+      completion: { actorSession: string; blockedReason: string | null; evidence: { validated: boolean; reasons: string[];
+        outsideAssignment: string[] }; attempt: { attemptId: string; entityVersion: number } } };
+    expect(body.completion.blockedReason).toBeNull();
+    expect(body.completion.evidence.validated).toBe(false);
+
+    writeFileSync(join(tree, "lead-proposal.json"), proposal);
+    body = await (await request("/api/team-control/runs/run/tasks/lead-task/completion")).json() as typeof body;
+    expect(body.completion.evidence).toMatchObject({ validated: true, reasons: [], changedPaths: ["lead-proposal.json"],
+      outsideAssignment: [] });
+
+    // The owner action records it exactly as any other completion, and C2's loop does not start.
+    const outcome = governance.recordTaskOutcome(command(governance.findTask("run", "lead-task")!.qitemId, {
+      expectedTaskVersion: governance.getTask(governance.findTask("run", "lead-task")!.qitemId)!.entityVersion,
+      state: "done", closureReason: "no-follow-on", actorSession: body.completion.actorSession,
+      attemptId: body.completion.attempt.attemptId, expectedAttemptVersion: body.completion.attempt.entityVersion,
+      evidence: JSON.parse(JSON.stringify(body.completion.evidence)) }), { kind: "owner", sessionId: "owner-control" });
+    expect(outcome.status).toBe("observed");
+    expect((outcome as { reviewTaskId?: string }).reviewTaskId).toBeUndefined();
+    expect(governance.queueState(governance.findTask("run", "lead-task")!.qitemId)).toBe("done");
+    // No review task exists for a lead's completion: the run holds its implementer and the lead.
+    expect(db.prepare("SELECT count(*) AS n FROM team_queue_authority WHERE run_id = 'run'").get()).toEqual({ n: 2 });
+  });
+
+  it("refuses the completion read to a worker credential", async () => {    const workerApp = createTestApp(db, { appDeps: { teamGovernance: governance, workflowRuntime: runtime,
       teamControl: { credentials: { ownerToken: "owner-fixture",
         workers: [{ token: "worker-fixture", sessionId: "builder@rig", runId: "run" }] } } } }).app;
     const response = await workerApp.request("http://localhost/api/team-control/runs/run/tasks/task/completion",
@@ -278,8 +328,35 @@ describe("the completion path's pure rules", () => {
       .toMatchObject({ validated: false, reasons: ["gone"], manifestDigest: null });
   });
 
-  it("treats a process whose start time moved as a different process, and an unreadable one as alive", () => {
-    // The test's own process is alive under its recorded start; a moved start time is not it.
+  /**
+   * C3 — a lead's deliverable is its proposal, not a code change.
+   *
+   * The implementer rule would call `lead-proposal.json` outside the lead's assignment (which is
+   * the run's scope), so a lead task could never be recorded done. Its own rule validates exactly
+   * the candidate that writes the proposal and nothing else, and only when that file parses.
+   */
+  it("validates a lead only on its proposal, and reports everything else", () => {
+    const proposal = ["diff --git a/lead-proposal.json b/lead-proposal.json", "+++ b/lead-proposal.json"].join("\n");
+    expect(leadCompletionEvidence({ manifest: manifest(proposal), proposal: { taskCount: 2 } }))
+      .toMatchObject({ validated: true, changedPaths: ["lead-proposal.json"], outsideAssignment: [], reasons: [] });
+    // A candidate that also moves something else is not a lead's deliverable.
+    const extra = [proposal, "diff --git a/src/a.ts b/src/a.ts", "+++ b/src/a.ts"].join("\n");
+    expect(leadCompletionEvidence({ manifest: manifest(extra), proposal: { taskCount: 2 } }))
+      .toMatchObject({ validated: false, outsideAssignment: ["src/a.ts"] });
+    // A candidate with no proposal at all, or one the boundary refuses, is not validated.
+    expect(leadCompletionEvidence({ manifest: manifest(""), proposal: null }).reasons)
+      .toEqual(["The candidate does not write lead-proposal.json", "The lead's proposal is missing or unreadable"]);
+    expect(leadCompletionEvidence({ manifest: manifest(proposal), proposal: null }))
+      .toMatchObject({ validated: false, reasons: ["The lead's proposal is missing or unreadable"] });
+    // The snapshot lane cannot say what moved, exactly as for an implementer.
+    expect(leadCompletionEvidence({ manifest: manifest(proposal, "snapshot"), proposal: { taskCount: 2 } }))
+      .toMatchObject({ validated: false });
+    // An unreadable candidate is its own reason, not an empty one.
+    expect(leadCompletionEvidence({ manifest: null, proposal: null, unavailableReason: "gone" }))
+      .toMatchObject({ validated: false, reasons: ["gone"], manifestDigest: null });
+  });
+
+  it("treats a process whose start time moved as a different process, and an unreadable one as alive", () => {    // The test's own process is alive under its recorded start; a moved start time is not it.
     const self = process.pid, stat = execFileSync("cat", ["/proc/" + self + "/stat"], { encoding: "utf8" });
     const start = stat.slice(stat.lastIndexOf(")") + 2).trim().split(/\s+/)[19]!;
     expect(processIdentityAlive({ processId: self, processStart: start })).toBe(true);

@@ -173,6 +173,14 @@ try {
   assert.equal((await read()).read.tasks.length, 1);
   await finishSeat("lead@lead-demo", "task-1", 1);
   clearClientScratch();
+  // The lead's own completion is the owner's action like any other. Its deliverable is the
+  // proposal, so the daemon validates that file and nothing else: a lead completion is not a
+  // code change, and it starts no review — C2's loop reads implementer completions only.
+  const leadDone = await complete("task-1", "done");
+  assert.equal(leadDone.reviewTaskId, undefined, "a lead's completion creates no review task");
+  let state = (await read()).read;
+  assert.equal(state.tasks.find((task: { taskId: string }) => task.taskId === "task-1")?.queueState, "done");
+  console.log("The owner recorded the lead task done on the strength of its proposal.");
   const requested = await api(`/runs/${runId}/tasks/task-1/proposal`,
     await command("lead-proposal", { leadProposal: { expiresAt: new Date(Date.now() + 3_600_000).toISOString() } }));
   assert.equal(requested.status, "accepted");
@@ -181,7 +189,7 @@ try {
   const decided = await api(`/runs/${runId}/approvals/decide`,
     await command(approval.id, { approvalVersion: approval.entityVersion, decision: "approved" }));
   assert.deepEqual((decided.value as { addedTasks: string[] }).addedTasks, ["task-2", "task-3"]);
-  let state = (await read()).read;
+  state = (await read()).read;
   assert.equal(state.tasks.length, 3);
   assert.equal(state.tasks.find((task: { taskId: string }) => task.taskId === "task-1")?.role, "lead");
   assert.equal(state.tasks.find((task: { taskId: string }) => task.taskId === "task-2")?.queueState, "pending");
