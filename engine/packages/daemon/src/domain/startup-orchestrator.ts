@@ -24,6 +24,7 @@ import { resolveReadinessTimeoutMs } from "./readiness-timeout.js";
 import { SettingsStore } from "./user-settings/settings-store.js";
 import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
+import { attemptInstructionFiles } from "../integrations/framework/context-manifest.js";
 
 // Expanded startup text can put the current input marker above 50 scrollback lines.
 const STARTUP_SUBMIT_CAPTURE_LINES = 200;
@@ -791,9 +792,15 @@ export class StartupOrchestrator {
         WHERE a.run_id = ? AND a.task_id = ? AND q.destination_session = ?`).get(runId, assignment.taskId, binding.tmuxSession) as
         { body: string } | undefined;
       if (!task) return { ok: false, error: "The managed task is no longer assigned to this seat." };
+      // KTD28 keeps the core and the role's charter out of the brief, so they reach the client
+      // only through its projection. Naming those files is therefore part of the launch, not a
+      // second brief: the prompt states where the attempt's instructions are, never what they say.
+      const instructions = attemptInstructionFiles(binding.managedAttempt.context);
       prompt = [prompt, `Managed task ${assignment.taskId} for run ${runId}`, task.body,
         `Assignment: ${JSON.stringify(assignment)}`, `Outputs: ${JSON.stringify(outputs)}`,
         `Permissions: ${JSON.stringify(permissions)}`,
+        ...(instructions.length === 0 ? [] : ["Read these files before you start work; they are this attempt's role instructions and run context, and they are read-only:",
+          ...instructions.map(file => `- ${file.path}`)]),
         "Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished."].filter(Boolean).join("\n\n");
     } else if (includeDurableObligations) prompt = [prompt, `This is a fresh conversation. Before choosing work, derive your identity with rig whoami --json and read durable obligations with rig queue list --destination ${binding.tmuxSession} --state pending,in-progress,blocked --limit 10000 --full --json. Report truncation at the limit; a destination row is not permission to claim unrelated work.`].filter(Boolean).join("\n\n");
 
