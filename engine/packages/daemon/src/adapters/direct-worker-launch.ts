@@ -23,7 +23,8 @@ import type { WorkerClient, WorkerLauncher, WorkerLaunchInput } from "./worker-l
  */
 
 export interface DirectWorkerLaunchDeps {
-  tmux: Pick<TmuxAdapter, "sendText" | "sendKeys" | "getPanePid" | "getPaneCommand" | "capturePaneScreen">;
+  tmux: Pick<TmuxAdapter, "sendText" | "sendKeys" | "getPanePid" | "getPaneCommand" | "capturePaneScreen">
+    & Partial<Pick<TmuxAdapter, "holdPaneOnExit" | "respawnPane" | "getPaneExit">>;
   /** The pane this attempt's seat owns, resolved from the task's recorded destination. */
   resolvePane: (runId: string, taskId: string) => Promise<string>;
   /** The tree the runtime admitted for this assignment. */
@@ -88,6 +89,21 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       const facts: DirectLaunchFacts = { client, tree, pane, sessionId, attemptId: attempt.attemptId,
         runId: attempt.context.runId, taskId: attempt.context.assignment.taskId };
       const argv = this.deps.command ? this.deps.command(facts) : this.nativeArgs(client, input, sessionId);
+      // T033 — hold the pane before the client starts. Measured on tmux 3.6: without this, the
+      // client exiting destroys the pane (and a seat's only pane destroys its session), leaving
+      // no exit status and no output for the completion sweep to classify. With it, the pane
+      // stays dead and carries `pane_dead_status` and its last lines. A host whose tmux refuses
+      // the option still launches: the sweep then has no exit evidence and records no code,
+      // which is the conservative answer, not a retry.
+      await this.deps.tmux.holdPaneOnExit?.(pane);
+      // A pane held from an earlier attempt is still the seat's, but its shell is gone: measured
+      // on tmux 3.6, typing into a dead pane is accepted and does nothing. So the held pane is
+      // put back to a live shell first, in the seat's own pane, and the launch proceeds as it
+      // does for a pane that never ran a client.
+      if ((await this.deps.tmux.getPaneExit?.(pane))?.dead) {
+        const revived = await this.deps.tmux.respawnPane?.(pane);
+        if (revived && !revived.ok) return this.refuse(revived.code);
+      }
       // The pane already belongs to this seat, so the launch changes only what runs in it:
       // the admitted tree as the working directory, then the client as the foreground process.
       const line = "cd " + shellQuote(tree) + " && exec " + argv.map(shellQuote).join(" ");

@@ -11,6 +11,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QUEUE_STATES, isTerminalState } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
+import { classificationFor } from "../src/domain/attempt-failure.js";
 import {
   TEAM_CONTROL_VERSION, TEAM_QUEUE_STATES, canonicalJson, parseAssignment, parseAttemptIdentity, parseControlRequest,
   parsePlanBinding, parseTeamEvent, parseUsage, type ControlRequest, type PlanBinding, type UsageEvidence,
@@ -180,12 +181,16 @@ describe("transactional plan governance", () => {
     const qitemId = (createTask().value as { qitemId: string }).qitemId;
     governance.recordAttempt(command("task-attempt", { qitemId, role: "implementer", provider: "claude", identity,
       unknownReason: null, state: "stopped", usage: usage() }), binding);
+    // T033 — a retry reads the KTD20 decision the classifier recorded with the stop, so a
+    // failure this suite is about to retry carries the eligible code a network failure gets.
+    governance.recordUsage(command("task-attempt", { expectedAttemptVersion: 1, state: "stopped", usage: usage(),
+      failure: classificationFor("agent_error.provider_network") }), binding);
     governance.recordTaskOutcome(command(qitemId, { expectedTaskVersion: 1, state: "failed", actorSession: "builder@rig-1",
-      attemptId: "task-attempt", expectedAttemptVersion: 1, evidence: { receipt: "observed-exit" } }), owner);
+      attemptId: "task-attempt", expectedAttemptVersion: 2, evidence: { receipt: "observed-exit" } }), owner);
     return qitemId;
   };
   const retryRequest = (qitemId: string) => command(qitemId, { expectedTaskVersion: governance.getTask(qitemId)!.entityVersion,
-    attemptId: "task-attempt", expectedAttemptVersion: 1 });
+    attemptId: "task-attempt", expectedAttemptVersion: 2 });
 
   it("T016 retries the same verified failed task once without launching or discarding its evidence", () => {
     const qitemId = failedTask(), request = retryRequest(qitemId);

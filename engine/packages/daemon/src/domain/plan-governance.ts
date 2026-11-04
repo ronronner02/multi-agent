@@ -12,6 +12,7 @@ import {
   type TeamRun, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
+import { classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { LeadTask } from "./lead-proposal.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
@@ -365,11 +366,13 @@ export class PlanGovernance {
 
   getAttempt(id: string): TeamAttempt | null {
     const row = this.db.prepare(`SELECT id, run_id AS runId, qitem_id AS qitemId, role, provider, identity_json AS identityJson,
-      unknown_reason AS unknownReason, state, usage_json AS usageJson, entity_version AS entityVersion FROM team_attempts WHERE id = ?`)
-      .get(id) as (Omit<TeamAttempt, "identity" | "usage"> & { identityJson: string | null; usageJson: string }) | undefined;
+      unknown_reason AS unknownReason, state, usage_json AS usageJson, entity_version AS entityVersion,
+      failure_json AS failureJson FROM team_attempts WHERE id = ?`)
+      .get(id) as (Omit<TeamAttempt, "identity" | "usage" | "failure"> & { identityJson: string | null; usageJson: string; failureJson: string | null }) | undefined;
     if (!row) return null;
-    const { identityJson, usageJson, ...attempt } = row;
-    return { ...attempt, identity: identityJson === null ? null : parseAttemptIdentity(JSON.parse(identityJson)), usage: parseUsage(JSON.parse(usageJson)) };
+    const { identityJson, usageJson, failureJson, ...attempt } = row;
+    return { ...attempt, identity: identityJson === null ? null : parseAttemptIdentity(JSON.parse(identityJson)), usage: parseUsage(JSON.parse(usageJson)),
+      failure: failureJson === null ? null : parseAttemptClassification(JSON.parse(failureJson)) };
   }
 
 
@@ -753,6 +756,14 @@ export class PlanGovernance {
           || attempt.state !== "stopped" || attempt.identity === null || latest.id !== attempt.id
           || this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(task.qitemId)) {
           return deny("Retry requires a verified failed task with every attempt observed stopped");
+        }
+        // T033 — KTD20 decides whether this failure may be retried, and this command never
+        // re-derives that answer: it reads the code the classifier recorded with the stop. An
+        // attempt with no classification is exactly "when uncertain, choose not retried", and a
+        // code outside the eligible set is a blocker whose reason is the owner action.
+        if (attempt.failure === null) return deny("The failed attempt has no classification, so it is not retried");
+        if (!attempt.failure.retryEligible) {
+          return deny(`Retry is not eligible for ${attempt.failure.reasonCode}: ${attempt.failure.ownerAction}`);
         }
         if (ctx.run.retriesUsed >= ctx.run.binding.limits.maxRetries) return deny("Retry limit exhausted");
         ctx.run.retriesUsed += 1;
@@ -1229,9 +1240,16 @@ export class PlanGovernance {
         if (previous !== null && (usage[key].value === null || usage[key].value! < previous)) throw new Error("Cumulative usage evidence must not decrease or disappear");
       }
       const unknownReason = state === "unknown" ? text(v.unknownReason, "unknownReason") : null;
+      // T033 — the classifier's decision travels with the stop, so a reader never re-derives it.
+      // It is accepted only on a stopped attempt, and only in the shape its own code implies:
+      // a stored `retryEligible` that disagrees with KTD20 would be authority this command does
+      // not have. The observation owner classifies; this command records what it said.
+      const failure = state !== "stopped" || v.failure === undefined || v.failure === null
+        ? null : parseAttemptClassification(v.failure);
       this.db.prepare(`UPDATE team_attempts SET state = ?, unknown_reason = ?, usage_json = ?, active_ms = ?,
-        entity_version = entity_version + 1, updated_at = ? WHERE id = ? AND entity_version = ?`)
-        .run(state, unknownReason, canonicalJson(usage), usage.activeMs, ctx.now, attempt.id, attempt.entityVersion);
+        failure_json = ?, entity_version = entity_version + 1, updated_at = ? WHERE id = ? AND entity_version = ?`)
+        .run(state, unknownReason, canonicalJson(usage), usage.activeMs, failure === null ? null : canonicalJson(failure),
+          ctx.now, attempt.id, attempt.entityVersion);
       return { status: "observed", value: this.getAttempt(attempt.id), attemptId: attempt.id };
     });
   }

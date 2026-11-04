@@ -4,6 +4,7 @@ import { TEAM_CONTROL_VERSION, jsonValue, type ControlRequest, type JsonValue } 
 import type { PlanGovernance } from "./plan-governance.js";
 import type { SessionRegistry } from "./session-registry.js";
 import type { NativeAttemptIdentity } from "../contracts/team-control.js";
+import { classifyAttemptFailure, TERMINAL_TAIL_LINES, type AttemptClassification } from "./attempt-failure.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -35,13 +36,23 @@ export interface AttemptCompletionDependencies {
   sessions: Pick<SessionRegistry, "findResumeContextByName" | "updateStartupStatus">;
   /** Injectable for the tests; production leaves the default. */
   alive?: (identity: { processId: number; processStart: string }) => boolean;
+  /**
+   * T033 — the exit evidence the seat's terminal recorded for a pane, read once when the sweep
+   * observes the process gone. Absent means this daemon cannot read it (a hardened launch, or
+   * a test), and the attempt is then classified from the evidence it does have.
+   */
+  paneExit?: (paneId: string) => Promise<{ dead: boolean; code: number | null } | null>;
+  /** T033 — the pane's last lines, for the classifier's text fingerprints. Absent means none. */
+  paneTail?: (paneId: string, lines: number) => Promise<string | null>;
+  /** T033 — put a held pane back to a live shell once its exit evidence has been read. */
+  releasePane?: (paneId: string) => Promise<unknown>;
   intervalMs?: number;
   log?: (message: string) => void;
 }
 
 export interface AttemptCompletion {
   /** Register every receipt whose attempt is not recorded, then stop the ones that ended. */
-  sweep(): void;
+  sweep(): Promise<void>;
   start(): void;
   stop(): void;
 }
@@ -143,20 +154,32 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
    * the reviewer's second round see a live agent and start nothing, and the task would wait
    * forever for work nobody was doing. The session's `status` is left alone — it is the
    * presence record of the terminal, not of the agent.
+   *
+   * T033 — the stop carries the attempt's one KTD20 classification. The evidence is read here,
+   * once, at the moment the sweep observes the process gone: the run's own cancel state, the
+   * exit status the seat's terminal recorded, and the last lines it held. Nothing later
+   * re-derives it, and nothing here adds an attempt or a unit of budget.
    */
-  const close = (): void => {
+  const close = async (): Promise<void> => {
     const rows = db.prepare("SELECT id FROM team_attempts WHERE state = 'running' AND identity_json IS NOT NULL")
       .all() as Array<{ id: string }>;
     for (const row of rows) {
       try {
         const attempt = governance.getAttempt(row.id);
         if (!attempt?.identity || alive(attempt.identity)) continue;
+        // A pane the launcher held is still the seat's, but its dead foreground process makes the
+        // seat unusable: measured on tmux 3.6, input into a dead pane is accepted and does
+        // nothing. The evidence is read first, then the pane is released, so the next dispatch
+        // of this seat starts its client in a live shell instead of a dead one.
+        const failure = await classify(attempt);
+        await releaseHeldPane(attempt.identity.paneId);
         const request: ControlRequest<unknown> = {
           protocolVersion: TEAM_CONTROL_VERSION, runId: attempt.runId, actionId: attempt.id,
           expectedEntityVersion: governance.getRun(attempt.runId).entityVersion,
           idempotencyKey: `attempt-stop:${attempt.id}:${attempt.entityVersion}`,
           // The end of the process is the observation; no usage figure is claimed for it.
-          payload: { expectedAttemptVersion: attempt.entityVersion, state: "stopped", usage: jsonValue(attempt.usage) },
+          payload: { expectedAttemptVersion: attempt.entityVersion, state: "stopped", usage: jsonValue(attempt.usage),
+            ...(failure === null ? {} : { failure: jsonValue(failure) }) },
         };
         const recorded = governance.recordUsage(request);
         if (recorded.status !== "observed" && !recorded.replayed) {
@@ -172,6 +195,35 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     }
   };
 
+  /**
+   * The evidence the daemon holds about one ended attempt, classified once.
+   *
+   * A terminal read that fails is no evidence, and the classifier already treats no evidence as
+   * no failure rather than as a clean exit, so a transient tmux error cannot manufacture a
+   * retryable code.
+   *
+   * The exit status decides first, because it is structured: a launched client holds its pane
+   * (measured on tmux 3.6, without that the pane is destroyed on exit), and a client that exits
+   * with 0 finished its turn, so nothing it printed is the failure of this attempt. Only a
+   * non-zero exit, a signal, or no exit record at all sends the tail to the fingerprints.
+   */
+  const classify = async (attempt: NonNullable<ReturnType<PlanGovernance["getAttempt"]>>): Promise<AttemptClassification | null> => {
+    const run = governance.getRun(attempt.runId);
+    const canceled = run.state === "cancel_requested" || run.state === "canceled";
+    const pane = attempt.identity?.paneId ?? null;
+    const exit = pane !== null && dependencies.paneExit ? await dependencies.paneExit(pane) : null;
+    const terminalTail = pane !== null && dependencies.paneTail && exit?.code !== 0
+      ? await dependencies.paneTail(pane, TERMINAL_TAIL_LINES) : null;
+    return classifyAttemptFailure({ canceled, exit: exit === null ? null : { code: exit.code }, terminalTail });
+  };
+
+  /** Release a pane the launcher held, so the seat's next client starts in a live shell. */
+  const releaseHeldPane = async (paneId: string): Promise<void> => {
+    if (!dependencies.paneExit || !dependencies.releasePane) return;
+    const exit = await dependencies.paneExit(paneId);
+    if (exit?.dead) await dependencies.releasePane(paneId);
+  };
+
   /** Return the seat that ran a stopped attempt to "never launched", so a dispatch may start it. */
   const releaseSeat = (qitemId: string | null): void => {
     const seat = qitemId === null ? null : governance.taskSeat(qitemId);
@@ -180,7 +232,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     sessions.updateStartupStatus(context.sessionId, "pending");
   };
 
-  const sweep = (): void => {
+  const sweep = async (): Promise<void> => {
     const receipts = db.prepare("SELECT seq, payload FROM events WHERE type = 'managed.attempt.receipt' AND seq > ? ORDER BY seq")
       .all(processedSeq) as ReceiptRow[];
     for (const row of receipts) {
@@ -192,7 +244,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
         log(`team completion: receipt was not registered: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    close();
+    await close();
   };
 
   return {
@@ -200,9 +252,9 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     start() {
       if (timer) return;
       timer = setInterval(() => {
-        try { sweep(); } catch (error) {
-          log(`team completion: sweep failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
+        // A tick's observation is awaited here, so two ticks never read the same pane at once
+        // and a slow terminal read cannot overlap the next one.
+        sweep().catch(error => log(`team completion: sweep failed: ${error instanceof Error ? error.message : String(error)}`));
       }, intervalMs);
       // The daemon's lifetime decides how long this runs; a tick must never be the reason a
       // process stays alive after its database closed.

@@ -155,7 +155,8 @@ import { WorkerControlAccess } from "./domain/worker-control-access.js";
 import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
 import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
-import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, type SystemHealthProbeResult } from "./domain/system-health.js";
+import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, attemptsFromRecords, type SystemHealthProbeResult } from "./domain/system-health.js";
+import { parseAttemptClassification } from "./domain/attempt-failure.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { canonicalJson } from "./contracts/team-control.js";
 import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
@@ -791,7 +792,22 @@ export function composeUnisolatedHealthReader(dependencies: {
     workerBoundary: unisolated,
     sandboxNetwork: unisolated,
     clients: unisolated,
+    // T033 — the KTD20 decision each attempt recorded, so a health reader sees the same code
+    // and resume-safety the owner's task card shows. Bounded to the newest attempts, and a row
+    // whose stored decision disagrees with its own code is reported with no code rather than
+    // with a retryability nothing vouched for.
+    latestAttempts: () => attemptsFromRecords(() => new Date(), (db.prepare(`SELECT id, run_id AS runId, provider, state,
+      failure_json AS failureJson FROM team_attempts ORDER BY updated_at DESC, id DESC LIMIT 100`)
+      .all() as Array<{ id: string; runId: string; provider: "claude" | "codex"; state: string; failureJson: string | null }>)
+      .map(row => ({ id: row.id, runId: row.runId, provider: row.provider, state: row.state,
+        failure: storedFailure(row.failureJson) }))),
   });
+}
+
+/** The recorded classification of an attempt, or null when it has none or the row is unusable. */
+function storedFailure(json: string | null): { reasonCode: string; resumeSafe: boolean } | null {
+  if (json === null) return null;
+  try { return parseAttemptClassification(JSON.parse(json)); } catch { return null; }
 }
 
 export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> {
@@ -3163,6 +3179,14 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // stopped when the process it named is gone. It decides no outcome: the owner action does.
     const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
+      // T033 — the exit evidence a direct launch leaves behind. The seat's pane is where the
+      // client ran, so tmux's own record of that pane ending (its dead flag and exit status)
+      // and the last lines it held are the only structured evidence available without a
+      // wrapper around the native client. Both reads are read-only; a pane this daemon cannot
+      // see yields no evidence, which the classifier treats as "not classified", never a retry.
+      paneExit: paneId => tmuxAdapter.getPaneExit(paneId),
+      paneTail: (paneId, lines) => tmuxAdapter.capturePaneTail(paneId, lines),
+      releasePane: paneId => tmuxAdapter.respawnPane(paneId),
       currentBinding: runId => {
         const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();
         return policy ? refreshPlanBinding(run.binding, policy) : run.binding;

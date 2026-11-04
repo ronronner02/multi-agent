@@ -290,12 +290,12 @@ export class TeamReadModel {
     const rows = this.deps.db
       .prepare(`SELECT a.id AS attemptId, a.run_id AS runId, a.qitem_id AS qitemId, a.role, a.provider, a.state,
         a.unknown_reason AS unknownReason, a.usage_json AS usageJson, a.created_at AS createdAt,
-        q.destination_session AS session
+        a.failure_json AS failureJson, q.destination_session AS session
         FROM team_attempts a LEFT JOIN queue_items q ON q.qitem_id = a.qitem_id
         WHERE a.run_id = ? ORDER BY a.created_at, a.id`)
       .all(runId) as Array<{ attemptId: string; runId: string; qitemId: string | null; role: string;
         provider: string; state: string; unknownReason: string | null; usageJson: string;
-        createdAt: string; session: string | null }>;
+        createdAt: string; failureJson: string | null; session: string | null }>;
     return rows.map((row) => ({
       attemptId: row.attemptId,
       runId: row.runId,
@@ -308,6 +308,10 @@ export class TeamReadModel {
       session: row.session,
       createdAt: row.createdAt,
       usage: parseUsage(JSON.parse(row.usageJson)),
+      // T033 — the recorded KTD20 decision, published as it was stored. A row with no code is
+      // an attempt that is still running or that ended cleanly; the reader is told null, not
+      // given an invented reason.
+      failure: row.failureJson === null ? null : JSON.parse(row.failureJson) as TeamAttemptView["failure"],
     }));
   }
 
