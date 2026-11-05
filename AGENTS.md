@@ -48,6 +48,9 @@ Load the `karpathy-guidelines` skill when writing, reviewing or refactoring code
 - Validate only at real boundaries: worker-written data, external processes, the network, files from outside the repository, and owner input. Trust typed internal callers.
 - Prefer existing code and tools over hand-written replacements. Remove what your change made unused. Mention unrelated dead code instead of deleting it.
 
+### UI
+- Follow `docs/development-standards.md` section 9 for every Web UI and desktop screen: no redundant labels, captions or helper text; hierarchy, spacing and a clear primary action explain the screen; extra information goes behind an info icon with a tooltip. Keep form labels, accessible names and the consequence statement on dangerous or irreversible actions.
+
 ### Fixing
 - Fix a failure with a verified cause directly. A cause is verified when the failure was reproduced, or when a failing test or a direct trace points to the responsible line. Keep a test that fails for that cause, and record the cause in the PR. The full `spec-debug` workflow is only for failures whose cause is unknown; in this repository this overrides the `spec-debug` entry rule in the managed block above.
 - A failure listed in `docs/known-failures.md` with a matching test and error is pre-existing. Never weaken a legacy test.
