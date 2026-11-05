@@ -436,6 +436,7 @@ function composeDirectLaunch(dependencies: {
   const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
   const launcher = new DirectWorkerLauncher({
     tmux,
+    launchPath: dependencies.sessionEnv?.PATH,
     // The seat is the task's recorded destination: exactly one live session on the run's rig,
     // bound to one tmux pane. A fresh install never runs `rig up`, so under `none` a seat with
     // no terminal at all gets one here — the one owner of "where does this seat live" — and
@@ -1116,8 +1117,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // session (OPR.0.4.3.04), so a handed-over successor self-identifies +
   // reports activity exactly like a launched seat.
   const clientsBin = "/opt/multi-agent/toolchain/clients/bin";
-  const launchPath = process.env.PATH?.split(nodePath.delimiter).includes(clientsBin)
-    ? process.env.PATH : [process.env.PATH, clientsBin].filter(Boolean).join(nodePath.delimiter);
+  const launchPath = [...(process.env.PATH ? process.env.PATH.split(nodePath.delimiter) : []), clientsBin]
+    .filter((entry, index, entries) => entry !== clientsBin || entries.indexOf(clientsBin) === index)
+    .join(nodePath.delimiter);
   const launchSessionEnv: Record<string, string | undefined> = {
     PATH: launchPath,
     OPENRIG_HOME,

@@ -1,9 +1,10 @@
 import { expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { createDaemon } from "../src/startup.js";
+import { shellQuote } from "../src/adapters/shell-quote.js";
 import { hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
 import { unisolatedWorkerRoots } from "../src/domain/unisolated-roots.js";
@@ -25,9 +26,11 @@ it.each([
   const directory = realpathSync(mkdtempSync(join(tmpdir(), "default-native-command-")));
   const home = join(directory, "home"), repo = join(directory, "repo"), bin = join(directory, "bin");
   for (const path of [home, repo, bin, join(directory, "tmux")]) mkdirSync(path);
-  const saved = { OPENRIG_HOME: process.env.OPENRIG_HOME, TMUX_TMPDIR: process.env.TMUX_TMPDIR };
+  const saved = { OPENRIG_HOME: process.env.OPENRIG_HOME, TMUX_TMPDIR: process.env.TMUX_TMPDIR, PATH: process.env.PATH };
   process.env.OPENRIG_HOME = home;
   process.env.TMUX_TMPDIR = join(directory, "tmux");
+  const clientsBin = "/opt/multi-agent/toolchain/clients/bin";
+  process.env.PATH = [bin, ...(saved.PATH ?? "").split(delimiter).filter(part => part !== clientsBin)].join(delimiter);
   const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
   const tmux = (...args: string[]) => execFileSync("tmux", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   let daemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
@@ -36,6 +39,14 @@ it.each([
     git("config", "user.name", "test"); git("config", "user.email", "test@example.invalid");
     writeFileSync(join(repo, "plan.md"), "approved plan\n");
     git("add", "plan.md"); git("commit", "--quiet", "-m", "base");
+    // The launch restores the daemon PATH. Intercept its native executable, then reproduce
+    // a missing client on an empty PATH so installed clients are never invoked by this test.
+    writeFileSync(join(bin, executable), `#!/bin/bash
+printf '%s\\n' "$PATH" > ${shellQuote(join(directory, "client.path"))}
+printf '%s\\n' "$@" > ${shellQuote(join(directory, "client.args"))}
+/bin/cat > /dev/null
+PATH=${shellQuote(join(bin, "empty"))} ${executable} "$@"
+`, { mode: 0o755 });
     const policy = unisolatedPolicyCapability(unisolatedWorkerRoots(home).policyRevision);
     const binding: PlanBinding = {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
@@ -50,10 +61,9 @@ it.each([
     const rig = daemon.deps.rigRepo.createRig("fixture", repo);
     const node = daemon.deps.rigRepo.addNode(rig.id, "dev.impl", { runtime, cwd: repo });
     const session = daemon.deps.sessionRegistry.registerSession(node.id, "dev-impl@fixture");
-    // This real bash has an empty executable search path. It can parse and execute the typed
-    // command, but no installed client or provider account is reachable from this terminal.
+    // Start the bound pane with an empty PATH to exercise launch-time environment correction.
     tmux("new-session", "-d", "-s", "dev-impl@fixture", "-c", repo,
-      `/usr/bin/env HOME='${home}' PATH='${bin}' /bin/bash --noprofile --norc`);
+      `/usr/bin/env HOME='${home}' PATH='${bin}/empty' /bin/bash --noprofile --norc`);
     const pane = tmux("list-panes", "-t", "dev-impl@fixture", "-F", "#{pane_id}").trim();
     daemon.deps.sessionRegistry.updateBinding(node.id, { tmuxSession: "dev-impl@fixture", tmuxPane: pane });
     const governance = daemon.deps.teamGovernance!;
@@ -82,8 +92,11 @@ it.each([
     });
     // A headless turn reports the missing client and preserves its exit status in the pane.
     await vi.waitFor(() => expect(tmux("display-message", "-p", "-t", pane, "#{pane_dead}").trim()).toBe("1"), { timeout: 30_000 });
-    expect(tmux("display-message", "-p", "-t", pane, "#{pane_dead_status}").trim()).toBe("127");
     const output = tmux("capture-pane", "-p", "-J", "-S", "-100", "-t", pane);
+    expect(tmux("display-message", "-p", "-t", pane, "#{pane_dead_status}").trim(), output).toBe("127");
+    expect(readFileSync(join(directory, "client.path"), "utf8").trim().split(delimiter)
+      .filter(part => part === clientsBin)).toHaveLength(1);
+    expect(readFileSync(join(directory, "client.args"), "utf8").split("\n")).toContain(firstFlag);
     expect(output).toContain("agent-turn-view.mjs");
     if (runtime === "claude-code") {
       expect(output).toContain(`'-p' '--permission-mode' 'bypassPermissions'`);
