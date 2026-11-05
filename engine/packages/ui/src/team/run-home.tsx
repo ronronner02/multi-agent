@@ -42,12 +42,12 @@ export function RunHome({ read, runId, available, now, onOpenTask, onOpenBranch 
     <main className="home">
       <section className="chat" aria-label={t("team.chat.message")}>
         <div className="chat-log">
-          <PlanPlate read={read} runId={runId} entityVersion={entityVersion} />
           {chat.data?.available
             ? chat.data.messages.map(message => message.kind === "decision" && !message.answeredBy
               ? <DecisionPlate key={message.id} message={message} runId={runId} entityVersion={entityVersion} />
               : <Turn key={message.id} message={message} />)
             : null}
+          <PlanPlate read={read} runId={runId} entityVersion={entityVersion} />
           {chat.data && !chat.data.available && <p className="muted" style={{ fontSize: 13 }}>{t("team.chat.unavailable")}</p>}
           {read?.run.state === "blocked" && <ResumePlate read={read} />}
         </div>

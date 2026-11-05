@@ -57,6 +57,7 @@ export const MESSAGE_PARAMETERS = {
   "team.resume.minutes": ["count"],
   "team.resume.retries": ["count"],
   "team.resume.rounds": ["count"],
+  "team.merge.openTasks": ["count"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS
