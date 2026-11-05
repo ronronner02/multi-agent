@@ -703,5 +703,15 @@
   "team.resume.action": "Resume",
   "team.resume.minutes": "Resuming adds {{count}} minutes to the active-time budget.",
   "team.resume.retries": "Resuming adds {{count}} retries to the budget.",
-  "team.resume.rounds": "Resuming adds {{count}} review rounds."
+  "team.resume.rounds": "Resuming adds {{count}} review rounds.",
+  "team.merge.blocked": "Not ready to merge",
+  "team.merge.openTasks": "{{count}} tasks still open",
+  "team.merge.done": "Merged",
+  "team.merge.conflict": "The merge conflicts",
+  "team.merge.refused.merge_tasks_open": "Tasks are still open",
+  "team.merge.refused.merge_checkout_dirty": "The checkout has uncommitted changes",
+  "team.merge.refused.merge_detached_head": "The checkout is not on a branch",
+  "team.merge.refused.merge_already_on_branch": "Already on the target branch",
+  "team.merge.refused.merge_no_branch": "No integration branch yet",
+  "team.merge.refused.merge_unavailable": "Merge is unavailable"
 }

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { TeamRunState } from "@openrig/daemon/team-control";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
-import { readBranch, readChat, type BranchState, type ChatState } from "./clients.js";
+import { readIntegration, readChat, type ChatState, type IntegrationState } from "./clients.js";
 
 /**
  * U10 — the team surface's reads.
@@ -49,10 +49,10 @@ export function useTeamChat(runId: string, enabled: boolean) {
   });
 }
 
-export function useBranch(runId: string, enabled: boolean) {
+export function useIntegration(runId: string, enabled: boolean) {
   const { paired, request } = useOwnerSession();
-  return useQuery<BranchState>({
-    queryKey: ["team", runId, "branch"], enabled: paired && enabled && !!runId, retry: false, refetchInterval: 5_000,
-    queryFn: ({ signal }) => readBranch(request, runId, signal),
+  return useQuery<IntegrationState>({
+    queryKey: ["team", runId, "integration"], enabled: paired && enabled && !!runId, retry: false, refetchInterval: 5_000,
+    queryFn: ({ signal }) => readIntegration(request, runId, signal),
   });
 }

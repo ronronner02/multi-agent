@@ -703,5 +703,15 @@
   "team.resume.action": "继续",
   "team.resume.minutes": "继续会把活跃时间预算再加 {{count}} 分钟。",
   "team.resume.retries": "继续会把重试次数再加 {{count}} 次。",
-  "team.resume.rounds": "继续会把审查轮次再加 {{count}} 轮。"
+  "team.resume.rounds": "继续会把审查轮次再加 {{count}} 轮。",
+  "team.merge.blocked": "还不能合并",
+  "team.merge.openTasks": "还有 {{count}} 项没完成",
+  "team.merge.done": "已合并",
+  "team.merge.conflict": "合并有冲突",
+  "team.merge.refused.merge_tasks_open": "还有任务没完成",
+  "team.merge.refused.merge_checkout_dirty": "工作区有未提交的改动",
+  "team.merge.refused.merge_detached_head": "当前不在分支上",
+  "team.merge.refused.merge_already_on_branch": "已经在目标分支上",
+  "team.merge.refused.merge_no_branch": "还没有集成分支",
+  "team.merge.refused.merge_unavailable": "合并不可用"
 }
