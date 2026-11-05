@@ -878,6 +878,7 @@ export function createApp(deps: AppDeps): Hono {
     credentials: teamOptions.credentials,
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
+    ...(teamOptions.planWorktreeRoot ? { planWorktreeRoot: teamOptions.planWorktreeRoot } : {}),
   }, [deps.missionControlBearerToken, deps.terminalBearerToken]));
   // MVP slice C3 — the owner's read of a lead's decomposition and the decision it becomes. The
   // read is the daemon's own reading of the file the lead wrote; the write records an owner
@@ -885,6 +886,9 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/team-control", teamLeadRoutes(teamGovernance, {
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
+    // U5 — the chat and plan routes start the lead's next turn through the same dispatch a
+    // start and a growth use, so a chat message and a plan approval launch exactly as they do.
+    ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
   }));
 

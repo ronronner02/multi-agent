@@ -15,7 +15,7 @@ vi.mock("../new-task.js", () => ({ NewTaskForm: () => null }));
 
 let run: TeamRun;
 beforeEach(() => {
-  run = { id: "run", rigId: "rig", displayName: "Add the status filter", state: "approved", stateReason: null, entityVersion: 10,
+  run = { id: "run", rigId: "rig", displayName: "Add the status filter", state: "approved", stateReason: null, phase: "delivery", entityVersion: 10,
     activeMs: 0, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 0, reviewerSeat: null, bindingDigest: "binding", createdAt: "", updatedAt: "",
     usage: { activeMs: 0, inputTokens: { value: null, reason: null }, outputTokens: { value: null, reason: null }, costUsd: { value: null, reason: null } },
     binding: { artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",

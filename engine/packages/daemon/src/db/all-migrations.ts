@@ -116,6 +116,7 @@ import { reviewLoopSchema } from "./migrations/107_review_loop.js";
 import { cancellationSchema } from "./migrations/108_cancellation.js";
 import { attemptFailureSchema } from "./migrations/110_attempt_failure.js";
 import { displayNamesSchema } from "./migrations/112_display_names.js";
+import { leadChatSchema } from "./migrations/113_lead_chat.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -226,4 +227,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   cancellationSchema,
   attemptFailureSchema,
   displayNamesSchema,
+  leadChatSchema,
 ];

@@ -9,13 +9,14 @@ import {
   object, parseAssignment, parseAttemptIdentity, parseControlRequest, parsePlanBinding, parseTaskInputs, parseTeamEvent, parseUsage, text,
   type ApprovalAction, type ApprovalConsumption, type ApprovalKind, type AttemptState, type ControlActor,
   type ControlReceipt, type ControlRequest, type JsonObject, type TeamApproval, type TeamAttempt,
-  type TeamRun, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
+  type TeamRun, type TeamRunPhase, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
 import { ordinalRunName, reviewName, taskName } from "./display-names.js";
 import { classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { LeadTask } from "./lead-proposal.js";
+import { appendChatMessage, chatBody, listChatMessages, runLeadTask, type TeamChatMessage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
@@ -241,7 +242,8 @@ export class PlanGovernance {
     this.rigs = new RigRepository(db);
   }
 
-  createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null; displayName?: string | null }): TeamRun {
+  createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null; displayName?: string | null;
+    phase?: TeamRunPhase }): TeamRun {
     this.assertStandalone();
     if (daemonModeOf(this.db) === "legacy") throw new Error("A legacy-mode daemon cannot register managed authority; restart in managed mode");
     const id = text(input.id, "runId", 256);
@@ -253,6 +255,9 @@ export class PlanGovernance {
     // U9 — the run's name from its goal. A caller that names none records no name, and `getRun`
     // falls back to the run's creation order on the rig.
     const displayName = input.displayName?.trim() || null;
+    // U5 — a planning run's work is the lead's conversation with the owner; every other run
+    // starts in delivery, which is what every row recorded before the phase existed is.
+    const phase: TeamRunPhase = input.phase === "planning" ? "planning" : "delivery";
     const bindingDigest = hashBinding(binding);
     return this.events.withNotifyEnvelope((register) => {
       if (this.db.prepare("SELECT id FROM team_runs WHERE id = ?").get(id)) {
@@ -262,8 +267,8 @@ export class PlanGovernance {
       }
       this.rigs.assertNoPendingDeletion(rigId);
       const now = this.clock().toISOString();
-      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, display_name, state, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, displayName, now, now);
+      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, display_name, phase, state, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, displayName, phase, now, now);
       const run = this.getRun(id);
       this.emit(run, register, "run.created", { bindingDigest, state: "pending" });
       return run;
@@ -284,7 +289,7 @@ export class PlanGovernance {
 
   getRun(id: string): TeamRun {
     const row = this.db.prepare(`SELECT id, rig_id AS rigId, binding_json AS bindingJson, binding_digest AS bindingDigest,
-      reviewer_seat AS reviewerSeat, state, state_reason AS stateReason, entity_version AS entityVersion,
+      reviewer_seat AS reviewerSeat, state, state_reason AS stateReason, phase, entity_version AS entityVersion,
       active_ms AS activeMs, accounted_at AS accountedAt, retries_used AS retriesUsed,
       review_rounds_used AS reviewRoundsUsed, display_name AS displayName, created_at AS createdAt,
       updated_at AS updatedAt, rowid AS rowOrdinal
@@ -616,6 +621,136 @@ export class PlanGovernance {
     }
     return { status: "accepted", value: { ...this.getApproval(approval.id), revisionTaskId: taskId },
       effectMayStart: true, observedBy: owner.sessionId, revisionTaskId: taskId };
+  }
+
+  /**
+   * U5 — the owner's message in the run's chat, and the lead turn it is answered by.
+   *
+   * Every message is stored, and whether it starts a turn is decided from the run's own rows:
+   * a lead attempt still live means the message waits for the next turn, and a lead task that
+   * has already reached a terminal outcome is reopened the way a rejected proposal reopens it.
+   * The route dispatches only when the receipt says a turn may start, so a message that arrives
+   * mid-turn is never doubled into a second launch.
+   *
+   * The message itself is not copied into the event log: the chat table is its owner, and an
+   * event that carried the text would be a second copy of it with a second retention rule.
+   */
+  postChatMessage(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("chat.message", raw, owner, (ctx) => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.state === "canceled" || ctx.run.state === "cancel_requested") return deny("Run is closed; the lead is not reading messages");
+      const body = chatBody(object(ctx.request.payload, "chat").body, "chat.body");
+      const lead = runLeadTask(this.db, ctx.run.id);
+      if (!lead) return deny("This run has no lead task to answer the owner");
+      const message = appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id, sender: "owner",
+        body, createdAt: ctx.now });
+      // The command's own event carries the message id and the owner as its observer; the text
+      // itself stays in the chat table, so it is not copied into the log with a second retention.
+      // A turn already running is the whole answer: the message is pending now, and the turn-end
+      // owner starts the next turn for it. Two turns at once is never a state this command makes.
+      if (this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(lead.qitemId)) {
+        return { status: "accepted", value: { messageId: message.id, queued: true }, taskId: lead.taskId,
+          observedBy: owner.sessionId };
+      }
+      const item = this.queue.getById(lead.qitemId);
+      if (item && (item.state === "done" || item.state === "handed-off")) {
+        const updated = withQueueWrite(this.db, { operation: "update", qitemId: lead.qitemId }, () => this.queue.updateWithinTransaction({
+          qitemId: lead.qitemId, actorSession: ctx.run.id, state: "pending", reopen: true,
+          transitionNote: "The owner sent a chat message; the lead answers it",
+        }));
+        for (const event of updated.persistedEvents) ctx.register(event);
+        return { status: "accepted", value: { messageId: message.id, queued: false },
+          effectMayStart: true, taskId: lead.taskId, revisionTaskId: lead.taskId, observedBy: owner.sessionId };
+      }
+      if (item && (item.state === "pending" || item.state === "in-progress") && ctx.run.state === "approved") {
+        return { status: "accepted", value: { messageId: message.id, queued: false },
+          effectMayStart: true, taskId: lead.taskId, revisionTaskId: lead.taskId, observedBy: owner.sessionId };
+      }
+      // A blocked or canceled lead task is not dispatchable, and this command does not unblock a
+      // run. The message is recorded as queued so the owner sees it was kept, not answered.
+      return { status: "accepted", value: { messageId: message.id, queued: true }, taskId: lead.taskId,
+        observedBy: owner.sessionId, reason: "The lead task is not dispatchable; the message waits for it" };
+    });
+  }
+
+  /** U5 — the run's conversation, in order. A read for the route; it writes nothing. */
+  chatMessages(runId: string): TeamChatMessage[] {
+    this.getRun(runId);
+    return listChatMessages(this.db, runId);
+  }
+
+  /** U5 — the run's one lead task: the task a chat message and a plan approval address. */
+  leadTask(runId: string): { taskId: string; qitemId: string } | null {
+    this.getRun(runId);
+    return runLeadTask(this.db, runId);
+  }
+
+  /**
+   * U5 — the owner approves the plan, and the run becomes delivery.
+   *
+   * The plan's bytes were read from the lead's own candidate tree and committed to the
+   * daemon-owned branch before this runs; what is left is the binding it establishes. The
+   * replacement is the same kind C1 growth already accepts — same repository, same plan path,
+   * same roles and limits, a write scope the owner chose — and it is recorded the same way: a
+   * fresh implementation approval under the new digest, with the bootstrap approval and the
+   * pending decisions it made obsolete invalidated in one write.
+   *
+   * The lead's task is reopened, because its next activation is the decomposition the approved
+   * plan calls for; a task still pending is left as it is and the route starts it. A plan
+   * approval is not a task admission: nothing about the decomposition is known yet, and the
+   * lead's proposal still goes through the owner's decision.
+   */
+  approvePlan(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, approved: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("plan.approved", raw, owner, (ctx) => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.phase !== "planning") return deny("This run's plan was already approved");
+      if (ctx.run.state !== "approved") return deny(`Run is closed to plan approval (${ctx.run.state})`);
+      const binding = parsePlanBinding(approved);
+      // Everything the owner did not decide with this approval is the bootstrap's: the same
+      // repository, plan path, roles and limits, and a write scope that still covers the lead
+      // task the run already admitted. A plan that moved the repository would be a different
+      // run, which is a new start rather than an approval.
+      if (binding.repository.root !== ctx.run.binding.repository.root || binding.planRef !== ctx.run.binding.planRef
+        || canonicalJson(binding.roles) !== canonicalJson(ctx.run.binding.roles)
+        || canonicalJson(binding.limits) !== canonicalJson(ctx.run.binding.limits)) {
+        return deny("Approving a plan keeps the run's repository, plan path, roles and limits");
+      }
+      const covers = (path: string) => binding.writePaths.some(root => path === root || path.startsWith(root + "/"));
+      const admitted = (this.db.prepare("SELECT assignment_json AS assignment FROM team_queue_authority WHERE run_id = ?")
+        .all(ctx.run.id) as Array<{ assignment: string }>).map(row => parseAssignment(JSON.parse(row.assignment)));
+      if (admitted.some(task => task.role !== "reviewer" && task.paths.some(path => !covers(path)))) {
+        return deny("The approved plan's write scope must cover the tasks this run already admitted");
+      }
+      const lead = runLeadTask(this.db, ctx.run.id);
+      if (!lead) return deny("This run has no lead task to decompose the plan");
+      this.invalidateUnused(ctx, false);
+      ctx.run.binding = binding;
+      ctx.run.bindingDigest = hashBinding(binding);
+      const payload = { bindingDigest: ctx.run.bindingDigest };
+      this.db.prepare(`INSERT INTO team_approvals
+        (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,decision_actor,created_at,updated_at)
+        VALUES (?,?,'orchestrator','implementation',?,?,?,?,'approved',?,?,?,?)`).run(randomUUID(), ctx.run.id,
+        canonicalJson(payload), hashBytes(canonicalJson(payload)), ctx.run.bindingDigest, ctx.run.bindingDigest,
+        // A plan approval's grant lives as long as the run's budget does: the plan was just
+        // approved, and a second expiry a day later would close a run nobody had finished.
+        new Date(this.clock().getTime() + ctx.run.binding.limits.maxActiveMs).toISOString(),
+        owner.sessionId, ctx.now, ctx.now);
+      ctx.run.phase = "delivery";
+      ctx.run.state = "approved";
+      ctx.run.stateReason = null;
+      const item = this.queue.getById(lead.qitemId);
+      if (item && (item.state === "done" || item.state === "handed-off")) {
+        const updated = withQueueWrite(this.db, { operation: "update", qitemId: lead.qitemId }, () => this.queue.updateWithinTransaction({
+          qitemId: lead.qitemId, actorSession: ctx.run.id, state: "pending", reopen: true,
+          transitionNote: "The owner approved the plan; the lead decomposes it",
+        }));
+        for (const event of updated.persistedEvents) ctx.register(event);
+      }
+      return { status: "accepted", value: { phase: ctx.run.phase, bindingDigest: ctx.run.bindingDigest, planRef: binding.planRef },
+        effectMayStart: true, taskId: lead.taskId, revisionTaskId: lead.taskId, observedBy: owner.sessionId };
+    });
   }
 
   private applyRunGrowth(ctx: CommandContext, approval: TeamApproval, owner: ControlActor): Result {
@@ -1431,10 +1566,10 @@ export class PlanGovernance {
       this.accountClock(ctx);
       const result = apply(ctx);
       this.syncClock(ctx);
-      const changed = this.db.prepare(`UPDATE team_runs SET state = ?, state_reason = ?, entity_version = ?, active_ms = ?,
+      const changed = this.db.prepare(`UPDATE team_runs SET state = ?, state_reason = ?, phase = ?, entity_version = ?, active_ms = ?,
         accounted_at = ?, retries_used = ?, review_rounds_used = ?, updated_at = ?, binding_json = ?, binding_digest = ?
         WHERE id = ? AND entity_version = ?`)
-        .run(run.state, run.stateReason, run.entityVersion, run.activeMs, run.accountedAt, run.retriesUsed,
+        .run(run.state, run.stateReason, run.phase, run.entityVersion, run.activeMs, run.accountedAt, run.retriesUsed,
           run.reviewRoundsUsed, ctx.now, canonicalJson(run.binding), run.bindingDigest, run.id, request.expectedEntityVersion);
       if (changed.changes !== 1) throw new Error("Run entity version conflict");
       const value = result.value === undefined ? null : jsonValue(result.value);

@@ -1,9 +1,11 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { TEAM_CONTROL_VERSION, parseControlRequest, parseProtocolVersion } from "../contracts/team-control.js";
+import { TEAM_CONTROL_VERSION, TeamContractError, parseControlRequest, parseProtocolVersion } from "../contracts/team-control.js";
 import type { PlanGovernance, ProviderPolicyCapability } from "../domain/plan-governance.js";
 import type { LeadTask } from "../domain/lead-proposal.js";
-import { refreshPlanBinding } from "./team-start.js";
+import { runLeadTask } from "../domain/lead-chat.js";
+import { commitPlan } from "../domain/plan-branch.js";
+import { bindingForGoal, refreshPlanBinding } from "./team-start.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
 
 /**
@@ -28,9 +30,17 @@ export interface LeadProposalRouteOptions {
   credentials: TeamControlCredentials;
   legacyTokens: readonly (string | null | undefined)[];
   /** The runtime that owns the candidate trees and reads worker-written files. */
-  runtime?: { leadProposalFor(runId: string, taskId: string): LeadTask[] };
+  runtime?: {
+    leadProposalFor(runId: string, taskId: string): LeadTask[];
+    /** U5 — the plan a planning lead wrote in its own tree. */
+    planFor?(runId: string, taskId: string, planRef: string): { content: string; hash: string };
+    /** U5 — let the lead's tree be adopted again after the plan commit moved its source. */
+    forgetCandidate?(runId: string, taskId: string): void;
+  };
   /** The current policy capability a decision reconciles against, as every command reads it. */
   readPolicyCapability?: () => ProviderPolicyCapability | null;
+  /** U5 — what starts the lead's next turn; the same dispatch a start and a growth use. */
+  dispatch?: (runId: string, taskId: string) => Promise<void>;
 }
 
 export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposalRouteOptions): Hono<TeamControlEnv> {
@@ -98,7 +108,126 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     return c.json(receipt, receipt.status === "denied" ? 403 : 200);
   });
 
+  const chatRoute = "/runs/:runId/chat";
+  const planRoute = "/runs/:runId/plan/approve";
+  app.use(chatRoute, teamControlAuthentication(() => options.credentials, options.legacyTokens));
+  app.use(planRoute, teamControlAuthentication(() => options.credentials, options.legacyTokens));
+  app.use(chatRoute, bodyLimit({ maxSize: 1_048_576,
+    onError: c => c.json({ code: "invalid_team_contract", error: "The chat request exceeds its size limit." }, 413) }));
+  /** The owner, scoped to the run the URL names — the same rule the proposal routes read. */
+  const ownerFor = (c: Context<TeamControlEnv>, runId: string) => c.get("controlActor").kind === "owner"
+    && (c.get("controlRunId") === null || c.get("controlRunId") === runId);
+
+  /**
+   * U5 — the run's conversation, in order.
+   *
+   * The owner reads what they and the lead said, and the run's phase, so a client knows whether
+   * a plan is still being agreed. Nothing here starts work or records a decision.
+   */
+  app.get(chatRoute, (c) => {
+    const runId = c.req.param("runId");
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    let run;
+    try { run = governance.getRun(runId); } catch (error) {
+      if (/not found/i.test((error as Error).message)) return c.json({ code: "control_not_found", error: "The requested entity was not found." }, 404);
+      throw error;
+    }
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, phase: run.phase,
+      messages: governance.chatMessages(runId).map(message => ({ id: message.id, sender: message.sender,
+        body: message.body, createdAt: message.createdAt })) });
+  });
+
+  /**
+   * U5 — the owner's message, and the lead's turn to answer it.
+   *
+   * The row and the turn are decided together inside one governance command; this route only
+   * starts the turn the command says may start. `queued` in the answer is the honest report that
+   * a lead turn was already running: the message is stored and the turn-end owner starts the
+   * next one, so the answer to the owner is "kept", not "answered".
+   */
+  app.post(chatRoute, async (c) => {
+    const runId = c.req.param("runId");
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner message is required." }, 403);
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
+    const run = governance.getRun(runId), policy = options.readPolicyCapability?.();
+    // A planning run's binding is refreshed from the worktree the plan is recorded in, which is
+    // the same reconciliation every other command reads. A refresh that cannot read the plan is
+    // the daemon saying it cannot vouch for the binding, not a reason to act on a stale one.
+    let binding: unknown = run.binding;
+    try { if (policy) binding = refreshPlanBinding(run.binding, policy); }
+    catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
+    const receipt = governance.postChatMessage(request, c.get("controlActor"), binding);
+    if (receipt.effectMayStart && options.dispatch && receipt.revisionTaskId) {
+      const taskId = receipt.revisionTaskId;
+      void options.dispatch(runId, taskId)
+        .catch(error => console.warn(`team lead: launch for run=${runId} after a chat message failed: ${error instanceof Error ? error.message : String(error)}`));
+    }
+    return c.json(receipt, receipt.status === "denied" ? 403 : 200);
+  });
+
+  /**
+   * U5 — the owner approves the plan, and the run becomes delivery.
+   *
+   * Three steps, in this order: the plan is read from the lead's own candidate tree through the
+   * same pinned reader every worker-written file goes through; it is committed to the run's own
+   * branch in the daemon-owned worktree the run was bound to; and the binding is rebuilt from
+   * that commit, which is what the governance command records. The owner's checkout is never
+   * touched, and nothing is admitted: the lead's decomposition still goes through the owner's
+   * decision after this.
+   */
+  app.post(planRoute, async (c) => {
+    const runId = c.req.param("runId");
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner approval is required." }, 403);
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
+    const run = governance.getRun(runId);
+    if (run.phase !== "planning") {
+      return c.json({ code: "plan_not_awaiting_approval", error: "This run's plan was already approved." }, 409);
+    }
+    const lead = governance.leadTask(runId);
+    if (!lead) return c.json({ code: "control_not_found", error: "This run has no lead task to read a plan from." }, 404);
+    if (!options.runtime?.planFor) return c.json({ code: "lead_plan_unavailable", error: "Candidate trees are not composed in this daemon." }, 503);
+    let plan: { content: string; hash: string };
+    try { plan = options.runtime.planFor(runId, lead.taskId, run.binding.planRef); }
+    catch (error) { return c.json({ code: "plan_missing", error: (error as Error).message }, 409); }
+    if (!plan.content.trim()) return c.json({ code: "plan_missing", error: `The lead wrote no plan at ${run.binding.planRef}.` }, 409);
+    const policy = options.readPolicyCapability?.();
+    if (!policy) return c.json({ code: "current_policy_unavailable", error: "The plan capability a run is bound under is unavailable." }, 503);
+    let currentBinding: unknown;
+    try { currentBinding = refreshPlanBinding(run.binding, policy); }
+    catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
+    // The write scope is the one the owner named when they started planning; the plan path rides
+    // along so the lead task the run already admitted stays covered by the binding it runs under.
+    const writePaths = [...new Set([run.binding.planRef, ...run.binding.readPaths])];
+    let binding;
+    try {
+      commitPlan({ worktree: run.binding.repository.root, planRef: run.binding.planRef, plan: plan.content,
+        message: `plan: ${run.displayName}` });
+      binding = bindingForGoal({ root: run.binding.repository.root, planRef: run.binding.planRef, writePaths, policy });
+    } catch (error) {
+      return c.json({ code: "plan_record_failed", error: (error as Error).message }, 500);
+    }
+    const receipt = governance.approvePlan(request, c.get("controlActor"), currentBinding, binding);
+    if (receipt.status !== "accepted") return c.json(receipt, 403);
+    // The plan commit moved the worktree's HEAD, so the lead's tree is re-adopted at the new
+    // base rather than refused as a moved source. Its bytes stay exactly where the lead wrote them.
+    options.runtime.forgetCandidate?.(runId, lead.taskId);
+    if (receipt.effectMayStart && options.dispatch) {
+      void options.dispatch(runId, lead.taskId).catch(error =>
+        console.warn(`team lead: launch for run=${runId} after plan approval failed: ${error instanceof Error ? error.message : String(error)}`));
+    }
+    return c.json(receipt);
+  });
+
   app.onError((error, c) => {
+    // A message, a plan read or an approval that is malformed is the client's fault, not a
+    // persistence failure: say so instead of asking the owner to retry an unchanged request.
+    if (error instanceof TeamContractError || error instanceof SyntaxError) {
+      return c.json({ code: "invalid_team_contract", error: "The request is malformed or incompatible." }, 400);
+    }
     if (/not found/i.test(error.message)) return c.json({ code: "control_not_found", error: "The requested entity was not found." }, 404);
     if (/conflict|idempotency key/i.test(error.message)) {
       return c.json({ code: "control_conflict", error: "Refresh the entity version and exact request before retrying." }, 409);

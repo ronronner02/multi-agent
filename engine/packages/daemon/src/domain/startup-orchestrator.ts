@@ -25,6 +25,7 @@ import { SettingsStore } from "./user-settings/settings-store.js";
 import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
 import { continuationNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
+import { leadChatTurnNote, takeOwnerMessages } from "./lead-chat.js";
 
 /**
  * MVP — whether this launch starts a headless turn rather than an interactive session.
@@ -827,9 +828,16 @@ export class StartupOrchestrator {
     if (firstSendText) {
       try { bundle = this.readFile(firstSendText.absolutePath); } catch { /* the adapter reports its own read failure */ }
     }
+    // U5 — a lead's turn carries the owner's messages the previous turns have not seen, and this
+    // is the moment they are marked delivered: the prompt is written immediately before the
+    // client starts. Anything the owner sends afterwards is pending, and the turn-end owner
+    // starts the next turn for it.
+    const chat = assignment.role === "lead"
+      ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attempt.context.projection.attemptId))
+      : null;
     return managedTurnPrompt({ identity: identityAction?.value ?? "", bundle, runId, assignment, taskBody: task.body,
       outputs, permissions, instructions: turnInstructions(attempt.context),
-      continuation: continuationNote(this.db, runId, assignment.taskId, assignment.role) });
+      continuation: [continuationNote(this.db, runId, assignment.taskId, assignment.role), chat].filter(Boolean).join("\n\n") || null });
   }
 
   private async deliverInitialSessionPrompt(

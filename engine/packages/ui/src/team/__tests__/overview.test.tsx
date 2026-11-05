@@ -14,7 +14,7 @@ import { Overview, compactTokens, observedCost, stageGroupState, verifiedChecks 
  */
 
 const run: TeamRun = {
-  id: "RUN-0142", rigId: "work-board", displayName: "Add the status filter", bindingDigest: "binding", state: "approved", stateReason: null,
+  id: "RUN-0142", rigId: "work-board", displayName: "Add the status filter", bindingDigest: "binding", state: "approved", stateReason: null, phase: "delivery",
   entityVersion: 3, activeMs: 0, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 0, reviewerSeat: null,
   usage: { activeMs: 0, inputTokens: { value: null, reason: "Not published" }, outputTokens: { value: null, reason: "Not published" }, costUsd: { value: null, reason: "Not published" } },
   createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T00:00:00.000Z",
