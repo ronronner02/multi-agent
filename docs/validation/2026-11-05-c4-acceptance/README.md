@@ -47,15 +47,16 @@ Seq numbers are `events.seq` from `main-run/control-events.json`.
 | Implementers done | 44–47 | Both turns ended; the sweep observed both attempts `stopped`. |
 | task-2 recorded | 48–49 | `rig team done task-2` created `task-2-review-1`. |
 | task-3 recorded | 54–56 | `rig team done task-3` created `task-3-review-1`. |
-| Review 1 (task-2) | 57–… | The reviewer's turn reviewed task-2's candidate and approved it: no P0/P1, one P2 and one P3, both testing-only. |
-| **Review 2 (task-3): changes required** | — | The reviewer's turn reviewed task-3's candidate and returned **CHANGES-REQUIRED** with a cited, reproduced P1. See "The review round that changed the candidate" below. |
-| Rework | — | Recording the P1 reopened task-3 for rework. |
+| Review 1 (task-2) | 64–68 | The reviewer's turn reviewed task-2's candidate and approved it: `review.verdict = approved` at seq 67, no P0/P1, one P2 and one P3, both testing-only. Recorded at seq 68. |
+| **Review 2 (task-3): changes required** | 70–75 | The reviewer's turn reviewed task-3's candidate and returned **CHANGES-REQUIRED**: `review.verdict = changes-required` at seq 73 with a cited, reproduced P1, recorded at seq 75. See below. |
+| Rework | 74 | The verdict reopened task-3 for rework (`queue.updated` done→pending). |
 | Cancel run | — | A separate short run was started on the implementer seat and canceled while its agent was mid-turn. |
 
 ## The review round that changed the candidate
 
 The requirement is a review round that changed the candidate. The round is **task-3's first
-review**, recorded as `changes-required` at `review-1-task3-findings.json`.
+review**, whose verdict is `review.verdict = changes-required` at **seq 73** and whose record is
+`review-1-task3-findings.json`. It reopened the implementer's task at **seq 74**.
 
 The reviewer's report, verbatim:
 
@@ -79,8 +80,8 @@ finding and the reopening are all recorded; the second-round candidate is not.
 |---|---|
 | Lead protocol | Seq 6–15 and `lead-proposal-1.json`: the lead ran one turn under its protocol and roster, wrote `lead-proposal.json`, and the daemon read it at the boundary that owns worker-written data. |
 | Owner approval gate | Seq 16–25 and `step-reject.txt` / `step-approve.txt`: nothing the lead proposed was admitted until the owner decided the batch, and the rejected batch admitted nothing. |
-| Rejected approval | Seq 17 records the owner's rejection **with its reason**. `lead-proposal-2.json` shows the revision answering both points of that reason. |
-| Review rework | `review-1-task3-findings.json`: a cited, reproduced P1 with `done_signal.holds = false`, recorded as `changes-required`, which reopened task-3. |
+| Rejected approval | Seq 17 records the owner's rejection **with its reason**. `proposal-2-now.json` shows the revision answering both points of that reason. |
+| Review rework | `review-1-task3-findings.json` and seq 73: a cited, reproduced P1 with `done_signal.holds = false`, recorded as `changes-required`, which reopened task-3 at seq 74. |
 | Restart | The daemon was restarted while two turns were running. After it: three tasks, no duplicate, both attempts still `running`, then both observed `stopped`. |
 | Cancellation | `cancel-run/`: the run was canceled while its agent was mid-turn. The receipt names the process it stopped, the attempt is `stopped`, the task and the run are `canceled`, and the candidate tree is still on disk. |
 | Applied result | `step-apply.txt` and `step-apply-tests.txt`: `rig team apply` applied task-2's patch to a scratch clone and its `npm test` passed 5 of 5. |
@@ -94,7 +95,7 @@ The owner's rejection, recorded verbatim at seq 17:
 > same rule Task A uses. (2) Each task body must require the repository's full 'npm test' to
 > pass, not only the implementer's own test file, and must say to report that output.
 
-The lead's revision (`lead-proposal-2.json`) answers both: task-3's body states "Only ASCII
+The lead's revision (`proposal-2-now.json`) answers both: task-3's body states "Only ASCII
 letters (A-Z, a-z) count as letters for titleCase, the same rule Task A uses for slugify", and
 both bodies now require the repository's full `npm test` and its complete output.
 
