@@ -116,6 +116,28 @@ describe("the owner result read", () => {
     expect(body.result.manifestDigest).toBe(runtime.candidateIdentityFor("run", "task").manifestDigest);
   });
 
+  it("re-adopts an intact candidate after restart when the run is no longer approved", async () => {
+    db.prepare("UPDATE team_runs SET state = 'blocked' WHERE id = 'run'").run();
+    const restartedBus = new EventBus(db);
+    const restartedQueue = new QueueRepository(db, restartedBus);
+    const assignmentRoot = join(directory, "assignments");
+    runtime = new WorkflowRuntime({ db, eventBus: restartedBus, queueRepo: restartedQueue,
+      assignmentRoot: () => assignmentRoot,
+      candidateRoot: (runId, taskId, worker) => join(assignmentRoot, worker, `${runId}-${taskId}`),
+      defaultWorker: () => "local" });
+    app = createTestApp(db, { appDeps: { eventBus: restartedBus, queueRepo: restartedQueue,
+      teamGovernance: governance, workflowRuntime: runtime,
+      teamControl: { credentials: { ownerToken: "owner-fixture" },
+        resolveBinding: () => structuredClone(binding), readPolicyCapability: () => ({
+          policyRevision: 4, policyFingerprint: binding.policyFingerprint,
+          verifiedProviders: ["claude", "codex"] as const }) } } }).app;
+
+    const response = await request("/api/team-control/runs/run/tasks/task/result");
+    expect(response.status).toBe(200);
+    expect((await response.json() as { result: { patch: string } }).result.patch)
+      .toContain("+export const result = 42;");
+  });
+
   it("refuses an unfinished task, and one this run never recorded", async () => {
     db.prepare("UPDATE queue_items SET state = 'in-progress' WHERE qitem_id = ?").run(qitemId);
     const unfinished = await request("/api/team-control/runs/run/tasks/task/result");
