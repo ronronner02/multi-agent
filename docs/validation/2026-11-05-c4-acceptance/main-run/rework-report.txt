@@ -1,0 +1,45 @@
+assistant text blocks: 4
+================ FINAL ================
+**Status:** NEEDS-DECISION
+
+I made no change again. This attempt arrived with the same brief and the same R1-1 finding as the last one, and the conflict I reported then hasn't been resolved anywhere I can see:
+- This attempt's `core` and `charter` match the previous attempt's (`diff` found no differences).
+- This attempt's `plan` file matches the repository's `plan.md` (`diff` found no differences). Task B in both still says "a letter or digit" with no ASCII qualifier.
+- The `role` file only lists permissions. It contains no ruling on R1-1.
+
+**The conflict**
+- The brief requires ASCII-only letters, with "every non-ASCII character, including accented letters, acts as a word boundary, and non-ASCII characters are never changed." Under that rule, `'naïve'` → `'NaïVe'` and `'élan vital'` → `'éLan Vital'` are the required outputs. The current code produces exactly these.
+- R1-1 asks for the Unicode reading, `/(?<![\p{L}\p{N}])\p{Ll}/gu`. That regex would uppercase `é`, which breaks the brief's "never changed" rule.
+- All four acceptance lines pass under either rule, so the tests can't decide between them.
+
+This is the second time the same brief and finding have come back unchanged. If I send it back again without a decision, the loop repeats. The Lead needs to make one of these decisions:
+1. **Keep the brief's ASCII rule:** record R1-1 as not a defect. The current candidate already satisfies the brief.
+2. **Adopt the Unicode rule:** reissue the brief without the ASCII and "never changed" sentences, and allow one extra test, such as `titleCase("élan vital") === "Élan Vital"`, so the change can be shown failing first. I would then apply the reviewer's regex.
+
+**Changed files:** none. `src/titleCase.mjs` and `test/titleCase.test.mjs` are still exactly as round 1 left them, and nothing is committed.
+
+**Evidence:** I ran `npm test` from the repository root. This is the complete output:
+```
+> text-helpers@1.0.0 test
+> node --test --test-reporter=spec 'test/*.test.mjs'
+
+✔ uppercases the first letter of each word (0.549783ms)
+✔ preserves existing capitals inside a word (0.093928ms)
+✔ treats hyphens and underscores as word boundaries (0.061707ms)
+✔ leaves an empty string empty (0.052534ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 39.982061
+```
+It exited with 0.
+
+**Findings addressed**
+- R1-1: not fixed. It conflicts with the brief and needs the Lead's decision, as described above.
+
+**Open items**
+- Task A's files still aren't in this worktree, so the full `npm test` only runs the titleCase tests.

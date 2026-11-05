@@ -38,24 +38,36 @@
   {
     "id": "1af65c29-abc3-4c7f-b919-d3903698382d",
     "action": "scope-change",
-    "state": "approved",
-    "entity_version": 2,
+    "state": "expired",
+    "entity_version": 3,
     "expires_at": "2026-11-05T01:51:42.212Z",
     "decision_actor": "owner-control",
     "created_at": "2026-11-05T00:51:42.221Z",
-    "updated_at": "2026-11-05T00:51:42.230Z",
+    "updated_at": "2026-11-05T02:36:42.246Z",
     "change": "run-growth",
     "guard": null
   },
   {
     "id": "584616b5-c499-463c-bc82-372c02ab215e",
     "action": "implementation",
-    "state": "approved",
-    "entity_version": 1,
+    "state": "expired",
+    "entity_version": 2,
     "expires_at": "2026-11-05T01:51:42.212Z",
     "decision_actor": "owner-control",
     "created_at": "2026-11-05T00:51:42.230Z",
-    "updated_at": "2026-11-05T00:51:42.230Z",
+    "updated_at": "2026-11-05T02:36:42.246Z",
+    "change": null,
+    "guard": null
+  },
+  {
+    "id": "reissue-impl-1793847377933534207",
+    "action": "implementation",
+    "state": "invalidated",
+    "entity_version": 3,
+    "expires_at": "2026-11-05T08:56:17.000Z",
+    "decision_actor": "owner-control",
+    "created_at": "2026-11-05T02:56:17.943Z",
+    "updated_at": "2026-11-05T03:26:03.029Z",
     "change": null,
     "guard": null
   }

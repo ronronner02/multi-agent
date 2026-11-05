@@ -1,6 +1,6 @@
 {
   "runId": "577d5149-f615-4b82-b51e-090f527b9812",
-  "eventCount": 67,
+  "eventCount": 78,
   "events": [
     {
       "seq": 1,
@@ -1594,6 +1594,279 @@
           "reason": null,
           "status": "observed",
           "valueDigest": "sha256:fdf0e451f346d174ced36cd18b0d1c0ac81659b1cdb12436607deb1ec5b80f5a"
+        }
+      }
+    },
+    {
+      "seq": 117,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 02:36:41",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0C77NV7S1JAVDBG03P",
+        "sessionId": "01M6MHSW0C6R5G92EQD7Q34NSF",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "two@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "2e0c7f60-3fdd-42d2-99ee-67bf9ab6a422",
+            "tmuxServer": "/tmp",
+            "paneId": "%0",
+            "processId": 1251191,
+            "processStart": "31197351",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "2fe36d7e-0387-4297-9414-531211466100",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:11be96b78d5621cebcc5f74b9b2b934ed9caf105874c33d7edb5b9f5d39cc295",
+          "observedContextHash": "sha256:11be96b78d5621cebcc5f74b9b2b934ed9caf105874c33d7edb5b9f5d39cc295",
+          "workerUid": 1000,
+          "processGroupId": 1251191,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:2fe36d7e-0387-4297-9414-531211466100"
+          },
+          "deadline": 1793848791906
+        }
+      }
+    },
+    {
+      "seq": 120,
+      "type": "team.control",
+      "createdAt": "2026-11-05 02:36:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "00549532-b23a-4a28-ac9b-395b7a655a9b",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 33,
+        "action": "approvals.expired",
+        "payload": {
+          "count": 2
+        }
+      }
+    },
+    {
+      "seq": 121,
+      "type": "team.control",
+      "createdAt": "2026-11-05 02:36:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "564b6315-735a-4b61-96c5-390be7d36bbb",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 33,
+        "action": "attempt.recorded.denied",
+        "payload": {
+          "actionId": "2fe36d7e-0387-4297-9414-531211466100",
+          "reason": "Implementation approval is not active",
+          "status": "denied",
+          "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      }
+    },
+    {
+      "seq": 122,
+      "type": "team.control",
+      "createdAt": "2026-11-05 02:56:17",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "461789cf-9b4e-4de2-91ca-6e53fa185ae2",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 34,
+        "action": "approval.requested",
+        "payload": {
+          "actionId": "reissue-impl-1793847377933534207",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:788579dce57d8db2a9df2b986d2fc7bffb14f1bbd4d762f27bc621e18cb52e74"
+        }
+      }
+    },
+    {
+      "seq": 123,
+      "type": "team.control",
+      "createdAt": "2026-11-05 02:56:17",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "41d2bef7-9922-4e3b-90b7-b28a50cda3d2",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 35,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "reissue-impl-1793847377933534207",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:b0f4580508934b3ee64fb7f46cdeb41f530f8fe11e13acafdf94ad35ae837e3b"
+        }
+      }
+    },
+    {
+      "seq": 125,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 03:20:46",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0C77NV7S1JAVDBG03P",
+        "sessionId": "01M6MHSW0C6R5G92EQD7Q34NSF",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "two@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "2e0c7f60-3fdd-42d2-99ee-67bf9ab6a422",
+            "tmuxServer": "/tmp",
+            "paneId": "%0",
+            "processId": 1255479,
+            "processStart": "31461814",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "fd4b9dcb-37cf-4246-8a69-4a1183c63759",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:8e84b54ecc2a127d9864646ceab35667fdc67d3e23458db4e8a9eda492b4ef06",
+          "observedContextHash": "sha256:8e84b54ecc2a127d9864646ceab35667fdc67d3e23458db4e8a9eda492b4ef06",
+          "workerUid": 1000,
+          "processGroupId": 1255479,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:fd4b9dcb-37cf-4246-8a69-4a1183c63759"
+          },
+          "deadline": 1793851436373
+        }
+      }
+    },
+    {
+      "seq": 128,
+      "type": "team.control",
+      "createdAt": "2026-11-05 03:20:46",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "f6802d14-de47-4864-9103-29c899cbaa4f",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "fd4b9dcb-37cf-4246-8a69-4a1183c63759",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 36,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "fd4b9dcb-37cf-4246-8a69-4a1183c63759",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:294519a80dc608128174bb2fadc588100970ca9ff14d936d9145af039b14618f"
+        }
+      }
+    },
+    {
+      "seq": 129,
+      "type": "team.control",
+      "createdAt": "2026-11-05 03:24:37",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "79db924d-1cb2-499e-a4ce-8337943b4a21",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 37,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 1240418,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 130,
+      "type": "team.control",
+      "createdAt": "2026-11-05 03:24:37",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "52fdbc5d-b7db-4ed8-b5ef-cdf0bf1e0418",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "fd4b9dcb-37cf-4246-8a69-4a1183c63759",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 37,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "fd4b9dcb-37cf-4246-8a69-4a1183c63759",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:5349ed070f7eab2423d8aafb2d6115136ca584c7d3fb902460782a48f6877c93"
+        }
+      }
+    },
+    {
+      "seq": 131,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 03:26:03",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105003559-cb98eb1a",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
+      }
+    },
+    {
+      "seq": 132,
+      "type": "team.control",
+      "createdAt": "2026-11-05 03:26:03",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "73a853e7-5fcd-4416-9a01-4207cf2afefe",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 38,
+        "action": "task.outcome.denied",
+        "payload": {
+          "actionId": "qitem-20261105003559-cb98eb1a",
+          "reason": "review limit exhausted",
+          "status": "denied",
+          "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
         }
       }
     }
