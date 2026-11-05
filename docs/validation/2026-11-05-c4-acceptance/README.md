@@ -170,8 +170,8 @@ bundle therefore contains no token counts.
   candidate — is **not met** by this run. What the run does prove is the loop up to that point:
   the finding, the reopen, the rework dispatch and the limit. The two follow-up runs
   (`rework-run/`) did not meet it either: both implementers got the rule right first time, and
-  both reviews approved in round 1. **This requirement is unmet by evidence, and the owner
-  decides whether C4 closes without it.** The stub demo `review-demo.ts` still proves the
+  both reviews approved in round 1. **This requirement is unmet by evidence. The owner closed
+  C4 without it on 2026-11-05** (see `docs/amendments/2026-11-05-c4-acceptance.md`). The stub demo `review-demo.ts` still proves the
   changes-required → rework → approved sequence end to end with the stub runner.
 - **An owner decision on the ASCII-versus-Unicode conflict.** Resolving it needs the lead to
   reissue task-3's body or the owner to rule R1-1 not a defect; this run did neither.
@@ -231,10 +231,9 @@ fails without the fix, and each fix is its own commit.
   carried across a restart by the launch path itself.
 - **A `lead-wake:cycles` block has no owner surface.** Approving the `limit-increase` escalation
   does not clear it, and `resume` refuses a run that is not `owner-paused`.
-- **The review-round limit is spent after two rounds for a whole run**, not per task. Two
-  implementer tasks therefore leave one change request before the loop stops, and the second
-  task's rework can never be re-reviewed. Whether the limit should be per task is a plan
-  question this run did not decide.
+- **The review-round limit was spent per run, not per task**, so in this run task-3's rework
+  could never be re-reviewed. Fixed after the run: each implementer task now gets its own
+  rounds (`1bb85a1`), as the plan's Review convergence says.
 - **The ASCII-versus-Unicode conflict in Task B is unresolved.** The plan and the task body say
   ASCII-only; the reviewer read the plan as requiring Unicode letters. The run recorded the
   disagreement rather than choosing.
