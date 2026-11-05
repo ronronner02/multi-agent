@@ -38,6 +38,33 @@ export interface TaskDispatchDependencies {
 
 export type TaskDispatch = (runId: string, taskId: string) => Promise<void>;
 
+/**
+ * Put a seat whose last launch failed back to the state a never-launched seat has.
+ *
+ * A launch that fails after the seat is marked `failed` used to wedge the seat for the life of
+ * the run: the dispatcher starts only a `pending` seat, and the owner surfaces that could clear
+ * one (`rig seat clean`, `rig seat launch`) are legacy verbs a managed daemon refuses. The C4
+ * acceptance run hit exactly that — a launch pasted into a held-but-dead pane, failed, and left
+ * the seat `failed`, so the task it was starting could never be dispatched again.
+ *
+ * The same holds for a seat that still says `ready` while its pane is dead: the status is then
+ * stale rather than true, and a launch into that pane fails the same way. Both conditions are
+ * what `paneDead` reports, and both are recovered here.
+ *
+ * Recovery is one dispatch's own business, not a new owner surface: the seat's pane is released
+ * through the seat-pane owner's own adapter (a dead held pane is put back to a live shell; a live
+ * one is left alone), and the session's startup status returns to `pending`, which is what the
+ * dispatcher reads. Nothing else about the seat is rewritten — the resume token, the binding and
+ * the candidate all stay, so the retry continues the same conversation in the same tree.
+ */
+async function recoverFailedSeat(dependencies: TaskDispatchDependencies, sessionId: string,
+  nodeId: string, seat: string, pane: string | null, paneDead: boolean): Promise<void> {
+  if (pane !== null && paneDead) await dependencies.tmux.respawnPane(pane);
+  dependencies.sessions.updateStartupStatus(sessionId, "pending");
+  console.warn(`team dispatch: recovered seat ${seat} for one launch` +
+    ` (${pane === null ? "no pane recorded" : paneDead ? `pane ${pane} respawned` : `pane ${pane} kept`})`);
+}
+
 export function composeTaskDispatch(dependencies: TaskDispatchDependencies): TaskDispatch {
   // The sessions this dispatcher is already starting. `startNode` records `pending` before its
   // first await, so this covers only the window where a second dispatch would still read the
@@ -50,11 +77,20 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       .find(row => row.id === context.sessionId) : undefined;
     const node = context ? dependencies.rigRepo.getRig(context.rigId)?.nodes.find(row => row.id === context.nodeId) : undefined;
     const adapter = node?.runtime ? dependencies.runtimeAdapters[node.runtime] : undefined;
-    // Only a seat that has never launched starts here. A ready seat already has an agent, and
-    // an attention or failed one is the owner's to reconcile; either way it is not this
-    // dispatch's to overwrite. `starting` covers the window before that state is recorded.
-    if (!context || !session || !node?.cwd || !adapter || session.startupStatus !== "pending"
-      || starting.has(session.id)) return;
+    // The seat's terminal, when it has one. A `ready` seat is skipped below, but a `ready` seat
+    // whose pane is dead has no agent in it: the status is stale, not the truth, and the launch
+    // that follows would paste into a dead pane. So the pane's own state is read here too. A
+    // daemon that cannot read panes reports no evidence, which is never "dead".
+    const boundPane = context ? dependencies.sessions.getBindingForNode(context.nodeId)?.tmuxPane ?? null : null;
+    const paneDead = boundPane === null || !dependencies.tmux.getPaneExit
+      ? false : (await dependencies.tmux.getPaneExit(boundPane))?.dead === true;
+    // A seat this dispatch may start: one that has never launched (`pending`), one whose last
+    // launch failed (`failed`), or one that claims to be `ready` while its pane is dead. An
+    // `attention_required` seat is waiting on a native prompt only the owner can clear, and a
+    // `ready` seat with a live pane already has an agent; neither is this dispatch's to overwrite.
+    if (!context || !session || !node?.cwd || !adapter || starting.has(session.id)
+      || !(session.startupStatus === "pending" || session.startupStatus === "failed"
+        || (session.startupStatus === "ready" && paneDead))) return;
     // MVP — the run's live-session limit is asked *before* the client starts. The governance
     // gate that already enforces it runs when the launch's receipt is registered, a second
     // later: by then the client is running, and a refused registration leaves an attempt nothing
@@ -62,6 +98,14 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     if (dependencies.liveSessions(runId) >= dependencies.maxSessions(runId)) return;
     starting.add(session.id);
     try {
+      // A seat whose last launch failed is recovered once, in this dispatch: its terminal is put
+      // back to a live shell and its startup status to the state a never-launched seat has. The
+      // launch then proceeds exactly as it does for a fresh seat. A second failure leaves the
+      // seat `failed` again — the launch records that itself — and the next dispatch is what
+      // tries again, so there is no loop here and no retry beyond this one recovery.
+      if (session.startupStatus === "failed" || paneDead) {
+        await recoverFailedSeat(dependencies, session.id, node.id, seat, boundPane, paneDead);
+      }
       await ensureSeatPane(dependencies, seat);
       // The terminal just opened is recorded as this node's binding, so the launch reads the
       // one binding record rather than a second copy invented here.
