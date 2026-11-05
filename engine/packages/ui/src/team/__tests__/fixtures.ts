@@ -4,7 +4,7 @@ import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun } from "@o
  * read the same projection, so a fixture that drifted between them would hide a real disagreement. */
 
 export const run: TeamRun = {
-  id: "RUN-0142", rigId: "work-board", displayName: "Add the status filter", bindingDigest: "binding", state: "approved", stateReason: null, phase: "delivery",
+  id: "RUN-0142", rigId: "work-board", displayName: "Add the status filter", bindingDigest: "binding", state: "approved", stateReason: null, stateReasonKey: null, phase: "delivery",
   entityVersion: 3, activeMs: 252_000, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 1,
   reviewerSeat: null,
   usage: { activeMs: 252_000, inputTokens: { value: 18_700, reason: null }, outputTokens: { value: 23_400, reason: null },
