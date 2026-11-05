@@ -43,6 +43,14 @@ export interface AttemptCompletionDependencies {
   candidateManifestFor?: (runId: string, taskId: string) => CandidateFacts;
   /** The runtime's daemon-owned lead proposal reader, used for automatic lead completion evidence. */
   readLeadProposal?: (runId: string, taskId: string) => readonly unknown[];
+  /**
+   * U6 — the runtime's reader of a delivery lead's escalation.
+   *
+   * Present means this daemon reads the second file a lead may deliver, and it turns on the
+   * manager rule: a delivery lead turn that writes neither file is still a turn the owner asked
+   * for, and one that writes either must have written a shape the boundary accepts.
+   */
+  readLeadEscalation?: (runId: string, taskId: string) => { optionCount: number } | null;
   /** Injectable for the tests; production leaves the default. */
   alive?: (identity: { processId: number; processStart: string }) => boolean;
   /**
@@ -90,6 +98,16 @@ export interface AttemptCompletionDependencies {
    * its own conflict, and the lead wakes on that.
    */
   integrateTask?: (runId: string, taskId: string) => Promise<unknown>;
+  /**
+   * U6 — the tick after every observation, for the owner of facts no single attempt produces.
+   *
+   * The lead is woken by what its whole team did — a task that failed after its retry, a review
+   * allowance that ran out, a task that conflicts on the integration branch, every task done —
+   * and none of those is "this attempt stopped". The completion sweep is already the daemon's
+   * 1 Hz observation of the queue, so the team-event owner runs on it rather than opening a
+   * second timer that could disagree about the cadence.
+   */
+  onSweep?: () => Promise<void>;
   intervalMs?: number;
   log?: (message: string) => void;
 }
@@ -362,7 +380,16 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           try { proposal = { taskCount: dependencies.readLeadProposal(stoppedAttempt.runId, task.assignment.taskId).length }; }
           catch { proposal = null; }
         }
-        completion = leadCompletionEvidence({ manifest, proposal, unavailableReason });
+        // U6 — a delivery lead's other deliverable is the question only the owner can answer.
+        // Read here too, so a turn that escalated is a turn that did its job rather than a turn
+        // whose proposal is missing.
+        let escalation: { optionCount: number } | null = null;
+        if (dependencies.readLeadEscalation) {
+          try { escalation = dependencies.readLeadEscalation(stoppedAttempt.runId, task.assignment.taskId); }
+          catch { escalation = null; }
+        }
+        completion = leadCompletionEvidence({ manifest, proposal,
+          ...(dependencies.readLeadEscalation ? { escalation, managementTurn: true } : {}), unavailableReason });
       } else {
         completion = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest, unavailableReason });
       }
@@ -463,6 +490,11 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       }
     }
     await close();
+    // The sweep has recorded everything this tick can observe about its attempts; the facts the
+    // whole team produced are read after it, once, for the same cadence.
+    try { await dependencies.onSweep?.(); } catch (error) {
+      log(`team completion: the sweep's team-event owner failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
   return {

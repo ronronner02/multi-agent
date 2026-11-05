@@ -26,7 +26,18 @@ export interface TeamChatMessage {
   id: string;
   runId: string;
   sender: "owner" | "lead";
+  /**
+   * U6 — `decision` is the lead asking the owner to choose; `text` is everything else.
+   *
+   * The two are the same row because they are the same conversation: a decision is a lead
+   * message with two-to-four options and an answer, and the chat lists it where the lead said it.
+   */
+  kind: "text" | "decision";
   body: string;
+  /** The choices a decision offers, in the lead's order; null on every other message. */
+  options: string[] | null;
+  /** The owner message that answered a decision; null while the run waits on it. */
+  answeredBy: string | null;
   /** The lead attempt whose final message this is; null for an owner message. */
   attemptId: string | null;
   /** The lead attempt whose prompt carried an owner message; null while it is still pending. */
@@ -50,13 +61,26 @@ export function chatBody(value: unknown, field: string): string {
   return value;
 }
 
-function rowToMessage(row: { id: string; runId: string; sender: string; body: string; attemptId: string | null;
-  deliveredAttempt: string | null; createdAt: string }): TeamChatMessage {
-  return { ...row, sender: row.sender === "lead" ? "lead" : "owner" };
+function rowToMessage(row: { id: string; runId: string; sender: string; kind: string; body: string; optionsJson: string | null;
+  answeredBy: string | null; attemptId: string | null; deliveredAttempt: string | null; createdAt: string }): TeamChatMessage {
+  return { id: row.id, runId: row.runId, sender: row.sender === "lead" ? "lead" : "owner",
+    kind: row.kind === "decision" ? "decision" : "text", body: row.body,
+    // The options are this row's own bytes, written by the daemon when it stored the decision.
+    // A row whose JSON the daemon cannot read is still a message, so it renders as one.
+    options: row.optionsJson === null ? null : parseOptions(row.optionsJson),
+    answeredBy: row.answeredBy, attemptId: row.attemptId, deliveredAttempt: row.deliveredAttempt,
+    createdAt: row.createdAt };
 }
 
-const COLUMNS = `id, run_id AS runId, sender, body, attempt_id AS attemptId,
-  delivered_attempt AS deliveredAttempt, created_at AS createdAt`;
+function parseOptions(value: string): string[] | null {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) && parsed.every(option => typeof option === "string") ? parsed as string[] : null;
+  } catch { return null; }
+}
+
+const COLUMNS = `id, run_id AS runId, sender, kind, body, options_json AS optionsJson,
+  answered_by AS answeredBy, attempt_id AS attemptId, delivered_attempt AS deliveredAttempt, created_at AS createdAt`;
 
 /** Append one owner message. Called inside the caller's transaction; it never opens its own. */
 export function appendChatMessage(db: Database.Database, input: {
@@ -109,17 +133,56 @@ export function takeOwnerMessages(db: Database.Database, runId: string, attemptI
 }
 
 /**
- * Store the lead's reply to one attempt. Returns whether this call wrote it.
+ * Store the lead's message for one attempt: its reply, or the decision it asked the owner for.
  *
- * The attempt is the identity: one lead turn has one final message, and the sweep that observes
- * the turn's end may run twice. A row already recorded for the attempt is left alone.
+ * The attempt is the identity: one lead turn has one message, and the sweep that observes the
+ * turn's end may run twice. A row already recorded for the attempt is left alone.
  */
 export function recordLeadReply(db: Database.Database, input: {
   id: string; runId: string; attemptId: string; body: string; createdAt: string;
+  /** U6 — a turn that asked for a decision records that decision as its message. */
+  decision?: { options: readonly string[] } | null;
 }): boolean {
-  const inserted = db.prepare(`INSERT OR IGNORE INTO team_chat_messages (id, run_id, sender, body, attempt_id, created_at)
-    VALUES (?, ?, 'lead', ?, ?, ?)`).run(input.id, input.runId, input.body, input.attemptId, input.createdAt);
+  const decision = input.decision ?? null;
+  const inserted = db.prepare(`INSERT OR IGNORE INTO team_chat_messages
+    (id, run_id, sender, kind, body, options_json, attempt_id, created_at)
+    VALUES (?, ?, 'lead', ?, ?, ?, ?, ?)`).run(input.id, input.runId, decision === null ? "text" : "decision",
+    input.body, decision === null ? null : JSON.stringify(decision.options), input.attemptId, input.createdAt);
   return inserted.changes === 1;
+}
+
+/**
+ * U6 — record the owner's message as the answer to one decision.
+ *
+ * The decision row is the one place the pending state lives: `answered_by` set means answered,
+ * null means the run is still waiting. A decision another message already answered keeps its
+ * first answer, which is what makes a replayed request record nothing twice.
+ */
+export function answerDecision(db: Database.Database, decisionId: string, messageId: string): boolean {
+  return db.prepare("UPDATE team_chat_messages SET answered_by = ? WHERE id = ? AND kind = 'decision' AND answered_by IS NULL")
+    .run(messageId, decisionId).changes === 1;
+}
+
+/** The decision the run is waiting on: the newest lead decision no owner message answered. */
+export function pendingDecision(db: Database.Database, runId: string): TeamChatMessage | null {
+  const row = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages
+    WHERE run_id = ? AND kind = 'decision' AND answered_by IS NULL ORDER BY rowid DESC LIMIT 1`).get(runId) as
+    Parameters<typeof rowToMessage>[0] | undefined;
+  return row ? rowToMessage(row) : null;
+}
+
+/**
+ * Whether this run's conversation already holds this exact decision.
+ *
+ * An escalation file stays in the lead's tree after the turn that wrote it, so a later turn's
+ * end reads it again. The same question with the same options is one decision: the owner
+ * answers it once, and a stale file must not put a second copy in front of them.
+ */
+function decisionRecorded(db: Database.Database, runId: string, body: string, options: readonly string[]): boolean {
+  const row = db.prepare(`SELECT options_json AS optionsJson FROM team_chat_messages
+    WHERE run_id = ? AND kind = 'decision' AND body = ? ORDER BY rowid DESC LIMIT 1`).get(runId, body) as
+    { optionsJson: string | null } | undefined;
+  return row !== undefined && row.optionsJson === JSON.stringify(options);
 }
 
 /** The run's one lead task, which is the task the chat talks to. */
@@ -154,6 +217,14 @@ export interface LeadTurnEndDependencies {
    * end of a turn agree on where a turn's output sits.
    */
   turnStateRoot?: string;
+  /**
+   * U6 — the decision this turn asked the owner for, read from the lead's own tree.
+   *
+   * Absent means this daemon does not read escalations, which is what every pre-U6 caller
+   * wants: the turn is then only its final message. A throw means the lead wrote something the
+   * boundary refuses, and the turn's message is still stored.
+   */
+  readEscalation?: (runId: string, taskId: string) => import("./lead-proposal.js").LeadEscalation | null;
   /** The daemon's dispatch, read at use so a host that composes it later is still the owner. */
   dispatch: () => ((runId: string, taskId: string) => Promise<void>) | undefined;
   now?: () => Date;
@@ -163,16 +234,18 @@ export interface LeadTurnEndDependencies {
 /**
  * The lead turn's end, as its conversation sees it.
  *
- * Two writes, in this order, and both are idempotent:
+ * Two writes, in this order, and both idempotent:
  *
- * 1. The turn's final message becomes the lead's reply. `readAgentTurnLastMessage` is the one
+ * 1. The turn's message becomes the lead's message. `readAgentTurnLastMessage` is the one
  *    reader for either client — Claude's stream-json `result`, written by the readable view, and
- *    Codex's `-o` file — so a Lead on Codex chats exactly as a Claude Lead does.
+ *    Codex's `-o` file — so a Lead on Codex chats exactly as a Claude Lead does. A turn that
+ *    wrote `lead-escalation.json` speaks with that decision instead of its prose: the question
+ *    is what the owner has to answer, and one turn is one message.
  * 2. If owner messages are still waiting for a turn, the next turn starts now. They can only be
  *    waiting because they arrived while this turn was running, and a chat whose answer waits for
  *    the owner to speak again is not a conversation. Nothing starts when the turn recorded no
- *    reply: a client that failed before answering would otherwise be retried in a loop the owner
- *    never asked for, and the messages stay pending for the next message to bring along.
+ *    message at all: a client that failed before answering would otherwise be retried in a loop
+ *    the owner never asked for, and the messages stay pending for the next message to carry.
  *
  * A turn whose task row is no longer active is left alone: a done lead task is reopened by the
  * owner's next message, which is the path that records the reopen's reason.
@@ -181,16 +254,43 @@ export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (atte
   id: string; runId: string; qitemId: string | null; role: string;
 }) => Promise<void> {
   const log = dependencies.log ?? ((message: string) => console.warn(message));
+  /** The decision the lead's tree holds for this turn, or null when it asked for none. */
+  const escalationOf = (runId: string): import("./lead-proposal.js").LeadEscalation | null => {
+    if (!dependencies.readEscalation) return null;
+    const task = runLeadTask(dependencies.db, runId);
+    if (!task) return null;
+    try { return dependencies.readEscalation(runId, task.taskId); }
+    catch (error) {
+      // A file the boundary refuses is not a decision: the turn still said something in its
+      // final message, and a refused escalation must not silently become one the owner answers.
+      log(`team chat: the lead's escalation for run=${runId} was not readable: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  };
   return async (attempt) => {
     if (attempt.role !== "lead") return;
     // One reader for either client: a Claude turn's view records its stream-json `result` in
     // this file and a Codex turn writes it through `-o`, so a Codex lead's reply is chat too.
     const body = dependencies.turnStateRoot
       ? readAgentTurnLastMessage(dependencies.turnStateRoot, attempt.id) : null;
-    if (!body) return;
+    const asked = escalationOf(attempt.runId);
+    // The escalation is what the owner must act on, so it is the message; its context is prose
+    // they read, and the options are the structured part the client renders as choices. A file
+    // the run has already turned into a decision is not asked again: the turn then speaks with
+    // its own final message.
+    const content = asked
+      ? asked.context ? `${asked.question}\n\n${asked.context}` : asked.question
+      : null;
+    const escalation = asked && content !== null && !decisionRecorded(dependencies.db, attempt.runId, content, asked.options)
+      ? asked : null;
+    if (!body && !escalation) return;
+    const message = escalation
+      ? escalation.context ? `${escalation.question}\n\n${escalation.context}` : escalation.question
+      : body!;
     const inserted = dependencies.db.transaction(() =>
       recordLeadReply(dependencies.db, { id: `chat-${attempt.id}`, runId: attempt.runId, attemptId: attempt.id,
-        body, createdAt: (dependencies.now?.() ?? new Date()).toISOString() }))();
+        body: message, createdAt: (dependencies.now?.() ?? new Date()).toISOString(),
+        ...(escalation ? { decision: { options: escalation.options } } : {}) }))();
     if (!inserted) return;
     if (!pendingOwnerMessages(dependencies.db, attempt.runId).length) return;
     const run = dependencies.governance.getRun(attempt.runId);

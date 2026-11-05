@@ -269,12 +269,13 @@ describe("MVP — the completion path", () => {
     const proposal = JSON.stringify({ tasks: [{ taskId: "task-2", seat: "builder@rig", paths: ["src/a.ts"],
       dependencies: [], body: "Implement a.ts" }] });
 
-    // A lead that has written nothing yet is not validated, and says why.
+    // U6 — a delivery lead's turn is a management turn: answering an event without a new list
+    // is a complete turn, so an untouched candidate is valid and carries no reasons.
     let body = await (await request("/api/team-control/runs/run/tasks/lead-task/completion")).json() as {
       completion: { actorSession: string; blockedReason: string | null; evidence: { validated: boolean; reasons: string[];
         outsideAssignment: string[] }; attempt: { attemptId: string; entityVersion: number } } };
     expect(body.completion.blockedReason).toBeNull();
-    expect(body.completion.evidence.validated).toBe(false);
+    expect(body.completion.evidence).toMatchObject({ validated: true, reasons: [], changedPaths: [] });
 
     writeFileSync(join(tree, "lead-proposal.json"), proposal);
     body = await (await request("/api/team-control/runs/run/tasks/lead-task/completion")).json() as typeof body;
@@ -356,7 +357,37 @@ describe("the completion path's pure rules", () => {
       .toMatchObject({ validated: false, reasons: ["gone"], manifestDigest: null });
   });
 
-  it("treats a process whose start time moved as a different process, and an unreadable one as alive", () => {    // The test's own process is alive under its recorded start; a moved start time is not it.
+  /**
+   * U6 — a delivery lead's management turn.
+   *
+   * After the plan is approved the lead's turns answer team events and ask the owner for
+   * decisions, so its candidate may hold the escalation as well as the proposal, and a turn
+   * that wrote neither is a complete answer rather than a failure. What stays refused is a write
+   * outside those two files, and an artifact the boundary could not read.
+   */
+  it("validates a delivery lead's management turn, and refuses writes outside its two files", () => {
+    const proposal = ["diff --git a/lead-proposal.json b/lead-proposal.json", "+++ b/lead-proposal.json"].join("\n");
+    const escalation = ["diff --git a/lead-escalation.json b/lead-escalation.json", "+++ b/lead-escalation.json"].join("\n");
+    // An untouched candidate: nothing to admit, nothing refused.
+    expect(leadCompletionEvidence({ manifest: manifest(""), proposal: null, escalation: null, managementTurn: true }))
+      .toMatchObject({ validated: true, reasons: [] });
+    expect(leadCompletionEvidence({ manifest: manifest(escalation), proposal: null,
+      escalation: { optionCount: 2 }, managementTurn: true })).toMatchObject({ validated: true, reasons: [] });
+    // An escalation the boundary refused is not a decision the owner can answer.
+    expect(leadCompletionEvidence({ manifest: manifest(escalation), proposal: null, escalation: null, managementTurn: true }).reasons)
+      .toEqual(["The lead's escalation is missing or unreadable"]);
+    expect(leadCompletionEvidence({ manifest: manifest(proposal), proposal: null, escalation: null, managementTurn: true }).reasons)
+      .toEqual(["The lead's proposal is missing or unreadable"]);
+    // Everything but the two management files is still outside what a lead may write.
+    const extra = [proposal, "diff --git a/src/a.ts b/src/a.ts", "+++ b/src/a.ts"].join("\n");
+    expect(leadCompletionEvidence({ manifest: manifest(extra), proposal: { taskCount: 1 }, escalation: null, managementTurn: true }))
+      .toMatchObject({ validated: false, outsideAssignment: ["src/a.ts"] });
+    // Without the manager rule, C3's rule is exactly what it was.
+    expect(leadCompletionEvidence({ manifest: manifest(escalation), proposal: null }).validated).toBe(false);
+  });
+
+  it("treats a process whose start time moved as a different process, and an unreadable one as alive", () => {
+    // The test's own process is alive under its recorded start; a moved start time is not it.
     const self = process.pid, stat = execFileSync("cat", ["/proc/" + self + "/stat"], { encoding: "utf8" });
     const start = stat.slice(stat.lastIndexOf(")") + 2).trim().split(/\s+/)[19]!;
     expect(processIdentityAlive({ processId: self, processStart: start })).toBe(true);

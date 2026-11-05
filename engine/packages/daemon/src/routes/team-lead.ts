@@ -122,7 +122,9 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
    * U5 — the run's conversation, in order.
    *
    * The owner reads what they and the lead said, and the run's phase, so a client knows whether
-   * a plan is still being agreed. Nothing here starts work or records a decision.
+   * a plan is still being agreed. U6 adds two things a client needs to render a decision: the
+   * message kind with its options and its answer, and the one decision the run is waiting on.
+   * Nothing here starts work or records a decision.
    */
   app.get(chatRoute, (c) => {
     const runId = c.req.param("runId");
@@ -133,14 +135,25 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
       if (/not found/i.test((error as Error).message)) return c.json({ code: "control_not_found", error: "The requested entity was not found." }, 404);
       throw error;
     }
+    const decision = governance.chatDecision(runId);
     c.header("Cache-Control", "no-store");
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, phase: run.phase,
       messages: governance.chatMessages(runId).map(message => ({ id: message.id, sender: message.sender,
-        body: message.body, createdAt: message.createdAt })) });
+        kind: message.kind, body: message.body, options: message.options,
+        answeredBy: message.answeredBy, createdAt: message.createdAt })),
+      // The run waits on this until the owner answers it through this same endpoint, naming it
+      // in `answerTo`. Null means nothing is waiting.
+      pendingDecision: decision === null ? null : { id: decision.id, body: decision.body,
+        options: decision.options, createdAt: decision.createdAt } });
   });
 
   /**
    * U5 — the owner's message, and the lead's turn to answer it.
+   *
+   * U6 adds one optional field to the payload: `answerTo` names the decision this message
+   * answers, and a message that names a decision also answers it (the decision stops being the
+   * pending one, and the answer is the lead's next prompt like any other owner message). The
+   * body is the answer's text whether the owner typed it or chose an option.
    *
    * The row and the turn are decided together inside one governance command; this route only
    * starts the turn the command says may start. `queued` in the answer is the honest report that

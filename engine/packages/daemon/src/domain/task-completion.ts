@@ -1,5 +1,5 @@
 import type { TeamRole, TeamTaskAuthority } from "../contracts/team-control.js";
-import { LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
+import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
 
 /**
  * MVP — the completion path's evidence half.
@@ -105,6 +105,23 @@ export function taskCompletionEvidence(input: {
 export function leadCompletionEvidence(input: {
   manifest: CandidateFacts | null;
   proposal: { taskCount: number } | null;
+  /**
+   * U6 — the escalation the turn asked the owner for, or null when it asked for none.
+   *
+   * Present (even as null) means this caller reads a delivery lead's escalations, and turns on
+   * the manager rule below. Absent keeps C3's rule exactly: the turn's one deliverable is the
+   * proposal, and a turn without it is not validated.
+   */
+  escalation?: { optionCount: number } | null;
+  /**
+   * U6 — a delivery lead turn is a management turn, not a decomposition.
+   *
+   * Its management files are the proposal and the escalation, and a turn that wrote neither is
+   * still a turn the owner asked for: the daemon woke it for a team event and its answer is its
+   * message in the chat. What stays invalid is a turn that moved anything else, or wrote one of
+   * its two files in a shape the boundary refuses.
+   */
+  managementTurn?: boolean;
   unavailableReason?: string;
 }): TaskCompletionEvidence {
   const empty: TaskCompletionEvidence = { validated: false, manifestDigest: null, base: null, baseIdentifier: null,
@@ -116,14 +133,25 @@ export function leadCompletionEvidence(input: {
   const paths = changedPaths(manifest.patch);
   const reasons: string[] = [];
   if (manifest.base === "snapshot") reasons.push("The candidate has no base commit to diff against");
-  // Everything but the proposal is a write the lead has no permission for. It is reported as
-  // outside the assignment so the owner sees what moved, exactly as an implementer's is.
-  const outside = paths.filter(path => path !== LEAD_PROPOSAL_PATH);
+  const wroteProposal = paths.includes(LEAD_PROPOSAL_PATH);
+  const wroteEscalation = paths.includes(LEAD_ESCALATION_PATH);
+  // Everything but the lead's own management files is a write it has no permission for. Each is
+  // reported as outside the assignment so the owner sees what moved, exactly as an
+  // implementer's is.
+  const outside = paths.filter(path => path !== LEAD_PROPOSAL_PATH
+    && !(input.managementTurn === true && path === LEAD_ESCALATION_PATH));
   if (outside.length) reasons.push(`${outside.length} changed path(s) are not the lead's proposal`);
-  if (manifest.base === "commit" && !paths.includes(LEAD_PROPOSAL_PATH)) {
-    reasons.push(`The candidate does not write ${LEAD_PROPOSAL_PATH}`);
+  if (input.managementTurn === true) {
+    // A management turn delivers whatever it was asked for; only an artifact it wrote and the
+    // boundary could not read is a failure.
+    if (wroteProposal && input.proposal === null) reasons.push("The lead's proposal is missing or unreadable");
+    if (wroteEscalation && (input.escalation ?? null) === null) reasons.push("The lead's escalation is missing or unreadable");
+  } else {
+    if (manifest.base === "commit" && !wroteProposal) {
+      reasons.push(`The candidate does not write ${LEAD_PROPOSAL_PATH}`);
+    }
+    if (input.proposal === null) reasons.push("The lead's proposal is missing or unreadable");
   }
-  if (input.proposal === null) reasons.push("The lead's proposal is missing or unreadable");
   return { validated: reasons.length === 0, manifestDigest: manifest.manifestDigest, base: manifest.base,
     baseIdentifier: manifest.baseIdentifier, fileCount: manifest.files.length, changedPaths: paths,
     outsideAssignment: outside, reasons };
