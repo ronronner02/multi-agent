@@ -12,6 +12,7 @@ import {
   type TeamRun, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
+import { ordinalRunName, reviewName, taskName } from "./display-names.js";
 import { classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { LeadTask } from "./lead-proposal.js";
@@ -240,7 +241,7 @@ export class PlanGovernance {
     this.rigs = new RigRepository(db);
   }
 
-  createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null }): TeamRun {
+  createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null; displayName?: string | null }): TeamRun {
     this.assertStandalone();
     if (daemonModeOf(this.db) === "legacy") throw new Error("A legacy-mode daemon cannot register managed authority; restart in managed mode");
     const id = text(input.id, "runId", 256);
@@ -249,6 +250,9 @@ export class PlanGovernance {
     // C2 — the seat every review round of this run routes to. A start that names none keeps
     // the pre-C2 behaviour: an implementer task completes and no review task is created.
     const reviewerSeat = input.reviewerSeat === undefined || input.reviewerSeat === null ? null : text(input.reviewerSeat, "reviewerSeat", 256);
+    // U9 — the run's name from its goal. A caller that names none records no name, and `getRun`
+    // falls back to the run's creation order on the rig.
+    const displayName = input.displayName?.trim() || null;
     const bindingDigest = hashBinding(binding);
     return this.events.withNotifyEnvelope((register) => {
       if (this.db.prepare("SELECT id FROM team_runs WHERE id = ?").get(id)) {
@@ -258,8 +262,8 @@ export class PlanGovernance {
       }
       this.rigs.assertNoPendingDeletion(rigId);
       const now = this.clock().toISOString();
-      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, state, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, now, now);
+      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, display_name, state, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, displayName, now, now);
       const run = this.getRun(id);
       this.emit(run, register, "run.created", { bindingDigest, state: "pending" });
       return run;
@@ -282,14 +286,29 @@ export class PlanGovernance {
     const row = this.db.prepare(`SELECT id, rig_id AS rigId, binding_json AS bindingJson, binding_digest AS bindingDigest,
       reviewer_seat AS reviewerSeat, state, state_reason AS stateReason, entity_version AS entityVersion,
       active_ms AS activeMs, accounted_at AS accountedAt, retries_used AS retriesUsed,
-      review_rounds_used AS reviewRoundsUsed, created_at AS createdAt, updated_at AS updatedAt
-      FROM team_runs WHERE id = ?`).get(id) as (Omit<TeamRun, "binding" | "usage"> & { bindingJson: string }) | undefined;
+      review_rounds_used AS reviewRoundsUsed, display_name AS displayName, created_at AS createdAt,
+      updated_at AS updatedAt, rowid AS rowOrdinal
+      FROM team_runs WHERE id = ?`).get(id) as (Omit<TeamRun, "binding" | "usage" | "displayName"> &
+        { bindingJson: string; displayName: string | null; rowOrdinal: number }) | undefined;
     if (!row) throw new Error("Run not found");
-    const { bindingJson, ...run } = row;
+    const { bindingJson, displayName, rowOrdinal, ...run } = row;
     const usages = (this.db.prepare("SELECT usage_json FROM team_attempts WHERE run_id = ?").all(id) as Array<{ usage_json: string }>)
       .map((attempt) => parseUsage(JSON.parse(attempt.usage_json)));
-    return { ...run, binding: parsePlanBinding(JSON.parse(bindingJson)), usage: { activeMs: run.activeMs,
+    return { ...run, displayName: displayName ?? this.runOrdinalName(run.rigId, rowOrdinal),
+      binding: parsePlanBinding(JSON.parse(bindingJson)), usage: { activeMs: run.activeMs,
       inputTokens: cumulativeMetric(usages, "inputTokens"), outputTokens: cumulativeMetric(usages, "outputTokens"), costUsd: cumulativeMetric(usages, "costUsd") } };
+  }
+
+  /**
+   * U9 — a run recorded before names existed is named by its creation order on its rig.
+   *
+   * `rowid` is the insertion order, which is what "created" means for rows whose `created_at`
+   * can tie at millisecond resolution; the row's own position is what makes the ordinal stable.
+   */
+  private runOrdinalName(rigId: string, rowOrdinal: number): string {
+    const { ordinal } = this.db.prepare("SELECT count(*) AS ordinal FROM team_runs WHERE rig_id = ? AND rowid <= ?")
+      .get(rigId, rowOrdinal) as { ordinal: number };
+    return ordinalRunName(ordinal);
   }
 
   listApprovals(runId: string): TeamApproval[] {
@@ -901,11 +920,33 @@ export class PlanGovernance {
     const created = withQueueWrite(this.db, { operation: "create" }, () => this.queue.createWithinTransaction({
       sourceSession, destinationSession, body, targetRepo: ctx.run.binding.repository.root, nudge: false }));
     ctx.register(created.persistedEvent);
+    // U9 — the task's name, derived from the row it is admitted with: its own title, or for a
+    // reviewer task the task it reviews. A body with nothing to name it by records none, and
+    // the read model falls back to the task's order.
+    const displayName = assignment.role === "reviewer" && assignment.reviewOf
+      ? this.reviewDisplayName(ctx.run.id, assignment.reviewOf) : taskName(body);
     this.db.prepare(`INSERT INTO team_queue_authority
-      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json) VALUES (?,?,?,?,?,?)`)
-      .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions));
+      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json,display_name) VALUES (?,?,?,?,?,?,?)`)
+      .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions), displayName);
     ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
     return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
+  }
+
+  /**
+   * U9 — a reviewer task's name from the task it reviews.
+   *
+   * The reviewed task's stored name is preferred; a row recorded before names existed is named
+   * from its body by the rule `admitTask` applies to a plain task. The round is the count of
+   * the implementer's reviewer tasks plus this one, which is the same derivation `createReview`
+   * uses for the reviewer task id.
+   */
+  private reviewDisplayName(runId: string, implementerTaskId: string): string {
+    const row = this.db.prepare(`SELECT a.display_name AS displayName, q.body AS body
+      FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+      WHERE a.run_id = ? AND a.task_id = ?`).get(runId, implementerTaskId) as
+      { displayName: string | null; body: string | null } | undefined;
+    const name = row?.displayName ?? taskName(row?.body ?? "") ?? "Task";
+    return reviewName(name, this.reviewRounds(runId, implementerTaskId) + 1);
   }
 
   transitionTask(raw: ControlRequest<unknown>, currentBinding: unknown): ControlReceipt {

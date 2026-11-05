@@ -20,7 +20,8 @@ vi.mock("../../hooks/useOwnerSession.js", async importOriginal => ({ ...(await i
 vi.mock("../new-task.js", () => ({ NewTaskForm: () => null }));
 
 function task(id: string, state: TeamReviewView["queueState"], role: TeamReviewView["role"] = "implementer"): TeamReviewView {
-  return { taskId: id, qitemId: `q-${id}`, role, queueState: state, title: null, dependencies: [],
+  return { taskId: id, qitemId: `q-${id}`, role, queueState: state, displayName: "Sample task",
+    displayNameParts: { kind: "task" }, title: null, dependencies: [],
     criteria: { verified: null, total: null, source: null }, currentCandidateDigest: null,
     rounds: 0, openP0P1: 0, verdicts: [], reviewAvailable: false, acceptance: null };
 }

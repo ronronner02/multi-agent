@@ -16,6 +16,7 @@ npm run test -w packages/daemon -- \
   test/team-control-auth.test.ts \
   test/team-governance.test.ts \
   test/team-read-model.test.ts \
+  test/display-names.test.ts \
   test/team-workspace.test.ts \
   test/team-candidate-launch.test.ts \
   test/managed-attempt-attachment.test.ts \
