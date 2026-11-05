@@ -3,7 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
-import { ShellFrame, TEAM_SECTIONS, teamSection } from "../shell.js";
+import { ShellFrame, TEAM_SECTIONS, teamSection, showsNewWork } from "../shell.js";
+import { read, task } from "./fixtures.js";
 
 /**
  * U10 — the shell is a bar, not a rail.
@@ -60,5 +61,15 @@ describe("team shell", () => {
     expect(view.container.querySelector("video")).toBeNull();
     expect(view.container.querySelector(".team-backdrop")).toBeNull();
     expect(view.container.querySelector(".team-shell")!.getAttribute("data-ui-theme")).toBeNull();
+  });
+
+  it("offers the next run when this one is no longer doing work", () => {
+    // In flight: the team is busy, so nothing offers a second run.
+    expect(showsNewWork(read({ tasks: [task({ queueState: "in-progress" })] }))).toBe(false);
+    // Every task finished, and the run still reads "approved": the owner can start more.
+    expect(showsNewWork(read({ tasks: [task({ queueState: "done" })] }))).toBe(true);
+    // A run that ended without finishing its work also offers the next one.
+    expect(showsNewWork(read({ run: { ...read().run, state: "canceled" }, tasks: [task({ queueState: "pending" })] }))).toBe(true);
+    expect(showsNewWork(undefined)).toBe(false);
   });
 });

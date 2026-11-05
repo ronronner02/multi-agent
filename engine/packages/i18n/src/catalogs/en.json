@@ -713,5 +713,6 @@
   "team.merge.refused.merge_detached_head": "The checkout is not on a branch",
   "team.merge.refused.merge_already_on_branch": "Already on the target branch",
   "team.merge.refused.merge_no_branch": "No integration branch yet",
-  "team.merge.refused.merge_unavailable": "Merge is unavailable"
+  "team.merge.refused.merge_unavailable": "Merge is unavailable",
+  "team.teams.newWork": "New work"
 }

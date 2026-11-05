@@ -6,6 +6,7 @@ import type { TeamRole } from "@openrig/daemon/team-control";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { isRunActive } from "./clients.js";
 import { clientLabel } from "./display.js";
+import { NewWorkSheet } from "./new-task.js";
 import { Caret, Close } from "./glyphs.js";
 import { runsKey, teamsKey, type RunSummary, type TeamSeatSummary, type TeamSummary } from "./hooks.js";
 
@@ -20,12 +21,13 @@ import { runsKey, teamsKey, type RunSummary, type TeamSeatSummary, type TeamSumm
 const ROLES: readonly TeamRole[] = ["lead", "implementer", "reviewer"];
 const CLIENTS = ["claude-code", "codex"] as const;
 
-export function TeamsScreen({ teams, runs, loading, onOpenTeam }: {
+export function TeamsScreen({ teams, runs, loading, onOpenTeam, onOpenRun }: {
   teams: TeamSummary[] | undefined; runs: RunSummary[] | undefined; loading: boolean;
-  onOpenTeam: (teamId: string) => void;
+  onOpenTeam: (teamId: string) => void; onOpenRun: (runId: string) => void;
 }) {
   const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
+  const [newWorkFor, setNewWorkFor] = useState<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
   return <div className="page" ref={host}>
     <div className="page-head">
@@ -38,19 +40,23 @@ export function TeamsScreen({ teams, runs, loading, onOpenTeam }: {
         ? <p className="muted">{t("team.teams.empty")}</p>
         : <div className="team-list">{teams!.map(team => {
           const run = (runs ?? []).find(entry => entry.rigId === team.id);
-          return <a key={team.id} className="team-row" href="#"
-            onClick={event => { event.preventDefault(); onOpenTeam(team.id); }}>
-            <div>
+          return <div key={team.id} className="team-row">
+            <a className="team-main" href="#" onClick={event => { event.preventDefault(); onOpenTeam(team.id); }}>
               <div><span className="team-name">{team.name}</span><span className="team-path">{team.repository}</span></div>
               <div className="seats">{team.seats.map((seat, index) => <SeatChip key={`${seat.role}:${index}`} seat={seat} />)}</div>
+            </a>
+            <div className="team-side">
+              <div className="team-run" data-state={run && isRunActive(run) ? "running" : "idle"}>
+                <span className="run-dot" />{run && isRunActive(run) ? t("team.teams.running") : t("team.teams.idle")}
+              </div>
+              <button className="btn btn-outline team-new-work" onClick={() => setNewWorkFor(team.id)}>{t("team.teams.newWork")}</button>
             </div>
-            <div className="team-run" data-state={run && isRunActive(run) ? "running" : "idle"}>
-              <span className="run-dot" />{run && isRunActive(run) ? t("team.teams.running") : t("team.teams.idle")}
-            </div>
-          </a>;
+          </div>;
         })}</div>}
 
     <CreateTeamSheet open={creating} onOpenChange={setCreating} container={host.current} />
+    <NewWorkSheet teams={teams} teamId={newWorkFor ?? ""} open={newWorkFor !== null}
+      onOpenChange={next => { if (!next) setNewWorkFor(null); }} onStarted={onOpenRun} />
   </div>;
 }
 

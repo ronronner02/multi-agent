@@ -27,11 +27,12 @@ const runs: RunSummary[] = [
 async function show(locale: "en" | "zh-CN" = "en") {
   const language = await createInterfaceI18n({ language: locale });
   const opened = vi.fn();
+  const openedRun = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><I18nextProvider i18n={language.instance}>
-    <TeamsScreen teams={teams} runs={runs} loading={false} onOpenTeam={opened} />
+    <TeamsScreen teams={teams} runs={runs} loading={false} onOpenTeam={opened} onOpenRun={openedRun} />
   </I18nextProvider></QueryClientProvider>);
-  return opened;
+  return { opened, openedRun };
 }
 
 describe("teams", () => {
@@ -47,9 +48,19 @@ describe("teams", () => {
   });
 
   it("opens the team's run when the row is chosen", async () => {
-    const opened = await show();
+    const { opened } = await show();
     fireEvent.click(screen.getByText("text-utils"));
     expect(opened).toHaveBeenCalledWith("01M6PCBFR46AZS672KPX5Z38ZM");
+  });
+
+  it("offers new work per team, preset to that team, even when it already has a run", async () => {
+    const { opened, openedRun } = await show();
+    expect(screen.getAllByRole("button", { name: "New work" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "New work" }));
+    expect(await screen.findByLabelText("What should the team do?")).toBeTruthy();
+    expect((screen.getByLabelText("Teams") as HTMLSelectElement).value).toBe(teams[0]!.id);
+    expect(opened).not.toHaveBeenCalled();
+    expect(openedRun).not.toHaveBeenCalled();
   });
 
   it("opens the create sheet with one seat per role", async () => {
