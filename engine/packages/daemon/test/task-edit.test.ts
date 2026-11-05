@@ -165,7 +165,7 @@ describe("versioned owner task edits", () => {
     expect(await (await post(requestFor({ role: "lead" }, "B"))).json()).toMatchObject({ value: { classification: "applied" } });
     db.prepare("UPDATE queue_items SET state='done' WHERE qitem_id=?").run(b.qitemId);
     db.prepare("UPDATE team_queue_authority SET evidence_json=? WHERE qitem_id=?").run(JSON.stringify({ validated: true }), b.qitemId);
-    expect(await (await post(requestFor({ role: "lead", dependencies: ["B"] }))).json()).toMatchObject({ value: { classification: "applied" } });
+    expect(await (await post(requestFor({ dependencies: ["B"] }))).json()).toMatchObject({ value: { classification: "applied" } });
     create("R", [], "reviewer", [added]);
     expect(await (await post(requestFor({ role: "implementer" }, "R"))).json()).toMatchObject({ status: "denied" });
   });
