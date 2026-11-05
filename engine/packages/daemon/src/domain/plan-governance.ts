@@ -7,7 +7,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   TEAM_CONTROL_VERSION, TEAM_QUEUE_STATES, TeamContractError, canonicalJson, digest, integer, jsonValue,
   object, parseAssignment, parseAttemptIdentity, parseControlRequest, parsePlanBinding, parseTaskInputs, parseTeamEvent, parseUsage, text,
-  type ApprovalAction, type ApprovalConsumption, type ApprovalKind, type AttemptState, type ControlActor,
+  teamReasonLabelKey, type ApprovalAction, type ApprovalConsumption, type ApprovalKind, type AttemptState, type ControlActor,
   type ControlReceipt, type ControlRequest, type JsonObject, type TeamApproval, type TeamAttempt,
   type TeamRun, type TeamRunPhase, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
 } from "../contracts/team-control.js";
@@ -138,6 +138,8 @@ interface Result {
   reviewTaskId?: string;
   /** MVP — the lead task a rejected proposal reopened, which the route dispatches next. */
   revisionTaskId?: string;
+  /** U8 — pending work a resumed run should offer to the dispatcher. */
+  resumeTaskIds?: string[];
 }
 
 /**
@@ -158,6 +160,8 @@ export interface ReviewOutcome {
 
 const deny = (reason: string): Result => ({ status: "denied", reason });
 const approvalActions: readonly ApprovalAction[] = ["implementation", "commit", "push", "pr-create", "merge", "release", "deploy", "scope-change", "limit-increase", "native-tool", "scope-extension"];
+const IMPLEMENTATION_APPROVAL_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const APPROVAL_RENEWAL_THRESHOLD_MS = 60 * 60 * 1_000;
 
 function isEscalation(approval: { kind: ApprovalKind; action: ApprovalAction }): boolean {
   return approval.kind === "orchestrator" && (approval.action === "scope-change" || approval.action === "limit-increase");
@@ -300,8 +304,43 @@ export class PlanGovernance {
     const usages = (this.db.prepare("SELECT usage_json FROM team_attempts WHERE run_id = ?").all(id) as Array<{ usage_json: string }>)
       .map((attempt) => parseUsage(JSON.parse(attempt.usage_json)));
     return { ...run, displayName: displayName ?? this.runOrdinalName(run.rigId, rowOrdinal),
+      stateReasonKey: teamReasonLabelKey(run.stateReason),
       binding: parsePlanBinding(JSON.parse(bindingJson)), usage: { activeMs: run.activeMs,
       inputTokens: cumulativeMetric(usages, "inputTokens"), outputTokens: cumulativeMetric(usages, "outputTokens"), costUsd: cumulativeMetric(usages, "costUsd") } };
+  }
+
+  /**
+   * U8 — refresh the run's implementation approval immediately before a launch.
+   *
+   * There is deliberately no timer. Dispatch is the boundary that needs the authority, so a
+   * dispatch close to (or just after) the old expiry extends the grant for another 24-hour
+   * approval window and records the daemon action. An expired row is recoverable when no command has yet
+   * observed the expiry; the run is still approved and the binding is unchanged.
+   */
+  renewImplementationApproval(runId: string): boolean {
+    this.assertStandalone();
+    return this.events.withNotifyEnvelope((register) => {
+      const run = this.getRun(runId);
+      if (run.state !== "approved") return false;
+      const now = this.clock().toISOString();
+      const approval = this.db.prepare(`SELECT id, expires_at AS expiresAt, state FROM team_approvals
+        WHERE run_id = ? AND kind = 'orchestrator' AND action = 'implementation'
+          AND binding_digest = ? AND state IN ('approved', 'expired')
+        ORDER BY rowid DESC LIMIT 1`).get(run.id, run.bindingDigest) as
+        { id: string; expiresAt: string; state: string } | undefined;
+      if (!approval) return false;
+      const remaining = Date.parse(approval.expiresAt) - Date.parse(now);
+      if (approval.state === "approved" && remaining > APPROVAL_RENEWAL_THRESHOLD_MS) return false;
+      const nextExpiry = new Date(Date.parse(now) + IMPLEMENTATION_APPROVAL_WINDOW_MS).toISOString();
+      const updated = this.db.prepare(`UPDATE team_approvals SET state = 'approved', expires_at = ?,
+        entity_version = entity_version + 1, decision_actor = 'daemon', updated_at = ?
+        WHERE id = ? AND state IN ('approved', 'expired')`).run(nextExpiry, now, approval.id);
+      if (updated.changes !== 1) return false;
+      this.emit(run, register, "approval.renewed", {
+        approvalId: approval.id, previousExpiresAt: approval.expiresAt, expiresAt: nextExpiry, observedBy: "daemon",
+      });
+      return true;
+    });
   }
 
   /**
@@ -984,17 +1023,75 @@ export class PlanGovernance {
           attemptId: attempt.id, observedBy: owner.sessionId };
       }
       if (ctx.request.actionId !== ctx.run.id) throw new TeamContractError("ownerCommand.actionId");
-      object(ctx.request.payload, "ownerCommand");
+      const payload = object(ctx.request.payload, "ownerCommand");
       if (operation === "resume") {
-        if (ctx.run.state !== "blocked" || ctx.run.stateReason !== "owner-paused") return deny("Only an owner-paused run can resume");
+        if (ctx.run.state !== "blocked") return deny("Only a blocked run can resume");
+        const option = (name: string): number => {
+          const value = payload[name];
+          if (value === undefined) return 0;
+          if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new TeamContractError(`ownerCommand.${name}`);
+          return value;
+        };
+        const addMinutes = option("addMinutes"), addRetries = option("addRetries"), addReviewRounds = option("addReviewRounds");
+        const reason = ctx.run.stateReason;
+        const activeBudget = reason === "Active wall-clock budget exhausted";
+        const retryBudget = reason === "retry limit exhausted" || reason === "Retry limit exhausted";
+        const reviewBudget = reason === "review limit exhausted";
+        // Review exhaustion is a lead escalation point: the owner may resume it so the lead can
+        // decide what follow-up work is needed. Retry and wall-clock exhaustion are the budgets
+        // that require an explicit increase in this same owner action.
+        const required = activeBudget ? "addMinutes" : retryBudget ? "addRetries"
+          : reviewBudget && addReviewRounds > 0 ? "addReviewRounds" : null;
+        const amount = required === "addMinutes" ? addMinutes : required === "addRetries" ? addRetries
+          : required === "addReviewRounds" ? addReviewRounds : 0;
+        if (required !== null && amount <= 0) {
+          return deny(`Resume requires a positive ${required} increase for ${reason}`);
+        }
+        if (required === null && (addMinutes > 0 || addRetries > 0 || addReviewRounds > 0)) {
+          return deny("Budget increases are only accepted for a budget-blocked run");
+        }
+        if (required !== null) {
+          const limits = { ...ctx.run.binding.limits,
+            ...(activeBudget ? { maxActiveMs: ctx.run.binding.limits.maxActiveMs + addMinutes * 60_000 } : {}),
+            ...(retryBudget ? { maxRetries: ctx.run.binding.limits.maxRetries + addRetries } : {}),
+            ...(reviewBudget ? { maxReviewRounds: ctx.run.binding.limits.maxReviewRounds + addReviewRounds } : {}),
+          };
+          const binding = parsePlanBinding({ ...ctx.run.binding, limits });
+          this.invalidateUnused(ctx);
+          ctx.run.binding = binding;
+          ctx.run.bindingDigest = hashBinding(binding);
+          const approvalPayload = { bindingDigest: ctx.run.bindingDigest };
+          this.db.prepare(`INSERT INTO team_approvals
+            (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,decision_actor,created_at,updated_at)
+            VALUES (?,?,'orchestrator','implementation',?,?,?,?,'approved',?,?,?,?)`).run(randomUUID(), ctx.run.id,
+            canonicalJson(approvalPayload), hashBytes(canonicalJson(approvalPayload)), ctx.run.bindingDigest, ctx.run.bindingDigest,
+            new Date(Date.parse(ctx.now) + binding.limits.maxActiveMs).toISOString(), owner.sessionId, ctx.now, ctx.now);
+        } else if (reason !== "owner-paused" && !this.db.prepare(`SELECT id FROM team_approvals WHERE run_id = ? AND kind = 'orchestrator'
+          AND action = 'implementation' AND binding_digest = ? AND state = 'approved' AND expires_at > ?`)
+          .get(ctx.run.id, ctx.run.bindingDigest, ctx.now)) {
+          // Blocking transitions revoke the old implementation grant. Resume is the one owner
+          // action that reopens that same binding, so issue a fresh grant before eligibility
+          // checks the dispatch gate.
+          this.invalidateUnused(ctx);
+          const approvalPayload = { bindingDigest: ctx.run.bindingDigest };
+          this.db.prepare(`INSERT INTO team_approvals
+            (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,decision_actor,created_at,updated_at)
+            VALUES (?,?,'orchestrator','implementation',?,?,?,?,'approved',?,?,?,?)`).run(randomUUID(), ctx.run.id,
+            canonicalJson(approvalPayload), hashBytes(canonicalJson(approvalPayload)), ctx.run.bindingDigest, ctx.run.bindingDigest,
+            new Date(Date.parse(ctx.now) + ctx.run.binding.limits.maxActiveMs).toISOString(), owner.sessionId, ctx.now, ctx.now);
+        }
         ctx.run.state = "approved";
-        const reason = this.eligibility(ctx);
-        if (reason) {
+        const eligibilityReason = this.eligibility(ctx);
+        if (eligibilityReason) {
           ctx.run.state = "blocked";
-          ctx.run.stateReason = reason;
-          return deny(reason);
+          ctx.run.stateReason = eligibilityReason;
+          return deny(eligibilityReason);
         }
         ctx.run.stateReason = null;
+        return { status: "observed", value: { state: ctx.run.state, stateReason: ctx.run.stateReason,
+          ...(required === "addMinutes" ? { addMinutes } : {}), ...(required === "addRetries" ? { addRetries } : {}),
+          ...(required === "addReviewRounds" ? { addReviewRounds } : {}) },
+          observedBy: owner.sessionId, effectMayStart: true, resumeTaskIds: this.pendingResumeTaskIds(ctx.run.id) };
       } else {
         const reason = this.eligibility(ctx);
         if (reason) return deny(reason);
@@ -1584,7 +1681,9 @@ export class PlanGovernance {
         replayed: false, effectMayStart: result.effectMayStart ?? false, value,
         ...(result.reworkTaskId === undefined ? {} : { reworkTaskId: result.reworkTaskId }),
         ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }),
-        ...(result.revisionTaskId === undefined ? {} : { revisionTaskId: result.revisionTaskId }), reason: result.reason ?? null };
+        ...(result.revisionTaskId === undefined ? {} : { revisionTaskId: result.revisionTaskId }),
+        ...(result.resumeTaskIds === undefined ? {} : { resumeTaskIds: result.resumeTaskIds }),
+        reason: result.reason ?? null, reasonKey: teamReasonLabelKey(result.reason ?? null) };
       this.db.prepare(`INSERT INTO team_control_requests (run_id, idempotency_key, request_digest, response_json, created_at)
         VALUES (?, ?, ?, ?, ?)`).run(run.id, request.idempotencyKey, requestDigest, canonicalJson(receipt), ctx.now);
       this.emit(run, register, result.status === "denied" ? `${action}.denied` : action,
@@ -1592,7 +1691,8 @@ export class PlanGovernance {
           ...(result.observedBy === undefined ? {} : { observedBy: result.observedBy }) }, result.taskId, result.attemptId);
       return { ...receipt, ...(result.reworkTaskId === undefined ? {} : { reworkTaskId: result.reworkTaskId }),
         ...(result.reviewTaskId === undefined ? {} : { reviewTaskId: result.reviewTaskId }),
-        ...(result.revisionTaskId === undefined ? {} : { revisionTaskId: result.revisionTaskId }) };
+        ...(result.revisionTaskId === undefined ? {} : { revisionTaskId: result.revisionTaskId }),
+        ...(result.resumeTaskIds === undefined ? {} : { resumeTaskIds: result.resumeTaskIds }) };
     });
   }
 
@@ -1678,6 +1778,16 @@ export class PlanGovernance {
   private liveAttemptCount(runId: string): number {
     return (this.db.prepare("SELECT count(*) AS count FROM team_attempts WHERE run_id = ? AND state IN ('running', 'unknown')")
       .get(runId) as { count: number }).count + this.nativeLaunchIntents(runId).filter(intent => intent.state === "admitted").length;
+  }
+
+  /** U8 — work a resumed run may offer to the dispatcher, in queue order. */
+  private pendingResumeTaskIds(runId: string): string[] {
+    const rows = this.db.prepare(`SELECT a.task_id AS taskId
+      FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+      WHERE a.run_id = ? AND q.state IN ('pending', 'in-progress')
+        AND NOT EXISTS (SELECT 1 FROM team_attempts t WHERE t.qitem_id = a.qitem_id AND t.state <> 'stopped')
+      ORDER BY a.rowid`).all(runId) as Array<{ taskId: string }>;
+    return rows.map(row => row.taskId);
   }
 
   private syncClock(ctx: CommandContext): void {

@@ -48,6 +48,57 @@ export type TeamRunPhase = "planning" | "delivery";
 export type AttemptState = "running" | "stopped" | "unknown";
 export type TeamOwnerCommand = "pause" | "resume" | "retry";
 
+/**
+ * Short owner-facing labels for blockers and dispatch refusals. The labels are
+ * interface keys; clients translate them through the i18n catalog instead of
+ * rendering the daemon's diagnostic prose.
+ */
+export const TEAM_REASON_LABEL_KEYS = {
+  leadWakeHourly: "team.reason.leadWakeHourly",
+  leadWakeCycles: "team.reason.leadWakeCycles",
+  reviewLimitExhausted: "team.reason.reviewLimitExhausted",
+  retryLimitExhausted: "team.reason.retryLimitExhausted",
+  initialAttemptRegistration: "team.reason.initialAttemptRegistration",
+  clockMovedBackwards: "team.reason.clockMovedBackwards",
+  activeWallClockBudget: "team.reason.activeWallClockBudget",
+  ownerPaused: "team.reason.ownerPaused",
+  implementationApprovalInactive: "team.reason.implementationApprovalInactive",
+  runClosedToDispatch: "team.reason.runClosedToDispatch",
+  nativeIdentityUnknown: "team.reason.nativeIdentityUnknown",
+  nativeLaunchUnresolved: "team.reason.nativeLaunchUnresolved",
+  providerPolicyUnverified: "team.reason.providerPolicyUnverified",
+  liveSessionLimit: "team.reason.liveSessionLimit",
+  planBindingChanged: "team.reason.planBindingChanged",
+  recoveryWedge: "team.reason.recoveryWedge",
+  generic: "team.reason.generic",
+} as const;
+
+export type TeamReasonLabelKey = (typeof TEAM_REASON_LABEL_KEYS)[keyof typeof TEAM_REASON_LABEL_KEYS];
+
+/** Map durable governance prose to the stable key an owner client renders. */
+export function teamReasonLabelKey(reason: string | null): TeamReasonLabelKey | null {
+  if (reason === null) return null;
+  if (reason === "lead-wake:hourly") return TEAM_REASON_LABEL_KEYS.leadWakeHourly;
+  if (reason === "lead-wake:cycles") return TEAM_REASON_LABEL_KEYS.leadWakeCycles;
+  if (reason === "review limit exhausted") return TEAM_REASON_LABEL_KEYS.reviewLimitExhausted;
+  if (reason === "retry limit exhausted" || reason === "Retry limit exhausted") return TEAM_REASON_LABEL_KEYS.retryLimitExhausted;
+  if (reason.startsWith("Initial attempt registration must precede work")) return TEAM_REASON_LABEL_KEYS.initialAttemptRegistration;
+  if (reason.startsWith("Clock moved backwards")) return TEAM_REASON_LABEL_KEYS.clockMovedBackwards;
+  if (reason === "Active wall-clock budget exhausted") return TEAM_REASON_LABEL_KEYS.activeWallClockBudget;
+  if (reason.startsWith("Resume requires a positive addMinutes")) return TEAM_REASON_LABEL_KEYS.activeWallClockBudget;
+  if (reason.startsWith("Resume requires a positive addRetries")) return TEAM_REASON_LABEL_KEYS.retryLimitExhausted;
+  if (reason === "owner-paused") return TEAM_REASON_LABEL_KEYS.ownerPaused;
+  if (reason === "Implementation approval is not active") return TEAM_REASON_LABEL_KEYS.implementationApprovalInactive;
+  if (reason.startsWith("Run is closed to dispatch")) return TEAM_REASON_LABEL_KEYS.runClosedToDispatch;
+  if (reason === "Native identity is unknown; reconciliation is required") return TEAM_REASON_LABEL_KEYS.nativeIdentityUnknown;
+  if (reason === "Native launch is unresolved; reconciliation is required") return TEAM_REASON_LABEL_KEYS.nativeLaunchUnresolved;
+  if (reason === "Provider policy capability is not verified for the current binding") return TEAM_REASON_LABEL_KEYS.providerPolicyUnverified;
+  if (reason === "Live session limit reached") return TEAM_REASON_LABEL_KEYS.liveSessionLimit;
+  if (reason === "Plan, repository or policy binding changed") return TEAM_REASON_LABEL_KEYS.planBindingChanged;
+  if (/seat|pane|wedge/i.test(reason)) return TEAM_REASON_LABEL_KEYS.recoveryWedge;
+  return TEAM_REASON_LABEL_KEYS.generic;
+}
+
 export interface TeamLimits {
   maxSessions: number;
   maxActiveMs: number;
@@ -126,6 +177,8 @@ export interface TeamRun {
   reviewerSeat: string | null;
   state: TeamRunState;
   stateReason: string | null;
+  /** Stable i18n key for `stateReason`, or null when the run is not blocked. */
+  stateReasonKey: TeamReasonLabelKey | null;
   /** U5 — planning until the owner approves the lead's plan, delivery afterwards. */
   phase: TeamRunPhase;
   entityVersion: number;
@@ -469,6 +522,8 @@ export interface ControlReceipt<T = unknown> {
   effectMayStart: boolean;
   value: T | null;
   reason: string | null;
+  /** Stable i18n key for `reason`, when the action was denied or reports a blocker. */
+  reasonKey?: TeamReasonLabelKey | null;
   /**
    * MVP slice C2 — the task a completion just created and the route must dispatch: the
    * reviewer task an implementer's validated completion admitted, or the implementer task a
@@ -481,6 +536,8 @@ export interface ControlReceipt<T = unknown> {
    * revision, resumed on the conversation that wrote the rejected proposal. Absent elsewhere.
    */
   revisionTaskId?: string;
+  /** Pending task ids a resumed run should offer to the dispatcher. */
+  resumeTaskIds?: string[];
 }
 
 export interface TeamControlEvent {
@@ -621,8 +678,10 @@ export function parsePlanBinding(value: unknown): PlanBinding {
     planRef: relativePath(v.planRef, "planRef"), planDigest: digest(v.planDigest, "planDigest"),
     repository: { root, identity }, readPaths, writePaths, roles,
     policyRevision: integer(v.policyRevision, "policyRevision", 1), policyFingerprint: digest(v.policyFingerprint, "policyFingerprint"),
-    limits: { maxSessions: integer(limits.maxSessions, "maxSessions", 1, 3), maxActiveMs: integer(limits.maxActiveMs, "maxActiveMs", 1, 3_600_000),
-      maxRetries: integer(limits.maxRetries, "maxRetries", 0, 1), maxReviewRounds: integer(limits.maxReviewRounds, "maxReviewRounds", 0, 2) },
+    // U8 allows an owner Resume action to add bounded budget. The original defaults remain
+    // small; these ceilings keep an owner increase finite without making the action a new plan.
+    limits: { maxSessions: integer(limits.maxSessions, "maxSessions", 1, 3), maxActiveMs: integer(limits.maxActiveMs, "maxActiveMs", 1, 7 * 24 * 3_600_000),
+      maxRetries: integer(limits.maxRetries, "maxRetries", 0, 100), maxReviewRounds: integer(limits.maxReviewRounds, "maxReviewRounds", 0, 100) },
   };
 }
 

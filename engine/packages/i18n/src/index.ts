@@ -94,6 +94,27 @@ export const STATUS_LABEL_KEYS = {
 } as const satisfies Record<string, Record<string, MessageKey>>;
 export type StatusDomain = keyof typeof STATUS_LABEL_KEYS;
 
+/** U8 — stable keys for daemon blockers and dispatch refusals. */
+export const TEAM_REASON_LABEL_KEYS = {
+  leadWakeHourly: "team.reason.leadWakeHourly",
+  leadWakeCycles: "team.reason.leadWakeCycles",
+  reviewLimitExhausted: "team.reason.reviewLimitExhausted",
+  retryLimitExhausted: "team.reason.retryLimitExhausted",
+  initialAttemptRegistration: "team.reason.initialAttemptRegistration",
+  clockMovedBackwards: "team.reason.clockMovedBackwards",
+  activeWallClockBudget: "team.reason.activeWallClockBudget",
+  ownerPaused: "team.reason.ownerPaused",
+  implementationApprovalInactive: "team.reason.implementationApprovalInactive",
+  runClosedToDispatch: "team.reason.runClosedToDispatch",
+  nativeIdentityUnknown: "team.reason.nativeIdentityUnknown",
+  nativeLaunchUnresolved: "team.reason.nativeLaunchUnresolved",
+  providerPolicyUnverified: "team.reason.providerPolicyUnverified",
+  liveSessionLimit: "team.reason.liveSessionLimit",
+  planBindingChanged: "team.reason.planBindingChanged",
+  recoveryWedge: "team.reason.recoveryWedge",
+  generic: "team.reason.generic",
+} as const satisfies Record<string, MessageKey>;
+
 export interface OwnerLanguagePreference {
   read(): unknown | Promise<unknown>;
   write(language: InterfaceLanguage): void | Promise<void>;

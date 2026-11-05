@@ -34,6 +34,8 @@ export interface TaskDispatchDependencies {
   maxSessions: (runId: string) => number;
   /** How many of the run's attempts are live right now, read the way governance counts them. */
   liveSessions: (runId: string) => number;
+  /** Renew a near-expiry implementation approval at the dispatch boundary. */
+  renewApproval?: (runId: string) => boolean;
 }
 
 export type TaskDispatch = (runId: string, taskId: string) => Promise<void>;
@@ -85,11 +87,11 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     const paneDead = boundPane === null || !dependencies.tmux.getPaneExit
       ? false : (await dependencies.tmux.getPaneExit(boundPane))?.dead === true;
     // A seat this dispatch may start: one that has never launched (`pending`), one whose last
-    // launch failed (`failed`), or one that claims to be `ready` while its pane is dead. An
-    // `attention_required` seat is waiting on a native prompt only the owner can clear, and a
-    // `ready` seat with a live pane already has an agent; neither is this dispatch's to overwrite.
+    // launch failed (`failed`), one waiting on a native prompt (`attention_required`), or one
+    // that claims to be `ready` while its pane is dead. A live `ready` seat already has an agent.
     if (!context || !session || !node?.cwd || !adapter || starting.has(session.id)
       || !(session.startupStatus === "pending" || session.startupStatus === "failed"
+        || session.startupStatus === "attention_required"
         || (session.startupStatus === "ready" && paneDead))) return;
     // MVP — the run's live-session limit is asked *before* the client starts. The governance
     // gate that already enforces it runs when the launch's receipt is registered, a second
@@ -98,12 +100,13 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     if (dependencies.liveSessions(runId) >= dependencies.maxSessions(runId)) return;
     starting.add(session.id);
     try {
+      dependencies.renewApproval?.(runId);
       // A seat whose last launch failed is recovered once, in this dispatch: its terminal is put
       // back to a live shell and its startup status to the state a never-launched seat has. The
       // launch then proceeds exactly as it does for a fresh seat. A second failure leaves the
       // seat `failed` again — the launch records that itself — and the next dispatch is what
       // tries again, so there is no loop here and no retry beyond this one recovery.
-      if (session.startupStatus === "failed" || paneDead) {
+      if (session.startupStatus === "failed" || session.startupStatus === "attention_required" || paneDead) {
         await recoverFailedSeat(dependencies, session.id, node.id, seat, boundPane, paneDead);
       }
       await ensureSeatPane(dependencies, seat);
@@ -129,7 +132,7 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       const resumeType = adapter.runtime === "codex" ? "codex_id" : "claude_id";
       const continueSessionId = !unsafe && session.resumeToken && session.resumeType === resumeType
         ? session.resumeToken : undefined;
-      await dependencies.startupOrchestrator.startNode({ rigId: context.rigId, nodeId: node.id, sessionId: session.id,
+      const started = await dependencies.startupOrchestrator.startNode({ rigId: context.rigId, nodeId: node.id, sessionId: session.id,
         binding, adapter,
         plan: { runtime: adapter.runtime, cwd: node.cwd, entries: [], startup: { files: [], actions: [] },
           conflicts: [], noOps: [], diagnostics: [] },
@@ -140,6 +143,10 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
         taskId,
         ...(continueSessionId ? { continueSessionId } : {}),
         includeDurableObligations: true, allowFreshFallback: false });
+      if (!started.ok) {
+        const detail = started.errors.join("; ");
+        console.warn(`team dispatch: seat ${seat} remains ${started.startupStatus}; ${detail || started.recovery || "recovery requires owner attention"}`);
+      }
     } finally {
       starting.delete(session.id);
     }

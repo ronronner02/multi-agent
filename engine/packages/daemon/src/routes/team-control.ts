@@ -240,7 +240,8 @@ export function teamControlRoutes(
         const addedTasks = (receipt.value as { addedTasks?: string[] } | null)?.addedTasks ?? [];
         const next = [receipt.reviewTaskId, receipt.reworkTaskId, receipt.revisionTaskId]
           .filter((taskId): taskId is string => taskId !== undefined);
-        for (const taskId of [...addedTasks, ...next]) void options.dispatch(request.runId, taskId).catch(error =>
+        const resumed = receipt.resumeTaskIds ?? [];
+        for (const taskId of [...addedTasks, ...next, ...resumed]) void options.dispatch(request.runId, taskId).catch(error =>
           console.warn(`team control: launch for run=${request.runId} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
       }
       return c.json(receipt, receipt.status === "denied" ? 403 : receipt.status === "pending-execution" ? 202 : 200);

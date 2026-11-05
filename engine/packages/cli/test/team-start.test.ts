@@ -163,6 +163,27 @@ describe("rig team continue", () => {
   });
 });
 
+describe("rig team resume", () => {
+  it("reads the current run version and posts one Resume action with budget increases", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => new Response(JSON.stringify(
+      init?.method === "POST"
+        ? { status: "observed", runId: "run-1", effectMayStart: true, reason: null, resumeTaskIds: ["task-1"] }
+        : { run: { entityVersion: 8 } },
+    ), { status: 200 })) as unknown as typeof fetch;
+    const result = await run(["team", "resume", "run-1", "--add-minutes", "5", "--add-retries", "2", "--add-review-rounds", "1", "--json"], deps(fetchImpl));
+    const calls = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+    expect(calls.map(([url]) => url)).toEqual([
+      "http://127.0.0.1:7433/api/team-control/runs/run-1",
+      "http://127.0.0.1:7433/api/team-control/runs/run-1/resume",
+    ]);
+    expect(JSON.parse(String(calls[1]![1].body))).toMatchObject({
+      protocolVersion: "1.0", runId: "run-1", actionId: "run-1", expectedEntityVersion: 8,
+      payload: { addMinutes: 5, addRetries: 2, addReviewRounds: 1 },
+    });
+    expect(JSON.parse(result.lines[0]!)).toMatchObject({ status: "observed", effectMayStart: true, resumeTaskIds: ["task-1"] });
+  });
+});
+
 describe("rig team proposal", () => {
   const proposal = { tasks: [
     { taskId: "task-2", seat: "a@demo", paths: ["src/a.ts"], dependencies: [], body: "First" },
