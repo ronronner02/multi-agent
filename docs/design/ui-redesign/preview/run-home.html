@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运行首页 · 主线</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="crumbs">
+    <a class="crumb" href="team-create.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+      文本工具
+    </a>
+    <span class="crumb-sep">/</span>
+    <span class="run-name">文本工具函数</span>
+  </div>
+  <div class="topbar-right">
+    <div class="lang" role="group" aria-label="语言">
+      <button aria-pressed="true">中</button><button aria-pressed="false">EN</button>
+    </div>
+    <button class="more" aria-label="更多">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="13" cy="8" r="1.3"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="line-strip">
+  <span class="row" style="display:flex; align-items:center; gap:8px; min-width:0">
+    <span class="label">主线</span>
+    <span class="now">统一分隔符处理 · 受阻</span>
+  </span>
+  <span class="count">4 / 9</span>
+</div>
+
+<main class="home">
+  <section class="chat" aria-label="与负责人的对话">
+    <div class="chat-log">
+
+      <div class="turn">
+        <div class="turn-who">负责人 · Claude Code <span class="faint">21:12</span></div>
+        <p class="turn-body">计划写在 plan.md 了：5 项工作，每项都过一遍审查。</p>
+      </div>
+
+      <div class="plate" role="group" aria-label="计划：文本工具函数">
+        <h2 class="plate-title">文本工具函数</h2>
+        <div class="plate-meta">实现者 2 · 审查者 1</div>
+        <ol class="plate-list">
+          <li><span class="n">01</span><span>补上 slugify 的边界用例</span><span class="st">实现者 · Claude Code</span></li>
+          <li><span class="n">02</span><span>实现 titleCase</span><span class="st">实现者 · Codex</span></li>
+          <li><span class="n">03</span><span>补上 titleCase 的测试</span><span class="st">实现者 · Codex</span></li>
+          <li><span class="n">04</span><span>统一分隔符处理</span><span class="st">实现者 · Claude Code</span></li>
+          <li><span class="n">05</span><span>更新 README 的用法</span><span class="st">实现者 · Codex</span></li>
+        </ol>
+        <div class="plate-foot">
+          <span class="plate-done">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>
+            你在 21:38 批准了计划
+          </span>
+        </div>
+      </div>
+
+      <div class="turn">
+        <div class="turn-who">负责人 · Claude Code <span class="faint">21:40</span></div>
+        <p class="turn-body">开始执行。两件事已经派下去了，审查者跟着每一项。</p>
+      </div>
+
+      <div class="plate plate-waiting" role="group" aria-label="待决定">
+        <div class="plate-meta">负责人 · Claude Code · 22:04</div>
+        <h2 class="plate-title">slugify 的两处改动都落在 normalize()，先按哪个为准？</h2>
+        <div class="options">
+          <button class="option">以边界用例为准，空输入修复重做
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
+          </button>
+          <button class="option">以空输入修复为准，边界用例重写
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
+          </button>
+          <button class="option">这一项先放下，其余 8 项照常推进
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <form class="composer" onsubmit="return false">
+      <textarea rows="1" aria-label="消息"></textarea>
+      <button class="btn btn-primary" type="submit" disabled>发送</button>
+    </form>
+  </section>
+
+  <aside class="line-scroll" aria-label="主线">
+    <div class="line">
+      <div class="line-head">
+        <h2>主线</h2>
+      </div>
+      <div class="line-body">
+        <div class="line-fill" style="height: 192px"></div>
+
+        <div class="task" data-state="done">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">补上 slugify 的边界用例</div><div class="task-seat">实现者 · Claude Code</div></div>
+          <span class="task-state">已完成</span>
+        </div>
+        <div class="task" data-state="done">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">审查：补上 slugify 的边界用例</div><div class="task-seat">审查者 · Codex</div></div>
+          <span class="task-state">已完成</span>
+        </div>
+        <div class="task" data-state="done">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">实现 titleCase</div><div class="task-seat">实现者 · Codex</div></div>
+          <span class="task-state">已完成</span>
+        </div>
+        <div class="task" data-state="done">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">审查：实现 titleCase</div><div class="task-seat">审查者 · Codex</div></div>
+          <span class="task-state">已完成</span>
+        </div>
+        <div class="task" data-state="review">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">补上 titleCase 的测试</div><div class="task-seat">实现者 · Codex</div></div>
+          <span class="task-state">审查中</span>
+        </div>
+        <div class="task" data-state="queued">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">审查：补上 titleCase 的测试</div><div class="task-seat">审查者 · Codex</div></div>
+          <span class="task-state">排队中</span>
+        </div>
+        <div class="task" data-state="blocked">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">统一分隔符处理</div><div class="task-seat">实现者 · Claude Code</div></div>
+          <span class="task-state">受阻</span>
+        </div>
+        <div class="task" data-state="queued">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">审查：统一分隔符处理</div><div class="task-seat">审查者 · Codex</div></div>
+          <span class="task-state">排队中</span>
+        </div>
+        <div class="task" data-state="queued">
+          <span class="node" aria-hidden="true"></span>
+          <div><div class="task-name">更新 README 的用法</div><div class="task-seat">实现者 · Codex</div></div>
+          <span class="task-state">排队中</span>
+        </div>
+      </div>
+
+      <div class="merge" data-ready="false">
+        <h3>合并到 main</h3>
+        <p>还有 5 项未完成</p>
+        <button class="btn btn-outline" disabled>合并到 main</button>
+        <a class="merge-link" href="integration-branch.html">查看提交</a>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+  // A conversation opens on its newest turn. Same rule the app uses; no state flags.
+  for (const log of document.querySelectorAll(".chat-log")) log.scrollTop = log.scrollHeight;
+</script>
+
+</body>
+</html>

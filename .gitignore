@@ -24,3 +24,6 @@ graphify-out/
 # desktop app build output and dependencies
 desktop/dist/
 desktop/node_modules/
+
+# oil-ui design workspace: local process files, never part of a delivery
+.oil-ui/
