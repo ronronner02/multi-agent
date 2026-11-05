@@ -736,14 +736,7 @@ export class PlanGovernance {
         this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
           valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
       }
-      // The list this run has now admitted, by digest. A later lead turn's tree still holds the
-      // proposal file it wrote earlier, so the digest is how the daemon tells "the same list
-      // again" from "a new list", and a turn that only answered an event does not try to admit
-      // its own earlier decomposition a second time.
-      const proposalDigest = hashBytes(canonicalJson(leadTasks as unknown as import("../contracts/team-control.js").JsonValue));
-      this.emit(ctx.run, ctx.register, "lead.tasks-admitted",
-        { proposalDigest, taskIds: batch.map(task => task.assignment.taskId) });
-      return { status: "accepted", value: { addedTasks: batch.map(task => task.assignment.taskId), proposalDigest },
+      return { status: "accepted", value: { addedTasks: batch.map(task => task.assignment.taskId) },
         effectMayStart: true, observedBy: "daemon" };
     });
   }

@@ -263,7 +263,9 @@ export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (atte
     catch (error) {
       // A file the boundary refuses is not a decision: the turn still said something in its
       // final message, and a refused escalation must not silently become one the owner answers.
-      log(`team chat: the lead's escalation for run=${runId} was not readable: ${error instanceof Error ? error.message : String(error)}`);
+      // A candidate the runtime cannot adopt right now reads the same way, and is worth saying
+      // because a turn with an intended decision would otherwise look like a turn without one.
+      log(`team chat: no escalation was read for run=${runId}: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   };
