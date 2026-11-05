@@ -1,6 +1,6 @@
 {
   "runId": "577d5149-f615-4b82-b51e-090f527b9812",
-  "eventCount": 53,
+  "eventCount": 67,
   "events": [
     {
       "seq": 1,
@@ -68,6 +68,20 @@
           "status": "accepted",
           "valueDigest": "sha256:bedf49fcff8276b94fee74c3a5c40577131889f0404ee5e58e0c31b994cc1c74"
         }
+      }
+    },
+    {
+      "seq": 4,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105003020-0c2437a3",
+        "sourceSession": "owner-control",
+        "destinationSession": "lead@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
       }
     },
     {
@@ -231,6 +245,21 @@
       }
     },
     {
+      "seq": 14,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:33:21",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105003020-0c2437a3",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
+      }
+    },
+    {
       "seq": 15,
       "type": "team.control",
       "createdAt": "2026-11-05 00:33:21",
@@ -302,6 +331,21 @@
           "taskId": "task-1",
           "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
         }
+      }
+    },
+    {
+      "seq": 18,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105003020-0c2437a3",
+        "fromState": "done",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "577d5149-f615-4b82-b51e-090f527b9812",
+        "summary": null
       }
     },
     {
@@ -491,6 +535,20 @@
       }
     },
     {
+      "seq": 29,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105003559-4a66cfac",
+        "sourceSession": "owner-control",
+        "destinationSession": "one@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
+      }
+    },
+    {
       "seq": 30,
       "type": "team.control",
       "createdAt": "2026-11-05 00:35:59",
@@ -510,6 +568,20 @@
           "status": "accepted",
           "valueDigest": "sha256:f19776cf41413b504f1f35bcd3478ad18c75301749649395c58499b6c18b9175"
         }
+      }
+    },
+    {
+      "seq": 31,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105003559-cb98eb1a",
+        "sourceSession": "owner-control",
+        "destinationSession": "two@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
       }
     },
     {
@@ -750,6 +822,35 @@
       }
     },
     {
+      "seq": 47,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105003559-4a66cfac",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
+      }
+    },
+    {
+      "seq": 48,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105004117-e45d356d",
+        "sourceSession": "task-2",
+        "destinationSession": "review@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
+      }
+    },
+    {
       "seq": 49,
       "type": "team.control",
       "createdAt": "2026-11-05 00:41:17",
@@ -810,6 +911,35 @@
           },
           "deadline": 1793842380324
         }
+      }
+    },
+    {
+      "seq": 54,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105003559-cb98eb1a",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
+      }
+    },
+    {
+      "seq": 55,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105004117-234c4da6",
+        "sourceSession": "task-3",
+        "destinationSession": "review@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
       }
     },
     {
@@ -989,6 +1119,21 @@
       }
     },
     {
+      "seq": 66,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:45:51",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105004117-e45d356d",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
+      }
+    },
+    {
       "seq": 67,
       "type": "team.control",
       "createdAt": "2026-11-05 00:45:51",
@@ -1125,6 +1270,21 @@
       }
     },
     {
+      "seq": 72,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:50:29",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105004117-234c4da6",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
+      }
+    },
+    {
       "seq": 73,
       "type": "team.control",
       "createdAt": "2026-11-05 00:50:29",
@@ -1167,6 +1327,21 @@
           "taskId": "task-3",
           "verdict": "changes-required"
         }
+      }
+    },
+    {
+      "seq": 74,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:50:29",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105003559-cb98eb1a",
+        "fromState": "done",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "577d5149-f615-4b82-b51e-090f527b9812",
+        "summary": null
       }
     },
     {
@@ -1215,6 +1390,20 @@
           "status": "accepted",
           "valueDigest": "sha256:61a7d16610b76d0f2d9e8669ffeec93d4b4a9ebe31205276aad2e0af02565648"
         }
+      }
+    },
+    {
+      "seq": 79,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 00:51:42",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105005142-e4ec6e47",
+        "sourceSession": "owner-control",
+        "destinationSession": "one@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
       }
     },
     {
@@ -1367,6 +1556,21 @@
           "status": "observed",
           "valueDigest": "sha256:ffdb73b01ebd9dd43ac103286c9753f581b723501b18dd3a35845ca0f83b99c4"
         }
+      }
+    },
+    {
+      "seq": 89,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 00:57:12",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105005142-e4ec6e47",
+        "fromState": "pending",
+        "toState": "failed",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "owner-control",
+        "summary": null
       }
     },
     {

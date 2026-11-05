@@ -1,6 +1,6 @@
 {
   "runId": "9b27efb9-9b14-4535-8e2d-9c08bc4944e0",
-  "eventCount": 10,
+  "eventCount": 12,
   "events": [
     {
       "seq": 101,
@@ -68,6 +68,20 @@
           "status": "accepted",
           "valueDigest": "sha256:a349132e6991e1945fca333218195948eafff2bb4bb047096b653dac0bdec8b5"
         }
+      }
+    },
+    {
+      "seq": 104,
+      "type": "queue.created",
+      "createdAt": "2026-11-05 01:00:39",
+      "event": {
+        "type": "queue.created",
+        "qitemId": "qitem-20261105010039-a49578c6",
+        "sourceSession": "owner-control",
+        "destinationSession": "one@acceptance",
+        "priority": "routine",
+        "tier": null,
+        "summary": null
       }
     },
     {
@@ -220,6 +234,21 @@
           "status": "observed",
           "valueDigest": "sha256:806fc1f5ecd1f4352a26a8e27e5ce7672e239920bc2ab4998200fe4c8b68a44a"
         }
+      }
+    },
+    {
+      "seq": 114,
+      "type": "queue.updated",
+      "createdAt": "2026-11-05 01:00:48",
+      "event": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261105010039-a49578c6",
+        "fromState": "pending",
+        "toState": "canceled",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "9b27efb9-9b14-4535-8e2d-9c08bc4944e0",
+        "summary": null
       }
     },
     {
