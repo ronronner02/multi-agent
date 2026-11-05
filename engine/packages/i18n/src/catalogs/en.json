@@ -284,6 +284,7 @@
   "team.reason.liveSessionLimit": "Live session limit reached",
   "team.reason.planBindingChanged": "Plan binding changed",
   "team.reason.recoveryWedge": "Seat recovery needs attention",
+  "team.reason.integrationConflict": "Work does not apply to the integration branch",
   "team.reason.generic": "Run needs attention",
   "team.create": "create",
   "team.modify": "modify",

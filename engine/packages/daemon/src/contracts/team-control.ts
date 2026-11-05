@@ -70,6 +70,7 @@ export const TEAM_REASON_LABEL_KEYS = {
   liveSessionLimit: "team.reason.liveSessionLimit",
   planBindingChanged: "team.reason.planBindingChanged",
   recoveryWedge: "team.reason.recoveryWedge",
+  integrationConflict: "team.reason.integrationConflict",
   generic: "team.reason.generic",
 } as const;
 
@@ -95,6 +96,9 @@ export function teamReasonLabelKey(reason: string | null): TeamReasonLabelKey | 
   if (reason === "Provider policy capability is not verified for the current binding") return TEAM_REASON_LABEL_KEYS.providerPolicyUnverified;
   if (reason === "Live session limit reached") return TEAM_REASON_LABEL_KEYS.liveSessionLimit;
   if (reason === "Plan, repository or policy binding changed") return TEAM_REASON_LABEL_KEYS.planBindingChanged;
+  // U7 — the approved work could not be applied to the run's integration branch. The task
+  // records it as `integration_conflict`, with the patch's own refusal as the reason.
+  if (reason === "integration_conflict" || reason.startsWith("Integration conflict")) return TEAM_REASON_LABEL_KEYS.integrationConflict;
   if (/seat|pane|wedge/i.test(reason)) return TEAM_REASON_LABEL_KEYS.recoveryWedge;
   return TEAM_REASON_LABEL_KEYS.generic;
 }
