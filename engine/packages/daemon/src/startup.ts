@@ -3234,6 +3234,21 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // observed to finish. This path admits the attempt when its receipt lands, records it stopped
     // when the process it named is gone, and records the daemon-verifiable outcome.
     const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
+    // U6 — the lead as manager: what its turn delivered, and what its team did since it spoke.
+    // It runs on this sweep's cadence (one owner of "the queue as it is now") and asks the same
+    // dispatch every other launch uses, so nothing here starts a client of its own.
+    const { composeLeadManager } = await import("./domain/lead-manager.js");
+    // The run's current binding, read the way every control command reads it.
+    const currentBinding = (runId: string) => {
+      const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();
+      return policy ? refreshPlanBinding(run.binding, policy) : run.binding;
+    };
+    const leadManager = composeLeadManager({ db, governance: teamGovernance,
+      readLeadProposal: (runId, taskId) => {
+        if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+        return workflowRuntime.leadProposalFor(runId, taskId);
+      },
+      currentBinding, dispatch: () => deps.teamControl?.dispatch });
     // The direct worker's mutable state root: each attempt's prompt, its captured Codex thread
     // id and its final message live under it. One value, so the readers of a turn's end cannot
     // disagree about where.
@@ -3247,6 +3262,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       readLeadProposal: (runId, taskId) => {
         if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
         return workflowRuntime.leadProposalFor(runId, taskId);
+      },
+      // U6 — a delivery lead's second deliverable is the question only the owner can answer.
+      readLeadEscalation: (runId, taskId) => {
+        if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+        const escalation = workflowRuntime.leadEscalationFor(runId, taskId);
+        return escalation === null ? null : { optionCount: escalation.options.length };
       },
       // T033 — the exit evidence a direct launch leaves behind. The seat's pane is where the
       // client ran, so tmux's own record of that pane ending (its dead flag and exit status)
@@ -3262,17 +3283,24 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       releasePane: paneId => tmuxAdapter.respawnPane(paneId),
       // U5 — the end of a lead's turn is the lead's reply in the run's chat, and a message that
       // waited for that turn is the next turn's prompt. The conversation owner reads the turn's
-      // recorded final message and asks the same dispatch for the next turn.
-      onAttemptStopped: composeLeadTurnEnd({ db, governance: teamGovernance, turnStateRoot,
-        dispatch: () => deps.teamControl?.dispatch }),
+      // recorded final message and asks the same dispatch for the next turn. U6 adds the one
+      // other thing the turn can say: the decision it asked the owner for.
+      onAttemptStopped: async attempt => {
+        await composeLeadTurnEnd({ db, governance: teamGovernance, turnStateRoot,
+          readEscalation: (runId, taskId) => workflowRuntime ? workflowRuntime.leadEscalationFor(runId, taskId) : null,
+          dispatch: () => deps.teamControl?.dispatch })(attempt);
+        // The decomposition is admitted at the turn's end, after the turn's message is stored,
+        // so the owner reads what the lead said before the tasks it admitted appear.
+        await leadManager.turnEnd(attempt);
+      },
       // U7 — an approving review is the run's signal to deliver: the implementer's task lands as
       // one commit on the run's branch, through the same owner the merge route reads.
       ...(deps.integration ? { integrateTask: (runId: string, taskId: string) => deps.integration!.integrate(runId, taskId) } : {}),
+      // U6 — the facts no single attempt produces — a failed retry, an exhausted review, an
+      // integration conflict, every task done — are read once per tick, after the attempts.
+      onSweep: () => leadManager.sweep(),
       dispatchPending,
-      currentBinding: runId => {
-        const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();
-        return policy ? refreshPlanBinding(run.binding, policy) : run.binding;
-      } });
+      currentBinding });
     // T017 (cancellation half) — the owner's cancel stops the work. Dispatch closure is the
     // governance eligibility check that already refuses every command outside `approved`;
     // this owner adds the two things nothing did: end the processes the run launched, and

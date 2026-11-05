@@ -150,12 +150,21 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
     // U5 — the owner's approval of the plan is the other thing a lead continuation can be. The
     // two are the same question ("what happened to what I wrote?") asked of the newest answer,
     // so the newest of the two decides and one turn is never told both.
+    //
+    // U6 — a refused proposal and a team event are the same question asked twice more, and both
+    // are only news until the lead has answered them: each is a fact about a turn, so it is read
+    // only when it happened after the lead's last turn ended. Without that, a wake would be
+    // restated in every later turn of the run.
+    const lastTurnEnd = db.prepare(`SELECT COALESCE(MAX(seq), 0) AS seq FROM events
+      WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
+        AND json_extract(payload, '$.action') = 'task.outcome'`).get(runId, taskId) as { seq: number };
     const row = db.prepare(`SELECT json_extract(payload, '$.action') AS action,
         json_extract(payload, '$.payload.note') AS note, json_extract(payload, '$.payload.reason') AS reason
       FROM events
       WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
-        AND json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved')
-      ORDER BY seq DESC LIMIT 1`).get(runId, taskId) as
+        AND (json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved')
+          OR (json_extract(payload, '$.action') IN ('lead.proposal-refused', 'lead.woken') AND seq > ?))
+      ORDER BY seq DESC LIMIT 1`).get(runId, taskId, lastTurnEnd.seq) as
       { action: string; note: string | null; reason: string | null } | undefined;
     if (!row) return null;
     if (row.action === "plan.approved") {
@@ -164,7 +173,17 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
       return "This continues your earlier attempt. The owner approved the plan. It is recorded at " +
         `${plan?.planRef ?? "the plan path"} on the run's own branch, and your working tree is based on it. ` +
         "Decompose it now: write lead-proposal.json in your working tree as your run instructions describe. " +
-        "The owner reads and decides the batch.";
+        "Your task list is admitted without a further owner decision.";
+    }
+    if (row.action === "lead.proposal-refused") {
+      return `This continues your earlier attempt. The task list you proposed was refused, because:\n\n` +
+        `${row.note ?? "it is outside the approved plan"}\n\n` +
+        "Write a list that stays inside the approved goal and files, or write lead-escalation.json if only the owner can decide.";
+    }
+    if (row.action === "lead.woken") {
+      return `This continues your earlier attempt. Since your last turn:\n\n${row.note ?? "a team event needs you"}\n\n` +
+        "Decide what the team does next: write the follow-up tasks to lead-proposal.json, or write " +
+        "lead-escalation.json if the owner must decide.";
     }
     return row.note
       ? `This continues your earlier attempt. The owner rejected the proposal you wrote and gave this reason:\n\n${row.note}\n\nWrite a revised lead-proposal.json that answers it. The owner reads and decides the revised proposal as before.`

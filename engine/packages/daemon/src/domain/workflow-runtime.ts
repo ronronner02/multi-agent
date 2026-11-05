@@ -31,7 +31,8 @@ import {
   type CandidateWorkspace,
   type WorkspaceBase,
 } from "./team-workspace.js";
-import { LEAD_PROPOSAL_PATH, parseLeadProposal, type LeadTask } from "./lead-proposal.js";
+import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH, parseLeadEscalation, parseLeadProposal,
+  type LeadEscalation, type LeadTask } from "./lead-proposal.js";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/team-control.js";
@@ -855,6 +856,23 @@ export class WorkflowRuntime {
     let value: unknown;
     try { value = JSON.parse(read.content); } catch { throw new Error("The lead's proposal is not valid JSON"); }
     return parseLeadProposal(value);
+  }
+
+  /**
+   * U6 — the decision a lead asked the owner for, read at the same boundary as its proposal.
+   *
+   * One file, one reader: the escalation goes through `readWorkspacePath` exactly as the
+   * proposal does, so a lead cannot reach the owner with anything but bytes the daemon itself
+   * read. Null means the turn wrote no escalation, which is every ordinary turn; a file the
+   * boundary refuses refuses here with a reason the turn-end owner can log.
+   */
+  leadEscalationFor(runId: string, taskId: string): LeadEscalation | null {
+    const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
+    const read = readWorkspacePath(workspace.root, LEAD_ESCALATION_PATH, () => false);
+    if (read.kind !== "file") return null;
+    let value: unknown;
+    try { value = JSON.parse(read.content); } catch { throw new Error("The lead's escalation is not valid JSON"); }
+    return parseLeadEscalation(value);
   }
 
   /**

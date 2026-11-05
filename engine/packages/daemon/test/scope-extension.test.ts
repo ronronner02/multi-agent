@@ -453,7 +453,12 @@ describe("task-local scope extensions at candidate staging", () => {
     writeFileSync(join(root, "lead-proposal.json"), JSON.stringify({ tasks: [{ taskId: "task-9", seat: "task@rig",
       paths: ["src/owned.ts"], dependencies: [], body: "Implement the owned file" }] }));
     expect(packet("lead").manifest.some(file => file.path === "lead-proposal.json")).toBe(true);
-    // The exemption is that one path for that one role: any other out-of-scope write by the
+    // U6 — the escalation is the lead's second management file, and a candidate that holds the
+    // question it is waiting on must stage the same way.
+    writeFileSync(join(root, "lead-escalation.json"), JSON.stringify({ question: "Which scope?",
+      options: ["Keep src", "Widen to lib"] }));
+    expect(packet("lead").manifest.some(file => file.path === "lead-escalation.json")).toBe(true);
+    // The exemption is those paths for that one role: any other out-of-scope write by the
     // same lead still refuses.
     writeFileSync(join(root, "other.json"), "{}");
     expect(() => packet("lead")).toThrow(/plan-change-required: outside-write-paths/);

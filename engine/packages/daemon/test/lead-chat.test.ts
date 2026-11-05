@@ -157,8 +157,8 @@ describe("U5 — lead chat and plan approval", () => {
     const read = await (await call(`/runs/${receipt.runId}/chat`)).json() as { phase: string;
       messages: Array<{ sender: string; body: string }> };
     expect(read.phase).toBe("planning");
-    expect(read.messages).toEqual([{ id: "chat-1", sender: "owner", body: "What would you build first?",
-      createdAt: expect.any(String) }]);
+    expect(read.messages).toEqual([{ id: "chat-1", sender: "owner", kind: "text", body: "What would you build first?",
+      options: null, answeredBy: null, createdAt: expect.any(String) }]);
     expect(pendingOwnerMessages(db, receipt.runId!).map(message => message.body)).toEqual(["What would you build first?"]);
   });
 

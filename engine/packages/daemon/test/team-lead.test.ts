@@ -11,7 +11,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
-import { leadInstructions, leadRoster, parseLeadProposal, LEAD_PROPOSAL_PATH } from "../src/domain/lead-proposal.js";
+import { leadInstructions, leadRoster, parseLeadProposal, LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "../src/domain/lead-proposal.js";
 import { teamLeadRoutes, PROPOSAL_WINDOW_MS } from "../src/routes/team-lead.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
 import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
@@ -193,7 +193,11 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     const instructions = leadInstructions("Implement the approved modules.\nSecond line.");
     expect(instructions).toContain(LEAD_PROPOSAL_PATH);
     expect(instructions).toContain('"tasks"');
-    expect(instructions).toContain("The owner approves the exact batch");
+    // U6 — after the plan is approved the list is admitted without a further owner decision,
+    // and only the things the lead may not decide go back to the owner as a decision.
+    expect(instructions).toContain("admitted without the owner");
+    expect(instructions).toContain(LEAD_ESCALATION_PATH);
+    expect(instructions).toContain('"options"');
     // The goal's control characters are flattened: the manifest carries prose, not bytes.
     expect(instructions).not.toContain("\nSecond line");
   });

@@ -869,7 +869,12 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/team-control", teamCompletionRoutes(teamGovernance, {
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime,
-      readLeadProposal: (runId: string, taskId: string) => deps.workflowRuntime!.leadProposalFor(runId, taskId) } : {}),
+      readLeadProposal: (runId: string, taskId: string) => deps.workflowRuntime!.leadProposalFor(runId, taskId),
+      // U6 — a delivery lead's turn may ask the owner for a decision instead of proposing work.
+      readLeadEscalation: (runId: string, taskId: string) => {
+        const escalation = deps.workflowRuntime!.leadEscalationFor(runId, taskId);
+        return escalation === null ? null : { optionCount: escalation.options.length };
+      } } : {}),
   }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,

@@ -16,7 +16,7 @@ import { ordinalRunName, reviewName, taskName } from "./display-names.js";
 import { classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { LeadTask } from "./lead-proposal.js";
-import { appendChatMessage, chatBody, listChatMessages, runLeadTask, type TeamChatMessage } from "./lead-chat.js";
+import { appendChatMessage, answerDecision, chatBody, getChatMessage, listChatMessages, pendingDecision, runLeadTask, type TeamChatMessage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
@@ -696,33 +696,164 @@ export class PlanGovernance {
   }
 
   /**
-   * U5 — the owner's message in the run's chat, and the lead turn it is answered by.
+   * U6 — admit the lead's decomposition at its turn end, with no owner approval.
    *
-   * Every message is stored, and whether it starts a turn is decided from the run's own rows:
-   * a lead attempt still live means the message waits for the next turn, and a lead task that
-   * has already reached a terminal outcome is reopened the way a rejected proposal reopens it.
-   * The route dispatches only when the receipt says a turn may start, so a message that arrives
-   * mid-turn is never doubled into a second launch.
+   * After the plan is approved the owner is the board, not the dispatcher (KTD1): the lead's
+   * task list is ordinary work inside a binding the owner already approved, so the daemon
+   * admits it the way it would admit any work — through the same `growthTasks` validation and
+   * the same one admission write — and no approval row is created. The owner-decided path
+   * (`proposeLeadTasks`/`applyLeadProposal`) stays for a caller that still wants a decision.
    *
-   * The message itself is not copied into the event log: the chat table is its owner, and an
-   * event that carried the text would be a second copy of it with a second retention rule.
+   * A batch the binding does not cover is refused with the reason the lead is then told: the
+   * lead task is reopened in this same transaction, and the refusal is recorded as the note its
+   * next prompt carries. The lead can shrink the change or escalate; the daemon never widens the
+   * plan on the lead's behalf.
+   */
+  admitLeadProposal(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, leadTasks: readonly LeadTask[]): ControlReceipt {
+    const daemon = actorIdentity(actor, false, true);
+    if (daemon.kind !== "daemon") throw new Error("A lead's decomposition is admitted by the daemon, not by another caller");
+    return this.command("run.lead-tasks-admitted", raw, daemon, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.phase !== "delivery") return deny("A lead's decomposition is admitted after the owner approves the plan");
+      // A closed run dispatches nothing, so reopening the lead would only record work the run
+      // cannot do. That is an observation about the run, not a defect in the lead's list.
+      if (ctx.run.state !== "approved") return deny(`Run is closed to task admission (${ctx.run.state})`);
+      // The lead's seats and paths are its proposal; everything else about each task is the
+      // run's own vocabulary, exactly as a growth task gets it.
+      const batch = this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
+        assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
+        outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
+        destinationSession: task.seat })), "daemon");
+      if (typeof batch === "string") return this.refuseLeadProposal(ctx, batch);
+      const notImplementer = batch.find(task => !this.implementerSeat(ctx.run.rigId, task.destinationSession));
+      if (notImplementer) {
+        return this.refuseLeadProposal(ctx, `Seat ${notImplementer.destinationSession} is not an implementer seat on this rig`);
+      }
+      for (const task of batch) {
+        const taskId = task.assignment.taskId;
+        const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } });
+        if (result.status !== "accepted") throw new Error("Lead task admission conflict: " + result.reason);
+        this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
+          valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
+      }
+      // The list this run has now admitted, by digest. A later lead turn's tree still holds the
+      // proposal file it wrote earlier, so the digest is how the daemon tells "the same list
+      // again" from "a new list", and a turn that only answered an event does not try to admit
+      // its own earlier decomposition a second time.
+      const proposalDigest = hashBytes(canonicalJson(leadTasks as unknown as import("../contracts/team-control.js").JsonValue));
+      this.emit(ctx.run, ctx.register, "lead.tasks-admitted",
+        { proposalDigest, taskIds: batch.map(task => task.assignment.taskId) });
+      return { status: "accepted", value: { addedTasks: batch.map(task => task.assignment.taskId), proposalDigest },
+        effectMayStart: true, observedBy: "daemon" };
+    });
+  }
+
+  /**
+   * U6 — refuse a decomposition and make the refusal the lead's next piece of work.
+   *
+   * The reason reaches an agent's prompt, so it is the governance owner's own sentence and not
+   * a stack trace. The lead task is reopened through the transition a rejected proposal already
+   * uses, and the `lead.proposal-refused` event is what its next attempt reads to learn why.
+   */
+  private refuseLeadProposal(ctx: CommandContext, reason: string): Result {
+    const lead = runLeadTask(this.db, ctx.run.id);
+    if (!lead) return deny(reason);
+    this.emit(ctx.run, ctx.register, "lead.proposal-refused", { note: reason }, lead.taskId);
+    this.reopenLeadTask(ctx, "The daemon refused the lead's task list; the lead revises it or escalates");
+    return { status: "denied", reason, effectMayStart: true, observedBy: "daemon", revisionTaskId: lead.taskId };
+  }
+
+  /**
+   * U6 — wake the lead with the team events it has not been told about.
+   *
+   * One command per wake, not one per event: the caller collects everything one sweep found and
+   * the note lists them together, so a team that fails two tasks at once is one turn, not two.
+   * The events are counted by the caller and recorded here with the note, which is what makes a
+   * second sweep over the same facts wake nobody.
+   */
+  wakeLeadTask(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown,
+    events: readonly { key: string; note: string }[]): ControlReceipt {
+    const daemon = actorIdentity(actor, false, true);
+    if (daemon.kind !== "daemon") throw new Error("A lead wake is observed by the daemon, not by another caller");
+    return this.command("run.lead-woken", raw, daemon, ctx => {
+      if (!events.length) return deny("A lead wake carries at least one event");
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.phase !== "delivery") return deny("This run is not delivering work");
+      if (ctx.run.state !== "approved") return deny(`Run is closed to a lead wake (${ctx.run.state})`);
+      const lead = runLeadTask(this.db, ctx.run.id);
+      if (!lead) return deny("This run has no lead task to wake");
+      if (this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(lead.qitemId)) {
+        return deny("The lead is already answering a turn");
+      }
+      const item = this.queue.getById(lead.qitemId);
+      if (!item || !["pending", "in-progress", "done", "handed-off"].includes(item.state)) return deny("The lead task is not woken here");
+      // The event is the wake's own record: the note its next prompt reads, and the keys that
+      // say which facts it has now been told about.
+      this.emit(ctx.run, ctx.register, "lead.woken", { note: events.map(event => event.note).join("\n"),
+        keys: events.map(event => event.key) }, lead.taskId);
+      this.reopenLeadTask(ctx, "The daemon woke the lead for its team's events");
+      return { status: "accepted", value: { keys: events.map(event => event.key) }, effectMayStart: true,
+        observedBy: "daemon", revisionTaskId: lead.taskId };
+    });
+  }
+
+  /**
+   * Return the run's lead task to the queue when it has already finished, so its next attempt
+   * exists. A task still pending or running is left alone: the wake or the refusal is the reason
+   * its next prompt carries, and a second reopen would only rewrite the transition that is
+   * already current.
+   */
+  private reopenLeadTask(ctx: CommandContext, note: string): void {
+    const lead = runLeadTask(this.db, ctx.run.id);
+    if (!lead) return;
+    const item = this.queue.getById(lead.qitemId);
+    if (!item || (item.state !== "done" && item.state !== "handed-off")) return;
+    const updated = withQueueWrite(this.db, { operation: "update", qitemId: lead.qitemId }, () => this.queue.updateWithinTransaction({
+      qitemId: lead.qitemId, actorSession: ctx.run.id, state: "pending", reopen: true, transitionNote: note,
+    }));
+    for (const event of updated.persistedEvents) ctx.register(event);
+  }
+
+  /**
+   * U6 — the chat message, and the decision it answers.
+   *
+   * An owner message that names a decision answers it: the decision row keeps the message id,
+   * which is what makes it no longer pending. The message itself is unchanged — it is the owner
+   * speaking — so the lead's next prompt carries the answer exactly as it carries any message.
    */
   postChatMessage(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
     const owner = actorIdentity(actor, true);
     return this.command("chat.message", raw, owner, (ctx) => {
       if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
       if (ctx.run.state === "canceled" || ctx.run.state === "cancel_requested") return deny("Run is closed; the lead is not reading messages");
-      const body = chatBody(object(ctx.request.payload, "chat").body, "chat.body");
+      const payload = object(ctx.request.payload, "chat");
+      const body = chatBody(payload.body, "chat.body");
+      // The decision the owner is answering, when they name one. Checked before anything is
+      // written, so a message that names a decision this run does not have is not stored as if
+      // it had answered something.
+      const answerTo = payload.answerTo === undefined || payload.answerTo === null
+        ? null : text(payload.answerTo, "chat.answerTo", 256);
+      if (answerTo !== null) {
+        const decision = getChatMessage(this.db, answerTo);
+        if (!decision || decision.runId !== ctx.run.id || decision.kind !== "decision") {
+          return deny("This run has no decision with that id");
+        }
+        if (decision.answeredBy !== null) return deny("That decision was already answered");
+      }
       const lead = runLeadTask(this.db, ctx.run.id);
       if (!lead) return deny("This run has no lead task to answer the owner");
       const message = appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
         body, createdAt: ctx.now });
+      // The answer is recorded in the same transaction as the message, so a decision is never
+      // answered by a message this run did not keep.
+      if (answerTo !== null) answerDecision(this.db, answerTo, message.id);
+      const answered = answerTo === null ? {} : { answered: answerTo };
       // The command's own event carries the message id and the owner as its observer; the text
       // itself stays in the chat table, so it is not copied into the log with a second retention.
       // A turn already running is the whole answer: the message is pending now, and the turn-end
       // owner starts the next turn for it. Two turns at once is never a state this command makes.
       if (this.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? AND state <> 'stopped' LIMIT 1").get(lead.qitemId)) {
-        return { status: "accepted", value: { messageId: message.id, queued: true }, taskId: lead.taskId,
+        return { status: "accepted", value: { messageId: message.id, queued: true, ...answered }, taskId: lead.taskId,
           observedBy: owner.sessionId };
       }
       const item = this.queue.getById(lead.qitemId);
@@ -732,18 +863,24 @@ export class PlanGovernance {
           transitionNote: "The owner sent a chat message; the lead answers it",
         }));
         for (const event of updated.persistedEvents) ctx.register(event);
-        return { status: "accepted", value: { messageId: message.id, queued: false },
+        return { status: "accepted", value: { messageId: message.id, queued: false, ...answered },
           effectMayStart: true, taskId: lead.taskId, revisionTaskId: lead.taskId, observedBy: owner.sessionId };
       }
       if (item && (item.state === "pending" || item.state === "in-progress") && ctx.run.state === "approved") {
-        return { status: "accepted", value: { messageId: message.id, queued: false },
+        return { status: "accepted", value: { messageId: message.id, queued: false, ...answered },
           effectMayStart: true, taskId: lead.taskId, revisionTaskId: lead.taskId, observedBy: owner.sessionId };
       }
       // A blocked or canceled lead task is not dispatchable, and this command does not unblock a
       // run. The message is recorded as queued so the owner sees it was kept, not answered.
-      return { status: "accepted", value: { messageId: message.id, queued: true }, taskId: lead.taskId,
+      return { status: "accepted", value: { messageId: message.id, queued: true, ...answered }, taskId: lead.taskId,
         observedBy: owner.sessionId, reason: "The lead task is not dispatchable; the message waits for it" };
     });
+  }
+
+  /** U6 — the decision the run is waiting on, as the chat read publishes it. */
+  chatDecision(runId: string): TeamChatMessage | null {
+    this.getRun(runId);
+    return pendingDecision(this.db, runId);
   }
 
   /** U5 — the run's conversation, in order. A read for the route; it writes nothing. */

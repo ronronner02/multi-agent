@@ -56,8 +56,8 @@ import { join } from "node:path";
  *  silencing a checker. */
 const SANCTIONED: Record<string, { sites: number; why: string }> = {
   "domain/plan-governance.ts": {
-    sites: 8,
-    why: "governance-owned task transitions, each joining queue state, authority evidence and events in one post-commit notification envelope: writeTaskTransition (the owner-observed transition); ownerCommand's counted retry reopen; startRework's reopen on a blocking review (C2); cancelOpenTasks' terminal cancel (T017); startLeadRevision's reopen on a rejected lead proposal (C3); approvePlan's reopen after the owner approves the plan (U5); postChatMessage's reopen when the owner's message finds the lead task closed (U5); writeTaskTransition's reopen before an integration_conflict close (U7)",
+    sites: 9,
+    why: "governance-owned task transitions, each joining queue state, authority evidence and events in one post-commit notification envelope: writeTaskTransition (the owner-observed transition); ownerCommand's counted retry reopen; startRework's reopen on a blocking review (C2); cancelOpenTasks' terminal cancel (T017); startLeadRevision's reopen on a rejected lead proposal (C3); approvePlan's reopen after the owner approves the plan (U5); postChatMessage's reopen when the owner's message finds the lead task closed (U5); reopenLeadTask's reopen for a refused proposal or a team-event wake (U6); writeTaskTransition's reopen before an integration_conflict close (U7)",
   },
   "domain/mission-control/mission-control-write-contract.ts": {
     sites: 2,
@@ -206,9 +206,9 @@ describe("P34 RED 3 — the enumeration guard (rev 2: call-site granularity)", (
   it("the LIVE corpus matches the sanctioned set exactly, by CALL SITE", () => {
     const result = checkCallSites(realCorpus(), SANCTIONED);
     expect(result.violations).toEqual([]);
-    // Counts SITES, not files. 20 sites across 4 files.
+    // Counts SITES, not files. 21 sites across 4 files.
     expect(result.examined).toBe(TOTAL_SITES);
-    expect(result.examined).toBe(20);
+    expect(result.examined).toBe(21);
     expect(result.vacuous).toBe(false);
   });
 
@@ -312,6 +312,6 @@ describe("P34 RED 5 — KNOWN-NEGATIVE: a guard that examines nothing must FAIL"
   it("the LIVE run is NOT vacuous and examined the expected number of SITES", () => {
     const live = checkCallSites(realCorpus(), SANCTIONED);
     expect(live.vacuous).toBe(false);
-    expect(live.examined).toBe(20);
+    expect(live.examined).toBe(21);
   });
 });

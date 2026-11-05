@@ -20,6 +20,17 @@ import { object, relativePath, TeamContractError, text, type TeamRole } from "..
 /** Where a lead writes its decomposition, relative to the candidate tree it runs in. */
 export const LEAD_PROPOSAL_PATH = "lead-proposal.json";
 
+/**
+ * U6 — where a lead asks the owner for a decision it may not take itself.
+ *
+ * The same boundary and the same file protocol as the proposal: the lead cannot call an
+ * endpoint, so the one thing it can deliver is a file in its own tree, and the daemon reads it
+ * at the turn boundary that owns worker-written data. The difference is where the decision
+ * lands: a proposal is admitted by the daemon, an escalation becomes one owner decision in the
+ * run's chat.
+ */
+export const LEAD_ESCALATION_PATH = "lead-escalation.json";
+
 /** One implementer task the lead asks the owner to admit. */
 export interface LeadTask {
   taskId: string;
@@ -66,6 +77,41 @@ export function parseLeadProposal(value: unknown): LeadTask[] {
   return tasks;
 }
 
+/** One decision the lead asks the owner for, as the run's chat shows it. */
+export interface LeadEscalation {
+  /** What the owner must decide, in the lead's own words. */
+  question: string;
+  /** The alternatives the owner chooses between, in the lead's order. */
+  options: string[];
+  /** What the owner needs to decide well: the constraint, the trade-off or the evidence. */
+  context: string | null;
+}
+
+/** The message an escalation becomes, bounded like any chat body rather than like a log line. */
+const ESCALATION_BODY_LIMIT = 65_536;
+
+/**
+ * The escalation a lead wrote, validated at the boundary that reads it.
+ *
+ * Worker-written data, checked field by field like the proposal: a question the owner can act
+ * on, two to four options, and optional context. Fewer than two options is not a decision — it
+ * is a statement — and more than four is a menu nobody reads, so both are refused here rather
+ * than rendered by the chat.
+ */
+export function parseLeadEscalation(value: unknown): LeadEscalation {
+  const v = object(value, "escalation");
+  if (Object.keys(v).some(key => !["question", "options", "context"].includes(key))) throw new TeamContractError("escalation");
+  const question = text(v.question, "escalation.question", 4_096);
+  if (!Array.isArray(v.options) || v.options.length < 2 || v.options.length > 4) throw new TeamContractError("escalation.options");
+  const options = v.options.map(option => text(option, "escalation.options", 1_024));
+  if (new Set(options).size !== options.length) throw new TeamContractError("escalation.options");
+  const context = v.context === undefined || v.context === null ? null : text(v.context, "escalation.context", 8_192);
+  // The chat body is what the owner reads, and it is the question plus its context: one message
+  // is one row, so the two prose fields are bounded together instead of separately.
+  if (question.length + (context?.length ?? 0) + 2 > ESCALATION_BODY_LIMIT) throw new TeamContractError("escalation.context");
+  return { question, options, context };
+}
+
 export interface LeadRosterMember {
   member: string;
   role: TeamRole;
@@ -96,19 +142,26 @@ export function leadRoster(db: Database.Database, input: { rigId: string; roles:
  * The run instructions a lead activation carries.
  *
  * The manifest projects these bytes read-only, so they are the one place the daemon can tell the
- * lead what to do without an agent-callable endpoint: where the proposal goes, the exact shape
- * the boundary will accept, and that the owner — not the lead — decides it.
+ * lead what to do without an agent-callable endpoint: where the proposal and the escalation go,
+ * the exact shape the boundary will accept, what the lead decides alone (KTD1) and what only
+ * the owner may decide. They are short on purpose — the plan, the roster and the charter carry
+ * the rest, and a prompt nobody finishes reading decides nothing.
  */
 export function leadInstructions(goal: string): string {
   // The manifest bounds this text, and a goal may be a whole brief: the lead reads the rest of
   // its task through the plan and the roster, so only the opening sentence is restated here.
   const summary = goal.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 300);
   return `Goal: ${summary}\n\n` +
-    `Write your decomposition to ${LEAD_PROPOSAL_PATH} in your working tree as JSON:\n` +
+    "The owner approved the plan. You run the team from here, and your task list is admitted without the owner.\n\n" +
+    `Write the tasks you want next to ${LEAD_PROPOSAL_PATH} in your working tree as JSON:\n` +
     `{"tasks":[{"taskId":"task-2","seat":"<roster member>","paths":["<approved path>"],"dependencies":[],"body":"<the work>"}]}\n\n` +
-    "Each task is an implementer task inside the approved scope, with a task id this run does not already use. " +
-    "Choose seats from the roster. Do not implement, review or record acceptance yourself. " +
-    "The owner approves the exact batch, and the daemon then runs each task and its review.";
+    "Decide alone: the breakdown, which seat does each task, rework and retries, a follow-up task after a review runs out, " +
+    "and any change inside the approved plan's goal and files. Do not implement, review or record acceptance yourself.\n\n" +
+    "Ask the owner only for a change to the goal or the write scope, more budget, a decision you cannot make, or a conflict " +
+    `you cannot resolve. Ask by writing ${LEAD_ESCALATION_PATH} in your working tree as JSON:\n` +
+    `{"question":"<what must be decided>","options":["<choice>","<choice>"],"context":"<what the owner needs to know>"}\n\n` +
+    "A proposal outside the approved plan comes back to you as your next prompt, with the reason. You are also woken with a " +
+    "short event prompt when a task fails after its retry, when a task's review limit runs out, and when every task is done.";
 }
 
 /**
