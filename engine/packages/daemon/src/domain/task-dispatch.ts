@@ -89,6 +89,10 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
         plan: { runtime: adapter.runtime, cwd: node.cwd, entries: [], startup: { files: [], actions: [] },
           conflicts: [], noOps: [], diagnostics: [] },
         resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: seat,
+        // The task this dispatch is starting. A seat can hold two live tasks — two completed
+        // implementers are two pending reviews on the same reviewer seat — and the launch
+        // composition must be told which one it is starting rather than refusing both.
+        taskId,
         ...(continueSessionId ? { continueSessionId } : {}),
         includeDurableObligations: true, allowFreshFallback: false });
     } finally {

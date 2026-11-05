@@ -513,6 +513,8 @@ function composeManagedAttemptAttachment(dependencies: {
     if (!seat) return undefined;
     // A seat may be the destination of at most one live task. Two is not a choice this
     // composition may make: attaching either would hand one assignment another's binding.
+    // The dispatcher already made that choice, so a launch it started names its task and the
+    // row is checked against it rather than the seat being refused outright.
     const rows = dependencies.db.prepare(`
       SELECT a.qitem_id AS qitemId, a.run_id AS runId, a.task_id AS taskId,
         q.source_session AS sourceSession
@@ -523,7 +525,11 @@ function composeManagedAttemptAttachment(dependencies: {
       LIMIT 2`).all(seat) as Array<{ qitemId: string; runId: string; taskId: string;
         sourceSession: string | null }>;
     if (rows.length === 0) return undefined;
-    if (rows.length > 1) throw new Error("Managed launch task is ambiguous");
+    if (rows.length > 1) {
+      const named = input.taskId === undefined ? [] : rows.filter(row => row.taskId === input.taskId);
+      if (named.length !== 1) throw new Error("Managed launch task is ambiguous");
+      rows.splice(0, rows.length, named[0]!);
+    }
     const row = rows[0]!;
     const task = dependencies.governance.getTask(row.qitemId);
     // T053 made the task record the store for outputs and permissions; a row without one
@@ -3200,6 +3206,10 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       // see yields no evidence, which the classifier treats as "not classified", never a retry.
       paneExit: paneId => tmuxAdapter.getPaneExit(paneId),
       paneTail: (paneId, lines) => tmuxAdapter.capturePaneTail(paneId, lines),
+      // The launch stamps the task it starts into the pane, so a seat with two live tasks — two
+      // completed implementers are two pending reviews on the same reviewer seat — still admits
+      // the attempt the receipt names.
+      paneTask: paneId => tmuxAdapter.getPaneTask(paneId),
       releasePane: paneId => tmuxAdapter.respawnPane(paneId),
       dispatchPending,
       currentBinding: runId => {

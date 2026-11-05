@@ -330,4 +330,40 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     expect(launches).toHaveLength(0);
     expect(endpoints().size).toBe(0);
   });
+
+  it("attaches the named task when the dispatcher says which of a seat's two live tasks it starts", async () => {
+    // Measured on the C4 rerun: both implementers completed, so the run created two review tasks
+    // on the same reviewer seat, and the next review launch refused the seat as ambiguous. The
+    // dispatcher already decided which task it is starting, so it names it and the composition
+    // checks that name against the seat's rows instead of refusing both.
+    expect(createTask("task-a", ["src/a.ts"]).status).toBe("accepted");
+    // A second task on the same seat with its own write path, so the two claims do not overlap.
+    expect(createTask("task-b", ["src/other.ts"]).status).toBe("accepted");
+    const result = await daemon.deps.startupOrchestrator!.startNode({
+      rigId: "rig", nodeId, sessionId, taskId: "task-b",
+      binding: { id: "binding-1", nodeId, tmuxSession: "builder@rig", tmuxWindow: null, tmuxPane: "%3",
+        cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: seatTree },
+      adapter,
+      plan: { runtime: "claude-code", cwd: seatTree, entries: [], diagnostics: [], conflicts: [], noOps: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "builder@rig",
+      includeDurableObligations: false,
+    });
+    expect(result.ok ? [] : result.errors).toEqual([]);
+    expect(launches).toHaveLength(1);
+    expect(launches[0]!.registered).toBe(true);
+    // A name that is not one of the seat's live tasks is still refused: the dispatcher cannot
+    // point this launch at work the seat does not hold.
+    const wrong = await daemon.deps.startupOrchestrator!.startNode({
+      rigId: "rig", nodeId, sessionId, taskId: "task-missing",
+      binding: { id: "binding-1", nodeId, tmuxSession: "builder@rig", tmuxWindow: null, tmuxPane: "%3",
+        cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: seatTree },
+      adapter,
+      plan: { runtime: "claude-code", cwd: seatTree, entries: [], diagnostics: [], conflicts: [], noOps: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "builder@rig",
+      includeDurableObligations: false,
+    });
+    expect(wrong.ok).toBe(false);
+    expect(wrong.ok ? [] : wrong.errors.join(" ")).toContain("Managed launch task is ambiguous");
+    expect(launches).toHaveLength(1);
+  });
 });

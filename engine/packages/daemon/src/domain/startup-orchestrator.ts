@@ -65,6 +65,15 @@ export interface StartupInput {
   isRestore: boolean;
   /** Session name for harness launch (used as --name flag). */
   sessionName?: string;
+  /**
+   * The task this launch is starting, when the caller already decided it.
+   *
+   * A seat is a terminal and can be the destination of two live tasks: two completed
+   * implementers are two pending reviews on the same reviewer seat. The dispatcher knows which
+   * task it is starting, so it says so; without it the composition can only refuse the
+   * ambiguous seat, and a real review turn would run with no attempt behind it.
+   */
+  taskId?: string;
   /** Resume token for restore path. Mutually exclusive with forkSource. */
   resumeToken?: string;
   /**
