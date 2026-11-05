@@ -66,6 +66,16 @@ export interface AttemptCompletionDependencies {
    * (a test, or a daemon under hardened isolation) wants.
    */
   dispatchPending?: (runId: string) => Promise<void>;
+  /**
+   * U5 — the end of one turn, after its stop is recorded and before the next task starts.
+   *
+   * A lead's turn ends with its final message, and that message is the reply the owner reads in
+   * the run's chat. Reading it and storing it belongs to the owner of that conversation, not to
+   * this sweep: this is the observation that the turn ended, which is the fact the conversation
+   * owner cannot see for itself. It is awaited so a reply is stored before the slot is offered
+   * again, and its failure is logged rather than allowed to stop the sweep.
+   */
+  onAttemptStopped?: (attempt: import("../contracts/team-control.js").TeamAttempt) => Promise<void>;
   intervalMs?: number;
   log?: (message: string) => void;
 }
@@ -215,7 +225,12 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           log(`team completion: attempt ${attempt.id} stop was not recorded: ${recorded.reason ?? recorded.status}`);
           continue;
         }
-        releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefined);
+releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefined);
+        // U5 — the turn is over and its seat is free: whoever owns this attempt's conversation
+        // gets its final message now, before the freed slot is offered to the next task.
+        try { await dependencies.onAttemptStopped?.(attempt); } catch (error) {
+          log(`team completion: turn-end owner for attempt ${attempt.id} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
         // MVP — the seat and its session slot are free now, so the run's next pending task can
         // start. A dispatch failure is logged and left for the next freed slot: it must not stop
         // the rest of the sweep, and a task that cannot start yet is not an error of this one.

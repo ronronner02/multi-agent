@@ -150,6 +150,7 @@ import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
 import { refreshPlanBinding, unisolatedPolicyCapability } from "./routes/team-start.js";
 import { leadActivation } from "./domain/lead-proposal.js";
+import { composeLeadTurnEnd } from "./domain/lead-chat.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
 import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
@@ -585,6 +586,9 @@ function composeManagedAttemptAttachment(dependencies: {
       const lead = assignment.role === "lead" ? leadActivation(dependencies.db, {
         rigId: run.rigId, roles: run.binding.roles, seat, activationId: attemptId,
         goal: (dependencies.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(task.qitemId) as { body: string }).body,
+        // U5 — a planning run's lead agrees a plan with the owner first; every other lead
+        // activation is the decomposition protocol C3 already had.
+        phase: run.phase, planRef: run.binding.planRef,
       }) : undefined;
       produced = await runtime.produceManagedAttempt(row.runId, {
         attemptId, worker, assignment, outputs, permissions,
@@ -1218,6 +1222,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
           ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) })),
     // MVP slice 2 — the capability a start request approves its binding against.
     ...(runPolicyCapability ? { readPolicyCapability: runPolicyCapability } : {}),
+    // U5 — where a planning run's plan worktree lives. It sits beside the candidate records in
+    // the control state directory, which no worker tree contains: the plan's branch is the
+    // daemon's, not the owner's checkout's, and not a worker's to rewrite.
+    planWorktreeRoot: teamControl.planWorktreeRoot
+      ?? (() => nodePath.join(rootsNow().controlStateDir, "teams")),
     ...(unisolated && !teamControl.resolveBinding && runPolicyCapability ? { resolveBinding: run => {
       const policy = runPolicyCapability();
       if (!policy) throw new Error("Current policy capability is unavailable");
@@ -3203,8 +3212,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // observed to finish. This owner admits the attempt when its receipt lands and records it
     // stopped when the process it named is gone. It decides no outcome: the owner action does.
     const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
+    // The direct worker's mutable state root: each attempt's prompt, its captured Codex thread
+    // id and its final message live under it. One value, so the two readers of the end of a turn
+    // (the sweep's resume-token capture and the chat's reply) cannot disagree about where.
+    const turnStateRoot = nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch");
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
-      turnStateRoot: nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch"),
+      turnStateRoot,
       // T033 — the exit evidence a direct launch leaves behind. The seat's pane is where the
       // client ran, so tmux's own record of that pane ending (its dead flag and exit status)
       // and the last lines it held are the only structured evidence available without a
@@ -3217,6 +3230,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       // the attempt the receipt names.
       paneTask: paneId => tmuxAdapter.getPaneTask(paneId),
       releasePane: paneId => tmuxAdapter.respawnPane(paneId),
+      // U5 — the end of a lead's turn is the lead's reply in the run's chat, and a message that
+      // waited for that turn is the next turn's prompt. The conversation owner reads the turn's
+      // recorded final message and asks the same dispatch for the next turn.
+      onAttemptStopped: composeLeadTurnEnd({ db, governance: teamGovernance, turnStateRoot,
+        dispatch: () => deps.teamControl?.dispatch }),
       dispatchPending,
       currentBinding: runId => {
         const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();

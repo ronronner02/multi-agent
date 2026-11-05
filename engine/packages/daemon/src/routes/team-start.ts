@@ -10,6 +10,7 @@ import {
 } from "../contracts/team-control.js";
 import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import { runName } from "../domain/display-names.js";
+import { bootstrapPlan, commitPlan, ensurePlanWorktree } from "../domain/plan-branch.js";
 import { roleConfiguration } from "../domain/role-configuration.js";
 import { leadRoster } from "../domain/lead-proposal.js";
 import type { RigRepository } from "../domain/rig-repository.js";
@@ -186,9 +187,17 @@ export function teamStartRoutes(
     // manifest owner builds; the implementer seats then come from the lead's own proposal, so
     // this request names none and there is no single implementer seat to compare against.
     //
-    // U3 — a rig created by `rig team create` records its seats, so naming the team is enough:
+// U3 — a rig created by `rig team create` records its seats, so naming the team is enough:
     // the lead and the reviewer come from the roles it recorded unless this request names them.
+    // U5 — a planning start is a lead start by definition: its first task is the conversation
+    // with the owner, so it needs one of those seats to exist.
+    if (v.planning !== undefined && typeof v.planning !== "boolean") throw new TeamContractError("planning");
+    const planning = v.planning === true;
     const leadSeat = v.lead === undefined ? seatForRole(rigRepo, rig, "lead") : text(v.lead, "lead", 256);
+    if (planning && leadSeat === null) {
+      return c.json({ code: "lead_required",
+        error: "A planning run needs a lead seat: name one, or create a team with `rig team create`." }, 400);
+    }
     const seat = v.seat === undefined ? (node ? defaultSeat(rigRepo, node, rig.name) : null) : text(v.seat, "seat", 256);
     if (leadSeat === null && !seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
     // C2 — the seat every review round of this run routes to. A start that names none keeps
@@ -217,17 +226,45 @@ export function teamStartRoutes(
     if (!root) return c.json({ code: "repository_required", error: "The rig's agent seat has no working directory; name the repository." }, 400);
     const planRef = repository.planRef === undefined ? DEFAULT_PLAN_REF : relativePath(repository.planRef, "repository.planRef");
     const scope = v.writePaths === undefined ? [...DEFAULT_WRITE_PATHS] : writePaths(v.writePaths);
+    // U5 — the run id exists before the binding does, because a planning run's binding is
+    // established in the daemon's own worktree for that run, not in the owner's checkout.
+    const runId = randomUUID();
+    const displayName = runName(goal);
     let binding: PlanBinding;
-    try {
-      binding = bindingForGoal({ root, planRef, writePaths: scope, policy });
-    } catch (error) {
-      if (error instanceof TeamContractError) throw error;
-      return c.json({ code: "repository_unreadable",
-        error: "The plan artifact or the repository's commit could not be read: " + (error as Error).message }, 400);
+    if (planning) {
+      const worktreeRoot = options.planWorktreeRoot?.();
+      if (!worktreeRoot) {
+        return c.json({ code: "planning_unavailable", error: "This daemon cannot record a plan for a planning run." }, 503);
+      }
+      // The plan the run is bound to before the lead has written one. It lives on the run's own
+      // branch in the daemon's worktree, so the owner's checkout is untouched and the binding
+      // names a real artifact at a real commit from the first moment. The lead's write scope is
+      // the plan file alone; the owner's implementation scope rides in `readPaths` until the
+      // approval turns it into the delivery binding.
+      let worktree: string;
+      try {
+        worktree = ensurePlanWorktree({ repositoryRoot: root, worktreeRoot, runId, name: displayName }).path;
+        commitPlan({ worktree, planRef, plan: bootstrapPlan(goal), message: `plan: ${displayName ?? "new run"} (planning)` });
+        const recorded = bindingForGoal({ root: worktree, planRef, writePaths: [planRef], policy });
+        binding = { ...recorded, readPaths: [...new Set([planRef, ...scope])] };
+      } catch (error) {
+        if (error instanceof TeamContractError) throw error;
+        return c.json({ code: "planning_worktree_unavailable",
+          error: "The run's plan worktree could not be created: " + (error as Error).message }, 500);
+      }
+    } else {
+      try {
+        binding = bindingForGoal({ root, planRef, writePaths: scope, policy });
+      } catch (error) {
+        if (error instanceof TeamContractError) throw error;
+        return c.json({ code: "repository_unreadable",
+          error: "The plan artifact or the repository's commit could not be read: " + (error as Error).message }, 400);
+      }
     }
     // U9 — the run is named from the goal the owner started it with, so no client ever has to
     // show the run id. The goal is already required to be non-blank above.
-    const run = governance.createRun({ id: randomUUID(), rigId: rig.id, binding, reviewerSeat, displayName: runName(goal) });
+    const run = governance.createRun({ id: runId, rigId: rig.id, binding, reviewerSeat, displayName,
+      phase: planning ? "planning" : "delivery" });
     const bindingDigest = hashBinding(binding);
     const request = (actionId: string, payload: unknown) => ({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id,
       actionId, expectedEntityVersion: governance.getRun(run.id).entityVersion, idempotencyKey: randomUUID(), payload });
@@ -241,9 +278,13 @@ export function teamStartRoutes(
       return c.json({ code: "start_refused", runId: run.id, error: decided.reason ?? "The plan was not approved." }, 409);
     }
     const taskId = "task-1";
-    const assignment = leadSeat === null
-      ? { taskId, role: "implementer" as const, paths: scope, dependencies: [] }
-      : { taskId, role: "lead" as const, paths: scope, dependencies: [] };
+    // U5 — a planning run's first task is the lead's conversation, and its scope is the plan
+    // file alone: the run may not touch anything else until the owner approves the plan.
+    const assignment = planning
+      ? { taskId, role: "lead" as const, paths: [planRef], dependencies: [] }
+      : leadSeat === null
+        ? { taskId, role: "implementer" as const, paths: scope, dependencies: [] }
+        : { taskId, role: "lead" as const, paths: scope, dependencies: [] };
     const taskSeat = leadSeat ?? seat;
     const created = governance.createTask(request(taskId, {
       assignment, outputs: [], permissions: [...roleConfiguration[assignment.role].permissions],
@@ -259,9 +300,10 @@ export function teamStartRoutes(
     // resolvable seat, no terminal) leaves the seat pending, so it is logged rather than lost.
     if (options.dispatch) void options.dispatch(run.id, taskId).catch(error =>
       console.warn(`team start: launch for run=${run.id} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
+    const started = governance.getRun(run.id);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id, rigId: rig.id, approvalId: approval.id,
       taskId, qitemId: (created.value as { qitemId: string }).qitemId, seat: taskSeat, reviewerSeat, leadSeat,
-      state: governance.getRun(run.id).state }, 201);
+      state: started.state, phase: started.phase }, 201);
   });
 
   app.onError((error, c) => {

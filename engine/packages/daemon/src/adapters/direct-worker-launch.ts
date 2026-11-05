@@ -56,6 +56,13 @@ export interface DirectLaunchFacts {
   taskId: string;
   /** Where this turn's prompt was written. */
   promptPath?: string;
+  /**
+   * Where this turn's final message is recorded: the attempt's `last-message.txt`, the same file
+   * `readAgentTurnLastMessage` reads for either client. A native Claude turn's view writes it, a
+   * native Codex turn writes it through `-o`, and an injected command (a stub, a fixture) may
+   * write it itself — either way the daemon reads the turn's answer from this one path.
+   */
+  resultPath?: string;
 }
 
 /** The shells a pane falls back to; anything else is the client the launch started. */
@@ -102,17 +109,19 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       const tree = this.deps.resolveAssignedTree(attempt.context.runId, attempt.context.assignment);
       // A fresh attempt opens a conversation; a continuation keeps the one it is given.
       const sessionId = input.continueSessionId ?? input.resumeToken ?? randomUUID();
-      const promptPath = agentTurnPromptPath(attempt.context);
-      const output = client === "codex" && !this.deps.command
-        ? agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId) : undefined;
-      if (output) {
-        mkdirSync(output.directory, { recursive: true, mode: 0o700 });
-        // An exact resume can reuse an attempt id; its previous output cannot describe this turn.
-        rmSync(output.threadId, { force: true });
-        rmSync(output.lastMessage, { force: true });
-      }
+const promptPath = agentTurnPromptPath(attempt.context);
+      // U5 — one final-message file per attempt, for either client: a Claude turn's readable
+      // view records its stream-json `result` there, and a Codex turn writes the same file
+      // through its own `-o`. An injected command (a stub, a fixture) gets the path in its
+      // facts and writes it itself, so every turn's answer is read from one place.
+      const output = agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId);
+      mkdirSync(output.directory, { recursive: true, mode: 0o700 });
+      // An exact resume can reuse an attempt id; its previous output cannot describe this turn.
+      rmSync(output.threadId, { force: true });
+      rmSync(output.lastMessage, { force: true });
       const facts: DirectLaunchFacts = { client, tree, pane, sessionId, attemptId: attempt.attemptId,
-        runId: attempt.context.runId, taskId: attempt.context.assignment.taskId, promptPath };
+        runId: attempt.context.runId, taskId: attempt.context.assignment.taskId, promptPath,
+        resultPath: output.lastMessage };
       const argv = this.deps.command ? this.deps.command(facts)
         : this.nativeArgs(client, input, sessionId, tree);
       // T033 — hold the pane before the client starts. Measured on tmux 3.6: without this, the
@@ -145,11 +154,13 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       // seat's one live task" finds two and records nothing. The pane says which one this
       // launch is starting, so it is stamped before the client starts.
       await this.deps.tmux.setPaneTask?.(pane, attempt.context.assignment.taskId);
-      // tmux 3.6 replaces session PATH with its client's PATH when spawning a pane, even
+// tmux 3.6 replaces session PATH with its client's PATH when spawning a pane, even
       // with new-session/respawn-pane -e. Reapply it here, after shell startup, for every turn.
       const command = [
         ...(this.deps.launchPath !== undefined ? ["/usr/bin/env", "PATH=" + this.deps.launchPath] : []),
-        ...this.turnCommand(argv, this.deps.command !== undefined, output?.threadId),
+        ...this.turnCommand(argv, this.deps.command !== undefined,
+          client === "codex" ? output.threadId : undefined,
+          client === "claude-code" ? output.lastMessage : undefined),
       ];
       const line = "cd " + shellQuote(tree) + " && exec " + command.map(shellQuote).join(" ")
         // The turn's text is fed on stdin, so its length and quoting never reach this line.
@@ -158,9 +169,10 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       if (!typed.ok) return this.refuse(typed.code);
       const submitted = await this.deps.tmux.sendKeys(pane, ["Enter"]);
       if (!submitted.ok) return this.refuse(submitted.code);
-      const ready = await this.waitForTurn(pane, attempt.deadline, output?.threadId);
+      const ready = await this.waitForTurn(pane, attempt.deadline,
+        client === "codex" && !this.deps.command ? output.threadId : undefined);
       if (!ready) return this.refuse("managed_readiness_unknown");
-      const observedThreadId = output ? readAgentTurnThreadId(output.threadId) : null;
+      const observedThreadId = client === "codex" && !this.deps.command ? readAgentTurnThreadId(output.threadId) : null;
       const receipt: ManagedSessionReceipt = {
         identity: parseAttemptIdentity({ nativeSessionId: observedThreadId ?? sessionId, tmuxServer: this.deps.tmuxServer(), paneId: pane,
           processId: identity.processId, processStart: identity.start, generation: (attempt.previous?.identity.generation ?? 0) + 1,
@@ -231,12 +243,18 @@ export class DirectWorkerLauncher implements WorkerLauncher {
    * own — T033's classifier reads that status, and a wrapper that swallowed it would turn every
    * failed turn into a successful one.
    */
-  private turnCommand(argv: string[], injected: boolean, threadIdPath?: string): string[] {
+private turnCommand(argv: string[], injected: boolean, threadIdPath?: string, resultPath?: string): string[] {
     // An injected command is already the caller's own program (a stub, a fixture), so it is
     // started as given: wrapping it would make the pane's exit status the wrapper's.
     if (injected) return argv;
     const view = fileURLToPath(new URL("../../assets/agent-turn-view.mjs", import.meta.url));
-    return [process.execPath, view, ...(threadIdPath ? ["--thread-id-file", threadIdPath] : []), ...argv];
+    // The output paths are the view's own arguments rather than environment assignments: the
+    // pane's shell runs with a PATH this side does not choose, and a command line needs nothing
+    // found on it. A Claude turn records its `result` here; a Codex turn writes the same file
+    // through its own `-o`, and only its thread id comes back through the view.
+    return [process.execPath, view,
+      ...(threadIdPath ? ["--thread-id-file", threadIdPath] : []),
+      ...(resultPath ? ["--result-file", resultPath] : []), ...argv];
   }
 
   /**

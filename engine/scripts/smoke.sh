@@ -29,6 +29,7 @@ npm run test -w packages/daemon -- \
   test/team-start.test.ts \
   test/team-setup.test.ts \
   test/team-lead.test.ts \
+  test/lead-chat.test.ts \
   test/run-growth.test.ts \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
@@ -40,7 +41,7 @@ npm run test -w packages/daemon -- \
   test/user-settings-routes.test.ts \
   --maxWorkers=2
 
-npm run test -w packages/cli -- test/team-start.test.ts test/team-setup.test.ts test/team-apply.test.ts test/team-done.test.ts --maxWorkers=2
+npm run test -w packages/cli -- test/team-start.test.ts test/team-setup.test.ts test/team-chat.test.ts test/team-apply.test.ts test/team-done.test.ts --maxWorkers=2
 
 # The catalog parity check runs here so a key that interpolates without a declared parameter
 # fails CI. Slice A added three such keys and nothing caught it until a later review.

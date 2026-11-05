@@ -37,6 +37,14 @@ export type ApprovalKind = "orchestrator" | "native";
 export type ApprovalAction = "implementation" | "commit" | "push" | "pr-create" | "merge" | "release" | "deploy" | "scope-change" | "limit-increase" | "native-tool" | "scope-extension";
 export type ApprovalState = "pending" | "approved" | "rejected" | "expired" | "invalidated";
 export type TeamRunState = "pending" | "approved" | "cancel_requested" | "canceled" | "invalidated" | "blocked";
+/**
+ * U5 — what the run is doing, as opposed to what it is allowed to do.
+ *
+ * `planning` is a run whose work is the lead's conversation with the owner; `delivery` is every
+ * run that has an approved plan. It is a separate column because dispatch and eligibility read
+ * `state`, and a planning lead turn launches through exactly the same gates as any other task.
+ */
+export type TeamRunPhase = "planning" | "delivery";
 export type AttemptState = "running" | "stopped" | "unknown";
 export type TeamOwnerCommand = "pause" | "resume" | "retry";
 
@@ -118,6 +126,8 @@ export interface TeamRun {
   reviewerSeat: string | null;
   state: TeamRunState;
   stateReason: string | null;
+  /** U5 — planning until the owner approves the lead's plan, delivery afterwards. */
+  phase: TeamRunPhase;
   entityVersion: number;
   activeMs: number;
   accountedAt: string | null;

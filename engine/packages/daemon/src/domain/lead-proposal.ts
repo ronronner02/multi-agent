@@ -111,10 +111,35 @@ export function leadInstructions(goal: string): string {
     "The owner approves the exact batch, and the daemon then runs each task and its review.";
 }
 
+/**
+ * The instructions a *planning* lead activation carries.
+ *
+ * The owner and the lead agree the plan in the run's chat before there is any work: the owner
+ * speaks in plain language, the lead answers in its turn's final message, and the one artifact
+ * the lead produces is the plan file. `planRef` is the run's own approved plan path, so the
+ * instructions and the binding cannot name different files.
+ */
+export function planningInstructions(goal: string, planRef: string): string {
+  const summary = goal.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 300);
+  return `Goal: ${summary}\n\n` +
+    "You are planning with the owner before any work starts. Talk with them in plain language: " +
+    "ask what you need to know, say what you would build and in what order, and agree the plan.\n\n" +
+    `When you and the owner agree, write ${planRef} in your working tree. It should state the goal, ` +
+    "the tasks in the order they should run, the files each task touches and how each one will be checked.\n\n" +
+    `Change nothing else. ${planRef} is the only file this run may write until the owner approves the plan. ` +
+    "Do not implement, review or record acceptance. The owner reads your reply in the chat, and the plan " +
+    "starts the work only when they approve it.";
+}
+
 /** The activation one lead attempt runs under: its identity, its roster and its instructions. */
 export function leadActivation(db: Database.Database, input: {
   rigId: string; roles: readonly TeamRole[]; seat: string; goal: string; activationId: string;
+  /** U5 — a planning run's lead agrees a plan before any decomposition exists. */
+  phase?: "planning" | "delivery";
+  /** The run's plan artifact, named in the planning instructions. */
+  planRef?: string;
 }): { activationId: string; roster: LeadRosterMember[]; instructions: string } {
   return { activationId: input.activationId, roster: leadRoster(db, { rigId: input.rigId, roles: input.roles, excludeSeat: input.seat }),
-    instructions: leadInstructions(input.goal) };
+    instructions: input.phase === "planning"
+      ? planningInstructions(input.goal, input.planRef ?? "plan.md") : leadInstructions(input.goal) };
 }

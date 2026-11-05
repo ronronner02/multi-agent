@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,6 +29,12 @@ import type { ContextManifest } from "../src/integrations/framework/context-mani
 
 const owner = { kind: "owner", sessionId: "owner-control" } as const;
 const policy = unisolatedPolicyCapability(1);
+/**
+ * The worker's mutable state root. A real one, because a launch records each turn's prompt and
+ * its final-message file under it before the client starts.
+ */
+const stateRoot = mkdtempSync(join(tmpdir(), "agent-turn-state-"));
+afterAll(() => rmSync(stateRoot, { recursive: true, force: true }));
 
 /** A manifest-shaped fixture: the launcher reads only these fields. */
 function manifest(attemptId: string): ContextManifest {
@@ -36,7 +42,7 @@ function manifest(attemptId: string): ContextManifest {
     runId: "run", assignment: { taskId: "task-1", role: "implementer", paths: ["src/a.ts"], dependencies: [] },
     outputs: ["src/a.ts"], permissions: [], role: "implementer", client: "claude-code",
     binding: { policyFingerprint: "sha256:" + "b".repeat(64) } as ContextManifest["binding"],
-    root: "/context", mutableStateRoot: "/scratch",
+    root: "/context", mutableStateRoot: stateRoot,
     frameworkRoot: "/framework", frameworkRevision: "pin", workerUid: 1000, workerGroups: [],
     discoveryRoots: [], files: [], workerDiscoveryRoots: [], generatedHash: "sha256:" + "a".repeat(64),
     protocolVersion: null, instructionVersions: { core: "1", charter: "1" },
@@ -81,7 +87,10 @@ describe("the managed turn's command line", () => {
     expect(line).toContain("'--session-id'");
     expect(line).not.toContain("'--resume'");
     // The prompt is a file on stdin, so its length and quoting never reach the shell line.
-    expect(line).toMatch(/ < '\/scratch\/turns\/attempt-1\.prompt'$/);
+    expect(line).toContain("< '" + join(stateRoot, "turns", "attempt-1.prompt") + "'");
+    // The turn's final message has one file per attempt, beside the prompt.
+    expect(line).toContain("'--result-file' '" + join(stateRoot, "turns", "attempt-1", "last-message.txt") + "'");
+    expect(line).not.toContain("'--thread-id-file'");
   });
 
   it("continues a conversation with --resume when the seat hands one over", async () => {

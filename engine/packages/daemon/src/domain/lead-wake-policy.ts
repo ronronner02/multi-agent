@@ -33,7 +33,7 @@ export class LeadWakePolicy {
     if (grant && grant.sequence > state.grant) { state.activations = []; state.grant = grant.sequence; }
     const { progress } = this.db.prepare(`SELECT COALESCE(MAX(seq), 0) AS progress FROM events
       WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ?
-      AND json_extract(payload, '$.action') IN ('approval.decided', 'task.outcome')
+      AND json_extract(payload, '$.action') IN ('approval.decided', 'task.outcome', 'plan.approved', 'chat.message')
       AND json_extract(payload, '$.payload.observedBy') IS NOT NULL`).get(run.id) as { progress: number };
     const task = qitemId ? this.db.prepare(`SELECT json_extract(a.assignment_json, '$.taskId') AS id, q.destination_session AS recipient
       FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id WHERE a.qitem_id = ? AND a.run_id = ?`)

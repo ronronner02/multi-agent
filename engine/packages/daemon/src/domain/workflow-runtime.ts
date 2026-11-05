@@ -836,6 +836,39 @@ export class WorkflowRuntime {
   }
 
   /**
+   * U5 — the plan the lead wrote, read at the same boundary as its proposal.
+   *
+   * A planning lead's one deliverable is the plan file in its own candidate tree, so the owner's
+   * approval reads it through `readWorkspacePath` like every other read of worker output. The
+   * path is the run's recorded plan path: the candidate and the binding cannot name different
+   * files, because the approval is what makes the binding real.
+   */
+  planFor(runId: string, taskId: string, planRef: string): { content: string; hash: string } {
+    const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
+    const read = readWorkspacePath(workspace.root, planRef, () => false);
+    if (read.kind !== "file") throw new Error("The lead wrote no plan at " + planRef);
+    return { content: read.content, hash: read.hash };
+  }
+
+  /**
+   * U5 — let a task's candidate be adopted again after its source moved.
+   *
+   * Approving a plan commits those bytes to the run's own branch, which moves the source
+   * worktree's HEAD. The tree the lead worked in is untouched, but the source-moved check reads
+   * the *recorded* fingerprint and would refuse it from then on. The tree is still the same
+   * task's candidate and still registered in the source's own worktree registry, so dropping the
+   * in-memory record lets the next launch adopt it — the same path a restart already takes — at
+   * the commit the plan was approved at. No bytes are moved, and nothing is released: the tree
+   * keeps every file the lead wrote.
+   */
+  forgetCandidate(runId: string, taskId: string): void {
+    const key = `${runId}\u0000${taskId}`;
+    this.candidates.delete(key);
+    this.candidateWorker.delete(key);
+    this.invalidCandidates.delete(key);
+  }
+
+  /**
    * T039 — the read-only packet a reviewer receives for the exact candidate.
    *
    * `destination` must not overlap the candidate or the source checkout; the

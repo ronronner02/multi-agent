@@ -37,6 +37,15 @@ export interface TeamControlOptions {
    */
   dispatch?: (runId: string, taskId: string) => Promise<void>;
   /**
+   * U5 — where a planning run's plan worktree lives.
+   *
+   * A planning run is bound before any plan exists, so the daemon creates the worktree of the
+   * owner's repository that holds the plan and the run's `team/<slug>` branch. It is the control
+   * state directory, never the owner's checkout. Absent means planning runs are unavailable
+   * rather than written somewhere this daemon cannot account for.
+   */
+  planWorktreeRoot?: () => string;
+  /**
    * T017 (cancellation half) — what turns the owner's cancel into a stopped run.
    *
    * `cancelRun` records the intent; this ends the processes the run launched and records the

@@ -11,14 +11,38 @@
 // records a signal rather than inventing a number — the completion sweep's classifier reads
 // that difference and must keep seeing it.
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 const argv = process.argv.slice(2);
-const threadIdFile = argv[0] === "--thread-id-file" ? argv.splice(0, 2)[1] : undefined;
+// The two options the launcher may put in front of the client: where this turn's final message
+// is recorded, and where the client's own thread id is. They are arguments rather than
+// environment variables because the pane's shell runs with the seat's PATH, and an ordinary
+// command line needs nothing found on it.
+let resultFile, threadIdFile;
+for (;;) {
+  if (argv[0] === "--result-file" && argv.length >= 2) { resultFile = argv.splice(0, 2)[1]; continue; }
+  if (argv[0] === "--thread-id-file" && argv.length >= 2) { threadIdFile = argv.splice(0, 2)[1]; continue; }
+  break;
+}
 const [command, ...args] = argv;
 if (!command) {
   process.stderr.write("agent-turn-view: no client command\n");
   process.exit(2);
+}
+
+// The `result` event's own text, written when the event arrives, so a reader of the turn's end
+// reads the client's answer rather than re-parsing the pane's scrollback. Codex writes the same
+// file through its own `-o`, so one file is the final message for either client. A failed write
+// is reported on stderr and does not change the turn's outcome; the pane output is unaffected.
+function recordResult(text) {
+  if (!resultFile || typeof text !== "string" || !text) return;
+  try {
+    mkdirSync(dirname(resultFile), { recursive: true });
+    writeFileSync(resultFile, text, { mode: 0o600 });
+  } catch (error) {
+    process.stderr.write(`agent-turn-view: could not record the turn's result: ${error.message}\n`);
+  }
 }
 
 const child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"] });
@@ -80,6 +104,7 @@ function render(line) {
   // The turn's own answer, or its own fatal error. Claude prints a provider failure as the
   // result, so this is the line the pane keeps for the tail the classifier reads.
   if (event.type === "result" && typeof event.result === "string" && event.result) {
+    recordResult(event.result);
     process.stdout.write(event.result.trimEnd() + "\n");
   }
 }

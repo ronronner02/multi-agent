@@ -65,6 +65,30 @@ export function writeAgentTurnPrompt(manifest: ContextManifest, text: string): s
   return path;
 }
 
+/** The bound on a turn's final message, matching the chat body a reply becomes. */
+const TURN_MESSAGE_LIMIT = 65_536;
+
+/**
+ * U5 — the final message of any managed attempt, whatever client ran it.
+ *
+ * A turn's answer is one file per attempt, `last-message.txt`: Codex writes it through its own
+ * `-o`, and a Claude turn's readable view records its stream-json `result` into the same file.
+ * So a reader of the end of a turn asks this one question — "what did attempt X say?" — without
+ * knowing which client it was, and without re-parsing a terminal's scrollback. U4 reads reviewer
+ * verdicts from the same answer; a lead's reply is stored in the chat from it.
+ *
+ * Null means the turn recorded nothing: a client that failed before answering, a command whose
+ * own output is not a final message, or bytes no message could carry.
+ */
+export function readAgentTurnLastMessage(mutableStateRoot: string, attemptId: string): string | null {
+  let bytes: Buffer;
+  try { bytes = readFileSync(agentTurnOutputPaths(mutableStateRoot, attemptId).lastMessage); }
+  catch { return null; }
+  if (bytes.length > TURN_MESSAGE_LIMIT || bytes.includes(0)) return null;
+  const text = bytes.toString("utf8").trim();
+  return text || null;
+}
+
 export interface ManagedTurnPromptInput {
   /** The seat's authored identity text, when the launch has one. Empty for a dispatched task. */
   identity: string;
@@ -122,11 +146,26 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
   if (role === "lead") {
     // The decision's own event carries the reason the owner gave; the payload is the event's
     // `payload` object, so the note and the task are one level down.
-    const row = db.prepare(`SELECT json_extract(payload, '$.payload.note') AS note FROM events
-      WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'approval.decided'
-        AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.payload.taskId') = ?
-      ORDER BY seq DESC LIMIT 1`).get(runId, taskId) as { note: string | null } | undefined;
+    //
+    // U5 — the owner's approval of the plan is the other thing a lead continuation can be. The
+    // two are the same question ("what happened to what I wrote?") asked of the newest answer,
+    // so the newest of the two decides and one turn is never told both.
+    const row = db.prepare(`SELECT json_extract(payload, '$.action') AS action,
+        json_extract(payload, '$.payload.note') AS note, json_extract(payload, '$.payload.reason') AS reason
+      FROM events
+      WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
+        AND json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved')
+      ORDER BY seq DESC LIMIT 1`).get(runId, taskId) as
+      { action: string; note: string | null; reason: string | null } | undefined;
     if (!row) return null;
+    if (row.action === "plan.approved") {
+      const plan = db.prepare("SELECT json_extract(binding_json, '$.planRef') AS planRef FROM team_runs WHERE id = ?")
+        .get(runId) as { planRef: string | null } | undefined;
+      return "This continues your earlier attempt. The owner approved the plan. It is recorded at " +
+        `${plan?.planRef ?? "the plan path"} on the run's own branch, and your working tree is based on it. ` +
+        "Decompose it now: write lead-proposal.json in your working tree as your run instructions describe. " +
+        "The owner reads and decides the batch.";
+    }
     return row.note
       ? `This continues your earlier attempt. The owner rejected the proposal you wrote and gave this reason:\n\n${row.note}\n\nWrite a revised lead-proposal.json that answers it. The owner reads and decides the revised proposal as before.`
       : "This continues your earlier attempt. The owner rejected the proposal you wrote. Write a revised lead-proposal.json; the owner reads and decides it as before.";

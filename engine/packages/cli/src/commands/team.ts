@@ -25,7 +25,9 @@ export interface TeamStartDeps {
   fetchImpl?: typeof fetch;
 }
 
-interface StartReceipt { runId: string; rigId: string; taskId: string; seat: string; leadSeat?: string | null; state: string }
+interface StartReceipt { runId: string; rigId: string; taskId: string; seat: string; leadSeat?: string | null; state: string;
+  /** U5 — `planning` until the owner approves the plan; `delivery` otherwise. */
+  phase?: string }
 
 /** The team `rig team create` returns; the daemon keeps the seat names to itself. */
 interface Team {
@@ -120,6 +122,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .option("--repository <path>", "repository the plan and the work belong to (default: the seat's cwd)")
     .option("--plan <path>", "plan artifact, relative to the repository (default: plan.md)")
     .option("--write <path...>", "repository-relative paths the task may write (default: src)")
+    .option("--planning", "start a planning run: the lead agrees a plan with you before any work")
     .option("--json", "print the daemon's receipt as JSON")
     .action(async (goal: string, opts: Record<string, unknown>) => {
       const token = ownerToken(deps());
@@ -134,6 +137,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       const body = { goal, ...(opts.rig ? { rig: String(opts.rig) } : {}), ...(opts.seat ? { seat: String(opts.seat) } : {}),
         ...(opts.lead ? { lead: String(opts.lead) } : {}),
         ...(opts.reviewer ? { reviewerSeat: String(opts.reviewer) } : {}),
+        ...(opts.planning ? { planning: true } : {}),
         ...(opts.repository ? { repository: { root: String(opts.repository), ...(opts.plan ? { planRef: String(opts.plan) } : {}) } }
           : opts.plan ? { repository: { planRef: String(opts.plan) } } : {}),
         ...(opts.write ? { writePaths: (opts.write as string[]) } : {}) };
@@ -149,6 +153,15 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       const base = getDaemonUrl(status);
       console.log(`Run:  ${receipt.runId}`);
       console.log(`Task: ${receipt.taskId} on ${receipt.seat}`);
+      if (receipt.phase === "planning") {
+        console.log("");
+        console.log("Agree the plan with the lead in the chat:");
+        console.log(`  rig team chat ${receipt.runId} "your message"`);
+        console.log(`  rig team chat ${receipt.runId}        (the conversation so far)`);
+        console.log("Then approve it once, which starts the work:");
+        console.log(`  rig team approve-plan ${receipt.runId}`);
+        return;
+      }
       if (receipt.leadSeat) {
         console.log("");
         console.log("The lead proposes the implementer tasks. Read and decide them:");
@@ -366,6 +379,98 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log("");
       console.log(added.length ? `Approved; ${added.length} task(s) admitted and dispatched: ${added.join(", ")}.`
         : "Rejected; no task was admitted.");
+    });
+
+  /**
+   * U5 — the owner's conversation with the lead.
+   *
+   * With no message the verb prints the conversation; with one it sends it and lets the daemon
+   * decide whether a lead turn starts now or the message waits for the turn already running.
+   * Nothing here composes a turn: the daemon's own chat owner stores the message and starts the
+   * lead's next activation, so the CLI and the Web UI cannot disagree about what the lead saw.
+   */
+  cmd.command("chat <run-id> [message]")
+    .description("print the run's owner↔lead conversation, or send the lead a message")
+    .option("--json", "print the daemon's answer as JSON")
+    .action(async (runId: string, message: string | undefined, options: { json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required",
+        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+        "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}/chat`;
+      if (message !== undefined) {
+        const run = await client.get<{ run?: { entityVersion: number } }>(`${BASE}/runs/${encodeURIComponent(runId)}`, { headers });
+        if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+          throw new TeamCommandError("control_unavailable", "The current run version could not be read.");
+        }
+        const sent = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
+          value?: { messageId?: string; queued?: boolean } | null }>(path, { protocolVersion: "1.0", runId,
+          actionId: crypto.randomUUID(), expectedEntityVersion: run.data.run!.entityVersion,
+          idempotencyKey: crypto.randomUUID(), payload: { body: message } }, { headers });
+        if (sent.status !== 200 || sent.data.status !== "accepted") {
+          throw new TeamCommandError(sent.data.code ?? "chat_refused",
+            sent.data.reason ?? sent.data.error ?? "The daemon refused the message.");
+        }
+        if (options.json) { console.log(JSON.stringify(sent.data)); return; }
+        console.log(sent.data.value?.queued
+          ? "Queued: a lead turn is already running, and the lead answers this message when it ends."
+          : "Sent: the lead's next turn answers it in the chat.");
+        return;
+      }
+      const read = await client.get<{ phase?: string; messages?: Array<{ sender: string; body: string; createdAt: string }>;
+        code?: string; error?: string }>(path, { headers });
+      if (read.status !== 200 || !read.data.messages) {
+        throw new TeamCommandError(read.data.code ?? "chat_unavailable",
+          read.data.error ?? "The daemon did not answer the conversation read.");
+      }
+      if (options.json) { console.log(JSON.stringify(read.data)); return; }
+      console.log(`Phase: ${read.data.phase ?? "unknown"}`);
+      for (const entry of read.data.messages) {
+        console.log("");
+        console.log(`${entry.sender === "lead" ? "Lead" : "Owner"} · ${entry.createdAt}`);
+        console.log(entry.body);
+      }
+    });
+
+  /**
+   * U5 — the owner's one action on a planning run: approve the plan.
+   *
+   * The daemon reads the plan from the lead's own tree and refuses a missing one by name, so
+   * this verb cannot approve an artifact the lead did not write. The write scope is the one the
+   * owner named when they started planning; the plan, its branch and the binding are the
+   * daemon's to record.
+   */
+  cmd.command("approve-plan <run-id>")
+    .description("approve the plan the lead wrote; the run starts delivery")
+    .option("--json", "print the daemon's receipt as JSON")
+    .action(async (runId: string, options: { json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required",
+        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+        "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token };
+      const run = await client.get<{ run?: { entityVersion: number; phase?: string } }>(
+        `${BASE}/runs/${encodeURIComponent(runId)}`, { headers });
+      if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+        throw new TeamCommandError("control_unavailable", "The current run version could not be read.");
+      }
+      const approved = await client.post<{ status?: string; reason?: string | null; code?: string; error?: string;
+        value?: { phase?: string; planRef?: string } | null }>(`${BASE}/runs/${encodeURIComponent(runId)}/plan/approve`,
+        { protocolVersion: "1.0", runId, actionId: crypto.randomUUID(),
+          expectedEntityVersion: run.data.run!.entityVersion, idempotencyKey: crypto.randomUUID(), payload: {} }, { headers });
+      if (approved.status !== 200 || approved.data.status !== "accepted") {
+        throw new TeamCommandError(approved.data.code ?? "plan_approval_refused",
+          approved.data.reason ?? approved.data.error ?? "The daemon refused the plan approval.");
+      }
+      if (options.json) { console.log(JSON.stringify(approved.data)); return; }
+      console.log(`Approved ${approved.data.value?.planRef ?? "the plan"}; the run is ${approved.data.value?.phase ?? "in delivery"}.`);
+      console.log("The lead decomposes the plan; read what it proposes with 'rig team proposal <run> <task>'.");
     });
 
   cmd.command("diff <run-id>")
