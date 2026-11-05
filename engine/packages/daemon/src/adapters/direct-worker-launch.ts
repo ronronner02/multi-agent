@@ -36,6 +36,8 @@ export interface DirectWorkerLaunchDeps {
    * client by name; tests inject the stub runner, which needs the attempt's own facts.
    */
   command?: (facts: DirectLaunchFacts) => string[];
+  /** The daemon's executable search path, reapplied after the pane's shell startup. */
+  launchPath?: string;
   /** The tmux server path the receipt records, as the daemon resolved it at startup. */
   tmuxServer: () => string;
   sleep?: (ms: number) => Promise<void>;
@@ -143,8 +145,13 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       // seat's one live task" finds two and records nothing. The pane says which one this
       // launch is starting, so it is stamped before the client starts.
       await this.deps.tmux.setPaneTask?.(pane, attempt.context.assignment.taskId);
-      const line = "cd " + shellQuote(tree) + " && exec "
-        + this.turnCommand(argv, this.deps.command !== undefined, output?.threadId).map(shellQuote).join(" ")
+      // tmux 3.6 replaces session PATH with its client's PATH when spawning a pane, even
+      // with new-session/respawn-pane -e. Reapply it here, after shell startup, for every turn.
+      const command = [
+        ...(this.deps.launchPath !== undefined ? ["/usr/bin/env", "PATH=" + this.deps.launchPath] : []),
+        ...this.turnCommand(argv, this.deps.command !== undefined, output?.threadId),
+      ];
+      const line = "cd " + shellQuote(tree) + " && exec " + command.map(shellQuote).join(" ")
         // The turn's text is fed on stdin, so its length and quoting never reach this line.
         + " < " + shellQuote(promptPath);
       const typed = await this.deps.tmux.sendText(pane, line);

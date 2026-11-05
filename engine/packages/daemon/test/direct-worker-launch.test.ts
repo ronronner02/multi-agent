@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import type { WorkerLaunchInput } from "../src/adapters/worker-launch.js";
@@ -12,6 +12,7 @@ import { unisolatedWorkerRoots } from "../src/domain/unisolated-roots.js";
 import type { createDaemon } from "../src/startup.js";
 
 const threadId = "019a527e-91e7-7000-8aac-35cd290bda12";
+const clientsBin = "/opt/multi-agent/toolchain/clients/bin";
 const view = fileURLToPath(new URL("../assets/agent-turn-view.mjs", import.meta.url));
 
 function writable(path: string): void {
@@ -131,10 +132,12 @@ process.exitCode = 7;
 });
 
 it.each([
-  { label: "valid thread and continuation", reportedThread: threadId },
-  { label: "leading dash refused", reportedThread: "--last" },
-  { label: "whitespace refused", reportedThread: "bad thread" },
-])("sweeps a native Codex stub to stopped ($label)", async ({ reportedThread }) => {
+  { label: "valid thread and continuation", reportedThread: threadId, clientsEntries: 0 },
+  { label: "clients directory already present", reportedThread: threadId, clientsEntries: 1 },
+  { label: "duplicate clients directories", reportedThread: threadId, clientsEntries: 2 },
+  { label: "leading dash refused", reportedThread: "--last", clientsEntries: 0 },
+  { label: "whitespace refused", reportedThread: "bad thread", clientsEntries: 0 },
+])("sweeps a native Codex stub to stopped ($label)", async ({ reportedThread, clientsEntries }) => {
   const root = mkdtempSync(join(tmpdir(), "codex-sweep-"));
   const home = join(root, "home"), repo = join(root, "repo"), bin = join(root, "bin");
   for (const path of [home, repo, bin, join(root, "tmux")]) mkdirSync(path);
@@ -143,7 +146,8 @@ it.each([
   process.env.OPENRIG_HOME = home;
   process.env.TMUX_TMPDIR = join(root, "tmux");
   delete process.env.TMUX; delete process.env.TMUX_PANE;
-  process.env.PATH = bin + ":" + saved.PATH;
+  process.env.PATH = [bin, ...(saved.PATH ?? "").split(delimiter).filter(part => part !== clientsBin),
+    ...Array<string>(clientsEntries).fill(clientsBin)].join(delimiter);
   const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
   let daemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
   try {
@@ -165,6 +169,7 @@ console.log(JSON.stringify({type:'turn.completed'}));
 `, { mode: 0o755 });
     vi.resetModules();
     const { createDaemon } = await import("../src/startup.js");
+    expect(process.env.PATH!.split(delimiter).filter(part => part === clientsBin)).toHaveLength(clientsEntries);
     daemon = await createDaemon({ dbPath: join(root, "demo.db"), managedMode: true, workersIsolation: "none",
       teamControl: { credentials: { ownerToken: "fixture-owner" } },
       cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
@@ -206,7 +211,7 @@ console.log(JSON.stringify({type:'turn.completed'}));
     const initial = JSON.parse(readFileSync(finalMessage + ".launch.json", "utf8"));
     expect(initial.prompt).toContain("Read the assigned plan and report the result.");
     expect(initial.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor(body.runId, governance.getTask(qitemId)!.assignment));
-    expect(initial.path.split(":").filter((part: string) => part === "/opt/multi-agent/toolchain/clients/bin")).toHaveLength(1);
+    expect(initial.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
 
     await daemon.deps.teamControl!.dispatch!(body.runId, "task-1");
     const second = await waitForStop(first.id);
@@ -214,6 +219,7 @@ console.log(JSON.stringify({type:'turn.completed'}));
     expect(continued.args.slice(0, 2)).toEqual(["exec", "resume"]);
     expect(continued.args.slice(-2)).toEqual([threadId, "-"]);
     expect(continued.cwd).toBe(initial.cwd);
+    expect(continued.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
     expect(second.identity?.nativeSessionId).toBe(threadId);
     expect(dirname(finalMessage)).not.toContain(initial.cwd);
   } finally {

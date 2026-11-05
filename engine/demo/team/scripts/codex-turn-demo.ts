@@ -44,10 +44,9 @@ let daemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
 let server: ReturnType<typeof serve> | undefined;
 let failed = true;
 try {
-  // Keep this private server's panes on the supplied PATH. Personal shell startup files can
-  // otherwise select another installed client before the version being demonstrated.
+  // Use a private server without the user's tmux configuration. The managed launch itself
+  // must supply the client PATH after the pane's normal shell startup.
   execFileSync("tmux", ["-f", "/dev/null", "new-session", "-d", "-s", "demo-control", "/bin/bash --noprofile --norc"], { stdio: "ignore" });
-  execFileSync("tmux", ["set-option", "-g", "default-command", "/bin/bash --noprofile --norc"], { stdio: "ignore" });
   daemon = await createDaemon({ dbPath: join(scratch, "daemon.db"), managedMode: true, workersIsolation: "none",
     teamControl: { credentials: { ownerToken } },
     cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
