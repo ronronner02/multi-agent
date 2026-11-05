@@ -152,6 +152,7 @@ import { teamStartRoutes } from "./routes/team-start.js";
 import { teamSetupRoutes } from "./routes/team-setup.js";
 import { teamLeadRoutes } from "./routes/team-lead.js";
 import { teamResultRoutes } from "./routes/team-result.js";
+import { teamMergeRoutes } from "./routes/team-merge.js";
 import { teamCompletionRoutes } from "./routes/team-completion.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
@@ -289,6 +290,12 @@ export interface AppDeps {
    * exactly as they were recorded.
    */
   attemptCompletion?: import("./domain/attempt-completion.js").AttemptCompletion;
+  /**
+   * U7 — the run's integration branch and the owner's merge. Startup composes it when a
+   * managed run can be delivered; absent leaves the read and the merge unavailable rather
+   * than answering as if nothing had landed.
+   */
+  integration?: import("./domain/integration-branch.js").Integration;
   /**
    * Absolute path to the daemon's bundled built-in workflow-specs
    * directory. Used by `GET /api/workflow/specs` to
@@ -890,6 +897,12 @@ export function createApp(deps: AppDeps): Hono {
     // start and a growth use, so a chat message and a plan approval launch exactly as they do.
     ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
+  }));
+  // U7 — the run's integration branch: what landed on it, and the owner's one merge.
+  app.route("/api/team-control", teamMergeRoutes({
+    credentials: teamOptions.credentials,
+    legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    ...(deps.integration ? { integration: deps.integration } : {}),
   }));
 
   app.get("/healthz", (c) => {

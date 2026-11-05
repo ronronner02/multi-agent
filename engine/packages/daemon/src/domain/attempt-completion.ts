@@ -81,6 +81,15 @@ export interface AttemptCompletionDependencies {
    * again, and its failure is logged rather than allowed to stop the sweep.
    */
   onAttemptStopped?: (attempt: import("../contracts/team-control.js").TeamAttempt) => Promise<void>;
+  /**
+   * U7 — land a task whose review just approved on the run's integration branch.
+   *
+   * The approval is the trigger: the outcome command records it, and this is the observation
+   * that it happened. Awaited so the branch has the commit before the sweep offers the slot
+   * again, and its failure is logged rather than allowed to stop the sweep — the task records
+   * its own conflict, and the lead wakes on that.
+   */
+  integrateTask?: (runId: string, taskId: string) => Promise<unknown>;
   intervalMs?: number;
   log?: (message: string) => void;
 }
@@ -397,6 +406,17 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     }, { kind: "daemon", sessionId: "daemon" });
     if (outcome.status !== "observed" && !outcome.replayed) {
       log(`team completion: automatic outcome for ${task.assignment.taskId} was not recorded: ${outcome.reason ?? outcome.status}`);
+      return;
+    }
+    // U7 — an approving review is the run's signal to deliver the work it approved: the
+    // implementer's own task lands as one commit on the run's branch. A replay finds the commit
+    // already recorded, so a repeated sweep commits nothing twice.
+    const review = (outcome.value as { review?: { verdict?: string; taskId?: string } } | null)?.review;
+    if (review?.verdict === "approved" && typeof review.taskId === "string" && dependencies.integrateTask) {
+      try { await dependencies.integrateTask(currentAttempt.runId, review.taskId); }
+      catch (error) {
+        log(`team completion: integration of ${review.taskId} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   };
 

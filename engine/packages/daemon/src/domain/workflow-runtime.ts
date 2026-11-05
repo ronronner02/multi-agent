@@ -16,6 +16,7 @@ import { ReviewEvidenceLedger, deliveryVerdict, evaluateProgressGate, type Assig
 import {
   candidateIdentity,
   candidateManifest,
+  checkedOutBranch,
   createCandidateWorkspace,
   createReviewPacket,
   isSourceWorktree,
@@ -24,6 +25,7 @@ import {
   resolveWorkspaceBase,
   snapshotCandidateRecorded,
   sourceFingerprint,
+  TEAM_BRANCH_PREFIX,
   verifySourceUnchanged,
   readWorkspacePath,
   type CandidateWorkspace,
@@ -668,9 +670,15 @@ export class WorkflowRuntime {
     // Adoption decides provenance from control-owned records only: the source repository's
     // worktree registry for the commit lane, and the creation record the control wrote under its
     // own state directory for the snapshot lane. Nothing on or in the candidate is consulted.
-    const base = resolveWorkspaceBase(run.binding.repository.root);
+    //
+    // U7 — the delivery base is the run's integration worktree once it has one. That worktree
+    // carries exactly the commits earlier tasks landed, so a later task builds on their work;
+    // the binding's own root is the base before the first integration.
+    const sourceRoot = this.deliverySource(run);
+    const base = resolveWorkspaceBase(sourceRoot);
     const recordPath = base.kind === "snapshot" ? this.snapshotRecordPath(runId, taskId) : undefined;
-    const adopted = this.adoptCandidate(runId, taskId, workspaceRoot, base, recordPath);
+    const integratedSource = (checkedOutBranch(sourceRoot) ?? "").startsWith(TEAM_BRANCH_PREFIX);
+    const adopted = this.adoptCandidate(runId, taskId, workspaceRoot, base, recordPath, sourceRoot);
     // T043: a review launch may adopt the tree a restart left behind, but must never
     // create one. Staging here would hand the reviewer a checkout nobody wrote — the
     // defect this task exists to close — so absence is a refusal, not a cue to build.
@@ -679,8 +687,9 @@ export class WorkflowRuntime {
       // The record is written only so a later caller in this process sees the same tree;
       // the launch that actually enters it records the owner, exactly as a non-review
       // launch does. Refusing above leaves everything untouched.
-      this.candidates.set(key, adopted);
-      return this.scopedCandidate(runId, taskId, adopted);
+      const workspace = { ...adopted, integrationSource: integratedSource };
+      this.candidates.set(key, workspace);
+      return this.scopedCandidate(runId, taskId, workspace);
     }
     if (run.state !== "approved") throw new Error("Run is not approved for this assignment");
     let workspace: CandidateWorkspace;
@@ -693,7 +702,7 @@ export class WorkflowRuntime {
       // chosen here and keeps whatever was in it.
       if (this.present(workspaceRoot)) this.quarantineCandidate(workspaceRoot);
       try {
-        workspace = createCandidateWorkspace({ root: run.binding.repository.root, base, workspaceRoot, label: taskId });
+        workspace = createCandidateWorkspace({ root: sourceRoot, base, workspaceRoot, label: taskId });
       } catch (error) {
         // A creation that failed partway is no more accounted for than a planted entry, and the
         // next retry has to be able to try again.
@@ -713,6 +722,7 @@ export class WorkflowRuntime {
         workspace = { ...workspace, recordPath };
       }
     }
+    workspace = { ...workspace, integrationSource: integratedSource };
     // Only a caller that named a worker tells us who owns the task's tree.
     if (worker !== undefined) this.candidateWorker.set(key, worker);
     this.candidates.set(key, workspace);
@@ -729,18 +739,30 @@ export class WorkflowRuntime {
    * source, so the source-moved check downstream still applies to the adopted tree.
    */
   private adoptCandidate(runId: string, taskId: string, workspaceRoot: string, base: WorkspaceBase,
-    recordPath: string | undefined): CandidateWorkspace | undefined {
+    recordPath: string | undefined, source: string): CandidateWorkspace | undefined {
     let stats;
     try { stats = lstatSync(workspaceRoot); } catch { return undefined; }
     if (!stats.isDirectory()) return undefined;
-    const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
-    const sourceRoot = realpathSync(run.binding.repository.root);
+    const sourceRoot = realpathSync(source);
     const accounted = base.kind === "commit"
       ? isSourceWorktree(sourceRoot, workspaceRoot)
       : recordPath !== undefined && snapshotCandidateRecorded(recordPath, { runId, taskId, root: workspaceRoot });
     if (!accounted) return undefined;
-    return { root: workspaceRoot, sourceRoot, base, source: sourceFingerprint(run.binding.repository.root),
+    return { root: workspaceRoot, sourceRoot, base, source: sourceFingerprint(sourceRoot),
       ...(recordPath ? { recordPath } : {}) };
+  }
+
+  /**
+   * U7 — where a task's candidate is staged from.
+   *
+   * Once the run has an integration worktree, that worktree is the delivery base: it carries
+   * exactly the commits earlier tasks landed, so a later task builds on their work. Before the
+   * first integration — and for a run whose recorded worktree has gone — the binding's own root
+   * is the base, which is where the run's plan was read.
+   */
+  private deliverySource(run: Pick<import("../contracts/team-control.js").TeamRun, "id" | "binding">): string {
+    const recorded = new PlanGovernance(this.db, this.eventBus, this.queueRepo).integrationRecord(run.id).worktree;
+    return recorded !== null && existsSync(recorded) ? recorded : run.binding.repository.root;
   }
 
   /**

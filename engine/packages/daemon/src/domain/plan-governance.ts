@@ -344,6 +344,39 @@ export class PlanGovernance {
   }
 
   /**
+   * U7 — the run's integration branch, where it lives, and the commits landed on it.
+   *
+   * A run that has not integrated anything yet has no record, and the caller derives the branch
+   * name from the run itself. The commits are returned in the order they landed, which is the
+   * order the owner reads them in and the order the branch holds them.
+   */
+  integrationRecord(runId: string): {
+    branch: string | null; worktree: string | null; repository: string | null;
+    commits: Array<{ taskId: string; commitSha: string; subject: string; committedAt: string }>;
+  } {
+    const row = this.db.prepare(`SELECT integration_branch AS branch, integration_worktree AS worktree,
+      integration_repository AS repository FROM team_runs WHERE id = ?`).get(runId) as
+      { branch: string | null; worktree: string | null; repository: string | null } | undefined;
+    if (!row) throw new Error("Run not found");
+    const commits = (this.db.prepare(`SELECT task_id AS taskId, commit_sha AS commitSha, subject, committed_at AS committedAt
+      FROM team_integration_commits WHERE run_id = ? ORDER BY committed_at, rowid`).all(runId) as Array<
+      { taskId: string; commitSha: string; subject: string; committedAt: string }>);
+    return { ...row, commits };
+  }
+
+  /**
+   * U9 — the name a task was admitted with, or null when its row recorded none.
+   *
+   * The integration commit's subject is the task's display name, so the reader here is the
+   * integration owner rather than any part of the task contract.
+   */
+  taskDisplayName(qitemId: string): string | null {
+    const row = this.db.prepare("SELECT display_name AS name FROM team_queue_authority WHERE qitem_id = ?")
+      .get(qitemId) as { name: string | null } | undefined;
+    return row?.name ?? null;
+  }
+
+  /**
    * U9 — a run recorded before names existed is named by its creation order on its rig.
    *
    * `rowid` is the insertion order, which is what "created" means for rows whose `created_at`
@@ -1198,6 +1231,72 @@ export class PlanGovernance {
     return this.command("task.outcome", raw, observer, (ctx) => this.writeTaskTransition(ctx, observedBy));
   }
 
+  /**
+   * U7 — the daemon records a commit it landed on the run's integration branch.
+   *
+   * The commit is the run's delivery history, so it is recorded as one fact with the branch it
+   * landed on, and the task's row is what says which work it carries. The only binding change
+   * accepted here is the head the commit moved: everything the owner approved — the repository,
+   * the plan path and its bytes, the scope, the roles and the limits — has to be identical, or
+   * this is a different run's plan wearing this one's id.
+   *
+   * A moved head changes the binding digest, and every dispatch gate reads the implementation
+   * grant under that digest. So the grant is reissued with the window the run already had: the
+   * daemon advancing its own branch is not a reason for the team to stop working, and it grants
+   * nothing the owner did not already approve.
+   */
+  recordIntegrationCommit(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
+    const daemon = actorIdentity(actor, false, true);
+    if (daemon.kind !== "daemon") throw new Error("The daemon records integration commits");
+    return this.command("task.integrated", raw, daemon, (ctx) => {
+      const v = object(ctx.request.payload, "integrationCommit");
+      const taskId = text(v.taskId, "integrationCommit.taskId");
+      const task = this.findTask(ctx.run.id, taskId);
+      if (!task || task.assignment.role !== "implementer") return deny("An integration commit names this run's implementer task");
+      if (this.queueState(task.qitemId) !== "done") return deny("Only a completed task's work is integrated");
+      const commitSha = text(v.commitSha, "integrationCommit.commitSha", 64);
+      if (!/^[0-9a-f]{40,64}$/.test(commitSha)) throw new TeamContractError("integrationCommit.commitSha");
+      const subject = text(v.subject, "integrationCommit.subject", 256);
+      const branch = text(v.branch, "integrationCommit.branch", 256);
+      const worktree = text(v.worktree, "integrationCommit.worktree", 4096);
+      const repository = text(v.repository, "integrationCommit.repository", 4096);
+      if (v.binding !== undefined && v.binding !== null) {
+        const binding = parsePlanBinding(v.binding), current = ctx.run.binding;
+        const unchanged = binding.repository.root === current.repository.root && binding.planRef === current.planRef
+          && binding.planDigest === current.planDigest && binding.policyRevision === current.policyRevision
+          && binding.policyFingerprint === current.policyFingerprint
+          && canonicalJson(binding.readPaths) === canonicalJson(current.readPaths)
+          && canonicalJson(binding.writePaths) === canonicalJson(current.writePaths)
+          && canonicalJson(binding.roles) === canonicalJson(current.roles)
+          && canonicalJson(binding.limits) === canonicalJson(current.limits);
+        if (!unchanged) return deny("An integration commit preserves everything the owner approved");
+        if (hashBinding(binding) !== ctx.run.bindingDigest) {
+          const prior = this.db.prepare(`SELECT expires_at AS expiresAt FROM team_approvals
+            WHERE run_id = ? AND kind = 'orchestrator' AND action = 'implementation' AND state = 'approved'
+            ORDER BY rowid DESC LIMIT 1`).get(ctx.run.id) as { expiresAt: string } | undefined;
+          this.invalidateUnused(ctx, false);
+          ctx.run.binding = binding;
+          ctx.run.bindingDigest = hashBinding(binding);
+          if (prior) {
+            const payload = { bindingDigest: ctx.run.bindingDigest };
+            this.db.prepare(`INSERT INTO team_approvals
+              (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,decision_actor,created_at,updated_at)
+              VALUES (?,?,'orchestrator','implementation',?,?,?,?,'approved',?,?,?,?)`).run(randomUUID(), ctx.run.id,
+              canonicalJson(payload), hashBytes(canonicalJson(payload)), ctx.run.bindingDigest, ctx.run.bindingDigest,
+              prior.expiresAt, daemon.sessionId, ctx.now, ctx.now);
+          }
+        }
+      }
+      this.db.prepare(`UPDATE team_runs SET integration_branch = ?, integration_worktree = ?, integration_repository = ?
+        WHERE id = ?`).run(branch, worktree, repository, ctx.run.id);
+      this.db.prepare(`INSERT INTO team_integration_commits (run_id, task_id, commit_sha, subject, committed_at)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (run_id, task_id) DO UPDATE SET commit_sha = excluded.commit_sha,
+        subject = excluded.subject, committed_at = excluded.committed_at`)
+        .run(ctx.run.id, taskId, commitSha, subject, ctx.now);
+      return { status: "observed", value: { commitSha, subject, branch, worktree, repository }, taskId };
+    });
+  }
+
   private writeTaskTransition(ctx: CommandContext, observedBy: string | null): Result {
     const observedOutcome = observedBy !== null;
     const task = this.getTask(ctx.request.actionId);
@@ -1206,7 +1305,16 @@ export class PlanGovernance {
     if (integer(v.expectedTaskVersion, "expectedTaskVersion", 1) !== task.entityVersion) throw new Error("Task version conflict");
     if (!TEAM_QUEUE_STATES.includes(v.state as QueueState)) throw new TeamContractError("task.state");
     const item = this.queue.getById(task.qitemId);
-    if (!item || !["pending", "in-progress", "blocked"].includes(item.state)) return deny("Task already has a terminal outcome; reopening requires an explicitly counted retry path");
+    // U7 — one observed failure is decided after the task closed. A task's review approved its
+    // work and the patch could not land on the run's integration branch: the work exists, it was
+    // accepted, and what failed is delivering it. That is the run's own recorded fact, so the
+    // closed row is reopened and closed as failed in this command rather than left saying done.
+    const integrationConflict = observedOutcome && v.state === "failed" && item !== undefined
+      && (v.evidence as JsonObject | undefined)?.reasonCode === "integration_conflict";
+    const reopeningTerminal = integrationConflict && ["done", "handed-off"].includes(item!.state);
+    if (!item || (!["pending", "in-progress", "blocked"].includes(item.state) && !reopeningTerminal)) {
+      return deny("Task already has a terminal outcome; reopening requires an explicitly counted retry path");
+    }
     if (!observedOutcome && !["pending", "in-progress", "blocked"].includes(v.state as string)) {
       return deny("Terminal task states require an owner-observed outcome; handoff requires a separate authority path");
     }
@@ -1245,6 +1353,15 @@ export class PlanGovernance {
     const changed = this.db.prepare(`UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ?
       WHERE qitem_id = ? AND entity_version = ?`).run(evidence === null ? null : canonicalJson(evidence), task.qitemId, task.entityVersion);
     if (changed.changes !== 1) throw new Error("Task version conflict");
+    if (reopeningTerminal) {
+      // Two writes, both in this command's transaction: the queue admits an active state from a
+      // terminal row only through a deliberate reopen, and the failure is the close that follows.
+      const reopened = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+        qitemId: task.qitemId, actorSession: observedBy ?? ctx.run.id, state: "pending", reopen: true,
+        transitionNote: "The daemon delivers the approved work to the run's integration branch",
+      }));
+      for (const event of reopened.persistedEvents) ctx.register(event);
+    }
     const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({ qitemId: task.qitemId, actorSession: observedBy ?? text(v.actorSession, "actorSession"),
       state: v.state as QueueState, transitionNote, closureReason: optionalText("closureReason"),
       closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") }));

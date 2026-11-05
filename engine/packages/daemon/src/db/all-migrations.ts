@@ -117,6 +117,7 @@ import { cancellationSchema } from "./migrations/108_cancellation.js";
 import { attemptFailureSchema } from "./migrations/110_attempt_failure.js";
 import { displayNamesSchema } from "./migrations/112_display_names.js";
 import { leadChatSchema } from "./migrations/113_lead_chat.js";
+import { integrationBranchSchema } from "./migrations/114_integration_branch.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -228,4 +229,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   attemptFailureSchema,
   displayNamesSchema,
   leadChatSchema,
+  integrationBranchSchema,
 ];

@@ -632,6 +632,44 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     });
 
   /**
+   * U7 — the owner's one delivery action.
+   *
+   * The daemon does the merge, into the repository the team was created for, and answers with
+   * what it did: fast-forwarded, merged with one commit, or already up to date. A refusal names
+   * its reason — an open task, a dirty checkout, a conflict — and leaves the checkout as it was,
+   * so this verb reports the daemon's answer rather than deciding one.
+   */
+  cmd.command("merge <run-id>")
+    .description("merge the run's integration branch into the repository the team was created for")
+    .option("--json", "print the daemon's answer as JSON")
+    .action(async (runId: string, options: { json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required",
+        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable",
+        "The daemon is not running or did not answer its health probe. Check it with 'rig daemon status'.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}`;
+      const run = await client.get<{ run?: { entityVersion: number } }>(path, { headers });
+      if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+        throw new TeamCommandError("team_run_unavailable", "The current run version could not be read.");
+      }
+      const answer = await client.post<{ status?: string; code?: string; reason?: string | null; error?: string;
+        branch?: string; mode?: string | null; head?: string | null }>(`${path}/merge`, {
+        protocolVersion: "1.0", runId, actionId: runId, expectedEntityVersion: run.data.run!.entityVersion,
+        idempotencyKey: crypto.randomUUID(), payload: {} }, { headers });
+      if (answer.status !== 200 || answer.data.status !== "merged") {
+        throw new TeamCommandError(answer.data.code ?? "team_merge_refused",
+          answer.data.reason ?? answer.data.error ?? "The daemon refused the merge.");
+      }
+      if (options.json) { console.log(JSON.stringify(answer.data)); return; }
+      const how = answer.data.mode === "fast-forward" ? "fast-forwarded"
+        : answer.data.mode === "merge-commit" ? "merged with one commit" : "already up to date";
+      console.log(`Merged ${answer.data.branch} (${how}) at ${answer.data.head?.slice(0, 7)}.`);
+    });
+
+  /**
    * T017 — the owner's cancel, from the terminal.
    *
    * The daemon does the stopping: it records the intent, ends the processes this run launched
