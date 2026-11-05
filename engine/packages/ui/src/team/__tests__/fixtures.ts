@@ -4,7 +4,7 @@ import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun } from "@o
  * read the same projection, so a fixture that drifted between them would hide a real disagreement. */
 
 export const run: TeamRun = {
-  id: "RUN-0142", rigId: "work-board", bindingDigest: "binding", state: "approved", stateReason: null,
+  id: "RUN-0142", rigId: "work-board", displayName: "Add the status filter", bindingDigest: "binding", state: "approved", stateReason: null,
   entityVersion: 3, activeMs: 252_000, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 1,
   reviewerSeat: null,
   usage: { activeMs: 252_000, inputTokens: { value: 18_700, reason: null }, outputTokens: { value: 23_400, reason: null },
@@ -17,7 +17,8 @@ export const run: TeamRun = {
 };
 
 export function task(overrides: Partial<TeamReviewView> = {}): TeamReviewView {
-  return { taskId: "T-102", qitemId: "q-T-102", role: "implementer", queueState: "done", title: "Status filter",
+  return { taskId: "T-102", qitemId: "q-T-102", role: "implementer", queueState: "done", displayName: "Status filter",
+    displayNameParts: { kind: "task" }, title: "Status filter",
     dependencies: [], criteria: { verified: null, total: null, source: null }, currentCandidateDigest: `sha256:${"c".repeat(64)}`,
     rounds: 1, openP0P1: 1, verdicts: [], reviewAvailable: true, acceptance: null, ...overrides };
 }
@@ -32,6 +33,6 @@ export function attempt(overrides: Partial<TeamAttemptView> = {}): TeamAttemptVi
 
 export function read(overrides: Partial<TeamOwnerRead> = {}): TeamOwnerRead {
   return { schema: "multi-agent-team-read/v1", protocolVersion: "1.0", runId: run.id, generatedAt: "2026-10-31T00:00:00.000Z",
-    run, workflow: { current: "review", stages: [] }, tasks: [task()], attempts: [], approvals: [], logs: [],
+    run, workflow: { current: "review", stages: [] }, tasks: [task()], seats: [], attempts: [], approvals: [], logs: [],
     replay: { retainedFrom: 1, latestSeq: 1 }, ...overrides };
 }

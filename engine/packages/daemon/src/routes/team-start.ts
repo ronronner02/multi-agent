@@ -9,6 +9,7 @@ import {
   type ControlActor, type PlanBinding, type TeamRun, type TeamRunSummary,
 } from "../contracts/team-control.js";
 import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
+import { runName } from "../domain/display-names.js";
 import { roleConfiguration } from "../domain/role-configuration.js";
 import { leadRoster } from "../domain/lead-proposal.js";
 import type { RigRepository } from "../domain/rig-repository.js";
@@ -115,7 +116,7 @@ function defaultSeat(rigRepo: RigRepository, node: { id: string; logicalId: stri
 
 function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
   return { id: run.id, rigId: run.rigId, rigName: rigRepo.getRig(run.rigId)?.rig.name ?? run.rigId,
-    state: run.state, planRef: run.binding.planRef, createdAt: run.createdAt };
+    state: run.state, planRef: run.binding.planRef, displayName: run.displayName, createdAt: run.createdAt };
 }
 
 export function teamStartRoutes(
@@ -206,7 +207,9 @@ export function teamStartRoutes(
       return c.json({ code: "repository_unreadable",
         error: "The plan artifact or the repository's commit could not be read: " + (error as Error).message }, 400);
     }
-    const run = governance.createRun({ id: randomUUID(), rigId: rig.id, binding, reviewerSeat });
+    // U9 — the run is named from the goal the owner started it with, so no client ever has to
+    // show the run id. The goal is already required to be non-blank above.
+    const run = governance.createRun({ id: randomUUID(), rigId: rig.id, binding, reviewerSeat, displayName: runName(goal) });
     const bindingDigest = hashBinding(binding);
     const request = (actionId: string, payload: unknown) => ({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id,
       actionId, expectedEntityVersion: governance.getRun(run.id).entityVersion, idempotencyKey: randomUUID(), payload });

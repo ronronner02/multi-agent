@@ -20,6 +20,19 @@ export function reviewerTaskId(implementerTaskId: string, round: number): string
   return `${implementerTaskId}-review-${round}`;
 }
 
+/**
+ * The round a reviewer task id names, or `null` when the id was not derived for that task.
+ *
+ * The inverse of `reviewerTaskId`. The round is not a row of its own, so this is how a reviewer
+ * task recorded before display names existed is named by the round it was admitted for.
+ */
+export function reviewRoundFor(implementerTaskId: string, reviewerTaskIdValue: string): number | null {
+  const prefix = `${implementerTaskId}-review-`;
+  if (!reviewerTaskIdValue.startsWith(prefix)) return null;
+  const round = Number(reviewerTaskIdValue.slice(prefix.length));
+  return Number.isSafeInteger(round) && round > 0 ? round : null;
+}
+
 /** The reviewer task's recorded body. Facts about the candidate, never instructions. */
 export function reviewBody(input: { implementerTaskId: string; round: number; candidateDigest: string | null }): string {
   return [

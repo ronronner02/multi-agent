@@ -6,11 +6,13 @@ import {
   TEAM_READ_MODEL_VERSION, TEAM_WORKFLOW_STAGES, canonicalJson, parseUsage,
   type JsonObject, type TeamApproval, type TeamAttemptView, type TeamCriteriaProgress,
   type TeamLogRecord, type TeamOwnerRead, type TeamReplayEvent, type TeamReviewView, type TeamRunStageView,
-  type TeamStageProgress, type TeamStageState, type TeamWorkflowStage,
+  type TeamSeatView, type TeamStageProgress, type TeamStageState, type TeamTaskNameParts, type TeamWorkflowStage,
 } from "./contracts/team-control.js";
 import type { PlanGovernance } from "./domain/plan-governance.js";
 import type { EventBus } from "./domain/event-bus.js";
 import { foldReviewState, type Entry } from "./domain/review-evidence.js";
+import { ordinalTaskName, reviewName, seatName, taskName } from "./domain/display-names.js";
+import { reviewRoundFor } from "./domain/review-loop.js";
 
 /** C2 — the shape a review round's durable verdict carries, for a client that renders it. */
 export type { ReviewFinding, ReviewVerdictRecord } from "./domain/review-evidence.js";
@@ -35,6 +37,17 @@ const LOG_BODY_LIMIT = 2000;
 const LOG_RECORD_LIMIT = 200;
 /** A task title is one display line, not the whole body: the body can be 256 KiB. */
 const TASK_TITLE_LIMIT = 80;
+
+/** One task's own recorded facts, as the naming and title projections read them. */
+interface TaskIdentity {
+  title: string | null;
+  body: string;
+  /** The name stored when the task was admitted, or `null` for a row recorded before names existed. */
+  displayName: string | null;
+  /** The implementer task a reviewer task reviews, or `null` for a task that reviews nothing. */
+  reviewOf: string | null;
+  dependencies: string[] | null;
+}
 
 export interface TeamReadModelDeps {
   db: Database.Database;
@@ -74,15 +87,22 @@ export class TeamReadModel {
    * a second store, so the honest value is "unavailable" until its owner lands.
    */
   private tasks(runId: string): TeamReviewView[] {
-    return this.deps.readTaskRows(runId).map((row) => {
+    const rows = this.deps.readTaskRows(runId);
+    const identities = new Map(rows.map((row) => [row.qitemId, this.identity(row.qitemId)]));
+    const names = this.taskNames(rows, identities);
+    return rows.map((row) => {
       const state = foldReviewState(row.taskId, this.reviewEntries(runId, row.taskId));
       const criteria = this.criteria(row.qitemId, state.currentManifestDigest);
-      const identity = this.identity(row.qitemId);
+      const identity = identities.get(row.qitemId)!;
+      // U9 — built from these same rows above, so every task has a name.
+      const name = names.get(row.taskId)!;
       return {
         taskId: row.taskId,
         qitemId: row.qitemId,
         role: row.role as TeamReviewView["role"],
         queueState: row.queueState as TeamReviewView["queueState"],
+        displayName: name.displayName,
+        displayNameParts: name.parts,
         title: identity.title,
         dependencies: identity.dependencies,
         criteria,
@@ -107,7 +127,8 @@ export class TeamReadModel {
   }
 
   /**
-   * The task's own words: its title and its declared dependencies.
+   * The task's own words: its title and its declared dependencies, plus the two facts naming
+   * it needs — the body it was admitted with and the task it reviews, if any.
    *
    * Both are read from the rows that already own them — the queue item's body and
    * the authority row's assignment — rather than added to `readTaskRows`, which
@@ -115,25 +136,95 @@ export class TeamReadModel {
    * unreadable assignment is missing evidence, and an empty list would claim the
    * task was recorded with no dependencies.
    */
-  private identity(qitemId: string): { title: string | null; dependencies: string[] | null } {
+  private identity(qitemId: string): TaskIdentity {
     const row = this.deps.db
-      .prepare(`SELECT q.body AS body, a.assignment_json AS assignmentJson
+      .prepare(`SELECT q.body AS body, a.assignment_json AS assignmentJson, a.display_name AS displayName
         FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
         WHERE a.qitem_id = ?`)
-      .get(qitemId) as { body: string | null; assignmentJson: string | null } | undefined;
-    if (!row) return { title: null, dependencies: null };
+      .get(qitemId) as { body: string | null; assignmentJson: string | null; displayName: string | null } | undefined;
+    if (!row) return { title: null, body: "", displayName: null, reviewOf: null, dependencies: null };
     const firstLine = (row.body ?? "").split("\n").map((line) => line.trim()).find((line) => line.length > 0) ?? "";
     const title = firstLine ? [...firstLine].slice(0, TASK_TITLE_LIMIT).join("") : null;
     let dependencies: string[] | null = null;
+    let reviewOf: string | null = null;
     if (row.assignmentJson) {
       try {
-        const assignment = (JSON.parse(row.assignmentJson) as { dependencies?: unknown }).dependencies;
-        dependencies = Array.isArray(assignment) ? assignment.filter((entry): entry is string => typeof entry === "string") : null;
+        const assignment = JSON.parse(row.assignmentJson) as { dependencies?: unknown; reviewOf?: unknown };
+        dependencies = Array.isArray(assignment.dependencies)
+          ? assignment.dependencies.filter((entry): entry is string => typeof entry === "string") : null;
+        reviewOf = typeof assignment.reviewOf === "string" ? assignment.reviewOf : null;
       } catch {
-        // Covered by the `null` initializer: an unreadable assignment has no list.
+        // Covered by the `null` initializers: an unreadable assignment has no list and no
+        // reviewed task.
       }
     }
-    return { title, dependencies };
+    return { title, body: row.body ?? "", displayName: row.displayName, reviewOf, dependencies };
+  }
+
+  /**
+   * U9 — every task's name, from the row it was recorded with.
+   *
+   * A stored name is used as recorded. A row recorded before names existed is named from itself:
+   * its body's first line, or for a reviewer task the task it reviews and the round. Reviewer
+   * tasks are resolved second so an old reviewer row takes its reviewed task's name whatever
+   * that task's own provenance is, and a task with nothing to name it by falls back to its
+   * position in the read rather than to its id.
+   */
+  private taskNames(rows: Array<{ taskId: string; qitemId: string }>, identities: Map<string, TaskIdentity>):
+    Map<string, { displayName: string; parts: TeamTaskNameParts }> {
+    const plain = new Map<string, string>();
+    rows.forEach((row, index) => {
+      const identity = identities.get(row.qitemId)!;
+      if (identity.reviewOf !== null) return;
+      plain.set(row.taskId, identity.displayName ?? taskName(identity.body) ?? ordinalTaskName(index + 1));
+    });
+    const names = new Map<string, { displayName: string; parts: TeamTaskNameParts }>();
+    rows.forEach((row, index) => {
+      const identity = identities.get(row.qitemId)!;
+      if (identity.reviewOf === null) {
+        names.set(row.taskId, { displayName: plain.get(row.taskId)!, parts: { kind: "task" } });
+        return;
+      }
+      const round = reviewRoundFor(identity.reviewOf, row.taskId) ?? 1;
+      const of = plain.get(identity.reviewOf) ?? ordinalTaskName(index + 1);
+      names.set(row.taskId, {
+        displayName: identity.displayName ?? reviewName(of, round),
+        parts: { kind: "review", round, of },
+      });
+    });
+    return names;
+  }
+
+  /**
+   * U9 — the rig's seats, named from the role and client each runs.
+   *
+   * A seat is a session on a node that declares a team role and a client runtime; a terminal
+   * node is not an agent seat. The latest session is the address a launch resolves, so it is the
+   * seat's name. A role and client that repeat are numbered — both members of the group carry
+   * the number, so two implementers on Codex stay distinct — and a unique pair carries none.
+   */
+  private seats(rigId: string): TeamSeatView[] {
+    const rows = this.deps.db.prepare(`SELECT n.role AS role, n.runtime AS runtime, s.session_name AS seat
+      FROM nodes n JOIN sessions s ON s.node_id = n.id
+      WHERE n.rig_id = ? AND n.role IN ('lead', 'implementer', 'reviewer')
+        AND n.runtime IS NOT NULL AND n.runtime <> 'terminal'
+        AND s.id = (SELECT latest.id FROM sessions latest WHERE latest.node_id = n.id
+          ORDER BY latest.created_at DESC, latest.id DESC LIMIT 1)
+      ORDER BY n.logical_id`).all(rigId) as Array<{ role: TeamSeatView["role"]; runtime: string; seat: string }>;
+    const members = new Map<string, number>();
+    for (const row of rows) {
+      const key = `${row.role}\u0000${row.runtime}`;
+      members.set(key, (members.get(key) ?? 0) + 1);
+    }
+    const ordinal = new Map<string, number>();
+    return rows.map((row) => {
+      const key = `${row.role}\u0000${row.runtime}`;
+      const position = (ordinal.get(key) ?? 0) + 1;
+      ordinal.set(key, position);
+      const index = (members.get(key) ?? 0) > 1 ? position : null;
+      return { seat: row.seat, role: row.role, client: row.runtime, index,
+        displayName: seatName({ role: row.role, client: row.runtime, index }) };
+    });
   }
 
   /**
@@ -458,6 +549,7 @@ export class TeamReadModel {
         run,
         workflow: this.workflow(runId, tasks),
         tasks,
+        seats: this.seats(run.rigId),
         attempts,
         approvals: approvals.map((approval) => ({ ...approval, awaitingDecision: approval.state === "pending" })),
         logs: this.logs(runId, tasks, attempts),

@@ -75,6 +75,8 @@ describe("MVP slice 2 — the owner starts team work", () => {
     const run = governance.getRun(receipt.runId!);
     expect(run.state).toBe("approved");
     expect(run.rigId).toBe("rig");
+    // U9 — the run is named from the goal it was started with, so a client can list it by name.
+    expect(run.displayName).toBe("Add a health endpoint");
     expect(run.binding.repository).toEqual({ root: directory, identity: expect.stringMatching(/^git:[a-f0-9]{40}$/) });
     expect(run.binding.planDigest).toBe(hashBytes("approved plan\n"));
     expect(run.binding.policyFingerprint).toBe(policy.policyFingerprint);
@@ -96,7 +98,7 @@ describe("MVP slice 2 — the owner starts team work", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { runs: Array<Record<string, string>> };
     expect(body.runs).toEqual([{ id: created.runId, rigId: "rig", rigName: "demo", state: "approved", planRef: "plan.md",
-      createdAt: expect.any(String) }]);
+      displayName: "First", createdAt: expect.any(String) }]);
   });
 
   it("refuses a caller that is not the owner, and creates nothing", async () => {

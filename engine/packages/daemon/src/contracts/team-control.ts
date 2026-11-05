@@ -102,6 +102,12 @@ export interface NativeAttemptIdentity {
 export interface TeamRun {
   id: string;
   rigId: string;
+  /**
+   * U9 / KTD8 — the run's readable name, derived from its goal when it was created. A run
+   * recorded before names existed is named by its creation order on the rig ("Run 2") on
+   * read, so this is never the id and never empty.
+   */
+  displayName: string;
   binding: PlanBinding;
   bindingDigest: string;
   /**
@@ -270,11 +276,53 @@ export interface TeamCriteriaProgress {
   source: string | null;
 }
 
+/**
+ * U9 — what a task's name is made of, so a client can render it in its own language.
+ *
+ * A plain task is named by its own words. A reviewer task is named by the task it reviews and
+ * the round, which is the part a client has to translate ("Review" / "Review 2"); `of` is the
+ * reviewed task's own name and is never translated.
+ */
+export type TeamTaskNameParts =
+  | { kind: "task" }
+  | { kind: "review"; round: number; of: string };
+
+/**
+ * U9 — one seat of the run's rig, named for display.
+ *
+ * A seat is a session on a node that declares a team role and a client runtime. `seat` is the
+ * address everything internal keys on; `role` and `client` are returned so a client can build
+ * the name locally, and `displayName` is the stored English form ("Implementer · Codex 2").
+ */
+export interface TeamSeatView {
+  seat: string;
+  role: TeamRole;
+  /** The client runtime the seat runs, e.g. "claude-code" or "codex". */
+  client: string;
+  /**
+   * The seat's number within its role and client group, or `null` when it is the only one.
+   * Both members of a repeating group carry it, so two implementers on Codex are 1 and 2.
+   */
+  index: number | null;
+  displayName: string;
+}
+
 export interface TeamReviewView {
   taskId: string;
   qitemId: string;
   role: TeamRole;
   queueState: TeamQueueState;
+  /**
+   * U9 / KTD8 — the task's readable name: its title, or for a reviewer task the task it
+   * reviews. Stored when the task was admitted; a task recorded before names existed is named
+   * on read from the same rows. It is never the id.
+   */
+  displayName: string;
+  /**
+   * The parts of `displayName`, so a client renders it in its own language instead of showing
+   * the stored English fallback. A client with no localisation renders `displayName` directly.
+   */
+  displayNameParts: TeamTaskNameParts;
   /**
    * The first line of the task body, shortened for display, or `null` when the
    * row carries no body text. It is the task's own words, never a summary.
@@ -366,6 +414,8 @@ export interface TeamOwnerRead {
   run: TeamRun;
   workflow: TeamRunStageView;
   tasks: TeamReviewView[];
+  /** U9 — the rig's seats, named, so a client never renders a seat address. */
+  seats: TeamSeatView[];
   attempts: TeamAttemptView[];
   approvals: Array<TeamApproval & { awaitingDecision: boolean }>;
   controlVersions?: { tasks: Record<string, number>; attempts: Record<string, number>; latestAttempts: Record<string, string> };
@@ -458,6 +508,8 @@ export interface TeamRunSummary {
   rigName: string;
   state: TeamRunState;
   planRef: string;
+  /** U9 — the run's readable name, so a run picker lists runs without showing an id. */
+  displayName: string;
   createdAt: string;
 }
 

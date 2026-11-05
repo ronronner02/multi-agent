@@ -15,7 +15,7 @@ vi.mock("../new-task.js", () => ({ NewTaskForm: () => null }));
 
 let run: TeamRun;
 beforeEach(() => {
-  run = { id: "run", rigId: "rig", state: "approved", stateReason: null, entityVersion: 10,
+  run = { id: "run", rigId: "rig", displayName: "Add the status filter", state: "approved", stateReason: null, entityVersion: 10,
     activeMs: 0, accountedAt: null, retriesUsed: 0, reviewRoundsUsed: 0, reviewerSeat: null, bindingDigest: "binding", createdAt: "", updatedAt: "",
     usage: { activeMs: 0, inputTokens: { value: null, reason: null }, outputTokens: { value: null, reason: null }, costUsd: { value: null, reason: null } },
     binding: { artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
@@ -39,10 +39,11 @@ async function show() {
   const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const read: TeamOwnerRead = { schema: "multi-agent-team-read/v1", protocolVersion: "1.0", runId: run.id, run,
     generatedAt: new Date().toISOString(), workflow: { current: "execution", stages: [] },
-    tasks: [{ taskId: "A", qitemId: "qA", role: "implementer", queueState: "pending", title: "Initial task", dependencies: [],
+    tasks: [{ taskId: "A", qitemId: "qA", role: "implementer", queueState: "pending", displayName: "Initial task",
+      displayNameParts: { kind: "task" }, title: "Initial task", dependencies: [],
       criteria: { verified: null, total: null, source: null }, currentCandidateDigest: null,
       rounds: 0, openP0P1: 0, verdicts: [], reviewAvailable: false, acceptance: null }],
-    attempts: [], approvals: [], logs: [], replay: { retainedFrom: 1, latestSeq: 1 } };
+    seats: [], attempts: [], approvals: [], logs: [], replay: { retainedFrom: 1, latestSeq: 1 } };
   render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}>
     <TasksScreen read={read} runId="run" />
   </I18nextProvider></QueryClientProvider>);
