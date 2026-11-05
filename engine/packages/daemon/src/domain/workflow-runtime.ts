@@ -648,7 +648,6 @@ export class WorkflowRuntime {
     }
     if (!this.candidateRoot || !this.assignmentRoot) throw new Error("Candidate isolation is not configured");
     const run = new PlanGovernance(this.db, this.eventBus, this.queueRepo).getRun(runId);
-    if (run.state !== "approved") throw new Error("Run is not approved for this assignment");
     const owner = worker ?? this.defaultWorkerName();
     const workspaceRoot = this.candidateRoot(runId, taskId, owner);
     // A candidate outside the kernel's assignment root could never be mounted, so
@@ -683,6 +682,7 @@ export class WorkflowRuntime {
       this.candidates.set(key, adopted);
       return this.scopedCandidate(runId, taskId, adopted);
     }
+    if (run.state !== "approved") throw new Error("Run is not approved for this assignment");
     let workspace: CandidateWorkspace;
     if (adopted) workspace = adopted;
     else {
