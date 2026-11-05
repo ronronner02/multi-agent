@@ -1,0 +1,64 @@
+diff --git a/src/truncate.mjs b/src/truncate.mjs
+new file mode 100644
+index 0000000..222b5b7
+--- /dev/null
++++ b/src/truncate.mjs
+@@ -0,0 +1,19 @@
++/**
++ * Return the first `maxLength` characters of `text`.
++ *
++ * A character is a Unicode code point, so a surrogate pair is never split. A string no
++ * longer than `maxLength` is returned unchanged.
++ */
++export function truncate(text, maxLength) {
++  if (!Number.isInteger(maxLength) || maxLength < 0) {
++    throw new RangeError("truncate expects maxLength to be a non-negative integer");
++  }
++  let end = 0;
++  let count = 0;
++  for (const char of text) {
++    if (count === maxLength) return text.slice(0, end);
++    end += char.length;
++    count += 1;
++  }
++  return text;
++}
+diff --git a/test/truncate.test.mjs b/test/truncate.test.mjs
+new file mode 100644
+index 0000000..4f3d33d
+--- /dev/null
++++ b/test/truncate.test.mjs
+@@ -0,0 +1,33 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { truncate } from "../src/truncate.mjs";
++
++test("keeps the first maxLength characters", () => {
++  assert.equal(truncate("abcdef", 3), "abc");
++});
++
++test("a string no longer than maxLength is returned unchanged", () => {
++  assert.equal(truncate("abc", 5), "abc");
++});
++
++test("a maxLength of zero is an empty string", () => {
++  assert.equal(truncate("abcdef", 0), "");
++});
++
++test("counts code points and never splits a surrogate pair", () => {
++  assert.equal(truncate("😀😀😀", 2), "😀😀");
++  assert.equal(truncate("a😀b", 2), "a😀");
++});
++
++test("a negative or non-integer maxLength is refused", () => {
++  assert.throws(() => truncate("abc", -1), RangeError);
++  assert.throws(() => truncate("abc", 1.5), RangeError);
++  assert.throws(() => truncate("abc", NaN), RangeError);
++  assert.throws(() => truncate("abc", Infinity), RangeError);
++});
++
++test("the input is not mutated", () => {
++  const text = "abcdef";
++  truncate(text, 3);
++  assert.equal(text, "abcdef");
++});

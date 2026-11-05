@@ -1,0 +1,373 @@
+[
+  {
+    "seq": 35,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:26:38",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "7867f5c4-3ba5-4c1d-afc4-d5e638030089",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 1,
+      "action": "run.created",
+      "payload": {
+        "bindingDigest": "sha256:68016fc839333645fc64fd4bee80feb3cab9fe46dd527f7f5d98b5215cabf24e",
+        "state": "pending"
+      }
+    }
+  },
+  {
+    "seq": 36,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:26:38",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "91832dd4-f9aa-4952-afc9-0dc5e4b9535b",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 2,
+      "action": "approval.requested",
+      "payload": {
+        "actionId": "b16ffc95-4f9b-4285-acc8-075d593ffaf2",
+        "reason": null,
+        "status": "accepted",
+        "valueDigest": "sha256:e3613485cfeae43f7fdc15e344592de4fa6a96e5e58f4680d94212ea45911007"
+      }
+    }
+  },
+  {
+    "seq": 37,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:26:38",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "77be4813-9646-4c68-b011-a5328e1d0137",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 3,
+      "action": "approval.decided",
+      "payload": {
+        "actionId": "b16ffc95-4f9b-4285-acc8-075d593ffaf2",
+        "observedBy": "owner-control",
+        "reason": null,
+        "status": "accepted",
+        "valueDigest": "sha256:10195eacd102fd090cc8f4d76d2d71881565ac2bffb62042cb3c5b1f1c7369ca"
+      }
+    }
+  },
+  {
+    "seq": 39,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:26:38",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "e8ebc039-33f5-4c88-8d60-ac71291af7b4",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": "task-1",
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 4,
+      "action": "task.created",
+      "payload": {
+        "actionId": "task-1",
+        "reason": null,
+        "status": "accepted",
+        "valueDigest": "sha256:ce3038db5e3854f63cada7f69d1934da5e1afec5d444b6e6f3d14c7bda04fe4a"
+      }
+    }
+  },
+  {
+    "seq": 44,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:26:39",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "c6a292a8-96dc-46d8-9477-376abc516d66",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": "3dde99d7-a3e9-47b1-bd17-83b1f180bd46",
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 5,
+      "action": "attempt.recorded",
+      "payload": {
+        "actionId": "3dde99d7-a3e9-47b1-bd17-83b1f180bd46",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:b22f651e034d8c8884f4d98142bccf25ab656e98d4fc0d42fb86276fba1c9f90"
+      }
+    }
+  },
+  {
+    "seq": 45,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:33:13",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "abe729a2-88b7-4134-b654-6009e935996f",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 6,
+      "action": "run.clock-paused",
+      "payload": {
+        "activeMs": 394075,
+        "reason": "All recorded managed attempts are observed stopped"
+      }
+    }
+  },
+  {
+    "seq": 46,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:33:13",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "a28ad184-3781-4c37-aa20-f50d3108fd74",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": "3dde99d7-a3e9-47b1-bd17-83b1f180bd46",
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 6,
+      "action": "attempt.observed",
+      "payload": {
+        "actionId": "3dde99d7-a3e9-47b1-bd17-83b1f180bd46",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:85a3b8dc121136bf23c22a3bd7c41ab41f78a9b62810082a2b96511599af7ca7"
+      }
+    }
+  },
+  {
+    "seq": 47,
+    "type": "queue.updated",
+    "createdAt": "2026-11-05 05:37:25",
+    "payload": {
+      "type": "queue.updated",
+      "qitemId": "qitem-20261105052638-dc08e28c",
+      "fromState": "pending",
+      "toState": "done",
+      "closureReason": "no-follow-on",
+      "closureTarget": null,
+      "actorSession": "owner-control",
+      "summary": null
+    }
+  },
+  {
+    "seq": 49,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:37:25",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "eb23dabd-0e11-43d8-bd1f-b9f45fce5695",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": "task-1",
+      "attemptId": "3dde99d7-a3e9-47b1-bd17-83b1f180bd46",
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 7,
+      "action": "task.outcome",
+      "payload": {
+        "actionId": "qitem-20261105052638-dc08e28c",
+        "observedBy": "owner-control",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:5a7dbeaed85bf0e875958c8fa446ac2352825c9ab0945a9679478f6ef80f62d4"
+      }
+    }
+  },
+  {
+    "seq": 54,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:37:26",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "75b3326f-798f-4ecc-b0cb-a968f77255b8",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": "17e10f0b-033a-4a39-a1fc-83a9217c4020",
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 8,
+      "action": "attempt.recorded",
+      "payload": {
+        "actionId": "17e10f0b-033a-4a39-a1fc-83a9217c4020",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:90935ddb44a625d38dcdc8e85aa32af8a0b4d8837f310e6bafa52ba1396608ba"
+      }
+    }
+  },
+  {
+    "seq": 55,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:41:14",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "30b42363-4634-45c5-ae0d-b455fb954265",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 9,
+      "action": "run.clock-paused",
+      "payload": {
+        "activeMs": 622108,
+        "reason": "All recorded managed attempts are observed stopped"
+      }
+    }
+  },
+  {
+    "seq": 56,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:41:14",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "078f1c2e-7204-4c2e-b667-f366bc3f68b8",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": "17e10f0b-033a-4a39-a1fc-83a9217c4020",
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 9,
+      "action": "attempt.observed",
+      "payload": {
+        "actionId": "17e10f0b-033a-4a39-a1fc-83a9217c4020",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:ef577af48684aa63aa7a954d7af98ea87cc5f95db2f2e9d0c7beaf8325cfd5fc"
+      }
+    }
+  },
+  {
+    "seq": 57,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:43:19",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "87df36fc-674b-40cd-a614-81b2f1e0dcf7",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 10,
+      "action": "task.outcome.denied",
+      "payload": {
+        "actionId": "qitem-20261105053725-d5ba5eac",
+        "reason": "Review findings must be an array",
+        "status": "denied",
+        "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      }
+    }
+  },
+  {
+    "seq": 58,
+    "type": "queue.updated",
+    "createdAt": "2026-11-05 05:47:14",
+    "payload": {
+      "type": "queue.updated",
+      "qitemId": "qitem-20261105053725-d5ba5eac",
+      "fromState": "pending",
+      "toState": "done",
+      "closureReason": "no-follow-on",
+      "closureTarget": null,
+      "actorSession": "owner-control",
+      "summary": null
+    }
+  },
+  {
+    "seq": 59,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:47:14",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "a69d66fd-42fe-4b69-895b-e8319794295e",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": "task-1",
+      "attemptId": null,
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 11,
+      "action": "review.verdict",
+      "payload": {
+        "candidateDigest": "sha256:060093fc63953ae037c74d8357863e6393214268972cc1db82a3bd829f9efe6f",
+        "findings": [
+          {
+            "category": "clarity",
+            "citation": "plan.md Task B (units KiB..TiB)",
+            "file": "src/formatBytes.mjs",
+            "id": "R1-1",
+            "reproduced": true,
+            "scenario": "formatBytes(1e300) returns \"9.094947017729283e+287 TiB\". Behaviour above 1024 TiB is unspecified, and the code doesnot document that TiB is the cap. Ran it via node -e.",
+            "severity": "P3"
+          },
+          {
+            "category": "testing",
+            "citation": "plan.md Task B (unit chosen after rounding)",
+            "file": "test/formatBytes.test.mjs",
+            "id": "R1-2",
+            "reproduced": true,
+            "scenario": "The round-after-choosing-the-unit rule is tested only at the KiB->MiB boundary. 1073741823 -> \"1 GiB\" and 1099511627775 -> \"1 TiB\" are correct when run by hand, but no test covers them.",
+            "severity": "P3"
+          }
+        ],
+        "recordedAt": "2026-11-05T05:47:14.783Z",
+        "reviewerTaskId": "task-1-review-1",
+        "round": 1,
+        "taskId": "task-1",
+        "verdict": "approved"
+      }
+    }
+  },
+  {
+    "seq": 60,
+    "type": "team.control",
+    "createdAt": "2026-11-05 05:47:14",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "82270883-26ac-4a4c-b8ef-bdcb888c2ce2",
+      "rigId": "01M6N2RRD551VVNJYFQN7C82P4",
+      "runId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "taskId": "task-1-review-1",
+      "attemptId": "17e10f0b-033a-4a39-a1fc-83a9217c4020",
+      "entityId": "57203634-9145-46b2-a614-7f32c1e3ccf3",
+      "entityVersion": 11,
+      "action": "task.outcome",
+      "payload": {
+        "actionId": "qitem-20261105053725-d5ba5eac",
+        "observedBy": "owner-control",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:9354ed9764be12f53f70a475e0a05275ad0532d1c874077b849763a199063bac"
+      }
+    }
+  }
+]

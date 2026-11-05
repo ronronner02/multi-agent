@@ -1,0 +1,28 @@
+{
+  "verdict": "NO NEW P0/P1",
+  "round": 1,
+  "prior": [],
+  "findings": [
+    {
+      "id": "R1-1",
+      "severity": "P3",
+      "citation": "plan.md Task B (units KiB..TiB)",
+      "file": "src/formatBytes.mjs",
+      "category": "clarity",
+      "scenario": "formatBytes(1e300) returns \"9.094947017729283e+287 TiB\". Behaviour above 1024 TiB is unspecified, and the code doesnot document that TiB is the cap. Ran it via node -e.",
+      "reproduced": true
+    },
+    {
+      "id": "R1-2",
+      "severity": "P3",
+      "citation": "plan.md Task B (unit chosen after rounding)",
+      "file": "test/formatBytes.test.mjs",
+      "category": "testing",
+      "scenario": "The round-after-choosing-the-unit rule is tested only at the KiB->MiB boundary. 1073741823 -> \"1 GiB\" and 1099511627775 -> \"1 TiB\" are correct when run by hand, but no test covers them.",
+      "reproduced": true
+    }
+  ],
+  "done_signal": {
+    "holds": true
+  }
+}

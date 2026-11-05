@@ -1,0 +1,6 @@
+{
+  "runId": "c0bf032d-91d6-484c-9d9a-d1a278dbdd19",
+  "state": "canceled",
+  "stateReason": "Owner requested cancellation from the CLI",
+  "note": "Canceled before any attempt: its seats reused rig rework's seat names, so the dispatcher refused the launch (direct_launch_seat_unresolved)."
+}

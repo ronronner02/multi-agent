@@ -1,0 +1,373 @@
+[
+  {
+    "seq": 1,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:27:39",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "801af9d0-66dc-40cf-bf26-c1bb63d7a60a",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 1,
+      "action": "run.created",
+      "payload": {
+        "bindingDigest": "sha256:5a1bdd0bb9e8a9ec0588d14359af3e4f1af0482d3d489174233d9dd3d87192c5",
+        "state": "pending"
+      }
+    }
+  },
+  {
+    "seq": 2,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:27:39",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "47359a46-28f0-4227-96db-34f7cbae7ef5",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 2,
+      "action": "approval.requested",
+      "payload": {
+        "actionId": "3c666024-4817-4a23-bde4-2e2406ba627a",
+        "reason": null,
+        "status": "accepted",
+        "valueDigest": "sha256:2004c3efb1dde4e1f715c66c23f05774d518474f34e4c4fd33d919f7dbe93497"
+      }
+    }
+  },
+  {
+    "seq": 3,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:27:39",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "5b26de7d-7d02-4591-a02e-69ca6e64f108",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 3,
+      "action": "approval.decided",
+      "payload": {
+        "actionId": "3c666024-4817-4a23-bde4-2e2406ba627a",
+        "observedBy": "owner-control",
+        "reason": null,
+        "status": "accepted",
+        "valueDigest": "sha256:78324a6a3d22ea5f1f5d5bdfefcb40694f5f4b3066f046a08056dd7cec126ac6"
+      }
+    }
+  },
+  {
+    "seq": 5,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:27:39",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "3c040a5d-f946-4a65-905e-b30a3aef384e",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": "task-1",
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 4,
+      "action": "task.created",
+      "payload": {
+        "actionId": "task-1",
+        "reason": null,
+        "status": "accepted",
+        "valueDigest": "sha256:aac3d34f2a4f9c69e23b8bb468d2480a110becda0010032927879f9403fc2910"
+      }
+    }
+  },
+  {
+    "seq": 10,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:27:40",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "e3677f2a-cf78-4c1c-b424-d620b1cb3557",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": "7c779fa9-6d6a-4bc7-84ea-b45a52b184b8",
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 5,
+      "action": "attempt.recorded",
+      "payload": {
+        "actionId": "7c779fa9-6d6a-4bc7-84ea-b45a52b184b8",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:29d842749ee7ae35e07e2fed1254d4d2b6eb359074a0697b45ec434f9ae30d02"
+      }
+    }
+  },
+  {
+    "seq": 11,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:31:28",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "17eba059-b13e-4de9-abfa-070d57cad7cc",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 6,
+      "action": "run.clock-paused",
+      "payload": {
+        "activeMs": 228033,
+        "reason": "All recorded managed attempts are observed stopped"
+      }
+    }
+  },
+  {
+    "seq": 12,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:31:28",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "b40af81a-a81b-4475-9e41-eda6f28d933c",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": "7c779fa9-6d6a-4bc7-84ea-b45a52b184b8",
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 6,
+      "action": "attempt.observed",
+      "payload": {
+        "actionId": "7c779fa9-6d6a-4bc7-84ea-b45a52b184b8",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:170b71b48b81535d30f6be71adeb02c4f01638223c2d204f27e19b2372a03fbd"
+      }
+    }
+  },
+  {
+    "seq": 13,
+    "type": "queue.updated",
+    "createdAt": "2026-11-05 04:32:00",
+    "payload": {
+      "type": "queue.updated",
+      "qitemId": "qitem-20261105042739-80b2f71e",
+      "fromState": "pending",
+      "toState": "done",
+      "closureReason": "no-follow-on",
+      "closureTarget": null,
+      "actorSession": "owner-control",
+      "summary": null
+    }
+  },
+  {
+    "seq": 15,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:32:00",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "06ae9c8b-77fb-4a28-8856-0b60a7583814",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": "task-1",
+      "attemptId": "7c779fa9-6d6a-4bc7-84ea-b45a52b184b8",
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 7,
+      "action": "task.outcome",
+      "payload": {
+        "actionId": "qitem-20261105042739-80b2f71e",
+        "observedBy": "owner-control",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:e08cef5dcca7f307381999dc9997df59235a2bfa81919542b333ff2cc46d6f32"
+      }
+    }
+  },
+  {
+    "seq": 20,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:32:00",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "f0eaf9ec-0d60-4c07-95f1-a383f8fc36af",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": "e6941812-52af-4c88-a428-b9f01683085a",
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 8,
+      "action": "attempt.recorded",
+      "payload": {
+        "actionId": "e6941812-52af-4c88-a428-b9f01683085a",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:21b1e5fbc880916817b2ffa9d4a82f864d18333ad1d75feece61d9d8cda8bec3"
+      }
+    }
+  },
+  {
+    "seq": 21,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:34:57",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "e8dd268a-3a60-4e9e-94b1-2514f71a8fbf",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 9,
+      "action": "run.clock-paused",
+      "payload": {
+        "activeMs": 405065,
+        "reason": "All recorded managed attempts are observed stopped"
+      }
+    }
+  },
+  {
+    "seq": 22,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:34:57",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "b8ff6f73-b969-47dc-867d-f22752b9896d",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": "e6941812-52af-4c88-a428-b9f01683085a",
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 9,
+      "action": "attempt.observed",
+      "payload": {
+        "actionId": "e6941812-52af-4c88-a428-b9f01683085a",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:581519ab8009dc880c2b01e756731a5939fc5b0e6652a9c42c75ff1cdae0e193"
+      }
+    }
+  },
+  {
+    "seq": 23,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:36:05",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "03ccb145-1a18-49fd-84f4-5cb8aa5c6b9b",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": null,
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 10,
+      "action": "task.outcome.denied",
+      "payload": {
+        "actionId": "qitem-20261105043200-c5f9a901",
+        "reason": "Review findings must be an array",
+        "status": "denied",
+        "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      }
+    }
+  },
+  {
+    "seq": 24,
+    "type": "queue.updated",
+    "createdAt": "2026-11-05 04:36:54",
+    "payload": {
+      "type": "queue.updated",
+      "qitemId": "qitem-20261105043200-c5f9a901",
+      "fromState": "pending",
+      "toState": "done",
+      "closureReason": "no-follow-on",
+      "closureTarget": null,
+      "actorSession": "owner-control",
+      "summary": null
+    }
+  },
+  {
+    "seq": 25,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:36:54",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "5567d9a7-49a8-46d4-b3f0-68e9c940d510",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": "task-1",
+      "attemptId": null,
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 11,
+      "action": "review.verdict",
+      "payload": {
+        "candidateDigest": "sha256:6c4f858594d09112f43c299cdef56e45f42d73a9d93741c5020e488b627d327d",
+        "findings": [
+          {
+            "category": "testing",
+            "citation": "plan.md Task A: the input is never mutated",
+            "file": "test/truncate.test.mjs",
+            "id": "R1-1",
+            "reproduced": true,
+            "scenario": "Test 'the input is not mutated' passes a primitive string; strings are immutable in JS, so the assertion cannot fail regardless of implementation. Guarantee holds by language semantics; test is vacuous.",
+            "severity": "P3"
+          },
+          {
+            "category": "correctness",
+            "citation": "",
+            "file": "src/truncate.mjs",
+            "id": "R1-2",
+            "reproduced": true,
+            "scenario": "truncate(['ab','c'], 1) returns the array unchanged (ran via node -e); truncate(null, 1) throws an incidental TypeError. Not required by plan; advisory only.",
+            "severity": "P3"
+          }
+        ],
+        "recordedAt": "2026-11-05T04:36:54.403Z",
+        "reviewerTaskId": "task-1-review-1",
+        "round": 1,
+        "taskId": "task-1",
+        "verdict": "approved"
+      }
+    }
+  },
+  {
+    "seq": 26,
+    "type": "team.control",
+    "createdAt": "2026-11-05 04:36:54",
+    "payload": {
+      "type": "team.control",
+      "protocolVersion": "1.0",
+      "eventId": "2b6cd0fc-0ae0-4a66-a221-529dce7b0910",
+      "rigId": "01M6MZCD0P38H5YSTGFM292EXG",
+      "runId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "taskId": "task-1-review-1",
+      "attemptId": "e6941812-52af-4c88-a428-b9f01683085a",
+      "entityId": "7346f047-281c-483d-a5bb-836ab53e439b",
+      "entityVersion": 11,
+      "action": "task.outcome",
+      "payload": {
+        "actionId": "qitem-20261105043200-c5f9a901",
+        "observedBy": "owner-control",
+        "reason": null,
+        "status": "observed",
+        "valueDigest": "sha256:167678ec3f1e1ac6e94571300be94a1ae6e1b76ade924381ad6bc77fb6315d38"
+      }
+    }
+  }
+]
