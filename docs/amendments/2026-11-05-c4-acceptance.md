@@ -40,7 +40,7 @@ No video is recorded.
 
 ## What the run established
 
-The run and its evidence are described in the bundle's `README.md`. Two defects the stub demos
+The run and its evidence are described in the bundle's `README.md`. Three defects the stub demos
 could not reach were found and fixed while running it:
 
 - a lead's own `lead-proposal.json` was read as an out-of-scope write when the lead's revision
@@ -53,3 +53,28 @@ could not reach were found and fixed while running it:
 
 Each fix carries a focused test that fails without it, and the revert-check is recorded in the
 PR that delivers this slice.
+
+## Closing decision
+
+**Decided by:** the owner, 2026-11-05.
+
+C4 is closed without one of its proofs: a live review round that changed the candidate
+(decision 5 of the 2026-11-02 amendment). Three live attempts did not produce one:
+
+- In the main run, the review of task-3 returned `changes-required` with a reproduced P1, and
+  the rework turn ran with that finding in its prompt. The agent then reported NEEDS-DECISION
+  and changed nothing. The finding conflicted with the ASCII-only rule that the owner's own
+  rejection reason had added to the task body.
+- In the two follow-up runs (`truncate`, `formatBytes`), the implementers met the stated rule
+  first time and both reviews approved in round 1.
+
+The full sequence, from `changes-required` through rework to `approved`, is proven with the
+stub runner (`engine/demo/team/scripts/review-demo.ts`) and by focused tests. With real
+agents, every step is proven up to the rework turn running with the finding in its prompt.
+Whether a real rework turn changes a candidate and then passes re-review is still unproven.
+
+The per-run review-round limit that the main run hit is fixed: each implementer task now gets
+its own rounds (`1bb85a1`).
+
+What remains for the milestone is the full daemon suite, run once at wrap-up, and the
+regenerated task pack.
