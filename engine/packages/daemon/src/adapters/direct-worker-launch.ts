@@ -26,7 +26,7 @@ import type { WorkerClient, WorkerLauncher, WorkerLaunchInput } from "./worker-l
 
 export interface DirectWorkerLaunchDeps {
   tmux: Pick<TmuxAdapter, "sendText" | "sendKeys" | "getPanePid" | "getPaneCommand" | "capturePaneScreen">
-    & Partial<Pick<TmuxAdapter, "holdPaneOnExit" | "respawnPane" | "getPaneExit">>;
+    & Partial<Pick<TmuxAdapter, "holdPaneOnExit" | "respawnPane" | "getPaneExit" | "setPaneTask">>;
   /** The pane this attempt's seat owns, resolved from the task's recorded destination. */
   resolvePane: (runId: string, taskId: string) => Promise<string>;
   /** The tree the runtime admitted for this assignment. */
@@ -131,6 +131,12 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       // lost by reading its identity once it is known to be running.
       const beforeSubmit = promptPath ? await this.paneIdentity(pane) : null;
       if (promptPath && beforeSubmit === null) return this.refuse("managed_identity_unobserved");
+      // A seat is a terminal, and one seat can hold two live tasks: the review loop creates a
+      // review task per completed implementer, so two completed tasks are two pending reviews
+      // on the same reviewer seat. The receipt names the seat, so a reader that resolves "the
+      // seat's one live task" finds two and records nothing. The pane says which one this
+      // launch is starting, so it is stamped before the client starts.
+      await this.deps.tmux.setPaneTask?.(pane, attempt.context.assignment.taskId);
       const line = "cd " + shellQuote(tree) + " && exec "
         + this.turnCommand(argv, promptPath, this.deps.command !== undefined).map(shellQuote).join(" ")
         // The turn's text is fed on stdin, so its length and quoting never reach this line.

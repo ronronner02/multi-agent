@@ -222,6 +222,9 @@ export interface PaneCapture { text: string | null; capturedAt: Date }
  *  fails and is split in half. */
 const CAPTURE_BATCH = 24;
 
+/** The pane-scoped user option a managed launch stamps with the task it starts. */
+const PANE_TASK_OPTION = "@openrig_task";
+
 function shellQuote(s: string): string {
   // Replace each ' with '"'"' (end quote, double-quote the apostrophe, resume quote)
   return "'" + s.replace(/'/g, "'\"'\"'") + "'";
@@ -1138,6 +1141,45 @@ export class TmuxAdapter {
   async getDefaultShell(): Promise<string | null> {
     try {
       const output = await this.run(["tmux", "show-options", "-gv", "default-shell"]);
+      const trimmed = output.trim();
+      return trimmed || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Record which task the pane is about to run, as a pane-scoped user option.
+   *
+   * A seat is a terminal, and one reviewer seat can hold two live tasks at once: the review
+   * loop creates one review task per completed implementer, so a two-task run has two pending
+   * reviewer rows on the same seat. The launch receipt names the seat, not the task, so a
+   * reader that resolves "the seat's one live task" finds two and records nothing — the turn
+   * runs, ends, and no attempt ever exists for the owner to record.
+   *
+   * The pane is the fact that disambiguates them: the launcher stamps the task it is starting
+   * before the client starts, and a reader asks the same pane. Measured on tmux 3.6: a
+   * pane-scoped user option is readable with `display-message -p '#{@openrig_task}'` and
+   * survives `respawn-pane` (the launcher's own revive of a held pane), so a later round of
+   * the same seat still reads the stamp its launch wrote.
+   */
+  async setPaneTask(paneId: string, taskId: string): Promise<boolean> {
+    const exact = exactTarget(paneId, "pane");
+    try {
+      await this.run(["tmux", "set-option", "-p", "-t", exact, PANE_TASK_OPTION, taskId],
+        `tmux set-option -p -t ${shellQuote(exact)} ${PANE_TASK_OPTION} ${shellQuote(taskId)}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The task a pane's last launch stamped, or null when nothing readable is recorded. */
+  async getPaneTask(paneId: string): Promise<string | null> {
+    const exact = exactTarget(paneId, "pane");
+    try {
+      const output = await this.run(["tmux", "display-message", "-p", "-t", exact, `#{${PANE_TASK_OPTION}}`],
+        `tmux display-message -p -t ${shellQuote(exact)} "#{${PANE_TASK_OPTION}}"`);
       const trimmed = output.trim();
       return trimmed || null;
     } catch {

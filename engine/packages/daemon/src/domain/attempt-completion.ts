@@ -44,6 +44,15 @@ export interface AttemptCompletionDependencies {
   paneExit?: (paneId: string) => Promise<{ dead: boolean; code: number | null } | null>;
   /** T033 — the pane's last lines, for the classifier's text fingerprints. Absent means none. */
   paneTail?: (paneId: string, lines: number) => Promise<string | null>;
+  /**
+   * The task a launch stamped into a pane before it started the client.
+   *
+   * A seat can hold two live tasks at once — two completed implementers are two pending
+   * reviews on the same reviewer seat — so the receipt's seat name is not always enough to
+   * say which task a turn is running. Absent means this daemon records no stamp and a
+   * multi-task seat stays ambiguous, which records nothing rather than guessing.
+   */
+  paneTask?: (paneId: string) => Promise<string | null>;
   /** T033 — put a held pane back to a live shell once its exit evidence has been read. */
   releasePane?: (paneId: string) => Promise<unknown>;
   /**
@@ -107,21 +116,28 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
    * the client started, and the queue destination is that decision made durable. A seat with
    * no single live task has nothing to admit, so the attempt stays unrecorded and the owner
    * action refuses it rather than attaching the receipt to a guess.
+   *
+   * One seat can hold two live tasks — two completed implementers are two pending reviews on
+   * the same reviewer seat — and the launch recorded which of them its pane is running. That
+   * stamp is the tie-break: without it the seat is ambiguous and a real turn would run with no
+   * attempt to observe.
    */
-  const taskForSeat = (runId: string, sessionName: string) => {
+  const taskForSeat = (runId: string, sessionName: string, paneTaskId: string | null) => {
     const rows = db.prepare(`
-      SELECT a.qitem_id AS qitemId, json_extract(a.assignment_json, '$.role') AS role
+      SELECT a.qitem_id AS qitemId, a.task_id AS taskId, json_extract(a.assignment_json, '$.role') AS role
       FROM team_queue_authority a
       JOIN queue_items q ON q.qitem_id = a.qitem_id
       JOIN team_runs r ON r.id = a.run_id
       WHERE a.run_id = ? AND q.destination_session = ? AND q.state IN ('pending', 'in-progress')
         AND r.state = 'approved'
-      LIMIT 2`).all(runId, sessionName) as Array<{ qitemId: string; role: string }>;
-    return rows.length === 1 ? rows[0]! : null;
+      LIMIT 2`).all(runId, sessionName) as Array<{ qitemId: string; taskId: string; role: string }>;
+    if (rows.length === 1) return { qitemId: rows[0]!.qitemId, role: rows[0]!.role };
+    const stamped = paneTaskId === null ? [] : rows.filter(row => row.taskId === paneTaskId);
+    return stamped.length === 1 ? { qitemId: stamped[0]!.qitemId, role: stamped[0]!.role } : null;
   };
 
   /** Admit the attempt a launch receipt names, unless it is already recorded. */
-  const register = (row: ReceiptRow): void => {
+  const register = async (row: ReceiptRow): Promise<void> => {
     const { sessionName, receipt } = JSON.parse(row.payload) as {
       sessionName?: string; receipt?: { attemptId: string; runId: string; client: string; identity: NativeAttemptIdentity };
     };
@@ -129,9 +145,11 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     // A resume re-enters the attempt it recorded, so its row already exists and keeps its own
     // history. Only the first observation of a native generation admits a new row.
     if (governance.getAttempt(receipt.attemptId)) return;
-    const task = taskForSeat(receipt.runId, sessionName);
+    const paneTaskId = (await dependencies.paneTask?.(receipt.identity.paneId)) ?? null;
+    const task = taskForSeat(receipt.runId, sessionName, paneTaskId);
     if (!task) {
-      log(`team completion: no single live task on ${sessionName} for run=${receipt.runId}; attempt ${receipt.attemptId} is unrecorded`);
+      log(`team completion: no single live task on ${sessionName} for run=${receipt.runId}` +
+        `${paneTaskId === null ? "" : ` (the pane's stamp names ${paneTaskId})`}; attempt ${receipt.attemptId} is unrecorded`);
       return;
     }
     const request: ControlRequest<unknown> = {
@@ -253,7 +271,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       // the owner action refuses its task with a named reason rather than leaving a tick to
       // repeat the same refusal every second for the life of the daemon.
       processedSeq = row.seq;
-      try { register(row); } catch (error) {
+      try { await register(row); } catch (error) {
         log(`team completion: receipt was not registered: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
