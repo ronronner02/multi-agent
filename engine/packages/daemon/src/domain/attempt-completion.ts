@@ -5,6 +5,7 @@ import type { PlanGovernance } from "./plan-governance.js";
 import type { SessionRegistry } from "./session-registry.js";
 import type { NativeAttemptIdentity } from "../contracts/team-control.js";
 import { classifyAttemptFailure, TERMINAL_TAIL_LINES, type AttemptClassification } from "./attempt-failure.js";
+import { agentTurnOutputPaths, readAgentTurnThreadId } from "./agent-turn.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -33,7 +34,10 @@ export interface AttemptCompletionDependencies {
    */
   currentBinding: (runId: string) => unknown;
   /** The seat's session status, which the dispatcher reads to decide whether to start a client. */
-  sessions: Pick<SessionRegistry, "findResumeContextByName" | "updateStartupStatus">;
+  sessions: Pick<SessionRegistry, "findResumeContextByName" | "updateStartupStatus">
+    & Partial<Pick<SessionRegistry, "updateResumeToken">>;
+  /** The direct worker's mutable state root, shared with its turn launcher. */
+  turnStateRoot?: string;
   /** Injectable for the tests; production leaves the default. */
   alive?: (identity: { processId: number; processStart: string }) => boolean;
   /**
@@ -211,7 +215,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           log(`team completion: attempt ${attempt.id} stop was not recorded: ${recorded.reason ?? recorded.status}`);
           continue;
         }
-        releaseSeat(attempt.qitemId);
+        releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefined);
         // MVP — the seat and its session slot are free now, so the run's next pending task can
         // start. A dispatch failure is logged and left for the next freed slot: it must not stop
         // the rest of the sweep, and a task that cannot start yet is not an error of this one.
@@ -256,10 +260,15 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
   };
 
   /** Return the seat that ran a stopped attempt to "never launched", so a dispatch may start it. */
-  const releaseSeat = (qitemId: string | null): void => {
+  const releaseSeat = (qitemId: string | null, codexAttemptId?: string): void => {
     const seat = qitemId === null ? null : governance.taskSeat(qitemId);
     const context = seat === null ? null : sessions.findResumeContextByName(seat);
     if (!context) return;
+    if (codexAttemptId && dependencies.turnStateRoot) {
+      const path = agentTurnOutputPaths(dependencies.turnStateRoot, codexAttemptId).threadId;
+      const token = readAgentTurnThreadId(path);
+      if (token) sessions.updateResumeToken?.(context.sessionId, "codex_id", token, "scrape");
+    }
     sessions.updateStartupStatus(context.sessionId, "pending");
   };
 

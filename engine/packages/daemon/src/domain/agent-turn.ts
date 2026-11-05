@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type Database from "better-sqlite3";
 import type { ScopedAssignment, TeamRole } from "../contracts/team-control.js";
@@ -33,6 +33,28 @@ import type { ReviewFinding } from "./review-evidence.js";
  */
 export function agentTurnPromptPath(manifest: ContextManifest): string {
   return join(manifest.mutableStateRoot, "turns", manifest.projection.attemptId + ".prompt");
+}
+
+/** Durable turn output, outside the candidate and addressable by attempt id after a restart. */
+export function agentTurnOutputPaths(mutableStateRoot: string, attemptId: string) {
+  const directory = join(mutableStateRoot, "turns", attemptId);
+  return { directory, lastMessage: join(directory, "last-message.txt"), threadId: join(directory, "thread-id.txt") };
+}
+
+/** The same native-token alphabet and length limit the managed Claude launcher accepts. */
+export function isNativeSessionToken(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
+}
+
+/** Only a valid first thread.started id may become a resume token. */
+export function readAgentTurnThreadId(path: string): string | null {
+  try {
+    const token = readFileSync(path, "utf8");
+    return isNativeSessionToken(token) ? token : null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 /** Write the turn's text and return its path. The file is private to the daemon's user. */

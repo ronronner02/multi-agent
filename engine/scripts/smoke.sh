@@ -33,6 +33,7 @@ npm run test -w packages/daemon -- \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
   test/agent-turn.test.ts \
+  test/direct-worker-launch.test.ts \
   test/attempt-failure.test.ts \
   test/team-cancellation.test.ts \
   test/team-result.test.ts \
