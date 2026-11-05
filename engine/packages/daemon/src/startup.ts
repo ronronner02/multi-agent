@@ -2225,6 +2225,28 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       },
     });
     deps.workflowRuntime = workflowRuntime;
+    // U7 — the run's integration branch. The worktree root is the one U5's plan worktree lives
+    // under, and the patch is the runtime's own candidate read, so what lands is exactly the
+    // work the reviewer approved and `rig team apply` would have applied.
+    {
+      const { composeIntegration } = await import("./domain/integration-branch.js");
+      deps.integration = composeIntegration({
+        db, governance: teamGovernance,
+        worktreeRoot: () => teamControlOptions.planWorktreeRoot!(),
+        candidateManifest: (runId: string, taskId: string) => {
+          if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+          return workflowRuntime.candidateManifestFor(runId, taskId);
+        },
+        // The binding every other command reads: the plan at the worktree's current head. A
+        // commit the daemon just landed moves that head, and the recorded binding has to move
+        // with it or the next dispatch would see a run whose plan changed under it.
+        ...(runPolicyCapability ? { currentBinding: (runId: string) => {
+          const run = teamGovernance.getRun(runId), policy = runPolicyCapability();
+          return policy ? refreshPlanBinding(run.binding, policy) : run.binding;
+        } } : {}),
+      });
+      teamControlOptions.integrateTask = (runId: string, taskId: string) => deps.integration!.integrate(runId, taskId);
+    }
     // T047 — assigned here, after the runtime it produces through exists and before the app
     // serves: every seat launch that could reach a worker happens after this point.
     managedAttempt = managedLaunch ? composeManagedAttemptAttachment({
@@ -3243,6 +3265,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       // recorded final message and asks the same dispatch for the next turn.
       onAttemptStopped: composeLeadTurnEnd({ db, governance: teamGovernance, turnStateRoot,
         dispatch: () => deps.teamControl?.dispatch }),
+      // U7 — an approving review is the run's signal to deliver: the implementer's task lands as
+      // one commit on the run's branch, through the same owner the merge route reads.
+      ...(deps.integration ? { integrateTask: (runId: string, taskId: string) => deps.integration!.integrate(runId, taskId) } : {}),
       dispatchPending,
       currentBinding: runId => {
         const run = teamGovernance.getRun(runId), policy = runPolicyCapability?.();

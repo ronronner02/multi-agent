@@ -51,6 +51,19 @@ export interface SourceFingerprint {
   statusDigest: string;
 }
 
+/**
+ * KTD7 — the branch namespace the daemon owns. U5 creates `team/<run-slug>` and U7 commits to
+ * it, so a ref under this prefix moves because the daemon moved it, not the owner.
+ */
+export const TEAM_BRANCH_PREFIX = "team/";
+export const TEAM_REF_PREFIX = "refs/heads/" + TEAM_BRANCH_PREFIX;
+
+/** The branch a checkout has out, or `null` when HEAD is detached. */
+export function checkedOutBranch(root: string): string | null {
+  const branch = gitOrNull(root, ["rev-parse", "--abbrev-ref", "HEAD"])?.trim() ?? null;
+  return branch !== null && branch !== "" && branch !== "HEAD" ? branch : null;
+}
+
 export interface CandidateWorkspace {
   checkScope?: (evidence: CandidateScopeEvidence) => ScopeProjection;
   root: string;
@@ -58,6 +71,16 @@ export interface CandidateWorkspace {
   base: WorkspaceBase;
   /** Source state captured immediately before isolation, for later comparison. */
   source: SourceFingerprint;
+  /**
+   * U7 — whether this candidate's source is the run's own integration worktree.
+   *
+   * A worktree on the run's `team/` branch is the daemon's to advance: every approved task lands
+   * a commit there, and new tasks are staged from the new head. A candidate staged there before
+   * that commit keeps the base it recorded, and is still valid — its patch is applied on top by
+   * `git apply --3way`. Every other source has no such owner, so its HEAD staying put is part of
+   * the proof.
+   */
+  integrationSource?: boolean;
   /**
    * T048 — the control-owned creation record of a snapshot-lane candidate. The snapshot lane has
    * no git registry to prove where the tree came from, so this file is its provenance and is
@@ -910,10 +933,19 @@ export function resolveWorkspaceBase(root: string): WorkspaceBase {
   return { kind: "snapshot", baselineDigest: digestManifest(files), files };
 }
 
-/** HEAD, every ref, and the exact bytes of each dirty or untracked file a change would move. */
+/**
+ * HEAD, every ref the owner's work can move, and the exact bytes of each dirty or untracked
+ * file a change would move.
+ *
+ * The daemon's own `refs/heads/team/` namespace is excluded. That namespace is the integration
+ * branch U5 creates and U7 commits to, and its ref moves every time the daemon lands an approved
+ * task. Counting it would make every in-flight candidate look like it had been staged from a
+ * source the owner changed, which is the one movement the daemon caused itself.
+ */
 export function sourceFingerprint(root: string): SourceFingerprint {
   const head = gitOrNull(root, ["rev-parse", "--verify", "HEAD^{commit}"])?.trim() ?? null;
-  const refs = gitOrNull(root, ["for-each-ref", "--format=%(refname) %(objectname)"])?.trim() ?? "";
+  const refs = (gitOrNull(root, ["for-each-ref", "--format=%(refname) %(objectname)"])?.trim() ?? "")
+    .split("\n").filter(line => line && !line.startsWith(TEAM_REF_PREFIX)).join("\n");
   const status = git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0").filter(Boolean);
   const dirty = new Map<string, string>();
   for (const entry of status) {
@@ -1176,16 +1208,36 @@ export function candidateManifest(workspace: CandidateWorkspace): {
  * Proof that isolation had no side effect on the owner's tree: the source HEAD
  * and refs are where they were and every dirty file still hashes the same, so
  * no commit or merge was manufactured by staging a candidate.
+ *
+ * U7 — one movement is not a side effect. When the source is the run's own integration
+ * worktree, the daemon commits approved work there, and a candidate staged before that commit
+ * is still valid: it keeps the base it recorded, and its patch is applied on top. So that
+ * source's HEAD may be a descendant of the recorded one — and only that source, and only a
+ * descendant. Everything else, including the owner's own commit or a reset of the branch, is
+ * still a refusal.
  */
 export function verifySourceUnchanged(workspace: CandidateWorkspace): { unchanged: boolean; current: SourceFingerprint } {
   const current = sourceFingerprint(workspace.sourceRoot);
   const sameDirty = Object.keys(workspace.source.dirtyHashes).length === Object.keys(current.dirtyHashes).length
     && Object.entries(workspace.source.dirtyHashes).every(([path, hash]) => current.dirtyHashes[path] === hash);
+  const headHeld = current.head === workspace.source.head
+    || (workspace.integrationSource === true && descendsFrom(workspace.sourceRoot, workspace.source.head, current.head));
   return {
-    unchanged: current.head === workspace.source.head && current.refsDigest === workspace.source.refsDigest
+    unchanged: headHeld && current.refsDigest === workspace.source.refsDigest
       && current.statusDigest === workspace.source.statusDigest && sameDirty,
     current,
   };
+}
+
+/** Whether `descendant` is `ancestor` or a commit reached from it, in one repository. */
+function descendsFrom(root: string, ancestor: string | null, descendant: string | null): boolean {
+  if (ancestor === null || descendant === null) return false;
+  try {
+    git(root, ["merge-base", "--is-ancestor", ancestor, descendant]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

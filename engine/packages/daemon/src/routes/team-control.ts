@@ -46,6 +46,14 @@ export interface TeamControlOptions {
    */
   planWorktreeRoot?: () => string;
   /**
+   * U7 — land an approved task on the run's integration branch.
+   *
+   * The daemon's own sweep calls the same owner; this is the owner-recorded outcome path
+   * (`rig team done --findings`), which approves a review without an automatic turn. Absent
+   * leaves the commit unlanded and the outcome recorded, exactly as before U7.
+   */
+  integrateTask?: (runId: string, taskId: string) => Promise<unknown>;
+  /**
    * T017 (cancellation half) — what turns the owner's cancel into a stopped run.
    *
    * `cancelRun` records the intent; this ends the processes the run launched and records the
@@ -243,6 +251,16 @@ export function teamControlRoutes(
         const resumed = receipt.resumeTaskIds ?? [];
         for (const taskId of [...addedTasks, ...next, ...resumed]) void options.dispatch(request.runId, taskId).catch(error =>
           console.warn(`team control: launch for run=${request.runId} task=${taskId} failed: ${error instanceof Error ? error.message : String(error)}`));
+      }
+      // U7 — the same trigger as the daemon's sweep: an approving review delivers the task's
+      // work to the run's branch. Awaited so the answer to the owner is not "recorded" while
+      // the delivery it caused is still unknown; the outcome itself is already durable.
+      const approved = (receipt.value as { review?: { verdict?: string; taskId?: string } } | null)?.review;
+      if (approved?.verdict === "approved" && typeof approved.taskId === "string" && options.integrateTask) {
+        try { await options.integrateTask(request.runId, approved.taskId); }
+        catch (error) {
+          console.warn(`team control: integration of run=${request.runId} task=${approved.taskId} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       return c.json(receipt, receipt.status === "denied" ? 403 : receipt.status === "pending-execution" ? 202 : 200);
     });

@@ -32,6 +32,12 @@ export const ATTEMPT_REASON_CODES = [
   "agent_error.model_unavailable", "agent_error.context_overflow", "agent_error.missing_config",
   "agent_error.missing_executable", "agent_error.unsupported_version", "agent_error.process_failure",
   "agent_error.unparseable_output", "agent_error.unknown", "evidence_invalid", "review_report_missing",
+  // U7 — not a reason an attempt ended: the attempt succeeded and its review approved, and the
+  // patch could not be landed on the run's integration branch. It lives in this vocabulary
+  // because it is the same kind of fact — a task that failed for a named reason, with a retry
+  // the classifier decides — and it is deliberately outside the retry-eligible set: replaying
+  // the same patch onto the same branch fails the same way, so a retry is not the repair.
+  "integration_conflict",
 ] as const;
 export type AttemptReasonCode = (typeof ATTEMPT_REASON_CODES)[number];
 
@@ -85,6 +91,7 @@ export const OWNER_ACTIONS: Readonly<Record<AttemptReasonCode, string>> = {
   "agent_error.unknown": "The daemon could not classify this failure, so it is not retried; inspect the attempt's output.",
   evidence_invalid: "The daemon could not validate the task's candidate evidence; retry the task once.",
   review_report_missing: "The reviewer did not return a readable findings report; retry the review once.",
+  integration_conflict: "The approved patch does not apply to the run's integration branch; the lead resolves it with a task based on that branch, and the branch is unchanged until then.",
 };
 
 /** The decision recorded with a stopped attempt, and read back by every consumer. */

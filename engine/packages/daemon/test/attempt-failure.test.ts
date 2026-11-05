@@ -82,6 +82,15 @@ describe("KTD20 classification of captured client errors", () => {
     }
   });
 
+  it("names an integration conflict and never retries it", () => {
+    // U7: the patch was approved and could not be applied to the run's branch. Replaying the
+    // same patch onto the same branch fails the same way, so the repair is a task based on the
+    // branch head, not a retry.
+    expect(classificationFor("integration_conflict")).toMatchObject({ retryEligible: false, resumeSafe: true });
+    expect(OWNER_ACTIONS.integration_conflict).toMatch(/integration branch/);
+    expect(OWNER_ACTIONS.integration_conflict).toMatch(/lead/);
+  });
+
   it("treats a cancelled run as the reason, whatever the exit or the pane says", () => {
     // A cancel is the owner's own action, so it outranks any fingerprint the client printed.
     expect(classifyAttemptFailure({ canceled: true, exit: { code: 1 }, terminalTail: "401 authentication_error\n" }))

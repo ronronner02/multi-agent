@@ -93,6 +93,12 @@ export function commitPlan(input: { worktree: string; planRef: string; plan: str
  */
 export function ensurePlanWorktree(input: {
   repositoryRoot: string; worktreeRoot: string; runId: string; name?: string | null;
+  /**
+   * The commit the branch starts at. Omitted, the owner's current HEAD is used, which is what a
+   * planning start wants. U7 passes the commit the run's plan was read at, so a run that
+   * integrates before it ever had a worktree still lands on the history it approved.
+   */
+  base?: string;
 }): { path: string; branch: string } {
   const repository = realpathSync(input.repositoryRoot);
   const path = planWorktreePath(input.worktreeRoot, input.runId);
@@ -103,6 +109,6 @@ export function ensurePlanWorktree(input: {
   }
   mkdirSync(dirname(path), { recursive: true });
   if (branchExists(repository, branch)) git(repository, ["worktree", "add", "--quiet", path, branch]);
-  else git(repository, ["worktree", "add", "--quiet", "-b", branch, path, headOf(repository)]);
+  else git(repository, ["worktree", "add", "--quiet", "-b", branch, path, input.base ?? headOf(repository)]);
   return { path, branch };
 }
