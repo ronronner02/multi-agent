@@ -443,6 +443,22 @@ describe("task-local scope extensions at candidate staging", () => {
     })).toThrow(/other-task-scope/);
   });
 
+  it("lets a lead's own proposal stay outside its assignment scope", () => {
+    // C3 — a lead's candidate holds the proposal it wrote, and its assignment paths are the
+    // run's scope rather than the proposal's location. Re-staging that candidate (the lead's
+    // revision attempt) must not read the proposal as an out-of-scope write.
+    expect(governance.createTask(command("lead", { assignment: { taskId: "lead", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Propose the work" }), binding).status).toBe("accepted");
+    const root = candidate("lead").root;
+    writeFileSync(join(root, "lead-proposal.json"), JSON.stringify({ tasks: [{ taskId: "task-9", seat: "task@rig",
+      paths: ["src/owned.ts"], dependencies: [], body: "Implement the owned file" }] }));
+    expect(packet("lead").manifest.some(file => file.path === "lead-proposal.json")).toBe(true);
+    // The exemption is that one path for that one role: any other out-of-scope write by the
+    // same lead still refuses.
+    writeFileSync(join(root, "other.json"), "{}");
+    expect(() => packet("lead")).toThrow(/plan-change-required: outside-write-paths/);
+  });
+
   it("refuses an unregistered writing assignment before materializing its candidate", () => {
     const context = { runId: "run", binding, role: "implementer" } as Parameters<WorkflowRuntime["admitForLaunch"]>[1]["context"];
     expect(() => runtime.admitForLaunch("run", { attemptId: "unregistered", worker: "ma-worker1",
