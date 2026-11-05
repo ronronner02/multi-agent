@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
 import { canonicalJson, type PlanBinding, type ScopeExtension, type ScopeProjection, type TeamApproval, type TeamRun, type TeamTaskAuthority } from "../contracts/team-control.js";
+import { LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
 import { candidatePath } from "./team-workspace.js";
 
 export interface CandidateScopeEvidence {
@@ -197,6 +198,14 @@ export class ScopeExtensions {
       let canonicalPath: string;
       try { canonicalPath = canonical(evidence.root, change.path); }
       catch { throw new ScopeExtensionError("plan-change-required", "path-escape"); }
+      // C3 — a lead's one output is its decomposition, at the root of its own tree. Its
+      // assignment paths are the run's scope, which is what the proposed tasks must stay
+      // inside, so the proposal is legitimately outside them. The completion path already
+      // reads it as the lead's deliverable; staging it as an out-of-scope write instead
+      // refuses every lead revision, whose candidate still holds the proposal the earlier
+      // attempt wrote. Only this exact path, and only for the lead, is exempt.
+      if (task.assignment.role === "lead" && change.path === LEAD_PROPOSAL_PATH
+        && canonicalPath === LEAD_PROPOSAL_PATH) continue;
       if (covers(change.path, task.assignment.paths) && covers(canonicalPath, task.assignment.paths)) continue;
       const dependency = dependencyPath(change.path);
       if (!dependency && covers(change.path, effective) && covers(canonicalPath, effective)) continue;
