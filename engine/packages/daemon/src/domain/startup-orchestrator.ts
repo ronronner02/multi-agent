@@ -29,11 +29,11 @@ import { continuationNote, managedTurnPrompt, turnInstructions, writeAgentTurnPr
 /**
  * MVP — whether this launch starts a headless turn rather than an interactive session.
  *
- * Claude Code only: Codex still starts interactively and is a residual of this slice. A managed
- * attempt is the only thing that gets a turn; a personal seat keeps its interactive launch.
+ * A managed Claude or Codex attempt gets a turn; a personal seat keeps its interactive launch.
  */
 function isHeadlessTurn(input: Pick<StartupInput, "binding" | "adapter">): boolean {
-  return input.binding.managedAttempt !== undefined && input.adapter.runtime === "claude-code";
+  return input.binding.managedAttempt !== undefined
+    && (input.adapter.runtime === "claude-code" || input.adapter.runtime === "codex");
 }
 
 // Expanded startup text can put the current input marker above 50 scrollback lines.
@@ -374,14 +374,14 @@ export class StartupOrchestrator {
       } catch (error) {
         return this.fail(input, "failed", [`Managed attempt attachment: ${(error as Error).message}`]);
       }
-      // MVP — a managed Claude attempt is one headless turn, so its prompt is written to the
+      // MVP — a managed attempt is one headless turn, so its prompt is written to the
       // attempt's own state *before* the client starts and the launcher feeds it on stdin.
       // Typing it afterwards is impossible: measured on the installed build, a `-p` client can
       // finish before readiness is even observed. A failure here is a launch failure, not a
       // warning, because a turn with no prompt would work on nothing.
-      if (input.binding.managedAttempt && input.adapter.runtime === "claude-code") {
+      if (isHeadlessTurn(input)) {
         try {
-          writeAgentTurnPrompt(input.binding.managedAttempt.context, await this.managedTurnText(deliveryInput, postLaunchFiles));
+          writeAgentTurnPrompt(input.binding.managedAttempt!.context, await this.managedTurnText(deliveryInput, postLaunchFiles));
         } catch (error) {
           return this.fail(input, "failed", [`Managed turn prompt: ${(error as Error).message}`]);
         }
@@ -538,7 +538,7 @@ export class StartupOrchestrator {
     const consumedActions = new Set<StartupAction>();
     let challengeOnlyPrompt: string | null = null;
     // Task dispatch has no authored identity action, but still needs its first work prompt.
-    // A managed Claude attempt already has it: its turn was written before the launch and is
+    // A managed turn already has it: its prompt was written before the launch and is
     // fed on stdin, so nothing is typed into a client that is not waiting for input.
     if (isHeadlessTurn(input)) {
       // The turn owns its prompt; the pane has nothing to paste into.
@@ -804,7 +804,7 @@ export class StartupOrchestrator {
   }
 
   /**
-   * The text a managed Claude attempt's turn receives.
+   * The text a managed turn receives.
    *
    * It is built from the same facts the interactive prompt used — the identity action, the
    * first `send_text` post-launch file, the task body, the assignment, the outputs and the

@@ -172,8 +172,8 @@ describe("workers.isolation: none launches a managed worker as the current user"
   it.each([
     ["claude-code", "claude", "--permission-mode", undefined],
     ["claude-code", "claude", "--permission-mode", "existing-session"],
-    ["codex", "codex", "-a", undefined],
-    ["codex", "codex", "-a", "existing-session"],
+    ["codex", "codex", "exec", undefined],
+    ["codex", "codex", "exec", "existing-session"],
   ] as const)("includes the %s executable %s before %s (resume: %s)", async (client, executable, firstFlag, resumeToken) => {
     // Capture before submission: exercise the default argv without starting a paid client.
     const sendText = vi.fn(async (_pane: string, _text: string) => ({ ok: false as const, code: "fixture_captured" }));
@@ -191,19 +191,25 @@ describe("workers.isolation: none launches a managed worker as the current user"
     await launch();
     expect(sendText).toHaveBeenCalledTimes(1);
     const line = sendText.mock.calls[0]![1];
-    // Claude Code is one headless turn; the pane execs the readable view of it, which starts
-    // the client. The client's own flags are unchanged and the prompt is fed on stdin.
-    const executablePart = client === "claude-code" ? "agent-turn-view.mjs" : `'${executable}'`;
+    // Both native clients run one headless turn through the readable view, with stdin input.
     expect(line).toContain(" && exec ");
-    expect(line).toContain(executablePart);
+    expect(line).toContain("agent-turn-view.mjs");
+    expect(line).toMatch(/ < '/);
     if (client === "claude-code") {
       expect(line).toContain("'-p'");
       expect(line).toContain("'--output-format' 'stream-json' '--verbose'");
-      expect(line).toMatch(/ < '/);
-    } else expect(line).toContain(`'${executable}' '${firstFlag}'`);
-    expect(line).toContain("'--model' 'fixture-model' '--effort' 'high'");
-    if (resumeToken) expect(line).toContain(`'${client === "claude-code" ? "--resume" : "resume"}' '${resumeToken}'`);
-    else if (client === "claude-code") expect(line).toContain("'--session-id'");
+      expect(line).toContain("'--model' 'fixture-model' '--effort' 'high'");
+      if (resumeToken) expect(line).toContain(`'--resume' '${resumeToken}'`);
+      else expect(line).toContain("'--session-id'");
+    } else {
+      expect(line).toContain(`'${executable}' '${firstFlag}'`);
+      expect(line).toContain("'-m' 'fixture-model' '-c' 'model_reasoning_effort=high'");
+      expect(line).not.toContain("'--effort'");
+      if (resumeToken) {
+        expect(line).toContain("'exec' 'resume'");
+        expect(line).toContain(`'${resumeToken}' '-'`);
+      }
+    }
     expect(sendKeys).not.toHaveBeenCalled();
   });
 
@@ -217,6 +223,7 @@ describe("workers.isolation: none launches a managed worker as the current user"
       getPanePid: vi.fn(async () => process.pid),
       getPaneCommand: vi.fn(async () => paneCommand),
       capturePaneScreen: vi.fn(async () => paneContent),
+      getPaneExit: vi.fn(async () => ({ dead: true, code: 0 })),
     };
     // Terminal I/O is substituted; the native launch has no command override.
     const native = new DirectWorkerLauncher({ tmux: terminal, resolvePane: async () => seatPane,
@@ -251,9 +258,9 @@ describe("workers.isolation: none launches a managed worker as the current user"
     ["claude-code", "claude.exe", readyScreen, true],
     // The one screen a turn can also hit is a gate the owner must clear.
     ["claude-code", "claude", "Not logged in\nRun /login", false],
-    ["codex", "codex", "", false],
+    ["codex", "codex", "", true],
     ["codex", "codex", "OpenAI Codex (v0.160.0)\n\u203a Implement the task", true],
-  ] as const)("checks the %s composer rather than only its PID (command=%s, case %#)", async (client, command, screen, ready) => {
+  ] as const)("checks %s native gates and process identity (command=%s, case %#)", async (client, command, screen, ready) => {
     const observedLaunch = vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch");
     expect((await launch()).ok).toBe(true);
     const input = observedLaunch.mock.calls[0]![0];

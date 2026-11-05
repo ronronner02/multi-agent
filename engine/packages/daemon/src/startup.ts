@@ -1115,8 +1115,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // by the seat-handover full-cycle composer when it creates a successor
   // session (OPR.0.4.3.04), so a handed-over successor self-identifies +
   // reports activity exactly like a launched seat.
+  const clientsBin = "/opt/multi-agent/toolchain/clients/bin";
+  const launchPath = process.env.PATH?.split(nodePath.delimiter).includes(clientsBin)
+    ? process.env.PATH : [process.env.PATH, clientsBin].filter(Boolean).join(nodePath.delimiter);
   const launchSessionEnv: Record<string, string | undefined> = {
-    PATH: process.env.PATH,
+    PATH: launchPath,
     OPENRIG_HOME,
     OPENRIG_PORT: openRigPort,
     OPENRIG_HOST: openRigHost,
@@ -3199,6 +3202,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // stopped when the process it named is gone. It decides no outcome: the owner action does.
     const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
+      turnStateRoot: nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch"),
       // T033 — the exit evidence a direct launch leaves behind. The seat's pane is where the
       // client ran, so tmux's own record of that pane ending (its dead flag and exit status)
       // and the last lines it held are the only structured evidence available without a

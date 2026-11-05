@@ -1,0 +1,8 @@
+# U1: one managed Codex turn
+
+- A managed Codex launch uses `exec --json` with its prompt on stdin. The candidate is the working directory, with `workspace-write` and network access enabled. Per-seat model and effort map to `-m` and `-c model_reasoning_effort=...`.
+- The installed CLI, version 0.160.0, accepts `-C` and `-s` on `exec` but not on `exec resume`. A continuation uses the launcher's existing `cd` into the candidate and `-c sandbox_mode=workspace-write`.
+- Native turns use the shared pane formatter, which preserves exit codes and signals. The first `thread.started` event supplies the native identity; later events cannot replace it. The completion sweep saves a valid thread ID in the seat's existing `codex_id` resume slot before dispatching more work. A turn that exits without a valid thread supplies no resume token.
+- Turn artifacts live outside the candidate, at `<OPENRIG_HOME>/state/workers/homes/local/scratch/turns/<attemptId>/`. `last-message.txt` is the final-message input for U4, and `thread-id.txt` holds the captured thread ID. `agentTurnOutputPaths` is the shared path resolver. The prompt keeps its existing sibling path, `<attemptId>.prompt`. No migration or public API change is needed.
+- The pane's inherited PATH gains `/opt/multi-agent/toolchain/clients/bin` only when absent. Launches continue to read the owner's local client configuration; this slice does not redirect it.
+- The startup and dispatch checks also recognize managed Codex turns, so they write the prompt before launch and pass the stored Codex thread into a continuation. Changing only the argv builder would leave those two links using interactive behavior.

@@ -126,7 +126,8 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       // after a review, the lead's revision after a rejection, or a retry the classifier called
       // resume-safe. Its next attempt continues that conversation, so the agent still holds the
       // tree, the brief and what it was told to fix. The token is the run's own record of it.
-      const continueSessionId = !unsafe && session.resumeToken && session.resumeType === "claude_id"
+      const resumeType = adapter.runtime === "codex" ? "codex_id" : "claude_id";
+      const continueSessionId = !unsafe && session.resumeToken && session.resumeType === resumeType
         ? session.resumeToken : undefined;
       await dependencies.startupOrchestrator.startNode({ rigId: context.rigId, nodeId: node.id, sessionId: session.id,
         binding, adapter,

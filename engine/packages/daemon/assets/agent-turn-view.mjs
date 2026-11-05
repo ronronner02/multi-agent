@@ -11,8 +11,11 @@
 // records a signal rather than inventing a number — the completion sweep's classifier reads
 // that difference and must keep seeing it.
 import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 
-const [command, ...args] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const threadIdFile = argv[0] === "--thread-id-file" ? argv.splice(0, 2)[1] : undefined;
+const [command, ...args] = argv;
 if (!command) {
   process.stderr.write("agent-turn-view: no client command\n");
   process.exit(2);
@@ -20,11 +23,47 @@ if (!command) {
 
 const child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"] });
 process.stdin.pipe(child.stdin);
+let observedThread = false;
 
 /** One assistant text block, one tool call, or one provider error — never raw JSON. */
 function render(line) {
   let event;
   try { event = JSON.parse(line); } catch { process.stdout.write(line + "\n"); return; }
+  if (event.type === "thread.started") {
+    if (!observedThread) {
+      observedThread = true;
+      if (threadIdFile && typeof event.thread_id === "string") writeFileSync(threadIdFile, event.thread_id, { mode: 0o600 });
+    }
+    return;
+  }
+  if (event.type === "turn.started" || event.type === "turn.completed") {
+    process.stdout.write(event.type === "turn.started" ? "[turn] Started\n" : "[turn] Completed\n");
+    return;
+  }
+  if (event.type === "error" || event.type === "turn.failed") {
+    process.stdout.write(`Error: ${event.message ?? event.error?.message ?? "The turn failed"}\n`);
+    return;
+  }
+  const item = event.item;
+  if (event.type === "item.started" && item?.type === "command_execution") {
+    process.stdout.write(`[command] ${item.command}\n`);
+    return;
+  }
+  if (event.type === "item.completed" && item) {
+    if ((item.type === "agent_message" || item.type === "reasoning") && item.text) {
+      process.stdout.write(item.text.trimEnd() + "\n");
+    } else if (item.type === "command_execution") {
+      if (item.aggregated_output) process.stdout.write(item.aggregated_output.trimEnd() + "\n");
+      process.stdout.write(`[command] exit ${item.exit_code ?? item.status}\n`);
+    } else if (item.type === "file_change") {
+      for (const change of item.changes ?? []) process.stdout.write(`[file] ${change.kind} ${change.path}\n`);
+    } else if (item.type === "mcp_tool_call") {
+      process.stdout.write(`[tool] ${item.server}/${item.tool}: ${item.status}\n`);
+    } else if (item.type === "web_search") {
+      process.stdout.write(`[search] ${item.query}\n`);
+    }
+    return;
+  }
   if (event.type === "assistant") {
     for (const block of event.message?.content ?? []) {
       if (block.type === "text" && block.text) process.stdout.write(block.text.trimEnd() + "\n");
