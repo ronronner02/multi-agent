@@ -119,6 +119,19 @@ function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
     state: run.state, planRef: run.binding.planRef, displayName: run.displayName, createdAt: run.createdAt };
 }
 
+/**
+ * The seat a rig records for a role, when a start names none.
+ *
+ * U3 — `rig team create` records one lead and one reviewer, so a start that names the team's rig
+ * already names every seat a run needs. A rig with no seat for the role keeps the pre-U3
+ * behaviour: no lead, or no reviewer.
+ */
+function seatForRole(rigRepo: RigRepository, rig: Rig, role: "lead" | "reviewer"): string | null {
+  const node = rigRepo.getRig(rig.id)?.nodes
+    .find(entry => entry.role === role && entry.runtime && entry.runtime !== "terminal") ?? null;
+  return node ? defaultSeat(rigRepo, node, rig.name) : null;
+}
+
 export function teamStartRoutes(
   governance: PlanGovernance,
   rigRepo: RigRepository,
@@ -156,7 +169,8 @@ export function teamStartRoutes(
       const active = rigRepo.listRigs();
       if (active.length !== 1) {
         return c.json({ code: active.length ? "rig_ambiguous" : "rig_required",
-          error: active.length ? "More than one rig exists; name the rig to start work on." : "No rig exists; create one with `rig up` first." }, 400);
+          error: active.length ? "More than one rig exists; name the rig to start work on."
+            : "No rig exists; create a team with `rig team create <repository>` first." }, 400);
       }
       rig = active[0]!;
     } else {
@@ -171,12 +185,16 @@ export function teamStartRoutes(
     // lead's, and the lead's context carries the protocol, roster and run instructions the
     // manifest owner builds; the implementer seats then come from the lead's own proposal, so
     // this request names none and there is no single implementer seat to compare against.
-    const leadSeat = v.lead === undefined ? null : text(v.lead, "lead", 256);
+    //
+    // U3 — a rig created by `rig team create` records its seats, so naming the team is enough:
+    // the lead and the reviewer come from the roles it recorded unless this request names them.
+    const leadSeat = v.lead === undefined ? seatForRole(rigRepo, rig, "lead") : text(v.lead, "lead", 256);
     const seat = v.seat === undefined ? (node ? defaultSeat(rigRepo, node, rig.name) : null) : text(v.seat, "seat", 256);
     if (leadSeat === null && !seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
     // C2 — the seat every review round of this run routes to. A start that names none keeps
     // the pre-C2 behaviour: an implementer completes and the run creates no review.
-    const reviewerSeat = v.reviewerSeat === undefined ? null : text(v.reviewerSeat, "reviewerSeat", 256);
+    const reviewerSeat = v.reviewerSeat === undefined
+      ? seatForRole(rigRepo, rig, "reviewer") : text(v.reviewerSeat, "reviewerSeat", 256);
     // The lead runs first and decides nothing about its own work, so a lead that is also the
     // reviewer seat would be asked to review the tasks it proposed. This is checked before the
     // implementer comparison below, which does not apply to a run whose lead chooses the seats.

@@ -149,6 +149,7 @@ import { PlanGovernance, daemonModeOf } from "./domain/plan-governance.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 import { teamStartRoutes } from "./routes/team-start.js";
+import { teamSetupRoutes } from "./routes/team-setup.js";
 import { teamLeadRoutes } from "./routes/team-lead.js";
 import { teamResultRoutes } from "./routes/team-result.js";
 import { teamCompletionRoutes } from "./routes/team-completion.js";
@@ -868,6 +869,10 @@ export function createApp(deps: AppDeps): Hono {
     legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(teamOptionsWithRead.readModel ? { readModel: teamOptionsWithRead.readModel } : {}),
   }));
+  // U3 — the owner's teams: the rig and seats a repository's team runs on. Same surface and the
+  // same owner credential as the start below, because a team is what a start routes work to.
+  app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials },
+    [deps.missionControlBearerToken, deps.terminalBearerToken]));
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {
     credentials: teamOptions.credentials,
