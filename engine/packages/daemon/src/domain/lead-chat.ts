@@ -58,13 +58,12 @@ function rowToMessage(row: { id: string; runId: string; sender: string; body: st
 const COLUMNS = `id, run_id AS runId, sender, body, attempt_id AS attemptId,
   delivered_attempt AS deliveredAttempt, created_at AS createdAt`;
 
-/** Append one message. Called inside the caller's transaction; it never opens its own. */
+/** Append one owner message. Called inside the caller's transaction; it never opens its own. */
 export function appendChatMessage(db: Database.Database, input: {
-  id: string; runId: string; sender: "owner" | "lead"; body: string; attemptId?: string | null; createdAt: string;
+  id: string; runId: string; body: string; createdAt: string;
 }): TeamChatMessage {
-  db.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, attempt_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(input.id, input.runId, input.sender, input.body,
-    input.attemptId === undefined ? null : input.attemptId, input.createdAt);
+  db.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, created_at)
+    VALUES (?, ?, 'owner', ?, ?)`).run(input.id, input.runId, input.body, input.createdAt);
   return getChatMessage(db, input.id)!;
 }
 

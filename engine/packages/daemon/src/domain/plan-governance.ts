@@ -643,7 +643,7 @@ export class PlanGovernance {
       const body = chatBody(object(ctx.request.payload, "chat").body, "chat.body");
       const lead = runLeadTask(this.db, ctx.run.id);
       if (!lead) return deny("This run has no lead task to answer the owner");
-      const message = appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id, sender: "owner",
+      const message = appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
         body, createdAt: ctx.now });
       // The command's own event carries the message id and the owner as its observer; the text
       // itself stays in the chat table, so it is not copied into the log with a second retention.
