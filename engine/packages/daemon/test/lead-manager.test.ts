@@ -138,6 +138,32 @@ describe("U6 — the lead as manager", () => {
       AND json_extract(payload, '$.action') = 'lead.proposal-refused'`).get()).toEqual({ n: 0 });
   });
 
+  it("treats a list the owner decided earlier as admitted too", async () => {
+    // The compatibility path is still a way a lead's batch reaches the run: the owner records a
+    // decision and `applyLeadProposal` admits it. The turn end must read the run's own tasks, not
+    // its own admission events, or every later lead turn refuses that same list as a duplicate.
+    endLeadTurn();
+    const list = [{ taskId: "task-2", seat: "a@rig", paths: ["src/a.ts"], dependencies: [], body: "Implement the module" }];
+    const requested = governance.proposeLeadTasks(request("lead-proposal",
+      { leadProposal: { expiresAt: "2026-11-06T02:00:00.000Z" } }), owner, binding, list);
+    expect(requested.status).toBe("accepted");
+    const approval = requested.value as { id: string; entityVersion: number };
+    expect(governance.decideApproval(request(approval.id, { approvalVersion: approval.entityVersion,
+      decision: "approved" }), owner, binding).status).toBe("accepted");
+    expect(governance.findTask("run", "task-2")).not.toBeNull();
+    dispatch.mockClear();
+    await leadTurnEnd(list, "attempt-lead-2");
+    expect(governance.queueState(leadQitemId)).toBe("done");
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(db.prepare(`SELECT count(*) AS n FROM events WHERE type = 'team.control'
+      AND json_extract(payload, '$.action') = 'lead.proposal-refused'`).get()).toEqual({ n: 0 });
+    // A list that changes what an admitted task is remains a different request, and the daemon
+    // says so rather than silently ignoring it.
+    await leadTurnEnd([{ taskId: "task-2", seat: "a@rig", paths: ["src/a.ts"], dependencies: [], body: "Do more" }], "attempt-lead-3");
+    expect(db.prepare(`SELECT count(*) AS n FROM events WHERE type = 'team.control'
+      AND json_extract(payload, '$.action') = 'lead.proposal-refused'`).get()).toEqual({ n: 1 });
+  });
+
   it("refuses a list outside the approved plan and reopens the lead with the reason", async () => {
     endLeadTurn();
     await leadTurnEnd([{ taskId: "task-2", seat: "a@rig", paths: ["lib/outside.ts"], dependencies: [], body: "Widen the scope" }]);
@@ -251,6 +277,37 @@ describe("U6 — the lead as manager", () => {
     expect(wakeEvents()).toHaveLength(1);
     expect(dispatch).not.toHaveBeenCalled();
     expect(deliveredLeadEvents(db, "run").has("review-limit:task-2")).toBe(true);
+  });
+
+  it("wakes the lead once when an approved task will not apply to the integration branch", async () => {
+    // U7 records the conflict through the observed-outcome command: the task's work was
+    // approved and closed, the patch could not land, and the failure names `integration_conflict`
+    // in the task's evidence. The row is `failed`, which the lead must still hear about — and
+    // it is not a retry, so "failed after its retry" is not what makes it news.
+    endLeadTurn();
+    expect(admit("task-2", "implementer", "a@rig", ["src/a.ts"]).status).toBe("accepted");
+    const qitemId = governance.findTask("run", "task-2")!.qitemId;
+    governance.recordAttempt(request("attempt-impl", { qitemId, role: "implementer", provider: "claude",
+      identity: { nativeSessionId: "native", tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 123,
+        processStart: "start-1", generation: 1, policyFingerprint: binding.policyFingerprint },
+      unknownReason: null, state: "stopped", usage }), binding);
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitemId);
+    expect(governance.recordTaskOutcome(request(qitemId, { expectedTaskVersion: 1, state: "failed", actorSession: "a@rig",
+      attemptId: "attempt-impl", expectedAttemptVersion: 1, evidence: { reasonCode: "integration_conflict" } }), daemon).status)
+      .toBe("observed");
+    expect(governance.queueState(qitemId)).toBe("failed");
+    expect(leadTeamEvents(db, "run").map(event => event.key)).toContain("conflict:task-2");
+    const lead = composeLeadManager({ db, governance, currentBinding: () => structuredClone(binding),
+      dispatch: () => dispatch as never, log: () => {} });
+    await lead.sweep();
+    expect(wakeEvents()).toHaveLength(1);
+    expect(wakeEvents()[0]!.keys).toContain("conflict:task-2");
+    expect(wakeEvents()[0]!.note).toContain("does not apply to the run's integration branch");
+    expect(dispatch).toHaveBeenCalledWith("run", "task-1");
+    // One fact, one wake: the sweep does not repeat it, and it does not also call it a failure.
+    await lead.sweep();
+    expect(wakeEvents()).toHaveLength(1);
+    expect(wakeEvents()[0]!.keys).not.toContain("failed:");
   });
 
   it("wakes the lead once when every task is done, and again only for a later task set", async () => {

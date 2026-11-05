@@ -1,7 +1,6 @@
 import type Database from "better-sqlite3";
-import { TEAM_CONTROL_VERSION, canonicalJson, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
+import { TEAM_CONTROL_VERSION, parseAssignment, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
 import type { PlanGovernance } from "./plan-governance.js";
-import { hashBytes } from "./plan-governance.js";
 import type { LeadTask } from "./lead-proposal.js";
 
 /**
@@ -61,10 +60,11 @@ export interface LeadManager {
 export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEvent[] {
   const rows = db.prepare(`SELECT a.task_id AS taskId, a.qitem_id AS qitemId, q.state AS state,
       q.closure_reason AS closureReason, COALESCE(a.display_name, a.task_id) AS name,
-      json_extract(a.assignment_json, '$.role') AS role
+      json_extract(a.assignment_json, '$.role') AS role,
+      json_extract(a.evidence_json, '$.reasonCode') AS evidenceReason
     FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
     WHERE a.run_id = ? ORDER BY a.rowid`).all(runId) as Array<{ taskId: string; qitemId: string; state: string;
-      closureReason: string | null; name: string; role: string }>;
+      closureReason: string | null; name: string; role: string; evidenceReason: string | null }>;
   const run = db.prepare("SELECT json_extract(binding_json, '$.limits.maxReviewRounds') AS maxReviewRounds FROM team_runs WHERE id = ?")
     .get(runId) as { maxReviewRounds: number | null } | undefined;
   const maxReviewRounds = run?.maxReviewRounds ?? 0;
@@ -83,14 +83,19 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
           "Decide whether to add a follow-up task, narrow the work, or ask the owner." });
     }
     // U7 — a patch that does not apply to the integration branch is the lead's conflict to
-    // resolve. Both the queue state and the closure reason are read, so whichever signal the
-    // integration owner records is heard here.
-    if (row.state === "conflict" || row.closureReason === "integration_conflict") {
+    // resolve. U7 records it the way every other failure is recorded: the work was approved and
+    // closed, the patch could not land, and the observed failure names `integration_conflict` in
+    // the task's evidence — so the queue row is `failed`, not a state of its own. The queue state
+    // and the closure reason are read too, so a host that records either signal is heard.
+    if (row.state === "conflict" || row.closureReason === "integration_conflict"
+      || row.evidenceReason === "integration_conflict") {
       events.push({ key: `conflict:${row.taskId}`,
-        note: `Task "${row.name}" conflicts with the integration branch. ` +
-          "Decide how it is resolved against the branch head and write the task that does it." });
+        note: `Task "${row.name}" was approved but its patch does not apply to the run's integration branch, ` +
+          "and the branch is unchanged. Decide how it is resolved against the branch head and write the task that does it." });
     }
     if (row.state !== "failed") continue;
+    // The conflict is the whole story of this failure; a second note for it would only repeat it.
+    if (row.evidenceReason === "integration_conflict") continue;
     // "Failed after its retry": the retry already happened, or the classifier said this failure
     // is not one the run may retry. Either way the next move is the lead's, not the queue's.
     const history = attemptHistory(row.qitemId);
@@ -122,19 +127,29 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
 }
 
 /**
- * The digest of the last task list this run admitted, or null when it admitted none.
+ * Whether this run already holds exactly the list the lead's tree is offering.
  *
- * The lead's candidate tree is the same tree across its attempts, so the proposal file from an
- * earlier turn is still there when the lead answers a later event. Comparing digests is how the
- * turn end tells "the list I already admitted" from "a list I have not seen".
+ * The tree keeps every file the lead wrote, so a turn that answered an event still holds the
+ * list it delivered earlier — and that list may have been admitted by the daemon (a delivery
+ * turn) or decided by the owner (the compatibility path). Both leave the same fact behind: the
+ * run's own tasks. A list whose every task is already recorded with the same seat, paths and
+ * brief is not a new request; a list that differs is admitted, and a repeated id is then refused
+ * with that reason, which is what tells the lead to use new ids for new work.
  */
-export function latestAdmittedProposal(db: Database.Database, runId: string): string | null {
-  const row = db.prepare(`SELECT json_extract(payload, '$.payload.proposalDigest') AS digest FROM events
-    WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ?
-      AND json_extract(payload, '$.action') = 'lead.tasks-admitted'
-      AND json_extract(payload, '$.payload.proposalDigest') IS NOT NULL ORDER BY seq DESC LIMIT 1`).get(runId) as
-    { digest: string } | undefined;
-  return row?.digest ?? null;
+export function proposalAlreadyAdmitted(db: Database.Database, runId: string, tasks: readonly LeadTask[]): boolean {
+  const existing = db.prepare(`SELECT a.task_id AS taskId, q.destination_session AS seat, q.body AS body,
+      a.assignment_json AS assignment FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+    WHERE a.run_id = ?`).all(runId) as Array<{ taskId: string; seat: string; body: string; assignment: string }>;
+  const byId = new Map(existing.map(row => [row.taskId, row]));
+  return tasks.every(task => {
+    const row = byId.get(task.taskId);
+    if (!row || row.seat !== task.seat || row.body !== task.body) return false;
+    try {
+      const assignment = parseAssignment(JSON.parse(row.assignment));
+      return assignment.role === "implementer" && assignment.paths.length === task.paths.length
+        && assignment.paths.every((path, index) => path === task.paths[index]);
+    } catch { return false; }
+  });
 }
 
 /** The event keys an earlier wake already delivered to this run's lead. */
@@ -198,7 +213,7 @@ export function composeLeadManager(dependencies: LeadManagerDependencies): LeadM
       }
       // The tree keeps every file the lead wrote, so a turn that answered an event still holds
       // the list it delivered earlier. That list is not a new request.
-      if (hashBytes(canonicalJson(tasks as unknown as JsonValue)) === latestAdmittedProposal(db, attempt.runId)) return;
+      if (proposalAlreadyAdmitted(db, attempt.runId, tasks)) return;
       const receipt = (() => {
         try {
           return governance.admitLeadProposal(

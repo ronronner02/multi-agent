@@ -200,6 +200,28 @@ describe("what a continuation is told", () => {
     expect(note).toContain("lead-proposal.json");
   });
 
+  it("stops telling the lead about an approval it has already answered", () => {
+    // U6 — a lead's turns continue after the approval: a wake for its team, a refusal, an
+    // owner's answer. Restating "the owner approved the plan, decompose it now" in every one of
+    // them makes a lead decompose the same plan again, which the daemon then refuses as
+    // duplicates. A note about a past turn is news only until the lead answers it.
+    expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig", body: "Approved goal." }), binding).status)
+      .toBe("accepted");
+    const leadEvent = (action: string, payload: Record<string, unknown>) => db.prepare(
+      "INSERT INTO events (rig_id, node_id, type, payload) VALUES ('rig', 'lead-node', 'team.control', ?)").run(JSON.stringify({
+        type: "team.control", protocolVersion: "1.0", eventId: `e-${action}-${Math.random()}`, rigId: "rig", runId: "run",
+        taskId: "task-1", attemptId: null, entityId: "run", entityVersion: 2, action, payload }));
+    leadEvent("plan.approved", { note: null, reason: null });
+    expect(continuationNote(db, "run", "task-1", "lead")).toContain("The owner approved the plan");
+    // The turn that answered it is the lead's own outcome, and from then on the note is spent.
+    leadEvent("task.outcome", { observedBy: "daemon", state: "done" });
+    expect(continuationNote(db, "run", "task-1", "lead")).toBeNull();
+    // A fresh fact after that turn is still news.
+    leadEvent("lead.woken", { note: "Task \"Add the endpoint\" failed again on its retry.", keys: ["failed:task-2"] });
+    expect(continuationNote(db, "run", "task-1", "lead")).toContain("failed again on its retry");
+  });
+
   it("records a rejection with no reason and still reopens the lead", () => {
     expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
       outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig", body: "Approved goal." }), binding).status)

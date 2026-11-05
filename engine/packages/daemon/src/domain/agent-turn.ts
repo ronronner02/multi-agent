@@ -151,10 +151,11 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
     // two are the same question ("what happened to what I wrote?") asked of the newest answer,
     // so the newest of the two decides and one turn is never told both.
     //
-    // U6 — a refused proposal and a team event are the same question asked twice more, and both
-    // are only news until the lead has answered them: each is a fact about a turn, so it is read
-    // only when it happened after the lead's last turn ended. Without that, a wake would be
-    // restated in every later turn of the run.
+    // U6 — a refused proposal and a team event are the same question asked twice more, and every
+    // one of these notes is news only until the lead has answered it: each is a fact about a
+    // turn, so it is read only when it happened after the lead's last turn ended. Without that,
+    // a plan approval or a wake would be restated in every later turn, and a lead that follows
+    // its instructions would decompose the same plan twice.
     const lastTurnEnd = db.prepare(`SELECT COALESCE(MAX(seq), 0) AS seq FROM events
       WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
         AND json_extract(payload, '$.action') = 'task.outcome'`).get(runId, taskId) as { seq: number };
@@ -162,8 +163,8 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
         json_extract(payload, '$.payload.note') AS note, json_extract(payload, '$.payload.reason') AS reason
       FROM events
       WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
-        AND (json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved')
-          OR (json_extract(payload, '$.action') IN ('lead.proposal-refused', 'lead.woken') AND seq > ?))
+        AND json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved', 'lead.proposal-refused', 'lead.woken')
+        AND seq > ?
       ORDER BY seq DESC LIMIT 1`).get(runId, taskId, lastTurnEnd.seq) as
       { action: string; note: string | null; reason: string | null } | undefined;
     if (!row) return null;
