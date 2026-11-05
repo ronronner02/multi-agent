@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
@@ -170,6 +171,47 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log("");
       console.log("Watch it:");
       console.log(`  ${base}/team?run=${encodeURIComponent(receipt.runId)}   (after rig config set ui.enabled true)`);
+    });
+
+  cmd.command("resume <run-id>")
+    .description("resume a blocked team run and offer its pending work to dispatch")
+    .option("--add-minutes <n>", "increase the active wall-clock budget by N minutes")
+    .option("--add-retries <n>", "increase the retry budget by N")
+    .option("--add-review-rounds <n>", "increase the review budget by N")
+    .option("--json", "print the daemon's receipt as JSON")
+    .action(async (runId: string, options: { addMinutes?: string; addRetries?: string; addReviewRounds?: string; json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) throw new TeamCommandError("control_auth_required", "No owner credential. Run ./setup.sh or set MULTI_AGENT_OWNER_TOKEN.");
+      const parseIncrease = (value: string | undefined, flag: string): number | undefined => {
+        if (value === undefined) return undefined;
+        if (!/^\d+$/.test(value)) throw new TeamCommandError("team_budget_invalid", `${flag} takes a non-negative integer.`);
+        const parsed = Number(value);
+        if (!Number.isSafeInteger(parsed)) throw new TeamCommandError("team_budget_invalid", `${flag} is outside the safe integer range.`);
+        return parsed;
+      };
+      const addMinutes = parseIncrease(options.addMinutes, "--add-minutes");
+      const addRetries = parseIncrease(options.addRetries, "--add-retries");
+      const addReviewRounds = parseIncrease(options.addReviewRounds, "--add-review-rounds");
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (status.state !== "running" || status.healthy === false) throw new TeamCommandError("team_daemon_unavailable", "The daemon is not running or healthy.");
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}`;
+      const run = await client.get<{ run?: { entityVersion: number } }>(path, { headers });
+      if (run.status !== 200 || !Number.isSafeInteger(run.data?.run?.entityVersion)) {
+        throw new TeamCommandError("control_unavailable", "The current run version could not be read.");
+      }
+      const payload = { ...(addMinutes === undefined ? {} : { addMinutes }), ...(addRetries === undefined ? {} : { addRetries }),
+        ...(addReviewRounds === undefined ? {} : { addReviewRounds }) };
+      const response = await client.post<{ status?: string; reason?: string; reasonKey?: string; error?: string; resumeTaskIds?: string[] }>(
+        `${path}/resume`, { protocolVersion: "1.0", runId, actionId: runId, expectedEntityVersion: run.data.run!.entityVersion,
+          idempotencyKey: randomUUID(), payload }, { headers });
+      if (options.json) { console.log(JSON.stringify(response.data)); if (response.status >= 400) process.exitCode = 1; return; }
+      if (response.status >= 400 || response.data?.status === "denied") {
+        throw new TeamCommandError(response.data?.reasonKey ?? "team_resume_refused",
+          response.data?.reason ?? response.data?.error ?? `Resume was refused (HTTP ${response.status}).`);
+      }
+      console.log(`Resumed ${runId}.`);
+      if (response.data?.resumeTaskIds?.length) console.log(`Pending tasks offered: ${response.data.resumeTaskIds.join(", ")}`);
     });
 
   /**

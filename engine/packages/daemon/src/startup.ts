@@ -3200,7 +3200,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const maxSessions = (runId: string) => teamGovernance.getRun(runId).binding.limits.maxSessions;
     deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
       startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv,
-      liveSessions, maxSessions });
+      liveSessions, maxSessions, renewApproval: runId => teamGovernance.renewImplementationApproval(runId) });
     // MVP — a task admitted while the run was at its limit used to wait forever: nothing tried
     // it again. A freed slot now starts the run's next pending task through the same dispatch,
     // as internal scheduling over the durable queue rather than an owner verb.

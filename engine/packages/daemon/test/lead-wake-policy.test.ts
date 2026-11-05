@@ -5,6 +5,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
+import { LeadWakePolicy } from "../src/domain/lead-wake-policy.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -106,6 +107,20 @@ describe("KTD21 Lead wake admission", () => {
     expect(governance.transitionTask(command(id, { expectedTaskVersion: 1, state: "in-progress",
       actorSession: "lead@rig", evidence: { checked: true }, observedBy: "owner" }), binding).status).toBe("accepted");
     restart(); expect(activate(id).status).toBe("denied");
+  });
+  it("counts a daemon-recorded outcome as lead-wake progress", () => {
+    const id = task();
+    const attempt = `attempt-${++serial}`;
+    expect(governance.recordAttempt(command(attempt, { qitemId: id, role: "lead", provider: "claude", state: "running",
+      identity: { nativeSessionId: attempt, tmuxServer: "/control/tmux.sock", paneId: "%1", processId: 123,
+        processStart: attempt, generation: 1, policyFingerprint: binding.policyFingerprint }, unknownReason: null, usage }), binding).status).toBe("observed");
+    expect(governance.recordUsage(command(attempt, { expectedAttemptVersion: 1, state: "stopped", unknownReason: null, usage })).status).toBe("observed");
+    const before = new LeadWakePolicy(db, bus).check(governance.getRun("run"), id, now.toISOString()).progress;
+    const outcome = governance.recordTaskOutcome(command(id, { expectedTaskVersion: 1, state: "done", actorSession: "lead@rig",
+      attemptId: attempt, expectedAttemptVersion: 2, closureReason: "no-follow-on", evidence: { validated: true } }), { kind: "daemon", sessionId: "daemon" });
+    expect(outcome.status).toBe("observed");
+    const after = new LeadWakePolicy(db, bus).check(governance.getRun("run"), id, now.toISOString()).progress;
+    expect(after).toBeGreaterThan(before);
   });
   it("blocks the third agent-only cycle across reconstruction and records an owner decision", async () => {
     const id = task();

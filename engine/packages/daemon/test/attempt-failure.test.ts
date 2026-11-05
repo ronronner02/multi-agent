@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { createDb } from "../src/db/connection.js";
@@ -332,5 +332,31 @@ describe("the owner retry reads the recorded classification", () => {
     await dispatchWith({ dead: false, code: null })("run-1", "task-1");
     expect(respawned).toEqual(["%1", "%1"]);
     expect(started).toHaveLength(3);
+    // U8 — attention_required is recoverable once per dispatch, just like a failed seat.
+    sessions.updateStartupStatus(seat.sessionId, "attention_required");
+    await dispatchWith({ dead: false, code: null })("run-1", "task-1");
+    expect(started).toHaveLength(4);
+    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.startupStatus).not.toBe("attention_required");
+  });
+
+  it("reports the named startup reason when attention recovery remains wedged", async () => {
+    const seat = sessions.findResumeContextByName("builder@rig-1")!;
+    sessions.updateBinding(seat.nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
+    sessions.updateStartupStatus(seat.sessionId, "attention_required");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
+      const dispatch = composeTaskDispatch({
+        rigRepo: new RigRepository(db), sessions,
+        tmux: { listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
+        startupOrchestrator: { startNode: async () => ({ ok: false, startupStatus: "attention_required", errors: ["trust_gate"] }) } as never,
+        runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
+        maxSessions: () => 2, liveSessions: () => 0,
+      });
+      await dispatch("run-1", "task-1");
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining("trust_gate"));
+    } finally {
+      warning.mockRestore();
+    }
   });
 });
