@@ -42,3 +42,11 @@ Long loops of "one more check" were the most expensive failure mode here.
 ## 8. Decide and record
 - Agents decide questions that the rules or the slice settle, and record the reason in the PR.
 - The owner is asked only about scope, public contracts, architecture or missing grants, in one batch.
+
+## 9. UI: let the structure explain
+- Leave out unnecessary secondary labels, captions, helper copy, descriptive text and redundant microcopy. Layout, visual hierarchy, spacing and a clear primary action do the explaining.
+- Prefer strong visual hierarchy and self-explanatory structure over text. By default add no slogan-style text, no tutorial paragraphs, and no help text under every section. When extra information is truly needed, use an info icon with a tooltip, not always-visible secondary text.
+- Keep the form labels and accessible names the interface needs. A cleaner screen must not cost accessibility.
+- Dangerous or irreversible actions (delete, pay, submit a permanent change) keep a clear statement of the consequence.
+- With the copy removed, a first-time user must still see where to click next and what it will do.
+- When rewriting an existing screen, remove redundant labels and descriptions first. If clarity drops, improve the layout and the button wording instead of putting the text back.
