@@ -1,0 +1,142 @@
+[
+  {
+    "transition_id": 1,
+    "ts": "2026-11-05T00:30:20.651Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "owner-control",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-1"
+  },
+  {
+    "transition_id": 2,
+    "ts": "2026-11-05T00:33:21.939Z",
+    "state": "done",
+    "transition_note": "Owner observation of lead@acceptance",
+    "actor_session": "owner-control",
+    "closure_reason": "no-follow-on",
+    "closure_target": null,
+    "task_id": "task-1"
+  },
+  {
+    "transition_id": 3,
+    "ts": "2026-11-05T00:33:22.269Z",
+    "state": "pending",
+    "transition_note": "reopen acknowledged: The owner rejected the lead's proposal; the lead revises it",
+    "actor_session": "577d5149-f615-4b82-b51e-090f527b9812",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-1"
+  },
+  {
+    "transition_id": 4,
+    "ts": "2026-11-05T00:35:59.307Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "owner-control",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-2"
+  },
+  {
+    "transition_id": 5,
+    "ts": "2026-11-05T00:35:59.309Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "owner-control",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-3"
+  },
+  {
+    "transition_id": 6,
+    "ts": "2026-11-05T00:41:17.590Z",
+    "state": "done",
+    "transition_note": "Owner observation of one@acceptance",
+    "actor_session": "owner-control",
+    "closure_reason": "no-follow-on",
+    "closure_target": null,
+    "task_id": "task-2"
+  },
+  {
+    "transition_id": 7,
+    "ts": "2026-11-05T00:41:17.592Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "task-2",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-2-review-1"
+  },
+  {
+    "transition_id": 8,
+    "ts": "2026-11-05T00:41:17.966Z",
+    "state": "done",
+    "transition_note": "Owner observation of two@acceptance",
+    "actor_session": "owner-control",
+    "closure_reason": "no-follow-on",
+    "closure_target": null,
+    "task_id": "task-3"
+  },
+  {
+    "transition_id": 9,
+    "ts": "2026-11-05T00:41:17.967Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "task-3",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-3-review-1"
+  },
+  {
+    "transition_id": 10,
+    "ts": "2026-11-05T00:45:51.779Z",
+    "state": "done",
+    "transition_note": "Owner observation of review@acceptance",
+    "actor_session": "owner-control",
+    "closure_reason": "no-follow-on",
+    "closure_target": null,
+    "task_id": "task-2-review-1"
+  },
+  {
+    "transition_id": 11,
+    "ts": "2026-11-05T00:50:29.758Z",
+    "state": "done",
+    "transition_note": "Owner observation of review@acceptance",
+    "actor_session": "owner-control",
+    "closure_reason": "no-follow-on",
+    "closure_target": null,
+    "task_id": "task-3-review-1"
+  },
+  {
+    "transition_id": 12,
+    "ts": "2026-11-05T00:50:29.759Z",
+    "state": "pending",
+    "transition_note": "reopen acknowledged: Review round 1 returned 1 blocking finding(s)",
+    "actor_session": "577d5149-f615-4b82-b51e-090f527b9812",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-3"
+  },
+  {
+    "transition_id": 13,
+    "ts": "2026-11-05T00:51:42.232Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "owner-control",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-4"
+  },
+  {
+    "transition_id": 14,
+    "ts": "2026-11-05T00:57:12.850Z",
+    "state": "failed",
+    "transition_note": "Owner observation of one@acceptance: The implementer reported that plan.md has no Task C, so it made no change.",
+    "actor_session": "owner-control",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-4"
+  }
+]

@@ -1,0 +1,5 @@
+The lead proposed 2 implementer task(s):
+  task-2 on one@acceptance: src/slugify.mjs, test/slugify.test.mjs
+  task-3 on two@acceptance: src/titleCase.mjs, test/titleCase.test.mjs
+
+Approved; 2 task(s) admitted and dispatched: task-2, task-3.

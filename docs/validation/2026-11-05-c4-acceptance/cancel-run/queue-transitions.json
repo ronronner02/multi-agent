@@ -1,0 +1,22 @@
+[
+  {
+    "transition_id": 17,
+    "ts": "2026-11-05T01:00:39.585Z",
+    "state": "pending",
+    "transition_note": "created",
+    "actor_session": "owner-control",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-1"
+  },
+  {
+    "transition_id": 18,
+    "ts": "2026-11-05T01:00:48.506Z",
+    "state": "canceled",
+    "transition_note": "Run canceled; the owner observed every attempt end",
+    "actor_session": "9b27efb9-9b14-4535-8e2d-9c08bc4944e0",
+    "closure_reason": null,
+    "closure_target": null,
+    "task_id": "task-1"
+  }
+]

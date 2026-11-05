@@ -1,0 +1,85 @@
+
+######## TURN 1 ########
+[tool Bash] {"command":"cat <scratch>/home/state/workers/context/local/577d5149-f615-4b82-b51e-090f527b9812/5792b8e1-7037-4ace-abb3-06cd27d7328e/core; echo ----; cat <scratch>/home/state/workers/context/local/577d5149-f615-4b82-b51e-090f527b9812/5792b8e1-7037-4ace-abb3-06cd27d7328e
+[text] I need the task card / plan. Let me find it in the repo.
+[tool Bash] {"command":"git ls-files; git show --stat HEAD | head -30; ls -a"}
+[tool Bash] {"command":"cat plan.md package.json README.md; node --test test/ 2>&1 | tail -15"}
+[tool Bash] {"command":"node --test test/slugify.test.mjs 2>&1 | tail -12; npm test 2>&1 | tail -12; node -e 'import(\"./src/slugify.mjs\").then(({slugify:s})=>{for (const x of [\"Café au lait\",\"ÄÖÜ\",\"aéb\",\"---\",\"\",  \"ABC123\"]) console.log(JSON.stringify(x),\"->\",JSON.stringify(s(x)))})'"}
+[text] **Verdict: NO NEW P0/P1**
+
+**New findings**
+
+- **R1-1 (P2, testing)** in `test/slugify.test.mjs`: nothing tests the clause "Diacritics are not transliterated; non-ASCII letters are not letters for this helper." The implementation handles it correctly. I ran it and got `slugify("Café au lait")` → `"caf-au-lait"`, `slugify("aéb")` → `"a-b"` and `slugify("ÄÖÜ")` → `""`. But if someone later switched to `\p{L}` or added NFD transliteration, every current test would still pass. Fix: add one assertion such as `slugify("Café au lait") === "caf-au-lait"`.
+- **R1-2 (P3, testing)** in `test/slugify.test.mjs`, the "the input is never mutated" test: JS strings are immutable primitives, so this test cannot fail under any implementation. The guarantee itself can't be broken either, so no claim is false. It's advisory only. A short comment, or keeping it as an explicit acceptance marker, is enough.
+
+**Done signal:** yes. All five Task A acceptance bullets have a passing test. `npm test` reports 5 pass and 0 fail. The tests use only `node:test` and `node:assert/strict`, and there are no new dependencies.
+
+**Checked and sound**
+- `src/slugify.mjs`: the `[^A-Za-z0-9]+` → `-` replacement collapses runs, the trim regex strips both ends, and lowercasing after the ASCII-only class means non-ASCII letters are treated as separators, as the plan says.
+- Edge inputs `""`, `"---"` and `"ABC123"` give `""`, `""` and `"abc123"` (run by hand).
+- The candidate stays within its declared paths (`src/slugify.mjs`, `test/slugify.test.mjs`).
+
+```json
+{
+  "verdict": "NO NEW P0/P1",
+  "round": 1,
+  "prior": [],
+  "findings": [
+    {
+      "id": "R1-1", "severity": "P2", "citation": "plan.md Task A: non-ASCII letters are not letters for this helper",
+      "file": "test/slugify.test.mjs", "category": "testing",
+      "scenario": "No test covers non-ASCII input. Current behaviour is correct (ran: slugify('Café au lait') -> 'caf-au-lait', slugify('ÄÖÜ') -> ''), but a change to \\p{L} or transliteration would pass all existing tests.",
+      "in_delta": true, "reproduced": true
+    },
+    {
+      "id": "R1-2", "severity": "P3", "citation": "plan.md Task A acceptance: the input is never mutated",
+      "file": "test/slugify.test.mjs", "category": "testing",
+      "scenario": "Test 'the input is never mutated' cannot fail because JS strings are immutable primitives; the guarantee holds by language semantics, so this is advisory.",
+      "in_delta": true, "reproduced": false
+    }
+  ],
+  "done_signal": { "holds": true }
+}
+```
+
+######## TURN 2 ########
+[tool Bash] {"command":"cd <scratch>/home/state/workers/assignments/local/577d5149-f615-4b82-b51e-090f527b9812-task-3; D=<scratch>/home/state/workers/context/local/577d5149-f615-4b82-b51e-090f527b9812/cc51fb74-a433-44dc-a044-42c632e19560; diff <(cat $D/core $D/charter) <(cat /home/
+[tool Bash] {"command":"cd <scratch>/home/state/workers/assignments/local/577d5149-f615-4b82-b51e-090f527b9812-task-3; npm test 2>&1 | grep -E '^ℹ (pass|fail)'; node -e 'import(\"./src/titleCase.mjs\").then(({titleCase:t})=>{for (const x of [\"cafés ouverts\",\"élan vital\",\"naïve\",\"über alles
+[tool Bash] {"command":"node -e 'const t=s=>s.replace(/(?<![\\p{L}\\p{N}])\\p{Ll}/gu,c=>c.toUpperCase());for (const x of [\"naïve\",\"élan vital\",\"hello world\",\"iOS device\",\"a-b c_d\",\"\"]) console.log(JSON.stringify(x),\"->\",JSON.stringify(t(x)))'"}
+[text] **Verdict: CHANGES-REQUIRED**
+
+**New findings**
+
+- **R1-1 (P1, correctness)** in `src/titleCase.mjs`, `titleCase`. The plan says a word starts "after any character that is not a letter or digit", and every other letter must stay "exactly as it was". Task B has no ASCII-only exception. That exception exists only in Task A ("non-ASCII letters are not letters for this helper"). The regex `(?<![A-Za-z0-9])[a-z]` treats any non-ASCII letter as a word boundary and never uppercases a non-ASCII first letter. I ran it: `titleCase("naïve")` gives `"NaïVe"` (expected `"Naïve"`), `titleCase("cafés ouverts")` gives `"CaféS Ouverts"`, and `titleCase("élan vital")` gives `"éLan Vital"` (expected `"Élan Vital"`). The first case uppercases a letter in the middle of a word, which breaks the "every other letter left exactly as it was" guarantee. The file's header comment states an ASCII-only rule that the plan doesn't contain. Fix: `/(?<![\p{L}\p{N}])\p{Ll}/gu`. I checked that this version gives `"Naïve"` and `"Élan Vital"` and still passes all four acceptance cases. If the Lead meant Task A's ASCII restriction to also cover Task B, they should say so in the plan. Then this finding drops to P3, and the fix is to cite the plan in the comment.
+- **R1-2 (P2, testing)** in `test/titleCase.test.mjs`: no test uses non-ASCII input, so the four tests pass under the defect in R1-1. Fix: add `titleCase("naïve élan") === "Naïve Élan"`.
+
+**Done signal:** no. The failing clause is Task B, "A word starts after any character that is not a letter or digit … every other letter left exactly as it was". `"naïve"` → `"NaïVe"`. The four acceptance bullets and `npm test` do pass (4 pass, 0 fail).
+
+**Checked and sound**
+- The four acceptance cases pass when run.
+- Nothing is lowercased: `"iOS device"` → `"IOS Device"`.
+- Digits are handled as word characters: `"x2y"` → `"X2y"` and `"2nd place"` → `"2nd Place"`.
+- The tests use only `node:test` and `node:assert/strict`, with no new dependencies, and the candidate stays within its declared paths.
+
+```json
+{
+  "verdict": "CHANGES-REQUIRED",
+  "round": 1,
+  "prior": [],
+  "findings": [
+    {
+      "id": "R1-1", "severity": "P1", "citation": "plan.md Task B: a word starts after any character that is not a letter or digit; every other letter left exactly as it was",
+      "file": "src/titleCase.mjs", "category": "correctness",
+      "scenario": "titleCase regex (?<![A-Za-z0-9])[a-z] treats non-ASCII letters as boundaries and never uppercases them. Ran: titleCase('naïve') -> 'NaïVe' (expected 'Naïve'); titleCase('élan vital') -> 'éLan Vital' (expected 'Élan Vital'); titleCase('cafés ouverts') -> 'CaféS Ouverts'. Task A's ASCII-only rule is scoped 'for this helper' and does not apply to Task B. Fix: /(?<![\\p{L}\\p{N}])\\p{Ll}/gu (verified it fixes these and keeps all four acceptance cases).",
+      "in_delta": true, "reproduced": true
+    },
+    {
+      "id": "R1-2", "severity": "P2", "citation": "plan.md Task B: a word starts after any character that is not a letter or digit",
+      "file": "test/titleCase.test.mjs", "category": "testing",
+      "scenario": "No test has non-ASCII input, so all four tests pass under the R1-1 defect. Add e.g. titleCase('naïve élan') === 'Naïve Élan'.",
+      "in_delta": true, "reproduced": true
+    }
+  ],
+  "done_signal": { "holds": false, "failing_clause": "Task B: a word starts after any character that is not a letter or digit; every other letter left exactly as it was ('naïve' -> 'NaïVe')" }
+}
+```

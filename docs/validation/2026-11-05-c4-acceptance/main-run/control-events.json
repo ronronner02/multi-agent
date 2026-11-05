@@ -1,0 +1,1397 @@
+{
+  "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+  "eventCount": 53,
+  "events": [
+    {
+      "seq": 1,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "ad78d4c1-ac8f-416e-abb7-044e3da4fad1",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 1,
+        "action": "run.created",
+        "payload": {
+          "bindingDigest": "sha256:6e806f903c96d6c4f6e06d0fa57bb069035567d6684bd0971a430cc0f4780bd7",
+          "state": "pending"
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "a499c3e0-c77c-4748-a800-7c65e65d6bc2",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 2,
+        "action": "approval.requested",
+        "payload": {
+          "actionId": "51e3b15d-6526-43ae-a811-ad3a278fba69",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:0494eb5defe71b42fa6f2300ded97c117b0f567cf05002ae6bca0096116cbe7e"
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "26cb2685-7cb7-4a2a-adf0-fcfe9598ce2c",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 3,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "51e3b15d-6526-43ae-a811-ad3a278fba69",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:bedf49fcff8276b94fee74c3a5c40577131889f0404ee5e58e0c31b994cc1c74"
+        }
+      }
+    },
+    {
+      "seq": 5,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "77b6198e-5214-493b-b8e7-24c7d919ffa3",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-1",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 4,
+        "action": "task.created",
+        "payload": {
+          "actionId": "task-1",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:49c32ecaea03a68c94f52dac9ec59b773e1ab8675fa5c3bf098c4487cfa19640"
+        }
+      }
+    },
+    {
+      "seq": 7,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0AGMR7BPVG9RAQ61N3",
+        "sessionId": "01M6MHSW0A6HASHY50JVQBESV1",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "lead@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "15e01dba-e24e-49a6-8668-42094c265bde",
+            "tmuxServer": "/tmp",
+            "paneId": "%0",
+            "processId": 1186916,
+            "processStart": "30439290",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:896f54af50d6b5511dd658abbd978ba4aaf8d4400602bb6e6778e06c8d585593",
+          "observedContextHash": "sha256:896f54af50d6b5511dd658abbd978ba4aaf8d4400602bb6e6778e06c8d585593",
+          "workerUid": 1000,
+          "processGroupId": 1186916,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2"
+          },
+          "deadline": 1793842220684
+        }
+      }
+    },
+    {
+      "seq": 10,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "74b4fcff-7db6-4688-bc8a-68693ee5fe98",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 5,
+        "action": "lead.wake-state",
+        "payload": {
+          "activations": [
+            1793838620910
+          ],
+          "cycleBlock": null,
+          "cycles": {
+            "task-1": {
+              "count": 1,
+              "progress": 3
+            }
+          },
+          "grant": 0,
+          "pending": {}
+        }
+      }
+    },
+    {
+      "seq": 11,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:30:20",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "e51ecf0c-32a7-466b-a362-78258aa5d924",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 5,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:2c50b7f68a3b6e38aad84e2e9cfb9651b7c1e2a9c1f7349595e9f2faabb37275"
+        }
+      }
+    },
+    {
+      "seq": 12,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:31:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "ae9f725c-a43d-4571-ab9a-6156e40f43d9",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 6,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 82009,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 13,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:31:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "5e82882d-0c5d-4e35-889a-a4a4e442104c",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 6,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:72225a7c101b991181fd84f28d3ab09be6feab1ad9ccb0dcf66353c51d8cb1e5"
+        }
+      }
+    },
+    {
+      "seq": 15,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:33:21",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "dce4b4b6-f983-4937-bac7-7ccfcdee1313",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-1",
+        "attemptId": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 7,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261105003020-0c2437a3",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:05458cccafc28067b8ec23fcc40040c4bda63e4b10c5b6d8c8601a07d42cdf54"
+        }
+      }
+    },
+    {
+      "seq": 16,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "171dd92e-aee9-4f64-a3c0-eef06f887d04",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 8,
+        "action": "run.lead-proposal-requested",
+        "payload": {
+          "actionId": "4ccb945f-a5f6-4e8d-b2b0-dd5a783eac73",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:99c882c7572ebefbaa7e77bb80b4ad35a92dbceb6c46ee1c21779f0d10b3b3f3"
+        }
+      }
+    },
+    {
+      "seq": 17,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "52cff8d6-4d2c-4c9a-a77e-7bb2afb570c1",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-1",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 9,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "4ccb945f-a5f6-4e8d-b2b0-dd5a783eac73",
+          "note": "Two changes before I approve. (1) task-3 must not leave the non-ASCII question to the implementer: state in the task body that only ASCII letters count as letters for titleCase, the same rule Task A uses. (2) Each task body must require the repository's full 'npm test' to pass, not only the implementer's own test file, and must say to report that output.",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "taskId": "task-1",
+          "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      }
+    },
+    {
+      "seq": 19,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "b20493b5-4879-41db-a9d8-cf8cef8aa5fe",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 9,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "4ccb945f-a5f6-4e8d-b2b0-dd5a783eac73",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:1d02d4f4d830f53bf5d1345a5c0c059f441bfacbf5a45ba0fd18df1a2e09d157"
+        }
+      }
+    },
+    {
+      "seq": 21,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0AGMR7BPVG9RAQ61N3",
+        "sessionId": "01M6MHSW0A6HASHY50JVQBESV1",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "lead@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "15e01dba-e24e-49a6-8668-42094c265bde",
+            "tmuxServer": "/tmp",
+            "paneId": "%0",
+            "processId": 1188059,
+            "processStart": "30457462",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "2cb95f9b-d4d3-4747-9831-70b91de1c859",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:3010f23f70b35137bd8a6d24a98cec8ffb2412853afa7a0c34aa086714edb5da",
+          "observedContextHash": "sha256:3010f23f70b35137bd8a6d24a98cec8ffb2412853afa7a0c34aa086714edb5da",
+          "workerUid": 1000,
+          "processGroupId": 1188059,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:2cb95f9b-d4d3-4747-9831-70b91de1c859"
+          },
+          "deadline": 1793842320271
+        }
+      }
+    },
+    {
+      "seq": 24,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "a68fa1f5-de67-4a0e-81a6-30c2605baa2e",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 10,
+        "action": "lead.wake-state",
+        "payload": {
+          "activations": [
+            1793838620910,
+            1793838802937
+          ],
+          "cycleBlock": null,
+          "cycles": {
+            "task-1": {
+              "count": 1,
+              "progress": 19
+            }
+          },
+          "grant": 0,
+          "pending": {}
+        }
+      }
+    },
+    {
+      "seq": 25,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:33:22",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "5f164612-67ba-4929-88cf-5d50bf660d41",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "2cb95f9b-d4d3-4747-9831-70b91de1c859",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 10,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "2cb95f9b-d4d3-4747-9831-70b91de1c859",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:0c096db60be761a76672152486336ca3be29e3d37774f6c30c6190e0539fb5b8"
+        }
+      }
+    },
+    {
+      "seq": 26,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:41",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "79edb0e7-db42-40d7-a503-db02818fdc4a",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 11,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 221033,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 27,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:41",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "1ed655bb-0cf7-4ed5-a797-169a5e3e59ba",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "2cb95f9b-d4d3-4747-9831-70b91de1c859",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 11,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "2cb95f9b-d4d3-4747-9831-70b91de1c859",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:0cbfdd8034e74211bd50f20c0b8a383f1090a1f7d47ab042573a35c8d0f5db43"
+        }
+      }
+    },
+    {
+      "seq": 28,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "dbcf2127-1a4e-4b59-825a-54b203034148",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 12,
+        "action": "run.lead-proposal-requested",
+        "payload": {
+          "actionId": "8a25d407-c274-49bb-84f7-07a728761751",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:428e78c25fcf737d79ab5b9cef224648d27f3a5d86d5d892140802bc28b6a862"
+        }
+      }
+    },
+    {
+      "seq": 30,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "f3c4466e-befc-45ac-9f0a-84531df4bcb9",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-2",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 13,
+        "action": "task.created",
+        "payload": {
+          "actionId": "task-2",
+          "status": "accepted",
+          "valueDigest": "sha256:f19776cf41413b504f1f35bcd3478ad18c75301749649395c58499b6c18b9175"
+        }
+      }
+    },
+    {
+      "seq": 32,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "b84e6af7-3785-4219-96be-d3606bfb3d09",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-3",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 13,
+        "action": "task.created",
+        "payload": {
+          "actionId": "task-3",
+          "status": "accepted",
+          "valueDigest": "sha256:5f7a086eed87af0444241b44ba5284089ec222b0caaec03643d6bfe58aeb9a97"
+        }
+      }
+    },
+    {
+      "seq": 33,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "58def405-e0f4-4a58-80bc-61ed00fbbcc2",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 13,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "8a25d407-c274-49bb-84f7-07a728761751",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:a6a13e21df4c440fb61403258c4da9254ca6134905661d99f721d82732e1b2b6"
+        }
+      }
+    },
+    {
+      "seq": 36,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0C77NV7S1JAVDBG03P",
+        "sessionId": "01M6MHSW0C6R5G92EQD7Q34NSF",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "two@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "2e0c7f60-3fdd-42d2-99ee-67bf9ab6a422",
+            "tmuxServer": "/tmp",
+            "paneId": "%2",
+            "processId": 1189249,
+            "processStart": "30473155",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:8a05ded55700c4149ea4819994fb88055fb1a28327fb5b343e8f60ed4ac6fe1b",
+          "observedContextHash": "sha256:8a05ded55700c4149ea4819994fb88055fb1a28327fb5b343e8f60ed4ac6fe1b",
+          "workerUid": 1000,
+          "processGroupId": 1189249,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:ffa2527a-23b4-44ae-92cf-cbb091075bd5"
+          },
+          "deadline": 1793842338309
+        }
+      }
+    },
+    {
+      "seq": 38,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0B415D8EM5Q7V6Q2Z4",
+        "sessionId": "01M6MHSW0BSWW86MYPYNAKYC0J",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "one@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "94dd8b09-8b0d-46a9-92ac-f4875be03f28",
+            "tmuxServer": "/tmp",
+            "paneId": "%1",
+            "processId": 1189248,
+            "processStart": "30473155",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "9d161be5-679c-427d-9cdb-4d773460c22a",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:c748f7308fc27d7ca7c19fad6c1a24d9e176ebda1ec8068686298d5c6afce42f",
+          "observedContextHash": "sha256:c748f7308fc27d7ca7c19fad6c1a24d9e176ebda1ec8068686298d5c6afce42f",
+          "workerUid": 1000,
+          "processGroupId": 1189248,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:9d161be5-679c-427d-9cdb-4d773460c22a"
+          },
+          "deadline": 1793842338397
+        }
+      }
+    },
+    {
+      "seq": 42,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "49cf956c-2203-465f-b494-6f123ecf3f37",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 14,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:de562b06619523cbc2bdd04dd52cf9713d6dc7df735b65cd5ac1168e25db7f22"
+        }
+      }
+    },
+    {
+      "seq": 43,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:35:59",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "3cc52e35-5439-4cd8-b1ee-6be6f7f1fda2",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "9d161be5-679c-427d-9cdb-4d773460c22a",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 15,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "9d161be5-679c-427d-9cdb-4d773460c22a",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:9587c633766c34a9645096363fd1fd49c7cfd378aaa84a11950b3fd7f9e39d20"
+        }
+      }
+    },
+    {
+      "seq": 44,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:40:11",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "1189a59c-f339-4d06-a4d8-ac7fa098b7f7",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 16,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:b4bc23fbcc7ff478a4bff5fa27d6172724046f724c95aa094903cdb87d525828"
+        }
+      }
+    },
+    {
+      "seq": 45,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:40:36",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "2666f3e8-e6d4-4cbf-a569-53f30a05fe2d",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 17,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 497309,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 46,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:40:36",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "91490c5e-23ac-49d6-8dcf-9b9b31f546eb",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "9d161be5-679c-427d-9cdb-4d773460c22a",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 17,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "9d161be5-679c-427d-9cdb-4d773460c22a",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:561a809a31be9b859cdc25a8339d1e2cd793d565ee1bd6b264346b28a23641de"
+        }
+      }
+    },
+    {
+      "seq": 49,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "5e1ed087-a7ec-4219-8adf-f2fd943a1405",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-2",
+        "attemptId": "9d161be5-679c-427d-9cdb-4d773460c22a",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 18,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261105003559-4a66cfac",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:2ce580cd7e2a8adf9b165164e4c56fdba40f0b1d78ea0068ea0ed6602edb811f"
+        }
+      }
+    },
+    {
+      "seq": 51,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0CSS4F4R9YNPSNMXN7",
+        "sessionId": "01M6MHSW0C6R5G92EQD7Q34NSH",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "review@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "10274a5d-2dc3-4e0f-a444-7c346088c01e",
+            "tmuxServer": "/tmp",
+            "paneId": "%3",
+            "processId": 1191830,
+            "processStart": "30504984",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:964bc0d5e5ab83ebe6a789c955123b2682889949c85f2067833680c4f10e40fa",
+          "observedContextHash": "sha256:964bc0d5e5ab83ebe6a789c955123b2682889949c85f2067833680c4f10e40fa",
+          "workerUid": 1000,
+          "processGroupId": 1191830,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:5792b8e1-7037-4ace-abb3-06cd27d7328e"
+          },
+          "deadline": 1793842380324
+        }
+      }
+    },
+    {
+      "seq": 56,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:41:17",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "a6ac0e2e-443e-442b-9f0f-2fecffd5da32",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-3",
+        "attemptId": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 19,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261105003559-cb98eb1a",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:18433a2e71fdc00f691cfed25462f97f06bf445a9f2ad457d5b4a05f56a308c1"
+        }
+      }
+    },
+    {
+      "seq": 57,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:41:18",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "5b995d18-57af-4c7c-abd6-47a409cbaca4",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 20,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:68eceb82f1737c07cc72f42545452a04a45666c84fe53e9739eb3cfaab8f79b3"
+        }
+      }
+    },
+    {
+      "seq": 58,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:44:43",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "2b6acf91-b4a8-4b0b-9111-a2a189ca3847",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 21,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 702339,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 59,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:44:43",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "6df30da3-c812-4d8b-ae89-1152138f802f",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 21,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:3e2719f6404b623f4cf8990c1430b2d05515c8314c603992a07d8dd15bea369e"
+        }
+      }
+    },
+    {
+      "seq": 61,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:44:43",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0CSS4F4R9YNPSNMXN7",
+        "sessionId": "01M6MHSW0C6R5G92EQD7Q34NSH",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "review@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "10274a5d-2dc3-4e0f-a444-7c346088c01e",
+            "tmuxServer": "/tmp",
+            "paneId": "%3",
+            "processId": 1193417,
+            "processStart": "30525564",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "cc51fb74-a433-44dc-a044-42c632e19560",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:38702a71f04270691f28b938cf1d94d58d88a1cfaaee8f1cf1a7130a6efcdc9e",
+          "observedContextHash": "sha256:38702a71f04270691f28b938cf1d94d58d88a1cfaaee8f1cf1a7130a6efcdc9e",
+          "workerUid": 1000,
+          "processGroupId": 1193417,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:cc51fb74-a433-44dc-a044-42c632e19560"
+          },
+          "deadline": 1793842380945
+        }
+      }
+    },
+    {
+      "seq": 64,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:44:44",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "66710d5c-6275-47e9-8112-20a68eedb204",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "cc51fb74-a433-44dc-a044-42c632e19560",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 22,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "cc51fb74-a433-44dc-a044-42c632e19560",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:d9919ca175aebb13efd34bfc76ae824bd112017168e331cfaa5984c4b931af12"
+        }
+      }
+    },
+    {
+      "seq": 65,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:45:35",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "71175ade-e0be-41fe-a3f0-50acfea178da",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 23,
+        "action": "task.outcome.denied",
+        "payload": {
+          "actionId": "qitem-20261105004117-e45d356d",
+          "reason": "Review findings must be an array",
+          "status": "denied",
+          "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      }
+    },
+    {
+      "seq": 67,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:45:51",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "fba4832c-6f8c-4be1-ab2e-7ddcc0895c9b",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-2",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 24,
+        "action": "review.verdict",
+        "payload": {
+          "candidateDigest": "sha256:18b860356accc842d28cdf42994c25ddfe0b89183b8f5f4543cc8d4af67d2e82",
+          "findings": [
+            {
+              "category": "testing",
+              "citation": "plan.md Task A: non-ASCII letters are not letters for this helper",
+              "file": "test/slugify.test.mjs",
+              "id": "R1-1",
+              "reproduced": true,
+              "scenario": "No test covers non-ASCII input. Current behaviour is correct (ran: slugify('Café au lait') -> 'caf-au-lait', slugify('ÄÖÜ') -> ''), but a change to \\p{L} or transliteration would pass all existing tests.",
+              "severity": "P2"
+            },
+            {
+              "category": "testing",
+              "citation": "plan.md Task A acceptance: the input is never mutated",
+              "file": "test/slugify.test.mjs",
+              "id": "R1-2",
+              "scenario": "Test 'the input is never mutated' cannot fail because JS strings are immutable primitives; the guarantee holds by language semantics, so this is advisory.",
+              "severity": "P3"
+            }
+          ],
+          "recordedAt": "2026-11-05T00:45:51.778Z",
+          "reviewerTaskId": "task-2-review-1",
+          "round": 1,
+          "taskId": "task-2",
+          "verdict": "approved"
+        }
+      }
+    },
+    {
+      "seq": 68,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:45:51",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "eb326ad4-ea0c-4259-baba-1b2158a7b139",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-2-review-1",
+        "attemptId": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 24,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261105004117-e45d356d",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:4f709a1be654a34d1551bd4056c5ae766564e0c9c4927a78a3a1c181ff232894"
+        }
+      }
+    },
+    {
+      "seq": 69,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:46:37",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "610074af-f1c1-4a40-a0f9-bbd26b35cec2",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 25,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 815359,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 70,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:46:37",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "b15f34c9-5bbc-4583-8000-869aa19a3be9",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "cc51fb74-a433-44dc-a044-42c632e19560",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 25,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "cc51fb74-a433-44dc-a044-42c632e19560",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:7f0cec4e4d428edc8c32509b621c8c64f7316465621411e08a705a68a02ad064"
+        }
+      }
+    },
+    {
+      "seq": 71,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:47:37",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "5722ad2b-df3c-4031-a819-f2cf93d022b6",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-3",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 26,
+        "action": "task.edited",
+        "payload": {
+          "actionId": "task-3",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:e4c4295f466dcdc26183e03d60b08f02871013e00eb82d3fd8cc4444f72542d4"
+        }
+      }
+    },
+    {
+      "seq": 73,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:50:29",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "76e145d1-0773-42b5-bb49-d0f48b89645d",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-3",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 27,
+        "action": "review.verdict",
+        "payload": {
+          "candidateDigest": "sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c",
+          "findings": [
+            {
+              "category": "correctness",
+              "citation": "plan.md Task B: a word starts after any character that is not a letter or digit; every other letter left exactly as it was",
+              "file": "src/titleCase.mjs",
+              "id": "R1-1",
+              "reproduced": true,
+              "scenario": "titleCase regex (?<![A-Za-z0-9])[a-z] treats non-ASCII letters as boundaries and never uppercases them. Ran: titleCase('naïve') -> 'NaïVe' (expected 'Naïve'); titleCase('élan vital') -> 'éLan Vital' (expected 'Élan Vital'); titleCase('cafés ouverts') -> 'CaféS Ouverts'. Task A's ASCII-only rule is scoped 'for this helper' and does not apply to Task B. Fix: /(?<![\\p{L}\\p{N}])\\p{Ll}/gu (verified it fixes these and keeps all four acceptance cases).",
+              "severity": "P1"
+            },
+            {
+              "category": "testing",
+              "citation": "plan.md Task B: a word starts after any character that is not a letter or digit",
+              "file": "test/titleCase.test.mjs",
+              "id": "R1-2",
+              "reproduced": true,
+              "scenario": "No test has non-ASCII input, so all four tests pass under the R1-1 defect. Add e.g. titleCase('naïve élan') === 'Naïve Élan'.",
+              "severity": "P2"
+            }
+          ],
+          "recordedAt": "2026-11-05T00:50:29.756Z",
+          "reviewerTaskId": "task-3-review-1",
+          "round": 1,
+          "taskId": "task-3",
+          "verdict": "changes-required"
+        }
+      }
+    },
+    {
+      "seq": 75,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:50:29",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "1f7aaee4-07a8-432f-9e55-7f80857da188",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-3-review-1",
+        "attemptId": "cc51fb74-a433-44dc-a044-42c632e19560",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 27,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261105004117-234c4da6",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:0a98c750f502eaafb45d6eaf837c0ce7e054fac47e3aa31d05a9b7b3da5db708"
+        }
+      }
+    },
+    {
+      "seq": 78,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:51:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "9ea00c64-88d3-4850-876d-706fe3ea3505",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 28,
+        "action": "run.growth-requested",
+        "payload": {
+          "actionId": "1af65c29-abc3-4c7f-b919-d3903698382d",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:61a7d16610b76d0f2d9e8669ffeec93d4b4a9ebe31205276aad2e0af02565648"
+        }
+      }
+    },
+    {
+      "seq": 80,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:51:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "df0f4026-4058-4cca-bb6f-9ca9ab2a07ff",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-4",
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 29,
+        "action": "task.created",
+        "payload": {
+          "actionId": "task-4",
+          "status": "accepted",
+          "valueDigest": "sha256:87f0bf06174ef1154d1b29caec129e5f12b2b60ab05166c400dcdee7d5d95428"
+        }
+      }
+    },
+    {
+      "seq": 81,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:51:42",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "0492ae40-24d1-4169-91d6-47b368aeb617",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 29,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "1af65c29-abc3-4c7f-b919-d3903698382d",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:0f8a382ba41f2d6fb75ed8571dd751c9e76a3d2bbcd910038b0c869c1981b89d"
+        }
+      }
+    },
+    {
+      "seq": 83,
+      "type": "managed.attempt.receipt",
+      "createdAt": "2026-11-05 00:51:42",
+      "event": {
+        "type": "managed.attempt.receipt",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "nodeId": "01M6MHSW0B415D8EM5Q7V6Q2Z4",
+        "sessionId": "01M6MHSW0BSWW86MYPYNAKYC0J",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "sessionName": "one@acceptance",
+        "receipt": {
+          "identity": {
+            "nativeSessionId": "94dd8b09-8b0d-46a9-92ac-f4875be03f28",
+            "tmuxServer": "/tmp",
+            "paneId": "%1",
+            "processId": 1194845,
+            "processStart": "30567460",
+            "generation": 1,
+            "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab"
+          },
+          "attemptId": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+          "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+          "client": "claude-code",
+          "contextHash": "sha256:8def3181a122e0389c6298434b5118875a7e8144e6c51b87c14e93253f6e7bdc",
+          "observedContextHash": "sha256:8def3181a122e0389c6298434b5118875a7e8144e6c51b87c14e93253f6e7bdc",
+          "workerUid": 1000,
+          "processGroupId": 1194845,
+          "executableVersion": "unknown",
+          "network": {
+            "namespace": "host",
+            "mode": "unknown",
+            "profileFingerprint": "sha256:70dd7e60674f805b31ca89734eba7ddfea16007ba544c8266ce2804cf515af3c",
+            "preflightRef": "direct-launch:99d32b32-9e56-41c2-8980-ab58e1aaad70"
+          },
+          "deadline": 1793842686883
+        }
+      }
+    },
+    {
+      "seq": 86,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:51:43",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "0ef68b2a-d759-4aeb-b337-c9a47c235e80",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 30,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:57c6ff87b58773c46db2d65fd380b8d12bca45224e516cef3cd6ded1c53b51ba"
+        }
+      }
+    },
+    {
+      "seq": 87,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:54:57",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "56565c60-6599-463d-b89a-1269d42472ee",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 31,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 1009385,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 88,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:54:57",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "2373a970-8ad3-4292-816a-c071c30d4879",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": null,
+        "attemptId": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 31,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:ffdb73b01ebd9dd43ac103286c9753f581b723501b18dd3a35845ca0f83b99c4"
+        }
+      }
+    },
+    {
+      "seq": 90,
+      "type": "team.control",
+      "createdAt": "2026-11-05 00:57:12",
+      "event": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "6c48feb4-081d-4979-8929-cd4fb1ce275e",
+        "rigId": "01M6MHSW09EG7AVHBVCYWQJPTT",
+        "runId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "taskId": "task-4",
+        "attemptId": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+        "entityId": "577d5149-f615-4b82-b51e-090f527b9812",
+        "entityVersion": 32,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261105005142-e4ec6e47",
+          "observedBy": "owner-control",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:fdf0e451f346d174ced36cd18b0d1c0ac81659b1cdb12436607deb1ec5b80f5a"
+        }
+      }
+    }
+  ]
+}

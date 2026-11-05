@@ -1,0 +1,14 @@
+
+✔ slugify("Hello, World!") is "hello-world" (0.480173ms)
+✔ slugify("  a  --  b  ") is "a-b" (0.074323ms)
+✔ slugify("!!!") is "" (0.057311ms)
+✔ slugify("a_b") is "a-b" (0.054155ms)
+✔ the input is never mutated (0.069072ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 41.804357
