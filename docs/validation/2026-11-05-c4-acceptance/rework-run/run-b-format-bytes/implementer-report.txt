@@ -1,0 +1,40 @@
+was `test/formatBytes.test.mjs` because the module could not be loaded.
+- After adding the module, `npm test` passed all 8 tests: the 4 new `formatBytes
+` tests and the 4 existing `joinLines` tests.
+- `git status` shows only the two new files. Nothing was committed.
+
+**Open items**
+- The plan doesn't say what happens at or above 1024 TiB. I kept TiB as the larg
+est unit, so those values print as TiB above 1024 (for example `1024 ** 5` → `"1
+024 TiB"`). No test covers this case, because the plan doesn't define it.
+- Values above `Number.MAX_SAFE_INTEGER` are still accepted, as long as they are
+ integers. The plan doesn't mention them, so I didn't add a check.
+**Status:** DONE
+
+**Changed files**
+- `src/formatBytes.mjs` (new): exports `formatBytes(bytes)`. Counts below 1024 c
+ome back as whole bytes (`"N B"`). Larger counts use KiB, MiB, GiB or TiB, round
+ed to one decimal place, and a trailing `.0` is dropped. The unit is picked afte
+r rounding: if the rounded value reaches 1024, the next unit is used and the rou
+nding is done again there. A negative number, a non-integer, `NaN` or `±Infinity
+` throws a `RangeError`.
+- `test/formatBytes.test.mjs` (new): uses `node:test` and `node:assert/strict`.
+It covers every acceptance case in the plan, plus GiB, TiB, both sides of the ro
+und-after-choosing rule (`1048575` → `"1 MiB"`, `1048474` → `"1023.9 KiB"`) and
+`-Infinity`.
+
+**Evidence**
+- Before the module existed, `npm test` failed: 4 passed, 1 failed. The failure
+was `test/formatBytes.test.mjs` because the module could not be loaded.
+- After adding the module, `npm test` passed all 8 tests: the 4 new `formatBytes
+` tests and the 4 existing `joinLines` tests.
+- `git status` shows only the two new files. Nothing was committed.
+
+**Open items**
+- The plan doesn't say what happens at or above 1024 TiB. I kept TiB as the larg
+est unit, so those values print as TiB above 1024 (for example `1024 ** 5` → `"1
+024 TiB"`). No test covers this case, because the plan doesn't define it.
+- Values above `Number.MAX_SAFE_INTEGER` are still accepted, as long as they are
+ integers. The plan doesn't mention them, so I didn't add a check.
+
+Pane is dead (status 0, Thu Nov  5 13:33:13 2026)

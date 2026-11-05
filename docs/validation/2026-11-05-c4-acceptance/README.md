@@ -96,6 +96,36 @@ Recording that candidate was then refused with `review limit exhausted` (seq 131
 spent its `maxReviewRounds: 2` on task-2's approval and task-3's change request. The loop stopped
 at its designed limit and the run went `blocked`.
 
+## The follow-up rework runs (`rework-run/`)
+
+The main run left one requirement unmet, a review round that changed the candidate, so two more
+runs tried for it. Both started with no lead, one implementer seat and one reviewer seat. In each,
+the plan and the task body state one acceptance rule, with an edge case the repository's own tests
+do not cover. Nothing was planted and neither agent was steered. These runs also used the per-task
+review-round limit (`c9cb2b5`).
+
+| Run | Task | Implementer turn | Review round 1 | Outcome |
+|---|---|---|---|---|
+| `run-a-truncate` (`7346f047`) | `truncate`: a character is a Unicode code point | candidate `sha256:6c4f8585…`, validated | approved | Done in one round |
+| `run-b-format-bytes` (`57203634`) | `formatBytes`: the unit is chosen after rounding | 260 s, exit 0; candidate `sha256:060093fc…`, validated; it tested the edge case itself (`1048575` → `"1 MiB"`) | approved, with two P3s (behaviour above 1024 TiB is unspecified; the rule is tested only at the KiB→MiB boundary) | Done in one round |
+
+Both implementers got the stated rule right first time, and both reviewers said so. A round-1
+approval cannot change a candidate, so these runs do not meet the requirement either.
+
+Each run folder holds:
+- the run's event export (16 events each);
+- the reviewer's report, as the owner action recorded it;
+- the owner-action receipts;
+- the candidate patch.
+
+In `run-b-format-bytes/review-1-report.json`, the R1-1 scenario reads "doesnot". That is the
+transcription joining two lines the pane had wrapped mid-word. The reviewer wrote "does not".
+
+A third run, `c0bf032d`, was canceled before any attempt (`canceled-collision-run.json`). Its rig
+reused the first rig's seat names, two live seats were then called `impl@rework`, and the
+dispatcher refused the launch (`direct_launch_seat_unresolved`). The fault was in the run's own
+setup, not the product: `acceptance-rework-seed.ts` now derives the seat names from the rig name.
+
 ## Requirements proven
 
 | Requirement | Where it is proven |
@@ -138,7 +168,11 @@ bundle therefore contains no token counts.
   byte-identical to round 1 (`task-3-round-2.diff` is empty), and recording it was refused with
   `review limit exhausted`. So the requirement — a review round whose outcome changed the
   candidate — is **not met** by this run. What the run does prove is the loop up to that point:
-  the finding, the reopen, the rework dispatch and the limit.
+  the finding, the reopen, the rework dispatch and the limit. The two follow-up runs
+  (`rework-run/`) did not meet it either: both implementers got the rule right first time, and
+  both reviews approved in round 1. **This requirement is unmet by evidence, and the owner
+  decides whether C4 closes without it.** The stub demo `review-demo.ts` still proves the
+  changes-required → rework → approved sequence end to end with the stub runner.
 - **An owner decision on the ASCII-versus-Unicode conflict.** Resolving it needs the lead to
   reissue task-3's body or the owner to rule R1-1 not a defect; this run did neither.
 - **Codex.** Every seat ran Claude Code. Codex is not runnable in WSL on this host, so nothing

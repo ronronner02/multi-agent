@@ -1,0 +1,65 @@
+diff --git a/src/formatBytes.mjs b/src/formatBytes.mjs
+new file mode 100644
+index 0000000..2002adc
+--- /dev/null
++++ b/src/formatBytes.mjs
+@@ -0,0 +1,23 @@
++const UNITS = ["KiB", "MiB", "GiB", "TiB"];
++
++/**
++ * Format a count of bytes as a human-readable size.
++ *
++ * Below 1024 the count is whole bytes. Otherwise it is binary units to one decimal place,
++ * with a trailing ".0" dropped. The unit is chosen after rounding, so a value that rounds
++ * up to 1024 moves to the next unit.
++ */
++export function formatBytes(bytes) {
++  if (!Number.isInteger(bytes) || bytes < 0) {
++    throw new RangeError("formatBytes expects a non-negative integer");
++  }
++  if (bytes < 1024) return `${bytes} B`;
++
++  let unit = 0;
++  let value = Math.round((bytes / 1024) * 10) / 10;
++  while (value >= 1024 && unit < UNITS.length - 1) {
++    unit += 1;
++    value = Math.round((bytes / 1024 ** (unit + 1)) * 10) / 10;
++  }
++  return `${value} ${UNITS[unit]}`;
++}
+diff --git a/test/formatBytes.test.mjs b/test/formatBytes.test.mjs
+new file mode 100644
+index 0000000..db0895c
+--- /dev/null
++++ b/test/formatBytes.test.mjs
+@@ -0,0 +1,30 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { formatBytes } from "../src/formatBytes.mjs";
++
++test("values below 1024 are whole bytes", () => {
++  assert.equal(formatBytes(0), "0 B");
++  assert.equal(formatBytes(512), "512 B");
++  assert.equal(formatBytes(1023), "1023 B");
++});
++
++test("values at or above 1024 use binary units", () => {
++  assert.equal(formatBytes(1024), "1 KiB");
++  assert.equal(formatBytes(1536), "1.5 KiB");
++  assert.equal(formatBytes(1048576), "1 MiB");
++  assert.equal(formatBytes(1024 ** 3), "1 GiB");
++  assert.equal(formatBytes(1024 ** 4), "1 TiB");
++});
++
++test("the unit is chosen after rounding", () => {
++  // 1048575 B is 1023.999 KiB, which rounds to 1024.0 KiB, so it is 1 MiB.
++  assert.equal(formatBytes(1048575), "1 MiB");
++  // 1048474 B is 1023.9004 KiB, which stays in KiB.
++  assert.equal(formatBytes(1048474), "1023.9 KiB");
++});
++
++test("an invalid count is refused", () => {
++  for (const bad of [-1, 1.5, NaN, Infinity, -Infinity]) {
++    assert.throws(() => formatBytes(bad), RangeError);
++  }
++});

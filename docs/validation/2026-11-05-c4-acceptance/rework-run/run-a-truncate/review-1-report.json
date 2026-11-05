@@ -1,0 +1,12 @@
+[
+  {
+    "id": "R1-1", "severity": "P3", "citation": "plan.md Task A: the input is never mutated", "file": "test/truncate.test.mjs",
+    "category": "testing", "scenario": "Test 'the input is not mutated' passes a primitive string; strings are immutable in JS, so the assertion cannot fail regardless of implementation. Guarantee holds by language semantics; test is vacuous.",
+    "in_delta": false, "reproduced": true
+  },
+  {
+    "id": "R1-2", "severity": "P3", "citation": "", "file": "src/truncate.mjs",
+    "category": "correctness", "scenario": "truncate(['ab','c'], 1) returns the array unchanged (ran via node -e); truncate(null, 1) throws an incidental TypeError. Not required by plan; advisory only.",
+    "in_delta": false, "reproduced": true
+  }
+]
