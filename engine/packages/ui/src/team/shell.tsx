@@ -5,13 +5,16 @@ import { I18nextProvider, useTranslation } from "react-i18next";
 import { ChevronLeft, MoreHorizontal } from "./glyphs.js";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
+import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { useRuns, useTeams } from "./hooks.js";
 import { TeamsScreen } from "./teams-screen.js";
 import { RunHome } from "./run-home.js";
 import { TaskScreen } from "./task-screen.js";
 import { BranchScreen } from "./branch-screen.js";
 import { SettingsScreen } from "./settings.js";
-import { StartRunForm } from "./new-task.js";
+import { StartRunForm, NewWorkSheet } from "./new-task.js";
+import { isFinished } from "./display.js";
+import { isRunActive } from "./clients.js";
 import { useThemePreference } from "./theme.js";
 import "./fonts.js";
 import "./team.css";
@@ -79,11 +82,12 @@ export function Pairing() {
  * The frame itself: a 56px bar and the screen below it. It holds no data and no router, so the
  * same frame serves the browser, the desktop wrapper and the tests.
  */
-export function ShellFrame({ language, crumbs, onLanguage, onSettings, children }: {
+export function ShellFrame({ language, crumbs, onLanguage, onSettings, action, children }: {
   language: InterfaceI18n;
   crumbs: ReactNode;
   onLanguage: (next: "zh-CN" | "en") => void;
   onSettings: () => void;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -91,6 +95,7 @@ export function ShellFrame({ language, crumbs, onLanguage, onSettings, children 
     <header className="topbar">
       <div className="crumbs">{crumbs}</div>
       <div className="topbar-right">
+        {action}
         <div className="lang" role="group" aria-label={t("team.settings.language")}>
           <button aria-pressed={language.language === "zh-CN"} onClick={() => onLanguage("zh-CN")}>中</button>
           <button aria-pressed={language.language === "en"} onClick={() => onLanguage("en")}>EN</button>
@@ -100,6 +105,19 @@ export function ShellFrame({ language, crumbs, onLanguage, onSettings, children 
     </header>
     {children}
   </div>;
+}
+
+/**
+ * Whether the run screen offers the next run.
+ *
+ * The run itself stays "approved" after its work finishes and after a merge, so the state alone
+ * cannot say the run is done: an active run with open tasks is the only case that hides the
+ * entry, because that is the only case where the team is already busy.
+ */
+export function showsNewWork(read?: TeamOwnerRead): boolean {
+  if (!read) return false;
+  if (!isRunActive(read.run)) return true;
+  return read.tasks.length > 0 && read.tasks.every(task => isFinished(task));
 }
 
 function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLanguage: (next: "zh-CN" | "en") => void }) {
@@ -143,8 +161,19 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
     </>}
   </>;
 
+  const [newWork, setNewWork] = useState(false);
+  // A run that is no longer doing work offers the next one: the owner can keep a team busy
+  // without starting from the teams list.
+  const canStartWork = showsNewWork(read) && runId !== "";
+
   const frame = (children: ReactNode) => <ShellFrame language={language} crumbs={crumbs}
-    onLanguage={onLanguage} onSettings={() => go("settings")}>{children}</ShellFrame>;
+    onLanguage={onLanguage} onSettings={() => go("settings")}
+    action={canStartWork ? <button className="btn btn-quiet" style={{ fontSize: 13 }}
+      onClick={() => setNewWork(true)}>{t("team.teams.newWork")}</button> : undefined}>
+    {children}
+    {canStartWork && <NewWorkSheet teams={teams.data} teamId={read!.run.rigId} open={newWork}
+      onOpenChange={setNewWork} onStarted={nextRun => { setNewWork(false); go("run", { run: nextRun, task: undefined }); }} />}
+  </ShellFrame>;
 
   if (!paired) return frame(<Pairing />);
   if (section === "settings") return frame(<SettingsScreen language={language} connection={connection}
@@ -152,7 +181,8 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
     onClose={() => go("teams", { run: undefined, task: undefined })} />);
 
   if (section === "teams") return frame(<TeamsScreen teams={teams.data} runs={runs.data}
-    loading={teams.isPending} onOpenTeam={teamId => go("run", { run: latestRunId(runs.data, teamId), task: undefined })} />);
+    loading={teams.isPending} onOpenTeam={teamId => go("run", { run: latestRunId(runs.data, teamId), task: undefined })}
+    onOpenRun={nextRun => go("run", { run: nextRun, task: undefined })} />);
 
   if (!runId) {
     return frame(<div className="page page-narrow" style={{ paddingTop: 48 }}>

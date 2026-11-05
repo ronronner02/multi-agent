@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
-import { Caret } from "./glyphs.js";
+import { Caret, Close } from "./glyphs.js";
 import { runsKey, type TeamSummary } from "./hooks.js";
 
 /**
@@ -10,12 +11,14 @@ import { runsKey, type TeamSummary } from "./hooks.js";
  *
  * The same owner endpoint `rig team start` calls: the goal is the only required field, and the
  * team it runs on is chosen from the teams the daemon lists, so nobody types an id. A refused
- * start shows the daemon's own reason. Under U5 the same form opens a planning chat instead of
- * dispatching straight away; that is one flag on this request, which is why the form does not
- * grow a second shape.
+ * start shows the daemon's own reason.
+ *
+ * A team with a lead seat starts in planning: the lead drafts the plan in the chat and the owner
+ * approves it (U5). A team without one keeps the direct start, because there is nobody to plan
+ * with. Both are the same request with one flag.
  */
-export function StartRunForm({ teams, onStarted }: {
-  teams: TeamSummary[] | undefined; onStarted: (runId: string) => void;
+export function StartRunForm({ teams, presetTeamId, onStarted }: {
+  teams: TeamSummary[] | undefined; presetTeamId?: string; onStarted: (runId: string) => void;
 }) {
   const { t } = useTranslation();
   const session = useOwnerSession();
@@ -25,7 +28,8 @@ export function StartRunForm({ teams, onStarted }: {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const chosen = team || teams?.[0]?.id || "";
+  const chosen = team || presetTeamId || teams?.[0]?.id || "";
+  const hasLead = (teams ?? []).some(entry => entry.id === chosen && entry.seats.some(seat => seat.role === "lead"));
 
   return <section className="plate" aria-label={t("web.newTask")}>
     <h2 className="plate-title">{t("web.newTask")}</h2>
@@ -36,7 +40,7 @@ export function StartRunForm({ teams, onStarted }: {
       try {
         const receipt = await session.request<{ runId: string }>("/runs", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: goal.trim(), ...(chosen ? { rig: chosen } : {}) }),
+          body: JSON.stringify({ goal: goal.trim(), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true } : {}) }),
         });
         if (!receipt?.runId) throw new Error("no run");
         await cache.invalidateQueries({ queryKey: runsKey });
@@ -66,4 +70,28 @@ export function StartRunForm({ teams, onStarted }: {
       </div>
     </form>
   </section>;
+}
+
+/**
+ * The same form as a sheet, so "new work" can open from the teams list and from a run that has
+ * finished without navigating away. The sheet is not portalled: the shell's own element carries
+ * the styles, and a fixed overlay renders correctly where it is declared.
+ */
+export function NewWorkSheet({ teams, teamId, open, onOpenChange, onStarted }: {
+  teams: TeamSummary[] | undefined; teamId: string; open: boolean;
+  onOpenChange: (open: boolean) => void; onStarted: (runId: string) => void;
+}) {
+  const { t } = useTranslation();
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Overlay className="scrim" />
+    <Dialog.Content className="sheet" aria-label={t("team.teams.newWork")}>
+      <header className="sheet-head">
+        <Dialog.Title className="display" style={{ fontSize: 20, margin: 0 }}>{t("team.teams.newWork")}</Dialog.Title>
+        <Dialog.Close className="more" aria-label={t("team.create.close")}><Close /></Dialog.Close>
+      </header>
+      <div className="sheet-body">
+        <StartRunForm teams={teams} presetTeamId={teamId} onStarted={runId => { onOpenChange(false); onStarted(runId); }} />
+      </div>
+    </Dialog.Content>
+  </Dialog.Root>;
 }

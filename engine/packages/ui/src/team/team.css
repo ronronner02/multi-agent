@@ -276,6 +276,9 @@ body:has(.team-shell) > #root { height: 100%; }
   align-items: center; padding: var(--sp-4) 0; border-top: 1px solid var(--line);
   transition: background var(--t-fast) var(--ease);
 }
+.team-shell .team-main { display: grid; gap: 2px; min-width: 0; }
+.team-shell .team-side { display: flex; align-items: center; gap: var(--sp-3); }
+.team-shell .team-new-work { min-height: 30px; padding: 0 12px; font-size: 13px; }
 .team-shell .team-row:last-child { border-bottom: 1px solid var(--line); }
 .team-shell .team-row:hover { background: var(--surface-2); }
 .team-shell .team-name { font-size: 15px; font-weight: 500; }
@@ -472,3 +475,6 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .verdict-mark[data-verdict="changes-required"] { color: var(--attention); }
 .team-shell .verdict-mark svg { width: 14px; height: 14px; }
 .team-shell .detail-foot .sev { color: var(--muted); font-size: 12px; }
+
+/* A sheet holds the start form itself, so the form does not draw a second card inside it. */
+.team-shell .sheet-body .plate { border: 0; background: none; padding: 0; }

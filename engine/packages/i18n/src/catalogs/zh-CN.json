@@ -713,5 +713,6 @@
   "team.merge.refused.merge_detached_head": "当前不在分支上",
   "team.merge.refused.merge_already_on_branch": "已经在目标分支上",
   "team.merge.refused.merge_no_branch": "还没有集成分支",
-  "team.merge.refused.merge_unavailable": "合并不可用"
+  "team.merge.refused.merge_unavailable": "合并不可用",
+  "team.teams.newWork": "新工作"
 }
