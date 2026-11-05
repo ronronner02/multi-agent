@@ -4,8 +4,10 @@ import { TEAM_CONTROL_VERSION, jsonValue, type ControlRequest, type JsonValue } 
 import type { PlanGovernance } from "./plan-governance.js";
 import type { SessionRegistry } from "./session-registry.js";
 import type { NativeAttemptIdentity } from "../contracts/team-control.js";
-import { classifyAttemptFailure, TERMINAL_TAIL_LINES, type AttemptClassification } from "./attempt-failure.js";
-import { agentTurnOutputPaths, readAgentTurnThreadId } from "./agent-turn.js";
+import { classifyAttemptFailure, classificationFor, TERMINAL_TAIL_LINES, type AttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
+import { agentTurnOutputPaths, readAgentTurnLastMessage, readAgentTurnThreadId } from "./agent-turn.js";
+import { leadCompletionEvidence, taskCompletionEvidence, type CandidateFacts, type TaskCompletionEvidence } from "./task-completion.js";
+import { recordedFindings } from "./review-loop.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -15,11 +17,10 @@ import { agentTurnOutputPaths, readAgentTurnThreadId } from "./agent-turn.js";
  * never be observed to finish, and the owner's outcome command — which requires a stopped
  * attempt with an identity — could never succeed outside the demos.
  *
- * This owner closes that gap with the two writes the plan already defines: the receipt admits
- * the attempt through `recordAttempt`, and the end of the process the receipt named is recorded
- * through `recordUsage`. Nothing here decides an outcome: R18 says a completed attempt never
- * accepts a task, so the owner's action still supplies the evidence and the decision. Both
- * writes are idempotent, so a sweep that runs twice records nothing twice.
+ * This path closes that gap with the receipt and stop writes, then records the task outcome from
+ * the daemon's own evidence. Owner commands remain an override, while ordinary implementer,
+ * lead and reviewer turns complete through this sweep. All writes are idempotent, so a repeated
+ * sweep records nothing twice.
  */
 
 /** How often receipts are registered and identities re-observed, on the daemon's 1 Hz cadence. */
@@ -38,6 +39,10 @@ export interface AttemptCompletionDependencies {
     & Partial<Pick<SessionRegistry, "updateResumeToken">>;
   /** The direct worker's mutable state root, shared with its turn launcher. */
   turnStateRoot?: string;
+  /** The runtime's daemon-owned candidate manifest reader, used for automatic completion evidence. */
+  candidateManifestFor?: (runId: string, taskId: string) => CandidateFacts;
+  /** The runtime's daemon-owned lead proposal reader, used for automatic lead completion evidence. */
+  readLeadProposal?: (runId: string, taskId: string) => readonly unknown[];
   /** Injectable for the tests; production leaves the default. */
   alive?: (identity: { processId: number; processStart: string }) => boolean;
   /**
@@ -85,6 +90,22 @@ export interface AttemptCompletion {
   sweep(): Promise<void>;
   start(): void;
   stop(): void;
+}
+
+/** The final JSON report a reviewer turn must return for automatic verdict recording. */
+export function extractReviewerReport(message: string | null): Record<string, unknown> | null {
+  if (message === null) return null;
+  const blocks = [...message.matchAll(/```json\s*([\s\S]*?)```/gi)];
+  const block = blocks.at(-1)?.[1];
+  if (block === undefined) return null;
+  try {
+    const value = JSON.parse(block) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)
+      || !("findings" in value)) return null;
+    return value as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 const unavailable = { value: null, reason: "Native usage has not been observed" };
@@ -225,7 +246,12 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           log(`team completion: attempt ${attempt.id} stop was not recorded: ${recorded.reason ?? recorded.status}`);
           continue;
         }
-releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefined);
+        const stopped = governance.getAttempt(attempt.id);
+        if (stopped) {
+          try { await recordAutomaticOutcome(stopped); }
+          catch (error) { log(`team completion: automatic outcome for attempt ${attempt.id} failed: ${error instanceof Error ? error.message : String(error)}`); }
+        }
+        releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefined);
         // U5 — the turn is over and its seat is free: whoever owns this attempt's conversation
         // gets its final message now, before the freed slot is offered to the next task.
         try { await dependencies.onAttemptStopped?.(attempt); } catch (error) {
@@ -265,6 +291,113 @@ releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefin
     const terminalTail = pane !== null && dependencies.paneTail && exit?.code !== 0
       ? await dependencies.paneTail(pane, TERMINAL_TAIL_LINES) : null;
     return classifyAttemptFailure({ canceled, exit: exit === null ? null : { code: exit.code }, terminalTail });
+  };
+
+  /** Record the task result the daemon can prove from the stopped turn. */
+  const recordAutomaticOutcome = async (stoppedAttempt: NonNullable<ReturnType<PlanGovernance["getAttempt"]>>): Promise<void> => {
+    // Older embedders and unit fixtures may compose only the stop observer. Production wires at
+    // least one worker-output reader; without one there is no daemon-owned evidence to record.
+    if (!dependencies.candidateManifestFor && !dependencies.readLeadProposal && !dependencies.turnStateRoot) return;
+    if (stoppedAttempt.qitemId === null) return;
+    const task = governance.getTask(stoppedAttempt.qitemId);
+    if (!task || !["lead", "implementer", "reviewer"].includes(task.assignment.role)) return;
+    // A planning lead task is the owner↔lead chat conversation, not a delivery task. Its turn
+    // ends in a chat reply and is reopened by the next owner message; completion evidence applies
+    // once the run enters delivery and the lead writes its decomposition proposal.
+    if (task.assignment.role === "lead" && governance.getRun(stoppedAttempt.runId).phase === "planning") return;
+    const subjectTaskId = task.assignment.role === "reviewer" && task.assignment.reviewOf !== undefined
+      ? task.assignment.reviewOf : task.assignment.taskId;
+    let state: "done" | "failed";
+    let evidence: Record<string, unknown>;
+    let reasonCode: AttemptReasonCode | null = null;
+
+    if (task.assignment.role === "reviewer") {
+      const message = dependencies.turnStateRoot
+        ? readAgentTurnLastMessage(dependencies.turnStateRoot, stoppedAttempt.id) : null;
+      const report = extractReviewerReport(message);
+      if (!report) {
+        state = "failed";
+        evidence = { reasonCode: "review_report_missing" };
+        reasonCode = "review_report_missing";
+      } else {
+        try {
+          // Validate the report at the same boundary the governance path uses before recording it.
+          recordedFindings(report);
+          evidence = { ...report };
+          try {
+            const manifest = dependencies.candidateManifestFor?.(stoppedAttempt.runId, subjectTaskId);
+            if (manifest) evidence.manifestDigest = manifest.manifestDigest;
+          } catch {
+            // The review report remains sufficient evidence; the existing review path treats a
+            // missing digest as unavailable candidate context and still validates the findings.
+          }
+          state = "done";
+        } catch {
+          state = "failed";
+          evidence = { reasonCode: "review_report_missing" };
+          reasonCode = "review_report_missing";
+        }
+      }
+    } else {
+      let manifest: CandidateFacts | null = null;
+      let unavailableReason = "Candidate trees are not composed in this daemon";
+      try {
+        manifest = dependencies.candidateManifestFor?.(stoppedAttempt.runId, subjectTaskId) ?? null;
+      } catch {
+        unavailableReason = "The task's candidate is not on disk";
+      }
+      let completion: TaskCompletionEvidence;
+      if (task.assignment.role === "lead") {
+        let proposal: { taskCount: number } | null = null;
+        if (dependencies.readLeadProposal) {
+          try { proposal = { taskCount: dependencies.readLeadProposal(stoppedAttempt.runId, task.assignment.taskId).length }; }
+          catch { proposal = null; }
+        }
+        completion = leadCompletionEvidence({ manifest, proposal, unavailableReason });
+      } else {
+        completion = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest, unavailableReason });
+      }
+      evidence = completion as unknown as Record<string, unknown>;
+      if (completion.validated) state = "done";
+      else {
+        state = "failed";
+        reasonCode = (stoppedAttempt.failure?.reasonCode as AttemptReasonCode | undefined) ?? "evidence_invalid";
+        evidence = { ...evidence, reasonCode };
+      }
+    }
+
+    // The classifier is recorded with the stop when available. A failed evidence read has no
+    // process classifier, so stamp its retry-eligible code onto the stopped attempt first.
+    let currentAttempt = stoppedAttempt;
+    if (state === "failed" && currentAttempt.failure === null && reasonCode !== null) {
+      const failure = classificationFor(reasonCode);
+      const observed = governance.recordUsage({
+        protocolVersion: TEAM_CONTROL_VERSION, runId: currentAttempt.runId, actionId: currentAttempt.id,
+        expectedEntityVersion: governance.getRun(currentAttempt.runId).entityVersion,
+        idempotencyKey: `attempt-failure:${currentAttempt.id}:${currentAttempt.entityVersion}`,
+        payload: { expectedAttemptVersion: currentAttempt.entityVersion, state: "stopped", usage: jsonValue(currentAttempt.usage), failure: jsonValue(failure) },
+      });
+      if (observed.status !== "observed" && !observed.replayed) {
+        log(`team completion: could not record ${reasonCode} for attempt ${currentAttempt.id}: ${observed.reason ?? observed.status}`);
+        return;
+      }
+      currentAttempt = governance.getAttempt(currentAttempt.id) ?? currentAttempt;
+    }
+
+    const actorSession = governance.taskSeat(task.qitemId);
+    if (!actorSession) return;
+    const run = governance.getRun(currentAttempt.runId);
+    const outcome = governance.recordTaskOutcome({
+      protocolVersion: TEAM_CONTROL_VERSION, runId: currentAttempt.runId, actionId: task.qitemId,
+      expectedEntityVersion: run.entityVersion,
+      idempotencyKey: `daemon-task-outcome:${currentAttempt.id}`,
+      payload: { expectedTaskVersion: task.entityVersion, state, actorSession, attemptId: currentAttempt.id,
+        expectedAttemptVersion: currentAttempt.entityVersion, evidence,
+        ...(state === "done" ? { closureReason: "no-follow-on" } : {}) },
+    }, { kind: "daemon", sessionId: "daemon" });
+    if (outcome.status !== "observed" && !outcome.replayed) {
+      log(`team completion: automatic outcome for ${task.assignment.taskId} was not recorded: ${outcome.reason ?? outcome.status}`);
+    }
   };
 
   /** Release a pane the launcher held, so the seat's next client starts in a live shell. */

@@ -8,6 +8,7 @@ import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import type { WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 import { writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
+import { TEAM_CONTROL_VERSION } from "../src/contracts/team-control.js";
 import { unisolatedWorkerRoots } from "../src/domain/unisolated-roots.js";
 import type { createDaemon } from "../src/startup.js";
 
@@ -196,7 +197,10 @@ console.log(JSON.stringify({type:'turn.completed'}));
     };
     const first = await waitForStop();
     expect(first.provider).toBe("codex");
-    expect(first.failure).toBeNull();
+    // U4 records the daemon's candidate check as soon as the turn stops. This fixture only reads
+    // the plan, so its empty patch is an evidence failure; count the existing retry before
+    // asking the dispatcher to launch the continuation used by this Codex transport test.
+    expect(first.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
     const session = daemon.deps.sessionRegistry.getSessionsForRig(rig.id).find(row => row.sessionName === seat)!;
     if (reportedThread !== threadId) {
       expect(session.resumeToken).toBeNull();
@@ -213,6 +217,14 @@ console.log(JSON.stringify({type:'turn.completed'}));
     expect(initial.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor(body.runId, governance.getTask(qitemId)!.assignment));
     expect(initial.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
 
+    const task = governance.getTask(qitemId)!;
+    const retry = await daemon.app.fetch(new Request(`http://127.0.0.1/api/team-control/runs/${body.runId}/tasks/retry`, {
+      method: "POST", headers: { Authorization: "Bearer fixture-owner", "Content-Type": "application/json" },
+      body: JSON.stringify({ protocolVersion: TEAM_CONTROL_VERSION, runId: body.runId, actionId: qitemId,
+        expectedEntityVersion: governance.getRun(body.runId).entityVersion, idempotencyKey: `codex-retry-${first.id}`,
+        payload: { expectedTaskVersion: task.entityVersion, attemptId: first.id, expectedAttemptVersion: first.entityVersion } }),
+    }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    expect(retry.status).toBe(200);
     await daemon.deps.teamControl!.dispatch!(body.runId, "task-1");
     const second = await waitForStop(first.id);
     const continued = JSON.parse(readFileSync(join(stateRoot, "turns", second.id, "last-message.txt.launch.json"), "utf8"));

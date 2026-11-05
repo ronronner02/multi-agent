@@ -1,8 +1,8 @@
 /**
  * T033 — the one classifier for an attempt that ended.
  *
- * KTD20 gives every failed attempt exactly one reason code and a `resume_safe` flag, and only
- * five codes are eligible for KTD9's single recoverable retry. The decision has to be made in
+ * KTD20 gives every failed attempt exactly one reason code and a `resume_safe` flag. The retry
+ * eligible set is the only set allowed to use KTD9's single recoverable retry. The decision has to be made in
  * one place: a consumer that re-derived eligibility could disagree with the owner's retry, and
  * the plan forbids that. This module is pure — evidence in, decision out — so the completion
  * sweep can call it at the moment it records a stop, and the tests can drive it directly.
@@ -31,7 +31,7 @@ export const ATTEMPT_REASON_CODES = [
   "agent_error.provider_server_error", "agent_error.provider_network", "agent_error.provider_invalid_request",
   "agent_error.model_unavailable", "agent_error.context_overflow", "agent_error.missing_config",
   "agent_error.missing_executable", "agent_error.unsupported_version", "agent_error.process_failure",
-  "agent_error.unparseable_output", "agent_error.unknown",
+  "agent_error.unparseable_output", "agent_error.unknown", "evidence_invalid", "review_report_missing",
 ] as const;
 export type AttemptReasonCode = (typeof ATTEMPT_REASON_CODES)[number];
 
@@ -41,6 +41,7 @@ export type AttemptReasonCode = (typeof ATTEMPT_REASON_CODES)[number];
  */
 export const RETRY_ELIGIBLE_REASON_CODES: readonly AttemptReasonCode[] = [
   "runtime_offline", "daemon_recovery", "run_timeout", "no_progress", "agent_error.provider_network",
+  "evidence_invalid", "review_report_missing",
 ];
 
 /**
@@ -82,6 +83,8 @@ export const OWNER_ACTIONS: Readonly<Record<AttemptReasonCode, string>> = {
   "agent_error.process_failure": "The client process failed; inspect its output, then start a new task.",
   "agent_error.unparseable_output": "The client's output could not be read; inspect it, then start a new task.",
   "agent_error.unknown": "The daemon could not classify this failure, so it is not retried; inspect the attempt's output.",
+  evidence_invalid: "The daemon could not validate the task's candidate evidence; retry the task once.",
+  review_report_missing: "The reviewer did not return a readable findings report; retry the review once.",
 };
 
 /** The decision recorded with a stopped attempt, and read back by every consumer. */
