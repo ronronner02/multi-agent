@@ -43,22 +43,45 @@ export interface PendingDispatchDependencies {
  * A task a completion reopened *is* dispatched: its last transition is the reopen, which is the
  * rework after a review or the lead's revision after a rejection. Both are new attempts on the
  * same conversation, and both are exactly what a freed slot exists to start.
+ *
+ * A reopen starts *one* attempt, not one per freed slot. Once that attempt has run and ended, the
+ * queue row still shows the reopen as its last transition, so the test above would keep naming
+ * the task: the run's own attempt record is what says whether the reopen has been served. An
+ * attempt recorded after the reopen is that answer, and the task then waits for the owner's
+ * outcome exactly as any finished turn does.
+ *
+ * "After" is the event log's own order, not a wall clock: a reopen and the attempt its dispatch
+ * admits can share a millisecond, so `created_at` cannot separate them. The reopen writes a
+ * `queue.updated` and every recorded attempt writes an `attempt.recorded`, both into the one
+ * `events` table, so their `seq` values say which came first without depending on resolution.
  */
 export function pendingTasks(db: Database.Database, runId: string): string[] {
   const rows = db.prepare(`
-    SELECT a.task_id AS taskId, q.state AS state,
+    SELECT a.task_id AS taskId, q.state AS state, a.qitem_id AS qitemId,
       (SELECT count(*) FROM team_attempts t WHERE t.qitem_id = a.qitem_id) AS attempts,
       (SELECT count(*) FROM team_attempts t WHERE t.qitem_id = a.qitem_id AND t.state <> 'stopped') AS openAttempts,
       (SELECT tr.transition_note FROM queue_transitions tr WHERE tr.qitem_id = a.qitem_id
-        ORDER BY tr.ts DESC, tr.transition_id DESC LIMIT 1) AS lastNote
+        ORDER BY tr.ts DESC, tr.transition_id DESC LIMIT 1) AS lastNote,
+      (SELECT max(e.seq) FROM events e
+        WHERE e.type = 'queue.updated'
+          AND json_extract(e.payload, '$.qitemId') = a.qitem_id
+          AND json_extract(e.payload, '$.toState') = 'pending'
+          AND json_extract(e.payload, '$.fromState') IN ('done', 'handed-off')) AS reopenSeq,
+      (SELECT max(e.seq) FROM events e
+        JOIN team_attempts t ON t.id = json_extract(e.payload, '$.attemptId')
+        WHERE e.type = 'team.control'
+          AND json_extract(e.payload, '$.action') IN ('attempt.recorded', 'attempt.admitted')
+          AND t.qitem_id = a.qitem_id) AS attemptSeq
     FROM team_queue_authority a
     JOIN queue_items q ON q.qitem_id = a.qitem_id
     WHERE a.run_id = ? AND q.state IN ('pending', 'in-progress')
-    ORDER BY a.rowid`).all(runId) as Array<{ taskId: string; state: string; attempts: number; openAttempts: number;
-      lastNote: string | null }>;
+    ORDER BY a.rowid`).all(runId) as Array<{ taskId: string; state: string; qitemId: string; attempts: number;
+      openAttempts: number; lastNote: string | null; reopenSeq: number | null; attemptSeq: number | null }>;
   return rows.filter(row => row.openAttempts === 0
-    // Never ran, or reopened deliberately: both are work nobody is doing.
-    && (row.attempts === 0 || (row.lastNote ?? "").startsWith("reopen acknowledged:")))
+    // Never ran, or reopened deliberately and not yet served: both are work nobody is doing.
+    && (row.attempts === 0
+      || ((row.lastNote ?? "").startsWith("reopen acknowledged:")
+        && (row.reopenSeq === null || row.attemptSeq === null || row.attemptSeq < row.reopenSeq))))
     .map(row => row.taskId);
 }
 
