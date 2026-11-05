@@ -442,4 +442,29 @@ describe("a freed slot dispatches the run's next task", () => {
     expect(dispatchPending).toHaveBeenCalledWith("run");
     completion.stop();
   });
+
+  it("asks the scheduler for a run's pending work when the daemon starts", async () => {
+    // Measured on the C4 acceptance run: the review reopened the implementer's task, then the
+    // daemon restarted. Nothing was live to stop, so no freed slot asked the scheduler again and
+    // the rework sat pending. A start is a freed slot too.
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    const dispatchPending = vi.fn(async () => {});
+    const completion = composeAttemptCompletion({ db, governance, sessions: { findResumeContextByName: () => null,
+      updateStartupStatus: () => {} }, currentBinding: () => binding, dispatchPending, intervalMs: 60_000 });
+    completion.start();
+    // The start pass is asynchronous; give it a turn to run before asserting.
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(dispatchPending).toHaveBeenCalledWith("run");
+    completion.stop();
+    // A run with nothing pending is not asked: the pass reads the queue, not every run ever made.
+    dispatchPending.mockClear();
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?")
+      .run(governance.findTask("run", "task-1")!.qitemId);
+    const second = composeAttemptCompletion({ db, governance, sessions: { findResumeContextByName: () => null,
+      updateStartupStatus: () => {} }, currentBinding: () => binding, dispatchPending, intervalMs: 60_000 });
+    second.start();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(dispatchPending).not.toHaveBeenCalled();
+    second.stop();
+  });
 });

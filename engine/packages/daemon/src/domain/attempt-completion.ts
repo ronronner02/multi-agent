@@ -263,6 +263,16 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     sessions.updateStartupStatus(context.sessionId, "pending");
   };
 
+  /** The runs that still hold work nobody is doing, as the scheduler's own durable rows say. */
+  const pendingRunIds = (): string[] => (db.prepare(`
+    SELECT DISTINCT a.run_id AS runId
+    FROM team_queue_authority a
+    JOIN queue_items q ON q.qitem_id = a.qitem_id
+    JOIN team_runs r ON r.id = a.run_id
+    WHERE q.state IN ('pending', 'in-progress') AND r.state = 'approved'
+      AND NOT EXISTS (SELECT 1 FROM team_attempts t WHERE t.qitem_id = a.qitem_id AND t.state <> 'stopped')`)
+    .all() as Array<{ runId: string }>).map(row => row.runId);
+
   const sweep = async (): Promise<void> => {
     const receipts = db.prepare("SELECT seq, payload FROM events WHERE type = 'managed.attempt.receipt' AND seq > ? ORDER BY seq")
       .all(processedSeq) as ReceiptRow[];
@@ -290,6 +300,17 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       // The daemon's lifetime decides how long this runs; a tick must never be the reason a
       // process stays alive after its database closed.
       timer.unref?.();
+      // A restart is a freed slot too: the run's pending tasks were waiting for one when the
+      // daemon stopped, and nothing else asks the scheduler again. Without this a run resumed
+      // after a restart sits with work nobody starts — measured on the C4 acceptance run, where
+      // the rework the review had just reopened was never dispatched.
+      void (async () => {
+        for (const runId of pendingRunIds()) {
+          try { await dependencies.dispatchPending?.(runId); } catch (error) {
+            log(`team completion: dispatch after start for run=${runId} failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+      })();
     },
     stop() {
       if (timer) clearInterval(timer);
