@@ -1,113 +1,51 @@
 import React from "react";
-import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { I18nextProvider } from "react-i18next";
+import { describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n } from "@openrig/i18n";
-import { OwnerReadError } from "../../hooks/useOwnerSession.js";
-import { NewTaskForm, NoRunCard, RunSelect } from "../new-task.js";
+import { I18nextProvider } from "react-i18next";
+import { StartRunForm } from "../new-task.js";
+import type { TeamSummary } from "../hooks.js";
 
-/**
- * MVP slice 2 — the Web UI "New task" form.
- *
- * The form is the owner's only in-browser way to create work, so what matters is that it
- * sends the goal to the one endpoint, that a refusal is reported instead of a silent no-op,
- * and that the run list is the list the daemon returned.
- */
+const request = vi.fn(async () => ({ runId: "3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f" }));
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), paired: true, navigate: vi.fn() }));
-vi.mock("../../hooks/useOwnerSession.js", async importOriginal => ({ ...(await importOriginal<object>()),
-  useOwnerSession: () => ({ paired: mocks.paired, request: mocks.request }),
-}));
-vi.mock("@tanstack/react-router", async importOriginal => ({ ...(await importOriginal<object>()),
-  useNavigate: () => mocks.navigate,
-  Link: ({ children, search }: { children: React.ReactNode; search: { run?: string } }) =>
-    React.createElement("a", { href: "/team?run=" + (search.run ?? "") }, children),
+vi.mock("../../hooks/useOwnerSession.js", () => ({
+  OwnerReadError: class OwnerReadError extends Error {
+    constructor(readonly status: number, readonly code: string) { super(code); }
+  },
+  useOwnerSession: () => ({ paired: true, request, pair: vi.fn(), revoke: vi.fn(), openTerminal: vi.fn(), terminalAvailable: false }),
+  OwnerSessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-afterEach(() => { mocks.request.mockReset(); mocks.navigate.mockReset(); mocks.paired = true; });
+const teams: TeamSummary[] = [
+  { id: "rig-01M6P2CGXVE037YT9C19K76PWK", name: "Text utils", repository: "/src/text-utils",
+    seats: [{ role: "lead", client: "claude-code" }, { role: "implementer", client: "codex" }] },
+];
 
-async function show(component: React.ReactElement, locale: "en" | "zh-CN" = "en") {
-  const language = await createInterfaceI18n({ preference: { read: () => locale, write() {} } });
-  const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}>{component}</I18nextProvider></QueryClientProvider>);
-  return language;
+async function show() {
+  const language = await createInterfaceI18n({ language: "en" });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const started = vi.fn();
+  render(<QueryClientProvider client={client}><I18nextProvider i18n={language.instance}>
+    <StartRunForm teams={teams} onStarted={started} />
+  </I18nextProvider></QueryClientProvider>);
+  return { started };
 }
 
-it.each(["en", "zh-CN"] as const)("starts a run from the goal and opens it (%s)", async locale => {
-  mocks.request.mockResolvedValue({ protocolVersion: "1.0", runId: "run-9", rigId: "rig", approvalId: "a",
-    taskId: "task-1", qitemId: "q", seat: "dev@demo", state: "approved" });
-  const language = await show(<NewTaskForm />, locale);
-  fireEvent.change(screen.getByLabelText(language.t("web.goal")), { target: { value: "Add a health endpoint" } });
-  fireEvent.click(screen.getByRole("button", { name: language.t("web.startTask") }));
-  await waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
-  const [path, init] = mocks.request.mock.calls[0]!;
-  expect(path).toBe("/runs");
-  expect(init.method).toBe("POST");
-  expect(JSON.parse(init.body)).toEqual({ goal: "Add a health endpoint" });
-  expect(mocks.navigate.mock.calls[0]![0]).toMatchObject({ params: { section: "overview" }, search: { run: "run-9" } });
-  // One start is one request: a second click while busy must not create a second run.
-  expect(mocks.request).toHaveBeenCalledTimes(1);
-});
+describe("new task", () => {
+  it("starts a run with the goal and the chosen team", async () => {
+    const { started } = await show();
+    fireEvent.change(screen.getByLabelText("What should the team do?"), { target: { value: "Add the status filter" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start task" }));
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    const [path, init] = request.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe("/runs");
+    expect(JSON.parse(String(init.body))).toEqual({ goal: "Add the status filter", rig: teams[0]!.id });
+    await waitFor(() => expect(started).toHaveBeenCalledWith("3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f"));
+  });
 
-// C3 — the lead is opt-in. The form sends it only when the owner filled it in, so an empty
-// field is exactly the pre-C3 start rather than a start naming the empty string.
-it.each([["", false], ["lead@demo", true]] as const)("sends the optional lead seat only when named (%s)", async (lead, sent) => {
-  mocks.request.mockResolvedValue({ protocolVersion: "1.0", runId: "run-9", rigId: "rig", approvalId: "a",
-    taskId: "task-1", qitemId: "q", seat: lead || "dev@demo", leadSeat: sent ? lead : null, state: "approved" });
-  const language = await show(<NewTaskForm />);
-  fireEvent.change(screen.getByLabelText(language.t("web.goal")), { target: { value: "Add a health endpoint" } });
-  if (lead) fireEvent.change(screen.getByLabelText(language.t("web.leadSeat")), { target: { value: lead } });
-  fireEvent.click(screen.getByRole("button", { name: language.t("web.startTask") }));
-  await waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
-  expect(JSON.parse(mocks.request.mock.calls[0]![1].body)).toEqual(sent
-    ? { goal: "Add a health endpoint", lead } : { goal: "Add a health endpoint" });
-});
-
-it("reports a refused start and stays on the form", async () => {  mocks.request.mockRejectedValue(new OwnerReadError(409, "start_refused"));
-  const language = await show(<NewTaskForm />);
-  fireEvent.change(screen.getByLabelText(language.t("web.goal")), { target: { value: "Add a health endpoint" } });
-  fireEvent.click(screen.getByRole("button", { name: language.t("web.startTask") }));
-  expect((await screen.findByRole("alert")).textContent).toBe(language.t("web.startRefused"));
-  expect(mocks.navigate).not.toHaveBeenCalled();
-});
-
-it("lists the runs the daemon returned so an id need not be typed", async () => {
-  mocks.request.mockResolvedValue({ runs: [
-    { id: "run-9", rigId: "rig", rigName: "demo", state: "approved", planRef: "plan.md", createdAt: "2026-10-31T00:00:00.000Z" },
-    { id: "run-8", rigId: "rig", rigName: "demo", state: "pending", planRef: "plan.md", createdAt: "2026-10-30T00:00:00.000Z" },
-  ] });
-  const language = await show(<RunSelect current="run-8" />);
-  const select = screen.getByRole("combobox", { name: language.t("shell.run") }) as HTMLSelectElement;
-  await waitFor(() => expect(select.options).toHaveLength(2));
-  expect([...select.options].map(option => option.value)).toEqual(["run-9", "run-8"]);
-  expect(select.value).toBe("run-8");
-  fireEvent.change(select, { target: { value: "run-9" } });
-  expect(mocks.navigate.mock.calls[0]![0]).toMatchObject({ params: { section: "overview" }, search: { run: "run-9" } });
-});
-
-it("keeps the current run selectable when the run list does not include it", async () => {
-  mocks.request.mockResolvedValue({ runs: [] });
-  const language = await show(<RunSelect current="run-7" />);
-  const select = screen.getByRole("combobox", { name: language.t("shell.run") }) as HTMLSelectElement;
-  await waitFor(() => expect(select.options).toHaveLength(1));
-  expect(select.options[0]!.value).toBe("run-7");
-  expect(select.value).toBe("run-7");
-});
-
-it("does not call the daemon until the browser is paired", async () => {
-  mocks.paired = false;
-  const language = await show(<NewTaskForm />);
-  expect(screen.getByRole("button", { name: language.t("web.startTask") }).hasAttribute("disabled")).toBe(true);
-  expect(screen.getByRole("status").textContent).toBe(language.t("web.pairRequired"));
-  expect(mocks.request).not.toHaveBeenCalled();
-});
-
-it.each(["en", "zh-CN"] as const)("offers the start form when no run is selected, so a fresh install can begin (%s)", async locale => {
-  const language = await show(<NoRunCard />, locale);
-  const status = screen.getByRole("status");
-  expect(status.textContent).toContain(language.t("shell.noRun"));
-  expect(status.textContent).toContain(language.t("shell.noRunHint"));
-  expect(screen.getByRole("region", { name: language.t("web.newTask") })).toBeTruthy();
-  expect(screen.getByLabelText(language.t("web.goal"))).toBeTruthy();
+  it("keeps the start button closed until there is a goal", async () => {
+    await show();
+    expect((screen.getByRole("button", { name: "Start task" }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });

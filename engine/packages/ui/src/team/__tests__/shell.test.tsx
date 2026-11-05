@@ -1,158 +1,64 @@
 import React from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createInterfaceI18n, type InterfaceI18n } from "@openrig/i18n";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { createInterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
-import { ShellFrame, TEAM_SECTIONS, teamSection, type TeamSection } from "../shell.js";
-import type { TeamTheme } from "../theme.js";
-
-afterEach(() => vi.unstubAllGlobals());
+import { ShellFrame, TEAM_SECTIONS, teamSection } from "../shell.js";
 
 /**
- * Slice A — the shell's six destinations.
+ * U10 — the shell is a bar, not a rail.
  *
- * The navigation is the product's map: these tests pin the six names and their order, the active
- * marker, and that a retired destination's deep link lands on the destination that now owns its
- * evidence rather than on a blank page.
+ * These pin the destination map (four screens, with retired deep links landing on the screen
+ * that now owns the work) and the two controls the bar carries: the language switch and the
+ * overflow menu that opens settings.
  */
 
-function Shell({ language, theme = "dark", onTheme = () => {}, onSearch = () => {}, runPicker, coordinator = { state: "running", known: true }, connection = "shell.connected", snapshotAge = null }: {
-  language: InterfaceI18n; theme?: TeamTheme; onTheme?: (theme: TeamTheme) => void; onSearch?: (query: string) => void;
-  runPicker?: React.ReactNode; coordinator?: { state: "running" | "stopped" | "unknown"; known: boolean }; connection?: string; snapshotAge?: number | null;
-}) {
-  const [current, setCurrent] = React.useState<TeamSection>("overview");
-  return <ShellFrame language={language} section={current} theme={theme} onTheme={onTheme}
-    runId="RUN-0142" runPicker={runPicker} project="work-board" coordinator={coordinator}
-    connection={connection} snapshotAge={snapshotAge} notifications={2} hrefFor={section => `/team/${section}?run=RUN-0142`}
-    onSelect={setCurrent} onSearch={onSearch}><p>content</p></ShellFrame>;
-}
-
 async function show(locale: "en" | "zh-CN" = "en") {
-  const language = await createInterfaceI18n({ preference: { read: () => locale, write() {} } });
-  render(<I18nextProvider i18n={language.instance}><Shell language={language} /></I18nextProvider>);
-  return language;
+  const language = await createInterfaceI18n({ language: locale });
+  const onLanguage = vi.fn();
+  const onSettings = vi.fn();
+  const view = render(<I18nextProvider i18n={language.instance}>
+    <ShellFrame language={language} crumbs={<span>Add the status filter</span>}
+      onLanguage={onLanguage} onSettings={onSettings}><p>content</p></ShellFrame>
+  </I18nextProvider>);
+  return { view, onLanguage, onSettings, language };
 }
 
-describe("managed shell navigation", () => {
-  it.each(["dark", "light"] as const)("does not load the Ink backdrop in %s", async theme => {
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    render(<I18nextProvider i18n={language.instance}><Shell language={language} theme={theme} /></I18nextProvider>);
-    expect(document.querySelector(".team-backdrop")).toBeNull();
-    expect(document.querySelector("video")).toBeNull();
+describe("team shell", () => {
+  it("ships four destinations and sends retired deep links to the screen that owns the work", () => {
+    expect([...TEAM_SECTIONS]).toEqual(["teams", "run", "task", "branch"]);
+    expect(teamSection("/team/overview")).toBe("run");
+    expect(teamSection("/team/tasks")).toBe("task");
+    expect(teamSection("/team/reviews")).toBe("task");
+    expect(teamSection("/team/workspace")).toBe("task");
+    expect(teamSection("/team/analytics")).toBe("run");
+    expect(teamSection("/team/settings")).toBe("settings");
+    expect(teamSection("/team")).toBe("teams");
   });
 
-  it.each([true, false])("keeps paper but removes video when reduced motion is enabled (initial: %s)", async reduced => {
-    const listeners = new Set<() => void>();
-    const query = { matches: reduced, addEventListener: (_: string, fn: () => void) => listeners.add(fn),
-      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn) };
-    vi.stubGlobal("matchMedia", vi.fn(() => query));
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    const view = render(<I18nextProvider i18n={language.instance}><Shell language={language} theme="ink" /></I18nextProvider>);
-    expect(document.querySelector(".team-shell")?.getAttribute("data-ui-theme")).toBe("ink");
-    expect(document.querySelector(".team-backdrop")?.getAttribute("aria-hidden")).toBe("true");
-    expect(document.querySelector("video") === null).toBe(reduced);
-    act(() => { query.matches = false; listeners.forEach(fn => fn()); });
-    const video = document.querySelector("video")!;
-    expect(video.getAttribute("src")).toBe("/skins/shuimo-danqing/shuimo-danqing-loop.mp4");
-    expect(video.autoplay && video.muted && video.loop && video.playsInline).toBe(true);
-    expect(video.tabIndex).toBe(-1);
-    act(() => { query.matches = true; listeners.forEach(fn => fn()); });
-    expect(document.querySelector("video")).toBeNull();
-    expect(document.querySelector(".team-backdrop")).not.toBeNull();
-    view.unmount();
-    expect(listeners.size).toBe(0);
+  it("renders one bar with the crumbs, the language switch and the overflow menu", async () => {
+    const { view } = await show();
+    expect(screen.getByText("Add the status filter")).toBeTruthy();
+    expect(view.container.querySelector(".ui-sidebar")).toBeNull();
+    expect(view.container.querySelector(".ui-topstrip")).toBeNull();
+    expect(view.container.querySelector(".topbar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "EN" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "中" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it.each(["en", "zh-CN"] as const)("shows exactly the six destinations in order (%s)", async locale => {
-    const language = await show(locale);
-    const nav = screen.getByRole("navigation", { name: language.t("shell.appName") });
-    const links = within(nav).getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(TEAM_SECTIONS.map(section => language.t(`nav.${section}`)));
-    expect(links.map(link => link.getAttribute("href"))).toEqual(TEAM_SECTIONS.map(section => `/team/${section}?run=RUN-0142`));
-    expect(links[0]!.getAttribute("aria-current")).toBe("page");
-    expect(links.slice(1).every(link => link.getAttribute("aria-current") === null)).toBe(true);
-    expect(TEAM_SECTIONS).toEqual(["overview", "workspace", "tasks", "reviews", "analytics", "settings"]);
+  it("reports the language and the settings request upward", async () => {
+    const { onLanguage, onSettings } = await show();
+    fireEvent.click(screen.getByRole("button", { name: "中" }));
+    expect(onLanguage).toHaveBeenCalledWith("zh-CN");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(onSettings).toHaveBeenCalled();
   });
 
-  it.each(["en", "zh-CN"] as const)("opens Reviews from the notification button (%s)", async locale => {
-    const language = await show(locale);
-    fireEvent.click(screen.getByRole("button", { name: `${language.t("shell.notifications")}: 2` }));
-    expect(screen.getByRole("link", { name: language.t("nav.reviews") }).getAttribute("aria-current")).toBe("page");
-  });
-
-  it.each(["stopped", "unknown"] as const)("shows the coordinator's observed %s state instead of idle", async state => {
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    render(<I18nextProvider i18n={language.instance}><Shell language={language} coordinator={{ state, known: true }} /></I18nextProvider>);
-    expect(document.querySelector(".ui-coordinator")?.textContent).toContain(language.t(`status.attempt.${state}`));
-    expect(document.querySelector(".ui-coordinator")?.textContent).not.toContain(language.t("shell.idle"));
-  });
-
-  it.each(["web.stale", "web.disconnected", "web.error", "web.notFound"])("makes %s visible above retained content", async connection => {
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    render(<I18nextProvider i18n={language.instance}><Shell language={language} connection={connection} snapshotAge={12} /></I18nextProvider>);
-    expect(screen.getByRole("alert").textContent).toContain(language.t(connection as "web.stale"));
-    expect(screen.getByRole("alert").textContent).toContain(language.t("shell.snapshotWarning"));
-    expect(screen.getByText(language.t("shell.snapshotAge", { seconds: 12 }))).toBeTruthy();
-    expect(screen.getByText("content")).toBeTruthy();
-  });
-
-  it("keeps the warning out of a connected view", async () => {
-    await show();
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("maps the retired destinations onto the destination that owns their evidence", () => {
-    expect(teamSection("/team/overview")).toBe("overview");
-    expect(teamSection("/team/agents")).toBe("workspace");
-    expect(teamSection("/team/logs")).toBe("workspace");
-    expect(teamSection("/team/knowledge")).toBe("workspace");
-    expect(teamSection("/team/decisions")).toBe("reviews");
-    expect(teamSection("/team")).toBe("overview");
-    expect(teamSection("/team/unknown")).toBe("overview");
-  });
-
-  it("keeps the project selector, coordinator row, command strip and theme switch in the shell", async () => {
-    const onTheme = vi.fn();
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    render(<I18nextProvider i18n={language.instance}><Shell language={language} onTheme={onTheme} /></I18nextProvider>);
-    expect(screen.getByText(language.t("shell.project"))).toBeTruthy();
-    expect(screen.getAllByText("work-board").length).toBeGreaterThan(0);
-    expect(screen.getByText(new RegExp(`${language.t("shell.coordinator")} · ${language.t("shell.active")}`))).toBeTruthy();
-    expect(screen.getByRole("search")).toBeTruthy();
-    expect(screen.getByLabelText(language.t("shell.searchJump"))).toBeTruthy();
-    expect(screen.getByText(language.t("shell.ctrlK"))).toBeTruthy();
-    expect(screen.getByText(language.t("shell.remoteMonitor"))).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain(language.t("shell.connected"));
-    expect(document.querySelector(".ui-badge")?.textContent).toBe("2");
-    expect(document.querySelector(".team-shell")?.getAttribute("data-ui-theme")).toBe("dark");
-    fireEvent.click(screen.getByRole("button", { name: language.t("shell.themeLight") }));
-    expect(onTheme).toHaveBeenCalledWith("light");
-  });
-
-  it("moves the active marker to the destination the owner selects", async () => {
-    const language = await show();
-    const nav = screen.getByRole("navigation", { name: language.t("shell.appName") });
-    fireEvent.click(within(nav).getByRole("link", { name: language.t("nav.tasks") }));
-    expect(within(nav).getByRole("link", { name: language.t("nav.tasks") }).getAttribute("aria-current")).toBe("page");
-    expect(within(nav).getByRole("link", { name: language.t("nav.overview") }).getAttribute("aria-current")).toBeNull();
-  });
-
-  it("puts the run selector in the breadcrumb when the browser is paired", async () => {
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    render(<I18nextProvider i18n={language.instance}>
-      <Shell language={language} runPicker={<select aria-label={language.t("shell.run")} value="RUN-0142" onChange={() => {}}><option value="RUN-0142">RUN-0142</option></select>} />
-    </I18nextProvider>);
-    const breadcrumb = document.querySelector(".ui-breadcrumb")!;
-    expect(within(breadcrumb as HTMLElement).getByRole("combobox", { name: language.t("shell.run") })).toBeTruthy();
-    expect(breadcrumb.textContent).toContain("work-board");
-  });
-
-  it("sends the command-strip query to the tasks search", async () => {
-    const onSearch = vi.fn();
-    const language = await createInterfaceI18n({ preference: { read: () => "en", write() {} } });
-    render(<I18nextProvider i18n={language.instance}><Shell language={language} onSearch={onSearch} /></I18nextProvider>);
-    fireEvent.change(screen.getByLabelText(language.t("shell.searchJump")), { target: { value: "T-102" } });
-    fireEvent.submit(screen.getByRole("search"));
-    expect(onSearch).toHaveBeenCalledWith("T-102");
+  it("has no video backdrop and no second palette", async () => {
+    const { view } = await show();
+    expect(view.container.querySelector("video")).toBeNull();
+    expect(view.container.querySelector(".team-backdrop")).toBeNull();
+    expect(view.container.querySelector(".team-shell")!.getAttribute("data-ui-theme")).toBeNull();
   });
 });

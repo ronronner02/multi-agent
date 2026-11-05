@@ -36,6 +36,27 @@ export const MESSAGE_PARAMETERS = {
   "completion.reworkOpened": ["taskId"],
   // T017 — a stop the daemon could not observe says how many attempts are still alive.
   "workspace.stopUnresolved": ["count"],
+  // U10 — the team surface names and times. A review is named by the task it reviews and its
+  // round; the line counts what is left; the merge plate names the branch it moves.
+  "team.reviewName": ["of"],
+  "team.reviewNameRound": ["round", "of"],
+  "team.line.waitingOn": ["count"],
+  "team.merge.title": ["branch"],
+  "team.merge.ready": ["count"],
+  "team.merge.consequence": ["branch", "commits", "from"],
+  "team.plan.approved": ["time"],
+  "team.plan.work": ["count"],
+  "team.task.attemptN": ["round"],
+  "team.task.roundN": ["round"],
+  "team.task.findingCount": ["count"],
+  "team.task.blockingCount": ["count"],
+  "team.time.minutes": ["count"],
+  "team.time.hours": ["count"],
+  "team.time.yesterday": ["time"],
+  // U8 — a resume that raises a budget says by how much, in the same request.
+  "team.resume.minutes": ["count"],
+  "team.resume.retries": ["count"],
+  "team.resume.rounds": ["count"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS

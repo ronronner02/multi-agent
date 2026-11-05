@@ -1,88 +1,69 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import type { TeamRunSummary, TeamStartReceipt } from "@openrig/daemon/team-control";
-import { Button } from "../components/ui/button.js";
-import { Card } from "../components/ui/card.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
+import { Caret } from "./glyphs.js";
+import { runsKey, type TeamSummary } from "./hooks.js";
 
 /**
- * MVP slice 2 — start team work from the Web UI.
+ * U10 — start a run from the UI.
  *
- * A "New task" form that calls the same owner endpoint `rig team start` calls, and a run
- * selector fed by the run list, so nobody has to type an id.
+ * The same owner endpoint `rig team start` calls: the goal is the only required field, and the
+ * team it runs on is chosen from the teams the daemon lists, so nobody types an id. A refused
+ * start shows the daemon's own reason. Under U5 the same form opens a planning chat instead of
+ * dispatching straight away; that is one flag on this request, which is why the form does not
+ * grow a second shape.
  */
-
-const runsKey = ["team", "runs"] as const;
-
-/**
- * The run selector the command strip shows. It lists the runs the daemon returns, so the owner
- * picks one instead of typing an id; an empty or unavailable list keeps the current run visible.
- */
-export function RunSelect({ current }: { current: string }) {
-  const { t } = useTranslation(), session = useOwnerSession(), navigate = useNavigate();
-  const query = useQuery({ queryKey: runsKey, enabled: session.paired, retry: false, refetchInterval: 5_000,
-    queryFn: ({ signal }) => session.request<{ runs: TeamRunSummary[] }>("/runs", { signal }) });
-  const runs = query.data?.runs ?? [];
-  const known = runs.some(run => run.id === current);
-  return <select className="ui-runselect" aria-label={t("shell.run")} value={current}
-    onChange={event => void navigate({ to: "/team/$section", params: { section: "overview" }, search: { run: event.target.value || undefined } })}>
-    {!current && <option value="">{t("shell.chooseRun")}</option>}
-    {current && !known && <option value={current}>{current}</option>}
-    {runs.map(run => <option key={run.id} value={run.id}>{run.id} · {run.rigName}</option>)}
-  </select>;
-}
-
-/**
- * What every screen shows before a run is selected: say so, and put the start form right here.
- * On a fresh install there is no run to pick, so this form is how the owner creates the first one.
- */
-export function NoRunCard() {
+export function StartRunForm({ teams, onStarted }: {
+  teams: TeamSummary[] | undefined; onStarted: (runId: string) => void;
+}) {
   const { t } = useTranslation();
-  return <>
-    <Card className="team-card ui-empty" role="status"><strong>{t("shell.noRun")}</strong>
-      <p className="team-muted">{t("shell.noRunHint")}</p></Card>
-    <NewTaskForm />
-  </>;
-}
-
-export function NewTaskForm() {
-  const { t } = useTranslation(), session = useOwnerSession(), navigate = useNavigate(), cache = useQueryClient();
+  const session = useOwnerSession();
+  const cache = useQueryClient();
   const [goal, setGoal] = useState("");
-  const [rig, setRig] = useState("");
-  const [lead, setLead] = useState("");
+  const [team, setTeam] = useState("");
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<"refused" | "unavailable" | null>(null);
-  return <Card className="team-card" role="region" aria-label={t("web.newTask")}>
-    <h2>{t("web.newTask")}</h2>
-    <form onSubmit={async event => {
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const chosen = team || teams?.[0]?.id || "";
+
+  return <section className="plate" aria-label={t("web.newTask")}>
+    <h2 className="plate-title">{t("web.newTask")}</h2>
+    <form style={{ display: "grid", gap: 12 }} onSubmit={async event => {
       event.preventDefault();
-      if (busy || !session.paired || !goal.trim()) return;
+      if (busy || !goal.trim()) return;
       setBusy(true); setFailure(null);
       try {
-        const receipt = await session.request<TeamStartReceipt>("/runs", { method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: goal.trim(), ...(rig.trim() ? { rig: rig.trim() } : {}),
-            ...(lead.trim() ? { lead: lead.trim() } : {}) }) });
-        if (!receipt?.runId) throw new Error("The start returned no run.");
+        const receipt = await session.request<{ runId: string }>("/runs", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ goal: goal.trim(), ...(chosen ? { rig: chosen } : {}) }),
+        });
+        if (!receipt?.runId) throw new Error("no run");
         await cache.invalidateQueries({ queryKey: runsKey });
-        setGoal(""); setRig(""); setLead("");
-        await navigate({ to: "/team/$section", params: { section: "overview" }, search: { run: receipt.runId } });
+        setGoal("");
+        onStarted(receipt.runId);
       } catch (error) {
-        setFailure(error instanceof OwnerReadError && error.status < 500 ? "refused" : "unavailable");
+        setFailure(error instanceof OwnerReadError ? error.code : "generic");
       } finally { setBusy(false); }
     }}>
-      <label>{t("web.goal")}<textarea value={goal} onChange={event => setGoal(event.target.value)}
-        maxLength={262_144} required disabled={!session.paired} /></label>
-      <label>{t("web.rig")}<input value={rig} onChange={event => setRig(event.target.value)}
-        autoComplete="off" placeholder={t("web.rigDefault")} disabled={!session.paired} /></label>
-      {/* C3 — optional: a run with no lead seat is exactly the pre-C3 start. */}
-      <label>{t("web.leadSeat")}<input value={lead} onChange={event => setLead(event.target.value)}
-        autoComplete="off" placeholder={t("web.leadSeatHint")} disabled={!session.paired} /></label>
-      <Button type="submit" variant="outline" disabled={busy || !session.paired || !goal.trim()}>{t("web.startTask")}</Button>
+      <div className="field">
+        <label htmlFor="start-goal">{t("web.goal")}</label>
+        <textarea id="start-goal" className="input" style={{ height: 96, padding: "10px 12px", resize: "vertical" }}
+          value={goal} maxLength={262_144} required onChange={event => setGoal(event.target.value)} />
+      </div>
+      {(teams ?? []).length > 0 && <div className="field">
+        <label htmlFor="start-team">{t("team.teams.title")}</label>
+        <label className="input select">
+          <select id="start-team" value={chosen} onChange={event => setTeam(event.target.value)}>
+            {(teams ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+          </select>
+          <Caret />
+        </label>
+      </div>}
+      {failure && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.startRefused")}</p>}
+      <div className="plate-foot">
+        <button className="btn btn-primary" type="submit" disabled={busy || !goal.trim() || !session.paired}>{t("web.startTask")}</button>
+      </div>
     </form>
-    {!session.paired && <p role="status">{t("web.pairRequired")}</p>}
-    {failure && <p role="alert">{t(failure === "refused" ? "web.startRefused" : "web.error")}</p>}
-  </Card>;
+  </section>;
 }

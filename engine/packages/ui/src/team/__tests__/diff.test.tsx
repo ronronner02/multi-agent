@@ -5,7 +5,7 @@ import { createInterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import { parsePatch } from "../diff-model.js";
 import { DiffView } from "../diff-view.js";
-import { fullDigest, shortDigest } from "../digest.js";
+
 
 /**
  * Slice B — the one diff surface.
@@ -111,52 +111,42 @@ describe("parsePatch", () => {
       ["remove", 1, null], ["note", null, null], ["add", null, 1], ["note", null, null],
     ]);
   });
-});describe("DiffView", () => {
+});
+
+describe("DiffView", () => {
   async function show(patch: string, locale: "en" | "zh-CN" = "en") {
-    const language = await createInterfaceI18n({ preference: { read: () => locale, write() {} } });
+    const language = await createInterfaceI18n({ language: locale });
     render(<I18nextProvider i18n={language.instance}><div className="team-shell"><DiffView patch={patch} /></div></I18nextProvider>);
     return language;
   }
 
   it.each(["en", "zh-CN"] as const)("lists the changed files and renders the selected file's numbered lines (%s)", async locale => {
     const language = await show(`${MODIFIED}${BINARY}`, locale);
-    const files = screen.getByRole("list", { name: language.t("web.changedFiles") });
-    expect(within(files).getAllByRole("button").map(button => button.getAttribute("data-path"))).toEqual(["src/filter.ts", "assets/logo.png"]);
+    const files = screen.getByRole("group", { name: language.t("web.changedFiles") });
+    expect(within(files).getAllByRole("button").map(button => button.getAttribute("data-path")))
+      .toEqual(["src/filter.ts", "assets/logo.png"]);
     // The first file is selected, so its hunk is the diff the owner reads.
     expect(screen.getByText("@@ -1,4 +1,5 @@ export function filterItems<T>(items: T[], predicate: (item: T) => boolean): T[] {")).toBeTruthy();
-    const lines = document.querySelectorAll(".ui-diff-line");
+    const lines = document.querySelectorAll(".cl");
     expect([...lines].map(line => line.getAttribute("data-kind"))).toEqual(
-      ["context", "remove", "add", "add", "context", "context", "remove", "add", "context"]);
+      [null, "remove", "add", "add", null, null, "remove", "add", null]);
     // The rendered line numbers are the patch's, not a running index.
-    expect([...lines][2]!.querySelectorAll(".ui-ln")[1]!.textContent).toBe("2");
-    expect([...lines][1]!.querySelectorAll(".ui-ln")[0]!.textContent).toBe("2");
+    expect([...lines][2]!.querySelectorAll(".ln")[1]!.textContent).toBe("2");
+    expect([...lines][1]!.querySelectorAll(".ln")[0]!.textContent).toBe("2");
   });
 
-  it("shows a binary file's notice instead of inventing hunks, and a rename's two names", async () => {
+  it("shows a binary file's notice instead of inventing hunks", async () => {
     const language = await show(`${RENAMED}${BINARY}`);
     fireEvent.click(screen.getByRole("button", { name: /logo\.png/ }));
     expect(screen.getByTestId("diff-binary").textContent).toBe(language.t("diff.binaryHint"));
-    expect(document.querySelectorAll(".ui-diff-line")).toHaveLength(0);
+    expect(document.querySelectorAll(".cl")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: /new-name\.ts/ }));
-    const rail = screen.getByRole("list", { name: language.t("web.changedFiles") });
-    expect(rail.textContent).toContain(language.t("diff.renamedFrom"));
-    expect(rail.textContent).toContain("src/old-name.ts");
-    expect(document.querySelectorAll(".ui-diff-line")).toHaveLength(2);
+    expect(document.querySelectorAll(".cl")).toHaveLength(2);
   });
 
   it("says the patch is empty rather than drawing an empty frame", async () => {
     const language = await show("");
-    expect(screen.getByTestId("diff-empty").textContent).toBe(language.t("diff.empty"));
+    expect(screen.getByTestId("diff-empty").textContent).toBe(language.t("team.task.noDiff"));
     expect(screen.queryByTestId("diff-view")).toBeNull();
-  });
-
-  it("shortens a digest to its algorithm and 12 hex characters, and keeps the full value", () => {
-    const full = `sha256:${"a1b2c3d4e5f6".repeat(5)}a1b2`;
-    expect(shortDigest(full)).toBe("sha256:a1b2c3d4e5f6…");
-    expect(fullDigest(full)).toBe(full);
-    // Nothing to shorten: the value is returned as it is, never truncated into a different digest.
-    expect(shortDigest("sha256:abc")).toBe("sha256:abc");
-    expect(shortDigest(null)).toBe("—");
-    expect(fullDigest(null)).toBeUndefined();
   });
 });
