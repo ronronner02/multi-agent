@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { DaemonClient } from "../client.js";
 import { getDaemonStatus, getDaemonUrl, daemonStatusGuard, type LifecycleDeps } from "../daemon-lifecycle.js";
 import { readOpenRigEnv } from "../openrig-compat.js";
@@ -26,6 +26,12 @@ export interface TeamStartDeps {
 }
 
 interface StartReceipt { runId: string; rigId: string; taskId: string; seat: string; leadSeat?: string | null; state: string }
+
+/** The team `rig team create` returns; the daemon keeps the seat names to itself. */
+interface Team {
+  id: string; name: string; repository: string;
+  seats: Array<{ role: "lead" | "implementer" | "reviewer"; client: "claude-code" | "codex"; model?: string }>;
+}
 
 /** The result the daemon serves for one finished task; the shape `TeamTaskResult` publishes. */
 interface TeamTaskResult {
@@ -91,6 +97,16 @@ class TeamCommandError extends Error {
   constructor(code: string, message: string) { super(message); this.code = code; }
 }
 
+/** A seat's client, with `claude` accepted as the shorthand the owner types. */
+function teamClient(value: string, flag: string): "claude-code" | "codex" {
+  const client = value.trim() === "claude" ? "claude-code" : value.trim();
+  if (client !== "claude-code" && client !== "codex") {
+    throw new TeamCommandError("team_client_invalid",
+      `${flag} takes claude-code or codex (claude is shorthand for claude-code), not "${value}".`);
+  }
+  return client;
+}
+
 export function teamCommand(depsOverride?: TeamStartDeps): Command {
   const deps = (): TeamStartDeps => depsOverride ?? { lifecycleDeps: realDeps() };
   const cmd = new Command("team").description("start and inspect owner-governed team runs");
@@ -141,6 +157,63 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log("");
       console.log("Watch it:");
       console.log(`  ${base}/team?run=${encodeURIComponent(receipt.runId)}   (after rig config set ui.enabled true)`);
+    });
+
+  /**
+   * U3 — the owner's team for a repository.
+   *
+   * The daemon creates the rig and one seat per role and launches nothing: the first start
+   * opens each seat's terminal. `claude` is the shorthand the owner types for `claude-code`,
+   * and the default seats are the ones a run needs — a lead, a Claude and a Codex implementer,
+   * and a reviewer — so the verb needs no flags to be useful.
+   */
+  cmd.command("create <repository>")
+    .description("create a team for a local git repository, then start it with `rig team start`")
+    .option("--lead <client>", "the lead seat's client: claude-code or codex", "claude-code")
+    .option("--implementers <clients>", "the implementer seats' clients, comma separated", "claude-code,codex")
+    .option("--reviewer <client>", "the reviewer seat's client: claude-code or codex", "claude-code")
+    .option("--json", "print the daemon's team as JSON")
+    .action(async (repository: string, opts: { lead: string; implementers: string; reviewer: string; json?: boolean }) => {
+      const seats: Team["seats"] = [
+        { role: "lead", client: teamClient(opts.lead, "--lead") },
+        ...opts.implementers.split(",").map(value => value.trim()).filter(Boolean)
+          .map(value => ({ role: "implementer" as const, client: teamClient(value, "--implementers") })),
+        { role: "reviewer", client: teamClient(opts.reviewer, "--reviewer") },
+      ];
+      if (!seats.some(seat => seat.role === "implementer")) {
+        throw new TeamCommandError("team_client_invalid", "--implementers needs at least one client.");
+      }
+      // The daemon resolves a path against its own working directory, and it is the one host a
+      // shell here cannot assume is the same, so a relative path is made absolute here.
+      let root = repository;
+      if (!isAbsolute(root)) {
+        try { root = realpathSync(root); } catch {
+          throw new TeamCommandError("team_repository_unreadable", `The repository path "${repository}" could not be read.`);
+        }
+      }
+      const token = ownerToken(deps());
+      if (!token) {
+        console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        process.exitCode = 1;
+        return;
+      }
+      const status = await getDaemonStatus(deps().lifecycleDeps);
+      if (!daemonStatusGuard(status)) return;
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const response = await client.post<{ team?: Team; code?: string; error?: string }>(BASE + "/teams",
+        { repository: root, seats }, { headers: { Authorization: "Bearer " + token } });
+      if (response.status !== 201 || !response.data?.team) {
+        console.error("error: the team was refused: " + (response.data?.error ?? `HTTP ${response.status}`));
+        process.exitCode = 1;
+        return;
+      }
+      const team = response.data.team;
+      if (opts.json) { console.log(JSON.stringify(team)); return; }
+      console.log(`Team ${team.name}`);
+      console.log(`Repository: ${team.repository}`);
+      for (const seat of team.seats) console.log(`  ${seat.role.padEnd(12)} ${seat.client}${seat.model ? "  " + seat.model : ""}`);
+      console.log("");
+      console.log(`Next: rig team start "<goal>" --rig ${team.name}`);
     });
 
   /**

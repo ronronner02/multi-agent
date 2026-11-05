@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { TeamSeatInput } from "../../../packages/daemon/src/domain/team-setup.js";
 
 /**
  * C4 acceptance rework run — the demo repositories and the two seats that work on them.
@@ -28,13 +29,14 @@ export const REWORK_RIG_NAME = "rework";
  * The two seats the rework run uses. There is no lead: the lead protocol is already proven.
  *
  * A seat name is a tmux session name, so it has to be unique on the daemon, not only within its
- * rig. The names carry the rig's name: a second rig seeded with fixed names made the dispatcher
- * find two live seats called `impl@rework` and refuse the launch (`direct_launch_seat_unresolved`).
+ * rig. `createTeam` derives it from the role, its index and the rig name, so two rigs cannot
+ * register the same seat — the C4 acceptance run once found two live seats called `impl@rework`
+ * and the dispatcher refused the launch.
  */
-export function reworkSeats(rigName = REWORK_RIG_NAME) {
+export function reworkSeats(): readonly TeamSeatInput[] {
   return [
-    { logicalId: "rework.impl", role: "implementer" as const, seat: `impl@${rigName}` },
-    { logicalId: "rework.review", role: "reviewer" as const, seat: `review@${rigName}` },
+    { role: "implementer", client: "claude-code" },
+    { role: "reviewer", client: "claude-code" },
   ];
 }
 
@@ -188,20 +190,14 @@ export async function seedSeats(repository: string, rigName = REWORK_RIG_NAME): 
   const { resolveDaemonDbPath } = await import("../../../packages/daemon/src/daemon-db-path.js");
   const { OPENRIG_HOME } = await import("../../../packages/cli/src/openrig-compat.js");
   const { RigRepository } = await import("../../../packages/daemon/src/domain/rig-repository.js");
-  const { SessionRegistry } = await import("../../../packages/daemon/src/domain/session-registry.js");
-  const root = realpathSync(repository);
+  const { createTeam } = await import("../../../packages/daemon/src/domain/team-setup.js");
   const db = createDb(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
   try {
     migrate(db, ALL_MIGRATIONS);
-    const rigs = new RigRepository(db), sessions = new SessionRegistry(db);
-    const existing = rigs.findRigsByName(rigName)[0];
+    const existing = new RigRepository(db).findRigsByName(rigName)[0];
     if (existing) return { rigId: existing.id, created: false };
-    const rig = rigs.createRig(rigName, root);
-    for (const seat of reworkSeats(rigName)) {
-      const node = rigs.addNode(rig.id, seat.logicalId, { role: seat.role, runtime: "claude-code", cwd: root });
-      sessions.registerSession(node.id, seat.seat);
-    }
-    return { rigId: rig.id, created: true };
+    const team = createTeam(db, { repository, name: rigName, seats: reworkSeats() });
+    return { rigId: team.id, created: true };
   } finally {
     db.close();
   }
@@ -217,7 +213,7 @@ if (invoked) {
     const rigName = args[2] ?? REWORK_RIG_NAME;
     const { rigId, created } = await seedSeats(repository, rigName);
     console.log(created ? `Created rig "${rigName}" (${rigId}).` : `Rig already exists (${rigId}); left alone.`);
-    for (const seat of reworkSeats(rigName)) console.log(`  ${seat.role.padEnd(12)} ${seat.seat}`);
+    for (const seat of reworkSeats()) console.log(`  ${seat.role.padEnd(12)} ${seat.client}`);
   } else {
     let variant: TaskVariant = "truncate";
     let target = args[0] ?? "demo/team/rework-repository";
