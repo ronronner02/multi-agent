@@ -1072,17 +1072,23 @@ export class PlanGovernance {
    * reviewer tasks, so a replayed completion finds the task it already admitted instead of
    * creating a second one. Returns the reviewer task id, which the route dispatches to that
    * seat, or the reason nothing was created.
+   *
+   * `maxReviewRounds` is a per-task allowance: the plan's Review convergence gives "each task
+   * two review rounds, counted across all of its slices and runs", so one task's spent rounds
+   * never take another task's away. The run's `review_rounds_used` still records the total,
+   * which is what the owner read publishes.
    */
   private createReview(ctx: CommandContext, implementer: TeamTaskAuthority): { reviewerTaskId: string; round: number } | string {
     const seat = ctx.run.reviewerSeat;
     if (seat === null) return "No reviewer seat is recorded for this run";
     const implementerSeat = this.queue.getById(implementer.qitemId)?.destinationSession;
     if (!implementerSeat || implementerSeat === seat) return "The reviewer seat must differ from the implementer's seat";
-    if (ctx.run.reviewRoundsUsed >= ctx.run.binding.limits.maxReviewRounds) {
+    const spent = this.reviewRounds(ctx.run.id, implementer.assignment.taskId);
+    if (spent >= ctx.run.binding.limits.maxReviewRounds) {
       this.block(ctx, "review limit exhausted");
       return "review limit exhausted";
     }
-    const round = this.reviewRounds(ctx.run.id, implementer.assignment.taskId) + 1;
+    const round = spent + 1;
     const taskId = reviewerTaskId(implementer.assignment.taskId, round);
     if (this.findTask(ctx.run.id, taskId)) return { reviewerTaskId: taskId, round };
     const assignment = { taskId, role: "reviewer" as const, reviewOf: implementer.assignment.taskId,

@@ -52,6 +52,11 @@ describe("MVP slice C2 — the review loop", () => {
     outputs: ["src/a.ts"], permissions: [...roleConfiguration.implementer.permissions], body: `Implement ${taskId}`,
     destinationSession: seat, sourceSession: "owner-control", ...extra,
   });
+  /** A second implementer task, on its own path and its own seat, so it is a separate allowance. */
+  const secondTask = () => ({
+    assignment: { taskId: "B", role: "implementer", paths: ["src/b.ts"], dependencies: [] },
+    outputs: ["src/b.ts"], permissions: [...roleConfiguration.implementer.permissions], body: "Implement B",
+    destinationSession: "implementer-b@rig", sourceSession: "owner-control" });
   /** An owner-observed terminal outcome, which is the only managed path to a terminal task. */
   let attempts = 0;
   const observe = (taskId: string, state: "done" | "failed" | "canceled", evidence: Record<string, unknown>) => {
@@ -78,8 +83,9 @@ describe("MVP slice C2 — the review loop", () => {
     execFileSync("git", ["-C", root, "add", "plan.md"]);
     execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
     // Two review rounds, which is the binding's own maximum: one round to send the
-    // implementer back and one to approve it.
-    binding = { ...bindingForGoal({ root, planRef: "plan.md", writePaths: ["src/a.ts"], policy }),
+    // implementer back and one to approve it. The allowance is per task, so the fixture
+    // declares two implementer paths and two tasks can each spend it.
+    binding = { ...bindingForGoal({ root, planRef: "plan.md", writePaths: ["src/a.ts", "src/b.ts"], policy }),
       limits: { maxSessions: 1, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 } };
     db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
     db.prepare("INSERT INTO rigs (id,name) VALUES ('rig','fixture')").run();
@@ -204,6 +210,28 @@ describe("MVP slice C2 — the review loop", () => {
     expect((await observe("A", "done", { validated: true })).status).toBe(403);
     expect(governance.findTask("run", reviewerTaskId("A", 3))).toBeNull();
     expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason: "review limit exhausted", reviewRoundsUsed: 2 });
+  });
+
+  it("gives a second implementer task its own rounds after the first task spent both", async () => {
+    // The plan's Review convergence: "Each task gets two review rounds". Task A spends its
+    // allowance on a change request and a second change request; that must not leave task B
+    // with no round at all.
+    expect((await observe("A", "done", { validated: true })).status).toBe(200);
+    const blocking = [{ id: "R1-1", severity: "P1", citation: "KTD8", category: "correctness", file: "src/a.ts",
+      scenario: "the boundary accepts a stale version" }];
+    expect((await observe("A-review-1", "done", { findings: blocking })).status).toBe(200);
+    expect((await observe("A", "done", { validated: true })).status).toBe(200);
+    expect((await observe("A-review-2", "done", { findings: blocking })).status).toBe(200);
+    expect(governance.getRun("run").reviewRoundsUsed).toBe(2);
+    // A second implementer task is admitted on its own path and seat, and completes.
+    expect(governance.createTask(command("B", secondTask()), binding).status).toBe("accepted");
+    expect((await observe("B", "done", { validated: true })).status).toBe(200);
+    // Its first round is round 1 of task B, not round 3 of the run.
+    const review = governance.findTask("run", reviewerTaskId("B", 1))!;
+    expect(review.assignment).toMatchObject({ role: "reviewer", reviewOf: "B" });
+    expect(governance.findTask("run", reviewerTaskId("B", 2))).toBeNull();
+    // The run's own total still counts both tasks' rounds, which is what the owner read shows.
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", reviewRoundsUsed: 3 });
   });
 
   it("keeps a task whose attempt predates a growth decision completing and reviewed", async () => {
