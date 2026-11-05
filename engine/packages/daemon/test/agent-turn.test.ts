@@ -334,6 +334,54 @@ describe("a freed slot dispatches the run's next task", () => {
     expect(started).toEqual(["task-1", "task-1"]);
   });
 
+  it("serves a reopen once, not once per freed slot", async () => {
+    // Measured on the C4 rerun: the owner rejected the lead's proposal, the lead's revision
+    // attempt ran and ended, and every later sweep re-named the same lead task because the
+    // reopen was still the queue row's last transition. Each extra launch spent the run's
+    // lead-wake budget until the run was blocked with `lead-wake:cycles`, so the revised
+    // proposal could never be approved. A reopen starts one attempt.
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    const started: string[] = [];
+    const pending = composePendingDispatch({ db, dispatch: () => async (_runId, taskId) => {
+      started.push(taskId);
+      const attemptId = `attempt-${started.length}`;
+      db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+        state, usage_json, active_ms, created_at, updated_at) VALUES (?, 'run', ?, 'implementer', 'claude',
+        ?, NULL, 'running', '{"activeMs":0,"inputTokens":{"value":null,"reason":"unobserved"},"outputTokens":{"value":null,"reason":"unobserved"},"costUsd":{"value":null,"reason":"unobserved"}}', 0, ?, ?)`)
+        .run(attemptId, governance.findTask("run", taskId)!.qitemId,
+          JSON.stringify({ nativeSessionId: "task", tmuxServer: "/tmp/tmux", paneId: "%1", processId: process.pid,
+            processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }),
+          new Date(Date.now() + started.length).toISOString(), new Date(Date.now() + started.length).toISOString());
+      // The event production writes when it records an attempt; the scheduler reads it to tell
+      // whether a reopen has already been served.
+      db.prepare(`INSERT INTO events (rig_id, node_id, type, payload, created_at)
+        VALUES ('rig', 'a-node', 'team.control', ?, '2026-11-04T00:00:00.000Z')`).run(JSON.stringify({
+        type: "team.control", action: "attempt.recorded", runId: "run", attemptId, payload: { actionId: attemptId } }));
+    }, liveSessions: () => 0, maxSessions: () => 2 });
+    await pending("run");
+    expect(started).toEqual(["task-1"]);
+    // The first turn ends and the owner records it done, so the reopen below is the next work.
+    // The attempt must already be stopped: a reopen while an attempt is still live is work in
+    // progress, which this scheduler must not start a second time.
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = 'attempt-1'").run();
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitemId);
+    // The reopen is written by the run's own rework path, exactly as a blocking review writes it.
+    const rework = (governance as unknown as { startRework: (...args: unknown[]) => unknown }).startRework;
+    const ctx = { run: governance.getRun("run"), register: () => {}, request: {}, now: "2026-11-04T00:00:00.000Z" };
+    db.transaction(() => rework.call(governance, ctx, { taskId: "task-1", reviewerTaskId: "task-1-review-1", round: 1,
+      candidateDigest: null, verdict: "changes-required", recordedAt: "2026-11-04T00:00:00.000Z",
+      findings: [{ id: "R1-1", severity: "P1", citation: "KTD8", category: "correctness", file: "src/task-1.ts",
+        scenario: "the value is stale" }] }))();
+    // The reopen is served by exactly one launch, and the next freed slot names nothing.
+    await pending("run");
+    expect(started).toEqual(["task-1", "task-1"]);
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = 'attempt-2'").run();
+    await pending("run");
+    expect(started).toEqual(["task-1", "task-1"]);
+    expect(pendingTasks(db, "run")).toEqual([]);
+  });
+
   it("names only pending tasks with no live attempt", () => {    expect(admit("task-1", "a@rig").status).toBe("accepted");
     expect(admit("task-2", "b@rig").status).toBe("accepted");
     expect(pendingTasks(db, "run")).toEqual(["task-1", "task-2"]);
@@ -343,6 +391,37 @@ describe("a freed slot dispatches the run's next task", () => {
       .run(governance.findTask("run", "task-1")!.qitemId, JSON.stringify({ nativeSessionId: "task", tmuxServer: "/tmp/tmux", paneId: "%1", processId: process.pid,
         processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }));
     expect(pendingTasks(db, "run")).toEqual(["task-2"]);
+  });
+
+  it("admits a receipt on a seat that holds two live tasks, by the pane's stamp", async () => {
+    // Measured on the C4 rerun: both implementers completed, so the run created task-2-review-1
+    // and task-3-review-1 on the same reviewer seat. The review turn really ran, but the receipt
+    // named only the seat, the sweep found two live tasks there and recorded nothing, so the
+    // owner's completion read had no attempt to record. The launch stamps its pane with the task
+    // it starts, and that stamp is the answer.
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    expect(admit("task-2", "a@rig").status).toBe("accepted");
+    // A receipt for the seat, as a real launch writes one: the daemon's event log is its source.
+    db.prepare(`INSERT INTO events (rig_id, node_id, type, payload, created_at)
+      VALUES ('rig', 'a-node', 'managed.attempt.receipt', ?, '2026-11-04T00:00:01.000Z')`).run(JSON.stringify({
+        sessionName: "a@rig", runId: "run", receipt: { attemptId: "attempt-stamped", runId: "run", client: "claude-code",
+          identity: { nativeSessionId: "stamped", tmuxServer: "/tmp/tmux", paneId: "%9", processId: process.pid,
+            processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint } } }));
+    const sweepWith = async (paneTask: string | null) => {
+      const completion = composeAttemptCompletion({ db, governance, sessions: { findResumeContextByName: () => null,
+        updateStartupStatus: () => {} }, currentBinding: () => binding, intervalMs: 60_000, paneTask: async () => paneTask,
+        // The launch's client is still running; this case is about which task it is admitted for.
+        alive: () => true });
+      await completion.sweep();
+      completion.stop();
+    };
+    // Without a stamp the seat is ambiguous and nothing is recorded: the conservative answer.
+    await sweepWith(null);
+    expect(governance.getAttempt("attempt-stamped")).toBeNull();
+    // The stamp names task-2, so that is the task the attempt belongs to.
+    await sweepWith("task-2");
+    expect(governance.getAttempt("attempt-stamped")).toMatchObject({ state: "running", role: "implementer" });
+    expect(governance.getAttempt("attempt-stamped")?.qitemId).toBe(governance.findTask("run", "task-2")!.qitemId);
   });
 
   it("asks the sweep to dispatch once it has recorded a stop", async () => {
