@@ -14,10 +14,10 @@ vi.mock("../../hooks/useOwnerSession.js", () => ({
   OwnerSessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-/** Neither the chat nor the branch surface is on this branch; the screen must still be whole. */
+/** Neither the chat nor the integration surface is composed here; the screen must still be whole. */
 vi.mock("../hooks.js", () => ({
-  useTeamChat: () => ({ data: { available: false, messages: [], phase: "delivery" }, isPending: false }),
-  useBranch: () => ({ data: { available: false, branch: "", base: "main", commits: [] }, isPending: false }),
+  useTeamChat: () => ({ data: { available: false, messages: [], phase: "delivery", pendingDecision: null }, isPending: false }),
+  useIntegration: () => ({ data: { available: false, branch: "", commits: [], tasksDone: false, merge: { possible: false, reason: null } }, isPending: false }),
 }));
 
 async function show(ui: React.ReactElement, locale: "en" | "zh-CN" = "en") {

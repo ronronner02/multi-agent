@@ -97,3 +97,12 @@ export function branchName(displayName: string): string {
   const slug = displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "run";
   return `team/${slug}`;
 }
+
+/**
+ * The daemon's branch name carries a short suffix of the run id so two runs with the same goal
+ * cannot collide. That suffix is an internal id, so the screen shows the readable part; the
+ * name itself is unchanged wherever git needs the real one.
+ */
+export function readableBranch(branch: string): string {
+  return branch.replace(/-[0-9a-f]{8}(-[0-9a-f]{4})*$/i, "").replace(/-+$/, "");
+}

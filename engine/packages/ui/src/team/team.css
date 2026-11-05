@@ -108,7 +108,7 @@ body:has(.team-shell) > #root { height: 100%; }
 /* --- primitives --------------------------------------------------------- */
 .team-shell .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 36px; padding: 0 16px; border-radius: var(--r-md);
+  min-height: 36px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--r-md);
   font-size: 14px; font-weight: 500; line-height: 1;
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }

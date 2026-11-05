@@ -1,81 +1,142 @@
 import { OwnerReadError, type useOwnerSession } from "../hooks/useOwnerSession.js";
-import type { TeamRun, TeamRunState } from "@openrig/daemon/team-control";
 
 /**
- * U10 — the client for the endpoints the design needs but the daemon does not serve yet.
+ * U10 — the clients for the endpoints this surface reads.
  *
- * Each one answers `{ available: false }` when the route is absent, so the screens render the
- * state they can honestly show instead of an error. The shapes below are the contract these
- * screens are built against; when the units land, only this file changes.
+ * Chat is U5/U6's own routes; the integration branch is U7's. Each answers `{ available: false }`
+ * when the route is absent, so a screen renders the state it can honestly show instead of an
+ * error. Shapes here are the contract the components are built against.
  */
 
 type Request = ReturnType<typeof useOwnerSession>["request"];
 
+export type RunPhase = "planning" | "delivery";
+
 export interface ChatMessage {
   id: string;
-  author: "owner" | "lead";
-  /** The lead's seat, when the daemon names it. Rendered through the seat projection. */
-  seat?: string | null;
+  sender: "owner" | "lead";
+  kind: "text" | "decision";
   body: string;
+  /** A decision's 2–4 choices; null on a text turn. */
+  options: string[] | null;
+  answeredBy: string | null;
   createdAt: string;
 }
 
-export interface ChatState { available: boolean; messages: ChatMessage[]; phase: RunPhase }
-export type RunPhase = "planning" | "delivery";
+export interface ChatState {
+  available: boolean;
+  phase: RunPhase;
+  messages: ChatMessage[];
+  /** The newest unanswered decision: the "waiting on you" signal. */
+  pendingDecision: { id: string; body: string; options: string[]; createdAt: string } | null;
+}
 
-/** U5 — `GET /runs/:runId/chat`. A run that has no chat yet answers with an empty list. */
+function controlBody(runId: string, actionId: string, entityVersion: number, payload: unknown) {
+  return JSON.stringify({
+    protocolVersion: "1.0", runId, actionId, expectedEntityVersion: entityVersion,
+    idempotencyKey: crypto.randomUUID(), payload,
+  });
+}
+
+/** U5 — `GET /runs/:runId/chat`. */
 export async function readChat(request: Request, runId: string, signal?: AbortSignal): Promise<ChatState> {
   try {
-    const body = await request<{ messages?: ChatMessage[]; phase?: RunPhase }>(
+    const body = await request<{ messages?: ChatMessage[]; phase?: RunPhase; pendingDecision?: ChatState["pendingDecision"] }>(
       `/runs/${encodeURIComponent(runId)}/chat`, { signal },
     );
-    return { available: true, messages: body.messages ?? [], phase: body.phase ?? "delivery" };
+    return { available: true, messages: body.messages ?? [], phase: body.phase ?? "delivery", pendingDecision: body.pendingDecision ?? null };
   } catch (error) {
-    if (error instanceof OwnerReadError && error.status === 404) return { available: false, messages: [], phase: "delivery" };
+    if (error instanceof OwnerReadError && error.status === 404) {
+      return { available: false, messages: [], phase: "delivery", pendingDecision: null };
+    }
     throw error;
   }
 }
 
-/** U5 — `POST /runs/:runId/chat` with the owner's message. */
-export async function sendChatMessage(request: Request, runId: string, body: string): Promise<void> {
+/**
+ * U6 — `POST /runs/:runId/chat`. Answering a decision sends the chosen option's text with
+ * `answerTo`, which is how the lead knows which question it answers.
+ */
+export async function sendChatMessage(request: Request, runId: string, body: string, entityVersion: number, answerTo?: string): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/chat`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }),
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, answerTo ? { body, answerTo } : { body }),
   });
 }
 
 /** U5 — `POST /runs/:runId/plan/approve`. */
-export async function approvePlan(request: Request, runId: string): Promise<void> {
+export async function approvePlan(request: Request, runId: string, entityVersion: number): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/plan/approve`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, {}),
   });
 }
 
-export interface BranchCommit { taskId: string | null; name: string; shortHash: string; committedAt: string }
-export interface BranchState { available: boolean; branch: string; base: string; commits: BranchCommit[] }
+export interface IntegrationCommit { hash: string; subject: string; task: string }
+export interface IntegrationState {
+  available: boolean;
+  branch: string;
+  commits: IntegrationCommit[];
+  /** Every task the run admitted has finished. */
+  tasksDone: boolean;
+  merge: { possible: boolean; reason: string | null };
+}
 
-/** U7 — `GET /runs/:runId/branch`. Absent until the integration branch ships. */
-export async function readBranch(request: Request, runId: string, signal?: AbortSignal): Promise<BranchState> {
+const ABSENT_INTEGRATION: IntegrationState = {
+  available: false, branch: "", commits: [], tasksDone: false, merge: { possible: false, reason: null },
+};
+
+/** U7 — `GET /runs/:runId/integration`. */
+export async function readIntegration(request: Request, runId: string, signal?: AbortSignal): Promise<IntegrationState> {
   try {
-    const body = await request<{ branch?: string; base?: string; commits?: BranchCommit[] }>(
-      `/runs/${encodeURIComponent(runId)}/branch`, { signal },
+    const body = await request<{ integration?: Partial<IntegrationState> }>(
+      `/runs/${encodeURIComponent(runId)}/integration`, { signal },
     );
-    return { available: true, branch: body.branch ?? "", base: body.base ?? "main", commits: body.commits ?? [] };
+    const integration = body.integration;
+    if (!integration) return { ...ABSENT_INTEGRATION };
+    return {
+      available: true,
+      branch: integration.branch ?? "",
+      commits: integration.commits ?? [],
+      tasksDone: integration.tasksDone === true,
+      merge: { possible: integration.merge?.possible === true, reason: integration.merge?.reason ?? null },
+    };
   } catch (error) {
-    if (error instanceof OwnerReadError && error.status === 404) return { available: false, branch: "", base: "main", commits: [] };
+    if (error instanceof OwnerReadError && error.status === 404) return { ...ABSENT_INTEGRATION };
     throw error;
   }
 }
 
-/** U7 — `POST /runs/:runId/merge`. */
-export async function mergeBranch(request: Request, runId: string): Promise<void> {
-  await request(`/runs/${encodeURIComponent(runId)}/merge`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
-  });
+export interface MergeOutcome {
+  status: "merged" | "refused" | "conflict";
+  code: string | null;
+  reason: string | null;
+  branch: string | null;
+  mode: "fast-forward" | "merge-commit" | "up-to-date" | null;
+  head: string | null;
 }
 
-/** The run states that mean work is still going on, for the teams list. */
-export const RUNNING_STATES: readonly TeamRunState[] = ["pending", "approved", "cancel_requested"];
+/**
+ * U7 — `POST /runs/:runId/merge`. A refusal answers 409 with its own code, so the code is read
+ * from the error rather than thrown at the owner. Neither `code` nor `reason` is rendered
+ * verbatim: the screen maps the code to a label and names open tasks itself.
+ */
+export async function mergeBranch(request: Request, runId: string, entityVersion: number): Promise<MergeOutcome> {
+  try {
+    const body = await request<MergeOutcome>(`/runs/${encodeURIComponent(runId)}/merge`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: controlBody(runId, crypto.randomUUID(), entityVersion, {}),
+    });
+    return body;
+  } catch (error) {
+    if (error instanceof OwnerReadError && (error.status === 409 || error.status === 403)) {
+      return { status: "refused", code: error.code, reason: null, branch: null, mode: null, head: null };
+    }
+    throw error;
+  }
+}
 
-export function isRunActive(run: Pick<TeamRun, "state">): boolean {
-  return RUNNING_STATES.includes(run.state);
+/** A run whose state still means work is going on, for the teams list. */
+export function isRunActive(run: { state: string }): boolean {
+  return run.state === "pending" || run.state === "approved" || run.state === "cancel_requested";
 }
