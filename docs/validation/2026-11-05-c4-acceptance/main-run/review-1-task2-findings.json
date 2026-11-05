@@ -1,0 +1,20 @@
+{
+  "verdict": "NO NEW P0/P1",
+  "round": 1,
+  "prior": [],
+  "findings": [
+    {
+      "id": "R1-1", "severity": "P2", "citation": "plan.md Task A: non-ASCII letters are not letters for this helper",
+      "file": "test/slugify.test.mjs", "category": "testing",
+      "scenario": "No test covers non-ASCII input. Current behaviour is correct (ran: slugify('Café au lait') -> 'caf-au-lait', slugify('ÄÖÜ') -> ''), but a change to \\p{L} or transliteration would pass all existing tests.",
+      "in_delta": true, "reproduced": true
+    },
+    {
+      "id": "R1-2", "severity": "P3", "citation": "plan.md Task A acceptance: the input is never mutated",
+      "file": "test/slugify.test.mjs", "category": "testing",
+      "scenario": "Test 'the input is never mutated' cannot fail because JS strings are immutable primitives; the guarantee holds by language semantics, so this is advisory.",
+      "in_delta": true, "reproduced": false
+    }
+  ],
+  "done_signal": { "holds": true }
+}

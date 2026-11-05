@@ -1,0 +1,20 @@
+{
+  "verdict": "CHANGES-REQUIRED",
+  "round": 1,
+  "prior": [],
+  "findings": [
+    {
+      "id": "R1-1", "severity": "P1", "citation": "plan.md Task B: a word starts after any character that is not a letter or digit; every other letter left exactly as it was",
+      "file": "src/titleCase.mjs", "category": "correctness",
+      "scenario": "titleCase regex (?<![A-Za-z0-9])[a-z] treats non-ASCII letters as boundaries and never uppercases them. Ran: titleCase('naïve') -> 'NaïVe' (expected 'Naïve'); titleCase('élan vital') -> 'éLan Vital' (expected 'Élan Vital'); titleCase('cafés ouverts') -> 'CaféS Ouverts'. Task A's ASCII-only rule is scoped 'for this helper' and does not apply to Task B. Fix: /(?<![\\p{L}\\p{N}])\\p{Ll}/gu (verified it fixes these and keeps all four acceptance cases).",
+      "in_delta": true, "reproduced": true
+    },
+    {
+      "id": "R1-2", "severity": "P2", "citation": "plan.md Task B: a word starts after any character that is not a letter or digit",
+      "file": "test/titleCase.test.mjs", "category": "testing",
+      "scenario": "No test has non-ASCII input, so all four tests pass under the R1-1 defect. Add e.g. titleCase('naïve élan') === 'Naïve Élan'.",
+      "in_delta": true, "reproduced": true
+    }
+  ],
+  "done_signal": { "holds": false, "failing_clause": "Task B: a word starts after any character that is not a letter or digit; every other letter left exactly as it was ('naïve' -> 'NaïVe')" }
+}

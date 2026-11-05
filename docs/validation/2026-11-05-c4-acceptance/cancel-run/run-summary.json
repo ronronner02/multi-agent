@@ -1,0 +1,32 @@
+{
+  "run": {
+    "id": "9b27efb9-9b14-4535-8e2d-9c08bc4944e0",
+    "state": "canceled",
+    "state_reason": "The owner stopped this separate run to prove the cancellation path.",
+    "review_rounds_used": 0,
+    "retries_used": 0,
+    "created_at": "2026-11-05T01:00:39.582Z",
+    "updated_at": "2026-11-05T01:00:48.503Z"
+  },
+  "tasks": [
+    {
+      "task_id": "task-1",
+      "role": "implementer",
+      "paths": "[\"src\",\"test\"]",
+      "state": "canceled",
+      "destination_session": "one@acceptance",
+      "manifestDigest": null,
+      "validated": null
+    }
+  ],
+  "attempts": [
+    {
+      "id": "256d5515-1b4e-4377-a831-5e0cebee8f32",
+      "role": "implementer",
+      "state": "stopped",
+      "created_at": "2026-11-05T01:00:40.409Z",
+      "updated_at": "2026-11-05T01:00:48.413Z",
+      "failure_json": "{\"ownerAction\":\"The owner canceled the run; start a new run if the work is still needed.\",\"reasonCode\":\"canceled\",\"resumeSafe\":true,\"retryEligible\":false}"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+Recorded task-4 as failed.
+  candidate: sha256:ad928e73753112a8d6cad4f204a1d77a82d566ec58fda7551a668900e3197260 (4 file(s), not validated)

@@ -1,0 +1,4 @@
+Canceled 9b27efb9-9b14-4535-8e2d-9c08bc4944e0.
+  process 1197464:30621195 stopped
+  task task-1 canceled
+  the candidate and its evidence are kept; rig team diff and rig team apply still read them

@@ -1,0 +1,43 @@
+diff --git a/src/slugify.mjs b/src/slugify.mjs
+new file mode 100644
+index 0000000..30d444a
+--- /dev/null
++++ b/src/slugify.mjs
+@@ -0,0 +1,6 @@
++export function slugify(input) {
++  return input
++    .replace(/[^A-Za-z0-9]+/g, "-")
++    .replace(/^-+|-+$/g, "")
++    .toLowerCase();
++}
+diff --git a/test/slugify.test.mjs b/test/slugify.test.mjs
+new file mode 100644
+index 0000000..e351356
+--- /dev/null
++++ b/test/slugify.test.mjs
+@@ -0,0 +1,25 @@
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { slugify } from "../src/slugify.mjs";
++
++test('slugify("Hello, World!") is "hello-world"', () => {
++  assert.equal(slugify("Hello, World!"), "hello-world");
++});
++
++test('slugify("  a  --  b  ") is "a-b"', () => {
++  assert.equal(slugify("  a  --  b  "), "a-b");
++});
++
++test('slugify("!!!") is ""', () => {
++  assert.equal(slugify("!!!"), "");
++});
++
++test('slugify("a_b") is "a-b"', () => {
++  assert.equal(slugify("a_b"), "a-b");
++});
++
++test("the input is never mutated", () => {
++  const input = "Hello, World!";
++  slugify(input);
++  assert.equal(input, "Hello, World!");
++});

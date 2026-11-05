@@ -1,0 +1,5 @@
+Recorded task-3 as done.
+  candidate: sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c (6 file(s), validated)
+  src/titleCase.mjs
+  test/titleCase.test.mjs
+Review: task-3-review-1 was created and routed to the reviewer seat.

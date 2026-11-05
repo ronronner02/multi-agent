@@ -1,0 +1,125 @@
+{
+  "run": {
+    "id": "577d5149-f615-4b82-b51e-090f527b9812",
+    "state": "approved",
+    "state_reason": null,
+    "review_rounds_used": 2,
+    "retries_used": 0,
+    "created_at": "2026-11-05T00:30:20.645Z",
+    "updated_at": "2026-11-05T00:57:12.848Z"
+  },
+  "tasks": [
+    {
+      "task_id": "task-1",
+      "role": "lead",
+      "paths": "[\"src\",\"test\"]",
+      "state": "pending",
+      "destination_session": "lead@acceptance",
+      "manifestDigest": "sha256:779f0b23a0a0c72fd651b152a962fdd48c204bde4d6dd3b12ce932d83d3ade4b",
+      "validated": 1
+    },
+    {
+      "task_id": "task-2",
+      "role": "implementer",
+      "paths": "[\"src/slugify.mjs\",\"test/slugify.test.mjs\"]",
+      "state": "done",
+      "destination_session": "one@acceptance",
+      "manifestDigest": "sha256:18b860356accc842d28cdf42994c25ddfe0b89183b8f5f4543cc8d4af67d2e82",
+      "validated": 1
+    },
+    {
+      "task_id": "task-2-review-1",
+      "role": "reviewer",
+      "paths": "[\"src/slugify.mjs\",\"test/slugify.test.mjs\"]",
+      "state": "done",
+      "destination_session": "review@acceptance",
+      "manifestDigest": "sha256:18b860356accc842d28cdf42994c25ddfe0b89183b8f5f4543cc8d4af67d2e82",
+      "validated": 1
+    },
+    {
+      "task_id": "task-3",
+      "role": "implementer",
+      "paths": "[\"src/titleCase.mjs\",\"test/titleCase.test.mjs\"]",
+      "state": "pending",
+      "destination_session": "two@acceptance",
+      "manifestDigest": "sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c",
+      "validated": 1
+    },
+    {
+      "task_id": "task-3-review-1",
+      "role": "reviewer",
+      "paths": "[\"src/titleCase.mjs\",\"test/titleCase.test.mjs\"]",
+      "state": "done",
+      "destination_session": "review@acceptance",
+      "manifestDigest": "sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c",
+      "validated": 1
+    },
+    {
+      "task_id": "task-4",
+      "role": "implementer",
+      "paths": "[\"src/normalize.mjs\",\"test/normalize.test.mjs\"]",
+      "state": "failed",
+      "destination_session": "one@acceptance",
+      "manifestDigest": "sha256:ad928e73753112a8d6cad4f204a1d77a82d566ec58fda7551a668900e3197260",
+      "validated": 0
+    }
+  ],
+  "attempts": [
+    {
+      "id": "6ab05f0b-0a0e-4bc2-9a2e-7787bdefa0f2",
+      "role": "lead",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:30:20.910Z",
+      "updated_at": "2026-11-05T00:31:42.919Z",
+      "failure_json": null
+    },
+    {
+      "id": "2cb95f9b-d4d3-4747-9831-70b91de1c859",
+      "role": "lead",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:33:22.937Z",
+      "updated_at": "2026-11-05T00:35:41.961Z",
+      "failure_json": null
+    },
+    {
+      "id": "ffa2527a-23b4-44ae-92cf-cbb091075bd5",
+      "role": "implementer",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:35:59.964Z",
+      "updated_at": "2026-11-05T00:40:11.238Z",
+      "failure_json": null
+    },
+    {
+      "id": "9d161be5-679c-427d-9cdb-4d773460c22a",
+      "role": "implementer",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:35:59.974Z",
+      "updated_at": "2026-11-05T00:40:36.240Z",
+      "failure_json": null
+    },
+    {
+      "id": "5792b8e1-7037-4ace-abb3-06cd27d7328e",
+      "role": "reviewer",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:41:18.243Z",
+      "updated_at": "2026-11-05T00:44:43.273Z",
+      "failure_json": null
+    },
+    {
+      "id": "cc51fb74-a433-44dc-a044-42c632e19560",
+      "role": "reviewer",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:44:44.272Z",
+      "updated_at": "2026-11-05T00:46:37.292Z",
+      "failure_json": null
+    },
+    {
+      "id": "99d32b32-9e56-41c2-8980-ab58e1aaad70",
+      "role": "implementer",
+      "state": "stopped",
+      "created_at": "2026-11-05T00:51:43.342Z",
+      "updated_at": "2026-11-05T00:54:57.368Z",
+      "failure_json": null
+    }
+  ]
+}

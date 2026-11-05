@@ -1,0 +1,38 @@
+assistant text blocks: 2
+================ FINAL TEXT BLOCK ================
+**Verdict: NO NEW P0/P1**
+
+**New findings**
+
+- **R1-1 (P2, testing)** in `test/slugify.test.mjs`: nothing tests the clause "Diacritics are not transliterated; non-ASCII letters are not letters for this helper." The implementation handles it correctly. I ran it and got `slugify("Café au lait")` → `"caf-au-lait"`, `slugify("aéb")` → `"a-b"` and `slugify("ÄÖÜ")` → `""`. But if someone later switched to `\p{L}` or added NFD transliteration, every current test would still pass. Fix: add one assertion such as `slugify("Café au lait") === "caf-au-lait"`.
+- **R1-2 (P3, testing)** in `test/slugify.test.mjs`, the "the input is never mutated" test: JS strings are immutable primitives, so this test cannot fail under any implementation. The guarantee itself can't be broken either, so no claim is false. It's advisory only. A short comment, or keeping it as an explicit acceptance marker, is enough.
+
+**Done signal:** yes. All five Task A acceptance bullets have a passing test. `npm test` reports 5 pass and 0 fail. The tests use only `node:test` and `node:assert/strict`, and there are no new dependencies.
+
+**Checked and sound**
+- `src/slugify.mjs`: the `[^A-Za-z0-9]+` → `-` replacement collapses runs, the trim regex strips both ends, and lowercasing after the ASCII-only class means non-ASCII letters are treated as separators, as the plan says.
+- Edge inputs `""`, `"---"` and `"ABC123"` give `""`, `""` and `"abc123"` (run by hand).
+- The candidate stays within its declared paths (`src/slugify.mjs`, `test/slugify.test.mjs`).
+
+```json
+{
+  "verdict": "NO NEW P0/P1",
+  "round": 1,
+  "prior": [],
+  "findings": [
+    {
+      "id": "R1-1", "severity": "P2", "citation": "plan.md Task A: non-ASCII letters are not letters for this helper",
+      "file": "test/slugify.test.mjs", "category": "testing",
+      "scenario": "No test covers non-ASCII input. Current behaviour is correct (ran: slugify('Café au lait') -> 'caf-au-lait', slugify('ÄÖÜ') -> ''), but a change to \\p{L} or transliteration would pass all existing tests.",
+      "in_delta": true, "reproduced": true
+    },
+    {
+      "id": "R1-2", "severity": "P3", "citation": "plan.md Task A acceptance: the input is never mutated",
+      "file": "test/slugify.test.mjs", "category": "testing",
+      "scenario": "Test 'the input is never mutated' cannot fail because JS strings are immutable primitives; the guarantee holds by language semantics, so this is advisory.",
+      "in_delta": true, "reproduced": false
+    }
+  ],
+  "done_signal": { "holds": true }
+}
+```
