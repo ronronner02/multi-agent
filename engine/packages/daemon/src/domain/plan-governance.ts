@@ -185,9 +185,9 @@ function timestamp(value: unknown, field: string): string {
   return s;
 }
 
-function actorIdentity(actor: ControlActor, ownerOnly = false): ControlActor {
+function actorIdentity(actor: ControlActor, ownerOnly = false, daemonAllowed = false): ControlActor {
   const v = object(actor, "actor");
-  if (v.kind !== "owner" && v.kind !== "worker") throw new TeamContractError("actor.kind");
+  if (v.kind !== "owner" && v.kind !== "worker" && !(daemonAllowed && v.kind === "daemon")) throw new TeamContractError("actor.kind");
   if (ownerOnly && v.kind !== "owner") throw new Error("An authenticated owner control session is required");
   return { kind: v.kind, sessionId: text(v.sessionId, "actor.sessionId", 256) };
 }
@@ -1091,10 +1091,14 @@ export class PlanGovernance {
     });
   }
 
-  /** Records an owner-verified stopped outcome, without granting launch or resume authority. */
+  /** Records an owner- or daemon-observed stopped outcome, without granting launch authority. */
   recordTaskOutcome(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
-    const owner = actorIdentity(actor, true);
-    return this.command("task.outcome", raw, owner, (ctx) => this.writeTaskTransition(ctx, owner.sessionId));
+    const observer = actorIdentity(actor, false, true);
+    if (observer.kind !== "owner" && observer.kind !== "daemon") {
+      throw new Error("An authenticated owner or daemon observation is required");
+    }
+    const observedBy = observer.kind === "daemon" ? "daemon" : observer.sessionId;
+    return this.command("task.outcome", raw, observer, (ctx) => this.writeTaskTransition(ctx, observedBy));
   }
 
   private writeTaskTransition(ctx: CommandContext, observedBy: string | null): Result {
@@ -1127,7 +1131,10 @@ export class PlanGovernance {
     }
     const optionalText = (key: string) => v[key] === undefined ? undefined : text(v[key], key);
     let transitionNote = optionalText("transitionNote");
-    if (observedOutcome) transitionNote = `Owner observation of ${v.actorSession}${transitionNote ? `: ${transitionNote}` : ""}`;
+    if (observedOutcome) {
+      const observer = observedBy === "daemon" ? "Daemon" : "Owner";
+      transitionNote = `${observer} observation of ${v.actorSession}${transitionNote ? `: ${transitionNote}` : ""}`;
+    }
     // The dependency gate inside the queue write reads this row's evidence in the
     // same transaction, so outcome evidence must be durable BEFORE the state write.
     const evidence = v.evidence === undefined ? task.evidence : jsonValue(object(v.evidence, "evidence"));

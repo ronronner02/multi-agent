@@ -9,15 +9,14 @@ import { teamControlAuthentication, type TeamControlCredentials, type TeamContro
 /**
  * MVP — the owner's completion read.
  *
- * A task can only be completed by an owner action, and that action needs two facts the owner
- * cannot see: which attempt was observed to stop, and what the daemon can verify about the
- * candidate. Both are reads over owners that already exist — the governance rows for the
- * attempt and the runtime's own candidate manifest — so this route writes nothing and composes
- * no second reader.
+ * The owner completion read exposes the same two facts the daemon uses for automatic outcomes:
+ * which attempt was observed to stop, and what the daemon can verify about the candidate. Both
+ * are reads over owners that already exist — the governance rows for the attempt and the
+ * runtime's own candidate manifest — so this route writes nothing and composes no second reader.
  *
  * The evidence it returns is what the owner action forwards to `POST /runs/:runId/tasks/outcome`.
- * The write contract is unchanged: the owner still observes the outcome, and the loop still
- * starts on the `validated` flag the daemon computed here rather than on anything an agent said.
+ * The owner can still forward this evidence as an override through `tasks/outcome`; the daemon's
+ * automatic path uses the same governance contract and the same `validated` flag.
  *
  * Owner-only: the evidence quotes the candidate's changed paths, which is worker-written
  * content the worker boundary is not allowed to read.

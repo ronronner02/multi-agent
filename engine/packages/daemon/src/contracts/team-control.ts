@@ -229,7 +229,7 @@ export interface ScopeExtension {
 export interface ScopeProjection { chainHead: string; scopeDigest: string; extensions: ScopeExtension[]; }
 
 export interface ControlActor {
-  kind: "owner" | "worker";
+  kind: "owner" | "worker" | "daemon";
   sessionId: string;
 }
 

@@ -72,9 +72,9 @@ describe("KTD20 classification of captured client errors", () => {
   it("never retries an unknown code, and never retries anything outside KTD20's eligible set", () => {
     expect(classifyAttemptFailure({ canceled: false, exit: { code: 1 }, terminalTail: "segfault\n" }))
       .toMatchObject({ reasonCode: "agent_error.unknown", retryEligible: false });
-    // The eligible set is exactly KTD20's five; a code added to the vocabulary does not join it.
+    // The eligible set includes the two daemon-owned evidence failures as one-shot retries.
     expect([...RETRY_ELIGIBLE_REASON_CODES].sort()).toEqual([
-      "agent_error.provider_network", "daemon_recovery", "no_progress", "run_timeout", "runtime_offline",
+      "agent_error.provider_network", "daemon_recovery", "evidence_invalid", "no_progress", "review_report_missing", "run_timeout", "runtime_offline",
     ]);
     for (const code of ATTEMPT_REASON_CODES) {
       expect(classificationFor(code).retryEligible, code).toBe(RETRY_ELIGIBLE_REASON_CODES.includes(code));

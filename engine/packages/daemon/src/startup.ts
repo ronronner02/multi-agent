@@ -3209,15 +3209,23 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       liveSessions, maxSessions });
     // MVP — the other end of that dispatch. A direct launch's receipt names the client process
     // the seat runs, and nothing wrote or closed the attempt from it, so a task could never be
-    // observed to finish. This owner admits the attempt when its receipt lands and records it
-    // stopped when the process it named is gone. It decides no outcome: the owner action does.
+    // observed to finish. This path admits the attempt when its receipt lands, records it stopped
+    // when the process it named is gone, and records the daemon-verifiable outcome.
     const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
     // The direct worker's mutable state root: each attempt's prompt, its captured Codex thread
-    // id and its final message live under it. One value, so the two readers of the end of a turn
-    // (the sweep's resume-token capture and the chat's reply) cannot disagree about where.
+    // id and its final message live under it. One value, so the readers of a turn's end cannot
+    // disagree about where.
     const turnStateRoot = nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch");
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
       turnStateRoot,
+      candidateManifestFor: (runId, taskId) => {
+        if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+        return workflowRuntime.candidateManifestFor(runId, taskId);
+      },
+      readLeadProposal: (runId, taskId) => {
+        if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+        return workflowRuntime.leadProposalFor(runId, taskId);
+      },
       // T033 — the exit evidence a direct launch leaves behind. The seat's pane is where the
       // client ran, so tmux's own record of that pane ending (its dead flag and exit status)
       // and the last lines it held are the only structured evidence available without a
