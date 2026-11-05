@@ -1,12 +1,12 @@
 {
   "run": {
     "id": "577d5149-f615-4b82-b51e-090f527b9812",
-    "state": "approved",
-    "state_reason": null,
+    "state": "blocked",
+    "state_reason": "review limit exhausted",
     "review_rounds_used": 2,
     "retries_used": 0,
     "created_at": "2026-11-05T00:30:20.645Z",
-    "updated_at": "2026-11-05T00:57:12.848Z"
+    "updated_at": "2026-11-05T03:26:03.029Z"
   },
   "tasks": [
     {
@@ -40,7 +40,7 @@
       "task_id": "task-3",
       "role": "implementer",
       "paths": "[\"src/titleCase.mjs\",\"test/titleCase.test.mjs\"]",
-      "state": "pending",
+      "state": "done",
       "destination_session": "two@acceptance",
       "manifestDigest": "sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c",
       "validated": 1
@@ -119,6 +119,14 @@
       "state": "stopped",
       "created_at": "2026-11-05T00:51:43.342Z",
       "updated_at": "2026-11-05T00:54:57.368Z",
+      "failure_json": null
+    },
+    {
+      "id": "fd4b9dcb-37cf-4246-8a69-4a1183c63759",
+      "role": "implementer",
+      "state": "stopped",
+      "created_at": "2026-11-05T03:20:46.747Z",
+      "updated_at": "2026-11-05T03:24:37.780Z",
       "failure_json": null
     }
   ]

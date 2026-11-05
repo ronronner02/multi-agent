@@ -1,0 +1,6 @@
+# Round 2 (the rework attempt fd4b9dcb) against round 1's candidate sha256:fa0de34d...
+# The rework agent made no change, so this diff is empty by construction.
+# Round 1 digest: sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c
+# Round 2 digest: sha256:fa0de34db08137e72f79152e9cc7db9727e76837dabd6cc17df9122332a68b1c (identical)
+
+# (both diffs are empty: the two candidates are byte-identical)

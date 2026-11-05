@@ -138,5 +138,15 @@
     "closure_reason": null,
     "closure_target": null,
     "task_id": "task-4"
+  },
+  {
+    "transition_id": 19,
+    "ts": "2026-11-05T03:26:03.035Z",
+    "state": "done",
+    "transition_note": "Owner observation of two@acceptance: The rework agent reported NEEDS-DECISION: the reviewer's P1 asks for Unicode letters while the approved task body says ASCII-only.",
+    "actor_session": "owner-control",
+    "closure_reason": "no-follow-on",
+    "closure_target": null,
+    "task_id": "task-3"
   }
 ]
