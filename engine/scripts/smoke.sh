@@ -34,6 +34,10 @@ npm run test -w packages/daemon -- \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
   test/agent-turn.test.ts \
+  test/agent-turn-view-telemetry.test.ts \
+  test/attempt-telemetry.test.ts \
+  test/team-telemetry-routes.test.ts \
+  test/attempt-completion.test.ts \
   test/direct-worker-launch.test.ts \
   test/attempt-failure.test.ts \
   test/team-cancellation.test.ts \

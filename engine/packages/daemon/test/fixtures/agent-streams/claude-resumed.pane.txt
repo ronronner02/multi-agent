@@ -1,0 +1,3 @@
+[tool] Bash {"command":"cat result.txt; printf 'resumed\\n' >> result.txt","description":"Read result.txt and append resumed marker"}
+resumed complete.
+resumed complete.

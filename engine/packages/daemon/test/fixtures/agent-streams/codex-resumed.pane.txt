@@ -1,0 +1,7 @@
+[turn] Started
+Private reasoning must not enter telemetry.
+[command] /bin/bash -lc "cat result.txt; printf 'resumed\\n' >> result.txt"
+initial
+[command] exit 0
+resumed complete.
+[turn] Completed

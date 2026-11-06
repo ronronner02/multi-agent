@@ -3238,6 +3238,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // observed to finish. This path admits the attempt when its receipt lands, records it stopped
     // when the process it named is gone, and records the daemon-verifiable outcome.
     const { composeAttemptCompletion } = await import("./domain/attempt-completion.js");
+    const { AttemptTelemetry } = await import("./domain/attempt-telemetry.js");
     // U6 — the lead as manager: what its turn delivered, and what its team did since it spoke.
     // It runs on this sweep's cadence (one owner of "the queue as it is now") and asks the same
     // dispatch every other launch uses, so nothing here starts a client of its own.
@@ -3257,8 +3258,10 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // id and its final message live under it. One value, so the readers of a turn's end cannot
     // disagree about where.
     const turnStateRoot = nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch");
+    const telemetry = new AttemptTelemetry(db, { turnStateRoot });
+    deps.attemptTelemetry = telemetry;
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
-      turnStateRoot,
+      turnStateRoot, telemetry,
       candidateManifestFor: (runId, taskId) => {
         if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
         return workflowRuntime.candidateManifestFor(runId, taskId);
