@@ -285,6 +285,7 @@
   "team.reason.planBindingChanged": "Plan binding changed",
   "team.reason.recoveryWedge": "Seat recovery needs attention",
   "team.reason.integrationConflict": "Work does not apply to the integration branch",
+  "team.reason.leadFailed": "The lead stopped and will not be retried",
   "team.reason.generic": "Run needs attention",
   "team.create": "create",
   "team.modify": "modify",

@@ -7,7 +7,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { classificationFor } from "../src/domain/attempt-failure.js";
-import { TEAM_CONTROL_VERSION, type ControlRequest, type PlanBinding, type UsageEvidence } from "../src/contracts/team-control.js";
+import { TEAM_CONTROL_VERSION, LEAD_FAILED_REASON, type ControlRequest, type PlanBinding, type UsageEvidence } from "../src/contracts/team-control.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
 
 const owner = { kind: "owner", sessionId: "owner" } as const;
@@ -68,6 +68,26 @@ describe("U8 automatic recovery and Resume", () => {
     db.prepare("UPDATE team_runs SET state = 'blocked', state_reason = ? WHERE id = 'run'").run(reason);
   };
 
+  /** One daemon-observed failed turn, recorded the way the completion sweep records it. */
+  const failTask = (taskId: string, seat: string, role: "lead" | "implementer", attemptId: string,
+    reasonCode: Parameters<typeof classificationFor>[0]) => {
+    const task = governance.findTask("run", taskId)!;
+    expect(governance.recordAttempt(command(attemptId, { qitemId: task.qitemId, role, provider: "claude",
+      identity: { nativeSessionId: `native-${attemptId}`, tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 4242,
+        processStart: `${attemptId}-start`, generation: 1, policyFingerprint: binding.policyFingerprint },
+      unknownReason: null, state: "running", usage: usage() }), binding).status).toBe("observed");
+    expect(governance.recordUsage(command(attemptId, {
+      expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion, state: "stopped", usage: usage(),
+      failure: classificationFor(reasonCode),
+    })).status).toBe("observed");
+    const outcome = governance.recordTaskOutcome(command(task.qitemId, {
+      expectedTaskVersion: governance.getTask(task.qitemId)!.entityVersion, state: "failed", actorSession: seat, attemptId,
+      expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion,
+      evidence: { validated: false, reasonCode },
+    }), daemon);
+    expect(outcome.status, JSON.stringify(outcome)).toBe("observed");
+  };
+
   it("renews a past 24-hour implementation approval at dispatch time and records a daemon action", () => {
     approve();
     db.prepare("UPDATE team_approvals SET expires_at = ? WHERE run_id = 'run' AND action = 'implementation'")
@@ -119,36 +139,48 @@ describe("U8 automatic recovery and Resume", () => {
       outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Decompose the plan",
     }), binding).status).toBe("accepted");
     const qitemId = governance.findTask("run", "lead-task")!.qitemId;
-    const failOnce = (attemptId: string) => {
-      const task = governance.getTask(qitemId)!;
-      expect(governance.recordAttempt(command(attemptId, { qitemId, role: "lead", provider: "claude",
-        identity: { nativeSessionId: `native-${attemptId}`, tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 4242,
-          processStart: `${attemptId}-start`, generation: 1, policyFingerprint: binding.policyFingerprint },
-        unknownReason: null, state: "running", usage: usage() }), binding).status).toBe("observed");
-      expect(governance.recordUsage(command(attemptId, {
-        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion, state: "stopped", usage: usage(),
-        failure: classificationFor("evidence_invalid"),
-      })).status).toBe("observed");
-      const outcome = governance.recordTaskOutcome(command(qitemId, {
-        expectedTaskVersion: task.entityVersion, state: "failed", actorSession: "lead@rig", attemptId,
-        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion,
-        evidence: { validated: false, reasonCode: "evidence_invalid" },
-      }), daemon);
-      expect(outcome.status, JSON.stringify(outcome)).toBe("observed");
-    };
 
-    failOnce("lead-attempt-1");
+    failTask("lead-task", "lead@rig", "lead", "lead-attempt-1", "evidence_invalid");
     // One retry is spent by the daemon, and the lead's task is work nobody is doing again.
     expect(governance.getRun("run").retriesUsed).toBe(1);
     expect(governance.getRun("run").state).toBe("approved");
     expect(governance.queueState(qitemId)).toBe("pending");
 
-    failOnce("lead-attempt-2");
+    failTask("lead-task", "lead@rig", "lead", "lead-attempt-2", "evidence_invalid");
     // No budget left and no one to wake: the owner gets the one Resume action that adds it.
     expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason: "retry limit exhausted",
       stateReasonKey: "team.reason.retryLimitExhausted" });
-    expect(governance.ownerCommand("resume", command("run", { addRetries: 1 }), owner, binding).status).toBe("observed");
+    const resumed = governance.ownerCommand("resume", command("run", { addRetries: 1 }), owner, binding);
+    expect(resumed).toMatchObject({ status: "observed", resumeTaskIds: ["lead-task"] });
     expect(governance.getRun("run")).toMatchObject({ state: "approved", binding: { limits: { maxRetries: 2 } } });
+    // The click restarts the manager: the lead's failed task is back in the queue, not stranded.
+    expect(governance.queueState(qitemId)).toBe("pending");
+  });
+
+  /**
+   * A lead failure the classifier forbids retrying has no retry to spend and no one to wake, so
+   * the run must reach the owner as a blocked run Resume can restart. Before this, it stayed
+   * `approved` with a failed lead task and nothing ever happened again.
+   */
+  it("blocks a run whose lead failed without a retry, and Resume reopens the lead", () => {
+    approve();
+    expect(governance.createTask(command("lead-task", {
+      assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Decompose the plan",
+    }), binding).status).toBe("accepted");
+    const qitemId = governance.findTask("run", "lead-task")!.qitemId;
+
+    failTask("lead-task", "lead@rig", "lead", "lead-attempt-1", "agent_error.provider_auth_or_access");
+    expect(governance.getRun("run").retriesUsed).toBe(0);
+    expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason: LEAD_FAILED_REASON,
+      stateReasonKey: "team.reason.leadFailed" });
+    expect(governance.queueState(qitemId)).toBe("failed");
+
+    // One plain Resume: no budget increase, because nothing was spent.
+    const resumed = governance.ownerCommand("resume", command("run", {}), owner, binding);
+    expect(resumed).toMatchObject({ status: "observed", effectMayStart: true, resumeTaskIds: ["lead-task"] });
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", stateReason: null });
+    expect(governance.queueState(qitemId)).toBe("pending");
   });
 
   it("leaves an implementer's retry-eligible failure to the lead rather than blocking the run", () => {
@@ -158,25 +190,9 @@ describe("U8 automatic recovery and Resume", () => {
       outputs: [], permissions: [], sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Do the work",
     }), binding).status).toBe("accepted");
     const qitemId = governance.findTask("run", "task-1")!.qitemId;
-    const failOnce = (attemptId: string) => {
-      const task = governance.getTask(qitemId)!;
-      governance.recordAttempt(command(attemptId, { qitemId, role: "implementer", provider: "claude",
-        identity: { nativeSessionId: `native-${attemptId}`, tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 4242,
-          processStart: `${attemptId}-start`, generation: 1, policyFingerprint: binding.policyFingerprint },
-        unknownReason: null, state: "running", usage: usage() }), binding);
-      governance.recordUsage(command(attemptId, {
-        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion, state: "stopped", usage: usage(),
-        failure: classificationFor("evidence_invalid"),
-      }));
-      expect(governance.recordTaskOutcome(command(qitemId, {
-        expectedTaskVersion: task.entityVersion, state: "failed", actorSession: "builder@rig", attemptId,
-        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion,
-        evidence: { validated: false, reasonCode: "evidence_invalid" },
-      }), daemon).status).toBe("observed");
-    };
 
-    failOnce("attempt-1");
-    failOnce("attempt-2");
+    failTask("task-1", "builder@rig", "implementer", "attempt-1", "evidence_invalid");
+    failTask("task-1", "builder@rig", "implementer", "attempt-2", "evidence_invalid");
     // The implementer's second failure is the lead's news: its budget is spent, but the lead can
     // still replace, split or re-scope the task without an owner decision.
     expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 1, stateReason: null });

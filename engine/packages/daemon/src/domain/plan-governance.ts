@@ -5,7 +5,7 @@ import { LeadWakePolicy } from "./lead-wake-policy.js";
 import { RigRepository } from "./rig-repository.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
-  TEAM_CONTROL_VERSION, TEAM_QUEUE_STATES, TeamContractError, canonicalJson, digest, integer, jsonValue,
+  TEAM_CONTROL_VERSION, TEAM_QUEUE_STATES, TeamContractError, LEAD_FAILED_REASON, canonicalJson, digest, integer, jsonValue,
   object, parseAssignment, parseAttemptIdentity, parseControlRequest, parsePlanBinding, parseTaskInputs, parseTeamEvent, parseUsage, text,
   teamReasonLabelKey, type ApprovalAction, type ApprovalConsumption, type ApprovalKind, type AttemptState, type ControlActor,
   type ControlReceipt, type ControlRequest, type JsonObject, type TeamApproval, type TeamAttempt,
@@ -832,6 +832,26 @@ export class PlanGovernance {
   }
 
   /**
+   * U6 — put a failed lead task back in the queue when the owner resumes the run.
+   *
+   * A lead failure the daemon will not retry blocks the run, and no wake can reach the lead:
+   * it is the manager. Resume is the owner's one action for a blocked run, so it is also what
+   * starts the manager again. `failed` is not a guarded terminal, so this is the queue's
+   * ordinary transition, and the caller reads the pending tasks after it.
+   */
+  private reopenFailedLeadTask(ctx: CommandContext): void {
+    const lead = runLeadTask(this.db, ctx.run.id);
+    if (!lead) return;
+    const item = this.queue.getById(lead.qitemId);
+    if (!item || item.state !== "failed") return;
+    const updated = withQueueWrite(this.db, { operation: "update", qitemId: lead.qitemId }, () => this.queue.updateWithinTransaction({
+      qitemId: lead.qitemId, actorSession: ctx.run.id, state: "pending",
+      transitionNote: "The owner resumed the run; the lead's task runs again",
+    }));
+    for (const event of updated.persistedEvents) ctx.register(event);
+  }
+
+  /**
    * U6 — the chat message, and the decision it answers.
    *
    * An owner message that names a decision answers it: the decision row keeps the message id,
@@ -1275,6 +1295,10 @@ export class PlanGovernance {
           return deny(eligibilityReason);
         }
         ctx.run.stateReason = null;
+        // U6 — a run blocked because its lead failed is restarted by the same click. The lead
+        // cannot wake itself, so Resume is what puts it back in the queue; the dispatcher then
+        // gets it through `resumeTaskIds`, exactly as it gets any other pending task.
+        this.reopenFailedLeadTask(ctx);
         return { status: "observed", value: { state: ctx.run.state, stateReason: ctx.run.stateReason,
           ...(required === "addMinutes" ? { addMinutes } : {}), ...(required === "addRetries" ? { addRetries } : {}),
           ...(required === "addReviewRounds" ? { addReviewRounds } : {}) },
@@ -1524,11 +1548,13 @@ export class PlanGovernance {
     for (const event of updated.persistedEvents) ctx.register(event);
     // KTD3 — "failed with the classifier's code, which routes to one retry and then to the lead".
     // The daemon's own observation spends the run's retry budget; an owner who records a failure
-    // has the explicit retry command instead. A lead cannot wake itself, so when its budget is
-    // gone the run is blocked with the reason U8's resume handles rather than left failed and
-    // silent — the live acceptance run sat in exactly that state for an hour and a half.
-    if (observedOutcome && observedBy === "daemon" && v.state === "failed" && observedAttempt?.failure?.retryEligible === true) {
-      if (ctx.run.retriesUsed < ctx.run.binding.limits.maxRetries) {
+    // has the explicit retry command instead. A lead cannot wake itself, so a lead failure the
+    // run will not retry — because the classifier forbids it, or because the budget is spent —
+    // leaves the run blocked with a reason Resume handles, never sitting failed and silent: the
+    // live acceptance run sat in exactly that state for an hour and a half.
+    if (observedOutcome && observedBy === "daemon" && v.state === "failed") {
+      const retryable = observedAttempt?.failure?.retryEligible === true;
+      if (retryable && observedAttempt !== null && ctx.run.retriesUsed < ctx.run.binding.limits.maxRetries) {
         ctx.run.retriesUsed += 1;
         const retried = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
           qitemId: task.qitemId, actorSession: ctx.run.id, state: "pending",
@@ -1536,7 +1562,7 @@ export class PlanGovernance {
         }));
         for (const event of retried.persistedEvents) ctx.register(event);
       } else if (task.assignment.role === "lead") {
-        this.block(ctx, "retry limit exhausted");
+        this.block(ctx, retryable ? "retry limit exhausted" : LEAD_FAILED_REASON);
       }
     }
     // C2 — an implementer that completed with validated evidence gets its review task now,

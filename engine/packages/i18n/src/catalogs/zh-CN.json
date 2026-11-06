@@ -285,6 +285,7 @@
   "team.reason.planBindingChanged": "计划绑定已改变",
   "team.reason.recoveryWedge": "座席恢复需要处理",
   "team.reason.integrationConflict": "工作无法应用到集成分支",
+  "team.reason.leadFailed": "负责人已停止，且不会自动重试",
   "team.reason.generic": "运行需要处理",
   "team.create": "创建",
   "team.modify": "修改",
