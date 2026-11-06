@@ -25,6 +25,7 @@ export const MESSAGE_PARAMETERS = {
   // here; a key that is not declared is one a caller can mistype without the type noticing.
   "overview.verified": ["verified", "total"],
   "shell.snapshotAge": ["seconds"],
+  "shell.notificationsCount": ["count"],
   "tasks.count": ["count"],
   "tasks.criteriaOf": ["verified", "total"],
   // C2's review-round line: a blocking finding count, so it is declared here like every

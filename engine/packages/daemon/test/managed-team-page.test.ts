@@ -23,6 +23,11 @@ function managedApp(webUiEnabled: boolean, { managed = true, terminalBearerToken
   fs.mkdirSync(nodePath.join(dir, "assets"));
   fs.writeFileSync(nodePath.join(dir, "index.html"), INDEX_HTML, "utf-8");
   fs.writeFileSync(nodePath.join(dir, "assets", "app.js"), "console.log('ui');", "utf-8");
+  const skin = nodePath.join(dir, "skins", "shuimo-danqing");
+  fs.mkdirSync(skin, { recursive: true });
+  fs.writeFileSync(nodePath.join(skin, "shuimo-danqing-loop.mp4"), "fixture-video");
+  fs.writeFileSync(nodePath.join(skin, "shuimo-danqing-still.webp"), "fixture-poster");
+  fs.writeFileSync(nodePath.join(skin, "unrelated.mp4"), "not-a-team-asset");
   cleanups.push(() => { db.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
   const s = createTestApp(db) as unknown as Record<string, unknown>;
@@ -42,6 +47,17 @@ function managedApp(webUiEnabled: boolean, { managed = true, terminalBearerToken
 }
 
 describe("managed-mode team page", () => {
+  it.each([
+    { path: "/skins/shuimo-danqing/shuimo-danqing-loop.mp4", mime: "video/mp4", bytes: "fixture-video" },
+    { path: "/skins/shuimo-danqing/shuimo-danqing-still.webp", mime: "image/webp", bytes: "fixture-poster" },
+  ])("serves the command-center media at $path as $mime", async ({ path, mime, bytes }) => {
+    const app = managedApp(true);
+    const response = await app.request(path);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(mime);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from(bytes));
+  });
+
   it("serves the team view and its assets when the web UI is on", async () => {
     const app = managedApp(true);
     for (const path of ["/team", "/team/overview"]) {
@@ -54,7 +70,8 @@ describe("managed-mode team page", () => {
 
   it("still refuses every other page in managed mode", async () => {
     const app = managedApp(true);
-    for (const path of ["/", "/index.html", "/specs", "/settings", "/topology", "/rigs/rig-1/nodes/dev.impl"]) {
+    for (const path of ["/", "/index.html", "/specs", "/settings", "/topology", "/rigs/rig-1/nodes/dev.impl",
+      "/skins", "/skins/shuimo-danqing/", "/skins/shuimo-danqing/unrelated.mp4"]) {
       const res = await app.request(path);
       expect(res.status, path).toBe(404);
       expect(await res.text(), path).toBe(LEGACY_REFUSAL);
@@ -63,9 +80,11 @@ describe("managed-mode team page", () => {
 
   it("keeps the team view off while the web UI setting is off", async () => {
     const app = managedApp(false);
-    const res = await app.request("/team");
-    expect(res.status).toBe(404);
-    expect(res.headers.get("x-openrig-web-ui")).toBe("off");
+    for (const path of ["/team", "/skins/shuimo-danqing/shuimo-danqing-loop.mp4", "/skins/shuimo-danqing/shuimo-danqing-still.webp"]) {
+      const res = await app.request(path);
+      expect(res.status, path).toBe(404);
+      expect(res.headers.get("x-openrig-web-ui"), path).toBe("off");
+    }
   });
 
   // A managed daemon serves its team view to any local process, so the page it hands out

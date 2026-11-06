@@ -85,3 +85,7 @@ Stop and report instead of looping when:
 - Commits and PRs carry no tool or AI attribution. Don't stash, reset or revert unless the owner asks.
 - Record decisions in `docs/amendments/`. Don't edit `docs/plans/` or `docs/tasks/` during a slice.
 - The T038 live grant is suspended while T038 is parked.
+
+## UI
+
+The restored command-center screens follow [the command-center UI amendment](docs/amendments/2026-11-06-command-center-ui.md) and its shared [design tokens](docs/design/command-center/DESIGN.md). For those screens, this direction supersedes section 9 of `docs/development-standards.md`. Preserve the stated attention, accessibility and mobile rules.

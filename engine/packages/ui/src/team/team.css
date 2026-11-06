@@ -1,78 +1,111 @@
-/* 主线 — the team surface's tokens and layout.
- *
- * Every value here is the reviewed direction: token names map to the Tailwind theme extension
- * in `tailwind.config`, and components read the custom properties rather than hex values.
- * Scoped to `.team-shell` so the rest of the product keeps its own palette.
- *
- * Latin faces are self-hosted WOFF2 in this package (imported from `main.tsx`); Chinese uses
- * the host's system font, so the desktop app renders offline with no network request.
- */
+/* Command-center colors share one semantic vocabulary with docs/design/command-center/DESIGN.md. */
 
-.team-shell {
-  --font-ui: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
-  --font-display: "Source Serif 4", "Songti SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* ground and ink */
-  --paper: #f4f3ef;
-  --surface: #ffffff;
-  --surface-2: #faf9f6;
-  --ink: #171a19;
-  --ink-2: #4a504d;
-  --muted: #5d635f;
-  --faint: #6b716e;
-  --line: #dcdad2;
-  --line-soft: #e9e7e0;
-  --sel: #ecefea;
-
-  /* one accent: 墨青. Reserved for actions and for what has landed on the branch. */
-  --accent: #155a5f;
-  --accent-press: #0e4448;
-  --accent-soft: #e4eeec;
-  --on-accent: #ffffff;
-
-  /* the only one that pulls the eye: something is waiting on the owner */
-  --attention: #96621a;
-  --attention-soft: #f6eddd;
-
-  /* something is wrong */
-  --danger: #a3342a;
-  --danger-soft: #f7e8e5;
-
-  /* diff content colours, never used as state */
-  --add-bg: #e8f0e7;
-  --add-ink: #2c6640;
-  --remove-bg: #f6e7e3;
-  --remove-ink: #9a3228;
-
-  /* type */
-  --font-display: "Source Serif 4", "Noto Serif SC", "Songti SC", Georgia, serif;
-  --font-ui: "IBM Plex Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "Noto Sans SC", ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* space: a 4px grid, five steps used in practice */
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-8: 48px; --sp-10: 56px;
-
-  --r-sm: 4px; --r-md: 6px; --r-lg: 10px;
-  --bar: 56px;
-
-  --t-fast: 120ms; --t-base: 160ms;
-  --ease: cubic-bezier(.2, .7, .3, 1);
+.team-shell,
+.team-shell[data-ui-theme="dark"] {
+  color-scheme: dark;
+  --ui-canvas: #151619;
+  --ui-surface: #1c1d21;
+  --ui-raised: #232429;
+  --ui-divider: #2c2d34;
+  --ui-divider-soft: #24252b;
+  --ui-text: #ededf0;
+  --ui-text-secondary: #c2c3cc;
+  --ui-muted: #999ba6;
+  --ui-faint: #8b8e9b;
+  --ui-selection: #292b38;
+  --ui-accent: #818cf8;
+  --ui-accent-press: #a5b4fc;
+  --ui-on-accent: #151619;
+  --ui-accent-soft: #25283c;
+  --ui-ok: #4ade80;
+  --ui-warn: #fbbf24;
+  --ui-warn-soft: #332a1c;
+  --ui-warn-border: #725b2e;
+  --ui-error: #f87171;
+  --ui-error-soft: #382124;
+  --ui-add-bg: #1a3227;
+  --ui-add-ink: #86d9a0;
+  --ui-remove-bg: #382124;
+  --ui-remove-ink: #f8a4a4;
+  --ui-overlay: rgb(0 0 0 / .55);
+  --ui-shadow: rgb(0 0 0 / .35);
 }
 
+.team-shell[data-ui-theme="light"] {
+  color-scheme: light;
+  --ui-canvas: #f6f6f8;
+  --ui-surface: #ffffff;
+  --ui-raised: #ffffff;
+  --ui-divider: #e0e1e7;
+  --ui-divider-soft: #edeef2;
+  --ui-text: #20212a;
+  --ui-text-secondary: #454857;
+  --ui-muted: #646675;
+  --ui-faint: #737583;
+  --ui-selection: #ececf6;
+  --ui-accent: #6366f1;
+  --ui-accent-press: #4f46e5;
+  --ui-on-accent: #ffffff;
+  --ui-accent-soft: #eeedff;
+  --ui-ok: #168345;
+  --ui-warn: #8a5900;
+  --ui-warn-soft: #fff5dd;
+  --ui-warn-border: #d9be85;
+  --ui-error: #b42318;
+  --ui-error-soft: #fff0ed;
+  --ui-add-bg: #e8f4ec;
+  --ui-add-ink: #27623a;
+  --ui-remove-bg: #fff0ed;
+  --ui-remove-ink: #9f342e;
+  --ui-overlay: rgb(32 33 42 / .22);
+  --ui-shadow: rgb(32 33 42 / .16);
+}
+
+.team-shell {
+  --paper: var(--ui-canvas);
+  --surface: var(--ui-surface);
+  --surface-2: var(--ui-raised);
+  --ink: var(--ui-text);
+  --ink-2: var(--ui-text-secondary);
+  --muted: var(--ui-muted);
+  --faint: var(--ui-faint);
+  --line: var(--ui-divider);
+  --line-soft: var(--ui-divider-soft);
+  --sel: var(--ui-selection);
+  --accent: var(--ui-accent);
+  --accent-press: var(--ui-accent-press);
+  --accent-soft: var(--ui-accent-soft);
+  --on-accent: var(--ui-on-accent);
+  --attention: var(--ui-warn);
+  --attention-soft: var(--ui-warn-soft);
+  --danger: var(--ui-error);
+  --danger-soft: var(--ui-error-soft);
+  --add-bg: var(--ui-add-bg);
+  --add-ink: var(--ui-add-ink);
+  --remove-bg: var(--ui-remove-bg);
+  --remove-ink: var(--ui-remove-ink);
+  --ui-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --ui-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-ui: var(--ui-sans); --font-display: var(--ui-sans); --font-mono: var(--ui-mono);
+  --ui-radius: 6px; --ui-gap: 8px; --ui-sidebar: 188px; --ui-topstrip: 48px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-8: 48px; --sp-10: 56px;
+  --r-sm: 6px; --r-md: 6px; --r-lg: 6px; --bar: 48px;
+  --t-fast: 120ms; --t-base: 160ms; --ease: cubic-bezier(.2, .7, .3, 1);
+}
 
 .team-shell * { box-sizing: border-box; }
 /* The shell owns the page it is rendered into, in the browser and in the desktop wrapper. */
 html:has(.team-shell), body:has(.team-shell) { height: 100%; }
-body:has(.team-shell) { margin: 0; background: #f4f3ef; }
+body:has(.team-shell) { margin: 0; }
 body:has(.team-shell) > #root { height: 100%; }
 .team-shell {
   position: relative;
-  display: flex; flex-direction: column;
-  min-height: 100%;
+  isolation: isolate;
+  display: grid; grid-template-columns: var(--ui-sidebar) minmax(0, 1fr);
+  height: 100%; min-height: 100%; overflow: hidden;
   background: var(--paper);
   color: var(--ink);
-  font: 15px/1.75 var(--font-ui);
+  font: 14px/1.5 var(--font-ui);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -81,29 +114,9 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell a { color: inherit; text-decoration: none; }
 .team-shell :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
 
-/* --- top bar ------------------------------------------------------------ */
-.team-shell .topbar {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: var(--sp-3);
-  height: var(--bar); padding: 0 var(--sp-6);
-  background: var(--paper); border-bottom: 1px solid var(--line);
-}
-.team-shell .crumbs { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; flex: 1 1 auto; overflow: hidden; }
-.team-shell .crumb {
-  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
-  color: var(--muted); font-size: 13px; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
-}
-.team-shell .crumb:hover { color: var(--ink); }
-.team-shell .crumb svg { width: 14px; height: 14px; }
-.team-shell .crumb-sep { color: var(--faint); font-size: 13px; }
-.team-shell .run-name { font-size: 15px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.team-shell .topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-4); flex: 0 0 auto; }
 .team-shell .lang { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; }
 .team-shell .lang button { padding: 4px 6px; border-radius: var(--r-sm); color: var(--faint); }
 .team-shell .lang button[aria-pressed="true"] { color: var(--ink); background: var(--sel); }
-.team-shell .more { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-sm); color: var(--muted); }
-.team-shell .more:hover { background: var(--sel); color: var(--ink); }
 
 /* --- primitives --------------------------------------------------------- */
 .team-shell .btn {
@@ -154,7 +167,7 @@ body:has(.team-shell) > #root { height: 100%; }
   display: grid; gap: 10px;
   animation: plate-in var(--t-base) var(--ease) both;
 }
-.team-shell .plate-waiting { border-color: #d8c39c; }
+.team-shell .plate-waiting { border-color: var(--ui-warn-border); }
 .team-shell .plate-title { font-family: var(--font-display); font-size: 18px; line-height: 1.4; font-weight: 600; color: var(--ink); margin: 0; }
 .team-shell .plate-meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .team-shell .plate-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
@@ -299,7 +312,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .team-run[data-state="running"] .run-dot { background: var(--accent); animation: breathe 1.8s var(--ease) infinite; }
 
 /* create sheet */
-.team-shell .scrim { position: fixed; inset: 0; background: rgb(23 26 25 / .18); z-index: 30; }
+.team-shell .scrim { position: fixed; inset: 0; background: var(--ui-overlay); z-index: 30; }
 .team-shell .sheet {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 31;
   width: 520px; max-width: 100vw; display: flex; flex-direction: column;
@@ -478,3 +491,155 @@ body:has(.team-shell) > #root { height: 100%; }
 
 /* A sheet holds the start form itself, so the form does not draw a second card inside it. */
 .team-shell .sheet-body .plate { border: 0; background: none; padding: 0; }
+
+/* --- shell chrome ------------------------------------------------------- */
+.team-shell .ui-sidebar {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 16px 8px; border-right: 1px solid var(--ui-divider); background: var(--ui-canvas);
+}
+.team-shell .ui-brand { display: flex; align-items: center; gap: 8px; padding: 2px 4px; font-weight: 600; }
+.team-shell .ui-monogram {
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border: 1px solid var(--ui-divider); border-radius: var(--ui-radius);
+  background: var(--ui-surface); color: var(--ui-accent); font-weight: 700;
+}
+.team-shell .ui-project, .ui-coordinator {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface);
+}
+.team-shell .ui-project { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label chevron" "value chevron"; row-gap: 2px; }
+.team-shell .ui-project-label { grid-area: label; color: var(--ui-muted); font-size: 11px; }
+.team-shell .ui-project strong { grid-area: value; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-shell .ui-project svg { grid-area: chevron; width: 14px; height: 14px; color: var(--ui-muted); }
+.team-shell .ui-coordinator { font-size: 12px; color: var(--ui-muted); }
+.team-shell .ui-nav { display: grid; gap: 2px; margin-top: 4px; }
+.team-shell .ui-nav a {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: var(--ui-radius); color: var(--ui-muted); font-weight: 500;
+}
+.team-shell .ui-nav a svg { width: 16px; height: 16px; flex-shrink: 0; }
+.team-shell .ui-nav a:hover { background: var(--ui-raised); }
+.team-shell .ui-nav a[aria-current="page"] { background: var(--ui-accent-soft); color: var(--ui-text); }
+.team-shell .ui-nav a[aria-current="page"] svg { color: var(--ui-accent); }
+.team-shell .ui-sidebar-foot { margin-top: auto; display: grid; gap: 8px; }
+
+.team-shell .ui-content { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.team-shell .ui-topstrip {
+  display: flex; align-items: center; gap: 16px; height: var(--ui-topstrip); flex: 0 0 var(--ui-topstrip);
+  padding: 0 24px; border-bottom: 1px solid var(--ui-divider);
+}
+.team-shell .ui-breadcrumb { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; color: var(--ui-muted); font-size: 13px; }
+.team-shell .ui-breadcrumb > span:first-child { flex: 0 1 auto; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-shell .ui-breadcrumb > span[aria-hidden] { flex: 0 0 auto; }
+.team-shell .ui-runselect { width: auto; max-width: 240px; padding: 4px 8px; font-size: 13px; }
+.team-shell .ui-search {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+  width: min(320px, 40vw); padding: 0 8px; height: 32px;
+  border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface);
+}
+.team-shell .ui-search svg { width: 15px; height: 15px; color: var(--ui-muted); flex-shrink: 0; }
+.team-shell .ui-search:focus-within { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.team-shell .ui-search kbd { color: var(--ui-muted); font: 11px/1 var(--ui-sans); white-space: nowrap; border: 1px solid var(--ui-divider); border-radius: 4px; padding: 3px 5px; }
+.team-shell .ui-top-meta { display: flex; flex-shrink: 0; align-items: center; gap: 16px; color: var(--ui-muted); font-size: 13px; }
+.team-shell .ui-status { display: flex; align-items: center; gap: 6px; }
+.team-shell .ui-bell { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; padding: 6px; border-color: transparent; background: transparent; color: var(--ui-muted); }
+.team-shell .ui-bell svg { width: 18px; height: 18px; }
+.team-shell .ui-bell:hover { background: var(--ui-raised); }
+.team-shell .ui-snapshot-warning { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--ui-warn); border-radius: var(--ui-radius); background: var(--ui-surface); }
+.team-shell .ui-snapshot-warning > svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 3px; color: var(--ui-warn); }
+.team-shell .ui-snapshot-warning p { margin: 0; }
+.team-shell .ui-snapshot-warning strong { color: var(--ui-warn); }
+.team-shell .ui-badge {
+  position: absolute; top: -2px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px;
+  display: grid; place-items: center; border-radius: 8px; background: var(--ui-accent); color: var(--ui-on-accent); font-size: 10px; font-weight: 600;
+}
+.team-shell .ui-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ui-muted); flex-shrink: 0; }
+.team-shell .ui-dot[data-state="ok"], .ui-dot[data-state="running"], .ui-dot[data-state="complete"] { background: var(--ui-ok); }
+.team-shell .ui-dot[data-state="active"] { background: var(--ui-accent); }
+.team-shell .ui-dot[data-state="degraded"], .ui-dot[data-state="pending"], .ui-dot[data-state="awaiting-decision"] { background: var(--ui-warn); }
+.team-shell .ui-dot[data-state="failed"], .ui-dot[data-state="blocked"] { background: var(--ui-error); }
+
+
+/* Background surfaces remain opaque; motion is a low-contrast layer in the canvas gutters. */
+.team-shell .team-backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.team-shell .team-backdrop :is(video, img) { width: 100%; height: 100%; object-fit: cover; opacity: .08; }
+.team-shell .team-backdrop::after { content: ""; position: absolute; inset: 0; background: var(--ui-canvas); opacity: .85; }
+.team-shell .ui-sidebar, .team-shell .ui-content { position: relative; z-index: 1; }
+.team-shell .ui-sidebar { min-height: 0; overflow-y: auto; }
+.team-shell .ui-content { min-height: 0; overflow: hidden; }
+.team-shell .ui-topstrip { background: var(--ui-surface); }
+.team-shell .ui-project { grid-template-columns: minmax(0, 1fr); grid-template-areas: "label" "value"; }
+.team-shell .ui-project-picker { grid-area: value; width: 100%; min-width: 0; border: 0; background: var(--ui-surface); color: var(--ui-text); font-size: 13px; }
+.team-shell .ui-coordinator { width: 100%; text-align: left; }
+.team-shell .ui-coordinator > svg { width: 16px; height: 16px; color: var(--ui-accent); }
+.team-shell .ui-coordinator strong { display: block; font-weight: 500; color: var(--ui-text); }
+.team-shell .ui-coordinator small { display: block; margin-top: 2px; color: var(--ui-muted); }
+.team-shell .ui-coordinator:hover:not(:disabled) { border-color: var(--ui-accent); }
+.team-shell button:disabled { cursor: default; }
+.team-shell .ui-appearance { display: grid; gap: 8px; padding: 8px; font-size: 12px; color: var(--ui-muted); }
+.team-shell .ui-appearance select, .team-shell .ui-runselect { min-height: 32px; padding: 4px 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); color: var(--ui-text); }
+.team-shell .ui-sidebar-foot .lang { padding: 0 4px; }
+.team-shell .ui-sidebar-foot .lang button { min-width: 36px; min-height: 32px; }
+.team-shell .ui-run-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-shell .ui-current-section { color: var(--ui-text); white-space: nowrap; }
+.team-shell .ui-search { flex: 0 1 272px; font-size: 12px; color: var(--ui-muted); text-align: left; }
+.team-shell .ui-search span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-shell .ui-search kbd { margin-left: auto; }
+.team-shell .ui-icon-button { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--ui-radius); color: var(--ui-muted); }
+.team-shell .ui-icon-button svg { width: 18px; height: 18px; }
+.team-shell .ui-icon-button:hover:not(:disabled) { background: var(--ui-raised); color: var(--ui-text); }
+.team-shell .ui-main { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; }
+.team-shell .ui-main > .home { height: 100%; min-height: 0; }
+.team-shell .ui-main > .detail { min-height: 0; }
+.team-shell h1.display { font-family: var(--ui-sans); font-size: 24px; line-height: 1.3; }
+.team-shell .ui-footer { display: flex; justify-content: space-between; gap: 16px; min-height: 28px; padding: 4px 16px; border-top: 1px solid var(--ui-divider); background: var(--ui-surface); color: var(--ui-muted); font-size: 11px; }
+.team-shell .ui-footer > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.team-shell .ui-footer > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-shell .ui-footer svg { width: 12px; height: 12px; flex-shrink: 0; }
+.team-shell .ui-task-links { display: grid; gap: 8px; margin-top: 16px; max-width: 760px; }
+.team-shell .ui-dialog-overlay { position: fixed; inset: 0; z-index: 40; background: var(--ui-overlay); }
+.team-shell .ui-chat-panel { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(520px, 100vw); display: flex; flex-direction: column; background: var(--ui-surface); border-left: 1px solid var(--ui-divider); box-shadow: -16px 0 48px var(--ui-shadow); }
+.team-shell .ui-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--ui-divider); }
+.team-shell .ui-panel-heading h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.team-shell .ui-panel-heading p { margin: 4px 0 0; color: var(--ui-muted); font-size: 12px; }
+.team-shell .ui-chat-panel > .chat { flex: 1; min-height: 0; padding: 0 24px; }
+.team-shell .ui-attention-heading { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: var(--ui-warn); }
+.team-shell .ui-decision-list { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.team-shell .composer { flex-wrap: wrap; }
+.team-shell .composer-error { flex-basis: 100%; margin: 0; color: var(--ui-error); font-size: 12px; }
+.team-shell .ui-command-overlay { z-index: 50; }
+.team-shell .ui-command-palette { position: fixed; top: 16%; left: 50%; transform: translateX(-50%); z-index: 51; width: min(560px, calc(100vw - 32px)); overflow: hidden; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); box-shadow: 0 16px 48px var(--ui-shadow); }
+.team-shell .ui-command-input { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--ui-divider); }
+.team-shell .ui-command-input > svg { width: 16px; height: 16px; color: var(--ui-muted); }
+.team-shell .ui-command-input input { min-width: 0; flex: 1; height: 36px; border: 0; background: transparent; }
+.team-shell .ui-command-results { display: grid; max-height: min(400px, 50dvh); overflow: auto; padding: 8px; }
+.team-shell .ui-command-results button { padding: 8px; border-radius: var(--ui-radius); text-align: left; overflow-wrap: anywhere; }
+.team-shell .ui-command-results button[aria-selected="true"] { background: var(--ui-accent-soft); color: var(--ui-text); }
+.team-shell .ui-command-empty { padding: 8px 16px 16px; color: var(--ui-muted); }
+.team-shell .ui-menu-button { display: none; }
+.team-shell .ui-mobile-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 41; width: 260px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; gap: 8px; padding: 16px; overflow: auto; background: var(--ui-canvas); border-right: 1px solid var(--ui-divider); }
+.team-shell .ui-menu-close { margin-left: auto; }
+@media (max-width: 1100px) {
+  .team-shell .ui-run-name, .team-shell .ui-topstrip .ui-status { display: none; }
+  .team-shell .ui-search { flex-basis: 208px; }
+}
+@media (max-width: 760px) {
+  .team-shell { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-sidebar { display: none; }
+  .team-shell .ui-menu-button { display: grid; }
+  .team-shell .ui-topstrip { gap: 8px; padding: 0 16px; }
+  .team-shell .ui-top-meta { gap: 4px; }
+  .team-shell .ui-breadcrumb { flex: 1; gap: 4px; }
+  .team-shell .ui-breadcrumb > span:first-child { display: none; }
+  .team-shell .ui-breadcrumb > span[aria-hidden] { display: none; }
+  .team-shell .ui-runselect { display: none; }
+  .team-shell .ui-search { flex: 0 0 32px; width: 32px; padding: 0; justify-content: center; }
+  .team-shell .ui-search span, .team-shell .ui-search kbd { display: none; }
+  .team-shell .ui-footer { padding: 4px 8px; gap: 8px; }
+  .team-shell .ui-chat-panel { width: 100%; border-left: 0; }
+  .team-shell .ui-panel-heading { padding: 16px; }
+  .team-shell .ui-chat-panel > .chat { padding: 0 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
