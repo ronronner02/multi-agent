@@ -134,6 +134,7 @@ export const TEAM_REASON_LABEL_KEYS = {
   liveSessionLimit: "team.reason.liveSessionLimit",
   planBindingChanged: "team.reason.planBindingChanged",
   recoveryWedge: "team.reason.recoveryWedge",
+  leadFailed: "team.reason.leadFailed",
   generic: "team.reason.generic",
 } as const satisfies Record<string, MessageKey>;
 

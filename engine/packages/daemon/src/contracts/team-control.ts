@@ -71,8 +71,18 @@ export const TEAM_REASON_LABEL_KEYS = {
   planBindingChanged: "team.reason.planBindingChanged",
   recoveryWedge: "team.reason.recoveryWedge",
   integrationConflict: "team.reason.integrationConflict",
+  leadFailed: "team.reason.leadFailed",
   generic: "team.reason.generic",
 } as const;
+
+/**
+ * U6 — the reason a run is blocked when its lead failed and no retry will come.
+ *
+ * A lead cannot wake itself and the daemon only retries a failure the classifier allows, so a
+ * lead failure the run will not retry is the owner's. Resume is the one action that restarts
+ * the manager: it reopens the failed lead task and dispatches it.
+ */
+export const LEAD_FAILED_REASON = "The lead's task failed and the daemon will not retry it";
 
 export type TeamReasonLabelKey = (typeof TEAM_REASON_LABEL_KEYS)[keyof typeof TEAM_REASON_LABEL_KEYS];
 
@@ -99,6 +109,7 @@ export function teamReasonLabelKey(reason: string | null): TeamReasonLabelKey | 
   // U7 — the approved work could not be applied to the run's integration branch. The task
   // records it as `integration_conflict`, with the patch's own refusal as the reason.
   if (reason === "integration_conflict" || reason.startsWith("Integration conflict")) return TEAM_REASON_LABEL_KEYS.integrationConflict;
+  if (reason === LEAD_FAILED_REASON) return TEAM_REASON_LABEL_KEYS.leadFailed;
   if (/seat|pane|wedge/i.test(reason)) return TEAM_REASON_LABEL_KEYS.recoveryWedge;
   return TEAM_REASON_LABEL_KEYS.generic;
 }
