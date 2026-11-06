@@ -742,6 +742,30 @@ export class PlanGovernance {
   }
 
   /**
+   * U6 — refuse a decomposition the boundary could not parse, and make the reason the lead's
+   * next piece of work.
+   *
+   * `admitLeadProposal` refuses a batch the approved plan does not cover, but only after the
+   * proposal has been parsed: a file that names a task with no write paths, or is not the shape
+   * the boundary states, has no batch to validate. That refusal is the lead's to act on all the
+   * same, so it is recorded through the same `lead.proposal-refused` event and the same reopen
+   * the plan-coverage refusal uses. Leaving it silent is what let a live run sit idle with a
+   * failed lead task and no list admitted.
+   */
+  refuseLeadTasks(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown,
+    reason: string): ControlReceipt {
+    const daemon = actorIdentity(actor, false, true);
+    if (daemon.kind !== "daemon") throw new Error("A lead's decomposition is refused by the daemon, not by another caller");
+    const note = text(reason, "reason", 4_096);
+    return this.command("run.lead-tasks-refused", raw, daemon, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.phase !== "delivery") return deny("A lead's decomposition is admitted after the owner approves the plan");
+      if (ctx.run.state !== "approved") return deny(`Run is closed to task admission (${ctx.run.state})`);
+      return this.refuseLeadProposal(ctx, note);
+    });
+  }
+
+  /**
    * U6 — refuse a decomposition and make the refusal the lead's next piece of work.
    *
    * The reason reaches an agent's prompt, so it is the governance owner's own sentence and not
@@ -1448,10 +1472,12 @@ export class PlanGovernance {
     if (!observedOutcome && !["pending", "in-progress", "blocked"].includes(v.state as string)) {
       return deny("Terminal task states require an owner-observed outcome; handoff requires a separate authority path");
     }
+    let observedAttempt: TeamAttempt | null = null;
     if (observedOutcome) {
       if (!["done", "failed", "denied", "canceled"].includes(v.state as string)) return deny("Observation cannot start or reopen work");
       if (v.actorSession !== item.destinationSession) return deny("Observation must identify the task's assigned queue session");
       const attempt = this.getAttempt(text(v.attemptId, "attemptId", 256));
+      observedAttempt = attempt;
       if (!attempt || attempt.runId !== ctx.run.id || attempt.qitemId !== task.qitemId || attempt.role !== task.assignment.role) {
         return deny("Observation requires an attempt belonging to this task and role");
       }
@@ -1496,6 +1522,23 @@ export class PlanGovernance {
       state: v.state as QueueState, transitionNote, closureReason: optionalText("closureReason"),
       closureTarget: optionalText("closureTarget"), blockedOn: optionalText("blockedOn") }));
     for (const event of updated.persistedEvents) ctx.register(event);
+    // KTD3 — "failed with the classifier's code, which routes to one retry and then to the lead".
+    // The daemon's own observation spends the run's retry budget; an owner who records a failure
+    // has the explicit retry command instead. A lead cannot wake itself, so when its budget is
+    // gone the run is blocked with the reason U8's resume handles rather than left failed and
+    // silent — the live acceptance run sat in exactly that state for an hour and a half.
+    if (observedOutcome && observedBy === "daemon" && v.state === "failed" && observedAttempt?.failure?.retryEligible === true) {
+      if (ctx.run.retriesUsed < ctx.run.binding.limits.maxRetries) {
+        ctx.run.retriesUsed += 1;
+        const retried = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+          qitemId: task.qitemId, actorSession: ctx.run.id, state: "pending",
+          transitionNote: `Daemon counted retry of ${observedAttempt.id}`,
+        }));
+        for (const event of retried.persistedEvents) ctx.register(event);
+      } else if (task.assignment.role === "lead") {
+        this.block(ctx, "retry limit exhausted");
+      }
+    }
     // C2 — an implementer that completed with validated evidence gets its review task now,
     // through the same admission path a start and a run growth use. A run that named no
     // reviewer seat keeps the pre-C2 behaviour: the completion stands and no review exists,

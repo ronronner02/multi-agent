@@ -186,21 +186,26 @@ console.log(JSON.stringify({type:'turn.completed'}));
     expect(response.status, JSON.stringify(body)).toBe(201);
     const governance = daemon.deps.teamGovernance!;
     const qitemId = governance.findTask(body.runId, "task-1")!.qitemId;
-    const waitForStop = async (previousId?: string) => {
-      await vi.waitFor(async () => {
-        await daemon!.deps.attemptCompletion!.sweep();
-        const attempt = governance.getLatestTaskAttempt(qitemId);
-        expect(attempt?.id).not.toBe(previousId);
-        expect(attempt?.state).toBe("stopped");
-      }, { timeout: 20_000, interval: 100 });
-      return governance.getLatestTaskAttempt(qitemId)!;
-    };
-    const first = await waitForStop();
-    expect(first.provider).toBe("codex");
-    // U4 records the daemon's candidate check as soon as the turn stops. This fixture only reads
-    // the plan, so its empty patch is an evidence failure; count the existing retry before
-    // asking the dispatcher to launch the continuation used by this Codex transport test.
+    const attemptIds = () => (daemon!.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid")
+      .all(qitemId) as Array<{ id: string }>).map(row => row.id);
+    // KTD3 — the sweep records the empty candidate as a retry-eligible failure and spends the
+    // run's one retry itself. The Codex continuation this transport test is about is therefore
+    // the daemon's own second attempt: no owner action asks for it.
+    await vi.waitFor(async () => {
+      await daemon!.deps.attemptCompletion!.sweep();
+      const ids = attemptIds();
+      expect(ids).toHaveLength(2);
+      expect(ids.every(id => governance.getAttempt(id)?.state === "stopped")).toBe(true);
+    }, { timeout: 20_000, interval: 100 });
+    const [firstId, secondId] = attemptIds();
+    const first = governance.getAttempt(firstId!)!;
+    const second = governance.getAttempt(secondId!)!;
+    // U4 records the daemon's candidate check as soon as each turn stops. This fixture only
+    // reads the plan, so both empty patches are evidence failures, and the first one is the
+    // retry the daemon spends.
     expect(first.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
+    expect(second.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
+    expect(governance.getRun(body.runId).retriesUsed).toBe(1);
     const session = daemon.deps.sessionRegistry.getSessionsForRig(rig.id).find(row => row.sessionName === seat)!;
     if (reportedThread !== threadId) {
       expect(session.resumeToken).toBeNull();
@@ -217,16 +222,6 @@ console.log(JSON.stringify({type:'turn.completed'}));
     expect(initial.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor(body.runId, governance.getTask(qitemId)!.assignment));
     expect(initial.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
 
-    const task = governance.getTask(qitemId)!;
-    const retry = await daemon.app.fetch(new Request(`http://127.0.0.1/api/team-control/runs/${body.runId}/tasks/retry`, {
-      method: "POST", headers: { Authorization: "Bearer fixture-owner", "Content-Type": "application/json" },
-      body: JSON.stringify({ protocolVersion: TEAM_CONTROL_VERSION, runId: body.runId, actionId: qitemId,
-        expectedEntityVersion: governance.getRun(body.runId).entityVersion, idempotencyKey: `codex-retry-${first.id}`,
-        payload: { expectedTaskVersion: task.entityVersion, attemptId: first.id, expectedAttemptVersion: first.entityVersion } }),
-    }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
-    expect(retry.status).toBe(200);
-    await daemon.deps.teamControl!.dispatch!(body.runId, "task-1");
-    const second = await waitForStop(first.id);
     const continued = JSON.parse(readFileSync(join(stateRoot, "turns", second.id, "last-message.txt.launch.json"), "utf8"));
     expect(continued.args.slice(0, 2)).toEqual(["exec", "resume"]);
     expect(continued.args.slice(-2)).toEqual([threadId, "-"]);

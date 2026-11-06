@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
-import { TEAM_CONTROL_VERSION, parseAssignment, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
+import { TEAM_CONTROL_VERSION, TeamContractError, parseAssignment, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
 import type { PlanGovernance } from "./plan-governance.js";
-import type { LeadTask } from "./lead-proposal.js";
+import { LeadProposalMissingError, type LeadTask } from "./lead-proposal.js";
 
 /**
  * U6 — the lead as manager, after the owner approved the plan.
@@ -152,6 +152,24 @@ export function proposalAlreadyAdmitted(db: Database.Database, runId: string, ta
   });
 }
 
+/**
+ * The sentence a proposal the boundary refused reaches the lead with.
+ *
+ * The parse boundary names the field it refused. The two fields a lead actually gets wrong are
+ * translated into what to do next; everything else is the boundary's own words, which already
+ * name the field.
+ */
+export function proposalRefusalReason(error: unknown): string {
+  if (error instanceof TeamContractError) {
+    if (error.field === "proposal.paths" || error.field === "paths") {
+      return "A task in your list names no write paths. Every task must own the files it writes; " +
+        "the review of a finished task is created by the daemon, so it is not a task you propose.";
+    }
+    if (error.field === "proposal.taskId") return "Two tasks in your list share a task id. Use a new id for each task.";
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** The event keys an earlier wake already delivered to this run's lead. */
 export function deliveredLeadEvents(db: Database.Database, runId: string): Set<string> {
   const rows = db.prepare(`SELECT json_extract(payload, '$.payload.keys') AS keys FROM events
@@ -205,10 +223,26 @@ export function composeLeadManager(dependencies: LeadManagerDependencies): LeadM
       if (!lead || !dependencies.readLeadProposal) return;
       let tasks: readonly LeadTask[];
       try { tasks = dependencies.readLeadProposal(attempt.runId, lead.taskId); }
-      catch {
-        // No readable list this turn: the turn's chat message is its answer, and there is
-        // nothing to admit. An unreadable proposal the turn did write is failed evidence, which
-        // the completion path records on its own.
+      catch (error) {
+        // No proposal in the tree is a management turn that answered in the chat instead, and
+        // there is nothing to admit. A proposal the boundary read and refused is work the lead
+        // must redo: it is refused through the same event and reopen a plan-coverage refusal
+        // uses, so the reason is its next prompt. Swallowing it would leave the run with a
+        // failed task and nobody told why.
+        if (error instanceof LeadProposalMissingError) return;
+        const refusal = (() => {
+          try {
+            return governance.refuseLeadTasks(
+              request(attempt.runId, "lead-refusal-" + attempt.id, "daemon-lead-refusal:" + attempt.id),
+              daemon, dependencies.currentBinding(attempt.runId), proposalRefusalReason(error));
+          } catch (refused) {
+            // The same turn observed twice: the stored receipt names the entity version it was
+            // recorded at, so an exact replay cannot be rebuilt. Nothing was refused twice.
+            if (/bound to another exact request/.test((refused as Error).message)) return null;
+            throw refused;
+          }
+        })();
+        if (refusal?.effectMayStart && refusal.revisionTaskId) await dispatchLead(attempt.runId, refusal.revisionTaskId);
         return;
       }
       // The tree keeps every file the lead wrote, so a turn that answered an event still holds

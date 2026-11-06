@@ -363,7 +363,8 @@ describe("the completion path's pure rules", () => {
    * After the plan is approved the lead's turns answer team events and ask the owner for
    * decisions, so its candidate may hold the escalation as well as the proposal, and a turn
    * that wrote neither is a complete answer rather than a failure. What stays refused is a write
-   * outside those two files, and an artifact the boundary could not read.
+   * outside those two files, and an escalation the boundary could not read; a proposal it could
+   * not read is the manager's refusal to make, so the lead hears the reason instead of a retry.
    */
   it("validates a delivery lead's management turn, and refuses writes outside its two files", () => {
     const proposal = ["diff --git a/lead-proposal.json b/lead-proposal.json", "+++ b/lead-proposal.json"].join("\n");
@@ -376,8 +377,11 @@ describe("the completion path's pure rules", () => {
     // An escalation the boundary refused is not a decision the owner can answer.
     expect(leadCompletionEvidence({ manifest: manifest(escalation), proposal: null, escalation: null, managementTurn: true }).reasons)
       .toEqual(["The lead's escalation is missing or unreadable"]);
-    expect(leadCompletionEvidence({ manifest: manifest(proposal), proposal: null, escalation: null, managementTurn: true }).reasons)
-      .toEqual(["The lead's proposal is missing or unreadable"]);
+    // A proposal the boundary refuses is the manager's to refuse, not invalid evidence: the lead
+    // has to be told why and given the next turn, and a failed task would spend a retry on it
+    // without ever saying why. This is the live acceptance run's stall.
+    expect(leadCompletionEvidence({ manifest: manifest(proposal), proposal: null, escalation: null, managementTurn: true }))
+      .toMatchObject({ validated: true, reasons: [] });
     // Everything but the two management files is still outside what a lead may write.
     const extra = [proposal, "diff --git a/src/a.ts b/src/a.ts", "+++ b/src/a.ts"].join("\n");
     expect(leadCompletionEvidence({ manifest: manifest(extra), proposal: { taskCount: 1 }, escalation: null, managementTurn: true }))

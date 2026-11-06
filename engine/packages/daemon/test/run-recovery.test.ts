@@ -6,11 +6,13 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
+import { classificationFor } from "../src/domain/attempt-failure.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest, type PlanBinding, type UsageEvidence } from "../src/contracts/team-control.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
 
 const owner = { kind: "owner", sessionId: "owner" } as const;
 const worker = { kind: "worker", sessionId: "worker" } as const;
+const daemon = { kind: "daemon", sessionId: "daemon" } as const;
 const digest = (letter: string) => `sha256:${letter.repeat(64)}`;
 const binding: PlanBinding = {
   artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
@@ -103,6 +105,82 @@ describe("U8 automatic recovery and Resume", () => {
     const resumed = governance.ownerCommand("resume", command("run", { addRetries: 1 }), owner, binding);
     expect(resumed).toMatchObject({ status: "observed", effectMayStart: true });
     expect(governance.getRun("run")).toMatchObject({ state: "approved", stateReason: null, binding: { limits: { maxRetries: 2 } } });
+  });
+
+  /**
+   * KTD3 — a retry-eligible failure is retried by the daemon, without the owner. A lead cannot
+   * wake itself, so when the run's budget is gone the run moves to the one state Resume handles
+   * instead of sitting failed forever. This is the live acceptance run's second stall.
+   */
+  it("spends the run's retry on a retry-eligible lead failure, then blocks when the budget is gone", () => {
+    approve();
+    expect(governance.createTask(command("lead-task", {
+      assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Decompose the plan",
+    }), binding).status).toBe("accepted");
+    const qitemId = governance.findTask("run", "lead-task")!.qitemId;
+    const failOnce = (attemptId: string) => {
+      const task = governance.getTask(qitemId)!;
+      expect(governance.recordAttempt(command(attemptId, { qitemId, role: "lead", provider: "claude",
+        identity: { nativeSessionId: `native-${attemptId}`, tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 4242,
+          processStart: `${attemptId}-start`, generation: 1, policyFingerprint: binding.policyFingerprint },
+        unknownReason: null, state: "running", usage: usage() }), binding).status).toBe("observed");
+      expect(governance.recordUsage(command(attemptId, {
+        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion, state: "stopped", usage: usage(),
+        failure: classificationFor("evidence_invalid"),
+      })).status).toBe("observed");
+      const outcome = governance.recordTaskOutcome(command(qitemId, {
+        expectedTaskVersion: task.entityVersion, state: "failed", actorSession: "lead@rig", attemptId,
+        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion,
+        evidence: { validated: false, reasonCode: "evidence_invalid" },
+      }), daemon);
+      expect(outcome.status, JSON.stringify(outcome)).toBe("observed");
+    };
+
+    failOnce("lead-attempt-1");
+    // One retry is spent by the daemon, and the lead's task is work nobody is doing again.
+    expect(governance.getRun("run").retriesUsed).toBe(1);
+    expect(governance.getRun("run").state).toBe("approved");
+    expect(governance.queueState(qitemId)).toBe("pending");
+
+    failOnce("lead-attempt-2");
+    // No budget left and no one to wake: the owner gets the one Resume action that adds it.
+    expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason: "retry limit exhausted",
+      stateReasonKey: "team.reason.retryLimitExhausted" });
+    expect(governance.ownerCommand("resume", command("run", { addRetries: 1 }), owner, binding).status).toBe("observed");
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", binding: { limits: { maxRetries: 2 } } });
+  });
+
+  it("leaves an implementer's retry-eligible failure to the lead rather than blocking the run", () => {
+    approve();
+    expect(governance.createTask(command("task-1", {
+      assignment: { taskId: "task-1", role: "implementer", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Do the work",
+    }), binding).status).toBe("accepted");
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    const failOnce = (attemptId: string) => {
+      const task = governance.getTask(qitemId)!;
+      governance.recordAttempt(command(attemptId, { qitemId, role: "implementer", provider: "claude",
+        identity: { nativeSessionId: `native-${attemptId}`, tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 4242,
+          processStart: `${attemptId}-start`, generation: 1, policyFingerprint: binding.policyFingerprint },
+        unknownReason: null, state: "running", usage: usage() }), binding);
+      governance.recordUsage(command(attemptId, {
+        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion, state: "stopped", usage: usage(),
+        failure: classificationFor("evidence_invalid"),
+      }));
+      expect(governance.recordTaskOutcome(command(qitemId, {
+        expectedTaskVersion: task.entityVersion, state: "failed", actorSession: "builder@rig", attemptId,
+        expectedAttemptVersion: governance.getAttempt(attemptId)!.entityVersion,
+        evidence: { validated: false, reasonCode: "evidence_invalid" },
+      }), daemon).status).toBe("observed");
+    };
+
+    failOnce("attempt-1");
+    failOnce("attempt-2");
+    // The implementer's second failure is the lead's news: its budget is spent, but the lead can
+    // still replace, split or re-scope the task without an owner decision.
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 1, stateReason: null });
+    expect(governance.queueState(qitemId)).toBe("failed");
   });
 
   it("refuses a wall-clock budget block without an increase and resumes with --add-minutes", () => {
