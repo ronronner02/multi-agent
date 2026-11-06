@@ -150,6 +150,8 @@ import { TeamReadModel } from "./team-control-surface.js";
 import { teamControlRoutes, type TeamControlOptions } from "./routes/team-control.js";
 import { teamStartRoutes } from "./routes/team-start.js";
 import { teamSetupRoutes } from "./routes/team-setup.js";
+import { teamGithubRoutes } from "./routes/team-github.js";
+import { GithubCli } from "./domain/github-cli.js";
 import { teamLeadRoutes } from "./routes/team-lead.js";
 import { teamResultRoutes } from "./routes/team-result.js";
 import { teamMergeRoutes } from "./routes/team-merge.js";
@@ -166,6 +168,7 @@ const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
 
 export interface AppDeps {
   teamControl?: TeamControlOptions;
+  github?: GithubCli;
   ownerSessions?: OwnerSessions;
   /** Owner-account terminal relay; absent means the owner terminal is honestly unavailable. */
   ownerTerminalHost?: OwnerTerminalRelay;
@@ -571,6 +574,8 @@ export function createApp(deps: AppDeps): Hono {
   const ownerSessions = pairedOwners ? deps.ownerSessions ?? new OwnerSessions(deps.rigRepo.db) : undefined;
   if (ownerSessions && ownerSessions.db !== deps.rigRepo.db) throw new Error("Owner sessions must use the control database.");
   deps.ownerSessions = ownerSessions;
+  const github = deps.github ?? new GithubCli();
+  deps.github = github;
   const terminalTakeover = deps.terminalTakeover ?? new TerminalTakeoverManager({
     eventBus: deps.eventBus,
     isOwnerSessionActive: ownerSessions
@@ -883,6 +888,8 @@ export function createApp(deps: AppDeps): Hono {
   }));
   // U3 — the owner's teams: the rig and seats a repository's team runs on. Same surface and the
   // same owner credential as the start below, because a team is what a start routes work to.
+  app.route("/api/team-control", teamGithubRoutes(github, teamOptions.credentials,
+    [deps.missionControlBearerToken, deps.terminalBearerToken]));
   app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials },
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.

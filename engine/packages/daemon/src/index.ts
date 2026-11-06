@@ -423,6 +423,7 @@ export async function startServer(port?: number) {
       ["gateway", () => deps.gatewaySubsystem?.stop()],
       ["wake-ladder", () => wakeLadderScheduler?.stop()],
       ["attempt-completion", () => deps.attemptCompletion?.stop()],
+      ["github-login", () => deps.github?.stop()],
       ["event-loop-monitor", () => eventLoopMonitor.stop()],
       ["connections", () => Promise.all(servers.map((srv) => closeHttpServer(srv)))],
       ["recorder", async () => {

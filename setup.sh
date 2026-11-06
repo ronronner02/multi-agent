@@ -27,6 +27,8 @@ case "$node_major" in
   *) die "Node.js $node_major is not supported; this project needs 22 or 24. Install it with nvm: nvm install 22" ;;
 esac
 
+bash "$REPO_ROOT/scripts/install-gh.sh"
+
 cd "$ENGINE"
 npm ci --no-audit --no-fund
 npm run build
