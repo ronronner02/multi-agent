@@ -23,6 +23,7 @@ export class GithubCliError extends Error {
 
 interface LoginFlow {
   child: ChildProcess;
+  stopping?: boolean;
   ready: Promise<GithubLoginState>;
   closed: Promise<void>;
 }
@@ -33,6 +34,7 @@ export class GithubCli {
   private readonly command: string;
   private state: GithubLoginState = { state: "idle" };
   private flow: LoginFlow | null = null;
+  private lifecycle: Promise<void> | null = null;
 
   constructor(options: { executable?: string; env?: NodeJS.ProcessEnv } = {}) {
     this.command = options.executable ?? "gh";
@@ -68,17 +70,29 @@ export class GithubCli {
     }
   }
 
-  async status(): Promise<GithubStatus> {
+  private async activeAccount(): Promise<{ login: string; signedIn: boolean } | null> {
     const result = await this.run(["auth", "status", "--hostname", HOST, "--active", "--json", "hosts"]);
-    const signedOut: GithubStatus = { signedIn: false, login: null, host: HOST };
-    if (!result.ok) return signedOut;
+    if (!result.ok && !result.stdout.trim()) return null;
     try {
       const accounts = JSON.parse(result.stdout).hosts?.[HOST] as
         Array<{ state: string; login: string; active: boolean }> | undefined;
-      const account = accounts?.find(value => value.active && value.state === "success");
-      if (!account || !/^[a-z\d](?:[a-z\d-]{0,38})$/i.test(account.login)) return signedOut;
-      return { signedIn: true, login: account.login, host: HOST };
+      const account = accounts?.find(value => value.active);
+      if (!account || !/^[a-z\d](?:[a-z\d-]{0,38})$/i.test(account.login)) return null;
+      return { login: account.login, signedIn: result.ok && account.state === "success" };
     } catch { throw new GithubCliError("github_login_failed"); }
+  }
+
+  async status(): Promise<GithubStatus> {
+    const account = await this.activeAccount();
+    return { signedIn: account?.signedIn ?? false, login: account?.signedIn ? account.login : null, host: HOST };
+  }
+
+  private mutateLifecycle<T>(operation: () => Promise<T>): Promise<T> {
+    const result = (this.lifecycle ?? Promise.resolve()).then(operation);
+    const settled = result.then(() => {}, () => {});
+    this.lifecycle = settled;
+    void settled.then(() => { if (this.lifecycle === settled) this.lifecycle = null; });
+    return result;
   }
 
   loginState(): GithubLoginState {
@@ -88,6 +102,7 @@ export class GithubCli {
 
   startLogin(): Promise<GithubLoginState> {
     const executable = this.executable();
+    if (this.lifecycle) return this.lifecycle.then(() => this.startLogin());
     if (this.flow) return this.flow.ready;
     this.state = { state: "pending" };
     let ready!: (value: GithubLoginState) => void;
@@ -100,7 +115,7 @@ export class GithubCli {
     this.flow = flow;
     let output = "";
     const read = (chunk: Buffer) => {
-      if (this.flow !== flow || this.state.code) return;
+      if (this.flow !== flow || flow.stopping || this.state.code) return;
       output = (output + chunk.toString("utf8")).slice(-8192);
       const code = /one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})/i.exec(output)?.[1];
       if (code && output.includes(DEVICE_URL)) {
@@ -120,7 +135,7 @@ export class GithubCli {
       output = "";
       if (this.flow === flow) {
         this.flow = null;
-        this.state = !failed && code === 0 ? { state: "done" }
+        this.state = flow.stopping ? { state: "idle" } : !failed && code === 0 ? { state: "done" }
           : { state: "failed", code: "github_login_failed" };
       }
       ready({ ...this.state });
@@ -129,25 +144,31 @@ export class GithubCli {
     return flow.ready;
   }
 
-  async stop(): Promise<void> {
+  private async stopFlow(): Promise<void> {
     const flow = this.flow;
-    this.flow = null;
-    this.state = { state: "idle" };
     if (flow) {
+      flow.stopping = true;
       flow.child.kill("SIGTERM");
       await flow.closed;
     }
+    this.state = { state: "idle" };
+  }
+
+  stop(): Promise<void> {
+    return this.mutateLifecycle(() => this.stopFlow());
   }
 
   async logout(): Promise<GithubStatus> {
     this.executable();
-    await this.stop();
-    const account = await this.status();
-    if (account.signedIn) {
-      const result = await this.run(["auth", "logout", "--hostname", HOST, "--user", account.login!]);
-      if (!result.ok) throw new GithubCliError("github_login_failed");
-    }
-    return this.status();
+    return this.mutateLifecycle(async () => {
+      await this.stopFlow();
+      const account = await this.activeAccount();
+      if (account) {
+        const result = await this.run(["auth", "logout", "--hostname", HOST, "--user", account.login]);
+        if (!result.ok) throw new GithubCliError("github_login_failed");
+      }
+      return this.status();
+    });
   }
 
   /** Only the daemon's git command gets this helper; no global git configuration changes. */

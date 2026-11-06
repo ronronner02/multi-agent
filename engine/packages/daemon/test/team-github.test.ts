@@ -8,6 +8,7 @@ import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { GithubCli } from "../src/domain/github-cli.js";
+import { parseProtocolVersion } from "../src/contracts/team-control.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { createTestApp } from "./helpers/test-app.js";
 
@@ -55,19 +56,27 @@ describe("owner GitHub sign-in", () => {
     const response = await call("GET", "/status");
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(await response.json()).toEqual({ signedIn: true, login: "octocat", host: "github.com" });
+    expect(await response.json()).toEqual({ protocolVersion: "1.0", signedIn: true, login: "octocat", host: "github.com" });
     expect(JSON.parse(readFileSync(join(directory, "token-vars.json"), "utf8"))).toEqual([]);
+  });
+
+  it("returns the protocol envelope required by the shared owner browser client", async () => {
+    for (const path of ["/status", "/login"]) {
+      const response = await call("GET", path);
+      const body = await response.json();
+      expect(parseProtocolVersion(body.protocolVersion)).toBe("1.0");
+    }
   });
 
   it("reports signed out without treating the empty gh account list as an error", async () => {
     expect(await (await call("GET", "/status")).json()).toEqual({
-      signedIn: false, login: null, host: "github.com",
+      protocolVersion: "1.0", signedIn: false, login: null, host: "github.com",
     });
   });
 
   it("coalesces overlapping starts, parses split output, and settles when gh completes", async () => {
     const [first, second] = await Promise.all([call("POST", "/login"), call("POST", "/login")]);
-    const pending = { state: "pending", code: "ABCD-1234", url: "https://github.com/login/device" };
+    const pending = { protocolVersion: "1.0", state: "pending", code: "ABCD-1234", url: "https://github.com/login/device" };
     expect(await first.json()).toEqual(pending);
     expect(await second.json()).toEqual(pending);
     expect(await (await call("GET", "/login")).json()).toEqual(pending);
@@ -83,24 +92,59 @@ describe("owner GitHub sign-in", () => {
     writeFileSync(join(directory, "finish"), mode);
     await expect.poll(() => github.loginState()).toEqual({ state: "failed", code: "github_login_failed" });
     const response = await call("GET", "/login");
-    expect(await response.json()).toEqual({ state: "failed", code: "github_login_failed" });
+    expect(await response.json()).toEqual({ protocolVersion: "1.0", state: "failed", code: "github_login_failed" });
   });
 
   it("reports a child that exits before issuing a device code", async () => {
     writeFileSync(join(directory, "early-failure"), "");
     const response = await call("POST", "/login");
-    expect(await response.json()).toEqual({ state: "failed", code: "github_login_failed" });
+    expect(await response.json()).toEqual({ protocolVersion: "1.0", state: "failed", code: "github_login_failed" });
   });
 
   it("logs out the account after stopping an in-flight login and permits a new flow", async () => {
     writeFileSync(join(directory, "account"), "octocat");
     await call("POST", "/login");
     const response = await call("POST", "/logout");
-    expect(await response.json()).toEqual({ signedIn: false, login: null, host: "github.com" });
+    expect(await response.json()).toEqual({ protocolVersion: "1.0", signedIn: false, login: null, host: "github.com" });
     expect(existsSync(join(directory, "login-stopped"))).toBe(true);
     expect(github.loginState()).toEqual({ state: "idle" });
     expect(calls()).toContainEqual(["auth", "logout", "--hostname", "github.com", "--user", "octocat"]);
     expect(await (await call("POST", "/login")).json()).toMatchObject({ state: "pending", code: "ABCD-1234" });
+  });
+
+  it.each([0, 1])("removes configured credentials when validation fails with exit %s", async exitCode => {
+    writeFileSync(join(directory, "account"), "octocat");
+    writeFileSync(join(directory, "validation-error"), String(exitCode));
+    expect(await (await call("GET", "/status")).json()).toMatchObject({ signedIn: false, login: null });
+    const response = await call("POST", "/logout");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ signedIn: false, login: null });
+    expect(calls()).toContainEqual(["auth", "logout", "--hostname", "github.com", "--user", "octocat"]);
+    expect(existsSync(join(directory, "account"))).toBe(false);
+  });
+
+  it.each(["login-close", "logout"])("holds a new login until sign-out completes while waiting for %s", async stage => {
+    writeFileSync(join(directory, "account"), "octocat");
+    writeFileSync(join(directory, "hold-" + stage), "");
+    await call("POST", "/login");
+    const signingOut = call("POST", "/logout");
+    let restarting: Promise<Response> | undefined;
+    let restartReturned = false;
+    try {
+      const marker = stage === "login-close" ? "login-stopped" : "logout-started";
+      await expect.poll(() => existsSync(join(directory, marker))).toBe(true);
+      restarting = call("POST", "/login").then(response => { restartReturned = true; return response; });
+      await new Promise(resolve => setTimeout(resolve, 150));
+      expect(calls().filter(args => args[1] === "login")).toHaveLength(1);
+      expect(restartReturned).toBe(false);
+    } finally {
+      writeFileSync(join(directory, "release-" + stage), "");
+      expect(await (await signingOut).json()).toMatchObject({ signedIn: false });
+      if (restarting) expect(await (await restarting).json()).toMatchObject({ state: "pending", code: "ABCD-1234" });
+    }
+    const commands = calls().map(args => args[1]);
+    expect(commands).toEqual(["login", "status", "logout", "status", "login"]);
+    expect(existsSync(join(directory, "account"))).toBe(false);
   });
 
   it("stops the login child on daemon cleanup", async () => {

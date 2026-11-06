@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { TEAM_CONTROL_VERSION } from "../contracts/team-control.js";
 import { GithubCli, GithubCliError } from "../domain/github-cli.js";
 import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
@@ -17,10 +18,10 @@ export function teamGithubRoutes(
     }
     await next();
   });
-  app.get("/github/status", async c => c.json(await github.status()));
-  app.post("/github/login", async c => c.json(await github.startLogin()));
-  app.get("/github/login", c => c.json(github.loginState()));
-  app.post("/github/logout", async c => c.json(await github.logout()));
+  app.get("/github/status", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.status() }));
+  app.post("/github/login", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.startLogin() }));
+  app.get("/github/login", c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...github.loginState() }));
+  app.post("/github/logout", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.logout() }));
   app.onError((error, c) => {
     const failure = error instanceof GithubCliError ? error : new GithubCliError("github_login_failed");
     return c.json({ code: failure.code, error: failure.message },
