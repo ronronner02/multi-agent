@@ -1,0 +1,18 @@
+# U11 acceptance run — progress log
+
+Attempt 2, started 2026-11-06.
+
+- [x] Attempt 1 daemon (port 7833) stopped, its tmux server killed, `home/` and `repos/` moved to `attempt-1/`.
+- [x] Worktree `/home/leo/scratch/u11-acceptance/worktree` rebased onto `origin/main` = `8aa6e9d`; `npm ci` and `npm run build` clean.
+- [x] Fresh demo repo `repos/smalltools` at `9bb7e42` — `clamp` baseline, `npm test` green (4/4).
+- [x] Fresh `OPENRIG_HOME=/home/leo/scratch/u11-acceptance/home`, daemon on 7833, `workers.isolation none`, `ui.enabled true`.
+- [x] Browser paired. Team created in the UI: lead/claude-code, implementer/claude-code, implementer/codex, reviewer/claude-code. Screenshot `01-team-created.png`.
+- [x] **Defect 1**: `POST /runs` refused a multi-line goal with `invalid_team_contract` — `text()` rejects every C0 control character. Fix branch `fix/team-goal-prose` (`4c27c01`) off `origin/main`, failing-before proven. Daemon restarted from `fix-goal/engine`.
+- [x] Run started from the UI: `60218d24-2f0e-4168-ada5-ce6a2c9a2840`, phase planning.
+- [x] Lead wrote a draft plan, asked three questions; owner answered all three in one chat message; lead updated `plan.md`. Screenshot `02-plan-chat.png`.
+- [x] Owner approved the plan in the UI (one action).
+- [x] Team delivered: task-2 (chunk, Claude Code impl), task-3 (formatBytes, Codex impl), each auto-reviewed by the reviewer seat; integration branch `team/add-two-independent-helpers-to-src-in-th-60218d24` with commits `dea017c`, `0d93818`.
+- [x] **Daemon restarted mid-turn** (16:11:44 local) while a lead attempt was running: the attempt survived and was later observed stopped; no duplicate rows.
+- [x] Owner sent two more chat messages (a check request, and a usage question) — counted as chat actions.
+- [x] Owner merged in the UI. `main` in the demo repo is at `0d93818`; `npm test` 19/19.
+- [x] **Defect 2 found (not fixed, larger)**: after the tasks landed, every later lead turn fails with `evidence_invalid` because its candidate is diffed against the integration branch head (which now contains the tasks' commits), so the lead's tree "deletes" the landed files. Its task row stays `pending` and merge is still offered. Also, the lead kept a saved native resume token across that failure, so each later turn replays the same stale tree.

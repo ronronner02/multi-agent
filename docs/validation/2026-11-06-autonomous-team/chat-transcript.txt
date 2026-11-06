@@ -1,0 +1,163 @@
+phase: delivery
+
+Lead  2026-11-06T07:24:42.527Z  (text)
+I've written a draft plan to `plan.md`. Nothing else in the repo changed. Before writing it I ran `npm test` on the current repo: 4 of 4 tests pass (the existing clamp tests).
+
+**The plan in brief**
+
+1. **chunk** (impl-1): adds `src/chunk.mjs` and `src/chunk.test.mjs`. It follows your spec and does not change the input array. It throws `RangeError` for a size of 0, a negative number, a fraction, NaN, Infinity or a non-number.
+2. **formatBytes** (impl-2): adds `src/format-bytes.mjs` and `src/format-bytes.test.mjs`. Units are B, KiB, MiB, GiB and TiB, 1024 apart. The number is rounded to one decimal, `.0` is dropped, and there's one space before the unit. The tests include your three examples plus cases for B, GiB, TiB and above.
+3. **Review** (review-1): runs after tasks 1 and 2. It checks the four new files against the plan, confirms no other files changed, and runs the full `npm test`.
+
+Tasks 1 and 2 share no files, so they can run at the same time. Every task runs the full `npm test` and reports its output. I'll propose acceptance once all three tasks report 0 failures and only those four files have been added.
+
+**Please confirm three choices I filled in myself:**
+
+1. **Bad input to `formatBytes`:** a negative number, NaN, Infinity or a non-number throws `RangeError`, the same way chunk handles a bad size. The other option is to allow negatives, e.g. `"-1.5 KiB"`.
+2. **Very large values:** 1024 TiB or more stays in TiB, e.g. `"2048 TiB"`.
+3. **Values just under a unit boundary:** the unit is picked before rounding, so a value just short of 1 MiB shows as `"1024 KiB"` rather than `"1 MiB"`. If you'd rather it move up to the next unit, I'll change the plan.
+
+If you approve, or tell me what to change, I'll update `plan.md` and the work can start. I haven't assigned any tasks or recorded an evaluation yet; that waits until you approve.
+
+Owner  2026-11-06T07:27:10.373Z  (text)
+All three of your choices are right, keep them: bad input throws RangeError, 1024 TiB and above stays in TiB, and the unit is picked before rounding so a value just under 1 MiB stays "1024 KiB". The plan is good as it stands — go ahead.
+
+Lead  2026-11-06T07:27:37.554Z  (text)
+Thanks. I've updated `plan.md` to mark your three choices as confirmed:
+
+- **Bad input to `formatBytes`:** a negative number, NaN, Infinity or a non-number throws `RangeError`.
+- **Very large values:** 1024 TiB or more stays in TiB.
+- **Values just under a unit boundary:** the unit is picked before rounding, so a value just short of 1 MiB reads `"1024 KiB"`.
+
+The plan's status line now says it is agreed and ready to start. The tasks, files and checks are as you saw them. `plan.md` is the only file changed, and it isn't committed.
+
+**Order of work once it starts:**
+1. **chunk** (impl-1) and **formatBytes** (impl-2) run at the same time, since they share no files. Each runs the full `npm test` and reports the output.
+2. **Review** (review-1) runs after both, checks the four new files against the plan, and runs `npm test` again.
+3. Once all three tasks report 0 failures and only those four files have been added, I'll propose acceptance to you.
+
+**Where things stand:**
+- **Evidence:** the plan is agreed in this chat, and `npm test` passed 4 of 4 when I ran it earlier.
+- **Remaining:** tasks 1, 2 and 3 above.
+- **Blockers:** none.
+
+I haven't sent any assignments yet. This activation's instructions only cover planning, and I don't have the tools here to assign work or record an evaluation. I'll assign tasks 1 and 2 when work starts in the next run.
+
+Lead  2026-11-06T07:37:26.682Z  (text)
+I've split the plan into three tasks and written them to `lead-proposal.json` in my working tree. I checked that it parses as valid JSON.
+
+| Task | Member | Files | Runs after |
+|---|---|---|---|
+| task-2: `chunk` (plan Task A) | impl-1 | `src/chunk.mjs`, `src/chunk.test.mjs` | nothing |
+| task-3: `formatBytes` (plan Task B) | impl-2 | `src/format-bytes.mjs`, `src/format-bytes.test.mjs` | nothing |
+| task-4: review (plan Task C) | review-1 | the four files above | task-2 and task-3 |
+
+Each task description is complete on its own and repeats the behaviour and test cases from the plan. That includes your three confirmed choices: bad input throws `RangeError`, 1024 TiB and above stays in TiB, and the unit is picked before rounding. Every task must run the full `npm test` and report its output.
+
+No escalation was needed, so I didn't write `lead-escalation.json`. Apart from the new proposal file, the only change in my tree is the earlier status-line edit to `plan.md`. The next step is task-2 and task-3 starting together. When every task is done, I'll check the reported `npm test` output and propose acceptance to you if it shows 0 failures.
+
+Lead  2026-11-06T07:37:52.692Z  (text)
+I've fixed the refused task list and rewritten `lead-proposal.json`. The refusal was my mistake: I had listed the four files the review reads as task-4's paths, but `paths` means files a task may write, so task-4 claimed `src/chunk.mjs` as well as task-2.
+
+The review only reads, so task-4 now has no paths, and its description now begins "Read-only review: write no files". It still names the four files to read, the plan checks, and the full `npm test` run. Nothing else changed:
+
+| Task | Member | Write paths | Runs after |
+|---|---|---|---|
+| task-2: `chunk` | impl-1 | `src/chunk.mjs`, `src/chunk.test.mjs` | nothing |
+| task-3: `formatBytes` | impl-2 | `src/format-bytes.mjs`, `src/format-bytes.test.mjs` | nothing |
+| task-4: review | review-1 | none | task-2, task-3 |
+
+A quick script check confirmed that no write paths overlap now. All of them are files the approved plan names, so no escalation was needed.
+
+The run instructions mention a per-task review limit, which suggests implementation tasks may also get an automatic review. If so, task-4 repeats some of that work, but it still adds the plan's check across both helpers and confirms no other files changed. If a task with no write paths is refused, the fallback is to drop task-4 and rely on the automatic per-task reviews.
+
+Lead  2026-11-06T07:38:13.682Z  (text)
+I've removed the review task, so `lead-proposal.json` now holds only the two implementation tasks. The daemon has said it creates the review of each finished task itself, so a review task isn't something I propose. The context files are unchanged since the last attempt.
+
+| Task | Member | Write paths | Runs after |
+|---|---|---|---|
+| task-2: `chunk` (plan Task A) | impl-1 | `src/chunk.mjs`, `src/chunk.test.mjs` | nothing |
+| task-3: `formatBytes` (plan Task B) | impl-2 | `src/format-bytes.mjs`, `src/format-bytes.test.mjs` | nothing |
+
+Both task descriptions are the same as before. Each includes the behaviour and test cases from the plan, your three confirmed choices, and the requirement to run the full `npm test` and report its output. The two tasks write different files, and each one owns the files it writes.
+
+This means plan Task C is now covered by the daemon's own review of each task rather than a separate review-1 task. That only changes how the review is scheduled; the goal and files are the same, so I didn't escalate. One check from Task C isn't in either per-task review: confirming that no other files changed and that the full suite passes with both helpers in place. I'll do that check myself from the reported results when every task is done, and then propose acceptance to you.
+
+Lead  2026-11-06T07:45:25.760Z  (text)
+The plan is complete and the run is ready to merge. No follow-up tasks are needed.
+
+**What I checked** on the run branch `team/add-two-independent-helpers-to-src-in-th-60218d24`:
+
+- **Commits:** two new ones on top of the approved plan. "Plan Task A" adds `src/chunk.mjs` and `src/chunk.test.mjs`. "Plan Task B" adds `src/format-bytes.mjs` and `src/format-bytes.test.mjs`.
+- **Files changed:** compared with the original repo, only `plan.md` and those four files differ. That is the scope we agreed.
+- **Exports:** each module has exactly one named export (`chunk` and `formatBytes`) and no import lines, so neither has dependencies.
+- **Tests:** I ran the full `npm test` on a temporary checkout of the branch, which I removed afterwards. All 19 tests passed with 0 failures: the 4 existing clamp tests, 6 for chunk and 9 for formatBytes. The test names match the cases in the plan, including your three choices (unit picked before rounding, 1024 TiB and above staying in TiB, and `RangeError` for bad input).
+
+The daemon reported all 5 tasks done, which I take to include its own reviews of the two implementation tasks. I didn't read the review results themselves; my evidence is the branch contents and the test run above.
+
+**Next steps:** I'm proposing acceptance, and it's your decision to accept and merge the run branch into `main`. I emptied `lead-proposal.json` to `{"tasks":[]}` so the old task list isn't picked up again. I didn't write `lead-escalation.json` because nothing is waiting on a decision.
+
+**Evaluation:**
+- **Evidence:** the full suite passes 19 of 19 on the run branch, and only the planned files changed.
+- **Remaining:** your acceptance and the merge.
+- **Blockers:** none.
+
+Lead  2026-11-06T07:45:57.743Z  (text)
+The run is still ready to merge, and no follow-up tasks are needed. The refusal came from a mistake on my part: last turn I left `lead-proposal.json` holding an empty task list, which the daemon rejects as invalid. I've now deleted that file, since there are no tasks to propose. I didn't write `lead-escalation.json` because nothing needs your decision.
+
+This turn's context files are the same as last turn's. The run branch is still at `0d93818`, so the evidence I reported last turn still holds:
+
+- **Files changed:** only `plan.md` and the four planned files (`src/chunk.mjs`, `src/chunk.test.mjs`, `src/format-bytes.mjs`, `src/format-bytes.test.mjs`).
+- **Exports:** each module has one named export and no imports.
+- **Tests:** the full `npm test` on the run branch passed 19 of 19 with 0 failures (4 clamp, 6 chunk, 9 formatBytes), including tests for your three choices.
+
+I'm proposing acceptance: please accept the run and merge `team/add-two-independent-helpers-to-src-in-th-60218d24` into `main`.
+
+**Evaluation:**
+- **Evidence:** the full suite passes 19 of 19 on the run branch, and only the planned files changed.
+- **Remaining:** your acceptance and the merge.
+- **Blockers:** none.
+
+Owner  2026-11-06T07:55:03.445Z  (text)
+One check before I merge: confirm on the run branch that src/chunk.mjs, src/chunk.test.mjs, src/format-bytes.mjs and src/format-bytes.test.mjs are the only files the two commits add, and that npm test passes there.
+
+Lead  2026-11-06T07:55:38.815Z  (text)
+Yes, both hold. I checked again just now rather than relying on last turn's results.
+
+**Files the two commits add.** The run branch `team/add-two-independent-helpers-to-src-in-th-60218d24` is still at `0d93818`.
+
+| Commit | Files | Change |
+|---|---|---|
+| `dea017c` Plan Task A | `src/chunk.mjs`, `src/chunk.test.mjs` | added |
+| `0d93818` Plan Task B | `src/format-bytes.mjs`, `src/format-bytes.test.mjs` | added |
+
+I also compared the branch tip with the approved-plan commit `3c63c6c`, which comes just before them. That shows exactly the same four added files, and no existing file is modified or deleted.
+
+**npm test.** I ran it on a temporary checkout of `0d93818`, which I removed afterwards: 19 tests, 19 pass, 0 fail, 0 skipped. That's the 4 existing clamp tests plus 6 for chunk and 9 for formatBytes.
+
+The branch is ready for you to merge into `main`. I'm proposing acceptance.
+
+**Evaluation:**
+- **Evidence:** the two commits add only the four planned files, and `npm test` passes 19 of 19 on the branch tip.
+- **Remaining:** your acceptance and the merge.
+- **Blockers:** none.
+
+Owner  2026-11-06T08:11:39.864Z  (text)
+While you are checking that, also tell me in one sentence how the two helpers would be used from a script, so I know the exported names are the ones I asked for.
+
+Lead  2026-11-06T08:11:59.427Z  (text)
+A script would use them like this: `import { chunk } from "./src/chunk.mjs"; import { formatBytes } from "./src/format-bytes.mjs";`, then call `chunk(items, size)` and `formatBytes(bytes)`.
+
+I tested that on a temporary checkout of the run branch at `0d93818`, which I removed afterwards:
+
+- **Exported names:** the only export from `src/chunk.mjs` is `chunk`, and the only export from `src/format-bytes.mjs` is `formatBytes`. There are no default exports.
+- **Your examples:** `chunk([1,2,3,4,5], 2)` returned `[[1,2],[3,4],[5]]`. `formatBytes` returned `"0 B"` for 0, `"1.5 KiB"` for 1536 and `"1 MiB"` for 1048576.
+- **Files:** compared with the approved-plan commit, the branch still adds only the four planned files and changes nothing else.
+- **Tests:** `npm test` passes 19 of 19, with 0 failing.
+
+The branch is ready to merge into `main`, and I'm proposing acceptance.
+
+**Evaluation:**
+- **Evidence:** both exported names are the ones you asked for, your examples give the expected output, only the four planned files were added, and the tests pass 19 of 19.
+- **Remaining:** your acceptance and the merge.
+- **Blockers:** none.

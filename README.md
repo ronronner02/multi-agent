@@ -1,48 +1,91 @@
 # Multi-Agent
 
-A team of coding agents, defined in YAML and run as one managed system. The engine
-lives in `engine/`; it builds on OpenRig and adds owner-governed team runs.
+A coding team for your repository. Agree a plan with the lead, let the team implement
+and review it, then merge the result into your branch. The engine lives in `engine/`.
 
 ## Quick start
 
-Requires Linux or WSL2, with `git`, `tmux`, and Node.js 22 or 24.
+Requires Linux or WSL2, with `git`, `tmux`, and a Linux installation of Node.js 22 or 24
+on `PATH`. Install and sign in to the clients you want your seats to use: Claude Code
+(`claude`) or Codex (`codex`). The team uses your local client configuration.
 
 On Windows, install `Multi-Agent Setup.exe` instead and open it from the Start menu: the
-desktop app sets up WSL, the engine and the Web UI for you (`desktop/README.md`).
+desktop app sets up WSL, the engine and the Web UI for you
+([desktop instructions](desktop/README.md)). The clients run inside WSL too.
 
 ```bash
-git clone https://github.com/ronronner02/multi-agent.git && cd multi-agent
-./setup.sh                                  # install, build, create the owner token
+git clone https://github.com/ronronner02/multi-agent.git
+cd multi-agent
+./setup.sh
 export PATH="$PWD/engine/node_modules/.bin:$PATH"
-./scripts/start.sh                          # start the daemon in managed mode
+rig config set ui.enabled true
+./scripts/start.sh
 ```
 
-Agents run as your own user; no `sudo` and no system provisioning.
+Setup installs and builds the engine and creates your owner credential. Agents run as
+your user in task worktrees with `workers.isolation: none`, the default.
 
-## Start team work
+## Create a team and start work
 
-Create the demo team rig once, then give the team a goal:
+Open [the Web UI](http://127.0.0.1:7433/team) and
+[pair your browser](docs/operations.md#pair-a-browser). In **Teams → New team**, choose
+your repository and the clients for its seats. The repository must have at least one
+commit. It does not need a plan file or a seed script.
+
+Choose **New work** and enter your goal. A team with a lead starts in planning: chat
+with the lead, settle its questions, and choose **Approve plan**. The lead then assigns
+the work, the implementers deliver it, and the reviewer checks each candidate.
+
+You can do the same work from the terminal, using the shell from setup:
 
 ```bash
-cd engine
-npx tsx demo/team/scripts/start-team-demo.ts   # creates rig "team-demo"
-rig team start "Say hello from the demo team"
+rig team create /absolute/path/to/your-repository
+rig team start "Describe the change you want in your repository" --planning
 ```
 
-`rig team start` creates a run, gets the plan approved for you, and puts a task on the
-rig's implementer seat. It prints the run id. Watch it in a browser at
-`http://127.0.0.1:7433/team?run=<run-id>`, after `rig config set ui.enabled true` and a
-daemon restart.
+The default team has a Claude Code lead, one Claude Code implementer, one Codex
+implementer, and a Claude Code reviewer. To choose clients, use `--lead`,
+`--implementers` (comma separated), and `--reviewer` on `rig team create`. If you have
+more than one team, add `--rig <team-name>` to `rig team start`, using the name printed
+by create. Keep `--planning` on the CLI start to agree a new plan first.
+The default delivery scope is `src`; use `--write <path...>` on the CLI start when
+the work belongs elsewhere, as described in [operations](docs/operations.md#plan-and-deliver).
 
-The Web UI has the same action as a "New task" form, and lists the runs that exist so
-you never have to type an id.
+Start prints the run id. Use it in the following commands:
 
-When a task finishes, `rig team diff <run-id>` prints its patch and `rig team apply
-<run-id>` lands it in your repository with `git apply --3way`. The run view shows the
-same diff and the exact command to copy.
+```bash
+rig team chat <run-id>
+rig team chat <run-id> "Your answers and any changes to the plan"
+rig team approve-plan <run-id>
+```
 
-To watch the whole flow without a provider account or a live token, `bash
-engine/demo/team/run.sh` boots a daemon with the stub runner, starts a run, and waits for the
-launch: the daemon opens the seat's terminal and the runner comes up in it.
-`bash engine/demo/team/scripts/result-demo.sh` takes that same stub-runner run all the way
-to the patch, then applies it with `rig team apply` in a throwaway clone.
+## Resume and merge
+
+Watch the lead chat and task list in the run view. Open a task for its attempts, review
+and diff, or open **Commits** for the integration branch. The daemon records outcomes,
+starts reviews and commits approved work to `team/…`. Answer any escalation in the chat.
+
+If a run is blocked, resolve the reason shown and choose **Resume** in its plate, or run:
+
+```bash
+rig team resume <run-id>
+```
+
+Time and retry budget blocks need an increase; the UI states any increase before
+resuming. CLI budget options are described in
+[operations](docs/operations.md#resume-a-blocked-run).
+
+When the work is ready, review the commits and choose **Merge**, or run:
+
+```bash
+rig team merge <run-id>
+```
+
+Merge writes to the currently checked-out branch in the repository you created the
+team for. Keep that checkout clean. It fast-forwards when possible, otherwise creates
+a merge commit; a conflict is reported without leaving a half-merged checkout.
+
+The [operations guide](docs/operations.md) covers setup, recovery and verification.
+The [live acceptance record](docs/validation/2026-11-06-autonomous-team/README.md)
+contains the two delivered commits, the restart evidence, and the defects and their
+subsequent fixes.

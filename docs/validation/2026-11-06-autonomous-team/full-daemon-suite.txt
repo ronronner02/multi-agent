@@ -1,0 +1,121 @@
+2026-11-06T09:27:01Z
+1034f46e43bcf7f75c205766eea68f2446ac7837
+v24.21.0
+11.19.0
+npx vitest run --maxWorkers=2 --testTimeout=60000 --reporter=default --reporter=json --outputFile=<verification>/full-daemon.json
+Standalone clone; stdin=/dev/null; setsid -w; TMUX and TMUX_PANE unset.
+The assertion output below retains paths and diffs; fixture credential values are redacted.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)
+AssertionError: expected '198.18.0.64' to be null
+
+- Expected:
+null
+
++ Received:
+"198.18.0.64"
+
+ ❯ test/auth-bearer-token.test.ts:144:18
+    142|     it("returns null for an intentionally-unresolvable hostname (HG-4)…
+    143|       const ip = await resolveToIpOrNull("this-host-does-not-exist.inv…
+    144|       expect(ip).toBeNull();
+       |                  ^
+    145|     });
+    146|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  test/s03-bound-launch.test.ts > S03 production managed capability selection > forwards only supplied daemon user names through the actual startup channel: {"USER":"fixture-user","LOGNAME":"fixture-login"}
+ FAIL  test/s03-bound-launch.test.ts > S03 production managed capability selection > forwards only supplied daemon user names through the actual startup channel: {"USER":"fixture-user"}
+ FAIL  test/s03-bound-launch.test.ts > S03 production managed capability selection > forwards only supplied daemon user names through the actual startup channel: {"LOGNAME":"fixture-login"}
+ FAIL  test/s03-bound-launch.test.ts > S03 production managed capability selection > forwards only supplied daemon user names through the actual startup channel: {}
+ReferenceError: launchPath is not defined
+ ❯ evalmachine.<anonymous>:2:11
+ ❯ test/s03-bound-launch.test.ts:83:24
+     81|     expect(start).toBeGreaterThan(-1);
+     82|     const expression = source.slice(source.indexOf("{", start), source…
+     83|     const sessionEnv = runInNewContext(`(${expression})`, {
+       |                        ^
+     84|       process: { env: { PATH: f.env.PATH, ...names, UNRELATED_VALUE: "…
+     85|       OPENRIG_HOME: f.env.OPENRIG_HOME, openRigPort: "1", openRigHost:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance
+AssertionError: expected "spy" to be called 1 times, but got 2 times
+ ❯ test/seat-fresh-launch.test.ts:214:18
+    212|     expect(await service.continueFreshStartup(seat.sessionName)).toMat…
+    213|     expect(launch).not.toHaveBeenCalled();
+    214|     expect(send).toHaveBeenCalledTimes(1);
+       |                  ^
+    215|     expect(db.prepare("SELECT id, resume_type, resume_token FROM sessi…
+    216|     expect(send.mock.calls[0]?.[1]).toContain("Configured startup inst…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  test/startup.test.ts > createDaemon startup composition > passes daemon CLI reachability env and PATH into launched tmux sessions
+AssertionError: expected 'tmux new-session -d -s \'r00-path-env…' to contain '-e \'PATH=/proof/openrig/bin:/usr/bin…'
+
+Expected: "-e 'PATH=/proof/openrig/bin:/usr/bin:/bin'"
+Received: "tmux new-session -d -s 'r00-path-env-rig-worker' -e 'OPENRIG_TRANSCRIPTS_LINES=' -e 'OPENRIG_TRANSCRIPTS_POLL_INTERVAL_SECONDS=' -e 'OPENRIG_NODE_ID=01M6R30QFKJ3MH5NZQS3JBR21T' -e 'OPENRIG_SESSION_NAME=r00-path-env-rig-worker' -e 'OPENRIG_RUNTIME=codex' -e 'PATH=/proof/openrig/bin:/usr/bin:/bin:/opt/multi-agent/toolchain/clients/bin' -e 'OPENRIG_HOME=/tmp/.openrig-test-fixture-home-WPOv8g' -e 'OPENRIG_PORT=17433' -e 'OPENRIG_HOST=127.0.0.1' -e 'OPENRIG_URL=http://127.0.0.1:17433' -e 'OPENRIG_ACTIVITY_HOOK_TOKEN=[REDACTED]' -e 'HOME=/tmp/.openrig-test-fixture-home-WPOv8g-user-home' -e 'USER=leo' -e 'LOGNAME=leo' -e 'CODEX_HOME=/tmp/.openrig-test-fixture-home-WPOv8g-user-home/.codex' -e 'OPENRIG_OCCUPANT_GENERATION=4245498e-4fc7-4352-832d-0518d0f71119' -P -F '#{pane_id}'"
+
+ ❯ test/startup.test.ts:427:29
+    425|         .find((cmd) => cmd.includes("tmux new-session"));
+    426|       expect(newSessionCmd).toBeDefined();
+    427|       expect(newSessionCmd).toContain("-e 'PATH=/proof/openrig/bin:/us…
+       |                             ^
+    428|       expect(newSessionCmd).toContain("-e 'OPENRIG_PORT=17433'");
+    429|       expect(newSessionCmd).toContain("-e 'OPENRIG_HOST=127.0.0.1'");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  test/startup.test.ts > createDaemon startup composition > GAP-7 projects the daemon HOME and default absolute CODEX_HOME into the production launch env
+AssertionError: expected { …(11) } to match object { …(4) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "CODEX_HOME": "/tmp/openrig-gap7-default-bEhuwd/daemon-home/.codex",
+    "HOME": "/tmp/openrig-gap7-default-bEhuwd/daemon-home",
+    "OPENAI_API_KEY": "[REDACTED]",
+-   "PATH": "/proof/openrig/bin:/usr/bin:/bin",
++   "PATH": "/proof/openrig/bin:/usr/bin:/bin:/opt/multi-agent/toolchain/clients/bin",
+  }
+
+ ❯ test/startup.test.ts:455:38
+    453|         tmuxExec,
+    454|       });
+    455|       expect(result.deps.sessionEnv).toMatchObject({
+       |                                      ^
+    456|         HOME: daemonHome,
+    457|         CODEX_HOME: path.join(daemonHome, ".codex"),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  test/stub-runner-determinism.test.ts > stub-runner FULL determinism pin (PRD §5, R3) > produces a byte-identical pane transcript + activity sequence + asset stamps across a double-run
+AssertionError: expected '[{"sessionName":"dev-worker@determini…' to be '[{"sessionName":"dev-worker@determini…' // Object.is equality
+
+Expected: "[{"sessionName":"dev-worker@determinism","nodeId":"det-node","runtime":"stub","hookEvent":"SessionStart","subtype":null,"occurredAt":"2021-06-06T06:06:06.000Z"},{"sessionName":"dev-worker@determinism","nodeId":"det-node","runtime":"stub","hookEvent":"UserPromptSubmit","subtype":null,"occurredAt":"2021-06-06T06:06:06.000Z"},{"sessionName":"dev-worker@determinism","nodeId":"det-node","runtime":"stub","hookEvent":"Stop","subtype":null,"occurredAt":"2021-06-06T06:06:06.000Z"}]"
+Received: "[{"sessionName":"dev-worker@determinism","nodeId":"det-node","runtime":"stub","hookEvent":"SessionStart","subtype":null,"occurredAt":"2021-06-06T06:06:06.000Z"},{"sessionName":"dev-worker@determinism","nodeId":"det-node","runtime":"stub","hookEvent":"Stop","subtype":null,"occurredAt":"2021-06-06T06:06:06.000Z"},{"sessionName":"dev-worker@determinism","nodeId":"det-node","runtime":"stub","hookEvent":"UserPromptSubmit","subtype":null,"occurredAt":"2021-06-06T06:06:06.000Z"}]"
+
+ ❯ test/stub-runner-determinism.test.ts:120:39
+    118|     // (2) Activity event sequence byte-identical (hookEvents, occurre…
+    119|     expect(r1.events.length).toBeGreaterThanOrEqual(3);
+    120|     expect(JSON.stringify(r1.events)).toBe(JSON.stringify(r2.events));
+       |                                       ^
+    121|     // (3) Compaction asset stamps byte-identical + clock-honored.
+    122|     expect(r1.markerCreatedAt).toBe(INJECTED_ISO);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+
+ Test Files  5 failed | 1016 passed | 2 skipped (1023)
+      Tests  9 failed | 16719 passed | 5 skipped | 5 todo (16738)
+   Start at  17:27:02
+   Duration  654.48s (transform 10.05s, setup 6.23s, collect 174.56s, tests 995.09s, environment 102ms, prepare 33.80s)
+
+JSON report written to /home/leo/scratch/u11-acceptance/verification/full-daemon.json

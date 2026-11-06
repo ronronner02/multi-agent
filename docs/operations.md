@@ -1,6 +1,134 @@
 # Operations
 
-Local runbook for the multi-agent engineering team milestone. Commands run inside the WSL Ubuntu distribution unless stated otherwise.
+Runbook for a team working on your repository. Commands run on Linux or inside WSL2
+unless stated otherwise. Use Linux Node.js 22 or 24, git and tmux. Put the selected
+Node installation first on `PATH`; a Windows npm on the WSL path cannot build the engine.
+
+## Create a team for your repository
+
+From a fresh clone, run `./setup.sh`, add `engine/node_modules/.bin` to `PATH`, run
+`rig config set ui.enabled true`, then `./scripts/start.sh`. The
+[README quick start](../README.md#quick-start) gives the complete sequence. Setup creates
+the owner credential; the start script loads it and starts a managed daemon on loopback.
+The default `workers.isolation: none` needs no host provisioning.
+
+Install and sign in to the clients your seats will use before starting work. The
+daemon uses your local Claude Code and Codex configurations. The repository needs at
+least one commit; it does not need `plan.md` or a seed script for planning.
+
+In the paired Web UI, open **Teams → New team**, choose the repository and seat clients,
+and create the team. The terminal equivalent is:
+
+```bash
+rig team create /absolute/path/to/your-repository
+```
+
+The default seats are a Claude Code lead, a Claude Code implementer, a Codex
+implementer and a Claude Code reviewer. `--lead <client>`,
+`--implementers <comma-separated-clients>` and `--reviewer <client>` select the clients
+on create; supported values are `claude-code` and `codex` (`claude` is also accepted).
+Creation records the seats. Starting work launches them as needed.
+
+## Pair a browser
+
+Open `http://127.0.0.1:7433/team`. A new browser needs a one-time pairing code; the
+Windows desktop app obtains and exchanges it automatically. There is currently no
+`rig team` command to mint a browser code. From the repository root, this uses the
+same owner credential reader as the CLI and the existing pairing endpoint:
+
+```bash
+node --input-type=module <<'JS'
+import { readOwnerTokenFile } from './engine/packages/cli/dist/commands/team.js';
+
+const token = readOwnerTokenFile();
+if (!token) throw new Error('Run ./setup.sh first.');
+const response = await fetch('http://127.0.0.1:7433/api/team-control/owner-session/pairing', {
+  method: 'POST',
+  headers: { Authorization: 'Bearer ' + token },
+});
+if (!response.ok) throw new Error('Pairing request failed: HTTP ' + response.status);
+console.log((await response.json()).code);
+JS
+```
+
+Enter the printed code in the browser's pairing field. The command prints only the
+one-time code. If the daemon uses another loopback port, use that port in both URLs.
+
+## Plan and deliver
+
+Choose **New work** for the team. A team with a lead starts in planning: the lead
+drafts `plan.md` in the run's worktree, asks questions in the chat, and waits for
+**Approve plan**. The chat answer and the plan approval are separate actions.
+
+The CLI requires `--planning` for this flow:
+
+```bash
+rig team start "Describe the change you want" --planning --rig <team-name>
+rig team chat <run-id>
+rig team chat <run-id> "Your answers and requested changes"
+rig team approve-plan <run-id>
+```
+
+Use the team name printed by create and the run id printed by start. `--rig` may be
+omitted when there is exactly one team. Start uses `plan.md` and a delivery write
+scope of `src` by default, including from the UI. For another scope, start through
+the CLI with `--write <path...>` (for example `--write src test`); `--plan <path>`
+selects another repository-relative plan artifact. The planning turn can write only
+the plan. Approval records its bytes and opens the approved delivery scope.
+
+Once approved, the lead decomposes the plan and assigns implementer tasks. The daemon
+records outcomes, creates a review for each completed implementer candidate, routes
+rework when a review requires it, and commits approved work to `team/…`. Task
+admission and reviewer verdicts require no owner action. Answer escalations in the
+chat when the lead needs a decision about scope, budget or an unresolved conflict.
+
+The run home is the lead chat with a task list. Open a task for attempts, review
+findings and the diff. **Commits** opens the integration branch. **New work** is also
+available for a team that already has a run. Settings are in the overflow menu.
+
+## Resume a blocked run
+
+Read the block reason and resolve any external problem, then choose **Resume** in
+the run's plate or use:
+
+```bash
+rig team resume <run-id>
+```
+
+Resume clears a resumable block and offers pending work to dispatch, including a
+failed lead. It does not restart the daemon or rerun finished tasks. Time and retry
+budget blocks require a positive increase in that budget in the same action:
+
+```bash
+rig team resume <run-id> --add-minutes 30
+rig team resume <run-id> --add-retries 1
+rig team resume <run-id> --add-review-rounds 1
+```
+
+Use the option that matches the displayed budget block. Review exhaustion can also
+be resumed without an increase so the lead can decide on follow-up work. The UI plate
+shows the increase it will request before the click. Resume is for a blocked run;
+plan approval and escalation answers remain separate actions.
+
+## Merge the integration branch
+
+Review the task diffs and the integration commits, then choose **Merge** in the UI
+or run:
+
+```bash
+rig team merge <run-id>
+```
+
+This updates the currently checked-out branch in the repository the team was created
+for. The checkout must be clean and on a branch. The daemon fast-forwards when it can,
+otherwise makes a merge commit. A conflict is reported and the attempted merge is
+aborted, restoring the checkout. Resolve the conflict before trying the merge again.
+
+Readiness requires landed work, completed implementation/review tasks and no failed
+task. Merge is also refused while the lead task is pending, in progress or blocked.
+[PR #138](https://github.com/ronronner02/multi-agent/pull/138) (`abb344f`) fixed the
+lead-evidence and premature-merge defect recorded in the
+[U11 acceptance record](validation/2026-11-06-autonomous-team/README.md).
 
 ## Worker Isolation
 
@@ -230,7 +358,7 @@ The producer supplies everything an attempt needs, from owners the daemon alread
 
 ## Source Authority and Windows Export
 
-The WSL checkout `/home/leo/src/multi-agent` is the only development source. Provision, preflight, build and test from that checkout. `D:\Multi-Agent` is a preserved read-only copy; it changes only through the one-way export described in `docs/development.md`.
+The repository in WSL is the development source. Build and test in the task's own worktree or verification clone; leave the owner's working checkout alone. The preserved Windows copy changes only through the separately authorized one-way export described in `docs/development.md`.
 
 Outside the repository:
 
@@ -275,73 +403,79 @@ Moved from `AGENTS.md` on 2026-10-26; the roster and review sizing stay there.
 - Reach every model through the locally configured gateway. Never print or persist keys.
 
 ## Full daemon suite
+
 This runs at project wrap-up or when the owner asks; tasks do not run it.
+
 - Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of `packages/daemon` and `packages/cli`. Never use a linked worktree with symlinked `node_modules`, where daemon-spawn tests fail.
 - Start it with no controlling terminal (`setsid -w … < /dev/null`, inside `tmux` when the session may be reaped). Unset `TMUX` and `TMUX_PANE` (`env -u TMUX -u TMUX_PANE`), or the hermetic scenario tests refuse to run. A test that opens an interactive shell can otherwise take the terminal, and the run then stops with SIGTTIN/SIGTTOU while looking hung.
-- Use `--maxWorkers=2 --testTimeout=60000`, run one suite at a time, and write a `.done` marker on exit.
+- Put the Linux Node installation first on a clean `PATH` that excludes Windows binaries. From `engine/packages/daemon`, run `npx vitest run --maxWorkers=2 --testTimeout=60000`, one Vitest process at a time, and write a `.done` marker with the exit code on completion. Preserve the counts and failure details before cleaning up only the fixtures that run created.
 
-## Starting team work (MVP slice 2)
-`POST /api/team-control/runs` is the owner action that creates a run and the task that puts one agent on a goal. `GET /api/team-control/runs` lists the runs that exist, so no client has to ask for an id. Both are owner-only on the team-control surface, so the managed-mode allowlist and the owner credential apply unchanged.
-- The start request names the goal, and optionally the rig, the seat, the repository and the write scope. Every default is read from what the daemon already runs: the only active rig, that rig's first agent node's registered session, its cwd, `plan.md`, and `src`.
-- The binding is read from the repository at the moment of the request: the canonical root, the plan artifact's exact bytes, and the commit they are approved at. A repository with no commit is refused, because the contract cannot name an identity for it.
-- The endpoint proposes the implementation approval for that binding and records the owner's own control session as the decision, then creates the task. A run whose approval or task is refused keeps its row, so the refusal is readable instead of silent.
-- Under `workers.isolation: none` the daemon has no installed policy, so a new binding is approved against the unisolated roots' revision, a fingerprint naming the isolation mode, and the clients the daemon may start by name. Dispatch then refuses a binding built for any other mode, which is the same check that already guards a launch.
-- Under `workers.isolation: none` a start also launches the agent the task was put on, and this is the only thing that does: a fresh install never runs `rig up`, and a managed daemon refuses it. If the seat has no terminal the daemon opens one — a detached tmux session named for the seat, in the node's cwd, on its own server — records the binding, and launches into it. A seat that has already launched is left alone, so a second start does not open a second client. Under `hardened` the start keeps its existing behaviour and an agent starts through the privileged launcher.
-- `rig team start "<goal>"` calls the endpoint with the owner credential and prints the run id plus the Web UI command that watches it. The Web UI's "New task" form and run list call the same endpoint.
-- `engine/demo/team/run.sh` proves the flow without a provider account: it seeds the demo rig, boots a managed daemon with the compiled stub runner, starts a run, and then waits for the launch that start has to produce by itself — the seat's terminal, the runner's readiness sidecar and the launch receipt, with no database or tmux step in between.
+## Automatic completion and review
 
-## The review loop (MVP slice C2)
-When an implementer task completes with validated evidence, the run creates its reviewer task and routes it to a reviewer seat.
-- A start request may name `reviewerSeat` (CLI: `rig team start "<goal>" --reviewer <session>`). The seat is recorded on the run and is where every review round of that run goes. A request that names none keeps the pre-C2 behaviour: an implementer completes and the run creates no review. A reviewer seat equal to the implementer's seat is refused, because a seat cannot review its own candidate.
-- The reviewer task is admitted through the same task path a start and a run growth use, with `reviewOf` naming the implementer task, the reviewer role's permission vocabulary, and the implementer's own paths. Its id is derived from the implementer task and the round (`<taskId>-review-<n>`), so a replayed completion finds the task it already created.
-- "Validated" is the queue's own word: `evidence.validated === true`. A `done` without it is recorded and reviewed by nothing.
-- The owner observes the reviewer task's report and records its outcome. The findings are normalized by the review protocol's own parser, so a P0/P1 without a failing scenario refuses the whole outcome and leaves the reviewer task open. A review with only P2/P3 findings approves; a cited P0/P1 sends the implementer's terminal queue row back to `pending` and the route dispatches it again.
-- The review-round allowance is per implementer task: the plan's Review convergence gives each task two rounds, counted across all of its slices and runs, so a second implementer task gets its own two after the first has spent both. A task whose rounds are spent cannot start another: its completion is refused and the run blocks on `review limit exhausted`. The run's `review_rounds_used` still counts every round the run has admitted, which is the total the owner read publishes.
-- The run's own rounds are published on each task's `verdicts` in the owner read model and rendered on the Web UI's Reviews screen.
-- `engine/demo/team/scripts/review-demo.ts` proves the loop without a provider account: two stub-runner seats, one implementer candidate, a first round whose P1 sends the implementer back, and an approving second round.
+The daemon observes each managed client's process end, validates its candidate and
+records the task outcome. An implementer finishing is not enough to accept its work:
+its patch must stay inside the assignment and its reviewer must approve it. Agents
+cannot call an owner completion endpoint or merge into the owner's branch.
 
-## Completing a task (the completion path)
-A task can only be completed by an owner observation, so the loop above needs two things the demos used to supply by hand: an attempt the daemon observed stop, and evidence it could verify. Both are now the daemon's.
-- A direct launch records a receipt naming the client process the seat runs. The daemon's attempt owner reads those receipts and admits each one as an attempt (`attempt.recorded`, one per native generation). It resolves the task from the run's own queue row for that seat, so a seat with no single live task leaves the receipt unrecorded rather than attaching it to a guess. Receipts are append-only and registration is idempotent, so the sweep tracks the highest `seq` it has read and never rescans the log.
-- The attempt's end is the process end. The same owner re-reads `/proc/<pid>/stat` for every running attempt's recorded identity; when the process is gone (a recycled pid starts at a different clock tick, and a zombie has already exited) it records the attempt `stopped` through `attempt.observed`, and puts that seat's session back to `pending` so the next dispatch starts a fresh client. Both writes are idempotent, so a repeated sweep records nothing twice.
-- `GET /api/team-control/runs/:runId/tasks/:taskId/completion` is the owner read: the attempt the daemon observed, whether the outcome can be recorded now and why not, and the evidence. The evidence is computed from the candidate the runtime already serves `rig team apply` and the diff view — its `manifestDigest`, the paths its own patch moves, and whether those paths are inside the assignment. `validated` is true only for a commit-backed candidate that moves at least one path and none outside the assignment; a snapshot candidate has no base to diff, so it is never validated.
-- The owner action is `POST /runs/:runId/tasks/outcome` — unchanged — with the attempt, the actor session and that evidence. The CLI wraps it as `rig team done <run-id> <task-id>` (`--failed`, `--findings <path>`, `--note`), and the Web UI's Tasks screen shows the same panel with "Mark done" and "Mark failed". Neither invents evidence: the done action is refused while the daemon's own check fails, and a reviewer task needs its findings.
-- Agents cannot complete a task, and nothing in this path lets them: there is no agent-facing endpoint and no credential change. R18 still holds — an attempt that ended, or a candidate that exists, accepts nothing by itself.
-- `engine/demo/team/scripts/review-demo.ts` now proves the whole path: the implementer's client ends, the daemon observes the stop and validates the candidate, the owner records the outcome, and the C2 loop runs to approval — with no attempt or outcome recorded by hand.
+- Each native generation has one recorded attempt. Repeated receipt reads and stop
+  observations update that attempt rather than creating another task or turn.
+- A validated implementer outcome creates a reviewer task for that candidate. The
+  daemon parses the reviewer's final findings and records its verdict. A reproduced
+  P0/P1 sends the task back for rework; P2/P3 findings do not prevent approval.
+- Each implementer task has its own review-round allowance. Exhaustion goes to the
+  lead for a follow-up decision or escalation. A refused lead task list is returned
+  to the lead with its reason, so the lead can revise it without an owner resubmission.
+- Approval lands the candidate as a commit on the integration branch. Completed
+  candidates can be read again after a daemon restart. Integration does not update
+  the owner's checkout; the owner's Merge action does that.
+
+The task detail view shows the attempts, review findings and diff. The run chat carries
+questions and escalation answers. Owners do not mark each task done, transcribe
+reviewer reports or approve each task list as part of this flow.
 
 ## Classifying a failed attempt (T033)
-Every attempt that ends gets exactly one KTD20 reason code, a `resume_safe` flag and a retry decision, recorded with the stop. One pure classifier (`engine/packages/daemon/src/domain/attempt-failure.ts`) makes that decision, and every consumer reads it instead of re-deriving eligibility: the owner retry, the Tasks screen, the health projection and the continuation that decides fresh versus resume.
+
+Failed attempts carry a KTD20 reason code, a `resume_safe` flag and retry eligibility.
+The classifier in `engine/packages/daemon/src/domain/attempt-failure.ts` owns that
+mapping; the completion path, task detail, health projection and continuation all
+read it. A client can exit cleanly and still fail candidate validation; completion
+then records `evidence_invalid` or `review_report_missing`.
+
 - **Where the evidence comes from.** A direct launch sets the seat pane's `remain-on-exit` before the client starts, so a client that exits leaves the pane dead instead of destroying it (measured on tmux 3.6: without that option the pane, and a seat's only pane its session, is gone, with no exit status and no output). The completion sweep reads tmux's own `pane_dead` and `pane_dead_status` once, at the moment it records the stop, plus the pane's last lines.
 - **How it decides.** A canceled run is `canceled` whatever the exit said. Otherwise a non-zero exit or a signal sends the last lines through a small set of fingerprints, each taken from output this repository already has evidence for. An exit status of 0 is a finished turn, so nothing it printed is the failure. A non-zero exit with nothing recognisable is `agent_error.unknown`. No exit record at all is no evidence, so no code is recorded — and an attempt with no code is never retried.
 - **What it never does.** It adds no attempt and no unit of budget. It never retries an unknown code. A stored classification that disagrees with its own code's eligibility is refused when it is read, so a row cannot grant a retry KTD20 does not allow.
-- **The owner retry.** `POST /runs/:runId/tasks/retry` refuses a code outside the eligible set, naming the owner action, and refuses an attempt with no classification. An eligible retry spends `maxRetries` exactly once; a second one is refused as `Retry limit exhausted`.
+- **Automatic retry and Resume.** The completion path retries an eligible failure while the run has retry budget. Each retry spends that budget once. A failure that cannot be retried is routed to the lead; an unrecoverable lead failure blocks the run. After resolving the reason, the owner uses the Resume action described above.
 - **`resume_safe: false`.** The dispatch that starts a reopened task clears the seat's saved native token first, so the next launch is a fresh native session in the same candidate tree, with every file the failed attempt wrote still there.
 - `engine/demo/team/scripts/failure-demo.ts` proves both halves with a client that really fails: a refused connection is classified, retried once, fails again, and the second retry is refused on budget; a rejected key is classified and refused at once with the owner action.
 
-| Reason code | Retry eligible | Owner action |
+| Reason code | Retry eligible | Response if work remains blocked |
 | --- | --- | --- |
-| `runtime_offline` | yes | Start the runtime again, then retry the task. |
-| `daemon_recovery` | yes | The daemon restarted during the attempt; retry the task. |
-| `run_timeout` | yes | The attempt reached the run's time budget; retry the task while budget remains. |
-| `no_progress` | yes (`resume_safe: false`) | Retry with a narrower task, which starts a fresh session on the same tree. |
-| `agent_error.provider_network` | yes | The provider was unreachable; retry the task. |
-| `start_timeout` | no | The client never became ready; repair the client or the seat, then start a new task. |
-| `environment_prepare_failed` | no | The attempt's environment could not be prepared; repair it, then start a new task. |
-| `resume_rejected` | no (`resume_safe: false`) | The provider rejected the resumed session; the next attempt starts a fresh session on the same tree. |
-| `agent_blocked` | no | The agent stopped on a decision it could not make; resolve it, then start a new task. |
-| `canceled` | no | The owner canceled the run; start a new run if the work is still needed. |
-| `agent_error.provider_auth_or_access` | no | Sign the client in or repair its provider access, then start a new task. |
-| `agent_error.provider_quota` | no | The provider account is out of quota; add quota or wait for its reset, then start a new task. |
-| `agent_error.provider_rate_limit` | no | The provider is rate-limiting this account; wait for the window, then start a new task. |
-| `agent_error.provider_server_error` | no | The provider returned a server error; start a new task once its status is clear. |
-| `agent_error.provider_invalid_request` | no (`resume_safe: false`) | The provider refused the request; fix the task or its model, and the next attempt starts a fresh session on the same tree. |
-| `agent_error.model_unavailable` | no | The requested model is unavailable to this client; choose another model, then start a new task. |
-| `agent_error.context_overflow` | no (`resume_safe: false`) | The conversation outgrew the model's context; the next attempt starts a fresh session on the same tree. |
-| `agent_error.missing_config` | no | The client is missing configuration it needs; repair it, then start a new task. |
-| `agent_error.missing_executable` | no | The client executable is not on the seat's path; install it, then start a new task. |
-| `agent_error.unsupported_version` | no | The client build is not the one this daemon supports; install the supported build, then start a new task. |
-| `agent_error.process_failure` | no | The client process failed; inspect its output, then start a new task. |
-| `agent_error.unparseable_output` | no | The client's output could not be read; inspect it, then start a new task. |
-| `agent_error.unknown` | no | The daemon could not classify this failure, so it is not retried; inspect the attempt's output. |
+| `runtime_offline` | yes | Restore the runtime, then Resume the blocked run. |
+| `daemon_recovery` | yes | Use Resume if daemon recovery left the run blocked. |
+| `run_timeout` | yes | A wall-clock budget block needs Resume with `--add-minutes`. |
+| `no_progress` | yes (`resume_safe: false`) | Discuss a narrower task with the lead; continuation starts a fresh session on the same tree. |
+| `agent_error.provider_network` | yes | Restore provider connectivity; automatic retry applies while budget remains. |
+| `evidence_invalid` | yes | Inspect the rejected candidate evidence if the automatic retry does not resolve it. |
+| `review_report_missing` | yes | The reviewer did not return a readable findings report; automatic retry applies while budget remains. |
+| `integration_conflict` | no | The lead needs to resolve the conflict against the integration head; replaying the same patch does not repair it. |
+| `start_timeout` | no | Repair the client or seat before resuming a blocked run. |
+| `environment_prepare_failed` | no | Repair the reported environment problem before Resume. |
+| `resume_rejected` | no (`resume_safe: false`) | The saved continuation was rejected; the next attempt starts a fresh native session. |
+| `agent_blocked` | no | Answer the lead's decision request; Resume if the run remains blocked. |
+| `canceled` | no | Start New work if the canceled goal is still needed. |
+| `agent_error.provider_auth_or_access` | no | Sign in or repair provider access before Resume. |
+| `agent_error.provider_quota` | no | Add quota or wait for its reset before Resume. |
+| `agent_error.provider_rate_limit` | no | Wait for the rate-limit window before Resume. |
+| `agent_error.provider_server_error` | no | Wait for the provider to recover before Resume. |
+| `agent_error.provider_invalid_request` | no (`resume_safe: false`) | Correct the task or client settings; the next attempt uses a fresh native session. |
+| `agent_error.model_unavailable` | no | Select an available model in the client settings before Resume. |
+| `agent_error.context_overflow` | no (`resume_safe: false`) | Ask the lead to narrow the work; continuation starts a fresh native session. |
+| `agent_error.missing_config` | no | Supply the client configuration named by the failure before Resume. |
+| `agent_error.missing_executable` | no | Install the client on the daemon's path before Resume. |
+| `agent_error.unsupported_version` | no | Install the supported client build before Resume. |
+| `agent_error.process_failure` | no | Inspect the attempt's failure before Resume. |
+| `agent_error.unparseable_output` | no | Inspect the unreadable client output before Resume. |
+| `agent_error.unknown` | no | Inspect the attempt evidence; an unknown failure is not retried automatically. |
 
-- `start_timeout` is the one code in the vocabulary this slice does not yet produce: `team_attempts` records no attempt phase, so there is no readiness state to time out against. The code and its owner action are in place for the slice that records phases.
+`start_timeout` is reserved in the vocabulary: the completion path records no
+attempt readiness phase to time out against yet.

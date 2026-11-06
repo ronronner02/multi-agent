@@ -1,0 +1,725 @@
+{
+  "source": "Archived attempt-1/home/demo.sqlite; read-only export",
+  "events": [
+    {
+      "seq": 1,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:28:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "4978086d-64c4-43d9-b929-cbe381852fd5",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 1,
+        "action": "run.created",
+        "payload": {
+          "bindingDigest": "sha256:a8ac1c74fa01c094e678bc4cbdc6f597a352260c6a9194a1c9cbd0a2b807d624",
+          "state": "pending"
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:28:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "f8ae8a6f-c9f1-4d8d-bc9e-f12f510bd982",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 2,
+        "action": "approval.requested",
+        "payload": {
+          "actionId": "f0e94e6d-8b75-41db-bf8a-a6f00532f3ff",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:6eeabce94844d1ef5146b7370d9808e5422dfee2e528775a93af30627f538cc3"
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:28:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "21c25067-5fc7-4e2a-b412-9fbcc549f702",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 3,
+        "action": "approval.decided",
+        "payload": {
+          "actionId": "f0e94e6d-8b75-41db-bf8a-a6f00532f3ff",
+          "observedBy": "2858cf08-3958-4257-b031-bf0cd8ee62d5",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:6a78d49343a13962d04c0a74fc8fef5aaef80421f3b127f8479f41a6f9d13c7c"
+        }
+      }
+    },
+    {
+      "seq": 5,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:28:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "aa01dcf5-c3a8-4198-ba28-0a6aa3d19ce9",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": "task-1",
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 4,
+        "action": "task.created",
+        "payload": {
+          "actionId": "task-1",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:719f2eeefc0436d324dec55a9c299dfef6fae734e86e8d5f72681d7ed8635d66"
+        }
+      }
+    },
+    {
+      "seq": 10,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:28:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "8eb450ea-3981-4aea-a205-39124c4549e3",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 5,
+        "action": "lead.wake-state",
+        "payload": {
+          "activations": [
+            1793924925791
+          ],
+          "cycleBlock": null,
+          "cycles": {
+            "task-1": {
+              "count": 1,
+              "progress": 3
+            }
+          },
+          "grant": 0,
+          "pending": {}
+        }
+      }
+    },
+    {
+      "seq": 11,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:28:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "1fc37656-5c6c-4ebc-b172-76a7eb6ae86f",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "b63b7227-336c-4450-ae23-0810f4fdc248",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 5,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "b63b7227-336c-4450-ae23-0810f4fdc248",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:b3f42bd57b71e9f0037e114df1c7f0781bbea486b7c81bdb21bb20ce86c997dc"
+        }
+      }
+    },
+    {
+      "seq": 12,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:29:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "4cf2b01c-c727-4b3a-8e1c-b4260a8296d4",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 6,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 28003,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 13,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:29:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "6d7b8004-eceb-46bc-99ed-bc2d39f58cee",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "b63b7227-336c-4450-ae23-0810f4fdc248",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 6,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "b63b7227-336c-4450-ae23-0810f4fdc248",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:46330ea3509c0d78f7c6197e26ec756666e41d6f9d5cb911315f831a49aca039"
+        }
+      }
+    },
+    {
+      "seq": 14,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:31:08",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "826741a2-aad1-4983-b2d6-99f98cb0904d",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": "task-1",
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 7,
+        "action": "chat.message",
+        "payload": {
+          "actionId": "5e801354-0e60-4694-8ebb-1ac2b0cbbd87",
+          "observedBy": "2858cf08-3958-4257-b031-bf0cd8ee62d5",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:002e3037b7cdcee76bf35a10a45b705376f4a34922ba42aa6e76fb4045b705a8"
+        }
+      }
+    },
+    {
+      "seq": 19,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:31:08",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "072ca0bc-e0dd-480e-a960-2b6c3e39b378",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 8,
+        "action": "lead.wake-state",
+        "payload": {
+          "activations": [
+            1793924925791,
+            1793925068819
+          ],
+          "cycleBlock": null,
+          "cycles": {
+            "task-1": {
+              "count": 1,
+              "progress": 14
+            }
+          },
+          "grant": 0,
+          "pending": {}
+        }
+      }
+    },
+    {
+      "seq": 20,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:31:08",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "75f825fd-2692-4014-a0d6-61928443a397",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "20910184-cf33-4ef7-b852-faabdec1059f",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 8,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "20910184-cf33-4ef7-b852-faabdec1059f",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:358d1a5acb1d74f57c8a32012124884b2103309f515a3acd438461073c539ef4"
+        }
+      }
+    },
+    {
+      "seq": 21,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:31:38",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "1be471bc-8b40-41df-8e09-dcc96af1096b",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 9,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 58007,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 22,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:31:38",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "c7d20e2b-bbc6-46e8-b171-1f2e7aea470e",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "20910184-cf33-4ef7-b852-faabdec1059f",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 9,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "20910184-cf33-4ef7-b852-faabdec1059f",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:22bdb17d9d442c634366600b0cc485a1f3d1e8f1f1a6e25d9ab792b83d402e7d"
+        }
+      }
+    },
+    {
+      "seq": 23,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:32:44",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "7a28bc58-3d99-4fd2-a8ca-e006395a1535",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": "task-1",
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 10,
+        "action": "plan.approved",
+        "payload": {
+          "actionId": "3b18785b-7d8a-4aa2-9f9e-7e7494cea8cc",
+          "observedBy": "2858cf08-3958-4257-b031-bf0cd8ee62d5",
+          "reason": null,
+          "status": "accepted",
+          "valueDigest": "sha256:068490ca258b7686e91d0fb905efe8ff2f0485d70ee09a84439fb21c82b2e5f6"
+        }
+      }
+    },
+    {
+      "seq": 24,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:32:44",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "11c1b253-7415-41a1-9a46-c89f11c23789",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 10,
+        "action": "approval.renewed",
+        "payload": {
+          "approvalId": "0f9a4f0e-3538-4760-91ff-0f351bdff262",
+          "expiresAt": "2026-11-07T00:32:44.765Z",
+          "observedBy": "daemon",
+          "previousExpiresAt": "2026-11-06T01:32:44.758Z"
+        }
+      }
+    },
+    {
+      "seq": 29,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:32:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "eee6db9a-b280-4ab3-a617-6138adf43573",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 11,
+        "action": "lead.wake-state",
+        "payload": {
+          "activations": [
+            1793924925791,
+            1793925068819,
+            1793925165854
+          ],
+          "cycleBlock": null,
+          "cycles": {
+            "task-1": {
+              "count": 1,
+              "progress": 23
+            }
+          },
+          "grant": 0,
+          "pending": {}
+        }
+      }
+    },
+    {
+      "seq": 30,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:32:45",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "0905f9dd-b028-4045-9bcc-5110d5849fdd",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "37f00e9d-955f-4146-93c9-1b8499658ee5",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 11,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "37f00e9d-955f-4146-93c9-1b8499658ee5",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:e19702ff1aeede6d9fb9778a0df29e204196b9d08b2eca096021602adbfba795"
+        }
+      }
+    },
+    {
+      "seq": 31,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "c583c6ce-13e0-4d24-824c-de76c2a0aa94",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 12,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 86016,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 32,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "04cdd583-ae09-4fe7-b73b-3d026c4bb822",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "37f00e9d-955f-4146-93c9-1b8499658ee5",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 12,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "37f00e9d-955f-4146-93c9-1b8499658ee5",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:28f6f3e1b94a59e5bf19226a937e6df0634d52befaed99b3fb002f36de1dabb6"
+        }
+      }
+    },
+    {
+      "seq": 33,
+      "type": "queue.updated",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106002845-8b683e59",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "daemon",
+        "summary": null
+      }
+    },
+    {
+      "seq": 34,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "9b0d7fd2-654f-4b25-ba5f-0029067d280b",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": "task-1",
+        "attemptId": "37f00e9d-955f-4146-93c9-1b8499658ee5",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 13,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261106002845-8b683e59",
+          "observedBy": "daemon",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:451ff260f4807de4f1262bbf4dcfbc4d74f4dc980b7e15b640a4caf39b4f2f0d"
+        }
+      }
+    },
+    {
+      "seq": 35,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "3894bfad-cc2f-471f-92ec-2066ff26a29a",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": "task-1",
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 14,
+        "action": "lead.proposal-refused",
+        "payload": {
+          "note": "write path src/chunk.mjs of task-4 overlaps task-2's src/chunk.mjs"
+        }
+      }
+    },
+    {
+      "seq": 36,
+      "type": "queue.updated",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106002845-8b683e59",
+        "fromState": "done",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "summary": null
+      }
+    },
+    {
+      "seq": 37,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:13",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "0657963f-d3ae-49ea-bbc5-ede4c7481173",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 14,
+        "action": "run.lead-tasks-admitted.denied",
+        "payload": {
+          "actionId": "lead-admission-37f00e9d-955f-4146-93c9-1b8499658ee5",
+          "observedBy": "daemon",
+          "reason": "write path src/chunk.mjs of task-4 overlaps task-2's src/chunk.mjs",
+          "status": "denied",
+          "valueDigest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+        }
+      }
+    },
+    {
+      "seq": 42,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:14",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "a19d05d9-ea37-4211-b43e-fb2321e78110",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 15,
+        "action": "lead.wake-state",
+        "payload": {
+          "activations": [
+            1793924925791,
+            1793925068819,
+            1793925165854,
+            1793925194862
+          ],
+          "cycleBlock": null,
+          "cycles": {
+            "task-1": {
+              "count": 1,
+              "progress": 34
+            }
+          },
+          "grant": 0,
+          "pending": {}
+        }
+      }
+    },
+    {
+      "seq": 43,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:14",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "42caee15-8ce5-4b3d-a2d7-bc6268323559",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 15,
+        "action": "attempt.recorded",
+        "payload": {
+          "actionId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:abae70f5230718898696bb3c44903c378ea94d9e8336767376cfcf6c3c469fd0"
+        }
+      }
+    },
+    {
+      "seq": 44,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:31",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "c66729c7-0d53-42b6-990b-9f10012611ca",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": null,
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 16,
+        "action": "run.clock-paused",
+        "payload": {
+          "activeMs": 103020,
+          "reason": "All recorded managed attempts are observed stopped"
+        }
+      }
+    },
+    {
+      "seq": 45,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:31",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "adbad510-1a61-4bda-8e7d-0859e495e9f1",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 16,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:0aea4ef89468dd64e05a7b7af26f92e3113e726753f48cac839db35c77c6ecbf"
+        }
+      }
+    },
+    {
+      "seq": 46,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:31",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "f3ce77c9-4f07-4247-b137-d093f6bfe9b4",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": null,
+        "attemptId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 17,
+        "action": "attempt.observed",
+        "payload": {
+          "actionId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:271df2401823adbcefab89740314af46773f078304bc630cf66bc8a37c39f13c"
+        }
+      }
+    },
+    {
+      "seq": 47,
+      "type": "queue.updated",
+      "createdAt": "2026-11-06 00:33:31",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106002845-8b683e59",
+        "fromState": "pending",
+        "toState": "failed",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "daemon",
+        "summary": null
+      }
+    },
+    {
+      "seq": 48,
+      "type": "team.control",
+      "createdAt": "2026-11-06 00:33:31",
+      "payload": {
+        "type": "team.control",
+        "protocolVersion": "1.0",
+        "eventId": "00f709c0-b80c-4c44-b170-59a0b478105f",
+        "rigId": "01M6Q42D3CWWBMFWGYVRDGJNR5",
+        "runId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "taskId": "task-1",
+        "attemptId": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+        "entityId": "2f82bb8e-37fa-4114-921b-a615e8871148",
+        "entityVersion": 18,
+        "action": "task.outcome",
+        "payload": {
+          "actionId": "qitem-20261106002845-8b683e59",
+          "observedBy": "daemon",
+          "reason": null,
+          "status": "observed",
+          "valueDigest": "sha256:50b525d98d83a41dad926a71c7466c2a710f62f24ac7564668d346b70d752b7c"
+        }
+      }
+    }
+  ]
+}
