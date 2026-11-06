@@ -715,5 +715,22 @@
   "team.merge.refused.merge_already_on_branch": "Already on the target branch",
   "team.merge.refused.merge_no_branch": "No integration branch yet",
   "team.merge.refused.merge_unavailable": "Merge is unavailable",
-  "team.teams.newWork": "New work"
+  "team.teams.newWork": "New work",
+  "shell.appearance": "Appearance",
+  "shell.openChat": "Open lead chat",
+  "shell.closeChat": "Close lead chat",
+  "shell.leadChat": "Lead chat",
+  "shell.ownerDecisions": "Needs your attention",
+  "shell.notificationsCount": "Notifications: {{count}}",
+  "shell.navigation": "Navigation",
+  "shell.openNavigation": "Open navigation",
+  "shell.closeNavigation": "Close navigation",
+  "shell.closeSearch": "Close task search",
+  "shell.noMatchingTasks": "No matching tasks",
+  "shell.allProjects": "All projects",
+  "shell.noBranch": "No integration branch",
+  "shell.runtimeConnection": "Runtime",
+  "shell.chooseTask": "Choose a task to inspect its current evidence.",
+  "shell.analyticsPending": "Token analytics will appear when turn telemetry is available.",
+  "shell.daemonAddress": "Daemon address"
 }

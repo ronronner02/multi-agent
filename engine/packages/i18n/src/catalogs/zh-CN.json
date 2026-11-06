@@ -715,5 +715,22 @@
   "team.merge.refused.merge_already_on_branch": "已经在目标分支上",
   "team.merge.refused.merge_no_branch": "还没有集成分支",
   "team.merge.refused.merge_unavailable": "合并不可用",
-  "team.teams.newWork": "新工作"
+  "team.teams.newWork": "新工作",
+  "shell.appearance": "外观",
+  "shell.openChat": "打开主智能体对话",
+  "shell.closeChat": "关闭主智能体对话",
+  "shell.leadChat": "主智能体对话",
+  "shell.ownerDecisions": "需要你处理",
+  "shell.notificationsCount": "通知：{{count}}",
+  "shell.navigation": "导航",
+  "shell.openNavigation": "打开导航",
+  "shell.closeNavigation": "关闭导航",
+  "shell.closeSearch": "关闭任务搜索",
+  "shell.noMatchingTasks": "没有匹配的任务",
+  "shell.allProjects": "所有项目",
+  "shell.noBranch": "尚无集成分支",
+  "shell.runtimeConnection": "运行环境",
+  "shell.chooseTask": "选择一个任务以查看当前证据。",
+  "shell.analyticsPending": "轮次遥测可用后将显示 token 统计。",
+  "shell.daemonAddress": "引擎地址"
 }

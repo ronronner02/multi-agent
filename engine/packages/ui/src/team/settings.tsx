@@ -32,7 +32,7 @@ export function SettingsScreen({ language, connection, isolation, address, onClo
         <dd style={{ margin: 0, fontSize: 13 }} className="mono">{isolation ?? "—"}</dd>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid var(--line-soft)" }}>
-        <dt className="muted" style={{ fontSize: 13 }}>{t("shell.remoteMonitor")}</dt>
+        <dt className="muted" style={{ fontSize: 13 }}>{t("shell.daemonAddress")}</dt>
         <dd style={{ margin: 0, fontSize: 13 }} className="mono">{address}</dd>
       </div>
     </dl>

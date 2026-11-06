@@ -460,8 +460,10 @@ const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".mp4": "video/mp4",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".webp": "image/webp",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
@@ -497,6 +499,8 @@ function fileResponse(filePath: string): Response {
 function isUiAssetRequestPath(requestPath: string): boolean {
   const relativePath = requestPath.replace(/^\/+/, "");
   return relativePath.startsWith("assets/")
+    || relativePath === "skins/shuimo-danqing/shuimo-danqing-loop.mp4"
+    || relativePath === "skins/shuimo-danqing/shuimo-danqing-still.webp"
     || relativePath === "favicon.ico"
     || relativePath === "robots.txt"
     || relativePath === "manifest.webmanifest";
