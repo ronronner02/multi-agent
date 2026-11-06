@@ -89,6 +89,7 @@ describe("U7 integration branch and merge", () => {
   const compose = () => {
     runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
       candidateRoot: (id, taskId, worker) => join(assignments, worker, `${id}-${taskId}`),
+      candidateRecordsRoot: () => join(directory, "candidate-records"),
       assignmentRoot: () => assignments, defaultWorker: () => "worker1" });
     integration = composeIntegration({ db, governance, worktreeRoot: () => worktrees,
       candidateManifest: (id, taskId) => runtime.candidateManifestFor(id, taskId),
@@ -113,7 +114,8 @@ describe("U7 integration branch and merge", () => {
     }), currentBinding());
 
   /** Start one attempt for a task, as a launch's receipt does. */
-  const startAttempt = (taskId: string, attemptId: string, role: "implementer" | "reviewer") => {
+  const startAttempt = (taskId: string, attemptId: string, role: "lead" | "implementer" | "reviewer") => {
+    runtime.prepareDeliveryLeadTurn?.(runId, taskId);
     const task = governance.findTask(runId, taskId)!;
     const recorded = governance.recordAttempt(request(attemptId, {
       qitemId: task.qitemId, role, provider: "claude",
@@ -285,6 +287,68 @@ describe("U7 integration branch and merge", () => {
 
     expect(governance.queueState(lead.qitemId)).toBe("failed");
     expect(integration.status(runId).merge).toEqual({ possible: false, reason: "Task(s) failed: lead-task" });
+    expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
+  });
+
+  it.each([
+    [null, "", true],
+    ["lead-proposal.json", JSON.stringify([{ taskId: "follow-up", seat: "impl@rig", paths: ["src/next.ts"], dependencies: [], body: "Follow up" }]), true],
+    ["lead-escalation.json", JSON.stringify({ question: "Extend the goal?", options: ["Keep it", "Extend it"] }), true],
+    ["src/health.ts", "export const health = () => 'changed by lead';\n", false],
+  ] as const)("judges only the delivery lead's turn after landing and restart: %s", async (path, content, valid) => {
+    expect(governance.createTask(request("lead-task", {
+      assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Manage delivery",
+    }), currentBinding()).status).toBe("accepted");
+    const lead = governance.findTask(runId, "lead-task")!;
+    const candidate = runtime.candidateFor(runId, "lead-task", "worker1");
+    writeFileSync(join(candidate.root, "lead-proposal.json"), "[]");
+    const startedAt = head();
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
+    expect(head()).not.toBe(startedAt);
+    expect(git(candidate.root, "rev-parse", "HEAD").trim()).toBe(startedAt);
+    compose();
+    startAttempt("lead-task", "attempt-lead", "lead");
+    const turnBase = head();
+    expect(git(candidate.root, "rev-parse", "HEAD").trim()).toBe(turnBase);
+    if (path) writeFileSync(join(candidate.root, path), content);
+    // Another task can land while the lead runs. Recovery must keep the turn's own base.
+    expect(admit("task-b", "implementer", "impl@rig").status).toBe("accepted");
+    stage("task-b", "src/other.ts", "export const other = 1;\n");
+    complete("task-b");
+    approveReview("task-b");
+    expect((await integration.integrate(runId, "task-b")).status).toBe("committed");
+    compose();
+    await composeAttemptCompletion({ db, governance, currentBinding, alive: () => false, log: () => {},
+      sessions: { findResumeContextByName: () => null, updateStartupStatus: vi.fn() },
+      candidateManifestFor: (id, taskId) => runtime.candidateManifestFor(id, taskId),
+      readLeadProposal: (id, taskId) => runtime.leadProposalFor(id, taskId),
+      readLeadEscalation: (id, taskId) => {
+        const escalation = runtime.leadEscalationFor(id, taskId);
+        return escalation && { optionCount: escalation.options.length };
+      },
+    }).sweep();
+    expect(governance.getTask(lead.qitemId)?.evidence).toMatchObject({ validated: valid, baseIdentifier: turnBase,
+      changedPaths: path ? [path] : [], outsideAssignment: valid ? [] : [path] });
+    if (valid) expect(governance.queueState(lead.qitemId)).toBe("done");
+    else expect(governance.getAttempt("attempt-lead")?.failure?.reasonCode).toBe("evidence_invalid");
+    expect(integration.status(runId).merge.possible).toBe(valid);
+  });
+
+  it.each(["pending", "in-progress", "blocked"])("does not offer a merge while the delivery lead is %s", async state => {
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
+    expect(governance.createTask(request("lead-task", {
+      assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Manage delivery",
+    }), currentBinding()).status).toBe("accepted");
+    db.prepare("UPDATE queue_items SET state = ? WHERE qitem_id = ?").run(state, governance.findTask(runId, "lead-task")!.qitemId);
+    expect(integration.status(runId).merge).toEqual({ possible: false, reason: "Task(s) still open: lead-task" });
     expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
   });
 

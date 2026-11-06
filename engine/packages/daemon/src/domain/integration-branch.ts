@@ -203,6 +203,10 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
   const blocked = (run: TeamRun): { reason: string } | null => {
     const failed = failedTasks(run.id);
     if (failed.length) return { reason: `Task(s) failed: ${failed.map(task => task.taskId).join(", ")}` };
+    const lead = governance.leadTask(run.id);
+    if (lead && ["pending", "in-progress", "blocked"].includes(governance.queueState(lead.qitemId) ?? "")) {
+      return { reason: `Task(s) still open: ${lead.taskId}` };
+    }
     // A branch exists from the run's base commit, so "the branch exists" is not "work landed".
     // Without this, an owner could merge a branch that carries nothing but the plan.
     if (governance.integrationRecord(run.id).commits.length === 0) {

@@ -3222,6 +3222,10 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const maxSessions = (runId: string) => teamGovernance.getRun(runId).binding.limits.maxSessions;
     deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
       startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv,
+      prepareDeliveryLeadTurn: (runId, taskId) => {
+        if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+        return workflowRuntime.prepareDeliveryLeadTurn(runId, taskId);
+      },
       liveSessions, maxSessions, renewApproval: runId => teamGovernance.renewImplementationApproval(runId) });
     // MVP — a task admitted while the run was at its limit used to wait forever: nothing tried
     // it again. A freed slot now starts the run's next pending task through the same dispatch,

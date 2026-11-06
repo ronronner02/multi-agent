@@ -36,6 +36,8 @@ export interface TaskDispatchDependencies {
   liveSessions: (runId: string) => number;
   /** Renew a near-expiry implementation approval at the dispatch boundary. */
   renewApproval?: (runId: string) => boolean;
+  /** Refresh a delivery lead's tree; true means its saved native conversation is stale. */
+  prepareDeliveryLeadTurn?: (runId: string, taskId: string) => boolean;
 }
 
 export type TaskDispatch = (runId: string, taskId: string) => Promise<void>;
@@ -121,9 +123,10 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       // Its agent starts with the role and plan it is given, which is what the task carries.
       // T033 — a task reopened by an eligible retry whose failure was `resume_safe: false` must
       // not continue the poisoned conversation. The seat's saved native token is cleared before
-      // the launch, so the client starts a fresh session in the same candidate tree and keeps
-      // every file the failed attempt wrote. Nothing else about the tree changes.
-      const unsafe = resumeUnsafe(dependencies, runId, taskId);
+      // launch. A delivery lead also needs a fresh session when its management tree is replaced;
+      // other retries keep the files their earlier attempt wrote.
+      const freshLeadTree = dependencies.prepareDeliveryLeadTurn?.(runId, taskId) ?? false;
+      const unsafe = freshLeadTree || resumeUnsafe(dependencies, runId, taskId);
       if (unsafe) dependencies.sessions.clearResumeToken(session.id);
       // MVP — a task this seat already ran is a continuation, not a fresh start: the rework
       // after a review, the lead's revision after a rejection, or a retry the classifier called

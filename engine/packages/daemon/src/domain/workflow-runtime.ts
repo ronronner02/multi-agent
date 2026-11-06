@@ -154,6 +154,7 @@ export interface WorkflowRuntimeDeps {
    * the worker sandbox neither mounts nor makes reachable. A function so a re-installed policy is
    * read at use. Absent, the snapshot lane refuses to create or adopt a candidate rather than
    * adopting a directory it cannot account for.
+   * Delivery lead turns also keep their starting base here for recovery after a restart.
    */
   candidateRecordsRoot?: () => string;
   /**
@@ -680,6 +681,11 @@ export class WorkflowRuntime {
     const recordPath = base.kind === "snapshot" ? this.snapshotRecordPath(runId, taskId) : undefined;
     const integratedSource = (checkedOutBranch(sourceRoot) ?? "").startsWith(TEAM_BRANCH_PREFIX);
     const adopted = this.adoptCandidate(runId, taskId, workspaceRoot, base, recordPath, sourceRoot);
+    // A delivery turn keeps its starting base even if integration advanced before a restart.
+    const leadBasePath = this.candidateRecordsRoot && this.leadTurnBasePath(runId, taskId);
+    if (adopted && leadBasePath && existsSync(leadBasePath)) {
+      adopted.base = JSON.parse(readFileSync(leadBasePath, "utf8")) as WorkspaceBase;
+    }
     // T043: a review launch may adopt the tree a restart left behind, but must never
     // create one. Staging here would hand the reviewer a checkout nobody wrote — the
     // defect this task exists to close — so absence is a refusal, not a cue to build.
@@ -906,6 +912,31 @@ export class WorkflowRuntime {
     this.candidates.delete(key);
     this.candidateWorker.delete(key);
     this.invalidCandidates.delete(key);
+  }
+
+  /** Start a delivery lead's next management turn from the integration head. */
+  prepareDeliveryLeadTurn(runId: string, taskId: string): boolean {
+    const governance = new PlanGovernance(this.db, this.eventBus, this.queueRepo);
+    const run = governance.getRun(runId);
+    if (run.phase !== "delivery" || run.state !== "approved"
+      || governance.findTask(runId, taskId)?.assignment.role !== "lead") return false;
+    const basePath = this.leadTurnBasePath(runId, taskId);
+    const previous = this.candidateFor(runId, taskId);
+    this.removeWorkspace(previous);
+    this.forgetCandidate(runId, taskId);
+    this.candidateOwners.delete(`${runId}\u0000${taskId}`);
+    rmSync(basePath, { force: true });
+    const candidate = this.candidateFor(runId, taskId);
+    mkdirSync(dirname(basePath), { recursive: true });
+    writeFileSync(basePath, JSON.stringify(candidate.base), { mode: 0o600 });
+    // The saved native conversation belongs to the tree this turn just replaced.
+    return true;
+  }
+
+  private leadTurnBasePath(runId: string, taskId: string): string {
+    const root = this.candidateRecordsRoot?.();
+    if (!root) throw new Error("Candidate provenance is not configured");
+    return join(root, `${runId}-${taskId}.lead-base.json`);
   }
 
   /**
