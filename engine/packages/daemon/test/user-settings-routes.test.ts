@@ -23,7 +23,7 @@ function clearEnv(): () => void {
     "OPENRIG_WORKSPACE_ROOT", "OPENRIG_DOGFOOD_EVIDENCE_ROOT",
     "OPENRIG_WORKSPACE_PROJECTS_ROOT", "OPENRIG_WORKSPACE_CATALOG_PATH",
     "OPENRIG_CONTEXT_ROOT", "OPENRIG_CONTEXT_PACKS_ROOT",
-    "OPENRIG_LAUNCH_NON_INTERRUPTIVE",
+    "OPENRIG_LAUNCH_NON_INTERRUPTIVE", "OPENRIG_TEAM_LEAD_CLIENT",
     "OPENRIG_POLICIES_CLAUDE_COMPACTION_ENABLED",
     "OPENRIG_POLICIES_CLAUDE_COMPACTION_THRESHOLD_PERCENT",
     "OPENRIG_POLICIES_CLAUDE_COMPACTION_PRE_COMPACT_INSTRUCTION",
@@ -112,7 +112,8 @@ describe("config routes (User Settings v0)", () => {
     // + 1 output.compact (slice 15 compact command-output switch; default off).
     // + 1 provider.usage_windows (slice 01 Codex usage windows; default off).
     // + 1 workers.isolation (MVP slice 1; default "none").
-    expect(Object.keys(body.settings).length).toBe(76);
+    expect(Object.keys(body.settings).length).toBe(77);
+    expect(body.settings["team.leadClient"]).toMatchObject({ value: "claude-code", source: "default", defaultValue: "claude-code" });
     expect(body.settings["workers.isolation"]).toMatchObject({ value: "none", source: "default" });
     expect(body.settings["launch.non_interruptive"]).toMatchObject({ value: false, source: "default" });
     expect(body.settings["runtime.readiness_timeout_seconds"]).toMatchObject({ value: 30, source: "default" });

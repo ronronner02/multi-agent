@@ -44,7 +44,7 @@ function clearEnv(): () => void {
     // its custom home into default-path resolution; UNSETTING it would fall through
     // to the REAL ~/.openrig (foreign on-box state) — so tests set a fresh tmp home.
     "OPENRIG_HOME", "RIGGED_HOME",
-    "OPENRIG_PORT", "OPENRIG_HOST", "OPENRIG_DB",
+    "OPENRIG_PORT", "OPENRIG_HOST", "OPENRIG_DB", "OPENRIG_TEAM_LEAD_CLIENT",
     "OPENRIG_TRANSCRIPTS_ENABLED", "OPENRIG_TRANSCRIPTS_PATH",
     "OPENRIG_TRANSCRIPTS_LINES", "OPENRIG_TRANSCRIPTS_POLL_INTERVAL_SECONDS",
     "OPENRIG_WORKSPACE_ROOT", "OPENRIG_WORKSPACE_SLICES_ROOT",
@@ -106,6 +106,15 @@ describe("ConfigStore — extended namespaces (User Settings v0)", () => {
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
     restoreEnv();
+  });
+
+  it("selects the configured lead client without accepting unsupported clients", () => {
+    const store = new ConfigStore(configPath);
+    expect(store.get("team.leadClient")).toBe("claude-code");
+    store.set("team.leadClient", "codex");
+    expect(new ConfigStore(configPath).get("team.leadClient")).toBe("codex");
+    expect(() => store.set("team.leadClient", "unsupported")).toThrow(/team.leadClient/);
+    expect(store.get("team.leadClient")).toBe("codex");
   });
 
   it("ui.language defaults to Chinese and persists without replacing other owner settings", () => {
@@ -225,6 +234,7 @@ describe("ConfigStore — extended namespaces (User Settings v0)", () => {
       "queue.wake_human_rung",
       // MVP — worker isolation level (none | hardened).
       "workers.isolation",
+      "team.leadClient",
     ];
     expect([...VALID_KEYS]).toEqual(expected);
   });

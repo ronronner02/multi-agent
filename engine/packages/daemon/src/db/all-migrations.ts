@@ -119,6 +119,7 @@ import { displayNamesSchema } from "./migrations/112_display_names.js";
 import { leadChatSchema } from "./migrations/113_lead_chat.js";
 import { integrationBranchSchema } from "./migrations/114_integration_branch.js";
 import { leadDecisionsSchema } from "./migrations/116_lead_decisions.js";
+import { teamBootstrapAndRetirementSchema } from "./migrations/117_team_bootstrap_and_retirement.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -232,4 +233,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   leadChatSchema,
   integrationBranchSchema,
   leadDecisionsSchema,
+  teamBootstrapAndRetirementSchema,
 ];

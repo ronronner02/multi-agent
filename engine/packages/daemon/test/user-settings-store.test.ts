@@ -25,7 +25,7 @@ const DEFAULT_EXTRA_INSTRUCTION_FILE_SUFFIX = "compaction/post-compact-extra.md"
 
 function clearEnv(): () => void {
   const keys = [
-    "OPENRIG_PORT", "OPENRIG_HOST", "OPENRIG_DB",
+    "OPENRIG_PORT", "OPENRIG_HOST", "OPENRIG_DB", "OPENRIG_TEAM_LEAD_CLIENT",
     "OPENRIG_TRANSCRIPTS_ENABLED", "OPENRIG_TRANSCRIPTS_PATH",
     "OPENRIG_TRANSCRIPTS_LINES", "OPENRIG_TRANSCRIPTS_POLL_INTERVAL_SECONDS",
     "OPENRIG_WORKSPACE_ROOT", "OPENRIG_WORKSPACE_SLICES_ROOT",
@@ -86,6 +86,15 @@ describe("SettingsStore (User Settings v0)", () => {
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
     restoreEnv();
+  });
+
+  it("selects the configured lead client without accepting unsupported clients", () => {
+    const store = new SettingsStore(configPath);
+    expect(store.resolveOne("team.leadClient").value).toBe("claude-code");
+    store.set("team.leadClient", "codex");
+    expect(new SettingsStore(configPath).resolveOne("team.leadClient").value).toBe("codex");
+    expect(() => store.set("team.leadClient", "unsupported")).toThrow(/team.leadClient/);
+    expect(store.resolveOne("team.leadClient").value).toBe("codex");
   });
 
   it("SETTINGS_VALID_KEYS matches the documented settings key set", () => {
@@ -176,6 +185,7 @@ describe("SettingsStore (User Settings v0)", () => {
       "queue.wake_human_rung",
       // MVP — worker isolation level (none | hardened).
       "workers.isolation",
+      "team.leadClient",
     ]);
   });
 

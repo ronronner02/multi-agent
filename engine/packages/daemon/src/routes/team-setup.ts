@@ -4,6 +4,9 @@ import {
   TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, text, type ControlActor,
 } from "../contracts/team-control.js";
 import type { RigRepository } from "../domain/rig-repository.js";
+import { bootstrapProject, listProjectDirectories, previewProject, ProjectBootstrapError } from "../domain/project-bootstrap.js";
+import { GithubCliError, type GithubCli } from "../domain/github-cli.js";
+import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import {
   TEAM_ROLES, TeamSetupError, createTeam, listTeams, parseTeamClient, type TeamSeatInput,
 } from "../domain/team-setup.js";
@@ -25,7 +28,7 @@ import {
 
 export function teamSetupRoutes(
   rigRepo: RigRepository,
-  options: { credentials: TeamControlCredentials },
+  options: { credentials: TeamControlCredentials; github: GithubCli; settingsStore?: SettingsStore },
   legacyTokens: readonly (string | null | undefined)[],
 ): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
@@ -34,6 +37,13 @@ export function teamSetupRoutes(
     onError: c => c.json({ code: "invalid_team_contract", error: "The team request exceeds its size limit." }, 413) }));
   const owner = (c: { get: (key: "controlActor") => ControlActor }) =>
     c.get("controlActor").kind === "owner" ? c.get("controlActor") : null;
+
+  app.get("/fs/dirs", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...listProjectDirectories(c.req.query("path")) });
+  });
 
   app.get("/teams", (c) => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
@@ -49,6 +59,19 @@ export function teamSetupRoutes(
     // The daemon runs on the host the repository is on, and every seat's cwd is that path, so a
     // relative path would resolve against the daemon's own working directory instead.
     if (!repository.startsWith("/")) throw new TeamContractError("repository");
+    if (v.dryRun !== undefined && typeof v.dryRun !== "boolean") throw new TeamContractError("dryRun");
+    c.header("Cache-Control", "no-store");
+    if (v.seats === undefined) {
+      const input = { repository, name: text(v.name, "name", 100) };
+      if (v.dryRun === true) return c.json({ protocolVersion: TEAM_CONTROL_VERSION,
+        preview: previewProject(input, undefined, rigRepo.db) });
+      const configured = options.settingsStore?.resolveOne("team.leadClient").value ?? "claude-code";
+      const leadClient = typeof configured === "string" ? parseTeamClient(configured) : null;
+      if (!leadClient) throw new TeamSetupError("team_seats_invalid", "Set the lead client to claude-code or codex before creating a project.");
+      const team = await bootstrapProject(rigRepo.db, input, { github: options.github, leadClient });
+      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, team }, 201);
+    }
+    if (v.dryRun === true) throw new TeamContractError("dryRun");
     const team = createTeam(rigRepo.db, { repository, seats: seats(v.seats),
       ...(v.name === undefined ? {} : { name: text(v.name, "name", 128) }) });
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, team }, 201);
@@ -60,6 +83,15 @@ export function teamSetupRoutes(
     }
     if (error instanceof TeamSetupError) {
       const status = error.code === "team_exists" || error.code === "team_name_taken" ? 409 : 400;
+      return c.json({ code: error.code, error: error.message }, status);
+    }
+    if (error instanceof ProjectBootstrapError) {
+      const status = error.code === "team_origin_changed" || error.code === "team_bootstrap_changed" ? 409 : 400;
+      return c.json({ code: error.code, error: error.message, excludedPaths: error.excludedPaths }, status);
+    }
+    if (error instanceof GithubCliError) {
+      const status = error.code === "github_repo_exists" || error.code === "github_not_signed_in" ? 409
+        : error.code === "github_cli_missing" ? 503 : 502;
       return c.json({ code: error.code, error: error.message }, status);
     }
     return c.json({ code: "team_creation_failed", error: "The team was not created." }, 500);

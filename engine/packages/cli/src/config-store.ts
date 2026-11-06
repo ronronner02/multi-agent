@@ -359,6 +359,7 @@ const DEFAULTS = {
   },
   // MVP — the default runs agents as the current user; no host provisioning is needed.
   workers: { isolation: "none" },
+  team: { leadClient: "claude-code" },
 } as const;
 
 export const VALID_KEYS = [
@@ -481,6 +482,7 @@ export const VALID_KEYS = [
   "queue.wake_human_rung",
   // MVP — worker isolation level; lockstep with the daemon settings-store twin.
   "workers.isolation",
+  "team.leadClient",
 ] as const;
 
 export type ValidKey = typeof VALID_KEYS[number];
@@ -574,6 +576,7 @@ export const ENV_MAP: Record<ValidKey, { primary: string; legacy?: string }> = {
   "queue.wake_swap_grace_seconds": { primary: "OPENRIG_QUEUE_WAKE_SWAP_GRACE_SECONDS" },
   "queue.wake_human_rung": { primary: "OPENRIG_QUEUE_WAKE_HUMAN_RUNG" },
   "workers.isolation": { primary: "OPENRIG_WORKERS_ISOLATION" },
+  "team.leadClient": { primary: "OPENRIG_TEAM_LEAD_CLIENT" },
 };
 
 // Maps dotted-string config keys to the camelCase RiggedConfig path.
@@ -656,6 +659,7 @@ const KEY_TO_PATH: Record<ValidKey, string[]> = {
   "queue.wake_swap_grace_seconds": ["queue", "wakeSwapGraceSeconds"],
   "queue.wake_human_rung": ["queue", "wakeHumanRung"],
   "workers.isolation": ["workers", "isolation"],
+  "team.leadClient": ["team", "leadClient"],
 };
 
 function isValidKey(key: string): key is ValidKey {
@@ -977,6 +981,9 @@ const KEY_CONSTRAINTS: Partial<Record<ValidKey, (raw: string, coerced: string | 
   "queue.wake_swap_grace_seconds": positiveIntegerConstraint("queue.wake_swap_grace_seconds"),
   "queue.wake_human_rung": wakeHumanRungConstraint,
   "workers.isolation": workersIsolationConstraint,
+  "team.leadClient": raw => {
+    if (raw !== "claude-code" && raw !== "codex") throw new Error("Invalid value for team.leadClient: use claude-code or codex.");
+  },
 };
 
 function validateKeyConstraints(key: ValidKey, raw: string, coerced: string | number | boolean): void {

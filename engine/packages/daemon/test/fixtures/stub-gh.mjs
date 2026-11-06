@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const root = process.env.GH_STUB_DIR;
 const args = process.argv.slice(2);
@@ -55,6 +56,24 @@ if (args[0] === "--version") {
   writeFileSync(join(root, "logout-started"), "started");
   await waitForRelease("logout");
   if (existsSync(account)) unlinkSync(account);
+} else if (args[0] === "api" && args[1] === "user") {
+  if (!existsSync(account)) process.exit(1);
+  console.log(JSON.stringify({ login: "octocat", name: "Fixture Owner", id: 123 }));
+} else if (args[0] === "repo" && args[1] === "create") {
+  if (existsSync(join(root, "repo-exists"))) {
+    process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: Name already exists on this account\n");
+    process.exit(1);
+  }
+  if (existsSync(join(root, "repo-failure"))) {
+    process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: network unavailable\n");
+    process.exit(1);
+  }
+  const source = args[args.indexOf("--source") + 1];
+  const url = "https://github.com/" + args[2] + ".git";
+  execFileSync("git", ["-C", source, "remote", "add", "origin", url]);
+  console.log(url);
+} else if (args[0] === "repo" && args[1] === "view") {
+  console.log(JSON.stringify({ nameWithOwner: args[2], isPrivate: !existsSync(join(root, "repo-public")) }));
 } else {
   process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: unexpected command\n");
   process.exitCode = 1;

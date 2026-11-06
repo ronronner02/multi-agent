@@ -4,7 +4,8 @@ import { realpathSync } from "node:fs";
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { DaemonClient } from "../client.js";
 import { getDaemonStatus, getDaemonUrl, daemonStatusGuard, type LifecycleDeps } from "../daemon-lifecycle.js";
 import { readOpenRigEnv } from "../openrig-compat.js";
@@ -214,33 +215,35 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (response.data?.resumeTaskIds?.length) console.log(`Pending tasks offered: ${response.data.resumeTaskIds.join(", ")}`);
     });
 
-  /**
-   * U3 — the owner's team for a repository.
-   *
-   * The daemon creates the rig and one seat per role and launches nothing: the first start
-   * opens each seat's terminal. `claude` is the shorthand the owner types for `claude-code`,
-   * and the default seats are the ones a run needs — a lead, a Claude and a Codex implementer,
-   * and a reviewer — so the verb needs no flags to be useful.
-   */
+  /** A named project uses bootstrap; the unnamed command retains its explicit-seat contract. */
   cmd.command("create <repository>")
-    .description("create a team for a local git repository, then start it with `rig team start`")
+    .description("create a private GitHub project with --name, or register a local repository with manual seats")
+    .option("--name <name>", "create a project from this folder with only its configured lead")
+    .option("--dry-run", "preview the named project's upload without changing it")
+    .option("--yes", "confirm the named project's upload without an interactive prompt")
     .option("--lead <client>", "the lead seat's client: claude-code or codex", "claude-code")
     .option("--implementers <clients>", "the implementer seats' clients, comma separated", "claude-code,codex")
     .option("--reviewer <client>", "the reviewer seat's client: claude-code or codex", "claude-code")
     .option("--json", "print the daemon's team as JSON")
-    .action(async (repository: string, opts: { lead: string; implementers: string; reviewer: string; json?: boolean }) => {
-      const seats: Team["seats"] = [
+    .action(async (repository: string, opts: { name?: string; dryRun?: boolean; yes?: boolean;
+      lead: string; implementers: string; reviewer: string; json?: boolean }, command: Command) => {
+      const named = opts.name !== undefined;
+      if ((named && ["lead", "implementers", "reviewer"].some(flag => command.getOptionValueSource(flag) === "cli"))
+        || (!named && (opts.dryRun || opts.yes))) {
+        throw new TeamCommandError("team_options_conflict", "Use --name for a lead-only project, without manual seat flags. --dry-run and --yes apply to that path.");
+      }
+      const seats: Team["seats"] | undefined = named ? undefined : [
         { role: "lead", client: teamClient(opts.lead, "--lead") },
         ...opts.implementers.split(",").map(value => value.trim()).filter(Boolean)
           .map(value => ({ role: "implementer" as const, client: teamClient(value, "--implementers") })),
         { role: "reviewer", client: teamClient(opts.reviewer, "--reviewer") },
       ];
-      if (!seats.some(seat => seat.role === "implementer")) {
+      if (seats && !seats.some(seat => seat.role === "implementer")) {
         throw new TeamCommandError("team_client_invalid", "--implementers needs at least one client.");
       }
       // The daemon resolves a path against its own working directory, and it is the one host a
       // shell here cannot assume is the same, so a relative path is made absolute here.
-      let root = repository;
+      let root = named ? resolve(repository) : repository;
       if (!isAbsolute(root)) {
         try { root = realpathSync(root); } catch {
           throw new TeamCommandError("team_repository_unreadable", `The repository path "${repository}" could not be read.`);
@@ -255,8 +258,39 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       const status = await getDaemonStatus(deps().lifecycleDeps);
       if (!daemonStatusGuard(status)) return;
       const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const headers = { Authorization: "Bearer " + token };
+      if (named) {
+        const response = await client.post<{ preview?: { repository: string; name: string; action: "create" | "push" | "register";
+          fileCount: number; excludedPaths: string[] }; code?: string; error?: string }>(BASE + "/teams",
+        { repository: root, name: opts.name, dryRun: true }, { headers });
+        const preview = response.data?.preview;
+        if (response.status !== 200 || !preview) {
+          console.error("error: the project preview was refused: " + (response.data?.error ?? `HTTP ${response.status}`));
+          process.exitCode = 1;
+          return;
+        }
+        root = preview.repository;
+        if (opts.dryRun && opts.json) { console.log(JSON.stringify(preview)); return; }
+        const print = opts.json ? console.error : console.log;
+        print(`Folder: ${preview.repository}`);
+        print(preview.action === "register" ? "Register the existing origin. Nothing will be created or pushed on GitHub."
+          : preview.action === "push" ? `Upload the existing commit (${preview.fileCount} files) and its reachable history to a new private GitHub repository. Uncommitted changes stay local.`
+          : `Upload ${preview.fileCount} files to a new private GitHub repository.`);
+        if (preview.excludedPaths.length) print(`Excluded: ${preview.excludedPaths.join(", ")}`);
+        if (opts.dryRun) return;
+        if (!opts.yes) {
+          if (!process.stdin.isTTY) {
+            print("Preview only. Review it, then repeat the command with --yes to create the project.");
+            process.exitCode = 1;
+            return;
+          }
+          const prompt = createInterface({ input: process.stdin, output: process.stderr });
+          try { if (!/^y(?:es)?$/i.test((await prompt.question("Create this project? [y/N] ")).trim())) return; }
+          finally { prompt.close(); }
+        }
+      }
       const response = await client.post<{ team?: Team; code?: string; error?: string }>(BASE + "/teams",
-        { repository: root, seats }, { headers: { Authorization: "Bearer " + token } });
+        { repository: root, ...(named ? { name: opts.name } : { seats }) }, { headers });
       if (response.status !== 201 || !response.data?.team) {
         console.error("error: the team was refused: " + (response.data?.error ?? `HTTP ${response.status}`));
         process.exitCode = 1;
@@ -268,7 +302,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log(`Repository: ${team.repository}`);
       for (const seat of team.seats) console.log(`  ${seat.role.padEnd(12)} ${seat.client}${seat.model ? "  " + seat.model : ""}`);
       console.log("");
-      console.log(`Next: rig team start "<goal>" --rig ${team.name}`);
+      console.log(`Next: rig team start "<goal>" --rig ${team.name}${named ? " --planning" : ""}`);
     });
 
   /**
