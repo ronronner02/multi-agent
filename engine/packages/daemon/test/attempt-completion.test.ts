@@ -10,6 +10,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest } from "../src/contracts/team-control.js";
 import { composeAttemptCompletion, extractReviewerReport } from "../src/domain/attempt-completion.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
+import { pendingTasks } from "../src/domain/pending-dispatch.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -131,14 +132,36 @@ describe("U4 daemon-recorded outcomes", () => {
     expect(db.prepare("SELECT count(*) AS n FROM events WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'task.outcome'").get()).toEqual({ n: 1 });
   });
 
-  it("records invalid candidate evidence as a retry-eligible daemon failure", async () => {
+  it("records invalid candidate evidence as a daemon failure and spends the run's one retry", async () => {
     const observe = completion(() => manifest("diff --git a/docs/outside.md b/docs/outside.md\n+++ b/docs/outside.md\n"));
     await observe.sweep();
 
-    expect(governance.queueState(taskQitemId)).toBe("failed");
+    // The evidence is the daemon's own: not validated, with the classifier that names a retry.
     expect(governance.findTask("run", "task-review-1")).toBeNull();
     expect(governance.getTask(taskQitemId)?.evidence).toMatchObject({ validated: false, reasonCode: "evidence_invalid" });
     expect(governance.getAttempt(attemptId)?.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
+    // KTD3 routes that failure to one retry, spent by the daemon and counted on the run.
+    expect(governance.queueState(taskQitemId)).toBe("pending");
+    expect(governance.getRun("run").retriesUsed).toBe(1);
+    // The retried row is work nobody is doing, so the dispatcher is offered it exactly once.
+    expect(pendingTasks(db, "run")).toContain("task");
+    const transitions = db.prepare("SELECT transition_note AS note FROM queue_transitions WHERE qitem_id = ? ORDER BY ts DESC, transition_id DESC")
+      .all(taskQitemId) as Array<{ note: string | null }>;
+    expect(transitions[0]!.note).toBe(`Daemon counted retry of ${attemptId}`);
+  });
+
+  it("leaves the task failed, and spends nothing more, when the retry fails too", async () => {
+    const observe = completion(() => manifest("diff --git a/docs/outside.md b/docs/outside.md\n+++ b/docs/outside.md\n"));
+    await observe.sweep();
+    addAttempt("task", "attempt-2", "implementer");
+
+    await observe.sweep();
+
+    expect(governance.queueState(taskQitemId)).toBe("failed");
+    expect(governance.getRun("run").retriesUsed).toBe(1);
+    expect(governance.getAttempt("attempt-2")?.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
+    // The second failure is the lead's news, not a second retry's: nothing is offered to start.
+    expect(pendingTasks(db, "run")).toEqual([]);
   });
 
   it("records reviewer findings from the final message and reopens on a cited P1", async () => {
@@ -172,7 +195,7 @@ describe("U4 daemon-recorded outcomes", () => {
       .toEqual({ verdict: "approved" });
   });
 
-  it("marks a reviewer without a findings block as retry-eligible", async () => {
+  it("marks a reviewer without a findings block as retry-eligible, and retries the review once", async () => {
     const observe = completion(() => manifest("diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n"));
     await observe.sweep();
     const reviewer = governance.findTask("run", "task-review-1")!;
@@ -180,9 +203,10 @@ describe("U4 daemon-recorded outcomes", () => {
 
     await observe.sweep();
 
-    expect(governance.queueState(reviewer.qitemId)).toBe("failed");
+    expect(governance.queueState(reviewer.qitemId)).toBe("pending");
     expect(governance.getAttempt("review-attempt")?.failure).toMatchObject({ reasonCode: "review_report_missing", retryEligible: true });
     expect(governance.getTask(reviewer.qitemId)?.evidence).toEqual({ reasonCode: "review_report_missing" });
+    expect(governance.getRun("run").retriesUsed).toBe(1);
   });
 
   it("records a validated lead proposal without creating a review task", async () => {

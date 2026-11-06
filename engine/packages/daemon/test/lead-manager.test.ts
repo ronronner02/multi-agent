@@ -7,12 +7,13 @@ import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
-import { TEAM_CONTROL_VERSION, type ControlRequest } from "../src/contracts/team-control.js";
+import { TEAM_CONTROL_VERSION, TeamContractError, type ControlRequest } from "../src/contracts/team-control.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
 import { agentTurnOutputPaths, continuationNote } from "../src/domain/agent-turn.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { composeLeadTurnEnd, leadChatTurnNote, pendingOwnerMessages } from "../src/domain/lead-chat.js";
-import { composeLeadManager, deliveredLeadEvents, leadTeamEvents } from "../src/domain/lead-manager.js";
+import { LeadProposalMissingError } from "../src/domain/lead-proposal.js";
+import { composeLeadManager, deliveredLeadEvents, leadTeamEvents, proposalRefusalReason } from "../src/domain/lead-manager.js";
 import { LeadWakePolicy } from "../src/domain/lead-wake-policy.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { composePendingDispatch } from "../src/domain/pending-dispatch.js";
@@ -179,6 +180,44 @@ describe("U6 — the lead as manager", () => {
     const note = continuationNote(db, "run", "task-1", "lead")!;
     expect(note).toContain("Assignment path is outside the binding");
     expect(note).toContain("lead-escalation.json");
+  });
+
+  /**
+   * The live acceptance run's stall: the lead's second list put the review in as a task with
+   * `paths: []`, the proposal parser refused it, and nothing ever told the lead why.
+   *
+   * A list the boundary cannot parse is not a turn with no answer: it is a list the daemon
+   * refuses, so the refusal is recorded, the lead is reopened with the reason, and the next
+   * turn starts. The sentence is the manager's, because a parser's field name is not a prompt.
+   */
+  it("refuses a proposal the boundary cannot parse, and reopens the lead with a readable reason", async () => {
+    endLeadTurn();
+    await leadTurnEnd(new TeamContractError("proposal.paths"), "attempt-lead-bad");
+    expect(governance.queueState(leadQitemId)).toBe("pending");
+    expect(dispatch).toHaveBeenCalledWith("run", "task-1");
+    const refused = db.prepare(`SELECT json_extract(payload, '$.payload.note') AS note FROM events
+      WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'lead.proposal-refused'
+      ORDER BY seq DESC LIMIT 1`).get() as { note: string };
+    expect(refused.note).toContain("names no write paths");
+    const note = continuationNote(db, "run", "task-1", "lead")!;
+    expect(note).toContain("names no write paths");
+  });
+
+  it("leaves a management turn that wrote no proposal alone", async () => {
+    endLeadTurn();
+    await leadTurnEnd(new LeadProposalMissingError(), "attempt-lead-empty");
+    // A turn that answered in the chat wrote nothing to admit, which is a complete answer.
+    expect(governance.queueState(leadQitemId)).toBe("done");
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(db.prepare(`SELECT count(*) AS n FROM events WHERE type = 'team.control'
+      AND json_extract(payload, '$.action') = 'lead.proposal-refused'`).get()).toEqual({ n: 0 });
+  });
+
+  it("translates the parser's field names into what the lead should do", () => {
+    expect(proposalRefusalReason(new TeamContractError("proposal.paths"))).toContain("names no write paths");
+    expect(proposalRefusalReason(new TeamContractError("proposal.taskId"))).toContain("share a task id");
+    expect(proposalRefusalReason(new Error("The lead's proposal is not valid JSON")))
+      .toBe("The lead's proposal is not valid JSON");
   });
 
   it("stores an escalation as one owner decision, and the owner's answer resumes the lead", async () => {

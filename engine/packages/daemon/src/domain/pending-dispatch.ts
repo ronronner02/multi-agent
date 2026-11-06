@@ -50,6 +50,12 @@ export interface PendingDispatchDependencies {
  * attempt recorded after the reopen is that answer, and the task then waits for the owner's
  * outcome exactly as any finished turn does.
  *
+ * A counted retry is the same question with a different name. KTD3 spends one retry on a
+ * retry-eligible daemon failure, and the owner's own retry command moves the row the same way:
+ * failed to pending, with the count named in the note. A failed row is not a guarded terminal,
+ * so the move is an ordinary transition and the reopen's own event is not written; the counted
+ * retry is recognised by its note, and "served" is again the attempt recorded after it.
+ *
  * "After" is the event log's own order, not a wall clock: a reopen and the attempt its dispatch
  * admits can share a millisecond, so `created_at` cannot separate them. The reopen writes a
  * `queue.updated` and every recorded attempt writes an `attempt.recorded`, both into the one
@@ -68,6 +74,11 @@ export function pendingTasks(db: Database.Database, runId: string): string[] {
           AND json_extract(e.payload, '$.toState') = 'pending'
           AND json_extract(e.payload, '$.fromState') IN ('done', 'handed-off')) AS reopenSeq,
       (SELECT max(e.seq) FROM events e
+        WHERE e.type = 'queue.updated'
+          AND json_extract(e.payload, '$.qitemId') = a.qitem_id
+          AND json_extract(e.payload, '$.toState') = 'pending'
+          AND json_extract(e.payload, '$.fromState') = 'failed') AS retrySeq,
+      (SELECT max(e.seq) FROM events e
         JOIN team_attempts t ON t.id = json_extract(e.payload, '$.attemptId')
         WHERE e.type = 'team.control'
           AND json_extract(e.payload, '$.action') IN ('attempt.recorded', 'attempt.admitted')
@@ -76,12 +87,15 @@ export function pendingTasks(db: Database.Database, runId: string): string[] {
     JOIN queue_items q ON q.qitem_id = a.qitem_id
     WHERE a.run_id = ? AND q.state IN ('pending', 'in-progress')
     ORDER BY a.rowid`).all(runId) as Array<{ taskId: string; state: string; qitemId: string; attempts: number;
-      openAttempts: number; lastNote: string | null; reopenSeq: number | null; attemptSeq: number | null }>;
+      openAttempts: number; lastNote: string | null; reopenSeq: number | null; retrySeq: number | null;
+      attemptSeq: number | null }>;
+  const served = (row: { attemptSeq: number | null }, since: number | null) =>
+    since === null || row.attemptSeq === null || row.attemptSeq < since;
   return rows.filter(row => row.openAttempts === 0
     // Never ran, or reopened deliberately and not yet served: both are work nobody is doing.
     && (row.attempts === 0
-      || ((row.lastNote ?? "").startsWith("reopen acknowledged:")
-        && (row.reopenSeq === null || row.attemptSeq === null || row.attemptSeq < row.reopenSeq))))
+      || ((row.lastNote ?? "").startsWith("reopen acknowledged:") && served(row, row.reopenSeq))
+      || (/^(?:Daemon|Owner) counted retry of /.test(row.lastNote ?? "") && served(row, row.retrySeq))))
     .map(row => row.taskId);
 }
 

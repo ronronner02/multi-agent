@@ -31,7 +31,7 @@ import {
   type CandidateWorkspace,
   type WorkspaceBase,
 } from "./team-workspace.js";
-import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH, parseLeadEscalation, parseLeadProposal,
+import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH, LeadProposalMissingError, parseLeadEscalation, parseLeadProposal,
   type LeadEscalation, type LeadTask } from "./lead-proposal.js";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
@@ -852,7 +852,7 @@ export class WorkflowRuntime {
   leadProposalFor(runId: string, taskId: string): LeadTask[] {
     const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
     const read = readWorkspacePath(workspace.root, LEAD_PROPOSAL_PATH, () => false);
-    if (read.kind !== "file") throw new Error("The lead wrote no proposal at " + LEAD_PROPOSAL_PATH);
+    if (read.kind !== "file") throw new LeadProposalMissingError();
     let value: unknown;
     try { value = JSON.parse(read.content); } catch { throw new Error("The lead's proposal is not valid JSON"); }
     return parseLeadProposal(value);

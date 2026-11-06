@@ -21,6 +21,18 @@ import { object, relativePath, TeamContractError, text, type TeamRole } from "..
 export const LEAD_PROPOSAL_PATH = "lead-proposal.json";
 
 /**
+ * U6 — the candidate holds no proposal at all.
+ *
+ * A delivery lead's turn may deliver its answer in the chat and write nothing, which is a
+ * complete turn rather than a refusal. The manager has to tell that case from a file the
+ * boundary read and refused, because only the second is work the lead must redo, so the two
+ * cannot both arrive as a plain `Error`.
+ */
+export class LeadProposalMissingError extends Error {
+  constructor() { super(`The lead wrote no proposal at ${LEAD_PROPOSAL_PATH}`); this.name = "LeadProposalMissingError"; }
+}
+
+/**
  * U6 — where a lead asks the owner for a decision it may not take itself.
  *
  * The same boundary and the same file protocol as the proposal: the lead cannot call an

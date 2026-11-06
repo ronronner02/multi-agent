@@ -142,9 +142,11 @@ export function leadCompletionEvidence(input: {
     && !(input.managementTurn === true && path === LEAD_ESCALATION_PATH));
   if (outside.length) reasons.push(`${outside.length} changed path(s) are not the lead's proposal`);
   if (input.managementTurn === true) {
-    // A management turn delivers whatever it was asked for; only an artifact it wrote and the
-    // boundary could not read is a failure.
-    if (wroteProposal && input.proposal === null) reasons.push("The lead's proposal is missing or unreadable");
+    // A management turn delivers whatever it was asked for. A proposal the boundary refuses is
+    // not a turn that failed its evidence: the manager reads it, refuses it, and hands the reason
+    // to the lead as its next prompt (U6). Counting it as invalid evidence instead would spend a
+    // retry on a recoverable refusal, and the lead would be retried without being told why. Only
+    // an escalation is checked here, because an escalation the owner cannot answer is silence.
     if (wroteEscalation && (input.escalation ?? null) === null) reasons.push("The lead's escalation is missing or unreadable");
   } else {
     if (manifest.base === "commit" && !wroteProposal) {

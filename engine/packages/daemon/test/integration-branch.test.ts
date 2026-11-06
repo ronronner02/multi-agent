@@ -240,6 +240,54 @@ describe("U7 integration branch and merge", () => {
     expect(git(repo, "rev-parse", "--abbrev-ref", "HEAD").trim()).toBe("main");
   });
 
+  /**
+   * The live acceptance run merged an empty branch: its only task was the lead, which had
+   * failed, and the branch carried the plan commit but no task's work. The owner must never be
+   * offered that merge, because it would land the plan and nothing the team was asked to do.
+   */
+  it("does not offer a merge while no task's work has landed", async () => {
+    const ownerHead = git(repo, "rev-parse", "HEAD").trim();
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+
+    const status = integration.status(runId);
+    expect(status.commits).toEqual([]);
+    expect(status.merge).toEqual({ possible: false, reason: "No task's work has landed on the integration branch yet." });
+    expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
+    // The refusal is what keeps the owner's checkout exactly where it was.
+    expect(git(repo, "rev-parse", "HEAD").trim()).toBe(ownerHead);
+  });
+
+  it("does not offer a merge while any task has failed, the lead included", async () => {
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
+    // A lead whose turn failed never decomposed the plan. The run has landed work, but it has
+    // not delivered what the owner approved, so its branch is not ready.
+    expect(governance.createTask(request("lead-task", {
+      assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Decompose the plan",
+    }), currentBinding()).status).toBe("accepted");
+    const lead = governance.findTask(runId, "lead-task")!;
+    governance.recordAttempt(request("attempt-lead", { qitemId: lead.qitemId, role: "lead", provider: "claude",
+      identity: { nativeSessionId: "native-lead", tmuxServer: "/tmp/tmux.sock", paneId: "%1", processId: 4242,
+        processStart: "lead-start", generation: 1, policyFingerprint: governance.getRun(runId).binding.policyFingerprint },
+      unknownReason: null, state: "running", usage: unusedUsage }), currentBinding());
+    stopAttempt("attempt-lead");
+    const failed = governance.recordTaskOutcome(request(lead.qitemId, {
+      expectedTaskVersion: lead.entityVersion, state: "failed", actorSession: "lead@rig",
+      attemptId: "attempt-lead", expectedAttemptVersion: governance.getAttempt("attempt-lead")!.entityVersion,
+      evidence: { validated: false, reasonCode: "evidence_invalid" },
+    }), { kind: "daemon", sessionId: "daemon" });
+    expect(failed.status, JSON.stringify(failed)).toBe("observed");
+
+    expect(governance.queueState(lead.qitemId)).toBe("failed");
+    expect(integration.status(runId).merge).toEqual({ possible: false, reason: "Task(s) failed: lead-task" });
+    expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
+  });
+
   it("keeps an in-flight candidate's recorded base and applies it on top of the moved head", async () => {
     expect(admit("task-b", "implementer", "impl@rig").status).toBe("accepted");
     // Both tasks start from the same head; the second candidate is staged before anything lands.
