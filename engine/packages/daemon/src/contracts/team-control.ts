@@ -632,6 +632,20 @@ export function text(value: unknown, field: string, max = 1024): string {
   return value;
 }
 
+/**
+ * Prose an owner writes: the goal a run starts from, and the reason it was refused.
+ *
+ * `text` refuses every C0 control character, which is right for a name, a path or an id and
+ * wrong for a paragraph: a goal is typed into a textarea and becomes the task's brief, so its
+ * line breaks and tabs are part of what the owner meant. The characters no textarea produces
+ * are still refused.
+ */
+export function prose(value: unknown, field: string, max = 1024): string {
+  if (typeof value !== "string" || !value.trim() || value.length > max
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) throw new TeamContractError(field);
+  return value;
+}
+
 export function integer(value: unknown, field: string, min = 0, max = Number.MAX_SAFE_INTEGER): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) throw new TeamContractError(field);
   return value;
