@@ -15,6 +15,8 @@ import { hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { MailboxDelivery } from "../src/domain/mailbox-delivery.js";
 import type { AssignmentInput } from "../src/domain/team-assignment.js";
+import type { ManagedSessionReceipt } from "../src/domain/runtime-adapter.js";
+import type { ContextInput } from "../src/integrations/framework/context-manifest.js";
 import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 
 // T042: the attempt an admitted assignment launches from is produced by the runtime,
@@ -311,6 +313,87 @@ describe("the managed attempt a seat launches from", () => {
     expect(resumed.attempt.context.generatedHash).toBe(before);
     await runtime.retireManagedAttempt("attempt-1");
   }, 30_000);
+
+  describe("lead context reconstruction", () => {
+    const leadInput = (phase?: "planning" | "delivery", emptyRoster = false) => {
+      const base = produceInput();
+      const assignment = { ...base.assignment, role: "lead" as const };
+      const lead: NonNullable<ContextInput["lead"]> = {
+        activationId: "activation-1", ...(phase ? { phase } : {}),
+        roster: emptyRoster ? [] : [{ member: "backend", role: "implementer", mailbox: "run/backend" }],
+        instructions: "Current run instructions",
+      };
+      db.prepare(`UPDATE team_queue_authority SET assignment_json = ?, outputs_json = '[]',
+        permissions_json = '[]' WHERE qitem_id = 'task-item'`).run(JSON.stringify(assignment));
+      return { ...base, assignment, role: "lead" as const, outputs: [], permissions: [],
+        context: { ...base.context, lead } };
+    };
+    const restart = async () => {
+      await runtime.retireManagedAttempt("attempt-1");
+      runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue,
+        candidateRoot: (runId, taskId, worker) => candidateDir(worker, runId, taskId),
+        assignmentRoot: () => assignmentRoot, defaultWorker: () => "ma-worker1",
+        managedAttemptRoots: () => ({ contextRoot, mailboxRoot, controlStateDir,
+          policyRevision: binding.policyRevision, workerIdentities: ["ma-worker1", "ma-worker2"],
+          frameworkRoot, frameworkRevision: FRAMEWORK_PIN.revision, toolchainDir }) });
+    };
+    // Only these two receipt fields participate in projection reconstruction. Full
+    // native identity validation belongs to the launcher's existing resume tests.
+    const previous = (contextHash: string, attemptId = "attempt-1") =>
+      ({ attemptId, contextHash } as ManagedSessionReceipt);
+
+    afterEach(async () => { await runtime.closeManagedAttempts(); });
+
+    it.each(["planning", "delivery"] as const)("preserves a legacy nonempty lead context on %s resume", async phase => {
+      const first = await runtime.produceManagedAttempt("run-1", leadInput());
+      const recorded = first.attempt.context;
+      const bytes = recorded.files.map(file => readFileSync(file.path));
+      await restart();
+      const resumed = await runtime.produceManagedAttempt("run-1", {
+        ...leadInput(phase), previous: previous(recorded.generatedHash),
+      });
+      expect(resumed.attempt.context.generatedHash).toBe(recorded.generatedHash);
+      expect(resumed.attempt.context.lead).not.toHaveProperty("phase");
+      expect(resumed.attempt.context.root).toBe(recorded.root);
+      expect(recorded.files.map(file => readFileSync(file.path))).toEqual(bytes);
+    }, 30_000);
+
+    it("retains the explicit phase when an empty-roster planning attempt resumes", async () => {
+      const input = leadInput("planning", true);
+      const first = await runtime.produceManagedAttempt("run-1", input);
+      await restart();
+      const resumed = await runtime.produceManagedAttempt("run-1", {
+        ...input, previous: previous(first.attempt.context.generatedHash),
+      });
+      expect(resumed.attempt.context.generatedHash).toBe(first.attempt.context.generatedHash);
+      expect(resumed.attempt.context.lead).toMatchObject({ phase: "planning", roster: [] });
+    }, 30_000);
+
+    it.each(["wrong-hash", "other-attempt"])("does not select the legacy form for a %s receipt", async kind => {
+      const first = await runtime.produceManagedAttempt("run-1", leadInput());
+      const hash = first.attempt.context.generatedHash;
+      await restart();
+      const receipt = previous(kind === "wrong-hash" ? hashBytes("wrong") : hash,
+        kind === "other-attempt" ? "attempt-other" : "attempt-1");
+      const resumed = await runtime.produceManagedAttempt("run-1", {
+        ...leadInput("delivery"), previous: receipt,
+      });
+      expect(resumed.attempt.context.generatedHash).not.toBe(hash);
+      expect(resumed.attempt.context.generatedHash).not.toBe(receipt.contextHash);
+      expect(resumed.attempt.context.lead?.phase).toBe("delivery");
+    }, 30_000);
+
+    it.each(["roster", "instructions"])("still rejects changed %s with the exact legacy receipt", async field => {
+      const first = await runtime.produceManagedAttempt("run-1", leadInput());
+      await restart();
+      const input = leadInput("delivery");
+      if (field === "roster") input.context.lead.roster[0]!.mailbox = "run/changed";
+      else input.context.lead.instructions = "Different run instructions";
+      await expect(runtime.produceManagedAttempt("run-1", {
+        ...input, previous: previous(first.attempt.context.generatedHash),
+      })).rejects.toThrow("Stale Lead protocol, roster or run instructions");
+    }, 30_000);
+  });
 
   it("refuses a candidate that is not the task's own", async () => {
     await expect(runtime.produceManagedAttempt("run-1", produceInput({ candidate: join(directory, "elsewhere") })))

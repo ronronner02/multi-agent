@@ -14,12 +14,19 @@ export interface GithubLoginState {
   url?: string;
 }
 
+const ERROR_MESSAGES = {
+  github_cli_missing: "GitHub CLI is not installed. Run ./setup.sh.",
+  github_login_failed: "GitHub sign-in failed. Start a new sign-in.",
+  github_not_signed_in: "Sign in to GitHub before creating a project.",
+  github_identity_failed: "The signed-in GitHub account identity could not be read.",
+  github_repo_exists: "A GitHub repository with that name already exists. Choose another name.",
+  github_repo_create_failed: "The private GitHub repository was not created. Retry Create.",
+  github_push_failed: "The initial push did not finish. Check repository access and private visibility, then retry Create.",
+} as const;
 export class GithubCliError extends Error {
-  constructor(readonly code: "github_cli_missing" | "github_login_failed") {
-    super(code === "github_cli_missing" ? "GitHub CLI is not installed. Run ./setup.sh."
-      : "GitHub sign-in failed. Start a new sign-in.");
-  }
+  constructor(readonly code: keyof typeof ERROR_MESSAGES) { super(ERROR_MESSAGES[code]); }
 }
+export interface GithubAccount { login: string; name: string; email: string }
 
 interface LoginFlow {
   child: ChildProcess;
@@ -44,6 +51,7 @@ export class GithubCli {
     for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]) {
       delete this.env[key];
     }
+    for (const key of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete this.env[key];
   }
 
   private executable(): string {
@@ -55,18 +63,19 @@ export class GithubCli {
     throw new GithubCliError("github_cli_missing");
   }
 
-  private async run(args: string[]): Promise<{ stdout: string; ok: boolean }> {
+  private async run(args: string[], options: { cwd?: string; timeout?: number; failure?: keyof typeof ERROR_MESSAGES } = {}):
+    Promise<{ stdout: string; stderr: string; ok: boolean }> {
     const executable = this.executable();
     try {
-      const { stdout } = await execute(executable, args, {
-        env: this.env, encoding: "utf8", timeout: 15_000, maxBuffer: 65_536,
+      const { stdout, stderr } = await execute(executable, args, {
+        env: this.env, encoding: "utf8", timeout: options.timeout ?? 15_000, maxBuffer: 65_536, cwd: options.cwd,
       });
-      return { stdout, ok: true };
+      return { stdout, stderr, ok: true };
     } catch (error) {
-      const failure = error as NodeJS.ErrnoException & { stdout?: string };
+      const failure = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
       if (failure.code === "ENOENT") throw new GithubCliError("github_cli_missing");
-      if (Number(failure.code) === 1) return { stdout: failure.stdout ?? "", ok: false };
-      throw new GithubCliError("github_login_failed");
+      if (Number(failure.code) === 1) return { stdout: failure.stdout ?? "", stderr: failure.stderr ?? "", ok: false };
+      throw new GithubCliError(options.failure ?? "github_login_failed");
     }
   }
 
@@ -85,6 +94,61 @@ export class GithubCli {
   async status(): Promise<GithubStatus> {
     const account = await this.activeAccount();
     return { signedIn: account?.signedIn ?? false, login: account?.signedIn ? account.login : null, host: HOST };
+  }
+
+  private async signedInLogin(expected?: string): Promise<string> {
+    const account = await this.activeAccount();
+    if (this.flow || !account?.signedIn || (expected !== undefined && account.login !== expected)) {
+      throw new GithubCliError("github_not_signed_in");
+    }
+    return account.login;
+  }
+
+  account(): Promise<GithubAccount> {
+    return this.mutateLifecycle(async () => {
+      const login = await this.signedInLogin();
+      const result = await this.run(["api", "user", "--hostname", HOST, "--jq", "{login,name,id}"], { failure: "github_identity_failed" });
+      try {
+        const value = JSON.parse(result.stdout);
+        if (!result.ok || value.login !== login || !Number.isSafeInteger(value.id) || value.id < 1) throw new Error();
+        const name = typeof value.name === "string" ? value.name.replace(/[\r\n<>]/g, " ").trim().slice(0, 128) : "";
+        return { login, name: name || login, email: `${value.id}+${login}@users.noreply.github.com` };
+      } catch { throw new GithubCliError("github_identity_failed"); }
+    });
+  }
+
+  createPrivateRepository(name: string, repository: string, login: string): Promise<string> {
+    return this.mutateLifecycle(async () => {
+      await this.signedInLogin(login);
+      const result = await this.run(["repo", "create", `${login}/${name}`, "--private", "--source", repository, "--remote", "origin"],
+        { cwd: repository, timeout: 60_000, failure: "github_repo_create_failed" });
+      if (!result.ok) throw new GithubCliError(/already exists/i.test(result.stderr) ? "github_repo_exists" : "github_repo_create_failed");
+      return `https://${HOST}/${login}/${name}.git`;
+    });
+  }
+
+  push(repository: string, remote: string, refspec: string, login: string): Promise<void> {
+    return this.mutateLifecycle(async () => {
+      await this.signedInLogin(login);
+      try {
+        const target = /^https:\/\/github\.com\/([^/]+)\/([a-z\d_.-]+)\.git$/i.exec(remote);
+        if (!target || target[1] !== login) throw new Error();
+        const identity = `${login}/${target[2]}`;
+        const result = await this.run(["repo", "view", identity, "--json", "nameWithOwner,isPrivate"], { failure: "github_push_failed" });
+        const value = JSON.parse(result.stdout);
+        if (!result.ok || value.isPrivate !== true || String(value.nameWithOwner).toLowerCase() !== identity.toLowerCase()) throw new Error();
+        const destination = await execute("git", ["-C", repository, "remote", "get-url", "--push", "--all", "origin"], {
+          env: this.env, encoding: "utf8", timeout: 15_000, maxBuffer: 65_536,
+        });
+        // Git resolves push URLs and both rewrite rules. Use that same named remote,
+        // only when its sole destination is the HTTPS repository whose privacy was checked.
+        if (destination.stdout.trim() !== remote) throw new Error();
+        await execute("git", ["-C", repository, ...this.gitCredentialArgs(), "-c", "remote.origin.mirror=false",
+          "push", "--no-follow-tags", "--recurse-submodules=no", "--", "origin", refspec], {
+          env: { ...this.env, GIT_TERMINAL_PROMPT: "0" }, encoding: "utf8", timeout: 120_000, maxBuffer: 65_536,
+        });
+      } catch { throw new GithubCliError("github_push_failed"); }
+    });
   }
 
   private mutateLifecycle<T>(operation: () => Promise<T>): Promise<T> {

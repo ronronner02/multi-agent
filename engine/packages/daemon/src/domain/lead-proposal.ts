@@ -203,8 +203,9 @@ export function leadActivation(db: Database.Database, input: {
   phase?: "planning" | "delivery";
   /** The run's plan artifact, named in the planning instructions. */
   planRef?: string;
-}): { activationId: string; roster: LeadRosterMember[]; instructions: string } {
+}): { activationId: string; phase?: "planning" | "delivery"; roster: LeadRosterMember[]; instructions: string } {
   return { activationId: input.activationId, roster: leadRoster(db, { rigId: input.rigId, roles: input.roles, excludeSeat: input.seat }),
+    ...(input.phase === undefined ? {} : { phase: input.phase }),
     instructions: input.phase === "planning"
       ? planningInstructions(input.goal, input.planRef ?? "plan.md") : leadInstructions(input.goal) };
 }

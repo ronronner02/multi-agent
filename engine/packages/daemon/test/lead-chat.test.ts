@@ -142,6 +142,21 @@ describe("U5 — lead chat and plan approval", () => {
     expect(await response.json()).toMatchObject({ code: "lead_required" });
   });
 
+  it("starts planning with only the lead, while delivery still requires an implementer", async () => {
+    db.prepare("DELETE FROM sessions WHERE node_id != 'lead-node'").run();
+    db.prepare("DELETE FROM nodes WHERE id != 'lead-node'").run();
+    const receipt = await planningRun();
+    expect(receipt).toMatchObject({ seat: "lead@demo", leadSeat: "lead@demo", reviewerSeat: null, phase: "planning" });
+    const run = governance.getRun(receipt.runId!);
+    expect(run.binding.repository.root).toBe(join(worktrees, receipt.runId!));
+    expect(readFileSync(join(run.binding.repository.root, "plan.md"), "utf8")).toContain("Goal: Add a health endpoint");
+    expect(run.binding.writePaths).toEqual(["plan.md"]);
+    expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
+    const delivery = await startPlanning({ planning: false });
+    expect(delivery.status).toBe(400);
+    expect(await delivery.json()).toMatchObject({ code: "lead_roster_empty" });
+  });
+
   it("stores the owner's message and starts exactly one lead turn for it", async () => {
     const receipt = await planningRun();
     dispatch.mockClear();

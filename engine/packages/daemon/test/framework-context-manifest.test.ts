@@ -57,6 +57,22 @@ it("includes current read-only Lead protocol, roster and instructions on every a
   chmodSync(roster.path, 0o644); writeFileSync(roster.path, content); chmodSync(roster.path, 0o440); roster.hash = hashBytes(content);
   const second = createContextManifest(input); expect(second.generatedHash).not.toBe(first.generatedHash); expect(second.lead!.roster[0]!.mailbox).toBe("run/reassigned"); expect(first.lead!.roster[0]!.mailbox).toBe("run/backend");
 });
+it.each(["planning", "delivery", undefined] as const)("allows an empty lead roster only during explicit planning: %s", phase => {
+  const { input } = leadFixture();
+  input.lead = { ...input.lead!, roster: [], ...(phase === undefined ? {} : { phase }) };
+  rewrite(input.files.find(file => file.kind === "roster")!, "[]");
+  if (phase === "planning") {
+    const manifest = createContextManifest(input);
+    expect(manifest.lead).toMatchObject({ phase: "planning", roster: [] });
+    expect(recordedContextManifest(input).generatedHash).toBe(manifest.generatedHash);
+  } else expect(() => createContextManifest(input)).toThrow("Invalid roster");
+});
+it("still rejects duplicate members in a planning lead roster", () => {
+  const { input } = leadFixture();
+  input.lead = { ...input.lead!, phase: "planning", roster: [input.lead!.roster[0]!, input.lead!.roster[0]!] };
+  rewrite(input.files.find(file => file.kind === "roster")!, JSON.stringify(input.lead.roster));
+  expect(() => createContextManifest(input)).toThrow("Invalid roster");
+});
 // C3: the run instructions are prose the lead reads, so they may span lines. Every other lead
 // field stays an identifier or an address.
 it("projects multi-line Lead run instructions and still refuses control bytes", () => {

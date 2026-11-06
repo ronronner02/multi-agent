@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createProgram } from "../src/index.js";
 import { teamCommand, type TeamStartDeps } from "../src/commands/team.js";
 import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-lifecycle.js";
@@ -51,6 +51,51 @@ const accepted = (body: unknown = { protocolVersion: "1.0", team }) =>
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("rig team create", () => {
+  const preview = { repository: "/work/new-project", name: "new-project", action: "create", fileCount: 3, excludedPaths: [".env", ".ssh/"] };
+  const project = { ...team, repository: preview.repository, name: preview.name, seats: [{ role: "lead", client: "claude-code" }] };
+  const projectFetch = () => vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    return new Response(JSON.stringify(body.dryRun ? { protocolVersion: "1.0", preview: { ...preview, repository: body.repository } }
+      : { protocolVersion: "1.0", team: project }), { status: body.dryRun ? 200 : 201 });
+  }) as unknown as typeof fetch;
+
+  it("previews and confirms a named project without sending the old default seats", async () => {
+    const fetchImpl = projectFetch();
+    const result = await run(["team", "create", preview.repository, "--name", preview.name, "--yes"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    const calls = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+    expect(calls.map(([, init]) => JSON.parse(String(init.body)))).toEqual([
+      { repository: preview.repository, name: preview.name, dryRun: true },
+      { repository: preview.repository, name: preview.name },
+    ]);
+    expect(result.lines.join("\n")).toContain("3 files");
+    expect(result.lines.join("\n")).toContain("private GitHub repository");
+    expect(result.lines.join("\n")).toContain(".env");
+    expect(result.lines.join("\n")).toContain('Next: rig team start "<goal>" --rig new-project --planning');
+  });
+
+  it("resolves a missing relative folder lexically for a named project", async () => {
+    const fetchImpl = projectFetch();
+    const result = await run(["team", "create", "missing-project-fixture", "--name", preview.name, "--dry-run", "--json"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    expect(JSON.parse(result.lines[0]!)).toMatchObject({ repository: resolve("missing-project-fixture"), fileCount: 3 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a preview without uploading when a noninteractive call has not confirmed it", async () => {
+    const fetchImpl = projectFetch();
+    expect(process.stdin.isTTY).not.toBe(true);
+    const result = await run(["team", "create", preview.repository, "--name", preview.name], deps(fetchImpl));
+    expect(result.lines.join("\n")).toContain("--yes");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects mixing named-project creation with manual seats", async () => {
+    const fetchImpl = projectFetch();
+    await expect(run(["team", "create", preview.repository, "--name", preview.name, "--lead", "codex"], deps(fetchImpl)))
+      .rejects.toMatchObject({ code: "team_options_conflict" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
   it("creates the default seats for the repository and prints the command that starts it", async () => {
     const fetchImpl = accepted();
     const result = await run(["team", "create", "/work/project"], deps(fetchImpl));
@@ -141,6 +186,6 @@ describe("team command registration", () => {
     const command = teamCommand(deps(vi.fn() as unknown as typeof fetch));
     const create = command.commands.find(entry => entry.name() === "create")!;
     expect(create.registeredArguments.map(argument => argument.name())).toEqual(["repository"]);
-    expect(create.options.map(option => option.long)).toEqual(["--lead", "--implementers", "--reviewer", "--json"]);
+    expect(create.options.map(option => option.long)).toEqual(["--name", "--dry-run", "--yes", "--lead", "--implementers", "--reviewer", "--json"]);
   });
 });

@@ -217,9 +217,8 @@ export function teamStartRoutes(
       return c.json({ code: "reviewer_seat_invalid",
         error: "The reviewer seat must differ from the implementer's seat; a seat cannot review its own candidate." }, 400);
     }
-    // A lead with no member to delegate to can propose nothing, and the activation's manifest
-    // refuses an empty roster. Say so here rather than letting the launch fail later.
-    if (leadSeat !== null && !leadRoster(rigRepo.db, { rigId: rig.id, roles: ["implementer"], excludeSeat: leadSeat }).length) {
+    // Planning needs only the lead; delivery still needs a member to receive its tasks.
+    if (!planning && leadSeat !== null && !leadRoster(rigRepo.db, { rigId: rig.id, roles: ["implementer"], excludeSeat: leadSeat }).length) {
       return c.json({ code: "lead_roster_empty",
         error: "No implementer seat exists for the lead to propose work to; add one to the rig, or start without a lead." }, 400);
     }

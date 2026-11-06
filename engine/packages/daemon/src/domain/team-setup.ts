@@ -75,19 +75,15 @@ export function parseTeamClient(value: string): TeamClient | null {
  */
 export function createTeam(db: Database.Database, input: {
   repository: string;
-  seats: readonly TeamSeatInput[];
+  seats?: readonly TeamSeatInput[];
+  leadClient?: TeamClient;
   /** An explicit name. The seeds keep theirs; the CLI and the route derive one from the folder. */
   name?: string;
 }): Team {
-  const seats = validatedSeats(input.seats);
+  const seats = validatedSeats(input.seats ?? [{ role: "lead", client: input.leadClient ?? "claude-code" }]);
   const root = repositoryRoot(input.repository);
   const rigs = new RigRepository(db), sessions = new SessionRegistry(db);
-  const existing = teamAt(db, root);
-  if (existing) {
-    throw new TeamSetupError("team_exists",
-      `The repository ${root} already has a team, rig "${existing}". Use it, or create the team for another checkout.`);
-  }
-  const name = rigName(db, input.name, root);
+  const name = availableTeamName(db, root, input.name);
   const rig = rigs.createRig(name, root);
   const counted: Record<TeamRole, number> = { lead: 0, implementer: 0, reviewer: 0 };
   for (const seat of seats) {
@@ -102,6 +98,14 @@ export function createTeam(db: Database.Database, input: {
   // Read back through the same projection the list uses, so a create and a later read of the
   // same team cannot report its seats in different orders.
   return { id: rig.id, name, repository: root, seats: recordedSeats(db, rig.id) };
+}
+
+/** Check local identity before project creation has any external side effects. */
+export function availableTeamName(db: Database.Database, root: string, requested?: string): string {
+  const existing = teamAt(db, root);
+  if (existing) throw new TeamSetupError("team_exists",
+    `The repository ${root} already has a team, rig "${existing}". Use it, or create the team for another checkout.`);
+  return rigName(db, requested, root);
 }
 
 /** The teams that exist, in the order they were created, so no client has to type a rig name. */

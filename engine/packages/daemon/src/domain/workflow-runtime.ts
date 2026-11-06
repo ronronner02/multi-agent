@@ -1250,7 +1250,8 @@ export class WorkflowRuntime {
       const manifest = this.projectAttemptContext({ runId, root, worker, attemptId, roots, binding,
         role: input.role, client: input.client, assignment: input.assignment, outputs: [...input.outputs],
         permissions: [...input.permissions], context,
-        nativePolicy, workerGid, frameworkFiles: input.frameworkFiles, resume: resumed });
+        nativePolicy, workerGid, frameworkFiles: input.frameworkFiles, resume: resumed,
+        previousContextHash: input.previous?.attemptId === attemptId ? input.previous.contextHash : undefined });
 
       // An endpoint's path has to fit AF_UNIX's 108 bytes, and it is built from two UUIDs. A
       // provisioned host installs its mailbox root deep enough to afford that; the unisolated
@@ -1391,6 +1392,7 @@ export class WorkflowRuntime {
     frameworkFiles: readonly { path: string; source: string }[];
     /** True when the projection root already exists: rebuild from its own recorded bytes. */
     resume: boolean;
+    previousContextHash?: string;
   }): ContextManifest {
     const { roots, root, role, client } = input;
     const frameworkRoot = roots.frameworkRoot;
@@ -1506,7 +1508,17 @@ export class WorkflowRuntime {
           sandbox: { context: "/context", framework: "/framework" } } },
       files,
     } as ContextInput;
-    return build(input_);
+    const manifest = build(input_);
+    if (input.resume && input.previousContextHash && manifest.generatedHash !== input.previousContextHash
+      && input_.lead?.phase !== undefined && input_.lead.roster.length) {
+      // Legacy attempts did not record phase. Adopt that representation only when
+      // the complete hash matches this same attempt's receipt; all other checks stand.
+      const lead = { ...input_.lead };
+      delete lead.phase;
+      const legacy = recordedContextManifest({ ...input_, lead });
+      if (legacy.generatedHash === input.previousContextHash) return legacy;
+    }
+    return manifest;
   }
 
   /** T039 — release a workspace this runtime owns, whichever path handed it back. */

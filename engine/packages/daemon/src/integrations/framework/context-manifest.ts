@@ -26,7 +26,7 @@ export interface ContextInput {
    * boundary for them to prove, so they are skipped rather than trivially satisfied.
    */
   sameIdentity?: boolean;
-  lead?: { activationId: string; roster: { member: string; role: TeamRole; mailbox: string }[]; instructions: string };
+  lead?: { activationId: string; phase?: "planning" | "delivery"; roster: { member: string; role: TeamRole; mailbox: string }[]; instructions: string };
 }
 export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (ContextFile & { workerPath: string })[]; workerDiscoveryRoots: string[]; generatedHash: string; protocolVersion: string | null; instructionVersions: InstructionVersions }>;
 export interface InstructionVersions { core: string; charter: string }
@@ -268,7 +268,8 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
       throw new Error("Lead run instructions are missing or malformed");
     }
     text(spec.lead.activationId, "activationId");
-    if (!spec.lead.roster.length || new Set(spec.lead.roster.map(m => m.member)).size !== spec.lead.roster.length) throw new Error("Invalid roster");
+    if ((!spec.lead.roster.length && spec.lead.phase !== "planning")
+      || new Set(spec.lead.roster.map(m => m.member)).size !== spec.lead.roster.length) throw new Error("Invalid roster");
     for (const m of spec.lead.roster) { text(m.member, "member"); text(m.mailbox, "mailbox"); if (!spec.binding.roles.includes(m.role)) throw new Error("Invalid roster role"); }
     const content = (kind: ContextFile["kind"]) => readFileSync(spec.files.find(f => f.kind === kind)!.path, "utf8");
     if (content("protocol") !== leadProtocol || canonicalJson(JSON.parse(content("roster"))) !== canonicalJson(spec.lead.roster) || content("run") !== spec.lead.instructions) throw new Error("Stale Lead protocol, roster or run instructions");

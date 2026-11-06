@@ -894,7 +894,8 @@ export function createApp(deps: AppDeps): Hono {
   // same owner credential as the start below, because a team is what a start routes work to.
   app.route("/api/team-control", teamGithubRoutes(github, teamOptions.credentials,
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
-  app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials },
+  app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials, github,
+    ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}) },
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {

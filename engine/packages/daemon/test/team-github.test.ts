@@ -74,6 +74,28 @@ describe("owner GitHub sign-in", () => {
     });
   });
 
+  it("reads only the account identity needed for a scoped initial commit", async () => {
+    writeFileSync(join(directory, "account"), "octocat");
+    expect(await github.account()).toEqual({ login: "octocat", name: "Fixture Owner", email: "123+octocat@users.noreply.github.com" });
+    expect(JSON.parse(readFileSync(join(directory, "token-vars.json"), "utf8"))).toEqual([]);
+  });
+
+  it("rejects project operations when signed out without starting a device flow", async () => {
+    await expect(github.account()).rejects.toMatchObject({ code: "github_not_signed_in" });
+    expect(calls().some(args => args[1] === "login")).toBe(false);
+  });
+
+  it.each([["repo-exists", "github_repo_exists"], ["repo-failure", "github_repo_create_failed"]])(
+    "sanitizes a %s failure without returning process output", async (marker, code) => {
+      writeFileSync(join(directory, "account"), "octocat");
+      writeFileSync(join(directory, marker), "");
+      let error: unknown;
+      try { await github.createPrivateRepository("project", directory, "octocat"); } catch (caught) { error = caught; }
+      expect(error).toMatchObject({ code });
+      expect(String(error)).not.toContain("ghp_fixture");
+      expect(calls()).toContainEqual(["repo", "create", "octocat/project", "--private", "--source", directory, "--remote", "origin"]);
+    });
+
   it("coalesces overlapping starts, parses split output, and settles when gh completes", async () => {
     const [first, second] = await Promise.all([call("POST", "/login"), call("POST", "/login")]);
     const pending = { protocolVersion: "1.0", state: "pending", code: "ABCD-1234", url: "https://github.com/login/device" };
