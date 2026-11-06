@@ -82,6 +82,7 @@ describe("S03 production managed capability selection", () => {
     const expression = source.slice(source.indexOf("{", start), source.indexOf("\n  };", start) + 4);
     const sessionEnv = runInNewContext(`(${expression})`, {
       process: { env: { PATH: f.env.PATH, ...names, UNRELATED_VALUE: "not-forwarded" } },
+      launchPath: f.env.PATH,
       OPENRIG_HOME: f.env.OPENRIG_HOME, openRigPort: "1", openRigHost: "127.0.0.1",
       resolvedActivityHookUrl: "http://127.0.0.1:1", resolvedActivityHookToken: "synthetic-only",
       providerAuthEnv: {}, daemonHome: f.env.HOME, codexHome: path.join(f.root, "codex"),
