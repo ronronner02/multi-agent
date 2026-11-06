@@ -1,0 +1,1 @@
+{"protocolVersion":"1.0","teams":[{"id":"01M6QSM8SRP3701MW33B2NP20K","name":"smalltools","repository":"/home/leo/scratch/u11-acceptance/repos/smalltools","seats":[{"role":"lead","client":"claude-code"},{"role":"implementer","client":"claude-code"},{"role":"implementer","client":"codex"},{"role":"reviewer","client":"claude-code"}]}]}

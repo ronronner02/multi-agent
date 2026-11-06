@@ -1,0 +1,34 @@
+{
+ "tasks": [
+  {
+   "taskId": "task-2",
+   "seat": "impl-1@toolbox",
+   "paths": [
+    "src/chunk.mjs",
+    "src/chunk.test.mjs"
+   ],
+   "dependencies": [],
+   "body": "Implement plan.md task 1 (chunk). Write only src/chunk.mjs and src/chunk.test.mjs, no dependencies, in the style of src/repeat.mjs. export function chunk(items, size): items is an array (arrays only); return an array of consecutive groups of at most size items, in order, where only the last group may be shorter. An empty array returns []. Do not modify the input array. A size that is not a positive integer (0, -1, 1.5, NaN, \"2\") throws RangeError. Tests (node:test + node:assert/strict): exact split, short last group, empty array, size larger than the array, each rejected size above, input unchanged. Check with `node --test` (no argument) from the repo root; do not use or change npm test/package.json (its script fails on Node 24 and is out of scope). Report the node --test pass/fail counts."
+  },
+  {
+   "taskId": "task-3",
+   "seat": "impl-2@toolbox",
+   "paths": [
+    "src/formatBytes.mjs",
+    "src/formatBytes.test.mjs"
+   ],
+   "dependencies": [],
+   "body": "Implement plan.md task 2 (formatBytes). Write only src/formatBytes.mjs and src/formatBytes.test.mjs, no dependencies, in the style of src/repeat.mjs. export function formatBytes(bytes): units B, KiB, MiB, GiB, TiB (factor 1024), TiB is the top unit; use the largest unit whose value is at least 1. State the rounding rule in a comment in the module: round to 1 decimal place, half away from zero, drop a trailing .0 (1536 -> \"1.5 KiB\", 3145728 -> \"3 MiB\"). Plain bytes are whole numbers (512 -> \"512 B\"; fractional bytes are rounded). If rounding reaches 1024 below TiB, move up one unit (1048575 -> \"1 MiB\", not \"1024 KiB\"); values beyond the TiB range stay in TiB (e.g. \"2048 TiB\"). Negative, non-finite (NaN, Infinity) or non-number input throws RangeError. Tests (node:test + node:assert/strict): 0, 512, 1024, 1536, 3 MiB, the round-up-to-next-unit boundary, a TiB value including one beyond 1024 TiB, each rejected input. Check with `node --test` (no argument) from the repo root; do not use or change npm test/package.json (its script fails on Node 24 and is out of scope). Report the node --test pass/fail counts."
+  },
+  {
+   "taskId": "task-4",
+   "seat": "review-1@toolbox",
+   "paths": [],
+   "dependencies": [
+    "task-2",
+    "task-3"
+   ],
+   "body": "Review plan.md task 3. Write no files (this task has no write paths). Read src/chunk.mjs, src/chunk.test.mjs (from task-2) and src/formatBytes.mjs, src/formatBytes.test.mjs (from task-3). Check each helper against its behaviour list in plan.md tasks 1 and 2, that each has no dependencies and stays small, that the formatBytes rounding rule is stated in the module, that no file outside these four changed versus the plan commit, and that `node --test` (no argument) on the combined tree passes: the 3 existing repeat tests plus the new ones, 0 failures. npm test is known broken on Node 24 and out of scope; do not count it. Report pass/fail per check with evidence."
+  }
+ ]
+}

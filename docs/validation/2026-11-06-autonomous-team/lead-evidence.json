@@ -1,0 +1,168 @@
+{
+  "source": "Read-only snapshot of the existing attempt-2 database and git worktrees; no live turn rerun",
+  "capturedAt": "2026-11-06T09:35:54.685697+00:00",
+  "task": {
+    "task_id": "task-1",
+    "state": "pending",
+    "evidence_json": {
+      "base": "commit",
+      "baseIdentifier": "0d938189f730a363b99d2178aeca59ee84d7298c",
+      "changedPaths": [
+        "src/chunk.mjs",
+        "src/chunk.test.mjs",
+        "src/format-bytes.mjs",
+        "src/format-bytes.test.mjs"
+      ],
+      "fileCount": 6,
+      "manifestDigest": "sha256:4d6eeb9c67eef1ac096644de2db64d080522c77de063aa5cd462da6800c60712",
+      "outsideAssignment": [
+        "src/chunk.mjs",
+        "src/chunk.test.mjs",
+        "src/format-bytes.mjs",
+        "src/format-bytes.test.mjs"
+      ],
+      "reasonCode": "evidence_invalid",
+      "reasons": [
+        "4 changed path(s) are not the lead's proposal"
+      ],
+      "validated": false
+    }
+  },
+  "candidateHead": "047f21ef42a652b09f3cb5d1d5681a284ea058bb",
+  "integrationHead": "0d938189f730a363b99d2178aeca59ee84d7298c",
+  "approvedPlanCommit": "3c63c6c46f987cb9271ba90441717827fe61238f",
+  "diffAgainstIntegration": [
+    "D\tsrc/chunk.mjs",
+    "D\tsrc/chunk.test.mjs",
+    "D\tsrc/format-bytes.mjs",
+    "D\tsrc/format-bytes.test.mjs"
+  ],
+  "diffAgainstApprovedPlan": [],
+  "queueTransitions": [
+    {
+      "seq": 117,
+      "createdAt": "2026-11-06 07:45:25",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "daemon",
+        "summary": null
+      }
+    },
+    {
+      "seq": 120,
+      "createdAt": "2026-11-06 07:45:25",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "done",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "60218d24-2f0e-4168-ada5-ce6a2c9a2840",
+        "summary": null
+      }
+    },
+    {
+      "seq": 130,
+      "createdAt": "2026-11-06 07:45:57",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "daemon",
+        "summary": null
+      }
+    },
+    {
+      "seq": 132,
+      "createdAt": "2026-11-06 07:55:03",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "done",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "60218d24-2f0e-4168-ada5-ce6a2c9a2840",
+        "summary": null
+      }
+    },
+    {
+      "seq": 142,
+      "createdAt": "2026-11-06 07:55:38",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "pending",
+        "toState": "done",
+        "closureReason": "no-follow-on",
+        "closureTarget": null,
+        "actorSession": "daemon",
+        "summary": null
+      }
+    },
+    {
+      "seq": 144,
+      "createdAt": "2026-11-06 08:11:39",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "done",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "60218d24-2f0e-4168-ada5-ce6a2c9a2840",
+        "summary": null
+      }
+    },
+    {
+      "seq": 155,
+      "createdAt": "2026-11-06 08:11:59",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "pending",
+        "toState": "failed",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "daemon",
+        "summary": null
+      }
+    },
+    {
+      "seq": 156,
+      "createdAt": "2026-11-06 08:11:59",
+      "payload": {
+        "type": "queue.updated",
+        "qitemId": "qitem-20261106072405-bfe3f246",
+        "fromState": "failed",
+        "toState": "pending",
+        "closureReason": null,
+        "closureTarget": null,
+        "actorSession": "60218d24-2f0e-4168-ada5-ce6a2c9a2840",
+        "summary": null
+      }
+    }
+  ],
+  "lastLaunchFailure": [
+    {
+      "seq": 159,
+      "createdAt": "2026-11-06 08:11:59",
+      "payload": {
+        "type": "node.startup_failed",
+        "rigId": "01M6QSM8SRP3701MW33B2NP20K",
+        "nodeId": "01M6QSM8SR47HVZZKHVRKF0A8X",
+        "error": "Managed attempt attachment: plan-change-required: other-task-scope",
+        "sessionId": "01M6QSM8SSBEKS81VQEBFKTTNB"
+      }
+    }
+  ]
+}

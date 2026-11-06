@@ -1,0 +1,24 @@
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+OpenRig daemon listening on http://127.0.0.1:7833
+OpenRig daemon received SIGTERM; shutting down (budget 10000ms)
+[gateway] gateway subsystem stopped
+[shutdown] clean; phase=complete; budget=10000ms; exit=0
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+OpenRig daemon listening on http://127.0.0.1:7833
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team lead: run=60218d24-2f0e-4168-ada5-ce6a2c9a2840 refused the lead's task list: write path src/chunk.mjs of task-4 overlaps task-2's src/chunk.mjs
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: recovered seat review-1@smalltools for one launch (pane %3 respawned)
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+OpenRig daemon received SIGTERM; shutting down (budget 10000ms)
+[gateway] gateway subsystem stopped
+[shutdown] clean; phase=complete; budget=10000ms; exit=0
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+OpenRig daemon listening on http://127.0.0.1:7833
+team dispatch: recovered seat lead-1@smalltools for one launch (pane %0 respawned)
+team dispatch: seat lead-1@smalltools remains failed; Managed attempt attachment: plan-change-required: other-task-scope

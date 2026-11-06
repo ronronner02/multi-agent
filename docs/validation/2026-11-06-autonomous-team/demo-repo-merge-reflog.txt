@@ -1,0 +1,3 @@
+0d93818 main@{2026-11-06 16:35:53 +0800}: merge team/add-two-independent-helpers-to-src-in-th-60218d24: Fast-forward
+9bb7e42 main@{2026-11-06 14:09:04 +0800}: commit (amend): baseline: a clamp helper with its test
+72f1f5c main@{2026-11-06 14:05:49 +0800}: commit (initial): baseline: a clamp helper with its test

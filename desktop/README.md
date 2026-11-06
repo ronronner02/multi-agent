@@ -1,7 +1,8 @@
 # Multi-Agent for Windows
 
 A native window around the Multi-Agent Web UI. The engine keeps running in WSL2; this app
-starts it, connects to it, and shows the team view. You never type a WSL command.
+starts it, connects to it, and shows your teams. Engine setup and browser pairing are
+handled by the app.
 
 ## What it does
 
@@ -18,6 +19,31 @@ starts it, connects to it, and shows the team view. You never type a WSL command
 
 Closing the window leaves the engine running, because agents may still be working.
 **Engine → Stop engine** stops it.
+
+## Work on your repository
+
+Install and sign in to the clients you want to use inside the selected WSL
+distribution. Seats use those local Claude Code or Codex configurations. Your
+repository must be available in WSL and have at least one commit.
+
+1. Open **Teams → New team**, enter the repository's WSL path, and choose the clients
+   for the lead, implementers and reviewer. No seed script or existing plan is needed.
+2. Choose **New work**. A team with a lead starts in planning; discuss the goal in
+   the lead chat and choose **Approve plan** when it is ready.
+3. Watch the tasks alongside the chat. The daemon records completed turns, starts
+   reviews and commits approved work to the team's integration branch. Open a task
+   for its attempts, review and diff, or **Commits** for the branch history.
+4. Answer escalations in the chat. If the run is blocked, resolve the displayed
+   reason and choose **Resume** in its plate. A budget increase is shown before the
+   action.
+5. Review the integration branch and choose **Merge**. This updates the currently
+   checked-out branch in your repository, which must be clean.
+
+The same actions are available in a WSL shell through `rig team create <repository>`,
+`rig team start "<goal>" --planning`, `rig team chat <run-id>`,
+`rig team approve-plan <run-id>`, `rig team resume <run-id>` and
+`rig team merge <run-id>`. See the [quick start](../README.md) and
+[operations guide](../docs/operations.md) for the complete commands and browser setup.
 
 ## Building
 
@@ -61,5 +87,6 @@ No credential is written to a file by this app, logged, or placed in a URL.
 ## Window chrome
 
 The title bar and the connection footer are this app's own local HTML, in the desktop
-design's charcoal (`#151619`). The page itself is the product's Web UI and is not restyled
-here; a separate slice rebuilds it against the new design.
+design's charcoal (`#151619`). The page uses the same team list, lead chat, task detail
+and integration branch views as the browser. Language, theme and settings are shared
+with the Web UI.

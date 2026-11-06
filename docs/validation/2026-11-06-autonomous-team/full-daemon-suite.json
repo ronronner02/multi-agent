@@ -1,0 +1,96 @@
+{
+  "source": "Single full daemon suite run in a standalone clone with its own npm ci and daemon/CLI build",
+  "baseCommit": "1034f46e43bcf7f75c205766eea68f2446ac7837",
+  "command": "npx vitest run --maxWorkers=2 --testTimeout=60000 --reporter=default --reporter=json --outputFile=<verification>/full-daemon.json",
+  "workingDirectory": "engine/packages/daemon",
+  "environment": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "PATH": "/opt/multi-agent/toolchain/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "TMUX": "unset",
+    "TMUX_PANE": "unset",
+    "stdin": "/dev/null",
+    "launcher": "setsid -w"
+  },
+  "exitCode": 1,
+  "durationSeconds": 654.48,
+  "files": {
+    "source": "Vitest console summary; JSON reporter also labels entirely skipped files as passed",
+    "total": 1023,
+    "passed": 1016,
+    "failed": 5,
+    "skipped": 2
+  },
+  "tests": {
+    "numTotalTests": 16738,
+    "numPassedTests": 16719,
+    "numFailedTests": 9,
+    "numPendingTests": 5,
+    "numTodoTests": 5
+  },
+  "failures": [
+    {
+      "file": "engine/packages/daemon/test/auth-bearer-token.test.ts",
+      "test": "auth-bearer-token middleware (PL-005 Phase B) resolveToIpOrNull returns null for an intentionally-unresolvable hostname (HG-4)",
+      "failureMessages": [
+        "AssertionError: expected '198.18.0.64' to be null\n    at <verification-clone>/engine/packages/daemon/test/auth-bearer-token.test.ts:144:18\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/s03-bound-launch.test.ts",
+      "test": "S03 production managed capability selection forwards only supplied daemon user names through the actual startup channel: {\"USER\":\"fixture-user\",\"LOGNAME\":\"fixture-login\"}",
+      "failureMessages": [
+        "evalmachine.<anonymous>:2\n    PATH: launchPath,\n          ^\n\nReferenceError: launchPath is not defined\n    at evalmachine.<anonymous>:2:11\n    at Script.runInContext (node:vm:149:12)\n    at Script.runInNewContext (node:vm:154:17)\n    at Proxy.runInNewContext (node:vm:310:38)\n    at <verification-clone>/engine/packages/daemon/test/s03-bound-launch.test.ts:83:24\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:863:59\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/s03-bound-launch.test.ts",
+      "test": "S03 production managed capability selection forwards only supplied daemon user names through the actual startup channel: {\"USER\":\"fixture-user\"}",
+      "failureMessages": [
+        "evalmachine.<anonymous>:2\n    PATH: launchPath,\n          ^\n\nReferenceError: launchPath is not defined\n    at evalmachine.<anonymous>:2:11\n    at Script.runInContext (node:vm:149:12)\n    at Script.runInNewContext (node:vm:154:17)\n    at Proxy.runInNewContext (node:vm:310:38)\n    at <verification-clone>/engine/packages/daemon/test/s03-bound-launch.test.ts:83:24\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:863:59\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/s03-bound-launch.test.ts",
+      "test": "S03 production managed capability selection forwards only supplied daemon user names through the actual startup channel: {\"LOGNAME\":\"fixture-login\"}",
+      "failureMessages": [
+        "evalmachine.<anonymous>:2\n    PATH: launchPath,\n          ^\n\nReferenceError: launchPath is not defined\n    at evalmachine.<anonymous>:2:11\n    at Script.runInContext (node:vm:149:12)\n    at Script.runInNewContext (node:vm:154:17)\n    at Proxy.runInNewContext (node:vm:310:38)\n    at <verification-clone>/engine/packages/daemon/test/s03-bound-launch.test.ts:83:24\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:863:59\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/s03-bound-launch.test.ts",
+      "test": "S03 production managed capability selection forwards only supplied daemon user names through the actual startup channel: {}",
+      "failureMessages": [
+        "evalmachine.<anonymous>:2\n    PATH: launchPath,\n          ^\n\nReferenceError: launchPath is not defined\n    at evalmachine.<anonymous>:2:11\n    at Script.runInContext (node:vm:149:12)\n    at Script.runInNewContext (node:vm:154:17)\n    at Proxy.runInNewContext (node:vm:310:38)\n    at <verification-clone>/engine/packages/daemon/test/s03-bound-launch.test.ts:83:24\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:863:59\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/seat-fresh-launch.test.ts",
+      "test": "SeatLifecycleService.launchFresh default-path consent retains context and continues the same occupant once after late acceptance",
+      "failureMessages": [
+        "AssertionError: expected \"spy\" to be called 1 times, but got 2 times\n    at <verification-clone>/engine/packages/daemon/test/seat-fresh-launch.test.ts:214:18\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/startup.test.ts",
+      "test": "createDaemon startup composition passes daemon CLI reachability env and PATH into launched tmux sessions",
+      "failureMessages": [
+        "AssertionError: expected 'tmux new-session -d -s \\'r00-path-env\u2026' to contain '-e \\'PATH=/proof/openrig/bin:/usr/bin\u2026'\n    at <verification-clone>/engine/packages/daemon/test/startup.test.ts:427:29\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/startup.test.ts",
+      "test": "createDaemon startup composition GAP-7 projects the daemon HOME and default absolute CODEX_HOME into the production launch env",
+      "failureMessages": [
+        "AssertionError: expected { \u2026(11) } to match object { \u2026(4) }\n(7 matching properties omitted from actual)\n    at Proxy.<anonymous> (file://<verification-clone>/engine/node_modules/@vitest/expect/dist/index.js:1155:10)\n    at Proxy.<anonymous> (file://<verification-clone>/engine/node_modules/@vitest/expect/dist/index.js:1029:14)\n    at Proxy.methodWrapper (file://<verification-clone>/engine/node_modules/chai/index.js:1686:25)\n    at <verification-clone>/engine/packages/daemon/test/startup.test.ts:455:38\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+      ]
+    },
+    {
+      "file": "engine/packages/daemon/test/stub-runner-determinism.test.ts",
+      "test": "stub-runner FULL determinism pin (PRD \u00a75, R3) produces a byte-identical pane transcript + activity sequence + asset stamps across a double-run",
+      "failureMessages": [
+        "AssertionError: expected '[{\"sessionName\":\"dev-worker@determini\u2026' to be '[{\"sessionName\":\"dev-worker@determini\u2026' // Object.is equality\n    at <verification-clone>/engine/packages/daemon/test/stub-runner-determinism.test.ts:120:39\n    at file://<verification-clone>/engine/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+
+> smalltools@0.1.0 test
+> node --test 'src/*.test.mjs'
+
+✔ chunk puts the remainder in the last chunk (0.714218ms)
+✔ chunk splits an exact multiple evenly (0.090702ms)
+✔ chunk returns one chunk when size exceeds the input (0.069738ms)
+✔ chunk returns no chunks for empty input (0.062201ms)
+✔ chunk does not mutate its input (0.673447ms)
+✔ chunk refuses a size that is not a positive integer (0.371237ms)
+✔ clamp keeps a value inside the range (0.535975ms)
+✔ clamp raises a value below the range (0.115249ms)
+✔ clamp lowers a value above the range (0.076786ms)
+✔ clamp refuses an inverted range (0.282222ms)
+✔ formats zero bytes (1.461125ms)
+✔ formats 1536 bytes (0.149489ms)
+✔ formats one MiB (0.188315ms)
+✔ keeps values below 1 KiB in bytes (1.844818ms)
+✔ chooses a unit from the raw value before rounding (0.152566ms)
+✔ formats a value in GiB (0.170201ms)
+✔ formats a value in TiB (0.409767ms)
+✔ keeps values at and above 1024 TiB in TiB (0.13904ms)
+✔ rejects negative, non-finite, and non-number input (0.446173ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 69.043109

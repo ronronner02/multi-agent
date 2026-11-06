@@ -1,0 +1,80 @@
+{
+  "source": "Archived attempt-1/home/demo.sqlite; read-only export",
+  "run": {
+    "id": "2f82bb8e-37fa-4114-921b-a615e8871148",
+    "state": "approved",
+    "state_reason": null,
+    "phase": "delivery",
+    "retries_used": 0,
+    "review_rounds_used": 0,
+    "integration_branch": null,
+    "created_at": "2026-11-06T00:28:45.117Z",
+    "updated_at": "2026-11-06T00:33:31.910Z"
+  },
+  "tasks": [
+    {
+      "task_id": "task-1",
+      "state": "failed",
+      "evidence_json": {
+        "base": "commit",
+        "baseIdentifier": "acf157dd401f9a6b20dcdddada088c0edb91dd98",
+        "changedPaths": [
+          "lead-proposal.json"
+        ],
+        "fileCount": 7,
+        "manifestDigest": "sha256:76eb65b2215ef423fd432fee6951e9045e59bcbc9ed7a1df74b5b6d55a08f6ac",
+        "outsideAssignment": [],
+        "reasonCode": "evidence_invalid",
+        "reasons": [
+          "The lead's proposal is missing or unreadable"
+        ],
+        "validated": false
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "id": "b63b7227-336c-4450-ae23-0810f4fdc248",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "failure_json": null,
+      "created_at": "2026-11-06T00:28:45.791Z",
+      "updated_at": "2026-11-06T00:29:13.794Z"
+    },
+    {
+      "id": "20910184-cf33-4ef7-b852-faabdec1059f",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "failure_json": null,
+      "created_at": "2026-11-06T00:31:08.819Z",
+      "updated_at": "2026-11-06T00:31:38.823Z"
+    },
+    {
+      "id": "37f00e9d-955f-4146-93c9-1b8499658ee5",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "failure_json": null,
+      "created_at": "2026-11-06T00:32:45.854Z",
+      "updated_at": "2026-11-06T00:33:13.863Z"
+    },
+    {
+      "id": "f4f2b0a1-d476-41f6-bc55-14947fad6be4",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "failure_json": {
+        "ownerAction": "The daemon could not validate the task's candidate evidence; retry the task once.",
+        "reasonCode": "evidence_invalid",
+        "resumeSafe": true,
+        "retryEligible": true
+      },
+      "created_at": "2026-11-06T00:33:14.862Z",
+      "updated_at": "2026-11-06T00:33:31.908Z"
+    }
+  ],
+  "integrationCommits": [],
+  "latestEventSeq": 48
+}
