@@ -101,6 +101,23 @@ describe("MVP slice 2 — the owner starts team work", () => {
       displayName: "First", createdAt: expect.any(String) }]);
   });
 
+  /**
+   * The goal is a paragraph the owner types into a textarea, and it becomes the task's brief.
+   *
+   * Its line breaks are part of it: a goal written as a short list reached the route as a
+   * malformed request, because the shared `text` validator refuses every C0 control character.
+   */
+  it("accepts a goal written in more than one line, and keeps its line breaks", async () => {
+    const goal = "Add two helpers to src/.\n\n1. chunk\n2. formatBytes\n\nLeave npm test green.";
+    const response = await start({ goal });
+    expect(response.status).toBe(201);
+    const receipt = await response.json() as Record<string, string>;
+    const row = db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(receipt.qitemId!) as { body: string };
+    expect(row.body).toBe(goal);
+    // A character no textarea can produce is still refused, so this did not weaken the contract.
+    expect((await start({ goal: "Add a helper\u0007" })).status).toBe(400);
+  });
+
   it("refuses a caller that is not the owner, and creates nothing", async () => {
     // A worker credential is authenticated but is not an owner decision.
     expect((await start({ goal: "Add a health endpoint" }, workerToken)).status).toBe(403);

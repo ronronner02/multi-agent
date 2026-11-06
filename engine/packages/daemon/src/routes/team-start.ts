@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
-  TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, relativePath, text,
+  TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, prose, relativePath, text,
   type ControlActor, type PlanBinding, type TeamRun, type TeamRunSummary,
 } from "../contracts/team-control.js";
 import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
@@ -161,7 +161,9 @@ export function teamStartRoutes(
       return c.json({ code: "current_policy_unavailable", error: "The plan capability a new run is approved against is unavailable." }, 503);
     }
     const v = object(await c.req.json(), "start");
-    const goal = text(v.goal, "goal", 262_144);
+    // The goal is prose: the owner types it into a textarea and it becomes the task's brief, so
+    // its line breaks are its meaning.
+    const goal = prose(v.goal, "goal", 262_144);
     // Every default below is a fact about the rig the owner already runs: its agent node's
     // working directory, the canonical plan name and the source tree. A request that names
     // none of them still lands on something the daemon can verify.
