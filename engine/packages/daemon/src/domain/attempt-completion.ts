@@ -8,6 +8,7 @@ import { classifyAttemptFailure, classificationFor, TERMINAL_TAIL_LINES, type At
 import { agentTurnOutputPaths, readAgentTurnLastMessage, readAgentTurnThreadId } from "./agent-turn.js";
 import { leadCompletionEvidence, taskCompletionEvidence, type CandidateFacts, type TaskCompletionEvidence } from "./task-completion.js";
 import { recordedFindings } from "./review-loop.js";
+import type { AttemptOutcome, AttemptTelemetry } from "./attempt-telemetry.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -39,6 +40,8 @@ export interface AttemptCompletionDependencies {
     & Partial<Pick<SessionRegistry, "updateResumeToken">>;
   /** The direct worker's mutable state root, shared with its turn launcher. */
   turnStateRoot?: string;
+  /** The same attempt store served by the live and historical telemetry routes. */
+  telemetry?: Pick<AttemptTelemetry, "capture" | "recordOutcome">;
   /** The runtime's daemon-owned candidate manifest reader, used for automatic completion evidence. */
   candidateManifestFor?: (runId: string, taskId: string) => CandidateFacts;
   /** The runtime's daemon-owned lead proposal reader, used for automatic lead completion evidence. */
@@ -259,6 +262,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
         // nothing. The evidence is read first, then the pane is released, so the next dispatch
         // of this seat starts its client in a live shell instead of a dead one.
         const failure = await classify(attempt);
+        dependencies.telemetry?.capture(attempt);
         await releaseHeldPane(attempt.identity.paneId);
         const request: ControlRequest<unknown> = {
           protocolVersion: TEAM_CONTROL_VERSION, runId: attempt.runId, actionId: attempt.id,
@@ -274,9 +278,18 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           continue;
         }
         const stopped = governance.getAttempt(attempt.id);
+        let telemetryOutcome: { outcome: AttemptOutcome; retryScheduled: boolean } = {
+          outcome: failure?.reasonCode === "canceled" ? "canceled" : failure === null ? "unknown" : "failed", retryScheduled: false,
+        };
         if (stopped) {
-          try { await recordAutomaticOutcome(stopped); }
+          try { telemetryOutcome = await recordAutomaticOutcome(stopped) ?? telemetryOutcome; }
           catch (error) { log(`team completion: automatic outcome for attempt ${attempt.id} failed: ${error instanceof Error ? error.message : String(error)}`); }
+        }
+        try { dependencies.telemetry?.recordOutcome(attempt.id, telemetryOutcome); }
+        catch (error) {
+          // The capture is already durable and the native stop is recorded. An unavailable
+          // outcome remains unknown; it must not strand the stopped attempt's seat.
+          log(`team completion: telemetry outcome for ${attempt.id} failed: ${error instanceof Error ? error.message : String(error)}`);
         }
         releaseSeat(attempt.qitemId, attempt.provider === "codex" ? attempt.id : undefined);
         // U5 — the turn is over and its seat is free: whoever owns this attempt's conversation
@@ -321,7 +334,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
   };
 
   /** Record the task result the daemon can prove from the stopped turn. */
-  const recordAutomaticOutcome = async (stoppedAttempt: NonNullable<ReturnType<PlanGovernance["getAttempt"]>>): Promise<void> => {
+  const recordAutomaticOutcome = async (stoppedAttempt: NonNullable<ReturnType<PlanGovernance["getAttempt"]>>): Promise<{ outcome: AttemptOutcome; retryScheduled: boolean } | void> => {
     // Older embedders and unit fixtures may compose only the stop observer. Production wires at
     // least one worker-output reader; without one there is no daemon-owned evidence to record.
     if (!dependencies.candidateManifestFor && !dependencies.readLeadProposal && !dependencies.turnStateRoot) return;
@@ -435,6 +448,8 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       log(`team completion: automatic outcome for ${task.assignment.taskId} was not recorded: ${outcome.reason ?? outcome.status}`);
       return;
     }
+    const telemetryOutcome = { outcome: (state === "done" ? "succeeded" : "failed") as AttemptOutcome,
+      retryScheduled: governance.getRun(currentAttempt.runId).retriesUsed > run.retriesUsed };
     // U7 — an approving review is the run's signal to deliver the work it approved: the
     // implementer's own task lands as one commit on the run's branch. A replay finds the commit
     // already recorded, so a repeated sweep commits nothing twice.
@@ -445,6 +460,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
         log(`team completion: integration of ${review.taskId} failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+    return telemetryOutcome;
   };
 
   /** Release a pane the launcher held, so the seat's next client starts in a live shell. */

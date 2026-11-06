@@ -156,6 +156,8 @@ import { teamLeadRoutes } from "./routes/team-lead.js";
 import { teamResultRoutes } from "./routes/team-result.js";
 import { teamMergeRoutes } from "./routes/team-merge.js";
 import { teamCompletionRoutes } from "./routes/team-completion.js";
+import { teamTelemetryRoutes } from "./routes/team-telemetry.js";
+import { AttemptTelemetry } from "./domain/attempt-telemetry.js";
 
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
@@ -176,6 +178,7 @@ export interface AppDeps {
   terminalTakeover?: TerminalTakeoverManager;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
+  attemptTelemetry?: AttemptTelemetry;
   /** KTD19 channel state from the launch control's own verified observations; absent means never adopted. */
   nativeChannelState?: NativeChannelStateReader;
   /** The single mailbox owner. Built by createApp when absent and published here for endpoint registration. */
@@ -885,6 +888,10 @@ export function createApp(deps: AppDeps): Hono {
         return escalation === null ? null : { optionCount: escalation.options.length };
       } } : {}),
   }));
+  app.route("/api/team-control", teamTelemetryRoutes(teamGovernance,
+    deps.attemptTelemetry ?? new AttemptTelemetry(deps.rigRepo.db), {
+      credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,
     legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],

@@ -45,6 +45,16 @@ function recordResult(text) {
   }
 }
 
+// The installed package carries both assets and compiled domain code. Missing telemetry support
+// disables only the sidecars; the native command, pane rendering and failure result remain intact.
+let telemetry = null;
+try {
+  const [{ createTurnTelemetry }, { redactTranscriptContent }] = await Promise.all([
+    import("./agent-turn-telemetry.mjs"), import("../dist/domain/transcript-redaction.js"),
+  ]);
+  telemetry = createTurnTelemetry(resultFile, args, redactTranscriptContent);
+} catch { /* Telemetry is best-effort, including during source-only execution before a build. */ }
+
 const child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"] });
 process.stdin.pipe(child.stdin);
 let observedThread = false;
@@ -53,6 +63,7 @@ let observedThread = false;
 function render(line) {
   let event;
   try { event = JSON.parse(line); } catch { process.stdout.write(line + "\n"); return; }
+  telemetry?.observe(event);
   if (event.type === "thread.started") {
     if (!observedThread) {
       observedThread = true;
@@ -122,6 +133,7 @@ child.stdout.on("data", chunk => {
 
 child.on("close", (code, signal) => {
   if (pending.trim()) render(pending.trim());
+  telemetry?.finish();
   if (signal) {
     // Re-raise, so the pane's exit status says "signalled" exactly as the client's would.
     process.kill(process.pid, signal);
@@ -130,6 +142,7 @@ child.on("close", (code, signal) => {
   process.exit(code ?? 1);
 });
 child.on("error", error => {
+  telemetry?.finish();
   // A client that is not installed is reported the way a shell reports it, because that is what
   // happened and because it is the line the completion sweep's classifier names as a missing
   // executable. A wrapper that printed its own vocabulary would leave the attempt unclassified.

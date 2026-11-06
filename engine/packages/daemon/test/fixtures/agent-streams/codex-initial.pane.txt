@@ -1,0 +1,7 @@
+[turn] Started
+Private reasoning must not enter telemetry.
+[command] /bin/bash -lc "cat input.txt; printf 'initial\\n' > result.txt"
+Small local telemetry fixture.
+[command] exit 0
+initial complete.
+[turn] Completed
