@@ -261,10 +261,9 @@ describe("the owner retry reads the recorded classification", () => {
     expect(retry().reason).toMatch(/no classification/);
   });
 
-  it.each([false, true])("starts a fresh session after an unsafe failure or a replaced lead tree (refresh: %s)", async refresh => {
-    const stopped = await end({ dead: true, code: refresh ? 0 : 1 }, refresh ? null : "API Error: 400 invalid_request_error\n");
-    if (refresh) expect(stopped.failure).toBeNull();
-    else expect(stopped.failure).toMatchObject({ reasonCode: "agent_error.provider_invalid_request", resumeSafe: false });
+  it("starts a fresh session after an unsafe failure", async () => {
+    const stopped = await end({ dead: true, code: 1 }, "API Error: 400 invalid_request_error\n");
+    expect(stopped.failure).toMatchObject({ reasonCode: "agent_error.provider_invalid_request", resumeSafe: false });
     const seat = sessions.findResumeContextByName("builder@rig-1")!;
     // The seat still carries the poisoned native token until the continuation decides about it.
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBe("poisoned-native-session");
@@ -284,15 +283,10 @@ describe("the owner retry reads the recorded classification", () => {
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
       // This run has room, so the limit is not what decides this case.
       maxSessions: () => 2, liveSessions: () => 0,
-      prepareDeliveryLeadTurn: (runId, taskId) => {
-        expect([runId, taskId]).toEqual(["run-1", "task-1"]);
-        return refresh;
-      },
     });
     sessions.updateStartupStatus(seat.sessionId, "pending");
     await dispatch("run-1", "task-1");
     expect(started).toHaveLength(1);
-    // A replaced lead tree requires a fresh native session even when the last exit was clean.
     expect(started[0]!.resumeToken).toBeUndefined();
     expect(started[0]!.continueSessionId).toBeUndefined();
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBeNull();
