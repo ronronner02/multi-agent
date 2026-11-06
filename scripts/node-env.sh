@@ -6,6 +6,11 @@
 # themselves on PATH, so `node` is missing even on a machine where it works in a
 # terminal. This script checks the usual install locations instead.
 
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH"; export PATH ;;
+esac
+
 _ma_node_ok() {
   [ -x "$1/node" ] || return 1
   case "$("$1/node" -p 'process.versions.node.split(".")[0]' 2>/dev/null)" in

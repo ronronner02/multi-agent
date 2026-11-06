@@ -92,6 +92,7 @@ import { policyCommand } from "./commands/policy.js";
 import { startupProofCommand, type StartupProofDeps } from "./commands/startup-proof.js";
 import type { LifecycleDeps } from "./daemon-lifecycle.js";
 import { CLI_VERSION } from "./version.js";
+import { githubCommand } from "./commands/github.js";
 
 export interface ProgramDeps {
   daemonDeps?: LifecycleDeps;
@@ -164,6 +165,7 @@ export interface ProgramDeps {
   healthDeps?: HealthDeps;
   startDeps?: StartDeps;
   teamStartDeps?: TeamStartDeps;
+  githubDeps?: TeamStartDeps;
   configPath?: string;
 }
 
@@ -191,6 +193,7 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
   program.addCommand(tuiCommand());
   // MVP slices 2 and 3 - the owner starts team work from a goal, then reads and applies the result.
   program.addCommand(teamCommand(depsOverride?.teamStartDeps));
+  program.addCommand(githubCommand(depsOverride?.githubDeps));
   program.addCommand(packageCommand(depsOverride?.packageDeps));
   program.addCommand(bootstrapCommand(depsOverride?.bootstrapDeps));
   program.addCommand(requirementsCommand(depsOverride?.requirementsDeps));
