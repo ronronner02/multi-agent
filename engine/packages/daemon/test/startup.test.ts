@@ -424,7 +424,7 @@ describe("createDaemon startup composition", () => {
         .map((call) => call[0])
         .find((cmd) => cmd.includes("tmux new-session"));
       expect(newSessionCmd).toBeDefined();
-      expect(newSessionCmd).toContain("-e 'PATH=/proof/openrig/bin:/usr/bin:/bin'");
+      expect(newSessionCmd).toContain("-e 'PATH=/proof/openrig/bin:/usr/bin:/bin:/opt/multi-agent/toolchain/clients/bin'");
       expect(newSessionCmd).toContain("-e 'OPENRIG_PORT=17433'");
       expect(newSessionCmd).toContain("-e 'OPENRIG_HOST=127.0.0.1'");
 
@@ -455,7 +455,7 @@ describe("createDaemon startup composition", () => {
       expect(result.deps.sessionEnv).toMatchObject({
         HOME: daemonHome,
         CODEX_HOME: path.join(daemonHome, ".codex"),
-        PATH: "/proof/openrig/bin:/usr/bin:/bin",
+        PATH: "/proof/openrig/bin:/usr/bin:/bin:/opt/multi-agent/toolchain/clients/bin",
         OPENAI_API_KEY: "gap7-openai-key",
       });
 
@@ -465,7 +465,7 @@ describe("createDaemon startup composition", () => {
       const command = tmuxExec.mock.calls.map((call) => call[0]).find((line) => line.includes("tmux new-session"));
       expect(command).toContain(`-e 'HOME=${daemonHome}'`);
       expect(command).toContain(`-e 'CODEX_HOME=${path.join(daemonHome, ".codex")}'`);
-      expect(command).toContain("-e 'PATH=/proof/openrig/bin:/usr/bin:/bin'");
+      expect(command).toContain("-e 'PATH=/proof/openrig/bin:/usr/bin:/bin:/opt/multi-agent/toolchain/clients/bin'");
       expect(command).toContain("-e 'OPENAI_API_KEY=gap7-openai-key'");
     } finally {
       result?.db.close();
