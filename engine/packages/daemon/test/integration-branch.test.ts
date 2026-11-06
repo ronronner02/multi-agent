@@ -10,6 +10,9 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest, type PlanBinding } from "../src/contracts/team-control.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
+import { RigRepository } from "../src/domain/rig-repository.js";
+import { SessionRegistry } from "../src/domain/session-registry.js";
+import { composeTaskDispatch } from "../src/domain/task-dispatch.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { composeIntegration, type Integration } from "../src/domain/integration-branch.js";
@@ -337,6 +340,60 @@ describe("U7 integration branch and merge", () => {
     else expect(governance.getAttempt("attempt-lead")?.failure?.reasonCode).toBe("evidence_invalid");
     expect(integration.status(runId).merge.possible).toBe(valid);
   });
+
+  it.each([
+    ["claude-code", "claude_id", "worker1", false, true],
+    ["codex", "codex_id", "worker1", false, true],
+    ["claude-code", "claude_id", "worker1", true, false],
+    ["claude-code", "claude_id", "worker2", false, false],
+  ] as const)("keeps the delivery lead conversation unless its path changes or resume is unsafe: %s, %s, %s, %s",
+    async (client, resumeType, previousWorker, unsafe, continued) => {
+      expect(governance.createTask(request("lead-task", {
+        assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Manage delivery",
+      }), currentBinding()).status).toBe("accepted");
+      if (unsafe) {
+        startAttempt("lead-task", "attempt-lead", "lead");
+        expect(governance.recordUsage(request("attempt-lead", {
+          expectedAttemptVersion: governance.getAttempt("attempt-lead")!.entityVersion, state: "stopped", usage: unusedUsage,
+          failure: classificationFor("agent_error.provider_invalid_request"),
+        })).status).toBe("observed");
+      }
+      mkdirSync(join(assignments, previousWorker), { recursive: true });
+      const previous = runtime.candidateFor(runId, "lead-task", previousWorker);
+      writeFileSync(join(previous.root, "lead-proposal.json"), "[]");
+      const rigRepo = new RigRepository(db), sessions = new SessionRegistry(db);
+      const node = rigRepo.addNode("rig", "lead", { role: "lead", runtime: client, cwd: previous.root });
+      const session = sessions.registerSession(node.id, "lead@rig");
+      sessions.updateResumeToken(session.id, resumeType, "lead-conversation");
+      sessions.updateStartupStatus(session.id, "pending");
+      sessions.updateBinding(node.id, { attachmentType: "tmux", tmuxSession: "lead@rig", tmuxPane: "%1" });
+      stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+      complete("task-a");
+      approveReview("task-a");
+      expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
+      expect(git(previous.root, "rev-parse", "HEAD").trim()).not.toBe(head());
+      const started: Array<{ continueSessionId?: string }> = [];
+      await composeTaskDispatch({
+        rigRepo, sessions, tmux: { listPanes: async () => [{ id: "%1" }] } as never,
+        startupOrchestrator: { startNode: async (input: { continueSessionId?: string }) => {
+          started.push(input);
+          return { ok: true, startupStatus: "ready", continuityOutcome: continued ? "resumed" : "fresh" };
+        } } as never,
+        runtimeAdapters: { [client]: { runtime: client } } as never,
+        maxSessions: () => 4, liveSessions: () => 0,
+        prepareDeliveryLeadTurn: (id, taskId) => runtime.prepareDeliveryLeadTurn(id, taskId),
+      })(runId, "lead-task");
+      const refreshed = runtime.candidateFor(runId, "lead-task");
+      expect(refreshed.root).toBe(join(assignments, "worker1", `${runId}-lead-task`));
+      expect(refreshed.base).toMatchObject({ kind: "commit", commit: head() });
+      expect(git(refreshed.root, "rev-parse", "HEAD").trim()).toBe(head());
+      expect(git(refreshed.root, "status", "--porcelain").trim()).toBe("");
+      expect(sessions.getSessionsForRig("rig").find(row => row.id === session.id)?.resumeToken)
+        .toBe(continued ? "lead-conversation" : null);
+      expect(started).toHaveLength(1);
+      expect(started[0]!.continueSessionId).toBe(continued ? "lead-conversation" : undefined);
+    });
 
   it.each(["pending", "in-progress", "blocked"])("does not offer a merge while the delivery lead is %s", async state => {
     stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");

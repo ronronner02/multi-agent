@@ -929,8 +929,8 @@ export class WorkflowRuntime {
     const candidate = this.candidateFor(runId, taskId);
     mkdirSync(dirname(basePath), { recursive: true });
     writeFileSync(basePath, JSON.stringify(candidate.base), { mode: 0o600 });
-    // The saved native conversation belongs to the tree this turn just replaced.
-    return true;
+    // Native sessions can resume after a tree refresh when their cwd stays the same.
+    return candidate.root !== previous.root;
   }
 
   private leadTurnBasePath(runId: string, taskId: string): string {
