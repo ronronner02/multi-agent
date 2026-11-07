@@ -359,7 +359,7 @@ const DEFAULTS = {
   },
   // MVP — the default runs agents as the current user; no host provisioning is needed.
   workers: { isolation: "none" },
-  team: { leadClient: "claude-code" },
+  team: { leadClient: "claude-code", maxSeats: 6, maxConcurrentAgents: 3 },
 } as const;
 
 export const VALID_KEYS = [
@@ -483,6 +483,8 @@ export const VALID_KEYS = [
   // MVP — worker isolation level; lockstep with the daemon settings-store twin.
   "workers.isolation",
   "team.leadClient",
+  "team.maxSeats",
+  "team.maxConcurrentAgents",
 ] as const;
 
 export type ValidKey = typeof VALID_KEYS[number];
@@ -577,6 +579,8 @@ export const ENV_MAP: Record<ValidKey, { primary: string; legacy?: string }> = {
   "queue.wake_human_rung": { primary: "OPENRIG_QUEUE_WAKE_HUMAN_RUNG" },
   "workers.isolation": { primary: "OPENRIG_WORKERS_ISOLATION" },
   "team.leadClient": { primary: "OPENRIG_TEAM_LEAD_CLIENT" },
+  "team.maxSeats": { primary: "OPENRIG_TEAM_MAX_SEATS" },
+  "team.maxConcurrentAgents": { primary: "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS" },
 };
 
 // Maps dotted-string config keys to the camelCase RiggedConfig path.
@@ -660,6 +664,8 @@ const KEY_TO_PATH: Record<ValidKey, string[]> = {
   "queue.wake_human_rung": ["queue", "wakeHumanRung"],
   "workers.isolation": ["workers", "isolation"],
   "team.leadClient": ["team", "leadClient"],
+  "team.maxSeats": ["team", "maxSeats"],
+  "team.maxConcurrentAgents": ["team", "maxConcurrentAgents"],
 };
 
 function isValidKey(key: string): key is ValidKey {
@@ -981,6 +987,11 @@ const KEY_CONSTRAINTS: Partial<Record<ValidKey, (raw: string, coerced: string | 
   "queue.wake_swap_grace_seconds": positiveIntegerConstraint("queue.wake_swap_grace_seconds"),
   "queue.wake_human_rung": wakeHumanRungConstraint,
   "workers.isolation": workersIsolationConstraint,
+  "team.maxSeats": positiveIntegerConstraint("team.maxSeats"),
+  "team.maxConcurrentAgents": (raw, coerced) => {
+    positiveIntegerConstraint("team.maxConcurrentAgents")(raw, coerced);
+    if (Number(coerced) > 3) throw new Error("Invalid value for team.maxConcurrentAgents: use 1, 2 or 3.");
+  },
   "team.leadClient": raw => {
     if (raw !== "claude-code" && raw !== "codex") throw new Error("Invalid value for team.leadClient: use claude-code or codex.");
   },

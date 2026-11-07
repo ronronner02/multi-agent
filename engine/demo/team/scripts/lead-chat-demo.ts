@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /**
- * U5 — the owner and the lead agree a plan in a chat, and one approval starts the run.
+ * The owner and lead agree a plan and roster; one approval creates the team and starts work.
  *
- * One lead seat, one implementer and one reviewer, all played by a stub client that reads the
+ * A lead-only team and its proposed implementer are played by a stub client that reads the
  * prompt the daemon actually wrote. The stub is the *only* thing standing in for an agent: it
  * writes what a lead's turn would write and its final message to the path the launch recorded,
  * and everything else — the planning binding, the chat rows, the plan commit, the delivery
@@ -19,17 +19,18 @@ import { join } from "node:path";
  *    lead's first turn says what it would build;
  * 2. the owner's message is carried into the lead's next prompt, and the lead's answer is
  *    stored as its reply;
- * 3. approving the plan records it on that branch, rebinds the run to it and flips the run to
- *    delivery;
- * 4. the lead's next activation is the decomposition, told in its prompt that the plan was
- *    approved, and the proposal it writes is what the daemon reads next.
+ * 3. the owner reads the roster digest and approves it with the plan; the daemon creates its
+ *    implementer seat, records the plan and flips the run to delivery;
+ * 4. the lead's next activation decomposes the plan, and the real managed dispatcher launches
+ *    its first task on the newly created seat. HTTP requests use the in-process router, not TCP.
  *
  * Usage, from `engine/` after `npm run build`: npx tsx demo/team/scripts/lead-chat-demo.ts
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "team-lead-chat-"));
+// Keep the fixture root short enough for the per-attempt Unix mailbox socket.
+const scratch = mkdtempSync(join(tmpdir(), "r"));
 const repository = join(scratch, "repository"), ownerToken = "demo-lead-chat-owner";
-process.env.OPENRIG_HOME = join(scratch, "home");
+process.env.OPENRIG_HOME = scratch;
 process.env.TMUX_TMPDIR = join(scratch, "tmux");
 delete process.env.TMUX; delete process.env.TMUX_PANE;
 mkdirSync(join(repository, "src"), { recursive: true });
@@ -51,16 +52,21 @@ import { dirname, join } from "node:path";
 const argv = process.argv.slice(2);
 const arg = (name) => argv[argv.indexOf(name) + 1];
 const prompt = readFileSync(0, "utf8");
-const result = arg("--result"), seat = arg("--seat");
+const result = arg("--result"), seat = arg("--seat"), taskId = arg("--task");
 const plan = join(process.cwd(), "plan.md");
 let reply;
-if (prompt.includes("The owner approved the plan")) {
+if (taskId === "task-2") {
+  mkdirSync("src", { recursive: true });
+  writeFileSync("src/health.ts", "export const health = () => ({ status: 'ok' });\\n");
+  writeFileSync("src/health.test.ts", "import { health } from './health.js';\\n" +
+    "import assert from 'node:assert/strict';\\nassert.equal(health().status, 'ok');\\n");
+  reply = "The health endpoint and its test are ready in my candidate tree.";
+} else if (prompt.includes("The owner approved the plan")) {
   writeFileSync(join(process.cwd(), "lead-proposal.json"), JSON.stringify({ tasks: [
-    { taskId: "task-2", seat, paths: ["src/health.ts"], dependencies: [], body: "Add the health endpoint described in plan.md" },
+    { taskId: "task-2", seat, paths: ["src/health.ts", "src/health.test.ts"], dependencies: [], body: "Add the health endpoint described in plan.md" },
   ] }));
   reply = "The plan is broken into one implementer task; the proposal is in my tree.";
 } else if (prompt.includes("The owner wrote to you in the run's chat")) {
-  const line = prompt.split("\\n").find(entry => entry.trim()) ?? "";
   const added = existsSync(plan);
   writeFileSync(plan, (added ? readFileSync(plan, "utf8") : "# Plan\\n") +
     "2. Cover the endpoint with a test in src/health.test.ts.\\n");
@@ -68,6 +74,7 @@ if (prompt.includes("The owner approved the plan")) {
     prompt.includes("Also cover it with a test") + ").";
 } else {
   writeFileSync(plan, "# Plan\\n\\n1. Add src/health.ts with GET /healthz.\\n");
+  writeFileSync("lead-roster.json", JSON.stringify({ seats: [{ role: "implementer", client: "codex" }] }));
   reply = "I would add a health endpoint in src/health.ts. Do you want it covered by a test?";
 }
 mkdirSync(dirname(result), { recursive: true });
@@ -79,23 +86,8 @@ const turnStateRoot = join(process.env.OPENRIG_HOME!, "state", "workers", "homes
 const promptPath = (attemptId: string) => join(turnStateRoot, "turns", attemptId + ".prompt");
 
 const { createDaemon } = await import("../../../packages/daemon/src/startup.js");
-const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMode: true, workersIsolation: "none",
-  teamControl: { credentials: { ownerToken } },
-  cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
-  directLaunchCommand: facts => {
-    if (!facts.resultPath) throw new Error("the launch recorded no result path");
-    return [process.execPath, client, "--seat", "impl@lead-chat", "--result", facts.resultPath];
-  } });
-async function api(path: string, payload?: unknown) {
-  const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control" + path, {
-    method: payload === undefined ? "GET" : "POST",
-    headers: { Authorization: "Bearer " + ownerToken, "Content-Type": "application/json" },
-    ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
-  }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
-  const result = await response.json();
-  assert(response.ok, JSON.stringify({ path, status: response.status, result }));
-  return result;
-}
+const { createTeam } = await import("../../../packages/daemon/src/domain/team-setup.js");
+let activeDaemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
 function writable(path: string): void {
   chmodSync(path, 0o700);
   for (const entry of readdirSync(path, { withFileTypes: true })) {
@@ -107,17 +99,31 @@ function writable(path: string): void {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let failed = true;
 try {
+  const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMode: true, workersIsolation: "none",
+    teamControl: { credentials: { ownerToken } },
+    cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
+    directLaunchCommand: facts => {
+      if (!facts.resultPath || !facts.taskId) throw new Error("the launch recorded no task or result path");
+      return [process.execPath, client, "--task", facts.taskId, "--seat", "impl-1@lead-chat", "--result", facts.resultPath];
+    } });
+  activeDaemon = daemon;
+  async function api(path: string, payload?: unknown) {
+    const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control" + path, {
+      method: payload === undefined ? "GET" : "POST",
+      headers: { Authorization: "Bearer " + ownerToken, "Content-Type": "application/json" },
+      ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+    }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    const result = await response.json();
+    assert(response.ok, JSON.stringify({ path, status: response.status, result }));
+    return result;
+  }
   const governance = daemon.deps.teamGovernance!;
-  const rig = daemon.deps.rigRepo.createRig("lead-chat", repository);
   // The lead's client is the seat's own. Both clients write their final message to the same
   // per-attempt file, so the chat's reply is stored either way; DEMO_LEAD_CLIENT=codex runs the
   // same conversation with a Codex lead to show it.
   const leadClient = process.env.DEMO_LEAD_CLIENT === "codex" ? "codex" : "claude-code";
-  for (const [id, role, seat] of [["lead", "lead", "lead@lead-chat"], ["impl", "implementer", "impl@lead-chat"],
-    ["reviewer", "reviewer", "reviewer@lead-chat"]] as const) {
-    const node = daemon.deps.rigRepo.addNode(rig.id, id, { role, runtime: id === "lead" ? leadClient : "claude-code", cwd: repository });
-    daemon.deps.sessionRegistry.registerSession(node.id, seat);
-  }
+  const team = createTeam(daemon.db, { repository, name: "lead-chat", leadClient });
+  assert.equal(team.seats.length, 1, "planning starts with only a lead");
   console.log(`The lead runs on ${leadClient}.`);
   const receipts = () => daemon.db.prepare("SELECT json_extract(payload, '$.receipt.attemptId') AS attemptId FROM events WHERE type = 'managed.attempt.receipt' ORDER BY seq")
     .all() as Array<{ attemptId: string }>;
@@ -168,12 +174,22 @@ try {
   assert.deepEqual((await chat()).map(message => message.sender), ["lead", "owner", "lead"]);
   console.log("The conversation so far:", (await chat()).map(message => `${message.sender}: ${message.body}`).join(" | "));
 
-  console.log("==> The owner approves the plan once");
+  console.log("==> The owner reads the roster and approves it with the plan");
+  const approval = (await api(`/runs/${runId}/chat`)).planApproval;
+  assert.equal(approval.error, null);
+  assert.deepEqual(approval.roster.seats, [{ role: "implementer", client: "codex" }]);
+  assert.match(approval.roster.digest, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(daemon.db.prepare("SELECT count(*) AS n FROM nodes WHERE rig_id = ?").get(team.id), { n: 1 });
   const approved = await api(`/runs/${runId}/plan/approve`, { protocolVersion: "1.0", runId, actionId: crypto.randomUUID(),
-    expectedEntityVersion: governance.getRun(runId).entityVersion, idempotencyKey: crypto.randomUUID(), payload: {} });
+    expectedEntityVersion: governance.getRun(runId).entityVersion, idempotencyKey: crypto.randomUUID(),
+    payload: { rosterDigest: approval.roster.digest } });
   assert.equal(approved.status, "accepted");
   const run = governance.getRun(runId);
   assert.equal(run.phase, "delivery");
+  assert.equal(run.reviewerSeat, null);
+  assert.deepEqual(daemon.db.prepare(`SELECT n.role, n.runtime AS client, s.session_name AS member
+    FROM nodes n JOIN sessions s ON s.node_id = n.id WHERE n.rig_id = ? AND n.role = 'implementer'`).all(team.id),
+    [{ role: "implementer", client: "codex", member: "impl-1@lead-chat" }]);
   assert.equal(run.binding.repository.root, worktree, "the plan is recorded in the same daemon-owned worktree");
   const recorded = readFileSync(join(worktree, "plan.md"), "utf8");
   assert.ok(recorded.includes("src/health.test.ts"), "the plan the owner approved is the plan they agreed");
@@ -192,16 +208,32 @@ try {
   assert.deepEqual(proposal.proposal.tasks.map((task: { taskId: string }) => task.taskId), ["task-2"]);
   console.log("The lead proposed:", proposal.proposal.tasks.map((task: { taskId: string; seat: string }) =>
     `${task.taskId} on ${task.seat}`).join(", "));
+  await waitFor("the first task's admission", () => governance.findTask(runId, "task-2") !== null);
+  const taskAttempts = () => daemon.db.prepare(`SELECT t.id, t.role, t.state, q.destination_session AS seat
+    FROM team_attempts t JOIN team_queue_authority a ON a.qitem_id = t.qitem_id
+      JOIN queue_items q ON q.qitem_id = t.qitem_id
+    WHERE t.run_id = ? AND a.task_id = 'task-2' ORDER BY t.rowid`).all(runId) as
+    Array<{ id: string; role: string; state: string; seat: string }>;
+  await waitFor("the implementer's managed launch receipt", () =>
+    taskAttempts().some(attempt => receipts().some(receipt => receipt.attemptId === attempt.id)));
+  const implementer = taskAttempts().find(attempt => receipts().some(receipt => receipt.attemptId === attempt.id))!;
+  assert.equal(implementer.role, "implementer");
+  assert.equal(implementer.seat, "impl-1@lead-chat");
+  await waitFor("the implementer attempt to stop", () => attemptState(implementer.id) === "stopped");
+  const candidate = daemon.deps.workflowRuntime!.candidateFor(runId, "task-2", undefined, { adoptOnly: true });
+  assert.ok(readFileSync(join(candidate.root, "src/health.ts"), "utf8").includes("status: 'ok'"));
+  assert.ok(readFileSync(join(candidate.root, "src/health.test.ts"), "utf8").includes("assert.equal"));
+  console.log(`Managed receipt ${implementer.id}: task-2 ran on ${implementer.seat} and produced its candidate files.`);
   const ownerActions = daemon.db.prepare("SELECT count(*) AS n FROM events WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'chat.message'").get() as { n: number };
   console.log(`Owner actions in this run: ${ownerActions.n} chat message(s) and 1 plan approval.`);
-  console.log("U5 demo passed: the owner chatted, approved once, and the lead decomposed the approved plan.");
+  console.log("Roster demo passed: lead-only planning, digest approval, seat creation and managed task dispatch.");
   failed = false;
 } catch (error) {
   console.error(error);
 } finally {
-  daemon.deps.attemptCompletion?.stop();
+  activeDaemon?.deps.attemptCompletion?.stop();
   try { execFileSync("tmux", ["kill-server"], { stdio: "ignore" }); } catch { /* The private server may already be stopped. */ }
-  await daemon.deps.workflowRuntime?.closeManagedAttempts();
-  daemon.db.close(); writable(scratch); rmSync(scratch, { recursive: true, force: true });
+  await activeDaemon?.deps.workflowRuntime?.closeManagedAttempts();
+  activeDaemon?.db.close(); writable(scratch); rmSync(scratch, { recursive: true, force: true });
   process.exit(failed ? 1 : 0);
 }

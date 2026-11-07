@@ -10,14 +10,15 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
-import { unisolatedPolicyCapability, refreshPlanBinding } from "../src/routes/team-start.js";
+import { bindingForGoal, unisolatedPolicyCapability, refreshPlanBinding } from "../src/routes/team-start.js";
 import { composeLeadTurnEnd, listChatMessages, pendingOwnerMessages } from "../src/domain/lead-chat.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
-import { runSlug } from "../src/domain/plan-branch.js";
+import { commitPlan, ensurePlanWorktree, runSlug } from "../src/domain/plan-branch.js";
 import { ScopeExtensionError } from "../src/domain/scope-extension.js";
 import { LeadWakePolicy } from "../src/domain/lead-wake-policy.js";
 import { createTestApp } from "./helpers/test-app.js";
+import { leadRosterPath, parseLeadRoster } from "../src/domain/lead-roster.js";
 
 /**
  * U5 — the owner and the lead agree a plan in a chat, and one approval starts the run.
@@ -30,6 +31,8 @@ import { createTestApp } from "./helpers/test-app.js";
 const ownerToken = "owner-lead-fixture";
 const workerToken = "worker-lead-fixture";
 const policy = unisolatedPolicyCapability(4);
+const rosterBytes = JSON.stringify({ seats: [{ role: "implementer", client: "claude-code" },
+  { role: "reviewer", client: "claude-code" }] });
 
 function repository(): string {
   const root = mkdtempSync(join(tmpdir(), "u5-lead-chat-"));
@@ -92,6 +95,11 @@ describe("U5 — lead chat and plan approval", () => {
         const path = join(candidates, taskId, planRef);
         return { content: readFileSync(path, "utf8"), hash: "sha256:" + "0".repeat(64) };
       },
+
+      rosterFor: (_runId: string, taskId: string, planRef: string) => {
+        const content = readFileSync(join(candidates, taskId, leadRosterPath(planRef)), "utf8");
+        return { seats: parseLeadRoster(JSON.parse(content)), digest: hashBytes(content) };
+      },
       leadProposalFor: () => { throw new Error("no proposal"); },
       forgetCandidate,
     };
@@ -122,16 +130,16 @@ describe("U5 — lead chat and plan approval", () => {
     // The binding names the daemon-owned worktree, and the owner's checkout still has no plan.md.
     expect(run.binding.repository.root).toBe(join(worktrees, receipt.runId!));
     expect(() => readFileSync(join(directory, "plan.md"))).toThrow();
-    expect(run.binding.writePaths).toEqual(["plan.md"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
     // The owner's scope travels with the run until the approval turns it into the delivery scope.
-    expect(run.binding.readPaths).toEqual(["plan.md", "src"]);
+    expect(run.binding.readPaths).toEqual(["plan.md", "lead-roster.json", "src"]);
     // The plan worktree is a checkout of the daemon's own branch at the run's commit.
     expect(execFileSync("git", ["-C", run.binding.repository.root, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).trim())
       .toBe(runSlug({ runId: receipt.runId!, name: "Add a health endpoint" }));
     expect(readFileSync(join(run.binding.repository.root, "plan.md"), "utf8")).toContain("Goal: Add a health endpoint");
-    // The lead's first task is the conversation, and the plan file is all it may write.
+    // The lead's first task is the conversation and its planning files.
     const task = governance.findTask(receipt.runId!, "task-1")!;
-    expect(task.assignment).toEqual({ taskId: "task-1", role: "lead", paths: ["plan.md"], dependencies: [] });
+    expect(task.assignment).toEqual({ taskId: "task-1", role: "lead", paths: ["plan.md", "lead-roster.json"], dependencies: [] });
     expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
   });
 
@@ -150,7 +158,7 @@ describe("U5 — lead chat and plan approval", () => {
     const run = governance.getRun(receipt.runId!);
     expect(run.binding.repository.root).toBe(join(worktrees, receipt.runId!));
     expect(readFileSync(join(run.binding.repository.root, "plan.md"), "utf8")).toContain("Goal: Add a health endpoint");
-    expect(run.binding.writePaths).toEqual(["plan.md"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
     expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
     const delivery = await startPlanning({ planning: false });
     expect(delivery.status).toBe(400);
@@ -214,11 +222,12 @@ describe("U5 — lead chat and plan approval", () => {
     const planText = "# Plan\n\n1. Add `GET /healthz` in src/health.ts.\n";
     mkdirSync(join(candidates, "task-1"), { recursive: true });
     writeFileSync(join(candidates, "task-1", "plan.md"), planText);
+    writeFileSync(join(candidates, "task-1", "lead-roster.json"), rosterBytes);
     const before = governance.getRun(runId);
     const currentBinding = refreshPlanBinding(before.binding, policy);
     expect(hashBinding(currentBinding)).toBe(before.bindingDigest);
     dispatch.mockClear();
-    const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-1", {}));
+    const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-1", { rosterDigest: hashBytes(rosterBytes) }));
     expect(response.status, await response.clone().text()).toBe(200);
     const body = await response.json() as { status: string; value: { phase: string; planRef: string } };
     expect(body).toMatchObject({ status: "accepted", value: { phase: "delivery", planRef: "plan.md" } });
@@ -231,7 +240,7 @@ describe("U5 — lead chat and plan approval", () => {
     expect(execFileSync("git", ["-C", run.binding.repository.root, "log", "-1", "--format=%s"], { encoding: "utf8" }).trim())
       .toBe("plan: Add a health endpoint");
     // A delivery binding covers the owner's scope and still covers the lead task it admitted.
-    expect(run.binding.writePaths).toEqual(["plan.md", "src"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json", "src"]);
     expect(governance.listApprovals(runId).filter(approval => approval.action === "implementation"
       && approval.bindingDigest === run.bindingDigest).map(approval => approval.state)).toEqual(["approved"]);
     // The lead's tree is re-adopted at the new base, and its next turn is the decomposition.
@@ -242,6 +251,34 @@ describe("U5 — lead chat and plan approval", () => {
     expect((await call(`/runs/${runId}/plan/approve`, command(runId, "approve-2", {}))).status).toBe(409);
   });
 
+
+  it("approves a persisted pre-roster planning run without retrofitting its binding or requiring a roster", async () => {
+    const runId = "legacy-pre-roster";
+    const root = ensurePlanWorktree({ repositoryRoot: directory, worktreeRoot: worktrees, runId, name: "Legacy plan" }).path;
+    commitPlan({ worktree: root, planRef: "plan.md", plan: "# Legacy bootstrap", message: "Legacy planning fixture" });
+    const binding = { ...bindingForGoal({ root, planRef: "plan.md", writePaths: ["plan.md"], policy }),
+      readPaths: ["plan.md", "src"] };
+    const owner = { kind: "owner", sessionId: "owner-control" } as const;
+    const digest = hashBinding(binding);
+    governance.createRun({ id: runId, rigId: "rig", binding, phase: "planning", reviewerSeat: "review@demo" });
+    governance.requestApproval(command(runId, "legacy-approval", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: digest }, targetDigest: digest, expiresAt: "2099-01-01T00:00:00.000Z" }), owner);
+    expect(governance.decideApproval(command(runId, "legacy-approval", { approvalVersion: 1, decision: "approved" }), owner, binding).status)
+      .toBe("accepted");
+    expect(governance.createTask(command(runId, "task-1", {
+      assignment: { taskId: "task-1", role: "lead", paths: ["plan.md"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner-control", destinationSession: "lead@demo",
+      body: "Continue the persisted planning conversation",
+    }), binding).status).toBe("accepted");
+    mkdirSync(join(candidates, "task-1"), { recursive: true });
+    writeFileSync(join(candidates, "task-1", "plan.md"), "# The persisted run's agreed plan");
+    expect(governance.getRun(runId).binding.writePaths).toEqual(["plan.md"]);
+    const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-legacy", {}));
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(governance.getRun(runId)).toMatchObject({ phase: "delivery", reviewerSeat: "review@demo",
+      binding: { writePaths: ["plan.md", "src"] } });
+  });
+
   it("refuses a lead write outside the plan during planning", async () => {
     const receipt = await planningRun();
     const run = governance.getRun(receipt.runId!);
@@ -250,11 +287,11 @@ describe("U5 — lead chat and plan approval", () => {
       changes: [{ path: "src/base.ts", before: Buffer.from("export const base = 1;\n"), after: Buffer.from("export const base = 2;\n") }] });
     expect(stage).toThrow(ScopeExtensionError);
     expect(stage).toThrow(/outside-write-paths/);
-    // The plan itself is the one file the lead may write.
+    // The plan itself remains one of the permitted planning files.
     expect(governance.stageCandidateScope(receipt.runId!, "task-1", { root: candidates,
       candidateDigest: "sha256:" + "2".repeat(64), files: ["plan.md"],
       changes: [{ path: "plan.md", before: null, after: Buffer.from("# Plan\n") }] })).toBeTruthy();
-    expect(run.binding.writePaths).toEqual(["plan.md"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
   });
 
   it("keeps every message and resumes the same conversation after the daemon is recomposed", async () => {

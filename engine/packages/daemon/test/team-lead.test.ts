@@ -11,7 +11,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
-import { leadActivation, leadInstructions, leadRoster, parseLeadProposal, LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "../src/domain/lead-proposal.js";
+import { leadActivation, leadInstructions, planningInstructions, leadRoster, parseLeadProposal, LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "../src/domain/lead-proposal.js";
 import { teamLeadRoutes, PROPOSAL_WINDOW_MS } from "../src/routes/team-lead.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
 import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
@@ -208,6 +208,29 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     if (phase === undefined) expect(activation).not.toHaveProperty("phase");
     else expect(activation).toHaveProperty("phase", phase);
     expect(activation.instructions).toContain(phase === "planning" ? "You are planning with the owner" : "The owner approved the plan");
+  });
+
+  it("shows existing clients only to roster-enabled planning, including inactive but not retired seats", () => {
+    db.prepare("UPDATE nodes SET runtime = 'codex' WHERE id = 'b-node'").run();
+    db.prepare("UPDATE sessions SET status = 'exited' WHERE node_id = 'b-node'").run();
+    db.prepare("UPDATE nodes SET retired_at = '2026-11-06T00:00:00.000Z' WHERE id = 'rev-node'").run();
+    const input = { rigId: "rig", roles: binding.roles, seat: "lead@rig", goal: "Plan the work", activationId: "planning",
+      phase: "planning" as const, planRef: "plan.md" };
+    const instructions = leadActivation(db, { ...input, buildRoster: true }).instructions;
+    expect(instructions).toContain(JSON.stringify([
+      { role: "implementer", client: "claude-code", count: 1 },
+      { role: "implementer", client: "codex", count: 1 },
+    ]));
+    expect(instructions).not.toContain("reviewer@rig");
+    expect(instructions).not.toContain("lead@rig");
+    expect(instructions.length).toBeLessThanOrEqual(8_192);
+    for (const buildRoster of [false, undefined]) {
+      expect(leadActivation(db, { ...input, buildRoster }).instructions).toBe(planningInstructions("Plan the work", "plan.md"));
+    }
+    for (const phase of ["delivery", undefined] as const) {
+      expect(leadActivation(db, { ...input, phase, buildRoster: true }).instructions)
+        .toBe(leadActivation(db, { ...input, phase, buildRoster: false }).instructions);
+    }
   });
 
   it("replays an identical decision instead of admitting a second batch", async () => {

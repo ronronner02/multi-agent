@@ -82,7 +82,7 @@ export function teamCompletionRoutes(governance: PlanGovernance, options: {
     // management turn that wrote neither is still the answer the daemon asked for.
     const delivery = governance.getRun(runId).phase === "delivery";
     evidence = task.assignment.role === "lead"
-        ? leadCompletionEvidence({ manifest, proposal: options.readLeadProposal ? proposalFor(runId, taskId) : null,
+        ? leadCompletionEvidence({ manifest, planRef: governance.getRun(runId).binding.planRef, proposal: options.readLeadProposal ? proposalFor(runId, taskId) : null,
             ...(options.readLeadEscalation && delivery ? { escalation: escalationFor(runId, taskId), managementTurn: true } : {}),
             ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }) })
         : taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths,

@@ -1,5 +1,6 @@
 import type { TeamRole, TeamTaskAuthority } from "../contracts/team-control.js";
 import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
+import { leadRosterPath } from "./lead-roster.js";
 
 /**
  * MVP — the completion path's evidence half.
@@ -122,6 +123,7 @@ export function leadCompletionEvidence(input: {
    * its two files in a shape the boundary refuses.
    */
   managementTurn?: boolean;
+  planRef?: string;
   unavailableReason?: string;
 }): TaskCompletionEvidence {
   const empty: TaskCompletionEvidence = { validated: false, manifestDigest: null, base: null, baseIdentifier: null,
@@ -139,7 +141,7 @@ export function leadCompletionEvidence(input: {
   // reported as outside the assignment so the owner sees what moved, exactly as an
   // implementer's is.
   const outside = paths.filter(path => path !== LEAD_PROPOSAL_PATH
-    && !(input.managementTurn === true && path === LEAD_ESCALATION_PATH));
+    && !(input.managementTurn === true && (path === LEAD_ESCALATION_PATH || path === leadRosterPath(input.planRef ?? "plan.md"))));
   if (outside.length) reasons.push(`${outside.length} changed path(s) are not the lead's proposal`);
   if (input.managementTurn === true) {
     // A management turn delivers whatever it was asked for. A proposal the boundary refuses is

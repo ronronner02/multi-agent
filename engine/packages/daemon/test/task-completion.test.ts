@@ -390,6 +390,20 @@ describe("the completion path's pure rules", () => {
     expect(leadCompletionEvidence({ manifest: manifest(escalation), proposal: null }).validated).toBe(false);
   });
 
+  it.each([
+    ["docs/plans/lead-roster.json", true, true],
+    ["lead-roster.json", true, false],
+    ["other/lead-roster.json", true, false],
+    ["docs/plans/lead-roster.json.bak", true, false],
+    ["docs/plans/lead-roster.json", false, false],
+  ] as const)("bounds the management roster path %s (management %s)", (path, managementTurn, validated) => {
+    const patch = ["diff --git a/" + path + " b/" + path, "+++ b/" + path].join("\n");
+    const result = leadCompletionEvidence({ manifest: manifest(patch), proposal: { taskCount: 1 },
+      managementTurn, planRef: "docs/plans/plan.md" });
+    expect(result.validated).toBe(validated);
+    expect(result.outsideAssignment).toEqual(validated ? [] : [path]);
+  });
+
   it("treats a process whose start time moved as a different process, and an unreadable one as alive", () => {
     // The test's own process is alive under its recorded start; a moved start time is not it.
     const self = process.pid, stat = execFileSync("cat", ["/proc/" + self + "/stat"], { encoding: "utf8" });

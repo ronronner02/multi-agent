@@ -10,7 +10,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode } from "../src/domain/plan-governance.js";
-import { createTeam } from "../src/domain/team-setup.js";
+import { addTeamSeats, createTeam } from "../src/domain/team-setup.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
 import { createTestApp } from "./helpers/test-app.js";
 
@@ -184,6 +184,21 @@ describe("U3 — the owner creates a team", () => {
     expect(governance.findTask(receipt.runId!, "task-1")!.assignment.role).toBe("lead");
     // The repository the run approves is the team's own, not a guess: nothing was passed here.
     expect(governance.getRun(receipt.runId!).binding.repository.root).toBe(created.team.repository);
+  });
+
+  it("selects the active replacement reviewer for a future run and retains retired history", async () => {
+    const created = await (await create({ repository: repository(directory), seats: defaultSeats })).json() as Created;
+    db.prepare("UPDATE nodes SET retired_at = CURRENT_TIMESTAMP WHERE rig_id = ? AND role = 'reviewer'").run(created.team.id);
+    expect(addTeamSeats(db, created.team.id, [{ role: "reviewer", client: "codex" }])[0]!.member).toBe("review-2@project");
+    const response = await start({ goal: "Add a health endpoint", rig: "project" });
+    expect(response.status).toBe(201);
+    const receipt = await response.json() as Record<string, string>;
+    expect(receipt.reviewerSeat).toBe("review-2@project");
+    expect(governance.getRun(receipt.runId!).reviewerSeat).toBe("review-2@project");
+    expect(seatsOf(created.team.id).filter(seat => seat.role === "reviewer").map(seat => seat.seat))
+      .toEqual(["review-1@project", "review-2@project"]);
+    const listed = await (await call("/api/team-control/teams")).json() as { teams: Array<{ seats: Array<{ role: string; client: string }> }> };
+    expect(listed.teams[0]!.seats.filter(seat => seat.role === "reviewer")).toEqual([{ role: "reviewer", client: "codex" }]);
   });
 
   it("keeps the pre-team start on a rig with no lead or reviewer role", async () => {

@@ -26,6 +26,7 @@ const DEFAULT_EXTRA_INSTRUCTION_FILE_SUFFIX = "compaction/post-compact-extra.md"
 function clearEnv(): () => void {
   const keys = [
     "OPENRIG_PORT", "OPENRIG_HOST", "OPENRIG_DB", "OPENRIG_TEAM_LEAD_CLIENT",
+    "OPENRIG_TEAM_MAX_SEATS", "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS",
     "OPENRIG_TRANSCRIPTS_ENABLED", "OPENRIG_TRANSCRIPTS_PATH",
     "OPENRIG_TRANSCRIPTS_LINES", "OPENRIG_TRANSCRIPTS_POLL_INTERVAL_SECONDS",
     "OPENRIG_WORKSPACE_ROOT", "OPENRIG_WORKSPACE_SLICES_ROOT",
@@ -86,6 +87,36 @@ describe("SettingsStore (User Settings v0)", () => {
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
     restoreEnv();
+  });
+
+  it.each([
+    ["team.maxSeats", 6, ["1", "8"], "OPENRIG_TEAM_MAX_SEATS", "9"],
+    ["team.maxConcurrentAgents", 3, ["1", "2", "3"], "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS", "2"],
+  ] as const)("persists and bounds %s without replacing other settings", (key, defaultValue, valid, env, override) => {
+    const store = new SettingsStore(configPath);
+    expect(store.resolveOne(key)).toMatchObject({ value: defaultValue, source: "default" });
+    store.set("team.leadClient", "codex");
+    store.set("daemon.port", "4999");
+    for (const value of valid) {
+      store.set(key, value);
+      expect(new SettingsStore(configPath).resolveOne(key)).toMatchObject({ value: Number(value), source: "file" });
+    }
+    const saved = readFileSync(configPath, "utf8");
+    const invalid = ["0", "-1", "1.5", "2x", ...(key === "team.maxConcurrentAgents" ? ["4"] : [])];
+    for (const value of invalid) {
+      expect(() => store.set(key, value)).toThrow();
+      expect(readFileSync(configPath, "utf8")).toBe(saved);
+    }
+    expect(store.resolveOne("team.leadClient").value).toBe("codex");
+    expect(store.resolveOne("daemon.port").value).toBe(4999);
+    process.env[env] = override;
+    expect(store.resolveOne(key)).toMatchObject({ value: Number(override), source: "env" });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      process.env[env] = "0";
+      expect(store.resolveOne(key)).toMatchObject({ value: Number(valid.at(-1)), source: "file" });
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining("env override for " + key + " rejected"));
+    } finally { stderr.mockRestore(); }
   });
 
   it("selects the configured lead client without accepting unsupported clients", () => {
@@ -186,6 +217,8 @@ describe("SettingsStore (User Settings v0)", () => {
       // MVP — worker isolation level (none | hardened).
       "workers.isolation",
       "team.leadClient",
+      "team.maxSeats",
+      "team.maxConcurrentAgents",
     ]);
   });
 
