@@ -385,6 +385,7 @@ export interface TeamSeatView {
    */
   index: number | null;
   displayName: string;
+  retired: boolean;
 }
 
 export const TEAM_TASK_STAGES = ["owner/decision", "owner/blocked", "lead/report", "queued", "running", "review", "done"] as const;
@@ -445,6 +446,13 @@ export interface TeamReviewView {
   acceptance: { manifestDigest: string; passed: boolean; reason: string; recordedAt: string } | null;
 }
 
+export interface TeamReviewFinding {
+  id: string;
+  severity: "P0" | "P1" | "P2" | "P3";
+  file: string;
+  summary: string;
+}
+
 /** One review round the run recorded, as a client renders it. */
 export interface TeamReviewVerdict {
   round: number;
@@ -453,6 +461,7 @@ export interface TeamReviewVerdict {
   candidateDigest: string | null;
   /** How many findings the round recorded, and how many of them were P0/P1. */
   findings: number;
+  findingRecords: TeamReviewFinding[];
   blocking: number;
   recordedAt: string;
 }

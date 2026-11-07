@@ -24,9 +24,9 @@ export const run: TeamRun = {
 };
 
 export const seats: TeamSeatView[] = [
-  { seat: "lead@rig", role: "lead", client: "claude-code", index: null, displayName: "Lead · Claude Code" },
-  { seat: "impl@rig", role: "implementer", client: "codex", index: null, displayName: "Implementer · Codex" },
-  { seat: "review@rig", role: "reviewer", client: "claude-code", index: null, displayName: "Reviewer · Claude Code" },
+  { seat: "lead@rig", role: "lead", retired: false, client: "claude-code", index: null, displayName: "Lead · Claude Code" },
+  { seat: "impl@rig", role: "implementer", retired: false, client: "codex", index: null, displayName: "Implementer · Codex" },
+  { seat: "review@rig", role: "reviewer", retired: false, client: "claude-code", index: null, displayName: "Reviewer · Claude Code" },
 ];
 
 export function task(overrides: Partial<TeamReviewView> = {}): TeamReviewView {

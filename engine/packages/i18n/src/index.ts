@@ -31,6 +31,8 @@ export const MESSAGE_PARAMETERS = {
   // C2's review-round line: a blocking finding count, so it is declared here like every
   // other key that interpolates.
   "reviews.blockingFindings": ["count"],
+  "reviews.roundLabel": ["round"],
+  "reviews.chatContext": ["task"],
   // MVP — the completion panel names the review task a completion created and the task a
   // review reopened, so both carry the task id they name.
   "completion.reviewCreated": ["taskId"],

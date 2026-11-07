@@ -210,11 +210,11 @@ describe("display names", () => {
 
       // Every seat is named from its role and client; the Codex implementers are numbered.
       expect(read.seats).toEqual([
-        { seat: "impl.a@demo", role: "implementer", client: "claude-code", index: null, displayName: "Implementer · Claude Code" },
-        { seat: "impl.b@demo", role: "implementer", client: "codex", index: 1, displayName: "Implementer · Codex 1" },
-        { seat: "impl.c@demo", role: "implementer", client: "codex", index: 2, displayName: "Implementer · Codex 2" },
-        { seat: "lead@demo", role: "lead", client: "claude-code", index: null, displayName: "Lead · Claude Code" },
-        { seat: "reviewer@demo", role: "reviewer", client: "codex", index: null, displayName: "Reviewer · Codex" },
+        { seat: "impl.a@demo", role: "implementer", retired: false, client: "claude-code", index: null, displayName: "Implementer · Claude Code" },
+        { seat: "impl.b@demo", role: "implementer", retired: false, client: "codex", index: 1, displayName: "Implementer · Codex 1" },
+        { seat: "impl.c@demo", role: "implementer", retired: false, client: "codex", index: 2, displayName: "Implementer · Codex 2" },
+        { seat: "lead@demo", role: "lead", retired: false, client: "claude-code", index: null, displayName: "Lead · Claude Code" },
+        { seat: "reviewer@demo", role: "reviewer", retired: false, client: "codex", index: null, displayName: "Reviewer · Codex" },
       ]);
     });
 

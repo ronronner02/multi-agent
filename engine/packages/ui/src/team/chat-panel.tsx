@@ -21,13 +21,16 @@ export function pendingOwnerDecisions(read: TeamOwnerRead | undefined, chat: Cha
   return decisions;
 }
 
-export function ChatPanel({ open, onOpenChange, opener, read, runId, chat }: {
+export function ChatPanel({ open, onOpenChange, opener, read, runId, chat, draftContext }: {
   open: boolean; onOpenChange: (open: boolean) => void; opener: RefObject<HTMLButtonElement | null>;
-  read?: TeamOwnerRead; runId: string; chat?: ChatState;
+  read?: TeamOwnerRead; runId: string; chat?: ChatState; draftContext?: { body: string };
 }) {
   const { t } = useTranslation();
   // The shell keeps this component mounted; closing its dialog or changing sections keeps the draft.
   const [draft, setDraft] = useState("");
+  useEffect(() => {
+    if (draftContext) setDraft(current => current ? current + "\n\n" + draftContext.body : draftContext.body);
+  }, [draftContext]);
   const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 760px)");

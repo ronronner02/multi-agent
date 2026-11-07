@@ -39,7 +39,10 @@ describe("Tasks board and drawer", () => {
       workerReport: { status: "needs-decision", question: "Which behavior is intended?", evidence: "Use the supplied trace.",
         truncated: false, attemptId: "attempt-private-id", resolution: null },
       verdicts: [{ round: 1, reviewerTaskId: "review-private-id", verdict: "changes-required", candidateDigest: null,
-        findings: 2, blocking: 1, recordedAt: "2026-11-01T00:00:00Z" }] });
+        findings: 2, findingRecords: [
+          { id: "finding-1", severity: "P1", file: "src/filter.ts", summary: "An empty selection hides every result." },
+          { id: "finding-2", severity: "P3", file: "src/filter.ts", summary: "Clarify the label." },
+        ], blocking: 1, recordedAt: "2026-11-01T00:00:00Z" }] });
     const snapshot = read({ tasks: [primary, task({ taskId: "dependency", displayName: "Dependency task" })],
       attempts: [attempt({ state: "running" })], logs: [{ source: "task-outcome", streamItemId: null,
         ts: "2026-11-01T00:00:00Z", runId: "run-private-id", taskId: primary.taskId, attemptId: null,

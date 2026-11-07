@@ -149,6 +149,9 @@ export class TeamReadModel {
         // task back or approved it. A run that never used the loop publishes `[]`.
         verdicts: state.verdicts.map(verdict => ({ round: verdict.round, reviewerTaskId: verdict.reviewerTaskId,
           verdict: verdict.verdict, candidateDigest: verdict.candidateDigest, findings: verdict.findings.length,
+          findingRecords: verdict.findings.map(finding => ({ id: finding.id, severity: finding.severity,
+            file: boundedLogBody(finding.file).body,
+            summary: boundedLogBody(finding.scenario ?? finding.category).body })),
           blocking: verdict.findings.filter(finding => finding.severity === "P0" || finding.severity === "P1").length,
           recordedAt: verdict.recordedAt })),
         // A review record exists once at least one round was recorded; until then
@@ -240,13 +243,13 @@ export class TeamReadModel {
    * the number, so two implementers on Codex stay distinct — and a unique pair carries none.
    */
   private seats(rigId: string): TeamSeatView[] {
-    const rows = this.deps.db.prepare(`SELECT n.role AS role, n.runtime AS runtime, s.session_name AS seat
+    const rows = this.deps.db.prepare(`SELECT n.role AS role, n.runtime AS runtime, n.retired_at AS retiredAt, s.session_name AS seat
       FROM nodes n JOIN sessions s ON s.node_id = n.id
       WHERE n.rig_id = ? AND n.role IN ('lead', 'implementer', 'reviewer')
         AND n.runtime IS NOT NULL AND n.runtime <> 'terminal'
         AND s.id = (SELECT latest.id FROM sessions latest WHERE latest.node_id = n.id
           ORDER BY latest.created_at DESC, latest.id DESC LIMIT 1)
-      ORDER BY n.logical_id`).all(rigId) as Array<{ role: TeamSeatView["role"]; runtime: string; seat: string }>;
+      ORDER BY n.logical_id`).all(rigId) as Array<{ role: TeamSeatView["role"]; runtime: string; retiredAt: string | null; seat: string }>;
     const members = new Map<string, number>();
     for (const row of rows) {
       const key = `${row.role}\u0000${row.runtime}`;
@@ -258,7 +261,7 @@ export class TeamReadModel {
       const position = (ordinal.get(key) ?? 0) + 1;
       ordinal.set(key, position);
       const index = (members.get(key) ?? 0) > 1 ? position : null;
-      return { seat: row.seat, role: row.role, client: row.runtime, index,
+      return { seat: row.seat, role: row.role, client: row.runtime, index, retired: row.retiredAt !== null,
         displayName: seatName({ role: row.role, client: row.runtime, index }) };
     });
   }

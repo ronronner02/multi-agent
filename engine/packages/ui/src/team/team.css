@@ -757,3 +757,64 @@ html[data-desktop="true"] .team-shell :is(.sheet, .ui-chat-panel, .ui-mobile-sid
   .team-shell .ui-active-list .ui-task-progress { grid-column: 1 / -1; }
   .team-shell .ui-drawer-body { padding: 16px; }
 }
+
+/* --- command-center Workspace and Reviews ------------------------------- */
+.team-shell .ui-layout-switch, .team-shell .ui-detail-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); }
+.team-shell .ui-layout-switch button, .team-shell .ui-detail-tabs button { min-height: 32px; padding: 4px 16px; border-radius: var(--ui-radius); color: var(--ui-muted); font-size: 12px; }
+.team-shell .ui-layout-switch [aria-pressed="true"], .team-shell .ui-detail-tabs [aria-pressed="true"] { background: var(--ui-selection); color: var(--ui-text); }
+.team-shell .ui-agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(304px, 100%), 1fr)); gap: 24px; align-items: start; }
+.team-shell .ui-agent-card { display: grid; gap: 16px; }
+.team-shell .ui-agent-card[data-retired="true"] { border-style: dashed; }
+.team-shell .ui-agent-select, .team-shell .ui-seat-choice, .team-shell .ui-agent-detail-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; text-align: left; }
+.team-shell .ui-agent-select { margin: -8px; padding: 8px; border-radius: var(--ui-radius); }
+.team-shell .ui-agent-select[aria-pressed="true"] { background: var(--ui-selection); }
+.team-shell .ui-agent-select strong, .team-shell .ui-seat-choice strong, .team-shell .ui-agent-detail-head strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.team-shell .ui-agent-task { grid-column: 1 / -1; margin: 0; color: var(--ui-muted); font-size: 12px; overflow-wrap: anywhere; }
+.team-shell .ui-agent-facts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; margin: 0; }
+.team-shell .ui-agent-facts dt { color: var(--ui-muted); font-size: 11px; }
+.team-shell .ui-agent-facts dd { margin: 4px 0 0; font-size: 12px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.team-shell .ui-agent-facts small { display: block; color: var(--ui-muted); }
+.team-shell .ui-tool-calls { list-style: none; margin: 0; padding: 0; }
+.team-shell .ui-tool-call { display: grid; grid-template-columns: 16px minmax(0, 1fr) 48px; gap: 8px; padding: 12px 0; border-top: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-tool-call svg { width: 14px; height: 14px; margin-top: 2px; color: var(--ui-muted); }
+.team-shell .ui-tool-call[data-status="running"] svg { color: var(--ui-accent); }
+.team-shell .ui-tool-call[data-status="succeeded"] svg { color: var(--ui-ok); }
+.team-shell .ui-tool-call[data-status="failed"] svg { color: var(--ui-error); }
+.team-shell .ui-tool-call strong { font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.team-shell .ui-tool-call p { margin: 4px 0 0; color: var(--ui-muted); font: 11px/1.6 var(--font-mono); overflow-wrap: anywhere; }
+.team-shell .ui-tool-call time { color: var(--ui-muted); font-size: 11px; text-align: right; }
+.team-shell .ui-agent-card > .ui-muted { margin: 0; font-size: 12px; }
+.team-shell .ui-workspace-split { display: grid; grid-template-columns: minmax(248px, 1fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+.team-shell .ui-seat-list { display: grid; gap: 16px; }
+.team-shell .ui-seat-choice { width: 100%; padding: 16px; }
+.team-shell .ui-seat-choice[aria-pressed="true"] { border-color: var(--ui-accent); }
+.team-shell .ui-agent-detail { display: grid; gap: 24px; }
+.team-shell .ui-detail-tabs { justify-self: start; }
+.team-shell .ui-detail-content { min-width: 0; }
+.team-shell .ui-detail-content > p { margin: 0; }
+.team-shell .ui-agent-output { max-height: 360px; overflow: auto; }
+.team-shell .ui-focus-select, .team-shell .ui-review-select { display: grid; grid-template-columns: auto minmax(0, 320px); align-items: center; justify-content: start; gap: 16px; font-size: 12px; color: var(--ui-muted); }
+.team-shell .ui-focus-select select, .team-shell .ui-review-select select { min-width: 0; min-height: 36px; padding: 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); color: var(--ui-text); background: var(--ui-surface); }
+.team-shell .ui-reviews-body { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(288px, 1fr); gap: 24px; align-items: start; }
+.team-shell .ui-reviews-inspector { display: grid; gap: 24px; min-width: 0; }
+.team-shell .ui-review-round { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--ui-muted); }
+.team-shell .ui-findings, .team-shell .ui-gates { list-style: none; margin: 0; padding: 0; }
+.team-shell .ui-findings li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px; padding: 16px 0; border-top: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-finding-severity { font-size: 11px; color: var(--ui-muted); }
+.team-shell .ui-finding-severity[data-severity="P0"], .team-shell .ui-finding-severity[data-severity="P1"] { color: var(--ui-error); }
+.team-shell .ui-findings code { font: 11px/1.6 var(--font-mono); overflow-wrap: anywhere; }
+.team-shell .ui-findings p { margin: 8px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.team-shell .ui-gates li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; padding: 12px 0; font-size: 12px; border-top: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-gates li > span:last-child { color: var(--ui-muted); }
+.team-shell .ui-gates [data-state="passed"] .ui-dot { background: var(--ui-ok); }
+.team-shell .ui-gates [data-state="waiting"] .ui-dot { background: var(--ui-warn); }
+@media (max-width: 960px) {
+  .team-shell .ui-reviews-body { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-reviews-inspector { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .team-shell .ui-agent-grid, .team-shell .ui-workspace-split, .team-shell .ui-reviews-inspector { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .team-shell .ui-agent-detail, .team-shell .ui-reviews-body { gap: 16px; }
+  .team-shell .ui-layout-switch button, .team-shell .ui-detail-tabs button { padding-inline: 12px; }
+  .team-shell .ui-focus-select, .team-shell .ui-review-select { grid-template-columns: auto minmax(0, 1fr); }
+}
