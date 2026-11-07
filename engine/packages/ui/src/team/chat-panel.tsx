@@ -12,6 +12,7 @@ type OwnerDecision = { kind: "plan" } | { kind: "resume" } | { kind: "message"; 
 /** The badge and the visible decision rows consume this same list. */
 export function pendingOwnerDecisions(read: TeamOwnerRead | undefined, chat: ChatState | undefined): OwnerDecision[] {
   const decisions: OwnerDecision[] = [];
+  if (read?.run.state === "canceled" || read?.run.state === "cancel_requested") return decisions;
   if (read?.run.phase === "planning") decisions.push({ kind: "plan" });
   if (read?.run.state === "blocked") decisions.push({ kind: "resume" });
   for (const message of chat?.available ? chat.messages : []) {
@@ -167,7 +168,7 @@ function PlanPlate({ read, runId, entityVersion }: { read?: TeamOwnerRead; runId
  * budget, so the same click raises it by the amount the run already had, and the plate states
  * the amount before it is taken.
  */
-function ResumePlate({ read }: { read: TeamOwnerRead }) {
+export function ResumePlate({ read }: { read: TeamOwnerRead }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);

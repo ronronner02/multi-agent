@@ -13,9 +13,12 @@ import type { EventBus } from "./domain/event-bus.js";
 import { foldReviewState, type Entry } from "./domain/review-evidence.js";
 import { ordinalTaskName, reviewName, seatName, taskName } from "./domain/display-names.js";
 import { reviewRoundFor } from "./domain/review-loop.js";
+import { teamTaskStage } from "./domain/team-task-stage.js";
+import type { TaskReport } from "./domain/task-report.js";
 
 /** C2 — the shape a review round's durable verdict carries, for a client that renders it. */
 export type { ReviewFinding, ReviewVerdictRecord } from "./domain/review-evidence.js";
+export type { AttemptActivity, ToolActivityRecord, TurnUsage } from "./domain/attempt-telemetry.js";
 
 /**
  * T052 — the managed owner read projections.
@@ -90,17 +93,50 @@ export class TeamReadModel {
     const rows = this.deps.readTaskRows(runId);
     const identities = new Map(rows.map((row) => [row.qitemId, this.identity(row.qitemId)]));
     const names = this.taskNames(rows, identities);
+    const run = this.deps.governance.getRun(runId);
+    const actionable = run.state !== "canceled" && run.state !== "cancel_requested";
+    const ownerDecision = actionable && (run.phase === "planning" || this.deps.governance.chatDecision(runId) !== null);
     return rows.map((row) => {
       const state = foldReviewState(row.taskId, this.reviewEntries(runId, row.taskId));
       const criteria = this.criteria(row.qitemId, state.currentManifestDigest);
       const identity = identities.get(row.qitemId)!;
       // U9 — built from these same rows above, so every task has a name.
       const name = names.get(row.taskId)!;
+      const evidence = this.deps.governance.getTask(row.qitemId)?.evidence;
+      const report = evidence?.taskReport as unknown as TaskReport | undefined;
+      const reportBody = report ? boundedLogBody(report.evidence) : null;
+      const resolution = evidence?.resolution as { action: "rework" | "reassign" | "drop" } | undefined;
+      const workerReport: TeamReviewView["workerReport"] = report ? {
+        status: report.status, question: report.question ? boundedLogBody(report.question).body : null,
+        evidence: reportBody!.body, truncated: reportBody!.truncated,
+        attemptId: typeof evidence?.reportedAttemptId === "string" ? evidence.reportedAttemptId : null,
+        resolution: resolution?.action ?? null,
+      } : null;
+      const liveAttempt = this.deps.governance.openAttemptCount(row.qitemId) > 0;
+      const verdict = state.verdicts.at(-1);
+      const awaitingReview = actionable && row.role === "implementer" && run.reviewerSeat !== null
+        && ["done", "handed-off"].includes(row.queueState) && report?.status !== "dropped" && resolution?.action !== "drop"
+        && !(verdict?.verdict === "approved" && verdict.candidateDigest === state.currentManifestDigest);
+      // A run-wide decision gates unfinished work, not tasks that already finished.
+      // The lead remains its representative even after its planning turn has stopped.
+      const waiting = row.role === "lead" || liveAttempt || awaitingReview
+        || !["done", "handed-off", "canceled"].includes(row.queueState);
       return {
         taskId: row.taskId,
         qitemId: row.qitemId,
         role: row.role as TeamReviewView["role"],
         queueState: row.queueState as TeamReviewView["queueState"],
+        stage: teamTaskStage({
+          ownerDecision: waiting && ownerDecision,
+          ownerBlocked: waiting && run.state === "blocked",
+          workerReport: row.queueState === "blocked" && workerReport !== null
+            && workerReport.status !== "dropped" && workerReport.resolution === null,
+          pending: row.queueState === "pending" || row.queueState === "in-progress"
+            || (actionable && row.queueState === "failed" && typeof evidence?.retryNotBefore === "string"),
+          liveAttempt, awaitingReview,
+        }),
+        seat: row.session,
+        workerReport,
         displayName: name.displayName,
         displayNameParts: name.parts,
         title: identity.title,

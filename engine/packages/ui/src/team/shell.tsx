@@ -10,6 +10,8 @@ import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { latestRunFor, useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
 import { TeamsScreen } from "./teams-screen.js";
 import { RunHome } from "./run-home.js";
+import { Overview } from "./overview.js";
+import { TasksScreen } from "./tasks.js";
 import { TaskScreen } from "./task-screen.js";
 import { BranchScreen } from "./branch-screen.js";
 import { SettingsScreen } from "./settings.js";
@@ -222,14 +224,19 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
   else if (!runId) content = <div className="page page-narrow"><div className="page-head"><h1 className="display">{t("team.run.noRun")}</h1></div>
     <StartRunForm teams={teams.data} onStarted={nextRun => go("overview", { run: nextRun })} /></div>;
   else if (section === "branch") content = <BranchScreen read={read} runId={runId} onBack={() => go("overview")} />;
-  else if (["task", "tasks", "workspace", "reviews"].includes(section)) content = taskId
+  else if (section === "tasks") content = <TasksScreen read={read} selectedTaskId={taskId}
+    onSelect={task => go("tasks", { task })} onNewTask={() => setNewWork(true)} />;
+  else if (["task", "workspace", "reviews"].includes(section)) content = taskId
     ? <TaskScreen read={read} runId={runId} taskId={taskId} seats={read?.seats ?? []} onBack={() => go("overview")} />
     : <div className="page"><div className="page-head"><h1 className="display">{t(SECTION_LABELS[section])}</h1></div>
       <p className="muted">{t("shell.chooseTask")}</p><div className="ui-task-links">{read?.tasks.map(task =>
         <button className="option" key={task.qitemId} onClick={() => go(section, { task: task.taskId })}>{taskName(task, t)}</button>)}</div></div>;
   else if (section === "analytics") content = <div className="page"><div className="page-head"><h1 className="display">{t("nav.analytics")}</h1></div><p className="muted">{t("shell.analyticsPending")}</p></div>;
-  else content = <RunHome read={read} runId={runId} available={paired && !error} now={Date.now()}
-    onOpenTask={next => go("tasks", { task: next })} onOpenBranch={() => go("branch")} />;
+  else if (section === "run") content = <RunHome read={read} runId={runId} available={paired && !error} now={Date.now()}
+    onOpenTask={next => go("task", { task: next })} onOpenBranch={() => go("branch")} />;
+  else content = <Overview read={read} chat={chat.data} integration={integration.data}
+    onOpenTasks={() => go("tasks")} onOpenTask={task => go("tasks", { task })}
+    onOpenChat={opener => { chatOpener.current = opener; setChatOpen(true); }} />;
 
   return <ShellFrame language={language} section={section} appearance={appearance} project={teamName} runName={runName}
     coordinator={coordinator} connection={connection} branch={readableBranch(integration.data?.branch ?? "")}
@@ -248,7 +255,7 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
     {paired && runId && <ChatPanel key={runId} read={read} runId={runId} chat={chat.data} open={chatOpen} onOpenChange={setChatOpen} opener={chatOpener} />}
     <CommandPalette open={paired && paletteOpen} onOpenChange={setPaletteOpen} tasks={paired ? read?.tasks ?? [] : []}
       onChoose={task => go("tasks", { task })} opener={paletteOpener} />
-    {canStartWork && <NewWorkSheet teams={teams.data} teamId={read!.run.rigId} open={newWork}
+    {paired && read && <NewWorkSheet teams={teams.data} teamId={read!.run.rigId} open={newWork}
       onOpenChange={setNewWork} onStarted={nextRun => { setNewWork(false); go("overview", { run: nextRun }); }} />}
   </ShellFrame>;
 }

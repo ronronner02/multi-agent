@@ -31,7 +31,7 @@ export const seats: TeamSeatView[] = [
 
 export function task(overrides: Partial<TeamReviewView> = {}): TeamReviewView {
   const taskId = overrides.taskId ?? "task-1";
-  return { taskId, qitemId: `qitem-${taskId}`, role: "implementer", queueState: "done",
+  return { stage: "done", seat: "impl@rig", workerReport: null, taskId, qitemId: `qitem-${taskId}`, role: "implementer", queueState: "done",
     displayName: "Status filter", displayNameParts: { kind: "task" }, title: "Status filter",
     dependencies: [], criteria: { verified: null, total: null, source: null }, currentCandidateDigest: `sha256:${"c".repeat(64)}`,
     rounds: 1, openP0P1: 0, verdicts: [], reviewAvailable: true, acceptance: null, ...overrides };
@@ -39,7 +39,7 @@ export function task(overrides: Partial<TeamReviewView> = {}): TeamReviewView {
 
 export function reviewTask(of = "Status filter", round = 1): TeamReviewView {
   return task({
-    taskId: "task-1-review-1", qitemId: "qitem-20261105144520-11aa22bb", role: "reviewer", queueState: "in-progress",
+    taskId: "task-1-review-1", qitemId: "qitem-20261105144520-11aa22bb", role: "reviewer", queueState: "in-progress", stage: "running", seat: "review@rig",
     displayName: `Review: ${of}`, displayNameParts: { kind: "review", round, of }, title: null,
   });
 }

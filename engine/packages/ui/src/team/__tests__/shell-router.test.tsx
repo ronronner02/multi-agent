@@ -9,7 +9,7 @@ import { read, RUN_ID, task } from "./fixtures.js";
 vi.mock("@xterm/xterm", () => ({ Terminal: class {} }));
 
 let mobile = false;
-const data = read({ tasks: [task({ queueState: "pending" }), task({ taskId: "task-2", displayName: "Filter chips", queueState: "pending" })] });
+const data = read({ tasks: [task({ queueState: "pending", stage: "queued" }), task({ taskId: "task-2", displayName: "Filter chips", queueState: "pending", stage: "queued" })] });
 const unexpected: string[] = [];
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
@@ -58,6 +58,19 @@ async function openShell() {
 }
 
 describe("command-center router integration", () => {
+  it("publishes the restored Overview summary through the real route", async () => {
+    await openShell();
+    expect(screen.getByRole("region", { name: "Run summary" })).toBeTruthy();
+  });
+
+  it("publishes the restored task board through the real route", async () => {
+    await openShell();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Multi-Agent" })).getByRole("link", { name: "Tasks" }));
+    expect(await screen.findByRole("region", { name: "Queued" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Waiting on lead" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Waiting on you" })).toBeTruthy();
+  });
+
   it("keeps the real chat draft mounted while every destination changes the URL", async () => {
     const router = await openShell();
     const opener = screen.getByRole("button", { name: "Coordinator" });
@@ -91,7 +104,11 @@ describe("command-center router integration", () => {
     expect(router.state.location.pathname).toBe("/team/tasks");
     expect(router.state.location.search.run).toBe(RUN_ID);
     expect(screen.getByRole("heading", { name: "Filter chips" })).toBeTruthy();
-    await waitFor(() => expect(document.activeElement).toBe(opener));
+    const drawer = screen.getByRole("dialog", { name: "Filter chips" });
+    await waitFor(() => expect(drawer.contains(document.activeElement)).toBe(true));
+    fireEvent.keyDown(drawer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Tasks" })));
   });
 
   it("closes mobile navigation before opening chat and returns focus to the menu trigger", async () => {

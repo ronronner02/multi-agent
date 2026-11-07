@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { TeamQueueState, TeamReviewView, TeamSeatView, TeamTaskNameParts } from "@openrig/daemon/team-control";
+import type { TeamQueueState, TeamReviewView, TeamSeatView, TeamTaskNameParts, TeamTaskStage } from "@openrig/daemon/team-control";
 
 /**
  * U10 — how the team surface names things.
@@ -105,4 +105,20 @@ export function branchName(displayName: string): string {
  */
 export function readableBranch(branch: string): string {
   return branch.replace(/-[0-9a-f]{8}(-[0-9a-f]{4})*$/i, "").replace(/-+$/, "");
+}
+
+export const TASK_STAGE_LABELS = {
+  "owner/decision": "tasks.stage.owner", "owner/blocked": "tasks.stage.owner",
+  "lead/report": "tasks.stage.lead", queued: "tasks.column.pending", running: "tasks.column.in-progress",
+  review: "progress.review", done: "team.state.done",
+} as const satisfies Record<TeamTaskStage, string>;
+
+export function namedSeat(seat: TeamSeatView, t: TFunction): string {
+  return t(("role." + seat.role) as "role.lead") + " · " + clientLabel(seat.client, t)
+    + (seat.index === null ? "" : " " + seat.index);
+}
+
+export function assignedSeat(task: TeamReviewView, seats: readonly TeamSeatView[], t: TFunction): string {
+  const seat = seats.find(item => item.seat === task.seat);
+  return seat ? namedSeat(seat, t) : t(("role." + task.role) as "role.lead");
 }

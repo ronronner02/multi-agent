@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import type { TeamRunState } from "@openrig/daemon/team-control";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import type { AttemptActivity, TeamOwnerRead, TeamRunState, TurnUsage } from "@openrig/daemon/team-control";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { readIntegration, readChat, type ChatState, type IntegrationState } from "./clients.js";
 
@@ -55,4 +55,33 @@ export function useIntegration(runId: string, enabled: boolean) {
     queryKey: ["team", runId, "integration"], enabled: paired && enabled && !!runId, retry: false, refetchInterval: 5_000,
     queryFn: ({ signal }) => readIntegration(request, runId, signal),
   });
+}
+
+export function observedTokens(usages: readonly (TurnUsage | undefined)[]): { tokens: number | null; partial: boolean } {
+  let tokens: number | null = null;
+  let partial = false;
+  for (const usage of usages) {
+    if (!usage || usage.status === "unavailable") { partial = true; continue; }
+    partial ||= usage.status === "partial";
+    // Reasoning output is already part of outputTokens.
+    for (const value of [usage.inputTokens, usage.cacheReadInputTokens, usage.cacheWriteInputTokens, usage.outputTokens]) {
+      if (value !== null) tokens = (tokens ?? 0) + value;
+      else partial = true;
+    }
+  }
+  return { tokens, partial };
+}
+
+/** Run totals use each attempt's native telemetry, never governance budget counters or another run's spend. */
+export function useRunTokens(read: TeamOwnerRead | undefined) {
+  const { paired, request } = useOwnerSession();
+  const queries = useQueries({ queries: (read?.attempts ?? []).map(attempt => ({
+    queryKey: ["team", read!.runId, "attempt", attempt.attemptId, "usage", attempt.state],
+    enabled: paired, retry: false, staleTime: attempt.state === "stopped" ? Infinity : 0,
+    refetchInterval: attempt.state === "stopped" ? false as const : 2_000,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => (await request<{ activity: AttemptActivity }>(
+      "/runs/" + encodeURIComponent(read!.runId) + "/attempts/" + encodeURIComponent(attempt.attemptId)
+        + "/activity?after=" + Number.MAX_SAFE_INTEGER, { signal })).activity.usage,
+  })) });
+  return observedTokens(queries.map(query => query.isError ? undefined : query.data));
 }

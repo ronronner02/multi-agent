@@ -7,6 +7,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding } from "../src/domain/plan-governance.js";
+import { recordLeadReply, answerDecision } from "../src/domain/lead-chat.js";
 import { StreamStore } from "../src/domain/stream-store.js";
 import { boundedLogBody, TeamReadModel } from "../src/team-control-surface.js";
 import { createTestApp } from "./helpers/test-app.js";
@@ -187,6 +188,92 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     // A task that declared no dependencies publishes an empty list, not null: the two are different
     // facts, and only null means the assignment could not be read.
     expect(second).toMatchObject({ taskId: "T002", title: "No dependencies here", dependencies: [] });
+  });
+
+  it("publishes the daemon-owned task stage and exact assigned seat", () => {
+    seedTask("run", "stage-task", "", "seat-b", undefined, { body: "Show the stage" });
+    expect(model.read("run").tasks[0]).toMatchObject({
+      stage: "queued", seat: "seat-b", workerReport: null,
+    });
+  });
+
+  it("routes a recorded worker report to the lead and preserves owner precedence", () => {
+    const qitemId = seedTask("run", "report-task", "", "seat-a");
+    const attempt = governance.getAttempt("attempt-report-task")!;
+    const receipt = governance.recordTaskOutcome(command("run", {
+      expectedTaskVersion: governance.getTask(qitemId)!.entityVersion, state: "blocked",
+      actorSession: "seat-a", attemptId: attempt.id, expectedAttemptVersion: attempt.entityVersion,
+      evidence: { taskReport: { status: "needs-decision", question: "Which input should I use?", evidence: "Evidence line. ".repeat(180) } },
+    }, qitemId), { kind: "daemon", sessionId: "daemon" });
+    expect(receipt.status).toBe("observed");
+    const projection = model.read("run").tasks[0]!;
+    expect(projection).toMatchObject({ stage: "lead/report", workerReport: {
+      status: "needs-decision", question: "Which input should I use?", truncated: true,
+      attemptId: attempt.id, resolution: null,
+    } });
+    expect(projection.workerReport!.evidence).toHaveLength(2000);
+    db.prepare("UPDATE team_runs SET state = 'blocked', state_reason = 'owner paused' WHERE id = 'run'").run();
+    expect(model.read("run").tasks[0]!.stage).toBe("owner/blocked");
+    db.prepare("UPDATE team_runs SET phase = 'planning' WHERE id = 'run'").run();
+    expect(model.read("run").tasks[0]!.stage).toBe("owner/decision");
+  });
+
+  it("uses open chat decisions, not a running queue heuristic, and restores the running stage after an answer", () => {
+    seedTask("run", "working", "", "seat-a");
+    db.prepare("UPDATE team_attempts SET state = 'running' WHERE id = 'attempt-working'").run();
+    expect(model.read("run").tasks[0]!.stage).toBe("running");
+    recordLeadReply(db, { id: "decision", runId: "run", attemptId: "attempt-working",
+      body: "Choose the scope", decision: { options: ["Small", "Large"] }, createdAt: new Date().toISOString() });
+    expect(model.read("run").tasks[0]!.stage).toBe("owner/decision");
+    answerDecision(db, "decision", "answer");
+    expect(model.read("run").tasks[0]!.stage).toBe("running");
+  });
+
+  it("keeps dropped work done when another task waits for the owner or a review seat exists", () => {
+    const qitemId = seedTask("run", "dropped", "", "seat-a");
+    const attempt = governance.getAttempt("attempt-dropped")!;
+    const receipt = governance.recordTaskOutcome(command("run", {
+      expectedTaskVersion: governance.getTask(qitemId)!.entityVersion, state: "done", closureReason: "no-follow-on",
+      actorSession: "seat-a", attemptId: attempt.id, expectedAttemptVersion: attempt.entityVersion,
+      evidence: { taskReport: { status: "dropped", evidence: "The requested change already exists." } },
+    }, qitemId), { kind: "daemon", sessionId: "daemon" });
+    expect(receipt.status).toBe("observed");
+    db.prepare("UPDATE team_runs SET phase = 'planning', reviewer_seat = 'reviewer' WHERE id = 'run'").run();
+    expect(model.read("run").tasks[0]).toMatchObject({ stage: "done", workerReport: { status: "dropped" } });
+  });
+
+  it("keeps canceled retries and canceled review work in Done", () => {
+    const retry = seedTask("run", "retry-task", "", "seat-a");
+    const review = seedTask("run", "review-task", "", "seat-b");
+    db.prepare("UPDATE team_queue_authority SET evidence_json = ? WHERE qitem_id = ?")
+      .run(JSON.stringify({ retryNotBefore: "2099-01-01T00:00:00.000Z" }), retry);
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(review);
+    db.prepare("UPDATE team_runs SET reviewer_seat = 'reviewer' WHERE id = 'run'").run();
+    expect(model.read("run").tasks.find(task => task.taskId === "review-task")!.stage).toBe("review");
+    expect(governance.cancelRun(command("run", { reason: "Owner canceled the run" }, "cancel"), owner).status).toBe("pending-execution");
+    expect(governance.observeCancellation(command("run", {}, "cancel-observed"), owner).status).toBe("observed");
+    expect(model.read("run").tasks.map(task => task.stage)).toEqual(["done", "done"]);
+  });
+
+  it("keeps required review open until the latest verdict approves the current candidate", () => {
+    const qitem = seedTask("run", "review-task", "", "seat-a");
+    db.prepare("UPDATE team_runs SET reviewer_seat = 'reviewer' WHERE id = 'run'").run();
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitem);
+    const candidate = (digest: string) => bus.emit({ type: "team.control", protocolVersion: "1.0",
+      eventId: "candidate-" + digest, rigId: "managed-rig", runId: "run", taskId: "review-task", attemptId: null,
+      entityId: "review-task", entityVersion: 1, action: "review.candidate",
+      payload: { manifestDigest: digest, baseDigest: sha("base"), capturedAt: "2026-10-26T00:00:00.000Z" } });
+    const verdict = (round: number, digest: string) => bus.emit({ type: "team.control", protocolVersion: "1.0",
+      eventId: "verdict-" + round, rigId: "managed-rig", runId: "run", taskId: "review-task", attemptId: null,
+      entityId: "review-task", entityVersion: round + 1, action: "review.verdict",
+      payload: { taskId: "review-task", reviewerTaskId: "reviewer-task", round, candidateDigest: digest,
+        verdict: "approved", findings: [], recordedAt: "2026-10-26T00:00:01.000Z" } });
+    candidate(sha("old")); verdict(1, sha("old"));
+    expect(model.read("run").tasks[0]!.stage).toBe("done");
+    candidate(sha("current"));
+    expect(model.read("run").tasks[0]!.stage).toBe("review");
+    verdict(2, sha("current"));
+    expect(model.read("run").tasks[0]!.stage).toBe("done");
   });
 
   it("bounds a long title to one display line and never invents one", async () => {

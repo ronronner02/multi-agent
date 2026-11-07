@@ -654,3 +654,106 @@ html[data-desktop="true"] .team-shell :is(.sheet, .ui-chat-panel, .ui-mobile-sid
 .team-shell .repository-picker { display: flex; gap: 8px; }
 .team-shell .repository-picker .input { flex: 1; min-width: 0; }
 .team-shell .repository-picker .btn { flex: none; }
+
+
+/* --- command-center Overview and task board ------------------------------ */
+.team-shell .ui-screen { min-width: 0; padding: 24px; display: grid; gap: 24px; align-content: start; }
+.team-shell .ui-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.team-shell .ui-page-head h1 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 600; }
+.team-shell .ui-subtitle { margin: 8px 0 0; color: var(--ui-muted); overflow-wrap: anywhere; }
+.team-shell .ui-page-actions { display: flex; align-items: center; gap: 8px; }
+.team-shell .ui-page-actions svg, .team-shell .ui-screen .btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.team-shell .ui-run-actions { display: grid; gap: 8px; justify-items: end; text-align: right; }
+.team-shell .ui-run-actions p { margin: 0; max-width: 280px; font-size: 12px; }
+.team-shell .ui-screen [role="alert"] { color: var(--ui-error); }
+.team-shell .ui-card { min-width: 0; padding: 24px; background: var(--ui-surface); border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); }
+.team-shell .ui-card h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 14px; font-weight: 600; }
+.team-shell .ui-muted { color: var(--ui-muted); }
+.team-shell .ui-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; padding: 0 8px; border-radius: var(--ui-radius); background: var(--ui-raised); color: var(--ui-muted); font-size: 12px; font-weight: 400; }
+.team-shell .ui-summary dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 0; }
+.team-shell .ui-summary dt { color: var(--ui-muted); font-size: 12px; }
+.team-shell .ui-summary dd { margin: 8px 0 0; font-size: 28px; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
+.team-shell .ui-summary small { display: block; margin-top: 8px; font-size: 11px; }
+.team-shell .ui-progress-head { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; }
+.team-shell .ui-phase-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; margin: 8px 0 0; padding: 0; gap: 16px; }
+.team-shell .ui-phase-strip li { position: relative; display: grid; grid-template-columns: 8px 1fr; gap: 4px 8px; border-top: 2px solid var(--ui-divider); padding-top: 16px; }
+.team-shell .ui-phase-strip strong { font-size: 12px; font-weight: 500; }
+.team-shell .ui-phase-strip small { grid-column: 2; color: var(--ui-muted); font-size: 11px; }
+.team-shell .ui-dot { display: inline-block; width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: var(--ui-muted); }
+.team-shell .ui-phase-strip [data-state="complete"] { border-color: var(--ui-ok); }
+.team-shell .ui-phase-strip [data-state="active"], .team-shell .ui-phase-strip [data-state="awaiting-decision"] { border-color: var(--ui-accent); }
+.team-shell .ui-phase-strip [data-state="complete"] .ui-dot, .team-shell .ui-dot[data-state="running"] { background: var(--ui-ok); }
+.team-shell .ui-phase-strip [data-state="active"] .ui-dot { background: var(--ui-accent); }
+.team-shell .ui-overview-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); gap: 24px; }
+.team-shell .ui-overview-grid-solo { grid-template-columns: minmax(0, 1fr); }
+.team-shell .ui-overview-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.team-shell .ui-section-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+.team-shell .ui-section-head h2 { margin: 0; }
+.team-shell .ui-section-head .btn { font-size: 12px; }
+.team-shell .ui-active-list, .team-shell .ui-fleet-list, .team-shell .ui-attention-list, .team-shell .ui-event-list,
+.team-shell .ui-attempt-list, .team-shell .ui-verdict-list { list-style: none; margin: 0; padding: 0; }
+.team-shell .ui-active-list li + li { border-top: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-active-list button { display: grid; grid-template-columns: minmax(0, 1fr) minmax(88px, auto) minmax(112px, .7fr); align-items: center; gap: 16px; width: 100%; padding: 16px 0; text-align: left; }
+.team-shell .ui-active-list strong { display: block; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.team-shell .ui-active-list small { display: block; color: var(--ui-muted); font-size: 11px; margin-top: 4px; }
+.team-shell .ui-stage { color: var(--ui-muted); font-size: 12px; }
+.team-shell .ui-stage[data-stage^="owner/"] { color: var(--ui-warn); }
+.team-shell .ui-stage[data-stage="lead/report"] { color: var(--ui-accent); }
+.team-shell .ui-task-progress { display: grid; gap: 8px; font-size: 11px; color: var(--ui-muted); }
+.team-shell .ui-task-progress progress { appearance: none; display: block; height: 4px; width: 100%; border: 0; border-radius: var(--ui-radius); background: var(--ui-divider); overflow: hidden; accent-color: var(--ui-accent); }
+.team-shell .ui-task-progress progress::-webkit-progress-bar { background: var(--ui-divider); }
+.team-shell .ui-task-progress progress::-webkit-progress-value { background: var(--ui-accent); }
+.team-shell .ui-task-progress progress::-moz-progress-bar { background: var(--ui-accent); }
+.team-shell .ui-attention-card { border-color: var(--ui-warn-border); }
+.team-shell .ui-attention-list > li + li { border-top: 1px solid var(--ui-divider); padding-top: 16px; margin-top: 16px; }
+.team-shell .ui-attention-list strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.team-shell .ui-attention-list .plate { margin: 0; }
+.team-shell .ui-fleet-list li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 12px 0; font-size: 12px; }
+.team-shell .ui-fleet-list strong, .team-shell .ui-fleet-list .ui-text-button { text-align: left; font-weight: 500; overflow-wrap: anywhere; }
+.team-shell .ui-fleet-list .ui-dot { margin-top: 6px; }
+.team-shell .ui-text-button:hover { color: var(--ui-accent); }
+.team-shell .ui-event-list li { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-event-list time { color: var(--ui-muted); font-size: 11px; }
+.team-shell .ui-event-list strong { font-weight: 500; font-size: 12px; overflow-wrap: anywhere; }
+.team-shell .ui-screen details, .team-shell .ui-drawer-body details { margin-top: 8px; font-size: 12px; }
+.team-shell .ui-screen summary, .team-shell .ui-drawer-body summary { color: var(--ui-muted); cursor: pointer; }
+.team-shell .ui-screen pre, .team-shell .ui-drawer-body pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.6 var(--font-mono); }
+.team-shell .ui-board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 16px; }
+.team-shell .ui-column { min-width: 0; background: var(--ui-surface); border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); padding: 16px; }
+.team-shell .ui-column h2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; margin: 0 0 16px; font-size: 12px; font-weight: 500; }
+.team-shell .ui-column > ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
+.team-shell .ui-column-empty { margin: 0; padding: 8px 0; font-size: 12px; }
+.team-shell .ui-task-card { display: grid; gap: 16px; width: 100%; padding: 16px; text-align: left; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-raised); }
+.team-shell .ui-task-card:hover, .team-shell .ui-task-card[aria-pressed="true"] { border-color: var(--ui-accent); }
+.team-shell .ui-task-card strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.team-shell .ui-task-card > .ui-muted { font-size: 11px; overflow-wrap: anywhere; }
+.team-shell .ui-task-drawer { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(480px, 100vw); display: flex; flex-direction: column; background: var(--ui-surface); border-left: 1px solid var(--ui-divider); box-shadow: -16px 0 48px var(--ui-shadow); }
+.team-shell .ui-task-drawer .ui-panel-heading > div { min-width: 0; overflow-wrap: anywhere; }
+.team-shell .ui-drawer-body { overflow: auto; padding: 24px; display: grid; gap: 24px; }
+.team-shell .ui-drawer-body > p { margin: 0; }
+.team-shell .ui-drawer-body h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.team-shell .ui-drawer-body section { min-width: 0; }
+.team-shell .ui-attempt-list li, .team-shell .ui-verdict-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 0; font-size: 12px; border-bottom: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-attempt-list details { flex-basis: 100%; }
+.team-shell .ui-technical-details dd { margin: 4px 0 16px; overflow-wrap: anywhere; font: 11px/1.6 var(--font-mono); }
+@media (max-width: 1250px) {
+  .team-shell .ui-board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .team-shell .ui-overview-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .team-shell .ui-screen { padding: 16px; gap: 16px; }
+  .team-shell .ui-card { padding: 16px; }
+  .team-shell .ui-page-head { flex-wrap: wrap; gap: 16px; }
+  .team-shell .ui-run-actions { justify-items: start; text-align: left; }
+  .team-shell .ui-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .team-shell .ui-summary dd { font-size: 24px; }
+  .team-shell .ui-progress-head { flex-direction: column; gap: 0; margin-bottom: 16px; }
+  .team-shell .ui-phase-strip { gap: 8px; }
+  .team-shell .ui-phase-strip li { display: flex; flex-wrap: wrap; align-content: start; }
+  .team-shell .ui-phase-strip small { flex-basis: 100%; }
+  .team-shell .ui-overview-foot, .team-shell .ui-board { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .team-shell .ui-section-head { flex-wrap: wrap; gap: 8px; }
+  .team-shell .ui-active-list button { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .team-shell .ui-active-list .ui-task-progress { grid-column: 1 / -1; }
+  .team-shell .ui-drawer-body { padding: 16px; }
+}
