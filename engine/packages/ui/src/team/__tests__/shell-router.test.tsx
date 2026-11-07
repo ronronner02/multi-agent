@@ -9,12 +9,13 @@ import { read, RUN_ID, task } from "./fixtures.js";
 vi.mock("@xterm/xterm", () => ({ Terminal: class {} }));
 
 let mobile = false;
+let signedIn = true;
 const data = read({ tasks: [task({ queueState: "pending", stage: "queued" }), task({ taskId: "task-2", displayName: "Filter chips", queueState: "pending", stage: "queued" })] });
 const unexpected: string[] = [];
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
-  mobile = false; unexpected.length = 0;
+  mobile = false; signedIn = true; unexpected.length = 0;
   vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   localStorage.clear(); sessionStorage.clear(); queryClient.clear();
   localStorage.setItem("openrig.interfaceLanguage", "en");
@@ -26,7 +27,14 @@ beforeEach(() => {
     const path = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, window.location.origin).pathname;
     const response = (body: object) => new Response(JSON.stringify({ protocolVersion: "1.0", ...body }), { headers: { "Content-Type": "application/json" } });
     if (path.endsWith("/owner-session/exchange")) return response({ antiForgeryToken: "a".repeat(43) });
-    if (path === "/api/team-control/teams") return response({ teams: [{ id: data.run.rigId, name: "Status board", repository: "/fixture", seats: [] }] });
+    if (path.endsWith("/github/status")) return response({ signedIn, login: signedIn ? "fixture-owner" : null, host: "github.com" });
+    if (path.endsWith("/github/login")) return response({ state: "idle" });
+    if (path.endsWith("/settings")) return response({ settings: { "team.leadClient": { value: "claude-code", source: "default" } } });
+    if (path.endsWith("/analytics")) return response({ analytics: null });
+    if (path === "/api/team-control/teams") return response({ teams: [
+      { id: data.run.rigId, name: "Status board", repository: "/fixture", seats: [] },
+      { id: "fresh-project", name: "Fresh project", repository: "/fixture/fresh", seats: [{ role: "lead", client: "codex" }] },
+    ] });
     if (path === "/api/team-control/runs") return response({ runs: [{ id: RUN_ID, rigId: data.run.rigId, rigName: "Status board", displayName: data.run.displayName, state: data.run.state }] });
     if (path.endsWith("/health")) return response({ health: { runtime: { isolation: "none" } } });
     if (path.endsWith("/read")) return response({ read: data });
@@ -59,9 +67,38 @@ async function openShell() {
 }
 
 describe("command-center router integration", () => {
+  it("gates the paired app before any project read when GitHub is signed out", async () => {
+    signedIn = false;
+    const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: ["/team/overview"] }), defaultPendingMinMs: 0 });
+    await act(async () => { render(<RouterProvider router={router} />); await router.load(); });
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).includes("/github/"))).toBe(false);
+    const pairing = await screen.findByLabelText("One-time pairing code");
+    fireEvent.change(pairing, { target: { value: "fixture-pairing" } });
+    fireEvent.submit(pairing.closest("form")!);
+    expect(await screen.findByRole("heading", { name: "Sign in to GitHub" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Multi-Agent" })).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => /\/(teams|runs)(?:\?|$)/.test(String(path)))).toBe(false);
+  });
+
   it("publishes the restored Overview summary through the real route", async () => {
     await openShell();
     expect(screen.getByRole("region", { name: "Run summary" })).toBeTruthy();
+  });
+
+  it("keeps a project selected across destinations before its first run", async () => {
+    const router = await openShell();
+    fireEvent.change(screen.getByRole("combobox", { name: "Project" }), { target: { value: "fresh-project" } });
+    expect(await screen.findByRole("heading", { name: "Fresh project" })).toBeTruthy();
+    expect(router.state.location.search.team).toBe("fresh-project");
+    expect(router.state.location.search.run).toBeUndefined();
+    expect(screen.getByRole("combobox", { name: "Projects" })).toHaveProperty("value", "fresh-project");
+    const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
+    fireEvent.click(within(nav).getByRole("link", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeTruthy();
+    fireEvent.click(within(nav).getByRole("link", { name: "Overview" }));
+    expect(await screen.findByRole("heading", { name: "Fresh project" })).toBeTruthy();
+    expect(router.state.location.search.team).toBe("fresh-project");
+    expect(screen.getByRole("textbox", { name: "What should the team do?" })).toBeTruthy();
   });
 
   it("publishes the restored task board through the real route", async () => {
@@ -144,6 +181,21 @@ describe("command-center router integration", () => {
     await waitFor(() => expect(navigation.isConnected).toBe(false));
     const panel = screen.getByRole("dialog", { name: "Lead chat" });
     fireEvent.keyDown(panel, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(menu));
+  });
+
+  it("returns focus to the mobile menu after closing Create", async () => {
+    mobile = true;
+    await openShell();
+    const menu = screen.getByLabelText("Open navigation");
+    menu.style.display = "grid";
+    fireEvent.click(menu);
+    const navigation = screen.getByRole("dialog", { name: "Navigation" });
+    fireEvent.click(within(navigation).getByRole("button", { name: "Create project" }));
+    await waitFor(() => expect(navigation.isConnected).toBe(false));
+    const create = await screen.findByRole("dialog", { name: "Create project" });
+    fireEvent.keyDown(create, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(menu));
   });

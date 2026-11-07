@@ -19,6 +19,7 @@ import type { TaskReport } from "./domain/task-report.js";
 /** C2 — the shape a review round's durable verdict carries, for a client that renders it. */
 export type { ReviewFinding, ReviewVerdictRecord } from "./domain/review-evidence.js";
 export type { AttemptActivity, ToolActivityRecord, TurnUsage } from "./domain/attempt-telemetry.js";
+export type TeamAnalytics = ReturnType<import("./domain/attempt-telemetry.js").AttemptTelemetry["analytics"]>;
 
 /**
  * T052 — the managed owner read projections.

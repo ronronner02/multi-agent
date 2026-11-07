@@ -100,10 +100,11 @@ const indexRoute = createRoute({
 const teamRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/team",
-  validateSearch: (search: Record<string, unknown>): { run?: string; q?: string; task?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { run?: string; q?: string; task?: string; team?: string } => ({
     run: typeof search.run === "string" ? search.run : undefined,
     q: typeof search.q === "string" && search.q.trim() ? search.q : undefined,
     task: typeof search.task === "string" ? search.task : undefined,
+    team: typeof search.team === "string" ? search.team : undefined,
   }),
   component: TeamShell,
 });

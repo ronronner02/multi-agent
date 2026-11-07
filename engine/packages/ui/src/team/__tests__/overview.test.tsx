@@ -34,6 +34,18 @@ async function show(snapshot: TeamOwnerRead = read(), options: { integration?: I
 }
 
 describe("Overview", () => {
+  it("keeps the integration commit list and task links in folded details", async () => {
+    const { onOpenTask } = await show(read(), { integration: { ...integration,
+      commits: [{ hash: "a".repeat(40), subject: "Status filter", task: "task-1" }] } });
+    const history = screen.getByRole("region", { name: "Commits" });
+    expect(within(history).getByText("1 reviewed commits")).toBeTruthy();
+    expect(history.querySelector("details")?.open).toBe(false);
+    fireEvent.click(within(history).getByText("1 reviewed commits"));
+    fireEvent.click(within(history).getByRole("button", { name: "Status filter" }));
+    expect(onOpenTask).toHaveBeenCalledWith("task-1");
+    expect(history.querySelectorAll("li")).toHaveLength(1);
+  });
+
   it("keeps retired seats out of the active fleet", async () => {
     const snapshot = read();
     snapshot.seats = snapshot.seats.map(seat => ({ ...seat, retired: seat.role === "reviewer" }));

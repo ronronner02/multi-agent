@@ -56,7 +56,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
           value={goal} maxLength={262_144} required onChange={event => setGoal(event.target.value)} />
       </div>
       {(teams ?? []).length > 0 && <div className="field">
-        <label htmlFor="start-team">{t("team.teams.title")}</label>
+        <label htmlFor="start-team">{t("projects.title")}</label>
         <label className="input select">
           <select id="start-team" value={chosen} onChange={event => setTeam(event.target.value)}>
             {(teams ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}

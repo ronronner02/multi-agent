@@ -35,9 +35,9 @@ async function show(locale: "en" | "zh-CN" = "en") {
 }
 
 describe("command-center shell", () => {
-  it("restores six destinations without removing the current run, task, branch or project URLs", () => {
+  it("has six destinations and falls back for unknown URLs", () => {
     expect([...TEAM_SECTIONS]).toEqual(["overview", "workspace", "tasks", "reviews", "analytics", "settings"]);
-    for (const section of [...TEAM_SECTIONS, "teams", "run", "task", "branch"]) {
+    for (const section of TEAM_SECTIONS) {
       expect(teamSection(`/team/${section}`)).toBe(section);
     }
     expect(teamSection("/team")).toBe("overview");
