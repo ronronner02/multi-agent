@@ -96,7 +96,7 @@ export function Overview({ read, chat, integration, onOpenTasks, onOpenTask, onO
   const tasks = read?.tasks ?? [];
   const active = tasks.filter(task => task.stage !== "done");
   const decisions = pendingOwnerDecisions(read, chat);
-  const fleet = (read?.seats ?? []).map(seat => ({
+  const fleet = (read?.seats ?? []).filter(seat => !seat.retired).map(seat => ({
     seat, attempt: read?.attempts.filter(attempt => attempt.session === seat.seat).at(-1),
   }));
   const summary = [

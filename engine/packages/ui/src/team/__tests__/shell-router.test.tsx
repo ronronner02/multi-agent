@@ -15,6 +15,7 @@ const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "s
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
   mobile = false; unexpected.length = 0;
+  vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   localStorage.clear(); sessionStorage.clear(); queryClient.clear();
   localStorage.setItem("openrig.interfaceLanguage", "en");
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
@@ -69,6 +70,27 @@ describe("command-center router integration", () => {
     expect(await screen.findByRole("region", { name: "Queued" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Waiting on lead" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Waiting on you" })).toBeTruthy();
+  });
+
+  it("opens Workspace layouts and the read-only Reviews gates through the real routes", async () => {
+    const renderErrors = vi.spyOn(console, "error").mockImplementation(() => {});
+    await openShell();
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Keep my original question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close lead chat" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
+    fireEvent.click(within(nav).getByRole("link", { name: "Workspace" }));
+    expect(await screen.findByRole("button", { name: "Grid" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Split" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Focus" })).toBeTruthy();
+    fireEvent.click(within(nav).getByRole("link", { name: "Reviews" }));
+    expect(await screen.findByRole("region", { name: "Gates" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ask the lead" }));
+    const panel = screen.getByRole("dialog", { name: "Lead chat" });
+    expect((within(panel).getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement).value).toBe("Keep my original question\n\nAbout the review for Status filter:");
+    expect(vi.mocked(fetch).mock.calls.some(([url, options]) => String(url).endsWith("/chat") && options?.method === "POST")).toBe(false);
+    expect(renderErrors).not.toHaveBeenCalled();
   });
 
   it("keeps the real chat draft mounted while every destination changes the URL", async () => {

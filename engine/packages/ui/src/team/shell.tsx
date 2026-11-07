@@ -12,6 +12,8 @@ import { TeamsScreen } from "./teams-screen.js";
 import { RunHome } from "./run-home.js";
 import { Overview } from "./overview.js";
 import { TasksScreen } from "./tasks.js";
+import { WorkspaceScreen } from "./workspace/workspace-screen.js";
+import { ReviewsScreen } from "./reviews.js";
 import { TaskScreen } from "./task-screen.js";
 import { BranchScreen } from "./branch-screen.js";
 import { SettingsScreen } from "./settings.js";
@@ -191,6 +193,7 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
   const chat = useTeamChat(runId, paired);
   const integration = useIntegration(runId, paired);
   const [chatOpen, setChatOpen] = useState(false);
+  const [draftContext, setDraftContext] = useState<{ runId: string; body: string }>();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [newWork, setNewWork] = useState(false);
   const chatOpener = useRef<HTMLButtonElement>(null);
@@ -226,7 +229,14 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
   else if (section === "branch") content = <BranchScreen read={read} runId={runId} onBack={() => go("overview")} />;
   else if (section === "tasks") content = <TasksScreen read={read} selectedTaskId={taskId}
     onSelect={task => go("tasks", { task })} onNewTask={() => setNewWork(true)} />;
-  else if (["task", "workspace", "reviews"].includes(section)) content = taskId
+  else if (section === "workspace") content = <WorkspaceScreen key={"workspace-" + runId} read={read} selectedTaskId={taskId} />;
+  else if (section === "reviews") content = <ReviewsScreen read={read} selectedTaskId={taskId} integration={integration.isError ? undefined : integration.data}
+    onSelect={task => go("reviews", { task })} onAskLead={(task, opener) => {
+      chatOpener.current = opener;
+      setDraftContext({ runId, body: t("reviews.chatContext", { task: taskName(task, t) }) });
+      setChatOpen(true);
+    }} />;
+  else if (section === "task") content = taskId
     ? <TaskScreen read={read} runId={runId} taskId={taskId} seats={read?.seats ?? []} onBack={() => go("overview")} />
     : <div className="page"><div className="page-head"><h1 className="display">{t(SECTION_LABELS[section])}</h1></div>
       <p className="muted">{t("shell.chooseTask")}</p><div className="ui-task-links">{read?.tasks.map(task =>
@@ -252,7 +262,7 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
     onSearch={opener => { paletteOpener.current = opener; setPaletteOpen(true); }}
     action={canStartWork ? <button className="btn btn-quiet ui-new-work" onClick={() => setNewWork(true)}>{t("team.teams.newWork")}</button> : undefined}>
     {content}
-    {paired && runId && <ChatPanel key={runId} read={read} runId={runId} chat={chat.data} open={chatOpen} onOpenChange={setChatOpen} opener={chatOpener} />}
+    {paired && runId && <ChatPanel key={runId} read={read} runId={runId} chat={chat.data} open={chatOpen} onOpenChange={setChatOpen} opener={chatOpener} draftContext={draftContext?.runId === runId ? draftContext : undefined} />}
     <CommandPalette open={paired && paletteOpen} onOpenChange={setPaletteOpen} tasks={paired ? read?.tasks ?? [] : []}
       onChoose={task => go("tasks", { task })} opener={paletteOpener} />
     {paired && read && <NewWorkSheet teams={teams.data} teamId={read!.run.rigId} open={newWork}

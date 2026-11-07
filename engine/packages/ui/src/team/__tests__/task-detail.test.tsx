@@ -42,7 +42,10 @@ async function show(ui: React.ReactElement, locale: "en" | "zh-CN" = "en") {
 describe("task detail", () => {
   it("shows the diff, the review round and the attempt, by name only", async () => {
     const verdicts = [{ round: 1, reviewerTaskId: "task-1-review-1", verdict: "approved" as const,
-      candidateDigest: null, findings: 2, blocking: 0, recordedAt: "2026-10-31T00:00:00.000Z" }];
+      candidateDigest: null, findings: 2, findingRecords: [
+        { id: "note-1", severity: "P2" as const, file: "src/filter.ts", summary: "Clarify the predicate." },
+        { id: "note-2", severity: "P3" as const, file: "src/filter.ts", summary: "Clarify the label." },
+      ], blocking: 0, recordedAt: "2026-10-31T00:00:00.000Z" }];
     await show(<TaskScreen read={read({ tasks: [task({ verdicts })], attempts: [attempt()] })} runId={RUN_ID} taskId="task-1" seats={seats} onBack={() => {}} />);
 
     expect(screen.getByRole("heading", { name: "Status filter" })).toBeTruthy();

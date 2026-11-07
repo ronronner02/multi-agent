@@ -34,6 +34,14 @@ async function show(snapshot: TeamOwnerRead = read(), options: { integration?: I
 }
 
 describe("Overview", () => {
+  it("keeps retired seats out of the active fleet", async () => {
+    const snapshot = read();
+    snapshot.seats = snapshot.seats.map(seat => ({ ...seat, retired: seat.role === "reviewer" }));
+    const view = await show(snapshot);
+    expect(view.container.querySelectorAll(".ui-fleet-list li")).toHaveLength(2);
+    expect(view.container.querySelector(".ui-fleet-list")?.textContent).not.toContain("Reviewer");
+  });
+
   it("leaves healthy owner attention empty and keeps worker reports with the lead", async () => {
     await show(read({ tasks: [task({ stage: "lead/report", queueState: "blocked" })] }));
     expect(screen.queryByRole("region", { name: "Needs attention" })).toBeNull();
