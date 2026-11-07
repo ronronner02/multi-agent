@@ -387,11 +387,27 @@ export interface TeamSeatView {
   displayName: string;
 }
 
+export const TEAM_TASK_STAGES = ["owner/decision", "owner/blocked", "lead/report", "queued", "running", "review", "done"] as const;
+export type TeamTaskStage = (typeof TEAM_TASK_STAGES)[number];
+
+export interface TeamWorkerReportView {
+  status: "blocked" | "needs-decision" | "dropped";
+  question: string | null;
+  evidence: string;
+  truncated: boolean;
+  attemptId: string | null;
+  resolution: "rework" | "reassign" | "drop" | null;
+}
+
 export interface TeamReviewView {
   taskId: string;
   qitemId: string;
   role: TeamRole;
   queueState: TeamQueueState;
+  /** One daemon-owned projection; consumers group this value without reclassifying queue rows. */
+  stage: TeamTaskStage;
+  seat: string | null;
+  workerReport: TeamWorkerReportView | null;
   /**
    * U9 / KTD8 — the task's readable name: its title, or for a reviewer task the task it
    * reviews. Stored when the task was admitted; a task recorded before names existed is named
