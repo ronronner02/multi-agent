@@ -209,93 +209,12 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .composer textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .team-shell .composer .btn-primary { min-height: 44px; }
 
-/* --- the line ----------------------------------------------------------- */
-.team-shell .line { display: flex; flex-direction: column; padding-top: var(--sp-4); }
-.team-shell .line-head { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: var(--sp-3); }
-.team-shell .line-head h2 { margin: 0; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .02em; }
-.team-shell .line-head .count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-.team-shell .line-body { position: relative; }
-.team-shell .line-body::before {
-  content: ""; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px; background: var(--line);
-}
-.team-shell .line-fill {
-  position: absolute; left: 5px; top: 6px; width: 1px; background: var(--accent);
-  transition: height 400ms var(--ease);
-}
-.team-shell .task { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; padding: 7px 0 9px; }
-.team-shell .node {
-  position: relative; z-index: 1; margin-top: 4px;
-  width: 11px; height: 11px; border-radius: 50%;
-  background: var(--paper); border: 1.5px solid var(--faint);
-}
-.team-shell .task[data-state="done"] .node { background: var(--accent); border-color: var(--accent); }
-.team-shell .task[data-state="running"] .node { border-color: var(--accent); box-shadow: inset 0 0 0 2.5px var(--paper), inset 0 0 0 9px var(--accent); animation: breathe 1.8s var(--ease) infinite; }
-.team-shell .task[data-state="review"] .node { border-color: var(--ink); }
-.team-shell .task[data-state="blocked"] .node { border-color: var(--danger); border-width: 2px; background: var(--paper); }
-.team-shell .task-name { display: block; font-size: 14px; line-height: 1.45; font-weight: 500; color: var(--ink); }
-.team-shell .task[data-state="done"] .task-name { color: var(--ink-2); font-weight: 400; }
-.team-shell .task[data-state="queued"] .task-name { color: var(--ink-2); font-weight: 400; }
-.team-shell .task-seat { display: block; font-size: 12px; color: var(--faint); margin-top: 2px; }
-.team-shell .task-state { font-size: 12px; color: var(--muted); white-space: nowrap; padding-top: 2px; }
-.team-shell .task[data-state="running"] .task-state, .team-shell .task[data-state="review"] .task-state { color: var(--ink); }
-.team-shell .task[data-state="blocked"] .task-state { color: var(--danger); }
-
-/* merge is the terminus of the line, not a button in a header */
-.team-shell .merge {
-  margin-top: var(--sp-4); padding: var(--sp-4); display: grid; gap: 10px;
-  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2);
-  transition: border-color var(--t-base) var(--ease), background var(--t-base) var(--ease);
-}
-.team-shell .merge[data-ready="true"] { border-color: var(--accent); background: var(--surface); }
-.team-shell .merge h3 { margin: 0; font-family: var(--font-display); font-size: 17px; line-height: 1.4; font-weight: 600; }
-.team-shell .merge p { margin: 0; font-size: 12px; color: var(--muted); }
-.team-shell .merge .btn { min-height: 40px; width: 100%; }
-.team-shell .merge .merge-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); justify-self: start; padding: 0; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
-.team-shell .merge .merge-link svg { width: 12px; height: 12px; }
-.team-shell .merge .merge-link:hover { color: var(--ink); text-decoration-color: currentColor; }
-
-/* --- run home ----------------------------------------------------------- */
-.team-shell .home {
-  display: grid; grid-template-columns: minmax(0, 720px) 344px; gap: var(--sp-10);
-  justify-content: center;
-  padding: 0 var(--sp-6);
-  height: calc(100vh - var(--bar));
-}
-.team-shell .home .chat { height: 100%; }
-.team-shell .line-scroll { height: 100%; overflow-y: auto; padding-bottom: var(--sp-4); scrollbar-width: thin; }
-
-/* the line, collapsed to one row: the state of the run at a glance, above the conversation */
-.team-shell .line-strip {
-  display: none; align-items: center; justify-content: space-between; gap: var(--sp-3);
-  width: 100%; height: 48px; padding: 0 var(--sp-6); border-bottom: 1px solid var(--line);
-  background: var(--paper); font-size: 13px; text-align: left; cursor: pointer;
-}
-.team-shell .line-strip:hover { background: var(--surface-2); }
-.team-shell .line-strip svg { width: 14px; height: 14px; color: var(--faint); }
-.team-shell .line-strip .label { color: var(--muted); }
-.team-shell .line-strip .now { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.team-shell .line-strip .count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-
 /* --- pages that read as a document ------------------------------------- */
 .team-shell .page { max-width: 980px; width: 100%; margin: 0 auto; padding: var(--sp-6) var(--sp-6) var(--sp-10); }
 .team-shell .page-narrow { max-width: 640px; }
 .team-shell .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4); padding-bottom: var(--sp-5); }
 .team-shell h1.display { margin: 0; font-family: var(--font-display); font-size: 24px; line-height: 1.3; font-weight: 600; letter-spacing: 0; }
 
-/* teams list */
-.team-shell .team-list { display: grid; }
-.team-shell .team-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px var(--sp-4);
-  align-items: center; padding: var(--sp-4) 0; border-top: 1px solid var(--line);
-  transition: background var(--t-fast) var(--ease);
-}
-.team-shell .team-main { display: grid; gap: 2px; min-width: 0; }
-.team-shell .team-side { display: flex; align-items: center; gap: var(--sp-3); }
-.team-shell .team-new-work { min-height: 30px; padding: 0 12px; font-size: 13px; }
-.team-shell .team-row:last-child { border-bottom: 1px solid var(--line); }
-.team-shell .team-row:hover { background: var(--surface-2); }
-.team-shell .team-name { font-size: 15px; font-weight: 500; }
-.team-shell .team-path { font-family: var(--font-mono); font-size: 12px; color: var(--faint); margin-left: 10px; }
 .team-shell .seats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .team-shell .chip {
   display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px;
@@ -306,11 +225,6 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .chip[data-role="lead"] i { background: var(--ink); }
 .team-shell .chip[data-role="implementer"] i { background: var(--accent); }
 .team-shell .chip[data-role="reviewer"] i { background: var(--faint); }
-.team-shell .team-run { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
-.team-shell .team-run[data-state="running"] { color: var(--ink); }
-.team-shell .run-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 1px; }
-.team-shell .team-run[data-state="running"] .run-dot { background: var(--accent); animation: breathe 1.8s var(--ease) infinite; }
-
 /* create sheet */
 .team-shell .scrim { position: fixed; inset: 0; background: var(--ui-overlay); z-index: 30; }
 .team-shell .sheet {
@@ -332,19 +246,6 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .input.mono { font-family: var(--font-mono); font-size: 13px; }
 .team-shell .select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
 .team-shell .select svg { width: 14px; height: 14px; color: var(--faint); }
-.team-shell .seat-row { display: grid; grid-template-columns: 1fr 1fr 32px; gap: var(--sp-2); align-items: center; }
-.team-shell .seat-row .remove { width: 32px; height: 40px; display: grid; place-items: center; color: var(--faint); border-radius: var(--r-md); }
-.team-shell .seat-row .remove:hover { color: var(--danger); background: var(--danger-soft); }
-.team-shell .add-seat { justify-self: start; font-size: 13px; color: var(--accent); padding: 4px 0; }
-.team-shell .add-seat:hover { color: var(--accent-press); }
-
-/* task detail */
-.team-shell .detail { max-width: 1240px; width: 100%; margin: 0 auto; padding: var(--sp-5) var(--sp-6) var(--sp-8); min-height: calc(100vh - var(--bar)); display: flex; flex-direction: column; gap: var(--sp-4); min-height: calc(100vh - var(--bar)); }
-.team-shell .detail-head { display: grid; gap: 6px; }
-.team-shell .detail-meta { display: flex; align-items: center; gap: var(--sp-4); font-size: 12px; color: var(--muted); }
-.team-shell .detail-meta .state { color: var(--accent); font-weight: 500; }
-.team-shell .detail-grid { display: flex; flex-direction: column; gap: var(--sp-5); align-items: stretch; }
-/* the diff is the subject: the file rail is a strip along the top so the code gets the width */
 .team-shell .diff { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; min-height: 420px; }
 .team-shell .files { display: flex; align-items: center; gap: 2px; padding: 6px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; flex: 0 0 auto; }
 .team-shell .file { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); text-align: left; white-space: nowrap; }
@@ -365,44 +266,6 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .cl[data-kind="add"] .mark, .team-shell .cl[data-kind="add"] .src { color: var(--add-ink); }
 .team-shell .cl[data-kind="remove"] { background: var(--remove-bg); }
 .team-shell .cl[data-kind="remove"] .mark, .team-shell .cl[data-kind="remove"] .src { color: var(--remove-ink); }
-.team-shell .side { display: flex; flex-direction: column; gap: var(--sp-5); min-height: 0; overflow-y: auto; }
-/* below the diff: the review reads at a narrower measure, the attempts sit in their own rail */
-.team-shell .detail-foot { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--sp-8); align-items: start; border-top: 1px solid var(--line); padding-top: var(--sp-4); }
-.team-shell .detail-foot .review { max-width: 68ch; }
-.team-shell .detail-foot h2 { margin: 0 0 var(--sp-3); font-size: 12px; font-weight: 500; color: var(--muted); display: flex; align-items: baseline; justify-content: space-between; }
-.team-shell .side h2 { margin: 0 0 var(--sp-3); font-size: 12px; font-weight: 500; color: var(--muted); display: flex; align-items: baseline; justify-content: space-between; }
-.team-shell .verdict { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--accent); padding-bottom: var(--sp-2); }
-.team-shell .finding { padding: var(--sp-3) 0; border-top: 1px solid var(--line-soft); display: grid; gap: 4px; }
-.team-shell .finding-head { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
-.team-shell .finding-head .sev { font-size: 12px; }
-.team-shell .finding-head .loc { font-family: var(--font-mono); font-size: 12px; color: var(--faint); margin-left: auto; }
-.team-shell .finding p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-2); text-wrap: balance; }
-.team-shell .sev-note { color: var(--ink-2); }
-.team-shell .sev-minor { color: var(--muted); }
-.team-shell .attempt { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: var(--sp-3) 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
-.team-shell .attempt .when { font-size: 12px; color: var(--faint); grid-column: 1 / -1; }
-.team-shell .attempt .result { font-size: 12px; color: var(--muted); }
-.team-shell .attempt .result[data-ok="true"] { color: var(--accent); }
-
-/* integration branch */
-.team-shell .branch { max-width: 720px; width: 100%; margin: 0 auto; padding: 56px var(--sp-6) var(--sp-8); }
-.team-shell .branch-head { display: grid; gap: 6px; padding-bottom: var(--sp-5); }
-.team-shell .branch-ref { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
-.team-shell .branch-ref .arrow { color: var(--faint); }
-.team-shell .commits { position: relative; }
-.team-shell .commits::before { content: ""; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: var(--accent); }
-.team-shell .commit { position: relative; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 18px 28px 18px 0; }
-.team-shell .commit .node { margin-top: 4px; background: var(--accent); border-color: var(--accent); justify-self: center; width: 13px; height: 13px; }
-.team-shell .commit-name { font-size: 15px; color: var(--ink); }
-.team-shell .commit-meta { font-family: var(--font-mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
-.team-shell .commit-meta .hash { color: var(--muted); }
-.team-shell .branch .merge { margin-top: 0; padding: 28px; gap: var(--sp-3); }
-/* the line keeps going until it reaches the merge plate: the plate is the end of the line */
-.team-shell .line-tail { width: 2px; height: 32px; margin-left: 7px; background: var(--accent); }
-.team-shell .branch .merge h3 { font-size: 22px; }
-.team-shell .branch .merge .consequence { font-size: 13px; color: var(--muted); line-height: 1.7; }
-.team-shell .branch .merge .btn { min-height: 48px; margin-top: 6px; font-size: 15px; }
-
 /* --- motion ------------------------------------------------------------- */
 @keyframes plate-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes sheet-in { from { transform: translateX(16px); opacity: .6; } to { transform: none; opacity: 1; } }
@@ -412,18 +275,9 @@ body:has(.team-shell) > #root { height: 100%; }
   .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; }
 }
 
-/* Narrow desktop / resizable app window: the chat keeps its measure, the line becomes a strip
- * that opens the full line on demand. 720 + 344 + gap + gutters needs 1184px to sit side by side. */
 @media (max-width: 1119px) {
-  .team-shell .home { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 var(--sp-5); height: calc(100vh - var(--bar) - 48px); }
-  .team-shell .line-scroll { display: none; }
-  .team-shell .line-strip { display: flex; }
-  .team-shell .detail { height: auto; }
-  .team-shell .detail-grid { grid-template-columns: minmax(0, 1fr); }
   .team-shell .diff { min-height: 520px; }
 }
-
-/* --- 390: chat keeps the viewport; the line becomes one status row ------ */
 @media (max-width: 767px) {
   .team-shell body { font-size: 15px; }
   .team-shell .topbar { padding: 0 var(--sp-4); gap: var(--sp-2); }
@@ -431,10 +285,6 @@ body:has(.team-shell) > #root { height: 100%; }
   .team-shell .lang button { padding: 13px 8px; }
   .team-shell .more { width: 44px; height: 44px; }
   .team-shell .run-name { font-size: 14px; }
-
-  .team-shell .home { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 var(--sp-4); height: calc(100vh - var(--bar) - 48px); }
-  .team-shell .line-scroll { display: none; }
-  .team-shell .line-strip { padding: 0 var(--sp-4); }
 
   .team-shell .turn-body { max-width: none; line-height: 1.7; }
   .team-shell .chat-log { gap: 16px; padding-top: 12px; }
@@ -447,15 +297,9 @@ body:has(.team-shell) > #root { height: 100%; }
   .team-shell .page { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
   .team-shell h1.display { font-size: 22px; }
   .team-shell .page-head { flex-wrap: wrap; gap: var(--sp-2); }
-  .team-shell .team-row { grid-template-columns: minmax(0, 1fr); }
-  .team-shell .team-run { text-align: left; }
-  .team-shell .team-path { display: block; margin-left: 0; margin-top: 2px; }
-
   .team-shell .sheet { width: 100%; border-left: 0; }
   .team-shell .scrim { display: none; }
 
-  .team-shell .detail { padding: var(--sp-4) var(--sp-4) var(--sp-6); min-height: 0; }
-  .team-shell .detail-foot { grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); }
   .team-shell .files { padding: 4px; }
   .team-shell .file { padding: 6px 8px; }
   /* one line-number column and wrapped continuations: on a phone every code line is complete */
@@ -465,10 +309,7 @@ body:has(.team-shell) > #root { height: 100%; }
   .team-shell .cl .ln:first-child { display: none; }
   .team-shell .cl .src { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 14px; padding-left: 2ch; text-indent: -2ch; }
 
-  .team-shell .branch { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
-  .team-shell .branch .merge { padding: var(--sp-4); }
 }
-@media (min-width: 1120px) { .team-shell .line-strip { display: none; } }
 
 /* --- form controls the shell renders natively -------------------------- */
 .team-shell .input.select { padding: 0 8px; cursor: pointer; }
@@ -482,12 +323,6 @@ body:has(.team-shell) > #root { height: 100%; }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
-
-/* --- review rounds ----------------------------------------------------- */
-.team-shell .verdict-mark { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; }
-.team-shell .verdict-mark[data-verdict="changes-required"] { color: var(--attention); }
-.team-shell .verdict-mark svg { width: 14px; height: 14px; }
-.team-shell .detail-foot .sev { color: var(--muted); font-size: 12px; }
 
 /* A sheet holds the start form itself, so the form does not draw a second card inside it. */
 .team-shell .sheet-body .plate { border: 0; background: none; padding: 0; }
@@ -589,14 +424,11 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .ui-icon-button svg { width: 18px; height: 18px; }
 .team-shell .ui-icon-button:hover:not(:disabled) { background: var(--ui-raised); color: var(--ui-text); }
 .team-shell .ui-main { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; }
-.team-shell .ui-main > .home { height: 100%; min-height: 0; }
-.team-shell .ui-main > .detail { min-height: 0; }
 .team-shell h1.display { font-family: var(--ui-sans); font-size: 24px; line-height: 1.3; }
 .team-shell .ui-footer { display: flex; justify-content: space-between; gap: 16px; min-height: 28px; padding: 4px 16px; border-top: 1px solid var(--ui-divider); background: var(--ui-surface); color: var(--ui-muted); font-size: 11px; }
 .team-shell .ui-footer > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .team-shell .ui-footer > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-shell .ui-footer svg { width: 12px; height: 12px; flex-shrink: 0; }
-.team-shell .ui-task-links { display: grid; gap: 8px; margin-top: 16px; max-width: 760px; }
 .team-shell .ui-dialog-overlay { position: fixed; inset: 0; z-index: 40; background: var(--ui-overlay); }
 .team-shell .ui-chat-panel { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(520px, 100vw); display: flex; flex-direction: column; background: var(--ui-surface); border-left: 1px solid var(--ui-divider); box-shadow: -16px 0 48px var(--ui-shadow); }
 .team-shell .ui-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--ui-divider); }
@@ -651,9 +483,114 @@ html[data-desktop="true"] .team-shell .ui-topstrip {
 }
 html[data-desktop="true"] .team-shell .ui-topstrip :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
 html[data-desktop="true"] .team-shell :is(.sheet, .ui-chat-panel, .ui-mobile-sidebar) { top: var(--ui-topstrip); }
-.team-shell .repository-picker { display: flex; gap: 8px; }
-.team-shell .repository-picker .input { flex: 1; min-width: 0; }
-.team-shell .repository-picker .btn { flex: none; }
+
+/* --- first open, preferences and usage ---------------------------------- */
+.team-shell.ui-entry { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.team-shell .ui-entry-header, .team-shell .ui-entry-main { position: relative; z-index: 1; }
+.team-shell .ui-entry-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--ui-divider); }
+.team-shell .ui-entry-preferences { display: flex; flex-wrap: wrap; gap: 16px; }
+.team-shell .ui-entry-preferences label, .team-shell .ui-range { display: flex; align-items: center; gap: 8px; color: var(--ui-muted); font-size: 12px; }
+.team-shell .ui-entry-preferences select, .team-shell .ui-range select { min-height: 32px; padding: 4px 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); color: var(--ui-text); }
+.team-shell .ui-entry-main { display: grid; justify-items: center; align-content: safe center; overflow: auto; padding: 24px; }
+.team-shell .ui-github-gate { width: min(480px, 100%); padding: 32px; gap: 24px; }
+.team-shell .ui-github-gate p, .team-shell .ui-device-flow p { margin: 0; }
+.team-shell .ui-gate-icon { width: 32px; height: 32px; color: var(--ui-accent); }
+.team-shell .ui-device-flow { display: grid; gap: 16px; }
+.team-shell .ui-device-flow > code { padding: 16px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-raised); font: 24px/1.4 var(--ui-mono); letter-spacing: .08em; text-align: center; }
+.team-shell .ui-device-flow small { color: var(--ui-muted); }
+.team-shell .ui-device-flow svg { width: 16px; height: 16px; }
+.team-shell :is(.ui-entry, .ui-settings, .ui-analytics, .ui-create-project) [role="alert"], .team-shell.ui-entry [role="alert"] { color: var(--ui-error); }
+html[data-desktop="true"] .team-shell .ui-entry-header { -webkit-app-region: drag; padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px)) + 16px); }
+html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, select) { -webkit-app-region: no-drag; }
+
+.team-shell .ui-settings-body { display: grid; grid-template-columns: 152px minmax(0, 1fr); gap: 24px; align-items: start; }
+.team-shell .ui-sections { display: grid; gap: 4px; }
+.team-shell .ui-sections button { padding: 8px 16px; border-radius: var(--ui-radius); text-align: left; color: var(--ui-muted); }
+.team-shell .ui-sections button:hover { background: var(--ui-raised); }
+.team-shell .ui-sections [aria-pressed="true"] { background: var(--ui-accent-soft); color: var(--ui-text); }
+.team-shell .ui-settings-pane { min-width: 0; }
+.team-shell .ui-settings-panel { padding: 24px; gap: 24px; }
+.team-shell .ui-settings-panel h2, .team-shell .ui-analytics h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.team-shell .ui-settings-panel > p { margin: 0; }
+.team-shell .ui-settings-panel > .btn { justify-self: start; }
+.team-shell .ui-settings-panel .field { max-width: 400px; font-size: 12px; color: var(--ui-muted); }
+.team-shell .ui-themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.team-shell .ui-theme-option { display: grid; justify-items: center; gap: 8px; padding: 16px 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); cursor: pointer; }
+.team-shell .ui-theme-option[data-checked="true"] { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+.team-shell .ui-theme-option svg { width: 24px; height: 24px; }
+.team-shell .ui-theme-option input, .team-shell .ui-motion-toggle input { accent-color: var(--ui-accent); }
+.team-shell .ui-motion-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.team-shell .ui-account { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.team-shell .ui-facts { display: grid; gap: 16px; margin: 0; }
+.team-shell .ui-facts > div { display: grid; grid-template-columns: minmax(104px, 1fr) minmax(0, 2fr); gap: 16px; }
+.team-shell .ui-facts dt { color: var(--ui-muted); font-size: 12px; }
+.team-shell .ui-facts dd { margin: 0; overflow-wrap: anywhere; }
+.team-shell .ui-facts code { font: 12px/1.5 var(--ui-mono); }
+.team-shell .ui-seat-settings { list-style: none; margin: 0; padding: 0; }
+.team-shell .ui-seat-settings li { display: grid; gap: 4px; padding: 16px 0; border-top: 1px solid var(--ui-divider-soft); overflow-wrap: anywhere; }
+.team-shell .ui-seat-settings strong { font-weight: 500; }
+
+.team-shell .ui-analytics { display: grid; gap: 24px; }
+.team-shell .ui-analytics .page-head { padding-bottom: 0; }
+.team-shell .ui-analytics .page-head p { margin: 8px 0 0; }
+.team-shell .ui-analytics .plate { min-width: 0; padding: 24px; gap: 16px; }
+.team-shell .ui-analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.team-shell .ui-range { flex: 0 0 auto; }
+.team-shell .ui-chart { display: block; width: 100%; height: auto; }
+.team-shell .ui-chart-grid { stroke: var(--ui-divider-soft); stroke-width: 1; }
+.team-shell .ui-chart-axis { stroke: var(--ui-divider); stroke-width: 1; }
+.team-shell .ui-chart-line { stroke: var(--ui-accent); stroke-width: 2; }
+.team-shell .ui-chart-point, .team-shell .ui-chart-bar { fill: var(--ui-accent); }
+.team-shell .ui-chart-tick, .team-shell .ui-chart-label { fill: var(--ui-muted); font: 12px var(--ui-sans); }
+.team-shell .ui-chart-label { fill: var(--ui-text-secondary); }
+.team-shell .ui-table-scroll { min-width: 0; overflow-x: auto; }
+.team-shell .ui-usage-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; font-variant-numeric: tabular-nums; }
+.team-shell .ui-usage-table :is(th, td) { padding: 12px 16px; border-bottom: 1px solid var(--ui-divider-soft); white-space: nowrap; }
+.team-shell .ui-usage-table :is(th, td):first-child { padding-left: 0; }
+.team-shell .ui-usage-table th { color: var(--ui-muted); font-weight: 500; }
+
+.team-shell .ui-create-project { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 41; width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); box-shadow: 0 16px 48px var(--ui-shadow); }
+.team-shell .ui-create-body { min-height: 0; overflow: auto; padding: 24px; }
+.team-shell .ui-create-body form { display: grid; gap: 24px; }
+.team-shell .ui-folder-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.team-shell .ui-folder-input input { min-width: 0; }
+.team-shell .ui-create-preview { display: grid; gap: 16px; padding: 16px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-raised); overflow-wrap: anywhere; }
+.team-shell .ui-create-preview h3 { margin: 0; font-size: 12px; font-weight: 500; color: var(--ui-muted); }
+.team-shell .ui-create-preview ul { margin: 8px 0 0; padding-left: 16px; }
+.team-shell .ui-create-preview code { font: 12px/1.6 var(--ui-mono); }
+.team-shell .ui-create-preview .consequence { margin: 0; color: var(--ui-text-secondary); }
+.team-shell .ui-create-body .plate-foot { justify-content: flex-end; }
+.team-shell .ui-folder-browser { display: grid; gap: 16px; }
+.team-shell .ui-folder-navigation { display: flex; gap: 8px; }
+.team-shell .ui-folder-navigation svg, .team-shell .ui-folder-list svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.team-shell .ui-folder-path { margin: 0; overflow-wrap: anywhere; }
+.team-shell .ui-folder-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); }
+.team-shell .ui-folder-list:empty { border: 0; }
+.team-shell .ui-folder-list button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px; text-align: left; overflow-wrap: anywhere; }
+.team-shell .ui-folder-list button:hover { background: var(--ui-selection); }
+.team-shell .ui-project-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 24px; }
+.team-shell .ui-project-card { padding: 24px; gap: 16px; align-content: start; }
+.team-shell .ui-project-open { display: grid; gap: 8px; text-align: left; overflow-wrap: anywhere; }
+.team-shell .ui-project-open strong { font-size: 16px; font-weight: 600; }
+.team-shell .ui-project-run { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 16px 0; text-align: left; border-top: 1px solid var(--ui-divider-soft); overflow-wrap: anywhere; }
+.team-shell .ui-project-card > .btn { justify-self: start; }
+.team-shell .ui-new-project { margin-top: 8px; }
+.team-shell .ui-integration-history li { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 0; }
+.team-shell .ui-integration-history button { text-align: left; color: var(--ui-accent); }
+.team-shell .ui-integration-history code { overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .team-shell .ui-analytics-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .team-shell .ui-entry-header, .team-shell .ui-entry-main { padding: 16px; }
+  .team-shell .ui-entry-preferences { gap: 8px; }
+  .team-shell .ui-github-gate { padding: 24px; }
+  .team-shell .ui-settings-body { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .team-shell .ui-sections { display: flex; flex-wrap: wrap; gap: 4px; }
+  .team-shell .ui-sections button { padding: 8px; }
+  .team-shell .ui-settings-panel, .team-shell .ui-analytics .plate, .team-shell .ui-create-body, .team-shell .ui-project-card { padding: 16px; }
+  .team-shell .ui-analytics, .team-shell .ui-analytics-grid, .team-shell .ui-project-list { gap: 16px; }
+}
 
 
 /* --- command-center Overview and task board ------------------------------ */

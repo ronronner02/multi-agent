@@ -151,6 +151,7 @@ import { teamControlRoutes, type TeamControlOptions } from "./routes/team-contro
 import { teamStartRoutes } from "./routes/team-start.js";
 import { teamSetupRoutes } from "./routes/team-setup.js";
 import { teamGithubRoutes } from "./routes/team-github.js";
+import { teamSettingsRoutes } from "./routes/team-settings.js";
 import { GithubCli } from "./domain/github-cli.js";
 import { teamLeadRoutes } from "./routes/team-lead.js";
 import { teamResultRoutes } from "./routes/team-result.js";
@@ -900,6 +901,8 @@ export function createApp(deps: AppDeps): Hono {
   // U3 — the owner's teams: the rig and seats a repository's team runs on. Same surface and the
   // same owner credential as the start below, because a team is what a start routes work to.
   app.route("/api/team-control", teamGithubRoutes(github, teamOptions.credentials,
+    [deps.missionControlBearerToken, deps.terminalBearerToken]));
+  app.route("/api/team-control", teamSettingsRoutes(deps.settingsStore, teamOptions.credentials,
     [deps.missionControlBearerToken, deps.terminalBearerToken]));
   app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials, github,
     ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}) },

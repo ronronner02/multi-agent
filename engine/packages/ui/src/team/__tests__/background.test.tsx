@@ -1,13 +1,13 @@
 import React from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Background } from "../background.js";
+import { Background, BACKGROUND_MOTION_KEY, useBackgroundPreference } from "../background.js";
 
 let reduced = false;
 let hidden = false;
 let query: MediaQueryList;
 beforeEach(() => {
-  reduced = false; hidden = false;
+  reduced = false; hidden = false; localStorage.clear();
   query = Object.assign(new EventTarget(), { media: "(prefers-reduced-motion: reduce)" }) as MediaQueryList;
   Object.defineProperty(query, "matches", { get: () => reduced });
   vi.spyOn(window, "matchMedia").mockReturnValue(query);
@@ -19,6 +19,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("command-center background", () => {
+  it("persists motion off and keeps a still frame without starting the video", () => {
+    localStorage.setItem(BACKGROUND_MOTION_KEY, "off");
+    function Fixture() { const preference = useBackgroundPreference(); return <>
+      <Background motion={preference.motion} /><button onClick={() => preference.setMotion(true)}>Enable</button>
+    </>; }
+    const view = render(<Fixture />);
+    expect(view.container.querySelector("video")).toBeNull();
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    fireEvent.click(view.getByText("Enable"));
+    expect(localStorage.getItem(BACKGROUND_MOTION_KEY)).toBe("on");
+    expect(view.container.querySelector("video")).not.toBeNull();
+  });
+
   it("plays the muted, inline background and pauses while hidden or blurred", () => {
     const view = render(<Background />);
     const video = view.container.querySelector("video")!;

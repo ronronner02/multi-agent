@@ -64,7 +64,7 @@ describe("new task", () => {
 
   it("presets the team the owner chose", async () => {
     await show([...withLead, ...withoutLead], withoutLead[0]!.id);
-    const select = screen.getByLabelText("Teams") as HTMLSelectElement;
+    const select = screen.getByLabelText("Projects") as HTMLSelectElement;
     expect(select.value).toBe(withoutLead[0]!.id);
     const body = await start("Ship the site");
     expect(body.rig).toBe(withoutLead[0]!.id);

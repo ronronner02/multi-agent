@@ -33,6 +33,15 @@ export const MESSAGE_PARAMETERS = {
   "reviews.blockingFindings": ["count"],
   "reviews.roundLabel": ["round"],
   "reviews.chatContext": ["task"],
+  "analytics.partial": ["measured", "total"],
+  "analytics.knownOutcomes": ["count"],
+  "analytics.attemptCount": ["count"],
+  "analytics.agentIndex": ["index"],
+  "projects.fileCount": ["count"],
+  "projects.createConsequence": ["name"],
+  "projects.pushConsequence": ["name"],
+  "projects.registerConsequence": ["name"],
+  "overview.integrationHistory": ["count"],
   // MVP — the completion panel names the review task a completion created and the task a
   // review reopened, so both carry the task id they name.
   "completion.reviewCreated": ["taskId"],

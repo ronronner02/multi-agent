@@ -8,20 +8,19 @@ import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/
 import { useTeamRun } from "../hooks/useTeamRun.js";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { latestRunFor, useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
-import { TeamsScreen } from "./teams-screen.js";
-import { RunHome } from "./run-home.js";
+import { CreateProject, ProjectsScreen } from "./create-project.js";
 import { Overview } from "./overview.js";
 import { TasksScreen } from "./tasks.js";
 import { WorkspaceScreen } from "./workspace/workspace-screen.js";
 import { ReviewsScreen } from "./reviews.js";
-import { TaskScreen } from "./task-screen.js";
-import { BranchScreen } from "./branch-screen.js";
 import { SettingsScreen } from "./settings.js";
+import { AnalyticsScreen } from "./analytics.js";
 import { StartRunForm, NewWorkSheet } from "./new-task.js";
 import { isFinished, readableBranch, taskName } from "./display.js";
 import { isRunActive } from "./clients.js";
 import { TEAM_THEME_PREFERENCES, useThemePreference } from "./theme.js";
-import { Background } from "./background.js";
+import { Background, useBackgroundPreference } from "./background.js";
+import { EntryFrame, GithubGate } from "./github-gate.js";
 import { ChatPanel, pendingOwnerDecisions } from "./chat-panel.js";
 import { CommandPalette } from "./command-palette.js";
 import "./fonts.js";
@@ -30,8 +29,8 @@ import "./team.css";
 export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
 export const TEAM_SECTIONS = ["overview", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
 export type TeamSection = (typeof TEAM_SECTIONS)[number];
-type TeamDestination = TeamSection | "teams" | "run" | "task" | "branch";
-const DESTINATIONS: readonly string[] = [...TEAM_SECTIONS, "teams", "run", "task", "branch"];
+type TeamDestination = TeamSection;
+const DESTINATIONS: readonly string[] = TEAM_SECTIONS;
 const LEGACY_SECTIONS: Readonly<Record<string, TeamSection>> = { agents: "workspace", logs: "workspace", knowledge: "workspace", decisions: "reviews" };
 
 export function teamSection(pathname: string): TeamDestination {
@@ -41,8 +40,7 @@ export function teamSection(pathname: string): TeamDestination {
 
 const SECTION_LABELS: Record<TeamDestination, MessageKey> = {
   overview: "nav.overview", workspace: "nav.workspace", tasks: "nav.tasks", reviews: "nav.reviews",
-  analytics: "nav.analytics", settings: "nav.settings", teams: "team.teams.title", run: "nav.overview",
-  task: "nav.tasks", branch: "team.branch.title",
+  analytics: "nav.analytics", settings: "nav.settings",
 };
 const NAV_ICONS = { overview: House, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
 
@@ -52,7 +50,7 @@ export function Pairing() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  return <div className="page page-narrow" style={{ paddingTop: 96 }}>
+  return <div className="page page-narrow">
     <section className="plate" aria-label={t("web.pair")}>
       {paired ? <>
         <h2 className="plate-title">{t("web.paired")}</h2>
@@ -83,13 +81,14 @@ export function Pairing() {
 
 /** Restored sidebar and command strip, composed with the current owner-session screens. */
 export function ShellFrame({ language, section, appearance, project, projectPicker, runName, runPicker, coordinator,
-  connection, branch, notifications, canChat, onLanguage, hrefFor, onSelect, onOpenChat, onSearch, action, children }: {
+  connection, branch, notifications, canChat, onLanguage, hrefFor, onSelect, onOpenChat, onSearch, onCreateProject, action, backgroundMotion = true, children }: {
   language: InterfaceI18n; section: TeamDestination; appearance: ReturnType<typeof useThemePreference>;
   project: string; projectPicker?: ReactNode; runName: string; runPicker?: ReactNode; coordinator: MessageKey;
   connection: MessageKey; branch: string; notifications: number; canChat: boolean;
   onLanguage: (next: "zh-CN" | "en") => void; hrefFor: (section: TeamSection) => string;
   onSelect: (section: TeamSection) => void; onOpenChat: (opener: HTMLButtonElement) => void;
-  onSearch: (opener: HTMLElement) => void; action?: ReactNode; children: ReactNode;
+  onSearch: (opener: HTMLElement) => void; onCreateProject?: (opener: HTMLButtonElement) => void;
+  action?: ReactNode; backgroundMotion?: boolean; children: ReactNode;
 }) {
   const { t } = useTranslation();
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -122,6 +121,10 @@ export function ShellFrame({ language, section, appearance, project, projectPick
       }}><Icon aria-hidden="true" /><span>{t(`nav.${id}`)}</span></a>;
     })}</nav>
     <div className="ui-sidebar-foot">
+      {onCreateProject && <button className="btn btn-outline ui-new-project" onClick={event => {
+        const opener = navigationOpen && navigationTrigger.current ? navigationTrigger.current : event.currentTarget;
+        setNavigationOpen(false); onCreateProject(opener);
+      }}>{t("projects.create")}</button>}
       {action && <div onClick={() => setNavigationOpen(false)}>{action}</div>}
       <label className="ui-appearance">{t("shell.appearance")}
         <select value={appearance.preference} onChange={event => appearance.setPreference(event.target.value as "dark" | "light" | "system")}>
@@ -137,7 +140,7 @@ export function ShellFrame({ language, section, appearance, project, projectPick
   const navSection = t(SECTION_LABELS[section]);
   return <Dialog.Root open={navigationOpen} onOpenChange={setNavigationOpen}>
     <div className="team-shell" lang={language.language} data-ui-theme={appearance.theme} data-testid="team-shell">
-      <Background />
+      <Background motion={backgroundMotion} />
       <aside className="ui-sidebar">{rail}</aside>
       <div className="ui-content">
         <header className="ui-topstrip">
@@ -179,6 +182,19 @@ export function showsNewWork(read?: TeamOwnerRead): boolean {
 }
 
 function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLanguage: (next: "zh-CN" | "en") => void }) {
+  const { paired } = useOwnerSession();
+  const appearance = useThemePreference();
+  const background = useBackgroundPreference();
+  const frame = (content: ReactNode) => <EntryFrame language={language} onLanguage={onLanguage} appearance={appearance}
+    backgroundMotion={background.motion}>{content}</EntryFrame>;
+  return paired ? <GithubGate frame={frame}><ProjectShell language={language} onLanguage={onLanguage}
+    appearance={appearance} background={background} /></GithubGate> : frame(<Pairing />);
+}
+
+function ProjectShell({ language, onLanguage, appearance, background }: {
+  language: InterfaceI18n; onLanguage: (next: "zh-CN" | "en") => void;
+  appearance: ReturnType<typeof useThemePreference>; background: ReturnType<typeof useBackgroundPreference>;
+}) {
   const { t } = useTranslation();
   const { paired } = useOwnerSession();
   const search = useSearch({ from: "/team" });
@@ -189,13 +205,14 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
   const data = useTeamRun(runId);
   const teams = useTeams();
   const runs = useRuns();
-  const appearance = useThemePreference();
   const chat = useTeamChat(runId, paired);
   const integration = useIntegration(runId, paired);
   const [chatOpen, setChatOpen] = useState(false);
   const [draftContext, setDraftContext] = useState<{ runId: string; body: string }>();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [newWork, setNewWork] = useState(false);
+  const [newWorkFor, setNewWorkFor] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const createOpener = useRef<HTMLElement>(null);
   const chatOpener = useRef<HTMLButtonElement>(null);
   const paletteOpener = useRef<HTMLElement>(null);
   const read = data.read.data;
@@ -204,31 +221,35 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
     : error instanceof OwnerReadError ? (error.status === 404 ? "web.notFound" : "web.error")
       : error instanceof TypeError ? "web.disconnected" : error ? "web.error"
         : (runId ? data.read.isPending : data.health.isPending) ? "web.loading" : "shell.connected";
-  const team = teams.data?.find(entry => entry.id === read?.run.rigId);
+  const selectedTeamId = read?.run.rigId ?? runs.data?.find(entry => entry.id === runId)?.rigId ?? search.team;
+  const team = teams.data?.find(entry => entry.id === selectedTeamId);
   const teamName = team?.name ?? runs.data?.find(entry => entry.id === runId)?.rigName ?? "";
   const runName = read?.run.displayName ?? runs.data?.find(entry => entry.id === runId)?.displayName ?? "";
   const lead = read?.attempts.filter(attempt => attempt.role === "lead").at(-1);
   const coordinator: MessageKey = !read ? "web.unknown" : !lead ? "shell.idle" : lead.state === "running" ? "shell.active" : `status.attempt.${lead.state}`;
-  const go = (next: TeamDestination, extra?: { run?: string; task?: string }) => void navigate({
+  const go = (next: TeamDestination, extra?: { run?: string; task?: string; team?: string }) => void navigate({
     to: "/team/$section", params: { section: next }, search: {
       run: extra && "run" in extra ? extra.run : runId || undefined,
-      task: extra?.task ?? (["task", "tasks", "workspace", "reviews"].includes(next) ? taskId || undefined : undefined),
+      team: extra && "team" in extra ? extra.team : selectedTeamId,
+      task: extra && "task" in extra ? extra.task : (["tasks", "workspace", "reviews"].includes(next) ? taskId || undefined : undefined),
     },
   });
   const canStartWork = showsNewWork(read) && runId !== "";
-  const currentRuns = runs.data?.filter(run => run.rigId === read?.run.rigId) ?? [];
+  const currentRuns = runs.data?.filter(run => run.rigId === selectedTeamId) ?? [];
+  const openProject = (id: string) => go("overview", { team: id || undefined, run: latestRunFor(runs.data, id)?.id, task: undefined });
+  const openCreate = (opener: HTMLButtonElement) => { createOpener.current = opener; setCreating(true); };
   let content: ReactNode;
   if (!paired) content = <Pairing />;
   else if (section === "settings") content = <SettingsScreen language={language} connection={connection}
-    isolation={data.health.data?.runtime?.isolation ?? null} address={window.location.origin} onClose={() => go("overview")} />;
-  else if (section === "teams" || (!runId && (teams.data?.length ?? 0) > 0)) content = <TeamsScreen teams={teams.data} runs={runs.data}
-    loading={teams.isPending} onOpenTeam={teamId => go("overview", { run: latestRunFor(runs.data, teamId)?.id })}
-    onOpenRun={nextRun => go("overview", { run: nextRun })} />;
-  else if (!runId) content = <div className="page page-narrow"><div className="page-head"><h1 className="display">{t("team.run.noRun")}</h1></div>
-    <StartRunForm teams={teams.data} onStarted={nextRun => go("overview", { run: nextRun })} /></div>;
-  else if (section === "branch") content = <BranchScreen read={read} runId={runId} onBack={() => go("overview")} />;
+    onLanguage={onLanguage} appearance={appearance} background={background} seats={read?.seats ?? team?.seats ?? []}
+    isolation={data.health.data?.runtime?.isolation ?? null} address={window.location.origin} />;
+  else if (section === "analytics") content = <AnalyticsScreen teamId={selectedTeamId} seats={read?.seats} />;
+  else if (!runId) content = team ? <div className="page page-narrow"><div className="page-head"><h1 className="display">{team.name}</h1></div>
+    <StartRunForm teams={teams.data} presetTeamId={team.id} onStarted={nextRun => go("overview", { run: nextRun })} /></div>
+    : <ProjectsScreen teams={teams.data} runs={runs.data} loading={teams.isPending} onOpenProject={openProject}
+      onOpenRun={nextRun => go("overview", { run: nextRun, task: undefined })} onNewWork={setNewWorkFor} onCreate={openCreate} />;
   else if (section === "tasks") content = <TasksScreen read={read} selectedTaskId={taskId}
-    onSelect={task => go("tasks", { task })} onNewTask={() => setNewWork(true)} />;
+    onSelect={task => go("tasks", { task })} onNewTask={() => { if (selectedTeamId) setNewWorkFor(selectedTeamId); }} />;
   else if (section === "workspace") content = <WorkspaceScreen key={"workspace-" + runId} read={read} selectedTaskId={taskId} />;
   else if (section === "reviews") content = <ReviewsScreen read={read} selectedTaskId={taskId} integration={integration.isError ? undefined : integration.data}
     onSelect={task => go("reviews", { task })} onAskLead={(task, opener) => {
@@ -236,37 +257,31 @@ function ManagedShell({ language, onLanguage }: { language: InterfaceI18n; onLan
       setDraftContext({ runId, body: t("reviews.chatContext", { task: taskName(task, t) }) });
       setChatOpen(true);
     }} />;
-  else if (section === "task") content = taskId
-    ? <TaskScreen read={read} runId={runId} taskId={taskId} seats={read?.seats ?? []} onBack={() => go("overview")} />
-    : <div className="page"><div className="page-head"><h1 className="display">{t(SECTION_LABELS[section])}</h1></div>
-      <p className="muted">{t("shell.chooseTask")}</p><div className="ui-task-links">{read?.tasks.map(task =>
-        <button className="option" key={task.qitemId} onClick={() => go(section, { task: task.taskId })}>{taskName(task, t)}</button>)}</div></div>;
-  else if (section === "analytics") content = <div className="page"><div className="page-head"><h1 className="display">{t("nav.analytics")}</h1></div><p className="muted">{t("shell.analyticsPending")}</p></div>;
-  else if (section === "run") content = <RunHome read={read} runId={runId} available={paired && !error} now={Date.now()}
-    onOpenTask={next => go("task", { task: next })} onOpenBranch={() => go("branch")} />;
   else content = <Overview read={read} chat={chat.data} integration={integration.data}
     onOpenTasks={() => go("tasks")} onOpenTask={task => go("tasks", { task })}
     onOpenChat={opener => { chatOpener.current = opener; setChatOpen(true); }} />;
 
-  return <ShellFrame language={language} section={section} appearance={appearance} project={teamName} runName={runName}
+  return <ShellFrame language={language} section={section} appearance={appearance} backgroundMotion={background.motion} project={teamName} runName={runName}
     coordinator={coordinator} connection={connection} branch={readableBranch(integration.data?.branch ?? "")}
     notifications={paired ? pendingOwnerDecisions(read, chat.data).length : 0} canChat={paired && !!runId}
-    projectPicker={<select className="ui-project-picker" aria-label={t("shell.project")} value={team?.id ?? ""} onChange={event => {
-      const next = latestRunFor(runs.data, event.target.value);
-      go(next ? "overview" : "teams", { run: next?.id });
-    }}><option value="">{t("shell.allProjects")}</option>{teams.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
+    projectPicker={<select className="ui-project-picker" aria-label={t("shell.project")} value={team?.id ?? ""} onChange={event => openProject(event.target.value)}>
+      <option value="">{t("shell.allProjects")}</option>{teams.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
     runPicker={currentRuns.length > 1 ? <select className="ui-runselect" aria-label={t("shell.run")} value={runId}
       onChange={event => go("overview", { run: event.target.value })}>{currentRuns.map(run => <option key={run.id} value={run.id}>{run.displayName}</option>)}</select> : undefined}
-    onLanguage={onLanguage} hrefFor={next => `/team/${next}${runId ? `?${new URLSearchParams({ run: runId })}` : ""}`} onSelect={go}
+    onLanguage={onLanguage} hrefFor={next => `/team/${next}?${new URLSearchParams({ ...(runId ? { run: runId } : {}),
+      ...(selectedTeamId ? { team: selectedTeamId } : {}), ...(["tasks", "workspace", "reviews"].includes(next) && taskId ? { task: taskId } : {}) })}`} onSelect={go}
     onOpenChat={opener => { chatOpener.current = opener; setChatOpen(true); }}
     onSearch={opener => { paletteOpener.current = opener; setPaletteOpen(true); }}
-    action={canStartWork ? <button className="btn btn-quiet ui-new-work" onClick={() => setNewWork(true)}>{t("team.teams.newWork")}</button> : undefined}>
+    onCreateProject={openCreate}
+    action={canStartWork ? <button className="btn btn-quiet ui-new-work" onClick={() => { if (selectedTeamId) setNewWorkFor(selectedTeamId); }}>{t("team.teams.newWork")}</button> : undefined}>
     {content}
     {paired && runId && <ChatPanel key={runId} read={read} runId={runId} chat={chat.data} open={chatOpen} onOpenChange={setChatOpen} opener={chatOpener} draftContext={draftContext?.runId === runId ? draftContext : undefined} />}
     <CommandPalette open={paired && paletteOpen} onOpenChange={setPaletteOpen} tasks={paired ? read?.tasks ?? [] : []}
       onChoose={task => go("tasks", { task })} opener={paletteOpener} />
-    {paired && read && <NewWorkSheet teams={teams.data} teamId={read!.run.rigId} open={newWork}
-      onOpenChange={setNewWork} onStarted={nextRun => { setNewWork(false); go("overview", { run: nextRun }); }} />}
+    <CreateProject open={creating} onOpenChange={setCreating} opener={createOpener}
+      onCreated={created => go("overview", { team: created.id, run: undefined, task: undefined })} />
+    {newWorkFor && <NewWorkSheet teams={teams.data} teamId={newWorkFor} open
+      onOpenChange={open => { if (!open) setNewWorkFor(null); }} onStarted={nextRun => { setNewWorkFor(null); go("overview", { run: nextRun }); }} />}
   </ShellFrame>;
 }
 

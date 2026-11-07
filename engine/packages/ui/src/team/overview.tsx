@@ -157,5 +157,17 @@ export function Overview({ read, chat, integration, onOpenTasks, onOpenTask, onO
         <TaskTimeline logs={[...(read?.logs ?? [])].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 4)} tasks={tasks} />
       </section>
     </div>
+    {integration?.available && integration.commits.length > 0 && <section className="ui-card" aria-label={t("team.branch.title")}>
+      <h2>{t("team.branch.title")}</h2>
+      <details className="ui-integration-history"><summary>{t("overview.integrationHistory", { count: integration.commits.length })}</summary>
+        <ol>{integration.commits.map(commit => {
+          const task = tasks.find(task => task.taskId === commit.task);
+          return <li key={commit.hash + ":" + commit.task}>
+            {task ? <button className="ui-text-button" onClick={() => onOpenTask(task.taskId)}>{taskName(task, t)}</button> : <span>{commit.subject}</span>}
+            <code>{commit.hash}</code>
+          </li>;
+        })}</ol>
+      </details>
+    </section>}
   </main>;
 }
