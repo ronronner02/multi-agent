@@ -18,9 +18,9 @@ import { join } from "node:path";
  *
  * 1. a planning run: the lead proposes a plan, the owner adds one requirement, the plan is agreed;
  * 2. the owner approves the plan once, and the lead's next turn writes its task list;
- * 3. the list is admitted with no owner decision, and its tasks run, complete and review
- *    themselves through the existing loop;
- * 4. every task done wakes the lead once, and it asks the owner the one question only they can
+ * 3. a worker reports a blocker; the lead resolves its brief without asking the owner;
+ * 4. the tasks complete and review themselves through the existing loop;
+ * 5. every task done wakes the lead once, and it asks the owner the one question only they can
  *    answer; the answer is the lead's next prompt and its last word is a status for the owner.
  *
  * Usage, from `engine/` after `npm run build`: npx tsx demo/team/scripts/lead-demo.ts
@@ -61,7 +61,12 @@ let reply;
 const say = (text) => { reply = text; };
 const write = (name, value) => writeFileSync(join(cwd, name), typeof value === "string" ? value : JSON.stringify(value, null, 1) + "\\n");
 
-if (prompt.includes("Since your last turn:")) {
+if (prompt.includes("Worker report for task") && prompt.includes("Which value should src/a.ts export?")) {
+  write("lead-proposal.json", { tasks: [], resolutions: [
+    { taskId: "task-2", action: "rework", body: "Implement the first scoped module. Use value 2." },
+  ] });
+  say("The worker's question is within the plan. I clarified its brief without asking you.");
+} else if (prompt.includes("Every task is done")) {
   // A team event. Every task is done, and the only open question is one the owner must decide.
   write("lead-escalation.json", {
     question: "The plan is delivered. Should the run also add a test module?",
@@ -75,12 +80,16 @@ if (prompt.includes("Since your last turn:")) {
   } else {
     // The owner's planning message: it changes the plan, so the plan file changes with it.
     write("plan.md", readFileSync(join(cwd, "plan.md"), "utf8") +
-      "\\n3. Cover src/a.ts with a test in src/a.test.ts.\\n");
-    say("Agreed. The plan now covers the two modules and a test for src/a.ts.");
+      "\\n3. Keep the exports named a and b.\\n");
+    say("Agreed. The plan keeps the exports named a and b.");
   }
 } else if (instructions.includes("You are planning with the owner")) {
   write("plan.md", "# Plan\\n\\n1. Implement src/a.ts.\\n2. Implement src/b.ts.\\n");
-  say("I would implement src/a.ts and src/b.ts, one task each. Do you want a test module as well?");
+  write("lead-roster.json", { seats: [
+    { role: "implementer", client: "claude-code" }, { role: "implementer", client: "claude-code" },
+    { role: "reviewer", client: "claude-code" },
+  ] });
+  say("I would implement src/a.ts and src/b.ts, one task each. Do you have any naming constraints?");
 } else if (task.includes("-review-")) {
   say("Reviewed the candidate.\\n\\n\\u0060\\u0060\\u0060json\\n{\\"findings\\": []}\\n\\u0060\\u0060\\u0060\\n");
 } else if (instructions.includes("admitted without the owner")) {
@@ -89,6 +98,13 @@ if (prompt.includes("Since your last turn:")) {
     { taskId: "task-3", seat: "b@lead-demo", paths: ["src/b.ts"], dependencies: [], body: "Implement the second scoped module" },
   ] });
   say("The plan is broken into two implementer tasks; the list is in my tree.");
+} else if (task === "task-2" && !prompt.includes("Use value 2.")) {
+  const reportLine = prompt.split("\\n").find(line => line.startsWith("Task report file: "));
+  if (!reportLine) throw new Error("the worker prompt omitted its report destination");
+  const report = JSON.parse(reportLine.slice("Task report file: ".length));
+  writeFileSync(report, JSON.stringify({ status: "blocked", question: "Which value should src/a.ts export?",
+    evidence: "The brief does not name the value." }));
+  say("The task is paused with a structured report.");
 } else if (task === "task-2") {
   write("src/a.ts", "export const a = 2;\\n");
   say("Implemented src/a.ts.");
@@ -103,11 +119,13 @@ writeFileSync(result, reply);
 `);
 
 const { createDaemon } = await import("../../../packages/daemon/src/startup.js");
+const launches = new Map<string, { promptPath: string; reportPath?: string }>();
 const daemon = await createDaemon({ dbPath: join(scratch, "demo.db"), managedMode: true, workersIsolation: "none",
   teamControl: { credentials: { ownerToken } },
   cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
   directLaunchCommand: facts => {
     if (!facts.resultPath || !facts.promptPath) throw new Error("the launch recorded no prompt or result path");
+    launches.set(facts.attemptId, { promptPath: facts.promptPath, reportPath: facts.reportPath });
     return [process.execPath, client, "--task", facts.taskId, "--prompt", facts.promptPath, "--result", facts.resultPath];
   } });
 async function api(path: string, payload?: unknown) {
@@ -129,8 +147,7 @@ function writable(path: string): void {
   }
 }
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const turnStateRoot = join(process.env.OPENRIG_HOME!, "state", "workers", "homes", "local", "scratch");
-const promptOf = (attemptId: string) => readFileSync(join(turnStateRoot, "turns", attemptId + ".prompt"), "utf8");
+const promptOf = (attemptId: string) => readFileSync(launches.get(attemptId)!.promptPath, "utf8");
 let failed = true;
 try {
   const governance = daemon.deps.teamGovernance!;
@@ -161,6 +178,7 @@ try {
     return attemptsOf(taskId)[count - 1]!.id;
   };
   const chat = async () => (await api(`/runs/${runId}/chat`)) as { phase: string;
+    planApproval: { plan: { hash: string }; roster: { digest: string }; error: string | null } | null;
     messages: Array<{ id: string; sender: string; kind: string; body: string; options: string[] | null;
       answeredBy: string | null }>; pendingDecision: { id: string; body: string; options: string[] } | null };
   const queueState = (taskId: string) => governance.queueState(qitem(taskId));
@@ -177,19 +195,23 @@ try {
   await waitFor("the lead's first reply", () => governance.chatMessages(runId).length >= 1);
   let conversation = await chat();
   assert.equal(conversation.messages[0]!.sender, "lead");
-  assert.match(conversation.messages[0]!.body, /test module/);
+  assert.match(conversation.messages[0]!.body, /naming constraints/);
   assert.match(readFileSync(join(leadTree, "plan.md"), "utf8"), /src\/a\.ts/);
   console.log("The lead's first turn proposed a plan:", conversation.messages[0]!.body);
 
   console.log("==> The owner adds one requirement in the chat, and the plan is agreed");
-  await api(`/runs/${runId}/chat`, await command("chat-plan", { body: "Cover src/a.ts with a test, then we are agreed." }));
+  await api(`/runs/${runId}/chat`, await command("chat-plan", { body: "Keep the exports named a and b, then we are agreed." }));
   const planningTurn = await waitTurn("task-1", 2);
-  assert.match(promptOf(planningTurn), /Cover src\/a\.ts with a test/);
+  assert.match(promptOf(planningTurn), /Keep the exports named a and b/);
   await waitFor("the lead's answer", () => governance.chatMessages(runId).filter(message => message.sender === "lead").length >= 2);
-  assert.match(readFileSync(join(leadTree, "plan.md"), "utf8"), /src\/a\.test\.ts/);
+  assert.match(readFileSync(join(leadTree, "plan.md"), "utf8"), /Keep the exports named a and b/);
 
   console.log("==> The owner approves the plan once");
-  const approved = await api(`/runs/${runId}/plan/approve`, await command("approve-plan", {}));
+  const approval = (await chat()).planApproval;
+  assert(approval && !approval.error, approval?.error ?? "The plan and roster must be readable.");
+  assert.match(approval.plan.hash, /^sha256:/);
+  const approved = await api(`/runs/${runId}/plan/approve`,
+    await command("approve-plan", { rosterDigest: approval.roster.digest }));
   assert.equal(approved.status, "accepted");
   assert.equal(governance.getRun(runId).phase, "delivery");
   const decompositionTurn = await waitTurn("task-1", 3);
@@ -200,6 +222,20 @@ try {
   // Nothing was recorded for the owner to approve: the batch is inside the binding they approved.
   assert.equal(approvalRows("scope-change"), 0, "the lead's decomposition must not become an owner decision");
   console.log("Admitted:", ["task-2", "task-3"].map(taskId => governance.findTask(runId, taskId)!.assignment.taskId).join(", "));
+
+  console.log("==> A blocked worker asks the lead, and the lead resolves the brief without owner attention");
+  const reportAttempt = await waitTurn("task-2", 1);
+  const reportPath = launches.get(reportAttempt)?.reportPath;
+  assert(reportPath, "the actual launch must expose its per-attempt report destination");
+  const report = JSON.parse(readFileSync(reportPath, "utf8"));
+  assert.equal(report.status, "blocked");
+  const reportTurn = await waitTurn("task-1", 4);
+  assert.ok(promptOf(reportTurn).includes("Which value should src/a.ts export?"));
+  assert.equal(governance.chatDecision(runId), null, "a worker report is not an owner decision");
+  assert.equal(governance.getRun(runId).retriesUsed, 0, "a lead resolution spends no automatic retry");
+  assert.equal(governance.getTask(qitem("task-2"))!.assignment.paths.join(","), "src/a.ts");
+  await waitTurn("task-2", 2);
+  console.log("The actual lead prompt carried the worker's question; its resolution resumed the same scoped task.");
 
   console.log("==> Both tasks run, complete on the daemon's evidence, and review themselves");
   for (const taskId of ["task-2", "task-3"]) {
@@ -218,7 +254,7 @@ try {
 
   console.log("==> Every task done wakes the lead, and it asks the one question only the owner can answer");
   await waitFor("the lead's decision", () => governance.chatDecision(runId) !== null);
-  const wakeTurn = await waitTurn("task-1", 4);
+  const wakeTurn = await waitTurn("task-1", 5);
   assert.match(promptOf(wakeTurn), /Every task is done/);
   conversation = await chat();
   const decision = conversation.pendingDecision!;
@@ -228,9 +264,9 @@ try {
 
   console.log("==> The owner answers the decision through the chat");
   await api(`/runs/${runId}/chat`, await command("chat-answer", { body: "Merge the branch as it is", answerTo: decision.id }));
-  const answerTurn = await waitTurn("task-1", 5);
+  const answerTurn = await waitTurn("task-1", 6);
   assert.match(promptOf(answerTurn), /Merge the branch as it is/);
-  await waitFor("the lead's closing message", () => governance.chatMessages(runId).filter(message => message.sender === "lead").length >= 4);
+  await waitFor("the lead's closing message", () => governance.chatMessages(runId).filter(message => message.sender === "lead").length >= 6);
   conversation = await chat();
   assert.equal(conversation.pendingDecision, null, "the answered decision is no longer pending");
   const closing = conversation.messages.at(-1)!;
@@ -244,11 +280,11 @@ try {
     AND json_extract(payload, '$.action') = 'plan.approved' AND json_extract(payload, '$.runId') = ?`).get(runId) as { n: number }).n;
   const wakes = (daemon.db.prepare(`SELECT count(*) AS n FROM events WHERE type = 'team.control'
     AND json_extract(payload, '$.action') = 'lead.woken' AND json_extract(payload, '$.runId') = ?`).get(runId) as { n: number }).n;
-  assert.equal(wakes, 1, "the lead is woken once for the team's events, not once per sweep");
+  assert.equal(wakes, 2, "one worker-report wake and one all-done wake, never one per sweep");
   assert.equal(ownerMessages, 2, "one planning message and one answered decision");
   assert.equal(planApprovals, 1);
   console.log(`Owner actions in this run: ${ownerMessages} chat messages, ${planApprovals} plan approval, 0 other decisions.`);
-  console.log("U6 demo passed: the lead decomposed, ran and reviewed the plan with no owner decision, and asked only what it could not decide.");
+  console.log("Lead demo passed: the worker report reached the lead, its resolution preserved scope, and only an explicit escalation reached the owner.");
   failed = false;
 } catch (error) {
   // A launch that never reached the receipt path is a startup failure the demo cannot explain

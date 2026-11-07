@@ -51,7 +51,7 @@ function leadFixture() {
 }
 it("includes current read-only Lead protocol, roster and instructions on every activation", () => {
   const { input } = leadFixture(), first = createContextManifest(input);
-  expect(first.protocolVersion).toBe("2"); expect(first.files.every(f => f.readOnly)).toBe(true);
+  expect(first.protocolVersion).toBe("3"); expect(first.files.every(f => f.readOnly)).toBe(true);
   input.lead!.activationId = "activation-2"; input.lead!.roster[0]!.mailbox = "run/reassigned";
   const roster = input.files.find(f => f.kind === "roster")!, content = JSON.stringify(input.lead!.roster);
   chmodSync(roster.path, 0o644); writeFileSync(roster.path, content); chmodSync(roster.path, 0o440); roster.hash = hashBytes(content);
@@ -96,7 +96,7 @@ const rewrite = (file: ContextInput["files"][number], content: string) => { chmo
 it.each(["implementer", "reviewer"] as const)("projects the core and the %s charter with their versions", role => {
   const { input, observed } = fixture(role), m = createContextManifest(input);
   expect(m.files.filter(f => f.kind === "core" || f.kind === "charter").map(f => readFileSync(f.path, "utf8"))).toEqual([coreInstructions, roleCharters[role]]);
-  expect(m.instructionVersions).toEqual({ core: "2", charter: "1" });
+  expect(m.instructionVersions).toEqual({ core: "2", charter: "2" });
   expect(verifyEffectiveContext(m, observed)).toBe(hashBytes(canonicalJson(observed)));
 });
 it.each(["missing-core", "missing-charter", "other-role", "changed-core", "changed-charter", "duplicate-core"])("refuses a projection whose role instructions are wrong: %s", kind => {

@@ -179,18 +179,19 @@ describe("attempt telemetry persistence and per-turn usage", () => {
     await completion.sweep(); expect(order).toHaveLength(3);
   });
 
-  it("retains failed attempt history even when automatic retry immediately reopens its task", async () => {
+  it("retains failed attempt history while a provider retry waits in the queue", async () => {
     const attempt = fixture.addAttempt("failed-turn");
     fixture.writeSidecars(attempt.id, nativeUsage());
     fixture.setNow("2026-11-07T12:00:10.000Z");
     const completion = composeAttemptCompletion({ db: fixture.db, governance: fixture.governance,
       currentBinding: () => fixture.binding, turnStateRoot: fixture.turnRoot, telemetry: store, alive: () => false,
       sessions: { findResumeContextByName: () => null, updateStartupStatus: vi.fn() },
-      candidateManifestFor: () => ({ base: "commit", baseIdentifier: "a".repeat(40), files: [{ path: "other.txt" }],
-        manifestDigest: "sha256:" + "b".repeat(64), patch: "diff --git a/other.txt b/other.txt\n+++ b/other.txt\n" }),
+      now: fixture.clock, paneExit: async () => ({ dead: true, code: 1 }),
+      paneTail: async () => "Error: connect ECONNRESET",
     });
     await completion.sweep();
     expect(fixture.governance.queueState(fixture.qitemId)).toBe("pending");
+    expect(fixture.governance.getTask(fixture.qitemId)!.evidence).toMatchObject({ retryNotBefore: "2026-11-07T12:02:10.000Z" });
     expect(store.read(fixture.governance.getAttempt(attempt.id)!)).toMatchObject({ outcome: "failed", activeMs: 10_000 });
     expect(store.analytics({ days: 1 }).totals).toMatchObject({ failed: 1, succeeded: 0, retryCount: 1 });
   });
@@ -231,11 +232,11 @@ describe("attempt telemetry persistence and per-turn usage", () => {
     const stopped = capture("owner-retry");
     store.recordOutcome(stopped.id, { outcome: "failed", retryScheduled: false });
     fixture.governance.recordUsage(fixture.request("run", stopped.id, { expectedAttemptVersion: stopped.entityVersion,
-      state: "stopped", usage: stopped.usage, failure: classificationFor("evidence_invalid") }));
+      state: "stopped", usage: stopped.usage, failure: classificationFor("agent_error.provider_network") }));
     const failed = fixture.governance.getAttempt(stopped.id)!;
     const outcome = fixture.governance.recordTaskOutcome(fixture.request("run", fixture.qitemId, {
       expectedTaskVersion: fixture.governance.getTask(fixture.qitemId)!.entityVersion, state: "failed", actorSession: "implementer@fixture",
-      attemptId: failed.id, expectedAttemptVersion: failed.entityVersion, evidence: { validated: false, reasonCode: "evidence_invalid" },
+      attemptId: failed.id, expectedAttemptVersion: failed.entityVersion, evidence: { validated: false, reasonCode: "agent_error.provider_network" },
     }), fixture.owner);
     expect(outcome.status).toBe("observed");
     const retry = fixture.governance.ownerCommand("retry", fixture.request("run", fixture.qitemId, {

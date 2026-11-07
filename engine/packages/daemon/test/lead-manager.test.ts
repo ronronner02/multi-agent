@@ -12,11 +12,11 @@ import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
 import { agentTurnOutputPaths, continuationNote } from "../src/domain/agent-turn.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { composeLeadTurnEnd, leadChatTurnNote, pendingOwnerMessages } from "../src/domain/lead-chat.js";
-import { LeadProposalMissingError } from "../src/domain/lead-proposal.js";
+import { LeadProposalMissingError, parseLeadProposalFile, type LeadProposal } from "../src/domain/lead-proposal.js";
 import { composeLeadManager, deliveredLeadEvents, leadTeamEvents, proposalRefusalReason } from "../src/domain/lead-manager.js";
 import { LeadWakePolicy } from "../src/domain/lead-wake-policy.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
-import { composePendingDispatch } from "../src/domain/pending-dispatch.js";
+import { composePendingDispatch, pendingTasks } from "../src/domain/pending-dispatch.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { roleConfiguration } from "../src/domain/role-configuration.js";
 import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
@@ -54,11 +54,11 @@ describe("U6 — the lead as manager", () => {
       sourceSession: "owner", destinationSession: seat, body: `Work ${taskId}`,
     }), binding);
 
-  const manager = (proposal: readonly unknown[] | Error) => composeLeadManager({ db, governance,
+  const manager = (proposal: readonly unknown[] | LeadProposal | Error) => composeLeadManager({ db, governance,
     readLeadProposal: () => { if (proposal instanceof Error) throw proposal; return proposal as never; },
     currentBinding: () => structuredClone(binding), dispatch: () => dispatch, log: () => {} });
 
-  const leadTurnEnd = async (proposal: readonly unknown[] | Error, attemptId = "attempt-lead") =>
+  const leadTurnEnd = async (proposal: readonly unknown[] | LeadProposal | Error, attemptId = "attempt-lead") =>
     manager(proposal).turnEnd({ id: attemptId, runId: "run", qitemId: leadQitemId, role: "lead" });
 
   const wakeEvents = () => db.prepare(`SELECT json_extract(payload, '$.payload.keys') AS keys, json_extract(payload, '$.payload.note') AS note
@@ -101,6 +101,111 @@ describe("U6 — the lead as manager", () => {
 
   /** The lead's last delivery turn ended: the state its next turn is reopened from. */
   const endLeadTurn = () => db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(leadQitemId);
+
+  const pauseWorker = (taskId = "task-2", role: "implementer" | "reviewer" = "implementer") => {
+    const seat = role === "reviewer" ? "reviewer@rig" : "a@rig";
+    expect(admit(taskId, role, seat, ["src/a.ts"], role === "reviewer" ? { reviewOf: "task-2" } : {}).status).toBe("accepted");
+    const task = governance.findTask("run", taskId)!;
+    const attemptId = `attempt-${taskId}`;
+    expect(governance.recordAttempt(request(attemptId, { qitemId: task.qitemId, role, provider: "claude",
+      identity: { nativeSessionId: attemptId, tmuxServer: "/tmp/tmux.sock", paneId: `%${serial}`,
+        processId: 123, processStart: "start", generation: 1, policyFingerprint: binding.policyFingerprint },
+      unknownReason: null, state: "running", usage }), binding).status).toBe("observed");
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = ?").run(attemptId);
+    expect(governance.recordTaskOutcome(request(task.qitemId, { expectedTaskVersion: task.entityVersion, state: "blocked",
+      actorSession: seat, attemptId, expectedAttemptVersion: 1, evidence: { taskReport: {
+        status: "needs-decision", question: "Which response is required?", evidence: "Two responses are named in the brief." } } }), daemon).status)
+      .toBe("observed");
+    return governance.findTask("run", taskId)!;
+  };
+
+  it("parses additive resolutions and rejects ambiguous or scope-changing fields", () => {
+    const resolution = { taskId: "task-2", action: "rework", body: "Use the approved response." };
+    expect(parseLeadProposalFile({ tasks: [], resolutions: [resolution] })).toEqual({ tasks: [], resolutions: [resolution] });
+    for (const entry of [{ ...resolution, paths: ["outside"] }, { taskId: "task-2", action: "rework" },
+      { taskId: "task-2", action: "reassign" }, { taskId: "task-2", action: "drop", body: "extra" },
+      { taskId: "task-2", action: "unknown" }]) {
+      expect(() => parseLeadProposalFile({ tasks: [], resolutions: [entry] })).toThrow();
+    }
+    expect(() => parseLeadProposalFile({ tasks: [], resolutions: [resolution, resolution] })).toThrow();
+    expect(() => parseLeadProposalFile({ tasks: [] })).toThrow();
+  });
+
+  it("carries a worker question to the lead and reworks only its brief, with one fresh attempt", async () => {
+    endLeadTurn();
+    const task = pauseWorker();
+    await manager(new LeadProposalMissingError()).sweep();
+    expect(wakeEvents()[0]!.note).toContain("Which response is required?");
+    expect(continuationNote(db, "run", "task-1", "lead")).toContain("Which response is required?");
+    expect(governance.chatDecision("run")).toBeNull();
+    expect(governance.getRun("run").retriesUsed).toBe(0);
+    const proposal: LeadProposal = { tasks: [], resolutions: [{ taskId: "task-2", action: "rework", body: "Use response A." }] };
+    await leadTurnEnd(proposal);
+    expect(governance.queueState(task.qitemId)).toBe("pending");
+    expect(db.prepare("SELECT body, destination_session AS seat FROM queue_items WHERE qitem_id = ?").get(task.qitemId))
+      .toEqual({ body: "Use response A.", seat: "a@rig" });
+    expect(governance.getTask(task.qitemId)!.assignment).toEqual(task.assignment);
+    expect(pendingTasks(db, "run")).toContain("task-2");
+    const version = governance.getTask(task.qitemId)!.entityVersion;
+    await leadTurnEnd(proposal, "lead-again");
+    expect(governance.getTask(task.qitemId)!.entityVersion).toBe(version);
+    expect(governance.recordAttempt(request("attempt-resolved", { qitemId: task.qitemId, role: "implementer", provider: "claude",
+      identity: { nativeSessionId: "resolved", tmuxServer: "/tmp/tmux.sock", paneId: "%9", processId: 456,
+        processStart: "resolved", generation: 1, policyFingerprint: binding.policyFingerprint },
+      unknownReason: null, state: "running", usage }), binding).status).toBe("observed");
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = 'attempt-resolved'").run();
+    expect(pendingTasks(db, "run")).not.toContain("task-2");
+  });
+
+  it("reassigns a paused worker only to an active same-role seat", async () => {
+    const task = pauseWorker();
+    for (const seat of ["reviewer@rig", "missing@rig"]) {
+      await leadTurnEnd({ tasks: [], resolutions: [{ taskId: "task-2", action: "reassign", seat }] }, `lead-${seat}`);
+      expect(governance.queueState(task.qitemId)).toBe("blocked");
+    }
+    await leadTurnEnd({ tasks: [], resolutions: [{ taskId: "task-2", action: "reassign", seat: "b@rig" }] }, "lead-reassign");
+    expect(db.prepare("SELECT destination_session AS seat FROM queue_items WHERE qitem_id = ?").get(task.qitemId)).toEqual({ seat: "b@rig" });
+    expect(governance.getTask(task.qitemId)!.assignment).toEqual(task.assignment);
+    expect(pendingTasks(db, "run")).toContain("task-2");
+  });
+
+  it("drops a paused reviewer without recording a verdict or candidate", async () => {
+    expect(admit("task-2", "implementer", "a@rig", ["src/a.ts"]).status).toBe("accepted");
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(governance.findTask("run", "task-2")!.qitemId);
+    const task = pauseWorker("task-review", "reviewer");
+    await leadTurnEnd({ tasks: [], resolutions: [{ taskId: "task-review", action: "drop" }] });
+    expect(governance.queueState(task.qitemId)).toBe("done");
+    expect(governance.getTask(task.qitemId)!.evidence).toMatchObject({ validated: false });
+    expect(db.prepare(`SELECT count(*) AS n FROM events WHERE type = 'team.control'
+      AND json_extract(payload, '$.action') = 'review.verdict'`).get()).toEqual({ n: 0 });
+    expect(pendingTasks(db, "run")).not.toContain("task-review");
+  });
+
+  it("validates every resolution before admitting tasks or applying seat changes", async () => {
+    const task = pauseWorker();
+    const nodes = db.prepare("SELECT count(*) AS n FROM nodes").get();
+    await leadTurnEnd({ tasks: [{ taskId: "new-task", seat: "a@rig", paths: ["src/new.ts"], dependencies: [], body: "New work" }],
+      seats: { add: [{ role: "implementer", client: "claude-code" }], retire: [] },
+      resolutions: [{ taskId: "task-2", action: "rework", body: "Changed" }, { taskId: "foreign-task", action: "drop" }] });
+    expect(governance.queueState(task.qitemId)).toBe("blocked");
+    expect(db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(task.qitemId)).toEqual({ body: "Work task-2" });
+    expect(governance.findTask("run", "new-task")).toBeNull();
+    expect(db.prepare("SELECT count(*) AS n FROM nodes").get()).toEqual(nodes);
+  });
+
+  it("leaves a report paused while the lead escalates, and delivers the owner's answer to the lead", async () => {
+    const task = pauseWorker();
+    endLeadTurn();
+    const stop = composeLeadTurnEnd({ db, governance, turnStateRoot: turnRoot,
+      readEscalation: () => ({ question: "Which response is required?", options: ["A", "B"] }), dispatch: () => dispatch as never });
+    await stop({ id: "lead-escalation", runId: "run", qitemId: leadQitemId, role: "lead" });
+    const decision = governance.chatDecision("run")!;
+    expect(decision.body).toBe("Which response is required?");
+    expect(governance.queueState(task.qitemId)).toBe("blocked");
+    expect(governance.postChatMessage(request("answer-report", { body: "A", answerTo: decision.id }), owner, binding).status).toBe("accepted");
+    expect(leadChatTurnNote(pendingOwnerMessages(db, "run"))).toContain("A");
+    expect(governance.chatDecision("run")).toBeNull();
+  });
 
   it("admits a valid decomposition with no owner approval, and its tasks dispatch", async () => {
     endLeadTurn();

@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 import { TEAM_CONTROL_VERSION, TeamContractError, canonicalJson, parseAssignment, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
 import { hashBytes, type PlanGovernance } from "./plan-governance.js";
 import type { LeadSeatChanges } from "./lead-roster.js";
-import { LeadProposalMissingError, type LeadTask, type LeadProposal } from "./lead-proposal.js";
+import { LeadProposalMissingError, type LeadTask, type LeadProposal, type LeadResolution } from "./lead-proposal.js";
 
 /**
  * U6 — the lead as manager, after the owner approved the plan.
@@ -63,10 +63,13 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
   const rows = db.prepare(`SELECT a.task_id AS taskId, a.qitem_id AS qitemId, q.state AS state,
       q.closure_reason AS closureReason, COALESCE(a.display_name, a.task_id) AS name,
       json_extract(a.assignment_json, '$.role') AS role,
-      json_extract(a.evidence_json, '$.reasonCode') AS evidenceReason
+      json_extract(a.evidence_json, '$.reasonCode') AS evidenceReason,
+      json_extract(a.evidence_json, '$.taskReport') AS taskReportJson,
+      json_extract(a.evidence_json, '$.reportedAttemptId') AS reportedAttemptId
     FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
     WHERE a.run_id = ? ORDER BY a.rowid`).all(runId) as Array<{ taskId: string; qitemId: string; state: string;
-      closureReason: string | null; name: string; role: string; evidenceReason: string | null }>;
+      closureReason: string | null; name: string; role: string; evidenceReason: string | null;
+      taskReportJson: string | null; reportedAttemptId: string | null }>;
   const run = db.prepare("SELECT json_extract(binding_json, '$.limits.maxReviewRounds') AS maxReviewRounds FROM team_runs WHERE id = ?")
     .get(runId) as { maxReviewRounds: number | null } | undefined;
   const maxReviewRounds = run?.maxReviewRounds ?? 0;
@@ -77,9 +80,15 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
     .all(qitemId) as Array<{ failureJson: string | null }>;
   const events: LeadTeamEvent[] = [];
   for (const row of rows) {
-    if (row.role !== "implementer") continue;
+    if (row.role !== "implementer" && row.role !== "reviewer") continue;
+    if (row.taskReportJson !== null && (row.state === "blocked" || row.state === "done")) {
+      events.push({ key: `report:${row.taskId}:${row.reportedAttemptId}`,
+        note: `Worker report for task "${row.name}" (taskId: ${row.taskId}): ${row.taskReportJson}. ` +
+          "Resolve a paused task through resolutions in lead-proposal.json, or escalate only when the owner must decide." });
+      continue;
+    }
     // A task that used the run's whole review allowance: no further round could be admitted.
-    if (row.state !== "done" && maxReviewRounds > 0 && reviewRounds(row.taskId) >= maxReviewRounds) {
+    if (row.role === "implementer" && row.state !== "done" && maxReviewRounds > 0 && reviewRounds(row.taskId) >= maxReviewRounds) {
       events.push({ key: `review-limit:${row.taskId}`,
         note: `Task "${row.name}" used every review round the plan allows and none of them approved it. ` +
           "Decide whether to add a follow-up task, narrow the work, or ask the owner." });
@@ -111,9 +120,8 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
       // A classification this reader cannot parse is no evidence either way, and no
       // classification already means "not retried": the lead hears about the failure.
     }
-    if (history.length < 2 && retryable) continue;
     events.push({ key: `failed:${row.taskId}`,
-      note: `Task "${row.name}" failed ${history.length >= 2 ? "again on its retry" : "and is not retryable"}` +
+      note: `Task "${row.name}" failed ${(history.length >= 2 || retryable) ? "after its retry allowance" : "and is not retryable"}` +
         `${reasonCode === null ? "" : ` (${reasonCode})`}. Decide whether to replace it, split it, or ask the owner.` });
   }
   // Every task done is the run's own finish line, and the digest makes "done" mean this exact
@@ -138,12 +146,14 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
  * brief is not a new request; a list that differs is admitted, and a repeated id is then refused
  * with that reason, which is what tells the lead to use new ids for new work.
  */
-export function proposalAlreadyAdmitted(db: Database.Database, runId: string, tasks: readonly LeadTask[], seats?: LeadSeatChanges): boolean {
-  if (seats !== undefined) {
+export function proposalAlreadyAdmitted(db: Database.Database, runId: string, tasks: readonly LeadTask[], seats?: LeadSeatChanges,
+  resolutions?: readonly LeadResolution[]): boolean {
+  if (seats !== undefined || resolutions !== undefined) {
     return !!db.prepare(`SELECT 1 FROM team_control_requests WHERE run_id = ?
       AND json_extract(response_json, '$.status') = 'accepted'
       AND json_extract(response_json, '$.value.proposalDigest') = ? LIMIT 1`)
-      .get(runId, hashBytes(canonicalJson({ tasks, seats })));
+      .get(runId, hashBytes(canonicalJson({ tasks, ...(seats === undefined ? {} : { seats }),
+        ...(resolutions === undefined ? {} : { resolutions }) })));
   }
   const existing = db.prepare(`SELECT a.task_id AS taskId, q.destination_session AS seat, q.body AS body,
       a.assignment_json AS assignment FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
@@ -229,10 +239,10 @@ export function composeLeadManager(dependencies: LeadManagerDependencies): LeadM
       if (run.phase !== "delivery" || run.state !== "approved") return;
       const lead = governance.leadTask(attempt.runId);
       if (!lead || !dependencies.readLeadProposal) return;
-      let tasks: readonly LeadTask[], seats: LeadSeatChanges | undefined;
+      let tasks: readonly LeadTask[], seats: LeadSeatChanges | undefined, resolutions: readonly LeadResolution[] | undefined;
       try {
         const proposal = dependencies.readLeadProposal(attempt.runId, lead.taskId);
-        if ("tasks" in proposal) { tasks = proposal.tasks; seats = proposal.seats; }
+        if ("tasks" in proposal) { tasks = proposal.tasks; seats = proposal.seats; resolutions = proposal.resolutions; }
         else tasks = proposal;
       }
       catch (error) {
@@ -259,12 +269,12 @@ export function composeLeadManager(dependencies: LeadManagerDependencies): LeadM
       }
       // The tree keeps every file the lead wrote, so a turn that answered an event still holds
       // the list it delivered earlier. That list is not a new request.
-      if (proposalAlreadyAdmitted(db, attempt.runId, tasks, seats)) return;
+      if (proposalAlreadyAdmitted(db, attempt.runId, tasks, seats, resolutions)) return;
       const receipt = (() => {
         try {
           return governance.admitLeadProposal(
             request(attempt.runId, "lead-admission-" + attempt.id, "daemon-lead-admission:" + attempt.id),
-            daemon, dependencies.currentBinding(attempt.runId), tasks, seats, dependencies.readMaxSeats?.() ?? 6);
+            daemon, dependencies.currentBinding(attempt.runId), tasks, seats, dependencies.readMaxSeats?.() ?? 6, resolutions);
         } catch (error) {
           // The attempt already admitted its list and the run has moved since: the stored
           // receipt names the entity version it was recorded at, so an exact replay cannot be

@@ -39,7 +39,8 @@ export function agentTurnPromptPath(manifest: ContextManifest): string {
 export function agentTurnOutputPaths(mutableStateRoot: string, attemptId: string) {
   const directory = join(mutableStateRoot, "turns", attemptId);
   return { directory, lastMessage: join(directory, "last-message.txt"), threadId: join(directory, "thread-id.txt"),
-    activity: join(directory, "activity.jsonl"), usage: join(directory, "usage.json") };
+    activity: join(directory, "activity.jsonl"), usage: join(directory, "usage.json"),
+    taskReport: join(directory, "report", "task-report.json") };
 }
 
 /** The same native-token alphabet and length limit the managed Claude launcher accepts. */
@@ -104,6 +105,7 @@ export interface ManagedTurnPromptInput {
   instructions: { path: string }[];
   /** What this attempt continues, when it is a rework or a lead revision. */
   continuation: string | null;
+  taskReportPath?: string;
 }
 
 /**
@@ -125,6 +127,9 @@ export function managedTurnPrompt(input: ManagedTurnPromptInput): string {
     ...(instructions.length === 0 ? [] : ["Read these files before you start work; they are this attempt's role instructions and run context, and they are read-only:",
       ...instructions.map(file => `- ${file.path}`)]),
     "Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished.",
+    ...(input.taskReportPath ? [`Task report file: ${JSON.stringify(input.taskReportPath)}`,
+      "Only this per-attempt report file is writable outside the candidate. It does not change your source permissions. " +
+      "For blocked, needs-decision, or dropped, write the structured report there, not in the candidate or final prose."] : []),
     ...(input.continuation === null ? [] : [input.continuation])].filter(Boolean).join("\n\n");
 }
 

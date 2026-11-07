@@ -1,8 +1,10 @@
+import { detectCodexLimitBanner } from "./provider/codex-limit-banner.js";
+
 /**
  * T033 — the one classifier for an attempt that ended.
  *
  * KTD20 gives every failed attempt exactly one reason code and a `resume_safe` flag. The retry
- * eligible set is the only set allowed to use KTD9's single recoverable retry. The decision has to be made in
+ * eligible set alone may use the run's bounded delayed retries. The decision has to be made in
  * one place: a consumer that re-derived eligibility could disagree with the owner's retry, and
  * the plan forbids that. This module is pure — evidence in, decision out — so the completion
  * sweep can call it at the moment it records a stop, and the tests can drive it directly.
@@ -18,7 +20,7 @@
  *    code is never retried. When uncertain, choose "not retried".
  *
  * Classification never adds an attempt or a unit of budget. It only says whether the owner's
- * already-counted retry may happen.
+ * already-counted retry may happen and when it becomes due.
  */
 
 /** Every KTD20 code, in the order the plan lists them. */
@@ -46,9 +48,22 @@ export type AttemptReasonCode = (typeof ATTEMPT_REASON_CODES)[number];
  * an unclassified failure becomes an owner-visible blocker.
  */
 export const RETRY_ELIGIBLE_REASON_CODES: readonly AttemptReasonCode[] = [
-  "runtime_offline", "daemon_recovery", "run_timeout", "no_progress", "agent_error.provider_network",
-  "evidence_invalid", "review_report_missing",
+  "runtime_offline", "daemon_recovery", "run_timeout", "agent_error.provider_network",
+  "agent_error.provider_rate_limit", "agent_error.provider_server_error", "agent_error.provider_quota",
 ];
+
+// Rows written before U11 keep their original eligibility encoding; reads normalize them to the current policy.
+const LEGACY_RETRY_ELIGIBLE: readonly AttemptReasonCode[] = ["runtime_offline", "daemon_recovery", "run_timeout",
+  "no_progress", "agent_error.provider_network", "evidence_invalid", "review_report_missing"];
+
+export type FailureClass = "transient" | "quota" | "judgment" | "environment";
+export function failureClassFor(code: AttemptReasonCode): FailureClass | null {
+  if (code === "canceled") return null;
+  if (code === "agent_error.provider_quota") return "quota";
+  if (RETRY_ELIGIBLE_REASON_CODES.includes(code)) return "transient";
+  if (["evidence_invalid", "review_report_missing", "no_progress", "agent_blocked", "integration_conflict"].includes(code)) return "judgment";
+  return "environment";
+}
 
 /**
  * KTD20's resume-unsafe set. A continuation after one of these starts a fresh native session on
@@ -70,7 +85,7 @@ export const OWNER_ACTIONS: Readonly<Record<AttemptReasonCode, string>> = {
   daemon_recovery: "The daemon restarted during the attempt; retry the task.",
   start_timeout: "The client never became ready; repair the client or the seat, then start a new task.",
   run_timeout: "The attempt reached the run's time budget; retry the task while budget remains.",
-  no_progress: "The attempt made no progress; retry with a narrower task, which starts a fresh session on the same tree.",
+  no_progress: "The attempt made no progress; the lead decides whether to narrow or replace the task.",
   environment_prepare_failed: "The attempt's environment could not be prepared; repair it, then start a new task.",
   resume_rejected: "The provider rejected the resumed session; the next attempt starts a fresh session on the same tree.",
   agent_blocked: "The agent stopped on a decision it could not make; resolve it, then start a new task.",
@@ -89,8 +104,8 @@ export const OWNER_ACTIONS: Readonly<Record<AttemptReasonCode, string>> = {
   "agent_error.process_failure": "The client process failed; inspect its output, then start a new task.",
   "agent_error.unparseable_output": "The client's output could not be read; inspect it, then start a new task.",
   "agent_error.unknown": "The daemon could not classify this failure, so it is not retried; inspect the attempt's output.",
-  evidence_invalid: "The daemon could not validate the task's candidate evidence; retry the task once.",
-  review_report_missing: "The reviewer did not return a readable findings report; retry the review once.",
+  evidence_invalid: "The candidate evidence was invalid; the lead decides how to rework the task.",
+  review_report_missing: "The reviewer returned no readable findings report; the lead decides how to obtain a review.",
   integration_conflict: "The approved patch does not apply to the run's integration branch; the lead resolves it with a task based on that branch, and the branch is unchanged until then.",
 };
 
@@ -100,6 +115,8 @@ export interface AttemptClassification {
   resumeSafe: boolean;
   retryEligible: boolean;
   ownerAction: string;
+  failureClass: FailureClass | null;
+  resetAt?: string;
 }
 
 /**
@@ -117,6 +134,7 @@ export interface AttemptEvidence {
   exit: { code: number | null } | null;
   /** The last lines the seat's terminal held when the process ended, or null when unreadable. */
   terminalTail: string | null;
+  now?: Date;
 }
 
 /** How much terminal output a fingerprint is allowed to look at. */
@@ -158,10 +176,11 @@ const TERMINAL_ERROR_LINE = /^(?:\[[^\]\n]{1,40}\]\s*)?(?:\d{3}\s|API Error\b|Er
 const FINGERPRINTS: ReadonlyArray<{ pattern: RegExp; code: AttemptReasonCode; anchored: boolean }> = [
   { pattern: /\bauthentication_error\b/, code: "agent_error.provider_auth_or_access", anchored: true },
   { pattern: /\binvalid x-api-key\b/, code: "agent_error.provider_auth_or_access", anchored: true },
-  { pattern: /You've hit your usage limit/, code: "agent_error.provider_quota", anchored: false },
   { pattern: /\binvalid_request_error\b/, code: "agent_error.provider_invalid_request", anchored: true },
   { pattern: /No conversation found/, code: "resume_rejected", anchored: false },
-  { pattern: /\boverloaded_error\b|\b529 overloaded\b/, code: "agent_error.provider_server_error", anchored: true },
+  { pattern: /\binsufficient_quota\b|\bcredit balance is too low\b/i, code: "agent_error.provider_quota", anchored: true },
+  { pattern: /\brate_limit_error\b|\b429\b|\bToo Many Requests\b/i, code: "agent_error.provider_rate_limit", anchored: true },
+  { pattern: /\boverloaded_error\b|\b5\d{2}\b/, code: "agent_error.provider_server_error", anchored: true },
   { pattern: /\b(?:ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT)\b/,
     code: "agent_error.provider_network", anchored: true },
   { pattern: /\bfetch failed\b/, code: "agent_error.provider_network", anchored: true },
@@ -172,6 +191,7 @@ const FINGERPRINTS: ReadonlyArray<{ pattern: RegExp; code: AttemptReasonCode; an
 export function classificationFor(reasonCode: AttemptReasonCode): AttemptClassification {
   return {
     reasonCode,
+    failureClass: failureClassFor(reasonCode),
     resumeSafe: !RESUME_UNSAFE_REASON_CODES.includes(reasonCode),
     retryEligible: RETRY_ELIGIBLE_REASON_CODES.includes(reasonCode),
     ownerAction: OWNER_ACTIONS[reasonCode],
@@ -192,7 +212,13 @@ export function classificationFor(reasonCode: AttemptReasonCode): AttemptClassif
 export function classifyAttemptFailure(evidence: AttemptEvidence): AttemptClassification | null {
   if (evidence.canceled) return classificationFor("canceled");
   const printed = fingerprintOf(evidence.terminalTail);
-  if (printed !== null) return classificationFor(printed);
+  if (printed !== null) {
+    const classification = classificationFor(printed);
+    const banner = printed === "agent_error.provider_quota" && evidence.terminalTail !== null
+      ? detectCodexLimitBanner(evidence.terminalTail) : null;
+    const resetAt = quotaResetAt(banner?.resetText ?? null, evidence.now ?? new Date());
+    return { ...classification, ...(resetAt === null ? {} : { resetAt }) };
+  }
   // No exit record is no evidence of failure, so nothing is claimed.
   if (evidence.exit === null) return null;
   if (evidence.exit.code === 0) return null;
@@ -211,6 +237,7 @@ export function classifyAttemptFailure(evidence: AttemptEvidence): AttemptClassi
  */
 export function fingerprintOf(terminalTail: string | null): AttemptReasonCode | null {
   if (terminalTail === null) return null;
+  if (detectCodexLimitBanner(terminalTail)) return "agent_error.provider_quota";
   const lines = terminalTail.split("\n");
   const tail = lines.slice(Math.max(0, lines.length - TERMINAL_TAIL_LINES));
   for (let index = tail.length - 1; index >= 0; index--) {
@@ -252,8 +279,50 @@ export function parseAttemptClassification(value: unknown): AttemptClassificatio
     throw new Error("attempt failure has no owner action");
   }
   const expected = classificationFor(reasonCode as AttemptReasonCode);
-  if (record.resumeSafe !== expected.resumeSafe || record.retryEligible !== expected.retryEligible) {
+  const legacy = record.failureClass === undefined
+    && record.retryEligible === LEGACY_RETRY_ELIGIBLE.includes(reasonCode as AttemptReasonCode);
+  if (record.resumeSafe !== expected.resumeSafe || (!legacy && record.retryEligible !== expected.retryEligible)
+    || (record.failureClass !== undefined && record.failureClass !== expected.failureClass)) {
     throw new Error("attempt failure disagrees with the reason code's eligibility");
   }
-  return expected;
+  if (record.resetAt !== undefined && (expected.failureClass !== "quota" || typeof record.resetAt !== "string"
+    || !Number.isFinite(Date.parse(record.resetAt)) || new Date(record.resetAt).toISOString() !== record.resetAt)) {
+    throw new Error("attempt failure has an invalid quota reset time");
+  }
+  return { ...expected, ...(typeof record.resetAt === "string" ? { resetAt: record.resetAt } : {}) };
+}
+
+/** A clock-only banner uses the client host's timezone and the next occurrence of that clock time. */
+function quotaResetAt(resetText: string | null, now: Date): string | null {
+  if (!resetText) return null;
+  const clock = /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i.exec(resetText);
+  if (clock) {
+    let hour = Number(clock[1]);
+    const minute = Number(clock[2]), meridiem = clock[3]?.toUpperCase();
+    if (minute > 59 || hour > (meridiem ? 12 : 23) || (meridiem && hour === 0)) return null;
+    if (meridiem) hour = hour % 12 + (meridiem === "PM" ? 12 : 0);
+    const reset = new Date(now); reset.setHours(hour, minute, 0, 0);
+    if (reset.getTime() <= now.getTime()) reset.setDate(reset.getDate() + 1);
+    return reset.toISOString();
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/.test(resetText)) {
+    const reset = Date.parse(resetText);
+    if (Number.isFinite(reset)) return new Date(reset).toISOString();
+  }
+  return null;
+}
+
+/** The count includes this failure. Budget accounting and persistence stay with governance. */
+export function automaticRetryAt(failure: AttemptClassification, failures: number, now: Date): string | null {
+  const delay = failure.failureClass === "transient" ? [2, 5, 15][failures - 1]
+    : failure.failureClass === "quota" && failures === 1 ? 30 : undefined;
+  if (delay === undefined) return null;
+  const at = failure.failureClass === "quota" && failure.resetAt !== undefined
+    ? Math.max(now.getTime(), Date.parse(failure.resetAt)) : now.getTime() + delay * 60_000;
+  return new Date(at).toISOString();
+}
+
+export function retryIsDue(notBefore: unknown, now = new Date()): boolean {
+  return notBefore === null || notBefore === undefined
+    || typeof notBefore === "string" && Date.parse(notBefore) <= now.getTime();
 }

@@ -1,5 +1,7 @@
+import { retryIsDue } from "./attempt-failure.js";
 import type Database from "better-sqlite3";
 import type { TaskDispatch } from "./task-dispatch.js";
+import { ownerMessageSlot } from "./lead-chat.js";
 
 /**
  * MVP — a freed session slot starts the run's next task.
@@ -25,6 +27,7 @@ export interface PendingDispatchDependencies {
   liveSessions: (runId: string) => number;
   /** The run's live-session limit, from its own binding. */
   maxSessions: (runId: string) => number;
+  now?: () => Date;
   log?: (message: string) => void;
 }
 
@@ -61,9 +64,9 @@ export interface PendingDispatchDependencies {
  * `queue.updated` and every recorded attempt writes an `attempt.recorded`, both into the one
  * `events` table, so their `seq` values say which came first without depending on resolution.
  */
-export function pendingTasks(db: Database.Database, runId: string): string[] {
+export function pendingTasks(db: Database.Database, runId: string, now = new Date()): string[] {
   const rows = db.prepare(`
-    SELECT a.task_id AS taskId, q.state AS state, a.qitem_id AS qitemId,
+    SELECT a.task_id AS taskId, q.state AS state, a.qitem_id AS qitemId, json_extract(a.evidence_json, '$.retryNotBefore') AS retryNotBefore,
       (SELECT count(*) FROM team_attempts t WHERE t.qitem_id = a.qitem_id) AS attempts,
       (SELECT count(*) FROM team_attempts t WHERE t.qitem_id = a.qitem_id AND t.state <> 'stopped') AS openAttempts,
       (SELECT tr.transition_note FROM queue_transitions tr WHERE tr.qitem_id = a.qitem_id
@@ -77,7 +80,7 @@ export function pendingTasks(db: Database.Database, runId: string): string[] {
         WHERE e.type = 'queue.updated'
           AND json_extract(e.payload, '$.qitemId') = a.qitem_id
           AND json_extract(e.payload, '$.toState') = 'pending'
-          AND json_extract(e.payload, '$.fromState') = 'failed') AS retrySeq,
+          AND json_extract(e.payload, '$.fromState') IN ('failed', 'blocked')) AS retrySeq,
       (SELECT max(e.seq) FROM events e
         JOIN team_attempts t ON t.id = json_extract(e.payload, '$.attemptId')
         WHERE e.type = 'team.control'
@@ -88,14 +91,14 @@ export function pendingTasks(db: Database.Database, runId: string): string[] {
     WHERE a.run_id = ? AND q.state IN ('pending', 'in-progress')
     ORDER BY a.rowid`).all(runId) as Array<{ taskId: string; state: string; qitemId: string; attempts: number;
       openAttempts: number; lastNote: string | null; reopenSeq: number | null; retrySeq: number | null;
-      attemptSeq: number | null }>;
+      attemptSeq: number | null; retryNotBefore: string | null }>;
   const served = (row: { attemptSeq: number | null }, since: number | null) =>
     since === null || row.attemptSeq === null || row.attemptSeq < since;
-  return rows.filter(row => row.openAttempts === 0
+  return rows.filter(row => row.openAttempts === 0 && retryIsDue(row.retryNotBefore, now)
     // Never ran, or reopened deliberately and not yet served: both are work nobody is doing.
     && (row.attempts === 0
       || ((row.lastNote ?? "").startsWith("reopen acknowledged:") && served(row, row.reopenSeq))
-      || (/^(?:Daemon|Owner) counted retry of /.test(row.lastNote ?? "") && served(row, row.retrySeq))))
+      || (/^(?:(?:Daemon|Owner) counted retry of |Lead resolved worker report from )/.test(row.lastNote ?? "") && served(row, row.retrySeq))))
     .map(row => row.taskId);
 }
 
@@ -121,8 +124,9 @@ export function composePendingDispatch(dependencies: PendingDispatchDependencies
     // or the admission refused it, and repeating the refusal would only spend the same cost.
     const tried = new Set<string>();
     for (;;) {
-      if (dependencies.liveSessions(runId) >= limit) return;
-      const next = pendingTasks(dependencies.db, runId).find(taskId => !tried.has(taskId));
+      const live = dependencies.liveSessions(runId);
+      const next = pendingTasks(dependencies.db, runId, dependencies.now?.()).find(taskId => !tried.has(taskId)
+        && live < limit + ownerMessageSlot(dependencies.db, runId, taskId));
       if (next === undefined) return;
       tried.add(next);
       try {

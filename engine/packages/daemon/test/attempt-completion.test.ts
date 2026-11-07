@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
@@ -12,6 +12,8 @@ import { composeAttemptCompletion, extractReviewerReport } from "../src/domain/a
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { pendingTasks } from "../src/domain/pending-dispatch.js";
 import { EventBus } from "../src/domain/event-bus.js";
+import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
+import { leadTeamEvents } from "../src/domain/lead-manager.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { roleConfiguration } from "../src/domain/role-configuration.js";
@@ -89,6 +91,10 @@ describe("U4 daemon-recorded outcomes", () => {
     db, governance, currentBinding: () => structuredClone(binding), alive: () => false, log: () => {}, turnStateRoot: turnRoot,
     sessions: { findResumeContextByName: () => null, updateStartupStatus: vi.fn() }, candidateManifestFor,
     ...(readLeadProposal ? { readLeadProposal } : {}),
+    readTaskReport: (runId, id) => {
+      const eventBus = new EventBus(db);
+      return new WorkflowRuntime({ db, eventBus, queueRepo: new QueueRepository(db, eventBus) }).taskReportFor(runId, id, turnRoot);
+    },
   });
 
   const addAttempt = (taskId: string, id: string, role: "implementer" | "reviewer") => {
@@ -132,35 +138,78 @@ describe("U4 daemon-recorded outcomes", () => {
     expect(db.prepare("SELECT count(*) AS n FROM events WHERE type = 'team.control' AND json_extract(payload, '$.action') = 'task.outcome'").get()).toEqual({ n: 1 });
   });
 
-  it("records invalid candidate evidence as a daemon failure and spends the run's one retry", async () => {
-    const observe = completion(() => manifest("diff --git a/docs/outside.md b/docs/outside.md\n+++ b/docs/outside.md\n"));
-    await observe.sweep();
 
-    // The evidence is the daemon's own: not validated, with the classifier that names a retry.
-    expect(governance.findTask("run", "task-review-1")).toBeNull();
-    expect(governance.getTask(taskQitemId)?.evidence).toMatchObject({ validated: false, reasonCode: "evidence_invalid" });
-    expect(governance.getAttempt(attemptId)?.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
-    // KTD3 routes that failure to one retry, spent by the daemon and counted on the run.
-    expect(governance.queueState(taskQitemId)).toBe("pending");
-    expect(governance.getRun("run").retriesUsed).toBe(1);
-    // The retried row is work nobody is doing, so the dispatcher is offered it exactly once.
-    expect(pendingTasks(db, "run")).toContain("task");
-    const transitions = db.prepare("SELECT transition_note AS note FROM queue_transitions WHERE qitem_id = ? ORDER BY ts DESC, transition_id DESC")
-      .all(taskQitemId) as Array<{ note: string | null }>;
-    expect(transitions[0]!.note).toBe(`Daemon counted retry of ${attemptId}`);
+  const writeReport = (id: string, content: unknown) => {
+    const path = agentTurnOutputPaths(turnRoot, id).taskReport;
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, typeof content === "string" ? content : JSON.stringify(content));
+  };
+
+  it.each(["blocked", "needs-decision"] as const)("pauses a %s report for the lead without a retry or owner decision", async status => {
+    writeReport(attemptId, { status, question: "Which response is required?", evidence: "The approved plan names two responses." });
+    const candidate = vi.fn(() => manifest("diff --git a/src/a.ts b/src/a.ts\n"));
+    const observe = completion(candidate);
+    await observe.sweep();
+    expect(candidate).not.toHaveBeenCalled();
+    expect(governance.queueState(taskQitemId)).toBe("blocked");
+    expect(governance.getTask(taskQitemId)?.evidence).toMatchObject({
+      taskReport: { status, question: "Which response is required?" }, reportedAttemptId: attemptId, validated: false,
+    });
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 0 });
+    expect(db.prepare("SELECT count(*) AS n FROM team_chat_messages WHERE kind = 'decision'").get()).toEqual({ n: 0 });
+    expect(leadTeamEvents(db, "run")).toEqual([expect.objectContaining({ key: "report:task:" + attemptId,
+      note: expect.stringContaining("Which response is required?") })]);
+    expect(pendingTasks(db, "run")).not.toContain("task");
   });
 
-  it("leaves the task failed, and spends nothing more, when the retry fails too", async () => {
+  it.each(["implementer", "reviewer"] as const)("closes a dropped %s report without reading a candidate or recording a review verdict", async role => {
+    let id = attemptId, qitemId = taskQitemId;
+    if (role === "reviewer") {
+      await completion(() => manifest("diff --git a/src/a.ts b/src/a.ts\n")).sweep();
+      id = "review-attempt"; qitemId = governance.findTask("run", "task-review-1")!.qitemId;
+      addAttempt("task-review-1", id, "reviewer");
+    }
+    writeReport(id, { status: "dropped", evidence: "This task has no remaining work." });
+    const candidate = vi.fn(() => manifest(""));
+    await completion(candidate).sweep();
+    expect(candidate).not.toHaveBeenCalled();
+    expect(governance.queueState(qitemId)).toBe("done");
+    expect(governance.getTask(qitemId)?.evidence).toMatchObject({ taskReport: { status: "dropped" }, validated: false });
+    expect(governance.getRun("run").retriesUsed).toBe(0);
+    expect(db.prepare("SELECT count(*) AS n FROM events WHERE json_extract(payload, '$.action') = 'review.verdict'").get()).toEqual({ n: 0 });
+    if (role === "implementer") expect(governance.findTask("run", "task-review-1")).toBeNull();
+  });
+
+  it("turns malformed report bytes into a paused task with the parse error as its question", async () => {
+    writeReport(attemptId, "{");
+    await completion(() => manifest("diff --git a/src/a.ts b/src/a.ts\n")).sweep();
+    expect(governance.queueState(taskQitemId)).toBe("blocked");
+    expect(governance.getTask(taskQitemId)?.evidence).toMatchObject({ taskReport: {
+      status: "blocked", question: expect.stringContaining("not valid JSON"),
+    } });
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 0 });
+  });
+
+  it("sends invalid candidate evidence to the lead without spending a retry", async () => {
     const observe = completion(() => manifest("diff --git a/docs/outside.md b/docs/outside.md\n+++ b/docs/outside.md\n"));
     await observe.sweep();
-    addAttempt("task", "attempt-2", "implementer");
-
-    await observe.sweep();
-
+    expect(governance.findTask("run", "task-review-1")).toBeNull();
+    expect(governance.getTask(taskQitemId)?.evidence).toMatchObject({ validated: false, reasonCode: "evidence_invalid" });
+    expect(governance.getAttempt(attemptId)?.failure).toMatchObject({ reasonCode: "evidence_invalid", failureClass: "judgment", retryEligible: false });
     expect(governance.queueState(taskQitemId)).toBe("failed");
-    expect(governance.getRun("run").retriesUsed).toBe(1);
-    expect(governance.getAttempt("attempt-2")?.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
-    // The second failure is the lead's news, not a second retry's: nothing is offered to start.
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 0 });
+    expect(pendingTasks(db, "run")).toEqual([]);
+    expect(leadTeamEvents(db, "run").some(event => event.key.startsWith("failed:task"))).toBe(true);
+  });
+
+  it("does not repeat a judgment outcome on later sweeps", async () => {
+    const observe = completion(() => manifest("diff --git a/docs/outside.md b/docs/outside.md\n+++ b/docs/outside.md\n"));
+    await observe.sweep();
+    const version = governance.getTask(taskQitemId)!.entityVersion;
+    await observe.sweep();
+    expect(governance.queueState(taskQitemId)).toBe("failed");
+    expect(governance.getTask(taskQitemId)!.entityVersion).toBe(version);
+    expect(governance.getRun("run").retriesUsed).toBe(0);
     expect(pendingTasks(db, "run")).toEqual([]);
   });
 
@@ -195,7 +244,7 @@ describe("U4 daemon-recorded outcomes", () => {
       .toEqual({ verdict: "approved" });
   });
 
-  it("marks a reviewer without a findings block as retry-eligible, and retries the review once", async () => {
+  it("sends a missing reviewer report to the lead rather than retrying it", async () => {
     const observe = completion(() => manifest("diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n"));
     await observe.sweep();
     const reviewer = governance.findTask("run", "task-review-1")!;
@@ -203,10 +252,11 @@ describe("U4 daemon-recorded outcomes", () => {
 
     await observe.sweep();
 
-    expect(governance.queueState(reviewer.qitemId)).toBe("pending");
-    expect(governance.getAttempt("review-attempt")?.failure).toMatchObject({ reasonCode: "review_report_missing", retryEligible: true });
+    expect(governance.queueState(reviewer.qitemId)).toBe("failed");
+    expect(governance.getAttempt("review-attempt")?.failure).toMatchObject({ reasonCode: "review_report_missing", failureClass: "judgment", retryEligible: false });
     expect(governance.getTask(reviewer.qitemId)?.evidence).toEqual({ reasonCode: "review_report_missing" });
-    expect(governance.getRun("run").retriesUsed).toBe(1);
+    expect(governance.getRun("run").retriesUsed).toBe(0);
+    expect(leadTeamEvents(db, "run").some(event => event.key.startsWith("failed:task-review-1"))).toBe(true);
   });
 
   it("records a validated lead proposal without creating a review task", async () => {

@@ -1,6 +1,6 @@
 {
   "schema": "attempt-failure-fixtures/v1",
-  "note": "Each entry is terminal output this repository already carries evidence for, or a client's own documented error text. Nothing here is invented provider output: `source` names where the string comes from. `tail` is the last lines of the seat's terminal, and `expected` is the KTD20 code plus the eligibility that follows from it.",
+  "note": "Each entry is terminal output this repository already carries evidence for, or a client's own documented error text. Nothing here is invented provider output: `source` names where the string comes from. `tail` is the last lines of the seat's terminal, and `expected` is the reason code with the U11 failure class and eligibility.",
   "fixtures": [
     {
       "id": "claude-auth-401",
@@ -8,7 +8,7 @@
       "source": "engine/packages/daemon/test/omp-runner.test.ts, which mirrors OMP 18.2.11's own `errorMessage` for an in-turn provider auth failure",
       "exit": 1,
       "tail": "> Fix the failing test\n\n401 authentication_error: API key is invalid.\n",
-      "expected": { "reasonCode": "agent_error.provider_auth_or_access", "resumeSafe": true, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.provider_auth_or_access", "resumeSafe": true, "retryEligible": false, "failureClass": "environment" }
     },
     {
       "id": "claude-api-error-401",
@@ -16,7 +16,7 @@
       "source": "Anthropic's documented 401 body, which Claude Code prints behind its own `API Error:` prefix",
       "exit": 1,
       "tail": "API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}\n",
-      "expected": { "reasonCode": "agent_error.provider_auth_or_access", "resumeSafe": true, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.provider_auth_or_access", "resumeSafe": true, "retryEligible": false, "failureClass": "environment" }
     },
     {
       "id": "claude-api-error-529",
@@ -24,7 +24,7 @@
       "source": "engine/packages/daemon/test/omp-runner.test.ts (`529 overloaded`), Anthropic's own overload status",
       "exit": 1,
       "tail": "API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n",
-      "expected": { "reasonCode": "agent_error.provider_server_error", "resumeSafe": true, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.provider_server_error", "resumeSafe": true, "retryEligible": true, "failureClass": "transient" }
     },
     {
       "id": "claude-api-error-400",
@@ -32,7 +32,7 @@
       "source": "engine/packages/daemon/test/model-divergence-monitor.test.ts (`runtime returned 400 invalid_request_error`)",
       "exit": 1,
       "tail": "API Error: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"prompt: unexpected field\"}}\n",
-      "expected": { "reasonCode": "agent_error.provider_invalid_request", "resumeSafe": false, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.provider_invalid_request", "resumeSafe": false, "retryEligible": false, "failureClass": "environment" }
     },
     {
       "id": "claude-resume-not-found",
@@ -40,7 +40,7 @@
       "source": "engine/packages/daemon/src/domain/native-resume-probe.ts and its test (`No conversation found with session ID: abc123`)",
       "exit": 1,
       "tail": "No conversation found with session ID: 3f0c1a52-9a0e-4b1e-8f6f-2a2b8f1d5e77\n",
-      "expected": { "reasonCode": "resume_rejected", "resumeSafe": false, "retryEligible": false }
+      "expected": { "reasonCode": "resume_rejected", "resumeSafe": false, "retryEligible": false, "failureClass": "environment" }
     },
     {
       "id": "claude-network-refused",
@@ -48,7 +48,7 @@
       "source": "engine/packages/cli/src/remote-host-ops.ts names this connection-code set; `fetch failed` is the wrapper Node's fetch reports",
       "exit": 1,
       "tail": "API Error: Unable to connect to API (ECONNREFUSED)\nfetch failed\n",
-      "expected": { "reasonCode": "agent_error.provider_network", "resumeSafe": true, "retryEligible": true }
+      "expected": { "reasonCode": "agent_error.provider_network", "resumeSafe": true, "retryEligible": true, "failureClass": "transient" }
     },
     {
       "id": "claude-missing-executable",
@@ -56,7 +56,7 @@
       "source": "engine/packages/cli/src/cross-host-executor.ts (exit 127 / `command not found`) and engine/packages/cli/test/setup.test.ts",
       "exit": 127,
       "tail": "bash: line 1: claude: command not found\n",
-      "expected": { "reasonCode": "agent_error.missing_executable", "resumeSafe": true, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.missing_executable", "resumeSafe": true, "retryEligible": false, "failureClass": "environment" }
     },
     {
       "id": "codex-usage-limit",
@@ -64,7 +64,7 @@
       "source": "engine/packages/daemon/src/domain/provider/codex-limit-banner.ts and test/codex-limit-banner.test.ts (the banner's own line form)",
       "exit": 1,
       "tail": "■ You've hit your usage limit. Upgrade to Pro (...), visit https://chatgpt.com/codex/settings/usage or try again at 4:14 AM.\n",
-      "expected": { "reasonCode": "agent_error.provider_quota", "resumeSafe": true, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.provider_quota", "resumeSafe": true, "retryEligible": true, "failureClass": "quota" }
     },
     {
       "id": "codex-network-timeout",
@@ -72,7 +72,7 @@
       "source": "the connection-code set engine/packages/cli/src/remote-host-ops.ts already names",
       "exit": 1,
       "tail": "ERROR: stream error: request timed out (ETIMEDOUT)\n",
-      "expected": { "reasonCode": "agent_error.provider_network", "resumeSafe": true, "retryEligible": true }
+      "expected": { "reasonCode": "agent_error.provider_network", "resumeSafe": true, "retryEligible": true, "failureClass": "transient" }
     },
     {
       "id": "unrecognised-nonzero-exit",
@@ -80,7 +80,7 @@
       "source": "no nameable cause at all — the honest case for `unknown`",
       "exit": 3,
       "tail": "Goodbye.\n",
-      "expected": { "reasonCode": "agent_error.unknown", "resumeSafe": true, "retryEligible": false }
+      "expected": { "reasonCode": "agent_error.unknown", "resumeSafe": true, "retryEligible": false, "failureClass": "environment" }
     },
     {
       "id": "clean-exit-is-not-a-failure",

@@ -112,15 +112,28 @@ export function pendingOwnerMessages(db: Database.Database, runId: string): Team
   return rows.map(rowToMessage);
 }
 
+/** One extra slot belongs only to this run's lead carrying an owner message. */
+export function ownerMessageSlot(db: Database.Database, runId: string, taskId: string, attemptId?: string): number {
+  if (runLeadTask(db, runId)?.taskId !== taskId) return 0;
+  return db.prepare(`SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'owner'
+    AND (delivered_attempt IS NULL OR delivered_attempt = ?) LIMIT 1`).get(runId, attemptId ?? null) ? 1 : 0;
+}
+
+/** Return a failed turn's messages only after its reply had a chance to be recorded. */
+function returnUnansweredMessages(db: Database.Database, runId: string, attemptId: string): number {
+  return db.prepare(`UPDATE team_chat_messages SET delivered_attempt = NULL
+    WHERE run_id = ? AND sender = 'owner' AND delivered_attempt = ?
+      AND NOT EXISTS (SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'lead' AND attempt_id = ?)`)
+    .run(runId, attemptId, runId, attemptId).changes;
+}
+
 /**
  * Take the pending owner messages for one attempt, marking them delivered.
  *
  * Idempotent per attempt: a prompt written twice for the same attempt (a retried delivery)
  * reads the same messages and marks the same rows, and the second call returns what the first
- * did — `delivered_attempt = ?` matches either way. A message whose prompt was written but whose
- * client never started is not retried by itself; the owner's next message brings it along with
- * the next prompt. That is the conservative answer: the daemon cannot know a turn ran until the
- * process it started is observed, and pretending otherwise would answer a message nobody read.
+ * did. A stopped turn without a recorded reply returns its messages to pending; delivery alone
+ * is not acknowledgment.
  */
 export function takeOwnerMessages(db: Database.Database, runId: string, attemptId: string): TeamChatMessage[] {
   const pending = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages
@@ -241,14 +254,12 @@ export interface LeadTurnEndDependencies {
  *    Codex's `-o` file — so a Lead on Codex chats exactly as a Claude Lead does. A turn that
  *    wrote `lead-escalation.json` speaks with that decision instead of its prose: the question
  *    is what the owner has to answer, and one turn is one message.
- * 2. If owner messages are still waiting for a turn, the next turn starts now. They can only be
- *    waiting because they arrived while this turn was running, and a chat whose answer waits for
- *    the owner to speak again is not a conversation. Nothing starts when the turn recorded no
- *    message at all: a client that failed before answering would otherwise be retried in a loop
- *    the owner never asked for, and the messages stay pending for the next message to carry.
+ * 2. Unanswered messages return to pending. The next eligible turn carries them, as it carries
+ *    messages that arrived during this turn. Dispatch still enforces run state, retry timing,
+ *    same-seat admission and the lead wake limits.
  *
- * A turn whose task row is no longer active is left alone: a done lead task is reopened by the
- * owner's next message, which is the path that records the reopen's reason.
+ * A completed delivery task is reopened when a pending owner message still needs a reply.
+ * Closed runs and failed tasks waiting on owner repair keep the message pending without launching.
  */
 export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (attempt: {
   id: string; runId: string; qitemId: string | null; role: string;
@@ -285,20 +296,28 @@ export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (atte
       : null;
     const escalation = asked && content !== null && !decisionRecorded(dependencies.db, attempt.runId, content, asked.options)
       ? asked : null;
-    if (!body && !escalation) return;
-    const message = escalation
-      ? escalation.context ? `${escalation.question}\n\n${escalation.context}` : escalation.question
-      : body!;
-    const inserted = dependencies.db.transaction(() =>
-      recordLeadReply(dependencies.db, { id: `chat-${attempt.id}`, runId: attempt.runId, attemptId: attempt.id,
-        body: message, createdAt: (dependencies.now?.() ?? new Date()).toISOString(),
-        ...(escalation ? { decision: { options: escalation.options } } : {}) }))();
-    if (!inserted) return;
+    if (!body && !escalation) {
+      returnUnansweredMessages(dependencies.db, attempt.runId, attempt.id);
+    } else {
+      const message = escalation
+        ? escalation.context ? `${escalation.question}\n\n${escalation.context}` : escalation.question
+        : body!;
+      const inserted = dependencies.db.transaction(() =>
+        recordLeadReply(dependencies.db, { id: `chat-${attempt.id}`, runId: attempt.runId, attemptId: attempt.id,
+          body: message, createdAt: (dependencies.now?.() ?? new Date()).toISOString(),
+          ...(escalation ? { decision: { options: escalation.options } } : {}) }))();
+      if (!inserted) return;
+    }
     if (!pendingOwnerMessages(dependencies.db, attempt.runId).length) return;
     const run = dependencies.governance.getRun(attempt.runId);
     if (run.state !== "approved") return;
     const task = runLeadTask(dependencies.db, attempt.runId);
     if (!task || dependencies.governance.openAttemptCount(task.qitemId) > 0) return;
+    if (["done", "handed-off"].includes(dependencies.governance.queueState(task.qitemId) ?? "")) {
+      dependencies.governance.continueLeadChat({ protocolVersion: "1.0", runId: attempt.runId, actionId: task.taskId,
+        expectedEntityVersion: run.entityVersion, idempotencyKey: `lead-chat-continue:${attempt.id}`, payload: {} },
+      { kind: "daemon", sessionId: "daemon" });
+    }
     const state = dependencies.governance.queueState(task.qitemId);
     if (state !== "pending" && state !== "in-progress") return;
     const dispatch = dependencies.dispatch();

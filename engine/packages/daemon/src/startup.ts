@@ -3267,6 +3267,10 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     deps.attemptTelemetry = telemetry;
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
       turnStateRoot, telemetry,
+      readTaskReport: (runId, attemptId) => {
+        if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
+        return workflowRuntime.taskReportFor(runId, attemptId, turnStateRoot);
+      },
       candidateManifestFor: (runId, taskId) => {
         if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
         return workflowRuntime.candidateManifestFor(runId, taskId);
