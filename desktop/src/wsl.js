@@ -96,6 +96,18 @@ export function normalizeRepoPath(candidate) {
   return value.replace(/\/+$/, "") || null;
 }
 
+/** Native folder selection is path data, separate from the engine-checkout validator. */
+export function nativeFolderToWsl(candidate, distro) {
+  if (typeof candidate !== "string" || typeof distro !== "string" || !distro || /[\0\r\n]/.test(candidate)) return null;
+  const value = candidate.replace(/\\/g, "/");
+  if (value.split("/").some(part => part === "." || part === "..")) return null;
+  const drive = /^([a-z]):\/(.*)$/i.exec(value);
+  if (drive) return `/mnt/${drive[1].toLowerCase()}/${drive[2]}`.replace(/\/+$/, "");
+  const unc = /^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i.exec(value);
+  if (!unc || unc[1].toLowerCase() !== distro.toLowerCase()) return null;
+  return (unc[2] ?? "/").replace(/\/+$/, "") || "/";
+}
+
 /** `wsl.exe --status`, run without a shell. */
 export function statusArgv() {
   return ["--status"];

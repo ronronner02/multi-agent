@@ -4,8 +4,8 @@
  *
  * The engine lives in WSL2 and the user never types a WSL command: this process checks WSL,
  * finds or creates the repository, starts the daemon if it is not answering, and then shows
- * the daemon's own Web UI. The window adds a title bar and a connection footer and nothing
- * else; the page inside is the product's own Web UI, untouched.
+ * the daemon's own Web UI. The shared page owns its chrome; this process supplies native
+ * caption controls and folder selection.
  *
  * Two rules shape the code below:
  *  - The window may only ever show the daemon's own loopback origin, plus its own local
@@ -14,14 +14,14 @@
  *  - No credential is logged, written outside the daemon's own cookie jar, or placed in a
  *    URL. The owner session comes from the daemon's own pairing flow.
  */
-const { app, BrowserWindow, Menu, ipcMain, screen, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, session, shell, dialog } = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
   DAEMON_ORIGIN, HEALTH_URL, TEAM_URL,
   cloneAndSetupArgv, decideWsl, enableUiArgv, installArgv, isAllowedNavigation, isDaemonHealth,
-  listQuietArgv, listVerboseArgv, normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable,
+  listQuietArgv, listVerboseArgv, nativeFolderToWsl, normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable,
   parsePairingResult, probeRepoArgv, startArgv, statusArgv, stopEngineArgv,
 } = require('./wsl.js');
 
@@ -90,7 +90,7 @@ function createWindow() {
     show: false,
     title: 'Multi-Agent',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: BACKGROUND, symbolColor: '#ededf0', height: 40 },
+    titleBarOverlay: { color: BACKGROUND, symbolColor: '#ededf0', height: 48 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -328,6 +328,20 @@ async function showTeam(token) {
 
 // ---------------------------------------------------------------- actions
 
+async function pickFolder(event) {
+  const currentWindow = window;
+  const { distro } = resolved;
+  if (!currentWindow || currentWindow.isDestroyed() || event.sender !== currentWindow.webContents
+    || event.senderFrame !== currentWindow.webContents.mainFrame || !isAllowedNavigation(event.senderFrame.url) || !distro) {
+    throw new Error('Folder selection is available only in the active project window.');
+  }
+  const result = await dialog.showOpenDialog(currentWindow, { properties: ['openDirectory', 'createDirectory'] });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const folder = nativeFolderToWsl(result.filePaths[0], distro);
+  if (folder === null) throw new Error('Select a folder on a Windows drive or in the selected WSL distribution.');
+  return folder;
+}
+
 function runInstall() {
   publish({ phase: 'installing', message: 'Windows is installing WSL. Approve the elevation prompt.' });
   const child = spawn('powershell.exe', installArgv(), { windowsHide: false, stdio: 'ignore' });
@@ -390,6 +404,7 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(buildMenu());
 
     ipcMain.handle('desktop:get-state', () => publicState());
+    ipcMain.handle('desktop:pick-folder', pickFolder);
     ipcMain.on('desktop:csrf-token', event => {
       // Synchronous by design: the preload needs the value before the page's scripts run.
       // Any sender other than our own window gets nothing.

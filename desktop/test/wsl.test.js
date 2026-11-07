@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
 const {
   DAEMON_ORIGIN, PAIR_SCRIPT, cloneAndSetupArgv, decodeWslOutput, decideWsl, enableUiArgv,
   installArgv, isAllowedNavigation, isDaemonHealth, listQuietArgv, listVerboseArgv,
-  normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable, parsePairingResult,
+  nativeFolderToWsl, normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable, parsePairingResult,
   probeRepoArgv, setupArgv, startArgv, statusArgv, stopEngineArgv,
 } = require('../src/wsl.js');
 
@@ -191,4 +191,33 @@ test('allows only the daemon origin', () => {
   assert.equal(isAllowedNavigation('javascript:alert(1)'), false);
   assert.equal(isAllowedNavigation('not a url'), false);
   assert.equal(isAllowedNavigation('', DAEMON_ORIGIN), false);
+});
+
+
+test('maps absolute Windows drive folders without changing path characters', () => {
+  for (const [input, expected] of [
+    [String.raw`D:\code\app`, '/mnt/d/code/app'],
+    [String.raw`d:\Client Work\O'Reilly & $work; app`, "/mnt/d/Client Work/O'Reilly & $work; app"],
+    ['C:\\Work\\\u65e5\u672c\u8a9e app\\', '/mnt/c/Work/\u65e5\u672c\u8a9e app'],
+    ['D:/code/app', '/mnt/d/code/app'],
+    ['D:\\', '/mnt/d'],
+  ]) assert.equal(nativeFolderToWsl(input, 'Ubuntu'), expected);
+});
+
+test('maps only the complete selected WSL distro and preserves path case', () => {
+  assert.equal(nativeFolderToWsl(String.raw`\\wsl.localhost\Ubuntu\home\dev\App`, 'Ubuntu'), '/home/dev/App');
+  assert.equal(nativeFolderToWsl(String.raw`\\WSL.LOCALHOST\ubuntu\home\dev\App`, 'Ubuntu'), '/home/dev/App');
+  assert.equal(nativeFolderToWsl(String.raw`\\wsl$\Ubuntu\home\dev\app`, 'Ubuntu'), '/home/dev/app');
+  assert.equal(nativeFolderToWsl(String.raw`\\wsl.localhost\Debian\home\dev\app`, 'Ubuntu'), null);
+  assert.equal(nativeFolderToWsl(String.raw`\\wsl.localhost\Ubuntu-Other\home\dev\app`, 'Ubuntu'), null);
+});
+
+test('rejects relative paths, unrelated shares and ambiguous native path forms', () => {
+  for (const input of [null, 12, '', 'D:folder', 'folder', '/home/dev/app',
+    String.raw`\\server\share\app`, String.raw`\\wsl.localhost`, '\\\\wsl.localhost\\',
+    String.raw`\\?\D:\code\app`, String.raw`D:\code\..\app`,
+    String.raw`\\wsl.localhost\Ubuntu\..\Debian\home\dev`, 'D:\\app\u0000tail']) {
+    assert.equal(nativeFolderToWsl(input, 'Ubuntu'), null, String(input));
+  }
+  assert.equal(nativeFolderToWsl(String.raw`D:\code\app`, null), null);
 });
