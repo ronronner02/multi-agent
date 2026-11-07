@@ -166,6 +166,12 @@ console.log(JSON.stringify({type:'thread.started',thread_id:${JSON.stringify(rep
 console.log(JSON.stringify({type:'turn.started'}));
 fs.writeFileSync(output, 'The assigned plan was read.');
 console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'The assigned plan was read.'}}));
+const firstTurn = ${JSON.stringify(join(root, 'first-turn'))};
+if (!fs.existsSync(firstTurn)) {
+  fs.writeFileSync(firstTurn, 'observed');
+  console.log(JSON.stringify({type:'error',message:'Error: connect ECONNRESET'}));
+  process.exit(1);
+}
 console.log(JSON.stringify({type:'turn.completed'}));
 `, { mode: 0o755 });
     vi.resetModules();
@@ -188,9 +194,20 @@ console.log(JSON.stringify({type:'turn.completed'}));
     const qitemId = governance.findTask(body.runId, "task-1")!.qitemId;
     const attemptIds = () => (daemon!.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid")
       .all(qitemId) as Array<{ id: string }>).map(row => row.id);
-    // KTD3 — the sweep records the empty candidate as a retry-eligible failure and spends the
-    // run's one retry itself. The Codex continuation this transport test is about is therefore
-    // the daemon's own second attempt: no owner action asks for it.
+    // Provider failures retain their native thread while the counted retry waits.
+    await vi.waitFor(async () => {
+      await daemon!.deps.attemptCompletion!.sweep();
+      const ids = attemptIds();
+      expect(ids).toHaveLength(1);
+      expect(governance.getAttempt(ids[0]!)?.state).toBe("stopped");
+    }, { timeout: 20_000, interval: 100 });
+    const retryAt = governance.getTask(qitemId)!.evidence?.retryNotBefore;
+    expect(typeof retryAt).toBe("string");
+    expect(Date.parse(retryAt as string)).toBeGreaterThan(Date.now());
+    await daemon.deps.attemptCompletion!.sweep();
+    expect(attemptIds()).toHaveLength(1);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(retryAt as string));
     await vi.waitFor(async () => {
       await daemon!.deps.attemptCompletion!.sweep();
       const ids = attemptIds();
@@ -200,11 +217,9 @@ console.log(JSON.stringify({type:'turn.completed'}));
     const [firstId, secondId] = attemptIds();
     const first = governance.getAttempt(firstId!)!;
     const second = governance.getAttempt(secondId!)!;
-    // U4 records the daemon's candidate check as soon as each turn stops. This fixture only
-    // reads the plan, so both empty patches are evidence failures, and the first one is the
-    // retry the daemon spends.
-    expect(first.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
-    expect(second.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: true });
+    // The transport retry resumes once; its empty candidate then needs lead judgment, not another retry.
+    expect(first.failure).toMatchObject({ reasonCode: "agent_error.provider_network", retryEligible: true });
+    expect(second.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: false });
     expect(governance.getRun(body.runId).retriesUsed).toBe(1);
     const session = daemon.deps.sessionRegistry.getSessionsForRig(rig.id).find(row => row.sessionName === seat)!;
     if (reportedThread !== threadId) {
@@ -230,6 +245,7 @@ console.log(JSON.stringify({type:'turn.completed'}));
     expect(second.identity?.nativeSessionId).toBe(threadId);
     expect(dirname(finalMessage)).not.toContain(initial.cwd);
   } finally {
+    vi.useRealTimers();
     daemon?.deps.attemptCompletion?.stop();
     try { execFileSync("tmux", ["kill-server"], { stdio: "ignore" }); } catch { /* The private server may already be stopped. */ }
     await daemon?.deps.workflowRuntime?.closeManagedAttempts();

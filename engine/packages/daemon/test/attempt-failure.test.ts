@@ -32,7 +32,7 @@ interface Fixture {
   source: string;
   exit: number | null;
   tail: string | null;
-  expected: { reasonCode: AttemptReasonCode; resumeSafe: boolean; retryEligible: boolean } | null;
+  expected: { reasonCode: AttemptReasonCode; resumeSafe: boolean; retryEligible: boolean; failureClass: string } | null;
 }
 const fixtures = (JSON.parse(readFileSync(
   new URL("./fixtures/attempt-failure/client-errors.json", import.meta.url), "utf8")) as { fixtures: Fixture[] }).fixtures;
@@ -57,10 +57,11 @@ describe("KTD20 classification of captured client errors", () => {
       const decision = classifyAttemptFailure({
         canceled: false,
         exit: fixture.exit === null ? null : { code: fixture.exit },
-        terminalTail: fixture.tail,
+        terminalTail: fixture.tail, now: new Date(2026, 10, 7, 1, 0),
       });
       expect(decision, fixture.id).toEqual(fixture.expected === null ? null : {
         ...fixture.expected, ownerAction: OWNER_ACTIONS[fixture.expected.reasonCode],
+        ...(fixture.expected.reasonCode === "agent_error.provider_quota" ? { resetAt: new Date(2026, 10, 7, 4, 14).toISOString() } : {}),
       });
     }
   });
@@ -69,12 +70,13 @@ describe("KTD20 classification of captured client errors", () => {
     for (const fixture of fixtures) expect(fixture.source, fixture.id).not.toHaveLength(0);
   });
 
-  it("never retries an unknown code, and never retries anything outside KTD20's eligible set", () => {
+  it("never retries an unknown code, and never retries anything outside the current eligible set", () => {
     expect(classifyAttemptFailure({ canceled: false, exit: { code: 1 }, terminalTail: "segfault\n" }))
       .toMatchObject({ reasonCode: "agent_error.unknown", retryEligible: false });
-    // The eligible set includes the two daemon-owned evidence failures as one-shot retries.
+    // Provider waits are retryable; judgment failures belong to the lead.
     expect([...RETRY_ELIGIBLE_REASON_CODES].sort()).toEqual([
-      "agent_error.provider_network", "daemon_recovery", "evidence_invalid", "no_progress", "review_report_missing", "run_timeout", "runtime_offline",
+      "agent_error.provider_network", "agent_error.provider_quota", "agent_error.provider_rate_limit", "agent_error.provider_server_error",
+      "daemon_recovery", "run_timeout", "runtime_offline",
     ]);
     for (const code of ATTEMPT_REASON_CODES) {
       expect(classificationFor(code).retryEligible, code).toBe(RETRY_ELIGIBLE_REASON_CODES.includes(code));

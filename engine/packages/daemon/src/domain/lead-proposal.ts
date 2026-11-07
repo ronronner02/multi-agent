@@ -91,14 +91,44 @@ export function parseLeadProposal(value: unknown): LeadTask[] {
   return tasks;
 }
 
-export interface LeadProposal { tasks: LeadTask[]; seats?: LeadSeatChanges }
+export type LeadResolution =
+  | { taskId: string; action: "rework"; body: string }
+  | { taskId: string; action: "reassign"; seat: string }
+  | { taskId: string; action: "drop" };
+
+export interface LeadProposal { tasks: LeadTask[]; seats?: LeadSeatChanges; resolutions?: LeadResolution[] }
+
+export function parseLeadResolutions(value: unknown): LeadResolution[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) throw new TeamContractError("proposal.resolutions");
+  const resolutions = value.map(entry => {
+    const row = object(entry, "proposal.resolution");
+    const taskId = text(row.taskId, "proposal.resolution.taskId", 256);
+    const fields = ["taskId", "action", ...(row.action === "rework" ? ["body"] : row.action === "reassign" ? ["seat"] : [])];
+    if (Object.keys(row).some(key => !fields.includes(key))) throw new TeamContractError("proposal.resolution");
+    if (row.action === "rework") {
+      if (typeof row.body !== "string" || !row.body.trim() || row.body.length > 262_144 || row.body.includes("\u0000")) {
+        throw new TeamContractError("proposal.resolution.body");
+      }
+      return { taskId, action: "rework" as const, body: row.body };
+    }
+    if (row.action === "reassign") return { taskId, action: "reassign" as const, seat: text(row.seat, "proposal.resolution.seat", 256) };
+    if (row.action === "drop") return { taskId, action: "drop" as const };
+    throw new TeamContractError("proposal.resolution.action");
+  });
+  if (new Set(resolutions.map(row => row.taskId)).size !== resolutions.length) throw new TeamContractError("proposal.resolution.taskId");
+  return resolutions;
+}
 
 /** The additive delivery file; task-only readers keep their existing array contract. */
 export function parseLeadProposalFile(value: unknown): LeadProposal {
   const proposal = object(value, "proposal");
-  if (Object.keys(proposal).some(key => key !== "tasks" && key !== "seats")) throw new TeamContractError("proposal");
-  return { tasks: parseLeadProposal({ tasks: proposal.tasks }),
-    ...(proposal.seats === undefined ? {} : { seats: parseLeadSeatChanges(proposal.seats) }) };
+  if (Object.keys(proposal).some(key => !["tasks", "seats", "resolutions"].includes(key))) throw new TeamContractError("proposal");
+  const resolutions = proposal.resolutions === undefined ? undefined : parseLeadResolutions(proposal.resolutions);
+  const tasks = Array.isArray(proposal.tasks) && proposal.tasks.length === 0 && resolutions?.length
+    ? [] : parseLeadProposal({ tasks: proposal.tasks });
+  if (resolutions?.some(row => tasks.some(task => task.taskId === row.taskId))) throw new TeamContractError("proposal.resolution.taskId");
+  return { tasks, ...(proposal.seats === undefined ? {} : { seats: parseLeadSeatChanges(proposal.seats) }),
+    ...(resolutions === undefined ? {} : { resolutions }) };
 }
 
 /** One decision the lead asks the owner for, as the run's chat shows it. */
@@ -183,14 +213,16 @@ export function leadInstructions(goal: string, maxSeats = 6, nextSeats?: string[
     `to that same file. Keep at least one implementer, at most one reviewer and at most ${maxSeats} active seats, excluding yourself. ` +
     `The next addition names are implementer ${nextSeats?.[0] ?? "impl-N@rig"} and reviewer ${nextSeats?.[1] ?? "review-N@rig"}; ` +
     "increment each role separately in add-array order. Tasks use those concrete names. Retired indices are never reused. " +
-    "Seats with live attempts or unfinished assignments stay active. Keep tasks nonempty; seat changes and tasks are applied together.\n\n" +
+    "Seats with live attempts or unfinished assignments stay active. Seat changes, tasks and resolutions are applied together.\n\n" +
+    'Resolve paused worker reports with "resolutions":[{"taskId":"task-2","action":"rework","body":"<revised brief>"}], ' +
+    'or action "reassign" with "seat", or action "drop". Preserve role and approved paths. Tasks may be empty when resolutions are nonempty.\n\n' +
     "Decide alone: the breakdown, which seat does each task, rework and retries, a follow-up task after a review runs out, " +
     "and any change inside the approved plan's goal and files. Do not implement, review or record acceptance yourself.\n\n" +
     "Ask the owner only for a change to the goal or the write scope, more budget, a decision you cannot make, or a conflict " +
     `you cannot resolve. Ask by writing ${LEAD_ESCALATION_PATH} in your working tree as JSON:\n` +
     `{"question":"<what must be decided>","options":["<choice>","<choice>"],"context":"<what the owner needs to know>"}\n\n` +
     "A proposal outside the approved plan comes back to you as your next prompt, with the reason. You are also woken with a " +
-    "short event prompt when a task fails after its retry, when a task's review limit runs out, and when every task is done.";
+    "short event prompt for worker reports, judgment failures, exhausted retries or review rounds, and when every task is done.";
 }
 
 /**

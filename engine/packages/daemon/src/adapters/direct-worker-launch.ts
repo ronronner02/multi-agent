@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 import { parseAttemptIdentity } from "../contracts/team-control.js";
 import { agentTurnOutputPaths, agentTurnPromptPath, isNativeSessionToken, readAgentTurnThreadId } from "../domain/agent-turn.js";
 import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
@@ -63,6 +64,7 @@ export interface DirectLaunchFacts {
    * write it itself — either way the daemon reads the turn's answer from this one path.
    */
   resultPath?: string;
+  reportPath?: string;
 }
 
 /** The shells a pane falls back to; anything else is the client the launch started. */
@@ -119,9 +121,11 @@ const promptPath = agentTurnPromptPath(attempt.context);
       // An exact resume can reuse an attempt id; its previous output cannot describe this turn.
       rmSync(output.threadId, { force: true });
       rmSync(output.lastMessage, { force: true });
+      mkdirSync(dirname(output.taskReport), { recursive: true, mode: 0o700 });
+      rmSync(output.taskReport, { force: true });
       const facts: DirectLaunchFacts = { client, tree, pane, sessionId, attemptId: attempt.attemptId,
         runId: attempt.context.runId, taskId: attempt.context.assignment.taskId, promptPath,
-        resultPath: output.lastMessage };
+        resultPath: output.lastMessage, reportPath: output.taskReport };
       const argv = this.deps.command ? this.deps.command(facts)
         : this.nativeArgs(client, input, sessionId, tree);
       // T033 — hold the pane before the client starts. Measured on tmux 3.6: without this, the
@@ -281,6 +285,8 @@ private turnCommand(argv: string[], injected: boolean, threadIdPath?: string, re
     return ["codex", "exec", ...(continuing ? ["resume"] : []), "--json", "-o", output.lastMessage,
       ...(continuing ? ["-c", "sandbox_mode=workspace-write"] : ["-C", tree, "-s", "workspace-write"]),
       "-c", "sandbox_workspace_write.network_access=true", "-c", "check_for_update_on_startup=false",
+      ...(["implementer", "reviewer"].includes(input.attempt.context.assignment.role)
+        ? ["-c", "sandbox_workspace_write.writable_roots=" + JSON.stringify([dirname(output.taskReport)])] : []),
       ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + input.effort] : []),
       ...(continuing ? [sessionId] : []), "-"];
   }

@@ -265,6 +265,8 @@ export interface AttemptFailure {
   resumeSafe: boolean;
   retryEligible: boolean;
   ownerAction: string;
+  failureClass?: "transient" | "quota" | "judgment" | "environment" | null;
+  resetAt?: string;
 }
 
 export interface ApprovalConsumption {

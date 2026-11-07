@@ -13,12 +13,13 @@ import {
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
 import { ordinalRunName, reviewName, taskName } from "./display-names.js";
-import { classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
+import { automaticRetryAt, retryIsDue, classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
-import type { LeadTask } from "./lead-proposal.js";
+import type { LeadTask, LeadResolution } from "./lead-proposal.js";
+import { parseTaskReport } from "./task-report.js";
 import { planningRosterRequired, rosterRefusal, type LeadRosterSeat, type LeadSeatChanges } from "./lead-roster.js";
 import { addTeamSeats, nextTeamSeatNames } from "./team-setup.js";
-import { appendChatMessage, answerDecision, chatBody, getChatMessage, listChatMessages, pendingDecision, runLeadTask, type TeamChatMessage } from "./lead-chat.js";
+import { appendChatMessage, answerDecision, chatBody, getChatMessage, listChatMessages, pendingDecision, pendingOwnerMessages, runLeadTask, ownerMessageSlot, type TeamChatMessage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
@@ -755,11 +756,12 @@ export class PlanGovernance {
     const refusal = rosterRefusal(final, maxSeats);
     if (refusal) return refusal;
     return { retired, added: changes.add, reviewer: final.find(seat => seat.role === "reviewer")?.member ?? null,
-      implementers: new Set(final.filter(seat => seat.role === "implementer").map(seat => seat.member)) };
+      implementers: new Set(final.filter(seat => seat.role === "implementer").map(seat => seat.member)),
+      roles: new Map(final.map(seat => [seat.member, seat.role])) };
   }
 
   admitLeadProposal(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, leadTasks: readonly LeadTask[],
-    seats?: LeadSeatChanges, maxSeats = 6): ControlReceipt {
+    seats?: LeadSeatChanges, maxSeats = 6, resolutions?: readonly LeadResolution[]): ControlReceipt {
     const daemon = actorIdentity(actor, false, true);
     if (daemon.kind !== "daemon") throw new Error("A lead's decomposition is admitted by the daemon, not by another caller");
     return this.command("run.lead-tasks-admitted", raw, daemon, ctx => {
@@ -770,9 +772,30 @@ export class PlanGovernance {
       if (ctx.run.state !== "approved") return deny(`Run is closed to task admission (${ctx.run.state})`);
       const seatChanges = seats === undefined ? null : this.prepareSeatChanges(ctx, seats, maxSeats);
       if (typeof seatChanges === "string") return this.refuseLeadProposal(ctx, seatChanges);
+      const resolved = [];
+      for (const resolution of resolutions ?? []) {
+        const task = this.findTask(ctx.run.id, resolution.taskId);
+        const item = task ? this.queue.getById(task.qitemId) : undefined;
+        if (!task || !item || item.state !== "blocked" || !task.evidence?.taskReport || task.evidence.resolution
+          || !["implementer", "reviewer"].includes(task.assignment.role)) {
+          return this.refuseLeadProposal(ctx, `Task ${resolution.taskId} has no unresolved worker report in this run`);
+        }
+        if (this.openAttemptCount(task.qitemId) > 0 || this.nativeLaunchIntents(ctx.run.id)
+          .some(intent => intent.qitemId === task.qitemId && intent.state === "admitted")) {
+          return this.refuseLeadProposal(ctx, `Task ${resolution.taskId} still has a live attempt`);
+        }
+        if (resolution.action === "reassign") {
+          const role = seatChanges ? seatChanges.roles.get(resolution.seat) : (this.db.prepare(`SELECT n.role FROM sessions s
+            JOIN nodes n ON n.id = s.node_id WHERE n.rig_id = ? AND n.retired_at IS NULL AND s.session_name = ?
+            ORDER BY s.created_at DESC, s.id DESC LIMIT 1`).get(ctx.run.rigId, resolution.seat) as { role: string } | undefined)?.role;
+          if (role !== task.assignment.role) return this.refuseLeadProposal(ctx,
+            `Seat ${resolution.seat} is not an active ${task.assignment.role} seat on this rig`);
+        }
+        resolved.push({ task, item, resolution });
+      }
       // The lead's seats and paths are its proposal; everything else about each task is the
       // run's own vocabulary, exactly as a growth task gets it.
-      const batch = this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
+      const batch = leadTasks.length === 0 && resolved.length > 0 ? [] : this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
         assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
         destinationSession: task.seat })), "daemon");
@@ -788,6 +811,19 @@ export class PlanGovernance {
         ctx.run.reviewerSeat = seatChanges.reviewer;
         this.db.prepare("UPDATE team_runs SET reviewer_seat = ? WHERE id = ?").run(ctx.run.reviewerSeat, ctx.run.id);
       }
+      for (const { task, item, resolution } of resolved) {
+        this.db.prepare("UPDATE queue_items SET body = ?, destination_session = ? WHERE qitem_id = ?")
+          .run(resolution.action === "rework" ? resolution.body : item.body,
+            resolution.action === "reassign" ? resolution.seat : item.destinationSession, task.qitemId);
+        this.db.prepare(`UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ? WHERE qitem_id = ?`)
+          .run(canonicalJson({ ...task.evidence, resolution }), task.qitemId);
+        const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+          qitemId: task.qitemId, actorSession: "daemon", state: resolution.action === "drop" ? "done" : "pending",
+          transitionNote: `Lead resolved worker report from ${task.evidence!.reportedAttemptId}: ${resolution.action}`,
+          ...(resolution.action === "drop" ? { closureReason: "no-follow-on" } : {}),
+        }));
+        for (const event of updated.persistedEvents) ctx.register(event);
+      }
       for (const task of batch) {
         const taskId = task.assignment.taskId;
         const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } });
@@ -796,7 +832,8 @@ export class PlanGovernance {
           valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
       }
       return { status: "accepted", value: { addedTasks: batch.map(task => task.assignment.taskId),
-        ...(seats === undefined ? {} : { proposalDigest: hashBytes(canonicalJson({ tasks: leadTasks, seats })) }) },
+        ...(seats === undefined && resolutions === undefined ? {} : { proposalDigest: hashBytes(canonicalJson({ tasks: leadTasks,
+          ...(seats === undefined ? {} : { seats }), ...(resolutions === undefined ? {} : { resolutions }) })) }) },
         effectMayStart: true, observedBy: "daemon" };
     });
   }
@@ -900,6 +937,19 @@ export class PlanGovernance {
       qitemId: lead.qitemId, actorSession: ctx.run.id, state: "pending", reopen: true, transitionNote: note,
     }));
     for (const event of updated.persistedEvents) ctx.register(event);
+  }
+
+  /** A stopped delivery turn can close its task before its conversation schedules the next reply. */
+  continueLeadChat(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
+    const daemon = actorIdentity(actor, false, true);
+    if (daemon.kind !== "daemon") throw new Error("The daemon continues a stopped lead's conversation");
+    return this.command("run.lead-chat-continued", raw, daemon, ctx => {
+      const lead = runLeadTask(this.db, ctx.run.id);
+      if (ctx.run.state !== "approved" || !lead || !pendingOwnerMessages(this.db, ctx.run.id).length
+        || this.openAttemptCount(lead.qitemId) > 0) return deny("No owner conversation is waiting for a lead turn");
+      this.reopenLeadTask(ctx, "The lead has unanswered owner messages");
+      return { status: "accepted", value: { taskId: lead.taskId }, observedBy: "daemon" };
+    });
   }
 
   /**
@@ -1329,9 +1379,11 @@ export class PlanGovernance {
           return deny(`Retry is not eligible for ${attempt.failure.reasonCode}: ${attempt.failure.ownerAction}`);
         }
         if (ctx.run.retriesUsed >= ctx.run.binding.limits.maxRetries) return deny("Retry limit exhausted");
+        const retryAt = this.retryTime(task, attempt, ctx.now);
+        if (!retryAt) return deny("This task has used its automatic retry allowance; the lead decides its next work");
         ctx.run.retriesUsed += 1;
-        const changed = this.db.prepare("UPDATE team_queue_authority SET entity_version = entity_version + 1 WHERE qitem_id = ? AND entity_version = ?")
-          .run(task.qitemId, task.entityVersion);
+        const changed = this.db.prepare("UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ? WHERE qitem_id = ? AND entity_version = ?")
+          .run(canonicalJson({ ...task.evidence, retryNotBefore: retryAt }), task.qitemId, task.entityVersion);
         if (changed.changes !== 1) throw new Error("Task version conflict");
         // Failed rows use the queue's ordinary transition; its reopen flag is only for archived outcomes.
         const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
@@ -1587,6 +1639,15 @@ export class PlanGovernance {
     });
   }
 
+  private retryTime(task: TeamTaskAuthority, attempt: TeamAttempt, now: string): string | null {
+    if (!attempt.failure) return null;
+    const failure = parseAttemptClassification(attempt.failure);
+    const rows = this.db.prepare("SELECT failure_json AS failure FROM team_attempts WHERE qitem_id = ? AND failure_json IS NOT NULL")
+      .all(task.qitemId) as Array<{ failure: string }>;
+    const failures = rows.filter(row => parseAttemptClassification(JSON.parse(row.failure)).failureClass === failure.failureClass).length;
+    return automaticRetryAt(failure, failures, new Date(now));
+  }
+
   private writeTaskTransition(ctx: CommandContext, observedBy: string | null): Result {
     const observedOutcome = observedBy !== null;
     const task = this.getTask(ctx.request.actionId);
@@ -1610,7 +1671,7 @@ export class PlanGovernance {
     }
     let observedAttempt: TeamAttempt | null = null;
     if (observedOutcome) {
-      if (!["done", "failed", "denied", "canceled"].includes(v.state as string)) return deny("Observation cannot start or reopen work");
+      if (!["done", "failed", "denied", "canceled", "blocked"].includes(v.state as string)) return deny("Observation cannot start or reopen work");
       if (v.actorSession !== item.destinationSession) return deny("Observation must identify the task's assigned queue session");
       const attempt = this.getAttempt(text(v.attemptId, "attemptId", 256));
       observedAttempt = attempt;
@@ -1634,14 +1695,27 @@ export class PlanGovernance {
     }
     // The dependency gate inside the queue write reads this row's evidence in the
     // same transaction, so outcome evidence must be durable BEFORE the state write.
-    const evidence = v.evidence === undefined ? task.evidence : jsonValue(object(v.evidence, "evidence"));
+    let evidence = v.evidence === undefined ? task.evidence : jsonValue(object(v.evidence, "evidence"));
+    const reportValue = (evidence as JsonObject | null)?.taskReport;
+    const report = reportValue === undefined ? null : parseTaskReport(reportValue);
+    if (report) {
+      if (!observedOutcome || observedBy !== "daemon" || !["implementer", "reviewer"].includes(task.assignment.role)) {
+        return deny("Task reports are recorded from a stopped worker by the daemon");
+      }
+      if (v.state !== (report.status === "dropped" ? "done" : "blocked")) return deny("Task state differs from its report");
+      evidence = jsonValue({ taskReport: report, reportedAttemptId: observedAttempt!.id, validated: false });
+    } else if (observedOutcome && v.state === "blocked") return deny("A paused outcome requires a task report");
     // C2 — a reviewer's completion is a review, not another reviewable candidate. Its
     // findings are validated before anything is written, so a P0/P1 with no failing scenario
     // refuses the whole outcome instead of recording a round nothing can act on. The verdict
     // itself is emitted with the rest of this command's writes, after the outcome is recorded.
-    const review = observedOutcome && task.assignment.role === "reviewer" && v.state === "done"
+    const review = observedOutcome && task.assignment.role === "reviewer" && v.state === "done" && !report
       ? this.reviewOutcome(task, evidence as JsonObject | null) : null;
     if (typeof review === "string") return deny(review);
+    const retryAt = observedOutcome && observedBy === "daemon" && v.state === "failed" && observedAttempt
+      && ctx.run.state === "approved" && ctx.run.retriesUsed < ctx.run.binding.limits.maxRetries
+      ? this.retryTime(task, observedAttempt, ctx.now) : null;
+    if (retryAt) evidence = jsonValue({ ...(evidence as JsonObject), retryNotBefore: retryAt });
     const changed = this.db.prepare(`UPDATE team_queue_authority SET entity_version = entity_version + 1, evidence_json = ?
       WHERE qitem_id = ? AND entity_version = ?`).run(evidence === null ? null : canonicalJson(evidence), task.qitemId, task.entityVersion);
     if (changed.changes !== 1) throw new Error("Task version conflict");
@@ -1666,13 +1740,15 @@ export class PlanGovernance {
     // live acceptance run sat in exactly that state for an hour and a half.
     if (observedOutcome && observedBy === "daemon" && v.state === "failed") {
       const retryable = observedAttempt?.failure?.retryEligible === true;
-      if (retryable && observedAttempt !== null && ctx.run.retriesUsed < ctx.run.binding.limits.maxRetries) {
+      if (retryAt && observedAttempt !== null) {
         ctx.run.retriesUsed += 1;
         const retried = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
           qitemId: task.qitemId, actorSession: ctx.run.id, state: "pending",
           transitionNote: `Daemon counted retry of ${observedAttempt.id}`,
         }));
         for (const event of retried.persistedEvents) ctx.register(event);
+      } else if (observedAttempt?.failure?.failureClass === "environment") {
+        this.block(ctx, observedAttempt.failure.ownerAction);
       } else if (task.assignment.role === "lead") {
         this.block(ctx, retryable ? "retry limit exhausted" : LEAD_FAILED_REASON);
       }
@@ -1856,6 +1932,7 @@ export class PlanGovernance {
       const task = qitemId === null ? null : this.getTask(qitemId);
       if (qitemId !== null && task?.runId !== ctx.run.id) throw new Error("Task not found in this run");
       if (task && task.assignment.role !== role) return deny("Attempt role differs from its task assignment");
+      if (task && !retryIsDue(task.evidence?.retryNotBefore, new Date(ctx.now))) return deny("The task is waiting for its retry time");
       const item = role === "lead" && qitemId !== null ? this.queue.getById(qitemId) : null;
       if (role === "lead" && qitemId !== null && (!item || item.sourceSession === item.destinationSession)) return deny("Lead wake originates from itself");
       const usage = parseUsage(v.usage);
@@ -1865,7 +1942,8 @@ export class PlanGovernance {
         return { status: "denied", reason, value: { reportedUsage: usage } };
       }
       const live = this.liveAttemptCount(ctx.run.id);
-      if ((state === "running" || intent) && live >= ctx.run.binding.limits.maxSessions) return deny("Live session limit reached");
+      const ownerSlot = task ? ownerMessageSlot(this.db, ctx.run.id, task.assignment.taskId, ctx.request.actionId) : 0;
+      if ((state === "running" || intent) && live >= ctx.run.binding.limits.maxSessions + ownerSlot) return deny("Live session limit reached");
       const policy = new LeadWakePolicy(this.db, this.events);
       const wake = role === "lead" ? policy.check(ctx.run, qitemId, ctx.now) : null;
       if (wake?.reason) {
@@ -1967,7 +2045,8 @@ export class PlanGovernance {
           if (intent.bindingDigest !== ctx.run.bindingDigest || !item || item.destinationSession !== intent.sessionId
             || !["pending", "in-progress"].includes(item.state) || task.assignment.role !== intent.role
             || intent.state === "admitted" && task.entityVersion !== intent.taskVersion) return deny("Native task/session binding changed");
-          if (this.liveAttemptCount(ctx.run.id) > ctx.run.binding.limits.maxSessions) return deny("Live session limit reached");
+          const ownerSlot = ownerMessageSlot(this.db, ctx.run.id, task.assignment.taskId, intent.attemptId);
+          if (this.liveAttemptCount(ctx.run.id) > ctx.run.binding.limits.maxSessions + ownerSlot) return deny("Live session limit reached");
         }
         if (attempt) {
           this.db.prepare(`UPDATE team_attempts SET identity_json = ?, state = ?, unknown_reason = NULL,

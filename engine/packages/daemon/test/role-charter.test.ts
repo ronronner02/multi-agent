@@ -27,9 +27,9 @@ describe("role charters", () => {
     expect(new Set(roles.map(role => roleCharters[role])).size).toBe(roles.length);
   });
 
-  it("projects protocol 2 and keeps each composed role prompt within 16 KiB", () => {
-    expect(LEAD_PROTOCOL_VERSION).toBe("2");
-    expect(instructionVersion(leadProtocol)).toBe("2");
+  it("projects protocol 3 and keeps each composed role prompt within 16 KiB", () => {
+    expect(LEAD_PROTOCOL_VERSION).toBe("3");
+    expect(instructionVersion(leadProtocol)).toBe("3");
     for (const role of roles) {
       const brief = role === "lead" ? Math.max(leadInstructions("A".repeat(300)).length,
         planningInstructions("A".repeat(300), "docs/plan.md", true).length) : 1_024;
@@ -68,6 +68,18 @@ describe("role charters", () => {
       const prompt = [coreInstructions, roleCharters.lead, leadProtocol, activation.instructions].join("\n");
       expect(Buffer.byteLength(prompt)).toBeLessThanOrEqual(16_384);
     } finally { db.close(); }
+  });
+
+  it("keeps worker report permissions outside the frozen candidate and states the resolution contract", () => {
+    for (const role of ["implementer", "reviewer"] as const) {
+      expect(instructionVersion(roleCharters[role])).toBe("2");
+      expect(roleCharters[role]).toContain("task-report.json");
+      expect(roleCharters[role]).toContain("16,384");
+      expect(roleCharters[role]).toContain("500");
+      expect(roleCharters[role]).toContain("outside");
+    }
+    expect(leadProtocol).toContain("resolutions");
+    expect(leadProtocol).toContain("reassign");
   });
 
   it("keeps development reviews and managed reviewers on the same charter file", () => {

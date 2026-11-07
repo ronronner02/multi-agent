@@ -5,7 +5,8 @@ import type { StartupOrchestrator } from "./startup-orchestrator.js";
 import type { TmuxAdapter } from "../adapters/tmux.js";
 import { ensureSeatPane, seatForTask } from "./seat-pane.js";
 import { isRetiredTeamNode } from "./team-setup.js";
-import { parseAttemptClassification } from "./attempt-failure.js";
+import { retryIsDue, parseAttemptClassification } from "./attempt-failure.js";
+import { ownerMessageSlot } from "./lead-chat.js";
 
 /**
  * MVP — the launch an owner's start produces.
@@ -26,6 +27,7 @@ import { parseAttemptClassification } from "./attempt-failure.js";
 export interface TaskDispatchDependencies {
   rigRepo: RigRepository;
   sessions: SessionRegistry;
+  now?: () => Date;
   tmux: TmuxAdapter;
   startupOrchestrator: StartupOrchestrator;
   runtimeAdapters: Record<string, RuntimeAdapter>;
@@ -74,8 +76,11 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
   // The sessions this dispatcher is already starting. `startNode` records `pending` before its
   // first await, so this covers only the window where a second dispatch would still read the
   // seat as pending and open a second terminal for it.
-  const starting = new Set<string>();
+  const starting = new Map<string, string>();
   return async (runId, taskId) => {
+    const timing = dependencies.sessions.db.prepare(`SELECT json_extract(evidence_json, '$.retryNotBefore') AS notBefore
+      FROM team_queue_authority WHERE run_id = ? AND task_id = ?`).get(runId, taskId) as { notBefore: string | null } | undefined;
+    if (!retryIsDue(timing?.notBefore, dependencies.now?.())) return;
     const seat = seatForTask(dependencies.sessions, runId, taskId);
     const context = dependencies.sessions.findResumeContextByName(seat);
     const session = context ? dependencies.sessions.getSessionsForRig(context.rigId)
@@ -93,16 +98,27 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     // A seat this dispatch may start: one that has never launched (`pending`), one whose last
     // launch failed (`failed`), one waiting on a native prompt (`attention_required`), or one
     // that claims to be `ready` while its pane is dead. A live `ready` seat already has an agent.
-    if (!context || !session || !node?.cwd || !adapter || starting.has(session.id)
+    if (!context || !session || !node?.cwd || !adapter || starting.has(seat)
       || !(session.startupStatus === "pending" || session.startupStatus === "failed"
         || session.startupStatus === "attention_required"
         || (session.startupStatus === "ready" && paneDead))) return;
+    // A short turn may exit before the next sweep registers its receipt. Its dead pane is
+    // still occupied until that observation closes it; recovering it early launches the task twice.
+    const receipts = dependencies.sessions.db.prepare(`SELECT json_extract(e.payload, '$.sessionName') AS seat,
+        a.id AS registeredId FROM events e
+      LEFT JOIN team_attempts a ON a.id = json_extract(e.payload, '$.receipt.attemptId')
+      WHERE e.type = 'managed.attempt.receipt' AND json_extract(e.payload, '$.runId') = ?
+        AND (a.id IS NULL OR a.state <> 'stopped')`).all(runId) as Array<{ seat: string; registeredId: string | null }>;
+    if (receipts.some(receipt => receipt.seat === seat)) return;
+    const unregistered = new Set(receipts.filter(receipt => receipt.registeredId === null).map(receipt => receipt.seat));
+    for (const [startingSeat, startingRun] of starting) if (startingRun === runId) unregistered.add(startingSeat);
     // MVP — the run's live-session limit is asked *before* the client starts. The governance
     // gate that already enforces it runs when the launch's receipt is registered, a second
     // later: by then the client is running, and a refused registration leaves an attempt nothing
     // observes ending. A task over the limit stays pending and the next freed slot dispatches it.
-    if (dependencies.liveSessions(runId) >= dependencies.maxSessions(runId)) return;
-    starting.add(session.id);
+    if (dependencies.liveSessions(runId) + unregistered.size >= dependencies.maxSessions(runId)
+      + ownerMessageSlot(dependencies.sessions.db, runId, taskId)) return;
+    starting.set(seat, runId);
     try {
       dependencies.renewApproval?.(runId);
       // A seat whose last launch failed is recovered once, in this dispatch: its terminal is put
@@ -152,7 +168,7 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
         console.warn(`team dispatch: seat ${seat} remains ${started.startupStatus}; ${detail || started.recovery || "recovery requires owner attention"}`);
       }
     } finally {
-      starting.delete(session.id);
+      starting.delete(seat);
     }
   };
 }

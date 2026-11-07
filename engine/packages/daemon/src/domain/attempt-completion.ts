@@ -9,6 +9,7 @@ import { agentTurnOutputPaths, readAgentTurnLastMessage, readAgentTurnThreadId }
 import { leadCompletionEvidence, taskCompletionEvidence, type CandidateFacts, type TaskCompletionEvidence } from "./task-completion.js";
 import { recordedFindings } from "./review-loop.js";
 import type { AttemptOutcome, AttemptTelemetry } from "./attempt-telemetry.js";
+import { unreadableTaskReport, type TaskReport } from "./task-report.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -46,6 +47,7 @@ export interface AttemptCompletionDependencies {
   candidateManifestFor?: (runId: string, taskId: string) => CandidateFacts;
   /** The runtime's daemon-owned lead proposal reader, used for automatic lead completion evidence. */
   readLeadProposal?: (runId: string, taskId: string) => readonly unknown[];
+  readTaskReport?: (runId: string, attemptId: string) => TaskReport | null;
   /**
    * U6 — the runtime's reader of a delivery lead's escalation.
    *
@@ -111,6 +113,7 @@ export interface AttemptCompletionDependencies {
    * second timer that could disagree about the cadence.
    */
   onSweep?: () => Promise<void>;
+  now?: () => Date;
   intervalMs?: number;
   log?: (message: string) => void;
 }
@@ -165,6 +168,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
   const intervalMs = dependencies.intervalMs ?? ATTEMPT_SWEEP_INTERVAL_MS;
   const alive = dependencies.alive ?? processIdentityAlive;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let sweeping = false;
   /**
    * The highest receipt `seq` this process has already read.
    *
@@ -330,7 +334,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     const exit = pane !== null && dependencies.paneExit ? await dependencies.paneExit(pane) : null;
     const terminalTail = pane !== null && dependencies.paneTail && exit?.code !== 0
       ? await dependencies.paneTail(pane, TERMINAL_TAIL_LINES) : null;
-    return classifyAttemptFailure({ canceled, exit: exit === null ? null : { code: exit.code }, terminalTail });
+    return classifyAttemptFailure({ canceled, exit: exit === null ? null : { code: exit.code }, terminalTail, now: dependencies.now?.() });
   };
 
   /** Record the task result the daemon can prove from the stopped turn. */
@@ -344,14 +348,29 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     // A planning lead task is the owner↔lead chat conversation, not a delivery task. Its turn
     // ends in a chat reply and is reopened by the next owner message; completion evidence applies
     // once the run enters delivery and the lead writes its decomposition proposal.
-    if (task.assignment.role === "lead" && governance.getRun(stoppedAttempt.runId).phase === "planning") return;
+    if (task.assignment.role === "lead" && governance.getRun(stoppedAttempt.runId).phase === "planning"
+      && stoppedAttempt.failure === null) return;
     const subjectTaskId = task.assignment.role === "reviewer" && task.assignment.reviewOf !== undefined
       ? task.assignment.reviewOf : task.assignment.taskId;
-    let state: "done" | "failed";
+    let state: "done" | "failed" | "blocked" | "canceled";
+    let taskReport: TaskReport | null = null;
+    if (task.assignment.role !== "lead" && dependencies.readTaskReport) {
+      try { taskReport = dependencies.readTaskReport(stoppedAttempt.runId, stoppedAttempt.id); }
+      catch (error) { taskReport = unreadableTaskReport(error); }
+    }
     let evidence: Record<string, unknown>;
     let reasonCode: AttemptReasonCode | null = null;
 
-    if (task.assignment.role === "reviewer") {
+    if (stoppedAttempt.failure?.reasonCode === "canceled") {
+      state = "canceled"; evidence = { reasonCode: "canceled" };
+    } else if (taskReport) {
+      state = taskReport.status === "dropped" ? "done" : "blocked";
+      evidence = { taskReport, reportedAttemptId: stoppedAttempt.id, validated: false };
+    } else if (stoppedAttempt.failure) {
+      state = "failed";
+      reasonCode = stoppedAttempt.failure.reasonCode as AttemptReasonCode;
+      evidence = { reasonCode };
+    } else if (task.assignment.role === "reviewer") {
       const message = dependencies.turnStateRoot
         ? readAgentTurnLastMessage(dependencies.turnStateRoot, stoppedAttempt.id) : null;
       const report = extractReviewerReport(message);
@@ -410,13 +429,13 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       if (completion.validated) state = "done";
       else {
         state = "failed";
-        reasonCode = (stoppedAttempt.failure?.reasonCode as AttemptReasonCode | undefined) ?? "evidence_invalid";
+        reasonCode = "evidence_invalid";
         evidence = { ...evidence, reasonCode };
       }
     }
 
     // The classifier is recorded with the stop when available. A failed evidence read has no
-    // process classifier, so stamp its retry-eligible code onto the stopped attempt first.
+    // process classifier, so stamp its judgment classification onto the stopped attempt first.
     let currentAttempt = stoppedAttempt;
     if (state === "failed" && currentAttempt.failure === null && reasonCode !== null) {
       const failure = classificationFor(reasonCode);
@@ -448,7 +467,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       log(`team completion: automatic outcome for ${task.assignment.taskId} was not recorded: ${outcome.reason ?? outcome.status}`);
       return;
     }
-    const telemetryOutcome = { outcome: (state === "done" ? "succeeded" : "failed") as AttemptOutcome,
+    const telemetryOutcome = { outcome: (state === "done" ? "succeeded" : state === "canceled" ? "canceled" : "failed") as AttemptOutcome,
       retryScheduled: governance.getRun(currentAttempt.runId).retriesUsed > run.retriesUsed };
     // U7 — an approving review is the run's signal to deliver the work it approved: the
     // implementer's own task lands as one commit on the run's branch. A replay finds the commit
@@ -494,22 +513,33 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     .all() as Array<{ runId: string }>).map(row => row.runId);
 
   const sweep = async (): Promise<void> => {
-    const receipts = db.prepare("SELECT seq, payload FROM events WHERE type = 'managed.attempt.receipt' AND seq > ? ORDER BY seq")
-      .all(processedSeq) as ReceiptRow[];
-    for (const row of receipts) {
-      // Advance before registering: a receipt that cannot be registered now is not retried, and
-      // the owner action refuses its task with a named reason rather than leaving a tick to
-      // repeat the same refusal every second for the life of the daemon.
-      processedSeq = row.seq;
-      try { await register(row); } catch (error) {
-        log(`team completion: receipt was not registered: ${error instanceof Error ? error.message : String(error)}`);
+    if (sweeping) return;
+    sweeping = true;
+    try {
+      const receipts = db.prepare("SELECT seq, payload FROM events WHERE type = 'managed.attempt.receipt' AND seq > ? ORDER BY seq")
+        .all(processedSeq) as ReceiptRow[];
+      for (const row of receipts) {
+        // Advance before registering: a receipt that cannot be registered now is not retried, and
+        // the owner action refuses its task with a named reason rather than leaving a tick to
+        // repeat the same refusal every second for the life of the daemon.
+        processedSeq = row.seq;
+        try { await register(row); } catch (error) {
+          log(`team completion: receipt was not registered: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
-    }
-    await close();
-    // The sweep has recorded everything this tick can observe about its attempts; the facts the
-    // whole team produced are read after it, once, for the same cadence.
-    try { await dependencies.onSweep?.(); } catch (error) {
-      log(`team completion: the sweep's team-event owner failed: ${error instanceof Error ? error.message : String(error)}`);
+      await close();
+      for (const runId of pendingRunIds()) {
+        try { await dependencies.dispatchPending?.(runId); } catch (error) {
+          log(`team completion: scheduled dispatch for run=${runId} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      // The sweep has recorded everything this tick can observe about its attempts; the facts the
+      // whole team produced are read after it, once, for the same cadence.
+      try { await dependencies.onSweep?.(); } catch (error) {
+        log(`team completion: the sweep's team-event owner failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } finally {
+      sweeping = false;
     }
   };
 
@@ -518,8 +548,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     start() {
       if (timer) return;
       timer = setInterval(() => {
-        // A tick's observation is awaited here, so two ticks never read the same pane at once
-        // and a slow terminal read cannot overlap the next one.
+        // The sweep guard covers timer ticks, startup and explicit observations while I/O waits.
         sweep().catch(error => log(`team completion: sweep failed: ${error instanceof Error ? error.message : String(error)}`));
       }, intervalMs);
       // The daemon's lifetime decides how long this runs; a tick must never be the reason a
@@ -529,13 +558,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       // daemon stopped, and nothing else asks the scheduler again. Without this a run resumed
       // after a restart sits with work nobody starts — measured on the C4 acceptance run, where
       // the rework the review had just reopened was never dispatched.
-      void (async () => {
-        for (const runId of pendingRunIds()) {
-          try { await dependencies.dispatchPending?.(runId); } catch (error) {
-            log(`team completion: dispatch after start for run=${runId} failed: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        }
-      })();
+      void sweep().catch(error => log("team completion: startup sweep failed: " + String(error)));
     },
     stop() {
       if (timer) clearInterval(timer);

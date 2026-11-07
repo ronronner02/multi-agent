@@ -49,6 +49,7 @@ import { canonicalJson, type TeamRole, type PlanBinding } from "../contracts/tea
 // Pattern mirrors Phase B's ProjectClassifier facade shape.
 
 import type Database from "better-sqlite3";
+import { parseTaskReport, type TaskReport } from "./task-report.js";
 import type { WorkflowSpec } from "./workflow-types.js";
 import type { EventBus } from "./event-bus.js";
 import type { PersistedEvent } from "./types.js";
@@ -845,6 +846,22 @@ export class WorkflowRuntime {
     return candidateManifest({ ...workspace, checkScope: undefined });
   }
 
+  /** Read only the report assigned to this run and worker attempt through the existing file boundary. */
+  taskReportFor(runId: string, attemptId: string, turnStateRoot: string): TaskReport | null {
+    const attempt = this.db.prepare("SELECT role FROM team_attempts WHERE id = ? AND run_id = ?").get(attemptId, runId) as
+      { role: string } | undefined;
+    if (!attempt || !["implementer", "reviewer"].includes(attempt.role)
+      || !attemptId || /[/\\\x00-\x1f]/.test(attemptId) || [".", ".."].includes(attemptId)) {
+      throw new Error("Task report requires this run's worker attempt");
+    }
+    const read = readWorkspacePath(turnStateRoot, "turns/" + attemptId + "/report/task-report.json", () => false);
+    if (read.kind === "missing") return null;
+    if (read.kind !== "file") throw new Error("Task report is not a regular file");
+    let value: unknown;
+    try { value = JSON.parse(read.content); } catch { throw new Error("Task report is not valid JSON"); }
+    return parseTaskReport(value);
+  }
+
   /**
    * C3 — the decomposition a lead wrote, read at the boundary that owns worker-written data.
    *
@@ -856,6 +873,7 @@ export class WorkflowRuntime {
    * method's decision: the governance owner validates it against the approved binding and
    * records an owner decision.
    */
+
   leadProposalFor(runId: string, taskId: string): LeadTask[] {
     return this.leadProposalWithSeatsFor(runId, taskId).tasks;
   }

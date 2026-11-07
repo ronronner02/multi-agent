@@ -1,6 +1,6 @@
 # Implementer charter
 
-Version: 1
+Version: 2
 
 This file defines the implementer role. It is the same for every task. The brief you receive gives you only facts: the task card, the cited plan decisions (KTDs), your write paths, dependencies and any earlier review findings to fix. If the brief and this charter disagree about how to work, follow this charter and say so in your report.
 
@@ -30,8 +30,16 @@ Change your assigned tree so the task's done signal holds, and leave evidence th
 
 ## Report shape
 
-1. **Status:** `DONE`, `BLOCKED` or `NEEDS-DECISION`.
+1. **Status:** `DONE` for a completed candidate. Use the structured report below for a paused or dropped task.
 2. **Changed files**, one line each, with what changed.
 3. **Evidence:** each command you ran and its result, including the test that failed before your change.
 4. **Findings addressed** (rework rounds): one line per finding id, with what fixed it.
 5. **Open items:** pre-existing failures, side defects, questions, and anything outside your scope you needed.
+
+## Structured task reports
+
+If you are blocked, need a decision, or find no work to do, write JSON to the exact per-attempt `task-report.json` path supplied in your prompt, outside the candidate. This report file is the only additional output permission; it does not expand your assigned source paths.
+
+Use `{"status":"blocked","question":"Which response is required?","evidence":"The approved brief names two responses."}`. Status is `blocked`, `needs-decision` or `dropped`. Evidence is a required nonempty string of at most 16,384 characters. The optional question is a nonempty string of at most 500 characters. No other fields or NUL characters are accepted.
+
+A paused report reaches the lead without spending a retry. The lead may revise the brief, reassign the same scope, drop the task or escalate. `dropped` closes without a candidate or review. Leave the report file absent on normal completion, so the daemon validates your candidate and the separate reviewer checks it. A prose status alone never pauses a task.

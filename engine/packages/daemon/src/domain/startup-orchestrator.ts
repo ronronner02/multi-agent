@@ -24,7 +24,7 @@ import { resolveReadinessTimeoutMs } from "./readiness-timeout.js";
 import { SettingsStore } from "./user-settings/settings-store.js";
 import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
-import { continuationNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
+import { agentTurnOutputPaths, continuationNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
 import { leadChatTurnNote, takeOwnerMessages } from "./lead-chat.js";
 
 /**
@@ -837,6 +837,9 @@ export class StartupOrchestrator {
       : null;
     return managedTurnPrompt({ identity: identityAction?.value ?? "", bundle, runId, assignment, taskBody: task.body,
       outputs, permissions, instructions: turnInstructions(attempt.context),
+      ...(["implementer", "reviewer"].includes(assignment.role) ? {
+        taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.context.projection.attemptId).taskReport,
+      } : {}),
       continuation: [continuationNote(this.db, runId, assignment.taskId, assignment.role), chat].filter(Boolean).join("\n\n") || null });
   }
 
