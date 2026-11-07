@@ -1,3 +1,4 @@
+import { leadRosterPath, parseLeadRoster, type LeadRosterEvidence } from "./lead-roster.js";
 import { ScopeExtensions } from "./scope-extension.js";
 import { PlanGovernance, hashBinding, hashBytes } from "./plan-governance.js";
 import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./team-assignment.js";
@@ -31,7 +32,7 @@ import {
   type CandidateWorkspace,
   type WorkspaceBase,
 } from "./team-workspace.js";
-import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH, LeadProposalMissingError, parseLeadEscalation, parseLeadProposal,
+import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH, LeadProposalMissingError, parseLeadEscalation, parseLeadProposalFile, type LeadProposal,
   type LeadEscalation, type LeadTask } from "./lead-proposal.js";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
@@ -856,12 +857,16 @@ export class WorkflowRuntime {
    * records an owner decision.
    */
   leadProposalFor(runId: string, taskId: string): LeadTask[] {
+    return this.leadProposalWithSeatsFor(runId, taskId).tasks;
+  }
+
+  leadProposalWithSeatsFor(runId: string, taskId: string): LeadProposal {
     const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
     const read = readWorkspacePath(workspace.root, LEAD_PROPOSAL_PATH, () => false);
     if (read.kind !== "file") throw new LeadProposalMissingError();
     let value: unknown;
     try { value = JSON.parse(read.content); } catch { throw new Error("The lead's proposal is not valid JSON"); }
-    return parseLeadProposal(value);
+    return parseLeadProposalFile(value);
   }
 
   /**
@@ -889,6 +894,15 @@ export class WorkflowRuntime {
    * path is the run's recorded plan path: the candidate and the binding cannot name different
    * files, because the approval is what makes the binding real.
    */
+  rosterFor(runId: string, taskId: string, planRef: string): LeadRosterEvidence {
+    const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
+    const read = readWorkspacePath(workspace.root, leadRosterPath(planRef), () => false);
+    if (read.kind !== "file") throw new Error("The lead wrote no readable lead-roster.json beside the plan.");
+    let value: unknown;
+    try { value = JSON.parse(read.content); } catch { throw new Error("The lead's roster is not valid JSON."); }
+    return { seats: parseLeadRoster(value), digest: read.hash };
+  }
+
   planFor(runId: string, taskId: string, planRef: string): { content: string; hash: string } {
     const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
     const read = readWorkspacePath(workspace.root, planRef, () => false);

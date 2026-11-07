@@ -292,6 +292,24 @@ describe("the owner retry reads the recorded classification", () => {
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBeNull();
   });
 
+  it.each(["failed", "ready"] as const)("does no pane work for a retired seat with status %s", async status => {
+    const seat = sessions.findResumeContextByName("builder@rig-1")!;
+    sessions.updateBinding(seat.nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
+    sessions.updateStartupStatus(seat.sessionId, status);
+    db.prepare("UPDATE nodes SET retired_at = CURRENT_TIMESTAMP WHERE id = ?").run(seat.nodeId);
+    const before = sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId);
+    const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
+    const listPanes = vi.fn(async () => [{ id: "%1" }]), getPaneExit = vi.fn(async () => ({ dead: true, code: 0 }));
+    const respawnPane = vi.fn(async () => ({ ok: true })), startNode = vi.fn(async () => ({ ok: true }));
+    await composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
+      tmux: { listPanes, getPaneExit, respawnPane } as never, startupOrchestrator: { startNode } as never,
+      runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
+      maxSessions: () => 2, liveSessions: () => 0,
+    })("run-1", "task-1");
+    for (const operation of [listPanes, getPaneExit, respawnPane, startNode]) expect(operation).not.toHaveBeenCalled();
+    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)).toEqual(before);
+  });
+
   it("recovers a seat whose last launch failed, once, and then launches it", async () => {
     // Measured on the C4 acceptance run: a launch pasted into a held-but-dead pane, failed, and
     // left the seat `failed`. The dispatcher starts only a `pending` seat, and a managed daemon

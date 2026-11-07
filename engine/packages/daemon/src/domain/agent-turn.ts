@@ -164,7 +164,7 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
         json_extract(payload, '$.payload.note') AS note, json_extract(payload, '$.payload.reason') AS reason
       FROM events
       WHERE type = 'team.control' AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.taskId') = ?
-        AND json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved', 'lead.proposal-refused', 'lead.woken')
+        AND json_extract(payload, '$.action') IN ('approval.decided', 'plan.approved', 'lead.proposal-refused', 'lead.plan-refused', 'lead.woken')
         AND seq > ?
       ORDER BY seq DESC LIMIT 1`).get(runId, taskId, lastTurnEnd.seq) as
       { action: string; note: string | null; reason: string | null } | undefined;
@@ -176,6 +176,10 @@ export function continuationNote(db: Database.Database, runId: string, taskId: s
         `${plan?.planRef ?? "the plan path"} on the run's own branch, and your working tree is based on it. ` +
         "Decompose it now: write lead-proposal.json in your working tree as your run instructions describe. " +
         "Your task list is admitted without a further owner decision.";
+    }
+    if (row.action === "lead.plan-refused") {
+      return `The planning roster was refused, because:\n\n${row.note ?? "the roster needs revision"}\n\n` +
+        "Revise lead-roster.json beside the plan, then wait for the owner to approve the plan and roster together.";
     }
     if (row.action === "lead.proposal-refused") {
       return `This continues your earlier attempt. The task list you proposed was refused, because:\n\n` +

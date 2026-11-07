@@ -4,6 +4,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
 import { canonicalJson, type PlanBinding, type ScopeExtension, type ScopeProjection, type TeamApproval, type TeamRun, type TeamTaskAuthority } from "../contracts/team-control.js";
 import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
+import { leadRosterPath } from "./lead-roster.js";
 import { candidatePath } from "./team-workspace.js";
 
 export interface CandidateScopeEvidence {
@@ -209,7 +210,8 @@ export class ScopeExtensions {
       // the owner for a decision, it lives at the same root for the same reason, and a later
       // launch would otherwise be refused for the question the lead is still waiting on.
       if (task.assignment.role === "lead" && change.path === canonicalPath
-        && (change.path === LEAD_PROPOSAL_PATH || change.path === LEAD_ESCALATION_PATH)) continue;
+        && (change.path === LEAD_PROPOSAL_PATH || change.path === LEAD_ESCALATION_PATH
+          || change.path === leadRosterPath(run.binding.planRef))) continue;
       if (covers(change.path, task.assignment.paths) && covers(canonicalPath, task.assignment.paths)) continue;
       const dependency = dependencyPath(change.path);
       if (!dependency && covers(change.path, effective) && covers(canonicalPath, effective)) continue;

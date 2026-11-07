@@ -1,7 +1,8 @@
 import type Database from "better-sqlite3";
-import { TEAM_CONTROL_VERSION, TeamContractError, parseAssignment, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
-import type { PlanGovernance } from "./plan-governance.js";
-import { LeadProposalMissingError, type LeadTask } from "./lead-proposal.js";
+import { TEAM_CONTROL_VERSION, TeamContractError, canonicalJson, parseAssignment, type ControlActor, type ControlRequest, type JsonValue } from "../contracts/team-control.js";
+import { hashBytes, type PlanGovernance } from "./plan-governance.js";
+import type { LeadSeatChanges } from "./lead-roster.js";
+import { LeadProposalMissingError, type LeadTask, type LeadProposal } from "./lead-proposal.js";
 
 /**
  * U6 — the lead as manager, after the owner approved the plan.
@@ -35,7 +36,8 @@ export interface LeadManagerDependencies {
   db: Database.Database;
   governance: PlanGovernance;
   /** The runtime's own reading of the lead's decomposition, at the worker-written boundary. */
-  readLeadProposal?: (runId: string, taskId: string) => readonly LeadTask[];
+  readLeadProposal?: (runId: string, taskId: string) => readonly LeadTask[] | LeadProposal;
+  readMaxSeats?: () => number;
   /** The run's current binding, read the way every control command reads it. */
   currentBinding: (runId: string) => unknown;
   /** The daemon's dispatch, read at use so a host that composes it later is still the owner. */
@@ -136,7 +138,13 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
  * brief is not a new request; a list that differs is admitted, and a repeated id is then refused
  * with that reason, which is what tells the lead to use new ids for new work.
  */
-export function proposalAlreadyAdmitted(db: Database.Database, runId: string, tasks: readonly LeadTask[]): boolean {
+export function proposalAlreadyAdmitted(db: Database.Database, runId: string, tasks: readonly LeadTask[], seats?: LeadSeatChanges): boolean {
+  if (seats !== undefined) {
+    return !!db.prepare(`SELECT 1 FROM team_control_requests WHERE run_id = ?
+      AND json_extract(response_json, '$.status') = 'accepted'
+      AND json_extract(response_json, '$.value.proposalDigest') = ? LIMIT 1`)
+      .get(runId, hashBytes(canonicalJson({ tasks, seats })));
+  }
   const existing = db.prepare(`SELECT a.task_id AS taskId, q.destination_session AS seat, q.body AS body,
       a.assignment_json AS assignment FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
     WHERE a.run_id = ?`).all(runId) as Array<{ taskId: string; seat: string; body: string; assignment: string }>;
@@ -221,8 +229,12 @@ export function composeLeadManager(dependencies: LeadManagerDependencies): LeadM
       if (run.phase !== "delivery" || run.state !== "approved") return;
       const lead = governance.leadTask(attempt.runId);
       if (!lead || !dependencies.readLeadProposal) return;
-      let tasks: readonly LeadTask[];
-      try { tasks = dependencies.readLeadProposal(attempt.runId, lead.taskId); }
+      let tasks: readonly LeadTask[], seats: LeadSeatChanges | undefined;
+      try {
+        const proposal = dependencies.readLeadProposal(attempt.runId, lead.taskId);
+        if ("tasks" in proposal) { tasks = proposal.tasks; seats = proposal.seats; }
+        else tasks = proposal;
+      }
       catch (error) {
         // No proposal in the tree is a management turn that answered in the chat instead, and
         // there is nothing to admit. A proposal the boundary read and refused is work the lead
@@ -247,12 +259,12 @@ export function composeLeadManager(dependencies: LeadManagerDependencies): LeadM
       }
       // The tree keeps every file the lead wrote, so a turn that answered an event still holds
       // the list it delivered earlier. That list is not a new request.
-      if (proposalAlreadyAdmitted(db, attempt.runId, tasks)) return;
+      if (proposalAlreadyAdmitted(db, attempt.runId, tasks, seats)) return;
       const receipt = (() => {
         try {
           return governance.admitLeadProposal(
             request(attempt.runId, "lead-admission-" + attempt.id, "daemon-lead-admission:" + attempt.id),
-            daemon, dependencies.currentBinding(attempt.runId), tasks);
+            daemon, dependencies.currentBinding(attempt.runId), tasks, seats, dependencies.readMaxSeats?.() ?? 6);
         } catch (error) {
           // The attempt already admitted its list and the run has moved since: the stored
           // receipt names the entity version it was recorded at, so an exact replay cannot be

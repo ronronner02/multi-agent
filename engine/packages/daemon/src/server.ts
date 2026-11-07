@@ -907,6 +907,7 @@ export function createApp(deps: AppDeps): Hono {
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {
     credentials: teamOptions.credentials,
+    ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}),
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
     ...(teamOptions.planWorktreeRoot ? { planWorktreeRoot: teamOptions.planWorktreeRoot } : {}),
@@ -915,6 +916,7 @@ export function createApp(deps: AppDeps): Hono {
   // read is the daemon's own reading of the file the lead wrote; the write records an owner
   // decision, never an admission.
   app.route("/api/team-control", teamLeadRoutes(teamGovernance, {
+    ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}),
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     // U5 — the chat and plan routes start the lead's next turn through the same dispatch a

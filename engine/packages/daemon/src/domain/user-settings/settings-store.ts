@@ -221,6 +221,8 @@ export const SETTINGS_VALID_KEYS = [
   // applies on the next restart. Lockstep with cli/src/config-store.ts VALID_KEYS.
   "workers.isolation",
   "team.leadClient",
+  "team.maxSeats",
+  "team.maxConcurrentAgents",
 ] as const;
 
 export type SettingsValidKey = typeof SETTINGS_VALID_KEYS[number];
@@ -314,6 +316,8 @@ const ENV_MAP: Record<SettingsValidKey, { primary: string; legacy?: string }> = 
   "queue.wake_swap_grace_seconds": { primary: "OPENRIG_QUEUE_WAKE_SWAP_GRACE_SECONDS" },
   "workers.isolation": { primary: "OPENRIG_WORKERS_ISOLATION" },
   "team.leadClient": { primary: "OPENRIG_TEAM_LEAD_CLIENT" },
+  "team.maxSeats": { primary: "OPENRIG_TEAM_MAX_SEATS" },
+  "team.maxConcurrentAgents": { primary: "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS" },
 };
 
 const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
@@ -394,6 +398,8 @@ const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
   "queue.wake_swap_grace_seconds": ["queue", "wakeSwapGraceSeconds"],
   "workers.isolation": ["workers", "isolation"],
   "team.leadClient": ["team", "leadClient"],
+  "team.maxSeats": ["team", "maxSeats"],
+  "team.maxConcurrentAgents": ["team", "maxConcurrentAgents"],
 };
 
 export type SettingSource = "env" | "file" | "default";
@@ -674,6 +680,8 @@ function getDefaultValue(key: SettingsValidKey, workspaceRoot: string): string |
     case "queue.wake_human_rung": return "always";
     case "workers.isolation": return "none";
     case "team.leadClient": return "claude-code";
+    case "team.maxSeats": return 6;
+    case "team.maxConcurrentAgents": return 3;
     default: return "";
   }
 }
@@ -868,6 +876,11 @@ const KEY_CONSTRAINTS: Partial<Record<SettingsValidKey, (raw: string, coerced: s
   "queue.wake_swap_grace_seconds": positiveIntegerConstraint("queue.wake_swap_grace_seconds"),
   "queue.wake_human_rung": wakeHumanRungConstraint,
   "workers.isolation": workersIsolationConstraint,
+  "team.maxSeats": positiveIntegerConstraint("team.maxSeats"),
+  "team.maxConcurrentAgents": (raw, coerced) => {
+    positiveIntegerConstraint("team.maxConcurrentAgents")(raw, coerced);
+    if (Number(coerced) > 3) throw new Error("Invalid value for team.maxConcurrentAgents: use 1, 2 or 3.");
+  },
   "team.leadClient": raw => {
     if (raw !== "claude-code" && raw !== "codex") throw new Error("Invalid value for team.leadClient: use claude-code or codex.");
   },

@@ -16,6 +16,8 @@ import { ordinalRunName, reviewName, taskName } from "./display-names.js";
 import { classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { LeadTask } from "./lead-proposal.js";
+import { planningRosterRequired, rosterRefusal, type LeadRosterSeat, type LeadSeatChanges } from "./lead-roster.js";
+import { addTeamSeats, nextTeamSeatNames } from "./team-setup.js";
 import { appendChatMessage, answerDecision, chatBody, getChatMessage, listChatMessages, pendingDecision, runLeadTask, type TeamChatMessage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import type { ReviewFinding } from "./review-evidence.js";
@@ -583,7 +585,7 @@ export class PlanGovernance {
    */
   private implementerSeat(rigId: string, seat: string): boolean {
     const row = this.db.prepare(`SELECT n.role AS role FROM sessions s JOIN nodes n ON n.id = s.node_id
-      WHERE n.rig_id = ? AND s.session_name = ? ORDER BY s.created_at DESC, s.id DESC LIMIT 1`).get(rigId, seat) as
+      WHERE n.rig_id = ? AND n.retired_at IS NULL AND s.session_name = ? ORDER BY s.created_at DESC, s.id DESC LIMIT 1`).get(rigId, seat) as
       { role: string | null } | undefined;
     return row?.role === "implementer";
   }
@@ -709,7 +711,55 @@ export class PlanGovernance {
    * next prompt carries. The lead can shrink the change or escalate; the daemon never widens the
    * plan on the lead's behalf.
    */
-  admitLeadProposal(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, leadTasks: readonly LeadTask[]): ControlReceipt {
+  private prepareSeatChanges(ctx: CommandContext, changes: LeadSeatChanges, maxSeats: number) {
+    const current = this.db.prepare(`SELECT n.id, n.role, n.runtime AS client,
+        (SELECT session_name FROM sessions WHERE node_id = n.id ORDER BY created_at DESC, id DESC LIMIT 1) AS member
+      FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')`)
+      .all(ctx.run.rigId) as Array<LeadRosterSeat & { id: string; member: string | null }>;
+    const retired: typeof current = [];
+    for (const member of changes.retire) {
+      const seat = current.find(seat => seat.member === member);
+      if (!seat) return `Seat ${member} is not an active non-lead seat on this rig`;
+      const live = this.db.prepare(`SELECT 1 FROM team_attempts a JOIN queue_items q ON q.qitem_id = a.qitem_id
+        JOIN team_runs r ON r.id = a.run_id WHERE r.rig_id = ? AND a.state <> 'stopped'
+        AND q.destination_session IN (SELECT session_name FROM sessions WHERE node_id = ?) LIMIT 1`).get(ctx.run.rigId, seat.id);
+      if (live) return `Seat ${member} has a live attempt`;
+      const sessions = this.db.prepare("SELECT session_name AS name FROM sessions WHERE node_id = ?").all(seat.id) as Array<{ name: string }>;
+      const rigsRuns = this.db.prepare("SELECT id FROM team_runs WHERE rig_id = ?").all(ctx.run.rigId) as Array<{ id: string }>;
+      if (rigsRuns.some(run => this.nativeLaunchIntents(run.id).some(intent => intent.state === "admitted"
+        && sessions.some(session => session.name === intent.sessionId)))) return `Seat ${member} has a pending native launch`;
+      // Failed tasks can be retried. Canceled and denied tasks no longer hold an assignment.
+      const assigned = this.db.prepare(`SELECT 1 FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+        JOIN team_runs r ON r.id = a.run_id WHERE r.rig_id = ? AND q.state IN ('pending', 'in-progress', 'blocked', 'failed')
+        AND q.destination_session IN (SELECT session_name FROM sessions WHERE node_id = ?) LIMIT 1`).get(ctx.run.rigId, seat.id);
+      if (assigned) return `Seat ${member} has an unfinished assigned task`;
+      // A completed implementation still owns rework while its separate reviewer task is unresolved.
+      const awaitingReview = this.db.prepare(`SELECT 1 FROM team_queue_authority a
+        JOIN queue_items q ON q.qitem_id = a.qitem_id JOIN team_runs r ON r.id = a.run_id
+        JOIN team_queue_authority review ON review.run_id = a.run_id
+          AND json_extract(review.assignment_json, '$.reviewOf') = a.task_id
+        JOIN queue_items rq ON rq.qitem_id = review.qitem_id
+        WHERE r.rig_id = ? AND json_extract(a.assignment_json, '$.role') = 'implementer'
+          AND json_extract(review.assignment_json, '$.role') = 'reviewer' AND q.state IN ('done', 'handed-off')
+          AND rq.state IN ('pending', 'in-progress', 'blocked', 'failed')
+          AND q.destination_session IN (SELECT session_name FROM sessions WHERE node_id = ?) LIMIT 1`).get(ctx.run.rigId, seat.id);
+      if (awaitingReview) return `Seat ${member} has an implementation with an unresolved review`;
+      const reserved = this.db.prepare(`SELECT 1 FROM team_runs WHERE rig_id = ? AND id <> ? AND state <> 'canceled'
+        AND reviewer_seat IN (SELECT session_name FROM sessions WHERE node_id = ?) LIMIT 1`).get(ctx.run.rigId, ctx.run.id, seat.id);
+      if (reserved) return `Seat ${member} is reserved by another open run`;
+      retired.push(seat);
+    }
+    const names = nextTeamSeatNames(this.db, ctx.run.rigId, changes.add);
+    const final = [...current.filter(seat => !retired.includes(seat)),
+      ...changes.add.map((seat, index) => ({ ...seat, member: names[index]! }))];
+    const refusal = rosterRefusal(final, maxSeats);
+    if (refusal) return refusal;
+    return { retired, added: changes.add, reviewer: final.find(seat => seat.role === "reviewer")?.member ?? null,
+      implementers: new Set(final.filter(seat => seat.role === "implementer").map(seat => seat.member)) };
+  }
+
+  admitLeadProposal(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, leadTasks: readonly LeadTask[],
+    seats?: LeadSeatChanges, maxSeats = 6): ControlReceipt {
     const daemon = actorIdentity(actor, false, true);
     if (daemon.kind !== "daemon") throw new Error("A lead's decomposition is admitted by the daemon, not by another caller");
     return this.command("run.lead-tasks-admitted", raw, daemon, ctx => {
@@ -718,6 +768,8 @@ export class PlanGovernance {
       // A closed run dispatches nothing, so reopening the lead would only record work the run
       // cannot do. That is an observation about the run, not a defect in the lead's list.
       if (ctx.run.state !== "approved") return deny(`Run is closed to task admission (${ctx.run.state})`);
+      const seatChanges = seats === undefined ? null : this.prepareSeatChanges(ctx, seats, maxSeats);
+      if (typeof seatChanges === "string") return this.refuseLeadProposal(ctx, seatChanges);
       // The lead's seats and paths are its proposal; everything else about each task is the
       // run's own vocabulary, exactly as a growth task gets it.
       const batch = this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
@@ -725,9 +777,16 @@ export class PlanGovernance {
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
         destinationSession: task.seat })), "daemon");
       if (typeof batch === "string") return this.refuseLeadProposal(ctx, batch);
-      const notImplementer = batch.find(task => !this.implementerSeat(ctx.run.rigId, task.destinationSession));
+      const notImplementer = batch.find(task => seatChanges ? !seatChanges.implementers.has(task.destinationSession)
+        : !this.implementerSeat(ctx.run.rigId, task.destinationSession));
       if (notImplementer) {
         return this.refuseLeadProposal(ctx, `Seat ${notImplementer.destinationSession} is not an implementer seat on this rig`);
+      }
+      if (seatChanges) {
+        for (const seat of seatChanges.retired) this.db.prepare("UPDATE nodes SET retired_at = ? WHERE id = ?").run(ctx.now, seat.id);
+        addTeamSeats(this.db, ctx.run.rigId, seatChanges.added);
+        ctx.run.reviewerSeat = seatChanges.reviewer;
+        this.db.prepare("UPDATE team_runs SET reviewer_seat = ? WHERE id = ?").run(ctx.run.reviewerSeat, ctx.run.id);
       }
       for (const task of batch) {
         const taskId = task.assignment.taskId;
@@ -736,7 +795,8 @@ export class PlanGovernance {
         this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
           valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
       }
-      return { status: "accepted", value: { addedTasks: batch.map(task => task.assignment.taskId) },
+      return { status: "accepted", value: { addedTasks: batch.map(task => task.assignment.taskId),
+        ...(seats === undefined ? {} : { proposalDigest: hashBytes(canonicalJson({ tasks: leadTasks, seats })) }) },
         effectMayStart: true, observedBy: "daemon" };
     });
   }
@@ -772,11 +832,22 @@ export class PlanGovernance {
    * a stack trace. The lead task is reopened through the transition a rejected proposal already
    * uses, and the `lead.proposal-refused` event is what its next attempt reads to learn why.
    */
+  refuseLeadPlan(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, reason: string): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("run.lead-plan-refused", raw, owner, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.phase !== "planning" || ctx.run.state !== "approved") return deny("This run is not awaiting a planning revision");
+      return this.refuseLeadProposal(ctx, text(reason, "reason", 4_096));
+    });
+  }
+
   private refuseLeadProposal(ctx: CommandContext, reason: string): Result {
     const lead = runLeadTask(this.db, ctx.run.id);
     if (!lead) return deny(reason);
-    this.emit(ctx.run, ctx.register, "lead.proposal-refused", { note: reason }, lead.taskId);
-    this.reopenLeadTask(ctx, "The daemon refused the lead's task list; the lead revises it or escalates");
+    const planning = ctx.run.phase === "planning";
+    this.emit(ctx.run, ctx.register, planning ? "lead.plan-refused" : "lead.proposal-refused", { note: reason }, lead.taskId);
+    this.reopenLeadTask(ctx, planning ? "The planning roster was refused; the lead revises it"
+      : "The daemon refused the lead's task list; the lead revises it or escalates");
     return { status: "denied", reason, effectMayStart: true, observedBy: "daemon", revisionTaskId: lead.taskId };
   }
 
@@ -947,7 +1018,40 @@ export class PlanGovernance {
    * approval is not a task admission: nothing about the decomposition is known yet, and the
    * lead's proposal still goes through the owner's decision.
    */
-  approvePlan(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, approved: unknown): ControlReceipt {
+  planRosterRefusal(runId: string, seats: readonly LeadRosterSeat[], maxSeats: number): string | null {
+    const result = this.reconcilePlanRoster(this.getRun(runId).rigId, seats, maxSeats);
+    return "reason" in result ? result.reason : null;
+  }
+
+  private reconcilePlanRoster(rigId: string, seats: readonly LeadRosterSeat[], maxSeats: number):
+    { reason: string } | { missing: LeadRosterSeat[]; reviewerSeat: string | null } {
+    const reason = rosterRefusal(seats, maxSeats);
+    if (reason) return { reason };
+    const existing = this.db.prepare(`SELECT n.logical_id AS logicalId, n.role, n.runtime AS client,
+      (SELECT s.session_name FROM sessions s WHERE s.node_id = n.id ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS member
+      FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')
+      ORDER BY n.logical_id`).all(rigId) as Array<{
+        logicalId: string; role: LeadRosterSeat["role"]; client: string | null; member: string | null;
+      }>;
+    const missing = [...seats];
+    let reviewerSeat: string | null = null;
+    for (const seat of existing) {
+      const name = seat.member ?? seat.logicalId;
+      if (!seat.member || (seat.client !== "claude-code" && seat.client !== "codex")) {
+        return { reason: `Existing seat ${name} (${seat.role}, ${seat.client ?? "no client"}) needs a supported client and session before approval.` };
+      }
+      const index = missing.findIndex(requested => requested.role === seat.role && requested.client === seat.client);
+      if (index < 0) {
+        return { reason: `Existing seat ${name} (${seat.role}, ${seat.client}) is not included in the proposed roster. Keep its role and client and revise the roster.` };
+      }
+      missing.splice(index, 1);
+      if (seat.role === "reviewer") reviewerSeat = seat.member;
+    }
+    return { missing, reviewerSeat };
+  }
+
+  approvePlan(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, approved: unknown,
+    roster?: { seats: readonly LeadRosterSeat[]; maxSeats: number }): ControlReceipt {
     const owner = actorIdentity(actor, true);
     return this.command("plan.approved", raw, owner, (ctx) => {
       if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
@@ -971,6 +1075,14 @@ export class PlanGovernance {
       }
       const lead = runLeadTask(this.db, ctx.run.id);
       if (!lead) return deny("This run has no lead task to decompose the plan");
+      if (planningRosterRequired(ctx.run.binding)) {
+        if (!roster) return this.refuseLeadProposal(ctx, "Read and approve the lead-roster.json digest with the plan.");
+        const reconciled = this.reconcilePlanRoster(ctx.run.rigId, roster.seats, roster.maxSeats);
+        if ("reason" in reconciled) return this.refuseLeadProposal(ctx, reconciled.reason);
+        const added = addTeamSeats(this.db, ctx.run.rigId, reconciled.missing);
+        ctx.run.reviewerSeat = reconciled.reviewerSeat ?? added.find(seat => seat.role === "reviewer")?.member ?? null;
+        this.db.prepare("UPDATE team_runs SET reviewer_seat = ? WHERE id = ?").run(ctx.run.reviewerSeat, ctx.run.id);
+      }
       this.invalidateUnused(ctx, false);
       ctx.run.binding = binding;
       ctx.run.bindingDigest = hashBinding(binding);

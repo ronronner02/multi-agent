@@ -3,6 +3,8 @@ import { bodyLimit } from "hono/body-limit";
 import { TEAM_CONTROL_VERSION, TeamContractError, parseControlRequest, parseProtocolVersion } from "../contracts/team-control.js";
 import type { PlanGovernance, ProviderPolicyCapability } from "../domain/plan-governance.js";
 import type { LeadTask } from "../domain/lead-proposal.js";
+import { planningRosterRequired, type LeadRosterEvidence } from "../domain/lead-roster.js";
+import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import { runLeadTask } from "../domain/lead-chat.js";
 import { commitPlan } from "../domain/plan-branch.js";
 import { bindingForGoal, refreshPlanBinding } from "./team-start.js";
@@ -29,9 +31,11 @@ export const PROPOSAL_WINDOW_MS = 86_400_000;
 export interface LeadProposalRouteOptions {
   credentials: TeamControlCredentials;
   legacyTokens: readonly (string | null | undefined)[];
+  settingsStore?: SettingsStore;
   /** The runtime that owns the candidate trees and reads worker-written files. */
   runtime?: {
     leadProposalFor(runId: string, taskId: string): LeadTask[];
+    rosterFor?(runId: string, taskId: string, planRef: string): LeadRosterEvidence;
     /** U5 — the plan a planning lead wrote in its own tree. */
     planFor?(runId: string, taskId: string, planRef: string): { content: string; hash: string };
     /** U5 — let the lead's tree be adopted again after the plan commit moved its source. */
@@ -136,8 +140,20 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
       throw error;
     }
     const decision = governance.chatDecision(runId);
+    let planApproval: { plan: { content: string; hash: string } | null; roster: LeadRosterEvidence | null; error: string | null } | null = null;
+    if (run.phase === "planning" && planningRosterRequired(run.binding)) {
+      planApproval = { plan: null, roster: null, error: null };
+      const lead = governance.leadTask(runId);
+      try {
+        if (!lead || !options.runtime?.planFor || !options.runtime.rosterFor) throw new Error("The planning files are not available yet.");
+        planApproval.plan = options.runtime.planFor(runId, lead.taskId, run.binding.planRef);
+        planApproval.roster = options.runtime.rosterFor(runId, lead.taskId, run.binding.planRef);
+        planApproval.error = governance.planRosterRefusal(runId, planApproval.roster.seats,
+          Number(options.settingsStore?.resolveOne("team.maxSeats").value ?? 6));
+      } catch (error) { planApproval.error = (error as Error).message; }
+    }
     c.header("Cache-Control", "no-store");
-    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, phase: run.phase,
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, phase: run.phase, planApproval,
       messages: governance.chatMessages(runId).map(message => ({ id: message.id, sender: message.sender,
         kind: message.kind, body: message.body, options: message.options,
         answeredBy: message.answeredBy, createdAt: message.createdAt })),
@@ -212,6 +228,30 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     let currentBinding: unknown;
     try { currentBinding = refreshPlanBinding(run.binding, policy); }
     catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
+    let roster: { seats: LeadRosterEvidence["seats"]; maxSeats: number } | undefined;
+    if (planningRosterRequired(run.binding)) {
+      if (request.expectedEntityVersion !== run.entityVersion) throw new Error("Run entity version conflict");
+      if (run.state !== "approved") return c.json({ code: "plan_not_awaiting_approval", error: "The run is closed to plan approval." }, 409);
+      let reason: string | null = null;
+      try {
+        if (!options.runtime.rosterFor) throw new Error("The lead wrote no readable lead-roster.json beside the plan.");
+        const evidence = options.runtime.rosterFor(runId, lead.taskId, run.binding.planRef);
+        if ((request.payload as Record<string, unknown>)?.rosterDigest !== evidence.digest) {
+          throw new Error("The roster changed or its digest is missing. Read lead-roster.json again before approving.");
+        }
+        const maxSeats = Number(options.settingsStore?.resolveOne("team.maxSeats").value ?? 6);
+        reason = governance.planRosterRefusal(runId, evidence.seats, maxSeats);
+        roster = { seats: evidence.seats, maxSeats };
+      } catch (error) { reason = (error as Error).message; }
+      if (reason) {
+        const receipt = governance.refuseLeadPlan(request, c.get("controlActor"), currentBinding, reason);
+        if (receipt.effectMayStart && options.dispatch && receipt.revisionTaskId) {
+          void options.dispatch(runId, receipt.revisionTaskId).catch(error =>
+            console.warn(`team lead: planning revision launch failed: ${error instanceof Error ? error.message : String(error)}`));
+        }
+        return c.json({ ...receipt, code: "lead_roster_refused", error: reason }, 409);
+      }
+    }
     // The write scope is the one the owner named when they started planning; the plan path rides
     // along so the lead task the run already admitted stays covered by the binding it runs under.
     const writePaths = [...new Set([run.binding.planRef, ...run.binding.readPaths])];
@@ -219,11 +259,12 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     try {
       commitPlan({ worktree: run.binding.repository.root, planRef: run.binding.planRef, plan: plan.content,
         message: `plan: ${run.displayName}` });
-      binding = bindingForGoal({ root: run.binding.repository.root, planRef: run.binding.planRef, writePaths, policy });
+      binding = { ...bindingForGoal({ root: run.binding.repository.root, planRef: run.binding.planRef, writePaths, policy }),
+        limits: run.binding.limits };
     } catch (error) {
       return c.json({ code: "plan_record_failed", error: (error as Error).message }, 500);
     }
-    const receipt = governance.approvePlan(request, c.get("controlActor"), currentBinding, binding);
+    const receipt = governance.approvePlan(request, c.get("controlActor"), currentBinding, binding, roster);
     if (receipt.status !== "accepted") return c.json(receipt, 403);
     // The plan commit moved the worktree's HEAD, so the lead's tree is re-adopted at the new
     // base rather than refused as a moved source. Its bytes stay exactly where the lead wrote them.

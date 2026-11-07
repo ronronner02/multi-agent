@@ -24,6 +24,7 @@ function clearEnv(): () => void {
     "OPENRIG_WORKSPACE_PROJECTS_ROOT", "OPENRIG_WORKSPACE_CATALOG_PATH",
     "OPENRIG_CONTEXT_ROOT", "OPENRIG_CONTEXT_PACKS_ROOT",
     "OPENRIG_LAUNCH_NON_INTERRUPTIVE", "OPENRIG_TEAM_LEAD_CLIENT",
+    "OPENRIG_TEAM_MAX_SEATS", "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS",
     "OPENRIG_POLICIES_CLAUDE_COMPACTION_ENABLED",
     "OPENRIG_POLICIES_CLAUDE_COMPACTION_THRESHOLD_PERCENT",
     "OPENRIG_POLICIES_CLAUDE_COMPACTION_PRE_COMPACT_INSTRUCTION",
@@ -112,7 +113,10 @@ describe("config routes (User Settings v0)", () => {
     // + 1 output.compact (slice 15 compact command-output switch; default off).
     // + 1 provider.usage_windows (slice 01 Codex usage windows; default off).
     // + 1 workers.isolation (MVP slice 1; default "none").
-    expect(Object.keys(body.settings).length).toBe(77);
+    // + 2 team limits (seat cap and concurrent agents).
+    expect(Object.keys(body.settings).length).toBe(79);
+    expect(body.settings["team.maxSeats"]).toMatchObject({ value: 6, source: "default", defaultValue: 6 });
+    expect(body.settings["team.maxConcurrentAgents"]).toMatchObject({ value: 3, source: "default", defaultValue: 3 });
     expect(body.settings["team.leadClient"]).toMatchObject({ value: "claude-code", source: "default", defaultValue: "claude-code" });
     expect(body.settings["workers.isolation"]).toMatchObject({ value: "none", source: "default" });
     expect(body.settings["launch.non_interruptive"]).toMatchObject({ value: false, source: "default" });

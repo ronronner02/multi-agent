@@ -4,6 +4,7 @@ import type { RuntimeAdapter, NodeBinding } from "./runtime-adapter.js";
 import type { StartupOrchestrator } from "./startup-orchestrator.js";
 import type { TmuxAdapter } from "../adapters/tmux.js";
 import { ensureSeatPane, seatForTask } from "./seat-pane.js";
+import { isRetiredTeamNode } from "./team-setup.js";
 import { parseAttemptClassification } from "./attempt-failure.js";
 
 /**
@@ -80,6 +81,7 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     const session = context ? dependencies.sessions.getSessionsForRig(context.rigId)
       .find(row => row.id === context.sessionId) : undefined;
     const node = context ? dependencies.rigRepo.getRig(context.rigId)?.nodes.find(row => row.id === context.nodeId) : undefined;
+    if (node && isRetiredTeamNode(dependencies.rigRepo.db, node.id)) return;
     const adapter = node?.runtime ? dependencies.runtimeAdapters[node.runtime] : undefined;
     // The seat's terminal, when it has one. A `ready` seat is skipped below, but a `ready` seat
     // whose pane is dead has no agent in it: the status is stale, not the truth, and the launch

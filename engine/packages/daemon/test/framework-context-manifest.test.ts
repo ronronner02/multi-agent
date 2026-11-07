@@ -51,7 +51,7 @@ function leadFixture() {
 }
 it("includes current read-only Lead protocol, roster and instructions on every activation", () => {
   const { input } = leadFixture(), first = createContextManifest(input);
-  expect(first.protocolVersion).toBe("1"); expect(first.files.every(f => f.readOnly)).toBe(true);
+  expect(first.protocolVersion).toBe("2"); expect(first.files.every(f => f.readOnly)).toBe(true);
   input.lead!.activationId = "activation-2"; input.lead!.roster[0]!.mailbox = "run/reassigned";
   const roster = input.files.find(f => f.kind === "roster")!, content = JSON.stringify(input.lead!.roster);
   chmodSync(roster.path, 0o644); writeFileSync(roster.path, content); chmodSync(roster.path, 0o440); roster.hash = hashBytes(content);
@@ -96,7 +96,7 @@ const rewrite = (file: ContextInput["files"][number], content: string) => { chmo
 it.each(["implementer", "reviewer"] as const)("projects the core and the %s charter with their versions", role => {
   const { input, observed } = fixture(role), m = createContextManifest(input);
   expect(m.files.filter(f => f.kind === "core" || f.kind === "charter").map(f => readFileSync(f.path, "utf8"))).toEqual([coreInstructions, roleCharters[role]]);
-  expect(m.instructionVersions).toEqual({ core: "1", charter: "1" });
+  expect(m.instructionVersions).toEqual({ core: "2", charter: "1" });
   expect(verifyEffectiveContext(m, observed)).toBe(hashBytes(canonicalJson(observed)));
 });
 it.each(["missing-core", "missing-charter", "other-role", "changed-core", "changed-charter", "duplicate-core"])("refuses a projection whose role instructions are wrong: %s", kind => {
@@ -111,7 +111,7 @@ it.each(["missing-core", "missing-charter", "other-role", "changed-core", "chang
 });
 it("keeps the Lead protocol as the Lead's charter and refuses a member charter in its context", () => {
   const { input } = leadFixture(), m = createContextManifest(input);
-  expect(m.instructionVersions).toEqual({ core: "1", charter: LEAD_PROTOCOL_VERSION });
+  expect(m.instructionVersions).toEqual({ core: "2", charter: LEAD_PROTOCOL_VERSION });
   expect(m.files.some(f => f.kind === "charter")).toBe(false);
   chmodSync(input.root, 0o755); const path = join(input.root, "member-charter"); writeFileSync(path, roleCharters.implementer, { mode: 0o440 }); chmodSync(input.root, 0o550);
   input.files.push({ path, hash: hashBytes(roleCharters.implementer), kind: "charter", readOnly: true });
@@ -129,7 +129,7 @@ it("resumes an attempt whose charter predates a source edit, but projects only c
   const older = roleCharters.reviewer.replace(/^Version: \S+$/m, "Version: 0");
   rewrite(charter, older);
   const recorded = recordedContextManifest(input);
-  expect(recorded.instructionVersions).toEqual({ core: "1", charter: "0" });
+  expect(recorded.instructionVersions).toEqual({ core: "2", charter: "0" });
   observed.files = recorded.files.map(({ workerPath, hash }) => ({ path: workerPath, hash }));
   expect(verifyEffectiveContext(recorded, observed)).toBe(hashBytes(canonicalJson(observed)));
   expect(() => createContextManifest(input)).toThrow(/role charter/i);

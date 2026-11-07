@@ -13,6 +13,9 @@ import { runName } from "../domain/display-names.js";
 import { bootstrapPlan, commitPlan, ensurePlanWorktree } from "../domain/plan-branch.js";
 import { roleConfiguration } from "../domain/role-configuration.js";
 import { leadRoster } from "../domain/lead-proposal.js";
+import { isRetiredTeamNode } from "../domain/team-setup.js";
+import { leadRosterPath } from "../domain/lead-roster.js";
+import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { Rig } from "../domain/types.js";
 import { teamControlAuthentication, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
@@ -48,7 +51,7 @@ const APPROVAL_WINDOW_MS = 86_400_000;
  * fingerprinted by some other means.
  */
 export function bindingForGoal(input: { root: string; planRef: string; writePaths: string[];
-  policy: ProviderPolicyCapability }): PlanBinding {
+  policy: ProviderPolicyCapability; maxSessions?: number }): PlanBinding {
   const root = realpathSync(input.root);
   const planDigest = hashBytes(readFileSync(join(root, input.planRef)));
   const head = execFileSync("git", ["-C", root, "rev-parse", "--verify", "HEAD^{commit}"],
@@ -58,17 +61,7 @@ export function bindingForGoal(input: { root: string; planRef: string; writePath
     planRef: input.planRef, planDigest, repository: { root, identity: "git:" + head },
     readPaths: input.writePaths, writePaths: input.writePaths, roles: ["lead", "implementer", "reviewer"],
     policyRevision: input.policy.policyRevision, policyFingerprint: input.policy.policyFingerprint,
-    // C2: two review rounds, which is the contract's ceiling for the unconditional ones. One
-    // is not enough for the loop to ever approve a candidate: a first round that finds a P0/P1
-    // spends it on the rework, so the round that would close the task could never start.
-    //
-    // C3: two live sessions, which is the fewest that lets a lead run hand over. The lead's own
-    // attempt is live while it reads the goal and writes its decomposition, and the task that
-    // then runs is the next one; with one, a second seat could never start while the first was
-    // still recorded running. Three would be the review loop's ceiling as well, but a review
-    // round starts only after the implementer's attempt is observed stopped, so the slice never
-    // needs it and this stays at the smallest number that works.
-    limits: { maxSessions: 2, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
+    limits: { maxSessions: input.maxSessions ?? 2, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 },
   };
 }
 
@@ -98,7 +91,7 @@ function writePaths(value: unknown): string[] {
 
 /** The rig's first agent node, which is where a run with no named seat routes its task. */
 function firstAgentNode(rigRepo: RigRepository, rigId: string) {
-  return rigRepo.getRig(rigId)?.nodes.find(entry => entry.runtime && entry.runtime !== "terminal") ?? null;
+  return rigRepo.getRig(rigId)?.nodes.find(entry => entry.runtime && entry.runtime !== "terminal" && !isRetiredTeamNode(rigRepo.db, entry.id)) ?? null;
 }
 
 /**
@@ -129,14 +122,14 @@ function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
  */
 function seatForRole(rigRepo: RigRepository, rig: Rig, role: "lead" | "reviewer"): string | null {
   const node = rigRepo.getRig(rig.id)?.nodes
-    .find(entry => entry.role === role && entry.runtime && entry.runtime !== "terminal") ?? null;
+    .find(entry => entry.role === role && entry.runtime && entry.runtime !== "terminal" && !isRetiredTeamNode(rigRepo.db, entry.id)) ?? null;
   return node ? defaultSeat(rigRepo, node, rig.name) : null;
 }
 
 export function teamStartRoutes(
   governance: PlanGovernance,
   rigRepo: RigRepository,
-  options: TeamControlOptions,
+  options: TeamControlOptions & { settingsStore?: SettingsStore },
   legacyTokens: readonly (string | null | undefined)[],
 ): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
@@ -195,6 +188,7 @@ export function teamStartRoutes(
     // with the owner, so it needs one of those seats to exist.
     if (v.planning !== undefined && typeof v.planning !== "boolean") throw new TeamContractError("planning");
     const planning = v.planning === true;
+    const maxSessions = Number(options.settingsStore?.resolveOne("team.maxConcurrentAgents").value ?? 3);
     const leadSeat = v.lead === undefined ? seatForRole(rigRepo, rig, "lead") : text(v.lead, "lead", 256);
     if (planning && leadSeat === null) {
       return c.json({ code: "lead_required",
@@ -227,6 +221,7 @@ export function teamStartRoutes(
     if (!root) return c.json({ code: "repository_required", error: "The rig's agent seat has no working directory; name the repository." }, 400);
     const planRef = repository.planRef === undefined ? DEFAULT_PLAN_REF : relativePath(repository.planRef, "repository.planRef");
     const scope = v.writePaths === undefined ? [...DEFAULT_WRITE_PATHS] : writePaths(v.writePaths);
+    const planningPaths = planning ? [planRef, leadRosterPath(planRef)] : [planRef];
     // U5 — the run id exists before the binding does, because a planning run's binding is
     // established in the daemon's own worktree for that run, not in the owner's checkout.
     const runId = randomUUID();
@@ -239,15 +234,15 @@ export function teamStartRoutes(
       }
       // The plan the run is bound to before the lead has written one. It lives on the run's own
       // branch in the daemon's worktree, so the owner's checkout is untouched and the binding
-      // names a real artifact at a real commit from the first moment. The lead's write scope is
-      // the plan file alone; the owner's implementation scope rides in `readPaths` until the
+      // names a real artifact at a real commit from the first moment. The lead's planning scope
+      // covers the plan and, for a lead-built team, its roster. The implementation scope rides in `readPaths` until the
       // approval turns it into the delivery binding.
       let worktree: string;
       try {
         worktree = ensurePlanWorktree({ repositoryRoot: root, worktreeRoot, runId, name: displayName }).path;
         commitPlan({ worktree, planRef, plan: bootstrapPlan(goal), message: `plan: ${displayName ?? "new run"} (planning)` });
-        const recorded = bindingForGoal({ root: worktree, planRef, writePaths: [planRef], policy });
-        binding = { ...recorded, readPaths: [...new Set([planRef, ...scope])] };
+        const recorded = bindingForGoal({ root: worktree, planRef, writePaths: planningPaths, policy, maxSessions });
+        binding = { ...recorded, readPaths: [...new Set([...planningPaths, ...scope])] };
       } catch (error) {
         if (error instanceof TeamContractError) throw error;
         return c.json({ code: "planning_worktree_unavailable",
@@ -255,7 +250,7 @@ export function teamStartRoutes(
       }
     } else {
       try {
-        binding = bindingForGoal({ root, planRef, writePaths: scope, policy });
+        binding = bindingForGoal({ root, planRef, writePaths: scope, policy, maxSessions });
       } catch (error) {
         if (error instanceof TeamContractError) throw error;
         return c.json({ code: "repository_unreadable",
@@ -279,10 +274,9 @@ export function teamStartRoutes(
       return c.json({ code: "start_refused", runId: run.id, error: decided.reason ?? "The plan was not approved." }, 409);
     }
     const taskId = "task-1";
-    // U5 — a planning run's first task is the lead's conversation, and its scope is the plan
-    // file alone: the run may not touch anything else until the owner approves the plan.
+    // Planning writes only its agreement files; implementation waits for the owner's approval.
     const assignment = planning
-      ? { taskId, role: "lead" as const, paths: [planRef], dependencies: [] }
+      ? { taskId, role: "lead" as const, paths: planningPaths, dependencies: [] }
       : leadSeat === null
         ? { taskId, role: "implementer" as const, paths: scope, dependencies: [] }
         : { taskId, role: "lead" as const, paths: scope, dependencies: [] };

@@ -401,7 +401,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
           try { escalation = dependencies.readLeadEscalation(stoppedAttempt.runId, task.assignment.taskId); }
           catch { escalation = null; }
         }
-        completion = leadCompletionEvidence({ manifest, proposal,
+        completion = leadCompletionEvidence({ manifest, proposal, planRef: governance.getRun(stoppedAttempt.runId).binding.planRef,
           ...(dependencies.readLeadEscalation ? { escalation, managementTurn: true } : {}), unavailableReason });
       } else {
         completion = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest, unavailableReason });

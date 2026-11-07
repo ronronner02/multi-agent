@@ -82,22 +82,52 @@ export function createTeam(db: Database.Database, input: {
 }): Team {
   const seats = validatedSeats(input.seats ?? [{ role: "lead", client: input.leadClient ?? "claude-code" }]);
   const root = repositoryRoot(input.repository);
-  const rigs = new RigRepository(db), sessions = new SessionRegistry(db);
+  const rigs = new RigRepository(db);
   const name = availableTeamName(db, root, input.name);
   const rig = rigs.createRig(name, root);
-  const counted: Record<TeamRole, number> = { lead: 0, implementer: 0, reviewer: 0 };
-  for (const seat of seats) {
-    // A seat name is a tmux session name, so it has to be unique on the daemon and not only
-    // inside its rig: role, index and rig name make it so without a second registry.
-    const member = `${SEAT_PREFIX[seat.role]}-${++counted[seat.role]}`;
-    const node = rigs.addNode(rig.id, `${name}.${member}`, {
-      role: seat.role, runtime: seat.client, cwd: root, ...(seat.model === undefined ? {} : { model: seat.model }),
-    });
-    sessions.registerSession(node.id, `${member}@${name}`);
-  }
+  addTeamSeats(db, rig.id, seats);
   // Read back through the same projection the list uses, so a create and a later read of the
   // same team cannot report its seats in different orders.
   return { id: rig.id, name, repository: root, seats: recordedSeats(db, rig.id) };
+}
+
+/** Allocate above every recorded index, including retired seats and earlier session names. */
+export function nextTeamSeatNames(db: Database.Database, rigId: string, seats: readonly TeamSeatInput[]): string[] {
+  const rig = new RigRepository(db).getRig(rigId)?.rig;
+  if (!rig) throw new Error("Rig not found");
+  const rows = db.prepare(`SELECT n.logical_id AS logicalId, s.session_name AS member FROM nodes n
+    LEFT JOIN sessions s ON s.node_id = n.id WHERE n.rig_id = ?`).all(rigId) as
+    Array<{ logicalId: string; member: string | null }>;
+  const counted: Record<TeamRole, number> = { lead: 0, implementer: 0, reviewer: 0 };
+  for (const role of TEAM_ROLES) {
+    const prefix = SEAT_PREFIX[role] + "-";
+    for (const row of rows) {
+      for (const name of [row.logicalId.startsWith(rig.name + ".") ? row.logicalId.slice(rig.name.length + 1) : "",
+        row.member?.endsWith("@" + rig.name) ? row.member.slice(0, -rig.name.length - 1) : ""]) {
+        const index = name.startsWith(prefix) ? name.slice(prefix.length) : "";
+        if (/^[1-9]\d*$/.test(index)) counted[role] = Math.max(counted[role], Number(index));
+      }
+    }
+  }
+  return seats.map(seat => `${SEAT_PREFIX[seat.role]}-${++counted[seat.role]}@${rig.name}`);
+}
+
+/** Only writes seat rows; the caller owns the enclosing approval/admission transaction. */
+export function addTeamSeats(db: Database.Database, rigId: string, seats: readonly TeamSeatInput[]): Array<TeamSeatInput & { member: string }> {
+  const rigs = new RigRepository(db), sessions = new SessionRegistry(db);
+  const rig = rigs.getRig(rigId)?.rig;
+  if (!rig) throw new Error("Rig not found");
+  const root = rigs.getRigInstallRoot(rigId) ?? repositoryOf(db, rigId);
+  if (!root) throw new Error("The team's repository is unavailable");
+  const names = nextTeamSeatNames(db, rigId, seats);
+  return seats.map((seat, index) => {
+    const member = names[index]!;
+    const node = rigs.addNode(rigId, `${rig.name}.${member.slice(0, -rig.name.length - 1)}`, {
+      role: seat.role, runtime: seat.client, cwd: root, ...(seat.model === undefined ? {} : { model: seat.model }),
+    });
+    sessions.registerSession(node.id, member);
+    return { ...seat, member };
+  });
 }
 
 /** Check local identity before project creation has any external side effects. */
@@ -106,6 +136,11 @@ export function availableTeamName(db: Database.Database, root: string, requested
   if (existing) throw new TeamSetupError("team_exists",
     `The repository ${root} already has a team, rig "${existing}". Use it, or create the team for another checkout.`);
   return rigName(db, requested, root);
+}
+
+export function isRetiredTeamNode(db: Database.Database, nodeId: string): boolean {
+  const row = db.prepare("SELECT retired_at FROM nodes WHERE id = ?").get(nodeId) as { retired_at: string | null } | undefined;
+  return row?.retired_at != null;
 }
 
 /** The teams that exist, in the order they were created, so no client has to type a rig name. */
@@ -221,7 +256,7 @@ function sanitiseName(value: string): string {
 /** The seats a rig records: the team's own order, lead first and reviewer last, then by seat. */
 function recordedSeats(db: Database.Database, rigId: string): TeamSeat[] {
   const rows = db.prepare(
-    `SELECT role, runtime, model FROM nodes WHERE rig_id = ? AND runtime IN ('claude-code', 'codex')
+    `SELECT role, runtime, model FROM nodes WHERE rig_id = ? AND retired_at IS NULL AND runtime IN ('claude-code', 'codex')
       ORDER BY CASE role WHEN 'lead' THEN 0 WHEN 'implementer' THEN 1 WHEN 'reviewer' THEN 2 ELSE 3 END,
         logical_id`).all(rigId) as Array<{ role: string | null; runtime: string; model: string | null }>;
   return rows.flatMap(row => TEAM_ROLES.includes(row.role as TeamRole)

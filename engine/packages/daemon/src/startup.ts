@@ -150,6 +150,7 @@ import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
 import { refreshPlanBinding, unisolatedPolicyCapability } from "./routes/team-start.js";
 import { leadActivation } from "./domain/lead-proposal.js";
+import { planningRosterRequired } from "./domain/lead-roster.js";
 import { composeLeadTurnEnd } from "./domain/lead-chat.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
@@ -495,6 +496,7 @@ function recordedManagedReceipt(dependencies: { db: Database.Database; governanc
  * which is the moment the launcher's `mailbox` seam becomes resolvable for the attempt.
  */
 function composeManagedAttemptAttachment(dependencies: {
+  readMaxSeats?: () => number;
   db: Database.Database;
   governance: PlanGovernance;
   endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"];
@@ -588,7 +590,8 @@ function composeManagedAttemptAttachment(dependencies: {
         goal: (dependencies.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(task.qitemId) as { body: string }).body,
         // U5 — a planning run's lead agrees a plan with the owner first; every other lead
         // activation is the decomposition protocol C3 already had.
-        phase: run.phase, planRef: run.binding.planRef,
+        phase: run.phase, planRef: run.binding.planRef, buildRoster: planningRosterRequired(run.binding),
+        maxSeats: dependencies.readMaxSeats?.() ?? 6,
       }) : undefined;
       produced = await runtime.produceManagedAttempt(row.runId, {
         attemptId, worker, assignment, outputs, permissions,
@@ -2250,6 +2253,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // T047 — assigned here, after the runtime it produces through exists and before the app
     // serves: every seat launch that could reach a worker happens after this point.
     managedAttempt = managedLaunch ? composeManagedAttemptAttachment({
+      readMaxSeats: () => Number(deps.settingsStore?.resolveOne("team.maxSeats").value ?? 6),
       db, governance: teamGovernance, endpoints: managedLaunch.endpoints,
       runtime: () => workflowRuntime,
       owners: () => ({ chat: deps.chatRepo, delivery: deps.mailboxDelivery }),
@@ -3251,8 +3255,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const leadManager = composeLeadManager({ db, governance: teamGovernance,
       readLeadProposal: (runId, taskId) => {
         if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
-        return workflowRuntime.leadProposalFor(runId, taskId);
+        return workflowRuntime.leadProposalWithSeatsFor(runId, taskId);
       },
+      readMaxSeats: () => Number(deps.settingsStore?.resolveOne("team.maxSeats").value ?? 6),
       currentBinding, dispatch: () => deps.teamControl?.dispatch });
     // The direct worker's mutable state root: each attempt's prompt, its captured Codex thread
     // id and its final message live under it. One value, so the readers of a turn's end cannot

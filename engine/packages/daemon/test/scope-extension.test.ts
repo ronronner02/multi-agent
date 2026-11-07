@@ -458,10 +458,26 @@ describe("task-local scope extensions at candidate staging", () => {
     writeFileSync(join(root, "lead-escalation.json"), JSON.stringify({ question: "Which scope?",
       options: ["Keep src", "Widen to lib"] }));
     expect(packet("lead").manifest.some(file => file.path === "lead-escalation.json")).toBe(true);
+    writeFileSync(join(root, "lead-roster.json"), JSON.stringify({ seats: [{ role: "implementer", client: "codex" }] }));
+    expect(packet("lead").manifest.some(file => file.path === "lead-roster.json")).toBe(true);
+    expect(governance.scopeForTask("run", "lead").extensions).toHaveLength(0);
     // The exemption is those paths for that one role: any other out-of-scope write by the
     // same lead still refuses.
     writeFileSync(join(root, "other.json"), "{}");
     expect(() => packet("lead")).toThrow(/plan-change-required: outside-write-paths/);
+  });
+
+  it.each(["lead", "implementer"] as const)("does not exempt a roster outside the exact lead path for %s", role => {
+    const taskId = role === "lead" ? "lead" : "task";
+    if (role === "lead") {
+      expect(governance.createTask(command(taskId, { assignment: { taskId, role, paths: ["src"], dependencies: [] },
+        outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Manage the work" }), binding).status).toBe("accepted");
+    }
+    const root = candidate(taskId).root;
+    const path = role === "lead" ? "unapproved/lead-roster.json" : "lead-roster.json";
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), "{}");
+    expect(() => packet(taskId)).toThrow(/plan-change-required: outside-write-paths/);
   });
 
   it("refuses an unregistered writing assignment before materializing its candidate", () => {
