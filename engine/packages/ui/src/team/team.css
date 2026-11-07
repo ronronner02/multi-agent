@@ -643,3 +643,14 @@ body:has(.team-shell) > #root { height: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Native caption buttons share the command strip; browser geometry stays unchanged. */
+html[data-desktop="true"] .team-shell .ui-topstrip {
+  -webkit-app-region: drag;
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px)) + 16px);
+}
+html[data-desktop="true"] .team-shell .ui-topstrip :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
+html[data-desktop="true"] .team-shell :is(.sheet, .ui-chat-panel, .ui-mobile-sidebar) { top: var(--ui-topstrip); }
+.team-shell .repository-picker { display: flex; gap: 8px; }
+.team-shell .repository-picker .input { flex: 1; min-width: 0; }
+.team-shell .repository-picker .btn { flex: none; }

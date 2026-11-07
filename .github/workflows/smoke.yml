@@ -26,6 +26,9 @@ jobs:
       - name: Typecheck
         run: npm run lint
         working-directory: engine
+      - name: Desktop boundary tests
+        run: npm test
+        working-directory: desktop
       - name: Smoke tests
         run: npm run smoke
         working-directory: engine

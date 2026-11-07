@@ -26,7 +26,7 @@ Install and sign in to the clients you want to use inside the selected WSL
 distribution. Seats use those local Claude Code or Codex configurations. Your
 repository must be available in WSL and have at least one commit.
 
-1. Open **Teams → New team**, enter the repository's WSL path, and choose the clients
+1. Open **Teams → New team**, choose **Browse…** or enter the repository's WSL path, and choose the clients
    for the lead, implementers and reviewer. No seed script or existing plan is needed.
 2. Choose **New work**. A team with a lead starts in planning; discuss the goal in
    the lead chat and choose **Approve plan** when it is ready.
@@ -57,8 +57,7 @@ npm run dist
 Windows shows a SmartScreen warning on first run.
 
 Run the app from source with `npm start`. Run the unit tests with `npm test`; they cover the
-pure parts only (WSL output parsing, the install/version decision, the repository-path check
-and every WSL argv) and never start WSL, clone anything or prompt for elevation.
+path mapping, WSL decisions and argv, navigation rules, and the preload/picker boundary with an in-memory window and never start WSL, clone anything or prompt for elevation.
 
 ## How it authenticates
 
@@ -86,7 +85,14 @@ No credential is written to a file by this app, logged, or placed in a URL.
 
 ## Window chrome
 
-The title bar and the connection footer are this app's own local HTML, in the desktop
-design's charcoal (`#151619`). The page uses the same team list, lead chat, task detail
-and integration branch views as the browser. Language, theme and settings are shared
-with the Web UI.
+The Web UI owns the command strip and connection footer; the desktop adds no duplicate
+bars or body padding. Drag the window by the command strip. Its controls remain clickable,
+and space is reserved for the native caption buttons. Setup has its own charcoal drag strip.
+Language, theme and settings are shared with the Web UI.
+
+**Browse…** opens the native Windows folder dialog. A drive folder such as
+`D:\code\app` becomes `/mnt/d/code/app`; a `\\wsl.localhost\Ubuntu\home\dev\app`
+folder becomes `/home/dev/app` only when Ubuntu is the engine's selected distribution.
+Another distribution or an unrelated network share produces a selection error. Canceling
+keeps the entered path. Selection returns path data without starting a shell or creating
+anything; the normal Create action still validates and registers the project.

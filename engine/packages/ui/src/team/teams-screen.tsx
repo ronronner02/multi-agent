@@ -83,6 +83,18 @@ function CreateTeamSheet({ open, onOpenChange, container }: {
   ]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const pickFolder = (window as Window & { multiAgentDesktop?: { pickFolder?: () => Promise<string | null> } }).multiAgentDesktop?.pickFolder;
+
+  const browse = async () => {
+    if (busy || !pickFolder) return;
+    setBusy(true); setFailure(null);
+    try {
+      const selected = await pickFolder();
+      if (selected !== null) setRepository(selected);
+    } catch { setFailure("folder_selection_failed"); }
+    finally { setBusy(false); }
+  };
+
 
   const reset = () => { setRepository(""); setFailure(null); setBusy(false); };
   const errorText = useMemo(() => {
@@ -118,8 +130,11 @@ function CreateTeamSheet({ open, onOpenChange, container }: {
         <div className="sheet-body">
           <div className="field">
             <label htmlFor="team-repository">{t("team.create.repository")}</label>
-            <input id="team-repository" className="input mono" value={repository} spellCheck={false}
-              onChange={event => setRepository(event.target.value)} placeholder="/home/you/src/project" />
+            <div className="repository-picker">
+              <input id="team-repository" className="input mono" value={repository} spellCheck={false} disabled={busy}
+                onChange={event => setRepository(event.target.value)} placeholder="/home/you/src/project" />
+              {pickFolder && <button className="btn btn-outline" disabled={busy} onClick={() => void browse()}>{t("team.create.browse")}</button>}
+            </div>
           </div>
           <div className="field">
             <label>{t("team.create.seats")}</label>
