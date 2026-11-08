@@ -77,8 +77,8 @@ describe("a managed seat launches under the attempt produced for its admitted ta
   let workerUid: number, workerGid: number, serial: number, task: TeamTaskAuthority;
   let nodeId: string, sessionId: string, seatTree: string;
 
-  const command = (actionId: string, payload: unknown) => ({ protocolVersion: "1.0", runId: "run", actionId,
-    expectedEntityVersion: governance.getRun("run").entityVersion, idempotencyKey: "t047-" + ++serial, payload });
+  const command = (actionId: string, payload: unknown, runId = "run") => ({ protocolVersion: "1.0", runId, actionId,
+    expectedEntityVersion: governance.getRun(runId).entityVersion, idempotencyKey: "t047-" + ++serial, payload });
   const endpoints = () => daemon.deps.managedLaunch!.endpoints;
 
   beforeEach(async () => {
@@ -153,12 +153,12 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     if (existsSync(directory)) { writable(directory); rmSync(directory, { recursive: true, force: true }); }
   });
 
-  const createTask = (taskId = "task", paths = ["src"], dependencies: string[] = []) => {
+  const createTask = (taskId = "task", paths = ["src"], dependencies: string[] = [], runId = "run") => {
     const receipt = governance.createTask(command(taskId, {
       assignment: { taskId, role: "implementer", paths, dependencies },
       outputs: [paths[0] + "/result.ts"], permissions: ["write-assigned-tree"],
       sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file.",
-    }), binding);
+    }, runId), binding);
     if (receipt.status === "accepted") task = receipt.value as TeamTaskAuthority;
     return receipt;
   };
@@ -178,7 +178,7 @@ describe("a managed seat launches under the attempt produced for its admitted ta
       const receipt = {
         identity: { nativeSessionId: input.resumeToken ?? "native-session", tmuxServer: "/tmp/tmux", paneId: "%3",
           processId: 1_000 + generation, processStart: "1", generation, policyFingerprint: binding.policyFingerprint },
-        attemptId: input.attempt.attemptId, runId: "run", client: "claude-code" as const,
+        attemptId: input.attempt.attemptId, runId: input.attempt.context.runId, client: "claude-code" as const,
         contextHash: input.attempt.context.generatedHash, workerUid, processGroupId: 2_000 + generation,
         executableVersion: "2.1.296", observedContextHash: input.attempt.context.generatedHash,
         network: { namespace: "net:[9]", mode: "filtered-proxy" as const,
@@ -196,8 +196,8 @@ describe("a managed seat launches under the attempt produced for its admitted ta
         db.prepare(`INSERT OR REPLACE INTO team_attempts
           (id, run_id, qitem_id, role, provider, identity_json, unknown_reason, state, usage_json,
            active_ms, entity_version, created_at, updated_at)
-          VALUES (?, 'run', ?, 'implementer', 'claude', ?, NULL, 'stopped', ?, 0, 1, ?, ?)`)
-          .run(receipt.attemptId, task.qitemId, JSON.stringify(receipt.identity), usage, now, now);
+          VALUES (?, ?, ?, 'implementer', 'claude', ?, NULL, 'stopped', ?, 0, 1, ?, ?)`)
+          .run(receipt.attemptId, receipt.runId, task.qitemId, JSON.stringify(receipt.identity), usage, now, now);
       }
       return { ok: true, managedSession: receipt, resumeToken: receipt.identity.nativeSessionId, resumeType: "claude_id" };
     },
@@ -329,6 +329,75 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     expect(result.ok ? [] : result.errors.join(" ")).toContain("Managed launch task is ambiguous");
     expect(launches).toHaveLength(0);
     expect(endpoints().size).toBe(0);
+  });
+
+  const createSiblingRun = (runId: string) => {
+    governance.createRun({ id: runId, rigId: "rig", binding });
+    const approvalId = `implementation-${runId}`;
+    governance.requestApproval(command(approvalId, { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding), expiresAt: "2030-01-01T00:00:00.000Z" }, runId),
+    { kind: "worker", sessionId: "builder@rig" });
+    governance.decideApproval(command(approvalId, { approvalVersion: 1, decision: "approved" }, runId),
+      { kind: "owner", sessionId: "owner-control" }, binding);
+  };
+
+  it("attaches the exact run and task beyond two other records using the same task name", async () => {
+    expect(createTask("task-1", ["src/one"]).status).toBe("accepted");
+    createSiblingRun("r2");
+    expect(createTask("task-1", ["src/two"], [], "r2").status).toBe("accepted");
+    createSiblingRun("r3");
+    expect(createTask("task-1", ["src/three"], [], "r3").status).toBe("accepted");
+    const result = await daemon.deps.startupOrchestrator!.startNode({
+      rigId: "rig", nodeId, sessionId, runId: "r3", taskId: "task-1",
+      binding: { id: "binding-1", nodeId, tmuxSession: "builder@rig", tmuxWindow: null, tmuxPane: "%3",
+        cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: seatTree }, adapter,
+      plan: { runtime: "claude-code", cwd: seatTree, entries: [], diagnostics: [], conflicts: [], noOps: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "builder@rig", includeDurableObligations: false,
+    });
+    expect(result.ok ? [] : result.errors).toEqual([]);
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]!.runId).toBe("r3");
+  });
+
+  it("rejects a wrong run or task even when the seat has only one task", async () => {
+    createTask();
+    for (const selector of [{ runId: "another-run", taskId: "task" }, { runId: "run", taskId: "another-task" }]) {
+      const result = await daemon.deps.startupOrchestrator!.startNode({
+        rigId: "rig", nodeId, sessionId, ...selector,
+        binding: { id: "binding-1", nodeId, tmuxSession: "builder@rig", tmuxWindow: null, tmuxPane: "%3",
+          cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: seatTree }, adapter,
+        plan: { runtime: "claude-code", cwd: seatTree, entries: [], diagnostics: [], conflicts: [], noOps: [] },
+        resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "builder@rig", includeDurableObligations: false,
+      });
+      expect(result.ok).toBe(false);
+    }
+    expect(launches).toHaveLength(0);
+    expect(endpoints().size).toBe(0);
+  });
+
+  it("dispatches an exact run and resumes only that task's durable native conversation", async () => {
+    createTask();
+    await launch();
+    db.prepare("UPDATE team_attempts SET state='stopped' WHERE id=?").run(receipts[0]!.attemptId);
+    const sessions = daemon.deps.sessionRegistry;
+    sessions.updateResumeToken(sessionId, "claude_id", "another-conversation");
+    sessions.updateStartupStatus(sessionId, "pending");
+    createSiblingRun("new-discussion");
+    createTask("task", ["src/new"], [], "new-discussion");
+    const started = vi.spyOn(daemon.deps.startupOrchestrator!, "startNode").mockResolvedValue({
+      ok: true, startupStatus: "ready", continuityOutcome: "fresh",
+    } as never);
+    const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
+    const dispatch = composeTaskDispatch({ rigRepo: daemon.deps.rigRepo, sessions,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%3" }] } as never,
+      startupOrchestrator: daemon.deps.startupOrchestrator!, runtimeAdapters: { "claude-code": adapter },
+      maxSessions: () => 3, liveSessions: () => 0 });
+    await dispatch("new-discussion", "task");
+    expect(started.mock.calls[0]![0]).toMatchObject({ runId: "new-discussion", taskId: "task" });
+    expect(started.mock.calls[0]![0].continueSessionId).toBeUndefined();
+    await dispatch("run", "task");
+    expect(started.mock.calls[1]![0]).toMatchObject({ runId: "run", taskId: "task", continueSessionId: "native-session" });
+    started.mockRestore();
   });
 
   it("attaches the named task when the dispatcher says which of a seat's two live tasks it starts", async () => {

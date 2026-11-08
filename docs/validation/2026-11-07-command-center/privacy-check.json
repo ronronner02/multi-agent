@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-11-08T01:02:16.043026+00:00",
+  "status": "passed-with-stated-scope",
+  "textFilesScanned": 299,
+  "jsonFilesParsed": 204,
+  "jsonlRowsParsed": 573,
+  "exactScopedCredentialMatches": 0,
+  "credentialPatternMatches": 0,
+  "unscopedOwnerProjectMatches": 0,
+  "rawCredentialFilesIncluded": false,
+  "rawDatabaseIncluded": false,
+  "nativeTranscriptsIncluded": false,
+  "method": "Allowlisted structured extraction, bounded command logs, exact isolated-profile credential comparison in memory without exporting values, and credential-pattern scanning. No current owner form, project database or window screenshot was read for this update.",
+  "limitations": [
+    "Pattern checks do not prove the absence of every possible secret.",
+    "Selected saved desktop screenshots were visually inspected; no full-image OCR scan was run.",
+    "Earlier scoped synthetic conversations and plans remain as acceptance evidence. Native transcripts and current owner-project contents are excluded.",
+    "No browser storage or cookies were inspected during the owner pause; the earlier browser export retains its own scoped privacy receipt."
+  ],
+  "newDesktopDeviceCodeImageIncluded": false,
+  "latestPlanAudit": "No new screenshots, browser storage, owner-project contents or native transcripts were read for the audit.",
+  "latestInstalledAcceptance": {
+    "textFilesScanned": 344,
+    "jsonFilesParsed": 249,
+    "jsonlRowsParsed": 573,
+    "actualCredentialMatches": 0,
+    "currentOwnerProjectScreenshotsCopied": false,
+    "rawDatabasesOrBrowserStorageCopied": false
+  },
+  "latestNativeCreateAcceptance": {
+    "textFilesScanned": 369,
+    "jsonFilesParsed": 274,
+    "actualCredentialMatches": 0,
+    "rawDatabasesCopied": false,
+    "browserStorageCopied": false,
+    "workingProfileScreenshotsCopied": false
+  },
+  "finalPostBundleCheck": {
+    "at": "2026-11-08T01:05:09.168183+00:00",
+    "textFilesScanned": 370,
+    "jsonFilesParsed": 275,
+    "actualCredentialMatches": 0,
+    "newWorkingProfileScreenshotsIncluded": false
+  }
+}

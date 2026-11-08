@@ -1,0 +1,133 @@
+{
+  "updatedAt": "2026-11-08T01:02:16.043026+00:00",
+  "status": "observed-local-desktop-acceptance",
+  "decision": "Normal launch repair, the additive read-only task details, one-time skin entrance and one additional native synthetic Create are approved. The earlier U10 source-delivery hold remains.",
+  "installation": {
+    "status": "observed",
+    "perUserDestinationSeparate": true,
+    "exit": 0,
+    "receipt": "receipts/desktop-install-result.json",
+    "integrity": "receipts/desktop-installed-integrity.json",
+    "existingInstallationReplaced": false,
+    "newPerUserUninstallEntry": true,
+    "newStartMenuShortcutMovedToTaskScratch": true,
+    "normalPerUserBuildDelivered": true,
+    "currentUserShortcutsUpdated": true,
+    "allUsersLegacyShortcutUpdated": false,
+    "latestEvidence": "receipts/native-create-windows-preservation.json"
+  },
+  "firstOpen": {
+    "status": "observed",
+    "cleanProfile": true,
+    "automaticEngineStartupAndPairing": true,
+    "origin": "http://127.0.0.1:7433",
+    "evidence": [
+      "receipts/desktop-env-probe.json",
+      "receipts/desktop-first-launch.json",
+      "receipts/desktop-first-open-gate.json",
+      "receipts/u10-desktop-candidate-start.json"
+    ]
+  },
+  "signIn": {
+    "status": "observed-after-parser-fix",
+    "confirmedAt": "2026-11-07T13:33:32.561Z",
+    "evidence": [
+      "receipts/u10-desktop-gh-output-diagnostic.json",
+      "receipts/desktop-sign-in-first-attempt.json",
+      "receipts/desktop-sign-in-after-fix.json",
+      "receipts/desktop-signed-in.json",
+      "verification/checks.json"
+    ],
+    "deviceCodeExported": false,
+    "newCredentialStoreOnly": true,
+    "currentUserSessionNotRecheckedAfterPause": false,
+    "latestExistingProfileVerification": "Native Create and read-only private repository verification succeeded without signing in again; both credential-file hashes remain unchanged.",
+    "latestEvidence": "receipts/native-create-runtime-preservation.json"
+  },
+  "nativeWindow": {
+    "nativeCaption": {
+      "maximize": true,
+      "restore": true,
+      "minimize": true,
+      "close": true
+    },
+    "drag": {
+      "deltaX": 72,
+      "deltaY": 45
+    },
+    "controlScope": "Earlier isolated packaged run with the same installed asar hash.",
+    "latestInstalledMinimizeAndRestore": "Observed while restoring the original window state for and after the native Create check.",
+    "normalInstanceReused": true,
+    "evidence": [
+      "resume-final-checkpoint.json",
+      "receipts/native-create-restored-view.json"
+    ]
+  },
+  "nativeFolder": {
+    "dialog": "observed",
+    "syntheticSelectionAndPreview": "observed",
+    "fullDesktopCreate": "observed",
+    "evidence": [
+      "receipts/native-create-flow.json"
+    ],
+    "claimBoundary": "The actual installed native sequence created only the approved synthetic repository. Earlier browser and picker-only checks remain separate evidence."
+  },
+  "preservation": {
+    "currentDaemon": {
+      "pid": 3401237,
+      "healthy": true,
+      "sameProcessThroughoutNativeCreate": true,
+      "counts": {
+        "rigs": 2,
+        "team_runs": 0,
+        "team_attempts": 0,
+        "queue_items": 0
+      }
+    },
+    "currentDesktop": {
+      "pid": 14236,
+      "exe": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+      "sameNormalInstance": true,
+      "debuggingEnabled": false
+    },
+    "preexistingProjectRowsPreserved": true,
+    "approvedAddedProjects": 1,
+    "ownerProjectContentsInspectedOrChanged": false,
+    "originalAllProjectsViewRestored": true,
+    "originalWindowStateRestored": "Minimized",
+    "leaveRunning": true,
+    "evidence": [
+      "receipts/native-create-runtime-preservation.json",
+      "receipts/native-create-windows-preservation.json"
+    ]
+  },
+  "scopeNotes": [
+    "The final combined native Create closes the earlier picker-to-Create gap; it does not backdate earlier acceptance.",
+    "No owner-project file contents, raw database rows, browser storage or working-profile screenshots are exported.",
+    "The original temporary profile and old installation remain unchanged; the promoted working profile receives normal application writes.",
+    "Existing font-request observations retain their original scope; no new network-interception claim is made for native input.",
+    "One additional private synthetic repository and test project are retained as approved."
+  ],
+  "latestReadOnlyObservation": {
+    "checkedAt": "2026-11-07T15:24:51.0263750Z",
+    "candidateDesktopProcesses": [],
+    "priorDesktopProcessNoLongerRunning": true,
+    "causeNotInferred": true,
+    "daemonStillHealthy": true,
+    "evidence": [
+      "receipts/desktop-resume-observation.json",
+      "receipts/u10-plan-audit-preservation.json"
+    ],
+    "newUiInteraction": false
+  },
+  "latestInstalledAcceptance": {
+    "checkedAt": "2026-11-08T01:02:16.043026+00:00",
+    "normalLaunchDelivered": true,
+    "evidence": "receipts/normal-installed-desktop.json",
+    "currentOwnerProjectCapturesPrivate": true,
+    "allUsersLegacyShortcutUnchanged": true,
+    "nativeFolderAndCreatePassed": true,
+    "nativeCreateEvidence": "receipts/native-create-flow.json"
+  },
+  "previousPausedObservation": "history/pre-native-create-final-01/desktop-observations.json"
+}

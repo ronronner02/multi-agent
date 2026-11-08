@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-11-07T13:16:54.279375+00:00",
+  "health": {
+    "status": "ok",
+    "pid": 2787973,
+    "selfHostId": "host-62a7ace6",
+    "selfHostIdSource": "generated",
+    "eventLoop": {
+      "lagMeanMs": 10.139734511779041,
+      "lagP99Ms": 10.518527,
+      "utilization": 0.006587542540296194,
+      "lastTickAgeMs": 218,
+      "healthy": true
+    },
+    "routeTimings": {},
+    "slowOperations": {
+      "healthy": true
+    },
+    "bind": {
+      "mode": "explicit",
+      "hosts": [
+        "127.0.0.1"
+      ],
+      "tailscaleDetected": true
+    }
+  },
+  "pid": 2787973,
+  "startTicks": 9436015,
+  "cwd": "<acceptance-worktree>",
+  "engineSourceMatchesCandidate": true,
+  "profileIsolated": true,
+  "githubStoreEmpty": true,
+  "initialRecords": {
+    "team_runs": 0,
+    "team_attempts": 0,
+    "queue_items": 0
+  },
+  "originalPidStopped": true
+}

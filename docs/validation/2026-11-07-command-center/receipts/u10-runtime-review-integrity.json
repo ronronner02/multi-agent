@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-11-07T12:30:57.239376+00:00",
+  "snapshots": [
+    {
+      "name": "review-candidate-u10-runtime-v1",
+      "manifestSha256": "8b8251fefaa6a2d209fe23fda1a2e4b9324b3b5432394d195501fb0a359b3b79",
+      "patchSha256": "d2aa21a63898ddf9da0a161610cb3f6b8a4b33d579c6b14d01f87acfdf59fc8c",
+      "verifiedEntries": {
+        "files": 41,
+        "evidence": 24
+      },
+      "allFrozenHashesMatch": true
+    },
+    {
+      "name": "review-candidate-u10-runtime-v2",
+      "manifestSha256": "ef297585e854282d8eeba46b780229f52c6e86d883cada03aba862df7768eb71",
+      "patchSha256": "7e76380c9480228f4e3077a5fc8c3c2191a9047023b4c69da828f00151c5e6f8",
+      "verifiedEntries": {
+        "files": 7,
+        "evidence": 4
+      },
+      "allFrozenHashesMatch": true
+    }
+  ],
+  "source": "Private frozen review snapshots retained in the task scratch directory; the bundle contains the verdict receipts, not their full source trees."
+}

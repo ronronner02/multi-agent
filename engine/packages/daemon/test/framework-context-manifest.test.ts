@@ -51,7 +51,7 @@ function leadFixture() {
 }
 it("includes current read-only Lead protocol, roster and instructions on every activation", () => {
   const { input } = leadFixture(), first = createContextManifest(input);
-  expect(first.protocolVersion).toBe("3"); expect(first.files.every(f => f.readOnly)).toBe(true);
+  expect(first.protocolVersion).toBe("5"); expect(first.files.every(f => f.readOnly)).toBe(true);
   input.lead!.activationId = "activation-2"; input.lead!.roster[0]!.mailbox = "run/reassigned";
   const roster = input.files.find(f => f.kind === "roster")!, content = JSON.stringify(input.lead!.roster);
   chmodSync(roster.path, 0o644); writeFileSync(roster.path, content); chmodSync(roster.path, 0o440); roster.hash = hashBytes(content);

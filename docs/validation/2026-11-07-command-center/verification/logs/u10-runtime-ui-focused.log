@@ -1,0 +1,11 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+ ✓ src/team/__tests__/overview.test.tsx (18 tests) 324ms
+ ✓ src/team/__tests__/chat-panel.test.tsx (18 tests) 398ms
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  18:58:30
+   Duration  1.22s (transform 171ms, setup 221ms, collect 482ms, tests 722ms, environment 656ms, prepare 94ms)
+

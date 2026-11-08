@@ -1,0 +1,337 @@
+-maxWorkers=2
+
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('clients directory already present')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('clients directory already present')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('duplicate clients directories')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('duplicate clients directories')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('leading dash refused')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('leading dash refused')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('whitespace refused')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('whitespace refused')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+ ✓ test/direct-worker-launch.test.ts (13 tests) 8612ms
+   ✓ sweeps a native Codex stub to stopped ('valid thread and continuation')  3627ms
+   ✓ sweeps a native Codex stub to stopped ('clients directory already present')  1211ms
+   ✓ sweeps a native Codex stub to stopped ('duplicate clients directories')  1259ms
+   ✓ sweeps a native Codex stub to stopped ('leading dash refused')  1238ms
+   ✓ sweeps a native Codex stub to stopped ('whitespace refused')  1173ms
+ ✓ test/scope-extension.test.ts (74 tests) 9967ms
+ ✓ test/team-workspace.test.ts (86 tests) 5051ms
+   ✓ T044 commit-lane manifest without a git in the candidate > T054 plain git over a control-owned copy > copies a realistic candidate in well under a few seconds  329ms
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > boots managed mode with no /etc/multi-agent and selects the direct launcher
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > includes the claude-code executable claude before --permission-mode (resume: undefined)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > includes the claude-code executable claude before --permission-mode (resume: existing-session)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > includes the codex executable codex before exec (resume: undefined)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > includes the codex executable codex before exec (resume: existing-session)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > keeps claude-code behind a native gate (case 0)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/team-governance.test.ts (111 tests) 5220ms
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > keeps claude-code behind a native gate (case 1)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > keeps codex behind a native gate (case 2)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude, case 0)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude, case 1)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude.exe, case 2)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude, case 3)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > checks codex native gates and process identity (command=codex, case 4)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > checks codex native gates and process identity (command=codex, case 5)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: none launches a managed worker as the current user > produces and launches the attempt into a worktree this user owns, and records the receipt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/unisolated-launch.test.ts > workers.isolation: hardened > still selects the restricted launcher, not the direct one
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/unisolated-launch.test.ts (17 tests) 4373ms
+   ✓ workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude, case 0)  333ms
+   ✓ workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude, case 1)  326ms
+   ✓ workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude.exe, case 2)  324ms
+   ✓ workers.isolation: none launches a managed worker as the current user > checks claude-code native gates and process identity (command=claude, case 3)  339ms
+   ✓ workers.isolation: none launches a managed worker as the current user > checks codex native gates and process identity (command=codex, case 4)  355ms
+   ✓ workers.isolation: none launches a managed worker as the current user > checks codex native gates and process identity (command=codex, case 5)  341ms
+   ✓ workers.isolation: none launches a managed worker as the current user > produces and launches the attempt into a worktree this user owns, and records the receipt  364ms
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+error connecting to /tmp/seat-pane-DGDzUt/tmux/tmux-1000/default (No such file or directory)
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/team-candidate-launch.test.ts (37 tests) 4205ms
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > preserves a bound seat when its presence probe fails
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+team dispatch: seat dev-impl@team-demo remains failed; Managed attempt attachment: Managed launch task is ambiguous
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/seat-pane-launch.test.ts (8 tests) 3646ms
+   ✓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt  543ms
+   ✓ a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy  421ms
+   ✓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt  400ms
+   ✓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client  1377ms
+   ✓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat  406ms
+ ✓ test/team-control-auth.test.ts (46 tests) 2511ms
+ ✓ test/team-telemetry-routes.test.ts (25 tests) 1875ms
+ ✓ test/team-read-model.test.ts (32 tests) 1895ms
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > attaches the produced attempt and registers its endpoint before the launcher asks for it
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > attaches again on the restore path, which shares the same launch seam
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > hands the registered attempt to the daemon's real composed launcher, with only sudo faked
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > resumes the recorded attempt with its exact previous receipt on a native token
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > shares the attachment seam with the restore and rig-instantiation paths
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > leaves a personal seat with no attempt and no registration
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > leaves no attempt or registration when admission refuses the task
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/attempt-telemetry.test.ts (21 tests) 1531ms
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > refuses an ambiguous seat rather than attach one assignment to another's binding
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-attempt-attachment.test.ts > a managed seat launches under the attempt produced for its admitted task > attaches the named task when the dispatcher says which of a seat's two live tasks it starts
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/managed-attempt-attachment.test.ts (9 tests) 1798ms
+   ✓ a managed seat launches under the attempt produced for its admitted task > attaches the produced attempt and registers its endpoint before the launcher asks for it  325ms
+ ✓ test/agent-turn-view-telemetry.test.ts (24 tests) 1145ms
+ ✓ test/lead-chat.test.ts (14 tests) 1354ms
+stderr | test/owner-session.test.ts > KTD14 paired owner authentication > retains native Host rules, configured bearer waiver and browser isolation
+[openrig] browser boundary refused untrusted_host: unknown.example.test (GET /)
+
+stderr | test/owner-session.test.ts > KTD14 paired owner authentication > retains native Host rules, configured bearer waiver and browser isolation
+[openrig] browser boundary refused untrusted_host:  (GET /)
+
+stderr | test/agent-turn.test.ts > a freed slot dispatches the run's next task > leaves a task alone until its owner records the outcome, and resumes it after a reopen
+team dispatch: launch for run=run task=task-1 failed: UNIQUE constraint failed: team_attempts.id, team_attempts.run_id
+
+stderr | test/agent-turn.test.ts > a freed slot dispatches the run's next task > admits a receipt on a seat that holds two live tasks, by the pane's stamp
+team completion: no single live task on a@rig for run=run; attempt attempt-stamped is unrecorded
+
+ ✓ test/owner-session.test.ts (22 tests) 1147ms
+ ✓ test/agent-turn.test.ts (18 tests) 1104ms
+stderr | test/task-completion.test.ts > MVP — the completion path > reads only receipts it has not already read, so a tick does not rescan the log
+team completion: no single live task on nobody@rig for run=run; attempt attempt-orphan is unrecorded
+
+stderr | test/task-completion.test.ts > MVP — the completion path > leaves a live process running, and never attaches a receipt to a seat with no single live task
+team completion: no single live task on builder@rig for run=run; attempt attempt-2 is unrecorded
+
+ ✓ test/task-completion.test.ts (18 tests) 967ms
+ ✓ test/team-setup.test.ts (14 tests) 1100ms
+ ✓ test/attempt-completion.test.ts (13 tests) 945ms
+ ✓ test/team-lead.test.ts (15 tests) 928ms
+stdout | test/default-native-command.test.ts > submits the default claude-code executable to a real shell without a launch override
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/default-native-command.test.ts > submits the default codex executable to a real shell without a launch override
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/run-growth.test.ts (13 tests) 867ms
+ ✓ test/default-native-command.test.ts (2 tests) 903ms
+   ✓ submits the default claude-code executable to a real shell without a launch override  514ms
+   ✓ submits the default codex executable to a real shell without a launch override  388ms
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+startup reconcile: rigs=1 checked=0 detached=0 errors=0
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+kernel-boot: tracker-state=skipped
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs the legacy boot effects in a legacy-mode daemon (control case)
+[gateway] gateway subsystem stopped
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs none of the legacy boot effects and refuses every legacy route in a managed-mode daemon
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/daemon-mode.test.ts > daemon mode fixed at startup (real composition) > runs none of the legacy boot effects and refuses every legacy route in a managed-mode daemon
+[gateway] gateway subsystem stopped
+
+ ✓ test/daemon-mode.test.ts (11 tests) 786ms
+ ✓ test/team-cancellation.test.ts (7 tests) 872ms
+ ✓ test/review-loop.test.ts (10 tests) 779ms
+ ✓ test/team-settings.test.ts (14 tests) 690ms
+ ✓ test/team-result.test.ts (4 tests) 532ms
+ ✓ test/team-start.test.ts (7 tests) 531ms
+stdout | test/unisolated-start-policy.test.ts > accepts an owner's start and launches the seat with no injected policy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/unisolated-start-policy.test.ts (1 test) 505ms
+   ✓ accepts an owner's start and launches the seat with no injected policy  504ms
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 respawned)
+
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 respawned)
+
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 kept)
+
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 kept)
+
+ ✓ test/attempt-failure.test.ts (17 tests) 524ms
+ ✓ test/user-settings-routes.test.ts (28 tests) 33ms
+ ✓ test/display-names.test.ts (11 tests) 253ms
+
+ Test Files  32 passed (32)
+      Tests  742 passed (742)
+   Start at  19:45:22
+   Duration  42.77s (transform 3.20s, setup 308ms, collect 13.87s, tests 66.65s, environment 3ms, prepare 1.09s)
+
+
+> @openrig/cli@0.1.0 test
+> vitest run test/team-start.test.ts test/team-setup.test.ts test/team-chat.test.ts test/team-apply.test.ts test/team-done.test.ts --maxWorkers=2
+
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/cli
+
+ ✓ test/team-start.test.ts (15 tests) 72ms
+ ✓ test/team-apply.test.ts (5 tests) 122ms
+ ✓ test/team-setup.test.ts (14 tests) 68ms
+ ✓ test/team-chat.test.ts (6 tests) 42ms
+ ✓ test/team-done.test.ts (5 tests) 41ms
+
+ Test Files  5 passed (5)
+      Tests  45 passed (45)
+   Start at  19:46:05
+   Duration  3.51s (transform 1.32s, setup 109ms, collect 5.30s, tests 345ms, environment 1ms, prepare 180ms)
+
+
+> @openrig/i18n@0.1.0 test
+> npm run typecheck && npm run test:unit --maxWorkers=2
+
+
+> @openrig/i18n@0.1.0 typecheck
+> tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --noUncheckedIndexedAccess --skipLibCheck --resolveJsonModule --esModuleInterop test/catalog-parity.test.ts test/display-width.test.ts
+
+npm warn Unknown cli config "--maxWorkers". This will stop working in the next major version of npm.
+
+> @openrig/i18n@0.1.0 test:unit
+> node --input-type=module -e "import { startVitest } from 'vitest/node'; await startVitest('test', ['test'], { config: false, watch: false, setupFiles: ['../../test/hermetic-env.setup.ts'] });"
+
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/i18n
+
+ ✓ test/display-width.test.ts (18 tests) 16ms
+ ✓ test/catalog-parity.test.ts (27 tests) 41ms
+
+ Test Files  2 passed (2)
+      Tests  45 passed (45)
+   Start at  19:46:11
+   Duration  370ms (transform 73ms, setup 88ms, collect 92ms, tests 57ms, environment 0ms, prepare 114ms)
+
+
+> @openrig/ui@0.1.0 test
+> vitest run src/team/__tests__/shell.test.tsx src/team/__tests__/shell-router.test.tsx src/team/__tests__/overview.test.tsx src/team/__tests__/tasks.test.tsx src/team/__tests__/reviews.test.tsx src/team/__tests__/analytics.test.tsx src/team/__tests__/settings.test.tsx src/team/__tests__/github-gate.test.tsx src/team/__tests__/create-project.test.tsx src/team/__tests__/new-task.test.tsx src/team/__tests__/diff.test.tsx --maxWorkers=2
+
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ src/team/__tests__/github-gate.test.tsx (5 tests) 1645ms
+   ✓ GitHub first-open gate > shows the public device code, polls the flow, and opens the app only after account verification  1575ms
+ ✓ src/team/__tests__/create-project.test.tsx (10 tests) 550ms
+ ✓ src/team/__tests__/shell.test.tsx (8 tests) 434ms
+ ✓ src/team/__tests__/shell-router.test.tsx (9 tests) 2357ms
+   ✓ command-center router integration > opens Workspace layouts and the read-only Reviews gates through the real routes  406ms
+   ✓ command-center router integration > keeps the real chat draft mounted while every destination changes the URL  440ms
+ ✓ src/team/__tests__/overview.test.tsx (18 tests) 355ms
+ ✓ src/team/__tests__/settings.test.tsx (7 tests) 239ms
+ ✓ src/team/__tests__/analytics.test.tsx (8 tests) 171ms
+ ✓ src/team/__tests__/tasks.test.tsx (3 tests) 183ms
+ ✓ src/team/__tests__/reviews.test.tsx (7 tests) 169ms
+ ✓ src/team/__tests__/new-task.test.tsx (4 tests) 114ms
+ ✓ src/team/__tests__/diff.test.tsx (9 tests) 115ms
+
+ Test Files  11 passed (11)
+      Tests  88 passed (88)
+   Start at  19:46:11
+   Duration  7.19s (transform 1.58s, setup 597ms, collect 3.52s, tests 6.33s, environment 2.20s, prepare 404ms)
+

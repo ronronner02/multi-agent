@@ -1,0 +1,15 @@
+{
+  "check": "u10-runtime-merge-progress-red",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "src/team/__tests__/overview.test.tsx",
+    "--maxWorkers=2",
+    "-t",
+    "uses observed Merge completion"
+  ],
+  "exit": 1,
+  "seconds": 1.53
+}

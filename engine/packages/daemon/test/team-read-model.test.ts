@@ -48,6 +48,7 @@ describe("T052 managed owner read projections", () => {
   let model: TeamReadModel;
   let app: ReturnType<typeof createTestApp>["app"];
   let key: number;
+  let knownWorkspaces: Map<string, NonNullable<import("../src/contracts/team-control.js").TeamReviewView["workspace"]>>;
 
   beforeEach(() => {
     db = createDb();
@@ -65,6 +66,7 @@ describe("T052 managed owner read projections", () => {
 
     model = new TeamReadModel({
       db, governance, events: bus,
+      readTaskWorkspace: (runId, taskId) => knownWorkspaces.get(`${runId}/${taskId}`) ?? null,
       readTaskRows: (runId: string) => db.prepare(
         `SELECT a.qitem_id AS qitemId, a.task_id AS taskId, json_extract(a.assignment_json, '$.role') AS role,
           q.state AS queueState, q.destination_session AS session
@@ -82,6 +84,7 @@ describe("T052 managed owner read projections", () => {
       },
     } }).app;
     key = 0;
+    knownWorkspaces = new Map();
   });
   afterEach(() => db.close());
 
@@ -190,6 +193,55 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     expect(second).toMatchObject({ taskId: "T002", title: "No dependencies here", dependencies: [] });
   });
 
+  it("publishes bounded task briefs and explicit declared criteria without claiming verification", async () => {
+    seedTask("run", "T001", "", "seat-a", undefined, { body:
+      "Implement search\n\nUse literal <button> text.\n\n## Acceptance criteria\n- Enter filters the list.\n- Empty input restores all rows.\n\n## Notes\nNot another criterion." });
+    const response = await request("/api/team-control/runs/run/read");
+    const { read } = await response.json() as { read: import("../src/contracts/team-control.js").TeamOwnerRead };
+    expect(read.tasks[0].description).toEqual({ body: expect.stringContaining("Use literal <button> text."), truncated: false });
+    expect(read.tasks[0].declaredAcceptanceCriteria).toEqual({ body: "- Enter filters the list.\n- Empty input restores all rows.", truncated: false });
+    expect(read.tasks[0].criteria).toEqual({ verified: null, total: null, source: null });
+    expect(read.tasks[0].workspace).toBeNull();
+    expect(read.tasks[0].integrationBranch).toBeNull();
+  });
+
+  it("redacts and bounds the new text while keeping absent declarations unavailable", () => {
+    seedTask("run", "T001", "", "seat-a", undefined, { body: "Task\nsk-abcdefghijklmnopqrstuvwxyz\n" + "ordinary words ".repeat(220) });
+    const projected = model.read("run").tasks[0];
+    expect(projected.description?.body).not.toContain("sk-abcdefghijklmnopqrstuvwxyz");
+    expect(projected.description?.body.length).toBeLessThanOrEqual(2000);
+    expect(projected.description?.truncated).toBe(true);
+    expect(projected.declaredAcceptanceCriteria).toBeNull();
+  });
+
+  it("ignores headings inside code and preserves an explicitly empty acceptance section", () => {
+    seedTask("run", "T001", "", "seat-a", undefined, { body: "Task\n```md\n## Acceptance criteria\n- Example only.\n```" });
+    seedTask("run", "T002", "", "seat-b", undefined, { body: "Task\n## Acceptance criteria\n\n## Notes\nNo criteria were listed." });
+    const tasks = model.read("run").tasks;
+    expect(tasks[0].declaredAcceptanceCriteria).toBeNull();
+    expect(tasks[1].declaredAcceptanceCriteria).toEqual({ body: "", truncated: false });
+  });
+
+  it("reads only the run's existing candidate and recorded integration branch without writing", () => {
+    seedTask("run", "T001", "", "seat-a");
+    const reviewId = seedTask("run", "R001", "", "review-a");
+    db.prepare("UPDATE team_queue_authority SET assignment_json = json_set(assignment_json, '$.role', 'reviewer', '$.reviewOf', 'T001') WHERE qitem_id = ?").run(reviewId);
+    db.prepare("UPDATE team_runs SET integration_branch = ? WHERE id = ?").run("team/current", "run");
+    db.prepare("UPDATE team_runs SET integration_branch = ? WHERE id = ?").run("team/other", "other-run");
+    const workspace = { root: "/fixture/current/task", sourceRoot: "/fixture/current/integration", baseCommit: "a".repeat(40) };
+    knownWorkspaces.set("run/T001", workspace);
+    knownWorkspaces.set("other-run/T001", { ...workspace, root: "/fixture/other/task" });
+    const changes = db.prepare("SELECT total_changes() AS value").get();
+    const read = model.read("run");
+    expect(read.tasks.every(task => task.workspace?.root === workspace.root)).toBe(true);
+    expect(read.tasks.every(task => task.integrationBranch === "team/current")).toBe(true);
+    expect(JSON.stringify(read)).not.toContain("/fixture/other");
+    knownWorkspaces.clear();
+    expect(model.read("run").tasks[0].workspace).toBeNull();
+    expect(model.read("run").tasks[0].integrationBranch).toBe("team/current");
+    expect(db.prepare("SELECT total_changes() AS value").get()).toEqual(changes);
+  });
+
   it("publishes the daemon-owned task stage and exact assigned seat", () => {
     seedTask("run", "stage-task", "", "seat-b", undefined, { body: "Show the stage" });
     expect(model.read("run").tasks[0]).toMatchObject({
@@ -259,6 +311,8 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     const qitem = seedTask("run", "review-task", "", "seat-a");
     db.prepare("UPDATE team_runs SET reviewer_seat = 'reviewer' WHERE id = 'run'").run();
     db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitem);
+    db.prepare("UPDATE team_queue_authority SET evidence_json = ? WHERE qitem_id = ?")
+      .run(JSON.stringify({ validated: true, manifestDigest: sha("old") }), qitem);
     const candidate = (digest: string) => bus.emit({ type: "team.control", protocolVersion: "1.0",
       eventId: "candidate-" + digest, rigId: "managed-rig", runId: "run", taskId: "review-task", attemptId: null,
       entityId: "review-task", entityVersion: 1, action: "review.candidate",
@@ -275,6 +329,56 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     verdict(2, sha("current"));
     expect(model.read("run").tasks[0]!.stage).toBe("done");
   });
+
+  it("projects the validated native completion candidate before and after its matching review", async () => {
+    const qitem = seedTask("run", "native-task", "", "seat-a");
+    db.prepare("UPDATE team_runs SET reviewer_seat = 'reviewer' WHERE id = 'run'").run();
+    const attempt = governance.getAttempt("attempt-native-task")!;
+    const digest = sha("native-candidate");
+    const receipt = governance.recordTaskOutcome(command("run", {
+      expectedTaskVersion: governance.getTask(qitem)!.entityVersion, state: "done", closureReason: "no-follow-on",
+      actorSession: "seat-a", attemptId: attempt.id, expectedAttemptVersion: attempt.entityVersion,
+      evidence: { validated: true, manifestDigest: digest, changedPaths: ["src/index.ts"], outsideAssignment: [] },
+    }, qitem), { kind: "daemon", sessionId: "daemon" });
+    expect(receipt.status).toBe("observed");
+    expect(model.read("run").tasks[0]).toMatchObject({
+      currentCandidateDigest: digest, stage: "review", reviewAvailable: false,
+      criteria: { verified: null, total: null }, acceptance: null,
+    });
+    bus.emit({ type: "team.control", protocolVersion: "1.0", eventId: "native-verdict", rigId: "managed-rig",
+      runId: "run", taskId: "native-task", attemptId: null, entityId: "native-task", entityVersion: 1,
+      action: "review.verdict", payload: { taskId: "native-task", reviewerTaskId: "reviewer-task", round: 1,
+        candidateDigest: digest, verdict: "approved", findings: [], recordedAt: "2026-10-26T00:00:01.000Z" } });
+    const response = await request("/api/team-control/runs/run/read");
+    expect(response.status).toBe(200);
+    expect((await response.json()).read.tasks[0]).toMatchObject({
+      currentCandidateDigest: digest, stage: "done", reviewAvailable: true, acceptance: null,
+      verdicts: [{ candidateDigest: digest, verdict: "approved" }],
+    });
+  });
+
+  it.each([
+    { validated: false, manifestDigest: sha("candidate") },
+    { manifestDigest: sha("candidate") },
+    { validated: true, manifestDigest: 42 },
+  ])("does not publish an unvalidated or unreadable completion candidate: %j", evidence => {
+    const qitem = seedTask("run", "unvalidated-task", "", "seat-a");
+    db.prepare("UPDATE team_runs SET reviewer_seat = 'reviewer' WHERE id = 'run'").run();
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitem);
+    db.prepare("UPDATE team_queue_authority SET evidence_json = ? WHERE qitem_id = ?")
+      .run(JSON.stringify(evidence), qitem);
+    expect(model.read("run").tasks[0]).toMatchObject({ currentCandidateDigest: null, stage: "review" });
+  });
+
+  it.each([["lead", "done"], ["implementer", "pending"]])(
+    "does not use completion evidence as a review candidate for %s work that is %s", (role, state) => {
+      const qitem = seedTask("run", "non-review-candidate", "", "seat-a");
+      db.prepare("UPDATE queue_items SET state = ? WHERE qitem_id = ?").run(state, qitem);
+      db.prepare("UPDATE team_queue_authority SET assignment_json = json_set(assignment_json, '$.role', ?), evidence_json = ? WHERE qitem_id = ?")
+        .run(role, JSON.stringify({ validated: true, manifestDigest: sha("candidate") }), qitem);
+      expect(model.read("run").tasks[0]!.currentCandidateDigest).toBeNull();
+    },
+  );
 
   it("bounds a long title to one display line and never invents one", async () => {
     seedTask("run", "T001", "", "seat-a", "2026-10-26T00:00:00.000Z", { body: "x".repeat(500) });

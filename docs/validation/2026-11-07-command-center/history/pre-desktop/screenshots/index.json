@@ -1,0 +1,558 @@
+{
+  "liveFinalCaptures": [
+    {
+      "name": "final-overview-1440-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:43.779Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-overview-390-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:43.828Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-overview-1440-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:43.911Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-overview-390-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:43.960Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-workspace-1440-dark.png",
+      "section": "Workspace",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:44.586Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-workspace-390-dark.png",
+      "section": "Workspace",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:44.638Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-workspace-1440-light.png",
+      "section": "Workspace",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:44.729Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-workspace-390-light.png",
+      "section": "Workspace",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:44.772Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-tasks-1440-dark.png",
+      "section": "Tasks",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:45.414Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-tasks-390-dark.png",
+      "section": "Tasks",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:45.459Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-tasks-1440-light.png",
+      "section": "Tasks",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:45.543Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-tasks-390-light.png",
+      "section": "Tasks",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:45.589Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-analytics-1440-dark.png",
+      "section": "Analytics",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:46.211Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-analytics-390-dark.png",
+      "section": "Analytics",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:46.260Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-analytics-1440-light.png",
+      "section": "Analytics",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:46.337Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-analytics-390-light.png",
+      "section": "Analytics",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:46.392Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-reviews-1440-dark.png",
+      "section": "Reviews",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:37:06.860Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-390-dark.png",
+      "section": "Reviews",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:37:06.948Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-1440-light.png",
+      "section": "Reviews",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:37:07.054Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-390-light.png",
+      "section": "Reviews",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:37:07.125Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-settings-1440-dark.png",
+      "section": "Settings",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:41:56.278Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-390-dark.png",
+      "section": "Settings",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:41:56.354Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-1440-light.png",
+      "section": "Settings",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:41:56.475Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-390-light.png",
+      "section": "Settings",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:41:56.550Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    }
+  ],
+  "liveFinalCaptureCount": 24,
+  "allCapturedWidthsMatchViewport": true,
+  "totalImages": 178,
+  "omitted": [
+    "Initial pairing image; no credential image is needed for the acceptance claim."
+  ],
+  "priorSlices": "../prior-slices/index.json",
+  "runtimeFinalCaptures": [
+    {
+      "name": "08-merged-after-restart-1440-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "phaseStates": [
+          "complete",
+          "complete",
+          "complete",
+          "complete"
+        ]
+      },
+      "at": "2026-11-07T12:03:22.911Z"
+    },
+    {
+      "name": "09-merged-after-restart-390-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "phaseStates": [
+          "complete",
+          "complete",
+          "complete",
+          "complete"
+        ]
+      },
+      "at": "2026-11-07T12:03:22.981Z"
+    },
+    {
+      "name": "10-merged-after-restart-1440-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "phaseStates": [
+          "complete",
+          "complete",
+          "complete",
+          "complete"
+        ]
+      },
+      "at": "2026-11-07T12:03:23.096Z"
+    },
+    {
+      "name": "11-merged-after-restart-390-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "phaseStates": [
+          "complete",
+          "complete",
+          "complete",
+          "complete"
+        ]
+      },
+      "at": "2026-11-07T12:03:23.167Z"
+    }
+  ],
+  "runtimeFinalCaptureCount": 4,
+  "runtimeImages": [
+    {
+      "path": "runtime/01-merged-before-review-fix.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "ad633fa126c7577d1144072f81bc9051feef5ed78ca8e59b263c1858afd92e6b",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/02-plan-and-roster.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "5a77b9432813b94aba839c63277a3c917c484a10147c76a7742eba98a7545312",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/03-reviewer-running.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "a6883134cf2449c55cc85bc190eb3059b215e04566d5a39eb2308b261060c53e",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/04-owner-progress-question.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "18b5185ec3c3db7fe5c46501845e999a328ecae028e77030efc48f037eb47e3e",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/05-progress-reply.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "1e7a0489b74da13d0a8773eaf4cc2062a53f160e59311c1963c7e6847acc91d1",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/06-merged-overview.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "1e732eb277dbde5b27e38bedd410e3c57928a18ce429393198c276617a6a19cc",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/07-merged-after-refresh.png",
+      "width": 1440,
+      "height": 980,
+      "sha256": "bdc7cffc74acaea4be8cb0384db3d2d41c6e98769a87c73fbf608ffea3e72029",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/08-merged-after-restart-1440-dark.png",
+      "width": 1440,
+      "height": 940,
+      "sha256": "2d6156b22c8512e72b2890a10d9969f6b4262c6d6d77f4e5a6e5538565bd2a0d",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/09-merged-after-restart-390-dark.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "6c5450baf46d2f2a06ae3947a481cd8efeee0baa83657441b5ed4f7d048ddd4a",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/10-merged-after-restart-1440-light.png",
+      "width": 1440,
+      "height": 940,
+      "sha256": "81f855fb269686323a0281e04a72a508ca69a63fdecc772cabb51436ffa5d2de",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/11-merged-after-restart-390-light.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "a0402e148a958fd2a29b63fca72d9ba3127cfb165d597a4c41c25efd4ce4341a",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/12-historical-task-a-result.png",
+      "width": 1440,
+      "height": 940,
+      "sha256": "72d42c0f782870c03355e13d0a7878ac8931782f58daa7942d61649917bb9fbf",
+      "classification": "captured-state"
+    },
+    {
+      "path": "runtime/13-historical-task-b-result.png",
+      "width": 1440,
+      "height": 940,
+      "sha256": "4122735222ef790ec3920dcd303777be3d56d9069ada3f753a74af61e31ea34b",
+      "classification": "transition-only"
+    },
+    {
+      "path": "runtime/14-historical-task-b-settled.png",
+      "width": 1440,
+      "height": 940,
+      "sha256": "5383ae40dd65e2f54923b2233d0123f2d52f728388a244974885970005aa47af",
+      "classification": "captured-state"
+    }
+  ],
+  "runtimeImageCount": 14,
+  "earlierFinalCapturesAreHistorical": true,
+  "visuallyInspectedRuntimeImages": [
+    "08-merged-after-restart-1440-dark.png",
+    "11-merged-after-restart-390-light.png",
+    "14-historical-task-b-settled.png"
+  ],
+  "runtimeNotes": [
+    "The four responsive Overview captures follow the idle restart and show all phases complete.",
+    "The task-B capture numbered 13 is transitional; the settled diff is captured at 14.",
+    "The settled Task B diff and task query survive page refresh, with result HTTP 200."
+  ]
+}

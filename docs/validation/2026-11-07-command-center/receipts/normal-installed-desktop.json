@@ -1,0 +1,22 @@
+{
+  "at": "2026-11-07T23:48:08.9809816Z",
+  "installedExecutable": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+  "profile": "%LOCALAPPDATA%/Multi-Agent/profile",
+  "launchEntry": "Current-user desktop shortcut",
+  "processId": 14236,
+  "debuggingEnabled": false,
+  "leftRunning": true,
+  "bothCurrentUserShortcutsReusedOneInstance": true,
+  "pairingFormNeeded": false,
+  "githubSignInPreserved": true,
+  "openFormPreservedOnRenewal": true,
+  "skinEntranceAtFreshSession": 0,
+  "skinPortraitMin": 10,
+  "skinPortraitMax": 23.041667,
+  "installerSha256": "b98a6fc2ea4af9359da758118bda2f9c80d67c5400db10a5f5c1e5f5e5746c61",
+  "asarSha256": "bad7192df7d4f4202f1d912b03dbc1848799e657a21df5917cfce47ea267256d",
+  "rollbackInstallationFilesUnchanged": 74,
+  "originalTemporaryProfileFilesUnchanged": 98,
+  "commonStartMenu": "The all-users legacy shortcut remains unchanged. Desktop and current-user Start-menu entries select this build.",
+  "workingProfileCaptures": "Retained privately; not included in this bundle."
+}

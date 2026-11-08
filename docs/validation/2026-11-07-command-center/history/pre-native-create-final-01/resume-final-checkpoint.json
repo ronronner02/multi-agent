@@ -1,0 +1,526 @@
+{
+  "checkedAt": "2026-11-08T00:32:50.313535+00:00",
+  "status": "local-acceptance-complete-with-known-failures-unmerged",
+  "supersedesSummaryOnly": "The earlier gate records retain their original scopes; this checkpoint adds later source, benchmark, documentation and native-candidate observations.",
+  "source": {
+    "head": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+    "branch": "feat/cc-u10-acceptance",
+    "changedCodeFilesMatchingStandaloneSuite": [
+      {
+        "path": "desktop/src/first-run.html",
+        "sha256": "ea178d8c96c456b23bd74d498cca27be42d8297103fa91afdc1492eb46b2ad54"
+      },
+      {
+        "path": "desktop/src/main.js",
+        "sha256": "74127deb4ef4fc4d5d5f8d1bc2d547467bbe7873a2543e03f1dc08afbb3fe3de"
+      },
+      {
+        "path": "desktop/src/preload.js",
+        "sha256": "568d8aa1050b64b88408e8c4c60b65b03abe4ccf7b77095873d50c5111d2c2bb"
+      },
+      {
+        "path": "desktop/src/wsl.js",
+        "sha256": "8bbe3655b2a191c479138f77aadec1b202ae6d0279574385e83da3d7dba6025f"
+      },
+      {
+        "path": "desktop/test/desktop.test.js",
+        "sha256": "36df333815185e1c3b1768f7b7969ab70debe3838901a961e2649d15169c7547"
+      },
+      {
+        "path": "desktop/test/wsl.test.js",
+        "sha256": "c49c8933033b5099b9a811218fdac2675464dcff9a027a10cd132369dcaea81e"
+      },
+      {
+        "path": "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+        "sha256": "20806d61a2c1c875737c9ffcd044c664d0c48751757ea56531db3cfbfe2ad10e"
+      },
+      {
+        "path": "engine/packages/daemon/src/contracts/team-control.ts",
+        "sha256": "ee2b8f299ea3220add1429b03fdba898759aafcc1b189d11efee1e79cf6440b8"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/agent-turn.ts",
+        "sha256": "4b80aaf225f9fefe45f7092889bb85dcf464ae368d83efb7b6416731703c4dc5"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/github-cli.ts",
+        "sha256": "8615ecb3db5fe240008b0ada99a31427dfcb144933630bdeff01c4471208be40"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/integration-branch.ts",
+        "sha256": "5efb03a3b5bf65d56734c872d627410f031772200df01845ad27a88ed2cea1d1"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/plan-governance.ts",
+        "sha256": "8b68ac54d13eaa00c3b7e133873bb9294947a6eb3c8b2141950b05acbeda454d"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/seat-pane.ts",
+        "sha256": "a8ba162a4b6feb3b3932c2b31e4ec32cc1c9a8ed898a159a6c38e14e2fae669e"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/startup-orchestrator.ts",
+        "sha256": "8dbbd01c4914832cd72461bbc0bfa5b355c176bafcf103f2314b6f994594af67"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/team-workspace.ts",
+        "sha256": "74d7cace550eb85550fbc6de1c1b45a91a041b92d694eb185450b530d6f84512"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/unisolated-roots.ts",
+        "sha256": "64d1fcb4473878250c57fa02d65a6f92ba44ccb47f6be9bb8f72ebde9cfcea74"
+      },
+      {
+        "path": "engine/packages/daemon/src/domain/workflow-runtime.ts",
+        "sha256": "d10bf233859d762e565a1847db5710736bd36eb0ba3350221a566a4b04be4bbe"
+      },
+      {
+        "path": "engine/packages/daemon/src/startup.ts",
+        "sha256": "ec6cc61e8388d9fe1cca959f0f418316a701e1839eb5b31125cf53dae2f4eb66"
+      },
+      {
+        "path": "engine/packages/daemon/src/team-control-surface.ts",
+        "sha256": "43eebda4d51f5f5589fc8d94345cd7de42d162d172afa3bbae9403051cbe1790"
+      },
+      {
+        "path": "engine/packages/daemon/test/agent-turn.test.ts",
+        "sha256": "f935bd78770aa5c722deb7761a82bdf2a8a8946b2f1388f65c60d86ebcdb54dd"
+      },
+      {
+        "path": "engine/packages/daemon/test/attempt-failure.test.ts",
+        "sha256": "9b36f7503febb23411672b74aae818b6a46357df8880e501c3e1caba788b7935"
+      },
+      {
+        "path": "engine/packages/daemon/test/direct-worker-launch.test.ts",
+        "sha256": "179f07736a4c0c72350fc9ed445bc82ba3e54c6b8ebc6cb631fe0350347013f4"
+      },
+      {
+        "path": "engine/packages/daemon/test/fixtures/stub-gh.mjs",
+        "sha256": "47e1c6374b934f197d1c20ef3671759533564fe25026e6d8b6ea50119d7492ff"
+      },
+      {
+        "path": "engine/packages/daemon/test/integration-branch.test.ts",
+        "sha256": "35579b95ddfdb3201fbd189b3e0f845b19d97c4fd50dc8c31cfc6f1c0518185c"
+      },
+      {
+        "path": "engine/packages/daemon/test/lead-manager.test.ts",
+        "sha256": "9790e1a0a36a1beeabd88c8343504afa49a0d33c64e7ab2be36369d3bd86c5e5"
+      },
+      {
+        "path": "engine/packages/daemon/test/lead-roster.test.ts",
+        "sha256": "b538d656bbd5588fc6111bef4c9e5bbf8fc4ecc6561918aae4c96d8b92f5323c"
+      },
+      {
+        "path": "engine/packages/daemon/test/managed-native-startup.test.ts",
+        "sha256": "c90cef22df91f85093f9139d049a212de346eb223d60d848bedfaf1aa2281527"
+      },
+      {
+        "path": "engine/packages/daemon/test/owner-slot.test.ts",
+        "sha256": "065235a19963f0252b29c148d37f3b89480fec9a7c64a6e1153a6c2ace7a6bf0"
+      },
+      {
+        "path": "engine/packages/daemon/test/run-recovery.test.ts",
+        "sha256": "58500e81f0219346925545dc759bf000552519ef3ff3a005ac7f61b0aecff6a6"
+      },
+      {
+        "path": "engine/packages/daemon/test/seat-pane-launch.test.ts",
+        "sha256": "006a47bf2337702957e3732b5a579d1d278fea7524d7f21867ef5c6353e94e62"
+      },
+      {
+        "path": "engine/packages/daemon/test/team-assignment.test.ts",
+        "sha256": "21d5e326471694e1f9f3f856156968204c77094793f28fd15871a73d3f0f410b"
+      },
+      {
+        "path": "engine/packages/daemon/test/team-github.test.ts",
+        "sha256": "f6d13c03218a8214a5cfe1aa4f3ff1f3f741ec825a86d4e873742dd97de78240"
+      },
+      {
+        "path": "engine/packages/daemon/test/team-read-model.test.ts",
+        "sha256": "da188b3d151314bee630c0d1ce54e9f5967df7afbe4e442c80f4b419fea89c4c"
+      },
+      {
+        "path": "engine/packages/daemon/test/team-workspace.test.ts",
+        "sha256": "1d35e124e765b9953aac61dc116b8f6b0250858727e49a06bf291fca629bd7d4"
+      },
+      {
+        "path": "engine/packages/daemon/test/unisolated-roots.test.ts",
+        "sha256": "b6ad875b12285ce92ba98529e045acec16d8258db4062b11c335e148804d9137"
+      },
+      {
+        "path": "engine/packages/daemon/test/unisolated-start-policy.test.ts",
+        "sha256": "637430fecbe47aa34bac0db0ee6df22a636114a7ca78dd61c9efff1aaa173458"
+      },
+      {
+        "path": "engine/packages/i18n/src/catalogs/en.json",
+        "sha256": "38bfb23ac48e3fc01b1a16b62a3a90ad3dabec5cbb6b5fc030b8aa1783b62b72"
+      },
+      {
+        "path": "engine/packages/i18n/src/catalogs/zh-CN.json",
+        "sha256": "2cdf392f8e223857c1148b319d4838fa0617ad03afb1080e45bb8d3ac833f50b"
+      },
+      {
+        "path": "engine/packages/ui/src/hooks/useOwnerSession.ts",
+        "sha256": "82bbbfad3ff0b6faa788ca3d1935e6917ae330d134dbaa11cf09694c42fb0a0a"
+      },
+      {
+        "path": "engine/packages/ui/src/team/__tests__/background.test.tsx",
+        "sha256": "90e2115dbd4dad6fecff06ad647a3f897cc2e727b3ab8ea8a58a392b52e05389"
+      },
+      {
+        "path": "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+        "sha256": "0e98e5c7d54bd947f3622a54496829711add2a3a3d316690886ac8ea0bb8235d"
+      },
+      {
+        "path": "engine/packages/ui/src/team/__tests__/fixtures.ts",
+        "sha256": "057a850e3fbcc3f325a2eb0e627efcd47bbeea550b70b3624cad5a62ce72f359"
+      },
+      {
+        "path": "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+        "sha256": "7de08fc0421d98e0edbbaffeb8e9cb69ebf1c90b3e8856ee9b6caa9a1caff8dc"
+      },
+      {
+        "path": "engine/packages/ui/src/team/__tests__/shell-router.test.tsx",
+        "sha256": "69d92af02545254a86529c44162cc09cef21624351bc852f96fefeb53b5494ba"
+      },
+      {
+        "path": "engine/packages/ui/src/team/__tests__/tasks.test.tsx",
+        "sha256": "8f50a7b39779f8213c06d6540ae280c1ac6c346324623bf704149eba31159342"
+      },
+      {
+        "path": "engine/packages/ui/src/team/background.tsx",
+        "sha256": "dffefffb4b8aded77b21daec0964adef373d450d70a3a8993f7dc98054f33df2"
+      },
+      {
+        "path": "engine/packages/ui/src/team/chat-panel.tsx",
+        "sha256": "186444bb92302c5c662ccf4c17d9ed3846f0abe21c6da5cb7c600d9be2360667"
+      },
+      {
+        "path": "engine/packages/ui/src/team/clients.ts",
+        "sha256": "49b840e30678d9282a3ad12d80f23fb8023ab72fc4fbf10a7add975d387f4cc5"
+      },
+      {
+        "path": "engine/packages/ui/src/team/overview.tsx",
+        "sha256": "92e13935dff6161f2389a5544f698ccdf8aa800357c3fede860ea2fda57b0c15"
+      },
+      {
+        "path": "engine/packages/ui/src/team/shell.tsx",
+        "sha256": "c5b704bc070aad4789d7cc4fb3755f7ad42471d11c234b02118ff18e39c2bfa8"
+      },
+      {
+        "path": "engine/packages/ui/src/team/task-drawer.tsx",
+        "sha256": "dc25fc8a37b2662cb0ae3fc7897ec7a4fa6c1a7ba28ce377a49b0e4e53e5f788"
+      },
+      {
+        "path": "engine/packages/ui/src/team/task-workbench.tsx",
+        "sha256": "4ffb91212239b17b4fd8ac41874cf735d322b603e4feb97a8083b5cf39ad605e"
+      },
+      {
+        "path": "engine/packages/ui/src/team/tasks.tsx",
+        "sha256": "b2d754f3a44c5c46b205572d0b177abc6d9614c3378123bbd92be254d37d32c6"
+      },
+      {
+        "path": "engine/packages/ui/src/team/team.css",
+        "sha256": "7f3b659bcf9f4ebc72ddbf669001d9e96c48e7d05ea07bb4d7457d41738e3b43"
+      },
+      {
+        "path": "engine/packages/ui/test/owner-session.test.tsx",
+        "sha256": "681d5efce901b3924e6ccc24536405d6bebb88ee33fd8b10c14b91b0a88118ec"
+      },
+      {
+        "path": "engine/packages/daemon/src/server.ts",
+        "sha256": "f00aeadd70f47863ca22391f1d008eeb2e0b6b6138fe37454a880dc7acc6adaf"
+      },
+      {
+        "path": "engine/packages/daemon/test/managed-team-page.test.ts",
+        "sha256": "b1b68e3847d4744d1e3806443891bda3ed9471304a235e3999b9628bee43563b"
+      }
+    ],
+    "codeFileCount": 57,
+    "documentationHashes": {
+      "README.md": "c4ba6976d09222673a190d6e9d34f7ae210bab9c056054e674d2823f3c601469",
+      "desktop/README.md": "f550f40e4cf941c42028724ce7eb773aa9bd65d74df24fcd78d2e5deb449a902",
+      "docs/operations.md": "e7ffbd78085d5a4932ca2ec8632b4a343f15f80e8450215711772804c6f8368c"
+    },
+    "sourcePlanSha256": "7d3c3172c30978fb6a88530e5266b46783fc267bd82d370742045d121ae09b8d",
+    "credentialReviewSnapshotSha256": "be214508d8122a88c57dc68b3436c0dee0923b2fa9eeeb8f4f811df0c4c01310",
+    "frozenCredentialReviewFilesVerified": 51,
+    "independentCredentialConfirmation": "Closed: R1-1 and R2-1. Source tracing and producer receipts, not independently executed tests.",
+    "sourcePlanAuthority": "The unchanged owner planning worktree, not an inferred path in this implementation checkout.",
+    "currentCredentialFilesMatchReviewedSnapshot": true
+  },
+  "benchmark": {
+    "baselineRepository": "https://github.com/gabrielecirulli/2048",
+    "baselineCommit": "478b6ec346e3787f589e4af751378d06ded4cbbc",
+    "license": "MIT",
+    "frozenContractSha256": "d6231ed150d5c5fb95a8c2cc3b1061478a94391f2e47921e433d253eff751bf5",
+    "original": {
+      "parity": 90,
+      "improvements": 0
+    },
+    "recreation": {
+      "parity": 100,
+      "improvements": 20,
+      "browserChecksPassed": 44,
+      "browserChecksTotal": 44,
+      "nodeTestsPassed": 64,
+      "generationCycle": 1
+    },
+    "mergedThroughProduct": true,
+    "mergedCommit": "f3dd4a6a1fb3f8a47c342ff686a05dfee462a13d",
+    "mergedStateSurvivedRestart": true,
+    "evaluatedFilesUnchanged": 19,
+    "originalFilesUnchanged": 34,
+    "sourceArchiveSha256": "14e7918e6826771b02231b1846bc0f955f3c3e012e64ca2b763d5346b3b6d0a6",
+    "limitations": [
+      "Scores apply to the frozen acceptance checks, not universal superiority.",
+      "The live run needed product repairs; failed and dropped attempts were preserved.",
+      "The concurrent workers used distinct worktrees, sessions, processes and panes. Direct launch remains task separation, not a host security sandbox."
+    ],
+    "windowsExport": {
+      "directory": "%LOCALAPPDATA%/Multi-Agent/TestProjects/2048-Recreation-20261108",
+      "filesVerified": 19,
+      "testsPassed": 64,
+      "registeredOrUploaded": false,
+      "sourceArchiveSha256": "14e7918e6826771b02231b1846bc0f955f3c3e012e64ca2b763d5346b3b6d0a6"
+    }
+  },
+  "desktop": {
+    "candidateInstallerSha256": "b98a6fc2ea4af9359da758118bda2f9c80d67c5400db10a5f5c1e5f5e5746c61",
+    "candidateAsarSha256": "bad7192df7d4f4202f1d912b03dbc1848799e657a21df5917cfce47ea267256d",
+    "nativeCaption": {
+      "maximize": true,
+      "restore": true,
+      "minimize": true,
+      "close": true
+    },
+    "drag": {
+      "deltaX": 72,
+      "deltaY": 45
+    },
+    "picker": {
+      "cancelRetainedFolder": true,
+      "projectNameRetained": true,
+      "selectedWindowsFolderMappedToWSL": true
+    },
+    "focusRestored": true,
+    "pageErrorCount": 0,
+    "applicationWriteRequestCount": 0,
+    "workingProfileFilesVerifiedUnchanged": 98,
+    "workingProfileChanged": [],
+    "scope": "Installed per-user build and promoted working profile. Native drag, picker and caption evidence remains from the identical asar candidate; normal launch, renewal and reopening were tested on the installed build.",
+    "normalShortcutUpdated": true,
+    "workingProfileSettingsUpdated": true,
+    "ownerDaemonRestarted": true,
+    "priorBinaryInstallationRetained": true,
+    "normalLaunchDelivered": true,
+    "normalLaunch": {
+      "at": "2026-11-07T23:48:08.9809816Z",
+      "installedExecutable": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+      "profile": "%LOCALAPPDATA%/Multi-Agent/profile",
+      "launchEntry": "Current-user desktop shortcut",
+      "processId": 14236,
+      "debuggingEnabled": false,
+      "leftRunning": true,
+      "bothCurrentUserShortcutsReusedOneInstance": true,
+      "pairingFormNeeded": false,
+      "githubSignInPreserved": true,
+      "openFormPreservedOnRenewal": true,
+      "skinEntranceAtFreshSession": 0,
+      "skinPortraitMin": 10,
+      "skinPortraitMax": 23.041667,
+      "installerSha256": "b98a6fc2ea4af9359da758118bda2f9c80d67c5400db10a5f5c1e5f5e5746c61",
+      "asarSha256": "bad7192df7d4f4202f1d912b03dbc1848799e657a21df5917cfce47ea267256d",
+      "rollbackInstallationFilesUnchanged": 74,
+      "originalTemporaryProfileFilesUnchanged": 98,
+      "commonStartMenu": "The all-users legacy shortcut remains unchanged. Desktop and current-user Start-menu entries select this build.",
+      "workingProfileCaptures": "Retained privately; not included in this bundle."
+    },
+    "allUsersLegacyShortcutUpdated": false,
+    "workingProfileFilesVerifiedUnchangedScope": "The original temporary rollback profile; the promoted working profile now receives ordinary app state writes."
+  },
+  "verification": {
+    "focused": {
+      "passed": 123,
+      "files": 4,
+      "unmatchedFilter": "The nonexistent team-dependency-evidence.test.ts filter contributed no coverage."
+    },
+    "build": "Final UI build, engine lint/typecheck and standalone build completed; 57 changed source files match both current and suite trees.",
+    "latestSmoke": {
+      "command": [
+        "npm",
+        "run",
+        "smoke"
+      ],
+      "cwd": "engine",
+      "exit": 0,
+      "passed": {
+        "daemon": 746,
+        "cli": 45,
+        "i18n": 45,
+        "ui": 93
+      }
+    },
+    "fullDaemon": {
+      "passed": 17113,
+      "failed": 2,
+      "skipped": 5,
+      "todo": 5,
+      "filesPassed": 1034,
+      "filesFailed": 2,
+      "filesSkipped": 2,
+      "allGreen": false,
+      "failures": [
+        {
+          "test": "auth-bearer-token.test.ts",
+          "classification": "Exact documented DNS failure",
+          "knownFailuresLine": 7,
+          "error": "Expected null; local resolver returned 198.18.0.76 for the intentionally unresolvable hostname."
+        },
+        {
+          "test": "seat-fresh-launch.test.ts",
+          "classification": "Exact documented startup-consent failure",
+          "knownFailuresLine": 16,
+          "error": "Expected one send; observed two after late consent."
+        }
+      ],
+      "sourceFilesMatchingStandaloneSuite": 57,
+      "receipt": "receipts/normal-full-daemon-command.json",
+      "priorFailures": "Earlier failed suites, including the activity-ordering variant, remain in history and private command logs."
+    },
+    "documentation": {
+      "files": 3,
+      "checked": 44,
+      "failures": 0,
+      "limitation": "Explicit three-document scope. Checks concrete command and path references, not prose correctness, flag semantics, runtime settings or desktop acceptance."
+    },
+    "diffCheckExit": 0,
+    "activeVitestProcesses": [],
+    "ui": {
+      "passed": 1893,
+      "skipped": 1
+    },
+    "desktop": {
+      "passed": 34
+    },
+    "i18n": {
+      "passed": 45
+    }
+  },
+  "preservation": {
+    "ownerRuntimeHealthy": true,
+    "ownerRuntimeCounts": {
+      "team_runs": 0,
+      "team_attempts": 0,
+      "queue_items": 0
+    },
+    "ownerProjectContentsInspectedOrChanged": false,
+    "normalShortcutAndWorkingSettingsUnchanged": false,
+    "benchmarkServicesStopped": true,
+    "oldBundleEntriesVerified": 480,
+    "normalShortcutAndWorkingSettingsChangedByOwnerApproval": true,
+    "allOwnedTestFixturesStopped": true,
+    "originalRollbackProfileUnchanged": true,
+    "oldInstallationUnchanged": true,
+    "testPortsListening": {
+      "4177": false,
+      "4188": false,
+      "4189": false,
+      "27433": false,
+      "28433": false
+    }
+  },
+  "pending": [
+    "U10 remains uncommitted and unmerged under the separate delivery hold.",
+    "Two exact pre-existing daemon-suite failures remain recorded; the full suite is not all green.",
+    "The legacy all-users Start-menu shortcut still selects the retained old installation. Current-user desktop and Start-menu entries are updated and verified."
+  ],
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "merged": false,
+    "normalLaunchDelivered": true,
+    "installerCopy": "%LOCALAPPDATA%/Multi-Agent/delivery/2026-11-08/Multi-Agent Setup 0.1.0.exe"
+  },
+  "evidenceRetention": "Earlier receipts and failed attempts are preserved. Raw databases, browser storage, credentials, native transcripts and current owner-project screenshots remain outside the repository. The new UI captures use synthetic fixture data only.",
+  "skin": {
+    "behavior": "One entrance per application/browser session; then only the fully revealed portrait stays animated. Navigation, reload, reconnect and motion toggles do not replay the entrance.",
+    "portraitSeconds": [
+      10,
+      23
+    ],
+    "nativeWholeClipLoop": false,
+    "freshSessionFirstDecodedFrame": 0,
+    "installedObservedPortraitRange": [
+      10,
+      23.041667
+    ],
+    "installedFirstRunRepetitions": 9,
+    "installedColdReopenRepetitions": 5,
+    "rangeResponseStatus": 206,
+    "reducedMotionRetained": true,
+    "evidence": [
+      "receipts/normal-skin-browser.json",
+      "receipts/normal-portrait-playback.json",
+      "receipts/normal-cold-reopen.json"
+    ]
+  },
+  "inspector": {
+    "approvedReadFields": [
+      "description",
+      "declaredAcceptanceCriteria",
+      "workspace",
+      "integrationBranch"
+    ],
+    "readOnly": true,
+    "declaredCriteriaDistinctFromVerifiedProgress": true,
+    "noWorkspaceAcquisitionOnRead": true,
+    "verifiedWidths": [
+      1440,
+      390,
+      320
+    ],
+    "evidence": [
+      "screenshots/normal-task-inspector.png",
+      "screenshots/normal-task-inspector-390.png",
+      "receipts/normal-delta-review.json"
+    ]
+  },
+  "capacity": {
+    "at": "2026-11-08T00:08:21.091237+00:00",
+    "passed": true,
+    "runId": "9d6de881-e4bd-49fd-a9a4-da19d92a0399",
+    "ordinaryCap": 2,
+    "workerCountAtSend": 2,
+    "workerCountAtReply": 2,
+    "leadObservedWithinSeconds": 2.028,
+    "replyObservedWithinSeconds": 10.041,
+    "sameTwoWorkersStillRunning": true,
+    "foregroundWaitsVerifiedAtSendAndReply": true,
+    "workers": [
+      {
+        "attemptId": "0e6b8dd9-8ae7-4a6b-b176-9c4a1b9890bf",
+        "provider": "claude",
+        "nativeSessionId": "0fda7f87-45f3-47b5-9ff4-72ca4f91c75b",
+        "processId": 3422884,
+        "processStart": "13343251",
+        "worktree": "/home/leo/scratch/cc-u10-acceptance/slot-final/runtime/home/state/workers/assignments/local/9d6de881-e4bd-49fd-a9a4-da19d92a0399-task-2"
+      },
+      {
+        "attemptId": "9535b8fc-2c81-4595-83f9-ec962a296e2a",
+        "provider": "codex",
+        "nativeSessionId": "01a1b87b-77b5-7441-a70e-ae52d1a7a6bf",
+        "processId": 3422999,
+        "processStart": "13343269",
+        "worktree": "/home/leo/scratch/cc-u10-acceptance/slot-final/runtime/home/state/workers/assignments/local/9d6de881-e4bd-49fd-a9a4-da19d92a0399-task-3"
+      }
+    ],
+    "reply": "SLOT_CHECK_RECEIVED\n\nAs of the runtime snapshot at 2026-11-08T00:08:11Z, both ordinary worker slots are occupied:\n\n- **Task A (task-2)** is assigned to `impl-1@owner-chat-capacity`, the Claude Code seat. Its queue state is pending and its latest attempt `0e6b8dd9\u2026` is **running** on provider `claude`. It started at 00:07:42.003Z.\n- **Task B (task-3)** is assigned to `impl-2@owner-chat-capacity`, the Codex seat. Its queue state is pending and its latest attempt `9535b8fc\u2026` is **running** on provider `codex`. It started at 00:07:42.011Z.\n\nNeither task has a review recorded yet, and neither is finished. Both attempts started about 29 seconds before the snapshot, which is well inside their 180-second waits. The snapshot can't show which step each worker is on, so I can't confirm from it that they're still in the wait.\n\nI haven't waited on, stopped or changed either worker, and I haven't created any tasks. If you cancel now, I'll respect it and the recorded attempts will be kept.",
+    "ownerMessageTransport": "Authenticated owner API; the resulting message was then verified in the real UI.",
+    "uiCaptureTiming": "After cancellation and an idle fixture restart, not a live saturation screenshot.",
+    "limitations": [
+      "The first fixture omitted explicit writePaths. Admission correctly held the tasks; that canceled run and its attempts remain recorded.",
+      "The native run used a deliberate foreground wait to keep both ordinary slots occupied. This is bounded capacity evidence, not a timing guarantee for every provider or task.",
+      "Browser harness failures and corrections remain in private scratch. No failed run has been rewritten as passed."
+    ]
+  }
+}

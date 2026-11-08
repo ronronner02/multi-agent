@@ -1,0 +1,33 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ❯ test/seat-pane-launch.test.ts (8 tests | 1 failed | 7 skipped) 596ms
+   ↓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+   × a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive 595ms
+     → Command failed: tmux list-panes -t '=dev-impl@team-demo:' -F "#{pane_id}|#{pane_index}|#{pane_current_path}|#{pane_width}|#{pane_height}|#{pane_active}"
+can't find session: dev-impl@team-demo
+
+   ↓ a start request launches the seat it put work on > preserves a bound seat when its presence probe fails
+   ↓ a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+   ↓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+   ↓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+   ↓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+   ↓ workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive
+Error: Command failed: tmux list-panes -t '=dev-impl@team-demo:' -F "#{pane_id}|#{pane_index}|#{pane_current_path}|#{pane_width}|#{pane_height}|#{pane_active}"
+can't find session: dev-impl@team-demo
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  19:37:29
+   Duration  4.13s (transform 2.54s, setup 37ms, collect 3.34s, tests 596ms, environment 0ms, prepare 38ms)
+

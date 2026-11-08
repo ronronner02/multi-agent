@@ -1,0 +1,262 @@
+
+ RUN  v3.2.4 <standalone-suite>/engine/packages/daemon
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: VITEST=true — skipping kernel auto-boot
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: tracker-state=skipped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] gateway subsystem stopped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ❯ test/managed-native-startup.test.ts (191 tests | 2 failed) 16623ms
+   ✓ managed launch governed scope resolution > resolves the persisted task and queue destination without creating launch or message state 71ms
+   ✓ managed launch governed scope resolution > rejects missing-task context claims without writes 45ms
+   ✓ managed launch governed scope resolution > rejects foreign-run context claims without writes 43ms
+   ✓ managed launch governed scope resolution > rejects assignment context claims without writes 44ms
+   ✓ managed launch governed scope resolution > rejects role context claims without writes 44ms
+   ✓ managed launch governed scope resolution > rejects client context claims without writes 40ms
+   ✓ managed launch governed scope resolution > rejects missing worker credentials through the shared resolver 43ms
+   ✓ managed launch governed scope resolution > rejects foreign-run worker credentials through the shared resolver 42ms
+   ✓ managed launch governed scope resolution > rejects foreign-session worker credentials through the shared resolver 43ms
+   ✓ managed launch governed scope resolution > rejects conflict worker credentials through the shared resolver 44ms
+   ✓ managed launch governed scope resolution > rejects legacy worker credentials through the shared resolver 46ms
+   ✓ managed launch governed scope resolution > rejects missing-resolver binding evidence 44ms
+   ✓ managed launch governed scope resolution > rejects source-drift binding evidence 44ms
+   ✓ managed launch governed scope resolution > rejects claimed-binding binding evidence 43ms
+   ✓ managed launch governed scope resolution > re-reads cancellation and credential revocation rather than caching admission 49ms
+   ✓ managed launch governed scope resolution > rejects a blocked queue item even while its run remains approved 47ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > lets the privileged helper select the native process below the pane-bound supervisor 50ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > binds a Claude session to its control-chosen argv token (resume=undefined) 48ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > binds a Claude session to its control-chosen argv token (resume=resumed-session) 47ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > adopts a Codex session only from its own fresh or exactly resumed rollout (resume=undefined) 47ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > adopts a Codex session only from its own fresh or exactly resumed rollout (resume=01a154fe-b417-7933-b7a4-a8c840f721e9) 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > keeps a later observation bound to the first session and rollout file 61ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects a none Codex session claim 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects a two Codex session claim 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects a reused-file Codex session claim 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects a held-elsewhere Codex session claim 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects a foreign-resume Codex session claim 42ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects a no-rollout Codex session claim 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects intent evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects command-digest evidence without accepting worker assertions 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects supervisor evidence without accepting worker assertions 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects no-supervisor evidence without accepting worker assertions 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects supervisor-outside-pane evidence without accepting worker assertions 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects pane evidence without accepting worker assertions 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects lineage evidence without accepting worker assertions 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects replaced-executable evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects argv0 evidence without accepting worker assertions 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects argv evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects stdio evidence without accepting worker assertions 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects uid evidence without accepting worker assertions 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects capabilities evidence without accepting worker assertions 42ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects cwd evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects namespace evidence without accepting worker assertions 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects file-hash evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects alias-hash evidence without accepting worker assertions 53ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects missing-file evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects discovery evidence without accepting worker assertions 48ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects stderr evidence without accepting worker assertions 46ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects pane-respawn evidence without accepting worker assertions 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects native-restart evidence without accepting worker assertions 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > managed process observation > rejects seat-drift evidence without accepting worker assertions 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects two live nodes with the same governed destination name 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > uses the current session's node cwd and exact persisted pane without changing authority 48ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects missing-session persisted seat state without an admission or effect 42ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects stopped-session persisted seat state without an admission or effect 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects superseded-session persisted seat state without an admission or effect 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects runtime persisted seat state without an admission or effect 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects missing-tree persisted seat state without an admission or effect 44ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects relative-tree persisted seat state without an admission or effect 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects missing-binding persisted seat state without an admission or effect 43ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects foreign-terminal persisted seat state without an admission or effect 42ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects invalid-pane persisted seat state without an admission or effect 42ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > rejects an alias rather than resolving it to a different assigned tree 45ms
+   ✓ managed launch governed scope resolution > persisted managed seat resolution > re-reads the tree and pane after a persisted assignment change 46ms
+   ✓ managed launch governed scope resolution > governed start sequencing > commits the exact immutable command before entering the start transport 48ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks context drift before any start effect 45ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks deadline drift before any start effect 42ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks client drift before any start effect 45ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks attempt drift before any start effect 49ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks owner drift before any start effect 44ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks worker drift before any start effect 46ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks binding drift before any start effect 42ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks secret drift before any start effect 42ms
+   ✓ managed launch governed scope resolution > governed start sequencing > does not start when durable admission fails 45ms
+   ✓ managed launch governed scope resolution > governed start sequencing > preserves unresolved intent when the transport throws and never grants a replay 46ms
+   ✓ managed launch governed scope resolution > governed start sequencing > rejects a concurrent start while the first transport is pending 47ms
+   ✓ managed launch governed scope resolution > governed start sequencing > uses the terminal owner and exact quoted argv after admission without typing terminal input 54ms
+   ✓ managed launch governed scope resolution > governed start sequencing > leaves a terminal transport failure unresolved and strips its diagnostics 47ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks expiry while the terminal owner awaits environment metadata 49ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks owner-revocation while the terminal owner awaits environment metadata 47ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks worker-revocation while the terminal owner awaits environment metadata 48ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks run-cancellation while the terminal owner awaits environment metadata 49ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks task-block while the terminal owner awaits environment metadata 49ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks session-reassignment while the terminal owner awaits environment metadata 47ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks binding-drift while the terminal owner awaits environment metadata 48ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks intent-digest while the terminal owner awaits environment metadata 50ms
+   ✓ managed launch governed scope resolution > governed start sequencing > blocks intent-command while the terminal owner awaits environment metadata 57ms
+   ✓ managed launch governed scope resolution > governed start sequencing > snapshots the command before asynchronous terminal resolution 49ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > persists one effect grant without claiming an observed native identity 48ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > persists an independent command snapshot before returning the one-shot grant 46ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > rejects a digest snapshot before recording an intent or grant 49ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > rejects a array snapshot before recording an intent or grant 45ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > rejects a utf8-bound snapshot before recording an intent or grant 47ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > recovers the exact command and denies a second grant from a reopened database 65ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > rolls back admission when its command snapshot fails to persist 69ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > immutable native command snapshots > retains its exact command after confirmed no-start without inventing a native identity 52ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > denies a worker actor without recording any command or intent 51ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > rejects an invalid session binding before admission 52ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > rejects an invalid task binding before admission 47ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > rejects an invalid version binding before admission 47ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > rejects an invalid provider binding before admission 47ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > rejects an invalid digest binding before admission 43ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > keeps cancel authoritative before granting any native effect 46ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > keeps drift authoritative before granting any native effect 48ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > counts an unresolved intent in the same live-session limit as native attempts 51ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > reuses Lead wake admission with self-wake=true 52ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > reuses Lead wake admission with self-wake=false 67ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > records the same admitted attempt as observed running without a second grant 49ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > records the same admitted attempt as observed stopped without a second grant 49ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > closes confirmed no-start without a fictional stopped attempt or replay permission 49ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > leaves digest mismatches unresolved 50ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > leaves policy mismatches unresolved 47ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > leaves generation mismatches unresolved 47ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > leaves no-start-identity mismatches unresolved 44ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > records cleanup but denies continuation after cancel 48ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > records cleanup but denies continuation after drift 53ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > rejects a worker observer and an unrelated legacy unknown attempt 46ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > admits exact next-generation resume with same attempt ID=true and preserves usage 57ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > admits exact next-generation resume with same attempt ID=false and preserves usage 61ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > reserves a admitted identity across runs before another grant 57ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > reserves a not_started identity across runs before another grant 58ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > waits for an unresolved task intent with resume=true and canceled=false 64ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > waits for an unresolved task intent with resume=false and canceled=false 67ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > waits for an unresolved task intent with resume=true and canceled=true 66ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > waits for an unresolved task intent with resume=false and canceled=true 66ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > does not block a stopped task outcome on another task's unresolved intent 64ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > atomically replaces a reserved slot with the observed native row 52ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > keeps terminal task outcome separate from a confirmed no-start command 49ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > accepts canceled no-start cleanup and rejects missing observation evidence 48ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > reconciles a known lost observation only against its admitted command and identity 51ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > observed native reconciliation > rejects stale observer versions and changed identity without losing the running attempt 51ms
+   ✓ managed launch governed scope resolution > owner-controlled native admission > retains unresolved admission and its clock across owner reconstruction 47ms
+   ✓ control-owned root inspection > binds observed facts through the fixed bounded inspect command without recording an admission 50ms
+   ✓ control-owned root inspection > inspects two worker trees without rewriting their common approved repository binding 50ms
+   ✓ control-owned root inspection > rejects a tree registered under a different worker before inspection 45ms
+   ✓ control-owned root inspection > rejects policy-byte drift before privileged I/O 45ms
+   ✓ control-owned root inspection > rejects forged schema inspection evidence without admission 45ms
+   ✓ control-owned root inspection > rejects forged worker inspection evidence without admission 43ms
+   ✓ control-owned root inspection > rejects forged control inspection evidence without admission 45ms
+   ✓ control-owned root inspection > rejects forged namespace inspection evidence without admission 43ms
+   ✓ control-owned root inspection > rejects forged tree inspection evidence without admission 44ms
+   ✓ control-owned root inspection > rejects forged executable inspection evidence without admission 45ms
+   ✓ control-owned root inspection > rejects forged file-owner inspection evidence without admission 43ms
+   ✓ control-owned root inspection > rejects forged file-mode inspection evidence without admission 43ms
+   ✓ control-owned root inspection > rejects forged policy-hash inspection evidence without admission 45ms
+   ✓ control-owned root inspection > rejects forged egress-hash inspection evidence without admission 42ms
+   ✓ control-owned root inspection > rejects forged lock-digest inspection evidence without admission 44ms
+   ✓ control-owned root inspection > rejects forged lock-version inspection evidence without admission 44ms
+   ✓ control-owned root inspection > rejects forged lock-client inspection evidence without admission 47ms
+   ✓ control-owned root inspection > rejects forged lock-files inspection evidence without admission 44ms
+   ✓ control-owned root inspection > rejects forged provider-client inspection evidence without admission 47ms
+   ✓ control-owned root inspection > rejects forged provider-status inspection evidence without admission 45ms
+   ✓ control-owned root inspection > rejects forged provider-extra inspection evidence without admission 43ms
+   ✓ control-owned root inspection > rejects forged no-provider inspection evidence without admission 47ms
+   ✓ control-owned root inspection > rechecks policy after asynchronous inspection 43ms
+   ✓ control-owned root inspection > rechecks lock after asynchronous inspection 44ms
+   ✓ control-owned root inspection > rechecks mailbox after asynchronous inspection 45ms
+   ✓ control-owned root inspection > rechecks assignment after asynchronous inspection 43ms
+   ✓ control-owned root inspection > rechecks revocation after asynchronous inspection 44ms
+   ✓ control-owned root inspection > rechecks cancellation after asynchronous inspection 44ms
+   ✓ control-owned root inspection > rejects a foreign endpoint before inspection 42ms
+   ✓ control-owned root inspection > does not expose helper error output or credentials 44ms
+   ✓ control-owned root inspection > maps only a launcher lock refusal to the non-retryable unsupported-version code (A-R3) 49ms
+   ✓ control-owned managed launch lifecycle > adopts the native session at its first control observation and records the verified receipt 189ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when remote-policy drifts after readiness 92ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when drop-in drifts after readiness 100ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when foreign-mount drifts after readiness 111ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when host-tmpfs drifts after readiness 109ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when mailbox drifts after readiness 92ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when native-restart drifts after readiness 90ms
+   ✓ control-owned managed launch lifecycle > quiesces and records a confirmed stop when pane-process drifts after readiness 94ms
+   ✓ control-owned managed launch lifecycle > keeps the WSL modules hidden below a masked path out of the boundary, but refuses them once reachable 94ms
+   ✓ control-owned managed launch lifecycle > resumes only from the exact receipt recorded for the stopped attempt 141ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a null pane screen  326ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "" pane screen  364ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "Starting up..." pane screen  366ms
+   ✓ control-owned managed launch lifecycle > refuses to start over an unresolved intent from an earlier control, without closing it 244ms
+   ✓ control-owned managed launch lifecycle > never closes a concurrent start's intent after losing the admission race 106ms
+   ✓ control-owned managed launch lifecycle > leaves an ambiguous start unresolved when nothing locates its command 112ms
+   ✓ control-owned managed launch lifecycle > stops an ambiguous start located by its command but never invents its native identity 226ms
+   ✓ control-owned managed launch lifecycle > refuses a seat whose runtime differs from the attempt's client before any terminal write 102ms
+   ✓ control-owned managed launch lifecycle > closes a start refused before any terminal write as a confirmed no-start 95ms
+   ✓ control-owned managed launch lifecycle > stops a verified session whose receipt cannot be recorded, and keeps a failed stop unresolved 115ms
+   ✓ control-owned managed launch lifecycle > keeps a running attempt blocked rather than reporting an unconfirmed stop (quiesce-error) 124ms
+   ✓ control-owned managed launch lifecycle > keeps a running attempt blocked rather than reporting an unconfirmed stop (orphaned-supervisor) 113ms
+   ✓ control-owned managed launch lifecycle > reports a launcher lock refusal as a non-retryable unsupported version before any start (A-R3) 85ms
+   ✓ control-owned managed launch lifecycle > blocks a signed_out provider before any start 79ms
+   ✓ control-owned managed launch lifecycle > blocks a unknown provider before any start 77ms
+   × production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only 2730ms
+     → managed_candidate_policy_unavailable
+   × production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3) 93ms
+     → managed_candidate_policy_unavailable
+   ✓ offline fixture-daemon restart > keeps durable messages, wake limits and unresolved intents, but not admission or handout rights  2405ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+Error: managed_candidate_policy_unavailable
+ ❯ managedWorkerRoots src/startup.ts:656:75
+    654|     || !Number.isInteger(policy.policy_revision) || (policy.policy_rev…
+    655|     || !workers.length || typeof workers[0] !== "string"
+    656|     || mailboxRoot !== nodePath.join(controlStateDir, "mailboxes")) th…
+       |                                                                           ^
+    657|   return { assignmentRoot, controlStateDir, worker: workers[0], worker…
+    658|     policyRevision: policy.policy_revision as number, workerIdentities…
+ ❯ createDaemon src/startup.ts:2164:33
+ ❯ test/managed-native-startup.test.ts:1466:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/managed-native-startup.test.ts > production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)
+Error: managed_candidate_policy_unavailable
+ ❯ managedWorkerRoots src/startup.ts:656:75
+    654|     || !Number.isInteger(policy.policy_revision) || (policy.policy_rev…
+    655|     || !workers.length || typeof workers[0] !== "string"
+    656|     || mailboxRoot !== nodePath.join(controlStateDir, "mailboxes")) th…
+       |                                                                           ^
+    657|   return { assignmentRoot, controlStateDir, worker: workers[0], worker…
+    658|     policyRevision: policy.policy_revision as number, workerIdentities…
+ ❯ createDaemon src/startup.ts:2164:33
+ ❯ test/managed-native-startup.test.ts:1484:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 189 passed (191)
+   Start at  17:06:59
+   Duration  18.14s (transform 2.61s, setup 34ms, collect 1.31s, tests 16.62s, environment 0ms, prepare 38ms)
+

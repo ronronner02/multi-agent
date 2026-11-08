@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-11-07T13:33:32.561Z",
+  "github": {
+    "http": 200,
+    "body": {
+      "protocolVersion": "1.0",
+      "signedIn": true,
+      "login": "ronronner02",
+      "host": "github.com"
+    }
+  },
+  "url": "http://127.0.0.1:7433/team/overview",
+  "entryLanguageResetAfterSignIn": true
+}

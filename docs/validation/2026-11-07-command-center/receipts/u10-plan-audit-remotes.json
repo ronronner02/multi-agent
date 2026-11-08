@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-11-07T15:27:04.218553+00:00",
+  "scope": "Read-only metadata for only the two existing synthetic acceptance repositories.",
+  "repositories": [
+    {
+      "repository": "ronronner02/cc-u10-win-20261107-2c433e64",
+      "private": true,
+      "defaultBranch": "main",
+      "head": "42031f70f3e432fd2c513731beb8281a61d78049"
+    },
+    {
+      "repository": "ronronner02/cc-u10-wsl-20261107-2c433e64",
+      "private": true,
+      "defaultBranch": "main",
+      "head": "c9ebf31ebd6e6b367e143a061e552454a116ea97"
+    }
+  ],
+  "remoteMutationPerformed": false,
+  "bothHeadsMatchPriorBootstrap": true
+}

@@ -45,6 +45,11 @@ export function GithubGate({ children, frame }: { children: ReactNode; frame: (c
   const { request } = useOwnerSession();
   const cache = useQueryClient();
   const status = useGithubStatus();
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    if (status.isFetchedAfterMount && !status.isError) setVerified(status.data?.signedIn === true);
+  }, [status.isFetchedAfterMount, status.isError, status.data?.signedIn]);
+  const signedIn = status.isFetchedAfterMount && !status.isError && status.data?.signedIn;
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const flow = useQuery({ queryKey: loginKey, retry: false,
@@ -54,7 +59,6 @@ export function GithubGate({ children, frame }: { children: ReactNode; frame: (c
   useEffect(() => {
     if (flow.data?.state === "done") void cache.invalidateQueries({ queryKey: githubStatusKey });
   }, [flow.data?.state, cache]);
-  if (status.isFetchedAfterMount && !status.isError && status.data?.signedIn) return children;
   const pending = flow.data?.state === "pending";
   const failed = startError !== null || flow.isError || flow.data?.state === "failed";
   const missing = startError === "github_cli_missing"
@@ -67,7 +71,9 @@ export function GithubGate({ children, frame }: { children: ReactNode; frame: (c
     } catch (error) { setStartError(error instanceof OwnerReadError ? error.code : "github_login_failed"); }
     finally { setStarting(false); }
   };
-  return frame(<section className="plate ui-github-gate" aria-label={t("github.title")}>
+  return <>
+    {(signedIn || status.isError && verified) && <div hidden={!signedIn} style={{ height: "100%" }}>{children}</div>}
+    {!signedIn && frame(<section className="plate ui-github-gate" aria-label={t("github.title")}>
     <GitBranch className="ui-gate-icon" aria-hidden="true" />
     <h1 className="display">{t("github.title")}</h1>
     <p className="muted">{t("github.description")}</p>
@@ -85,5 +91,6 @@ export function GithubGate({ children, frame }: { children: ReactNode; frame: (c
         {!pending && <button className="btn btn-primary" disabled={starting} onClick={() => void start()}>
           {t(starting ? "web.loading" : failed ? "github.retry" : "github.title")}</button>}
       </>}
-  </section>);
+  </section>)}
+  </>;
 }

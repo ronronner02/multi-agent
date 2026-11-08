@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-11-07T13:21:46.855074+00:00",
+  "originalLoginStopped": true,
+  "diagnosticProfileIsolated": true,
+  "elapsedSeconds": 1.05,
+  "exit": -15,
+  "output": "\n! One-time code (<device-code>) copied to clipboard\nOpen this URL to continue in your web browser: https://github.com/login/device\n",
+  "diagnosticChildStopped": true
+}

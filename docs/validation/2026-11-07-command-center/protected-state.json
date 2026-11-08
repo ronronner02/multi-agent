@@ -1,0 +1,76 @@
+{
+  "checkedAt": "2026-11-07T15:25:36.609350+00:00",
+  "protectedCheckout": "<protected-checkout>",
+  "head": "188f2c0933ffbdb0a672364f2d860748c1ce4848",
+  "branch": "feat/t038-worker-control-isolation-reacceptance",
+  "baselineFileMatches": [
+    {
+      "path": "docs/amendments/2026-11-02-mvp-multi-agent-scope.md",
+      "sha256": "1904ddefb0e7ae016f4c116ac91869ace41595f726ecc609fba218307e9fb2a0",
+      "currentSha256": "1904ddefb0e7ae016f4c116ac91869ace41595f726ecc609fba218307e9fb2a0",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/src/adapters/worker-launch.ts",
+      "sha256": "ecfcd2a129762879e5204516e4c137abe2799ddd1b76ea7dd5cea21a65e36cbe",
+      "currentSha256": "ecfcd2a129762879e5204516e4c137abe2799ddd1b76ea7dd5cea21a65e36cbe",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/test/fixtures/t038-live-daemon.mjs",
+      "sha256": "25106877d5109b424a054f6501a3c2e05de77b60488b354d7839e25cac81df7a",
+      "currentSha256": "25106877d5109b424a054f6501a3c2e05de77b60488b354d7839e25cac81df7a",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/test/worker-live-acceptance.test.ts",
+      "sha256": "180340f5cfa14cb76b96c7de913010cbffba302e4d4ad6e551391113fa7baa31",
+      "currentSha256": "180340f5cfa14cb76b96c7de913010cbffba302e4d4ad6e551391113fa7baa31",
+      "unchanged": true
+    }
+  ],
+  "protectedGitStatusUnchanged": true,
+  "windowsReferenceEditsPerformed": false,
+  "installedAppReplaced": false,
+  "originalDaemon": {
+    "status": "stopped-by-owner-request",
+    "pid": 1179,
+    "stopReceipt": "receipts/u10-desktop-original-stop.json",
+    "originalRecordsUnchanged": true,
+    "idleTerminalAndShellPreserved": true,
+    "protectedConfigUnchanged": true
+  },
+  "cleanupReceipt": "receipts/u10-runtime-final-cleanup.json",
+  "browserCleanupReceipt": "receipts/u10-runtime-browser-cleanup.json",
+  "replacementPort7433Listening": true,
+  "currentCandidate": {
+    "daemon": {
+      "pid": 2806685,
+      "startTicks": 9504675,
+      "state": "S",
+      "cwd": "<acceptance-worktree>",
+      "comm": "node"
+    },
+    "desktop": {
+      "status": "not-running-at-latest-check",
+      "priorPid": 28996,
+      "evidence": "receipts/desktop-resume-observation.json"
+    },
+    "healthy": true,
+    "profileEnvironmentMatches": {
+      "OPENRIG_HOME": true,
+      "OPENRIG_DB": true,
+      "XDG_CONFIG_HOME": true,
+      "GH_CONFIG_DIR": true,
+      "TMUX_TMPDIR": true
+    },
+    "keptRunningByOwnerRequest": true
+  },
+  "windows": {
+    "protectedFileCount": 115,
+    "originalWindowsFilesUnchanged": true,
+    "receipt": "receipts/desktop-resume-observation.json"
+  },
+  "currentProtectionReceipt": "receipts/u10-plan-audit-preservation.json",
+  "priorCleanupScope": "The existing cleanup receipts describe only the earlier isolated acceptance instance; the owner-requested desktop replacement is running."
+}

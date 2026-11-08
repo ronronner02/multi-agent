@@ -1,3 +1,4 @@
+import { TextPreview } from "../text-preview.js";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
@@ -16,7 +17,7 @@ export function WorkspaceScreen({ read, selectedTaskId }: { read?: TeamOwnerRead
     ?? seats.find(seat => !seat.retired) ?? seats[0];
   return <main className="ui-screen ui-workspace">
     <header className="ui-page-head">
-      <div><h1>{t("nav.workspace")}</h1><p className="ui-subtitle">{read?.run.displayName ?? t("value.unavailable")}</p></div>
+      <div><h1>{t("nav.workspace")}</h1><div className="ui-subtitle"><TextPreview text={read?.run.displayName ?? t("value.unavailable")} /></div></div>
       <div className="ui-layout-switch" role="group" aria-label={t("workspace.layout")}>
         {(["grid", "split", "focus"] as const).map(name => <button key={name} aria-pressed={layout === name} onClick={() => setLayout(name)}>
           {t(("workspace." + name) as "workspace.grid")}</button>)}

@@ -1,0 +1,14 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/seat-pane-launch.test.ts (6 tests | 5 skipped) 868ms
+   ✓ a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy  867ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 5 skipped (6)
+   Start at  18:44:16
+   Duration  4.45s (transform 2.60s, setup 35ms, collect 3.37s, tests 868ms, environment 0ms, prepare 50ms)
+

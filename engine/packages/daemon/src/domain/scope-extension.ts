@@ -6,6 +6,8 @@ import { canonicalJson, type PlanBinding, type ScopeExtension, type ScopeProject
 import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
 import { leadRosterPath } from "./lead-roster.js";
 import { candidatePath } from "./team-workspace.js";
+import { bindingCovers, protectedPath } from "./binding-scope.js";
+export { credentialExcluded } from "./binding-scope.js";
 
 export interface CandidateScopeEvidence {
   root: string;
@@ -16,19 +18,6 @@ export interface CandidateScopeEvidence {
 const hash = (value: unknown) => "sha256:" + createHash("sha256").update(canonicalJson(value)).digest("hex");
 const canonical = (root: string, path: string) => relative(realpathSync(root), candidatePath(root, path, true)).replaceAll("\\", "/");
 const covers = (path: string, paths: readonly string[]) => paths.some(owned => path === owned || path.startsWith(owned + "/"));
-const credentialPatterns: RegExp[] = JSON.parse(readFileSync(
-  new URL("../../../../config/governance/credential-exclusions.json", import.meta.url), "utf8",
-)).patterns.map((pattern: string) => new RegExp(pattern));
-export const credentialExcluded = (path: string): boolean => credentialPatterns.some(pattern => pattern.test(path));
-
-const protectedPath = (path: string) =>
-  /^(docs\/(?:plans|tasks)|engine\/config\/(?:isolation|governance))(\/|$)/.test(path)
-  || /(^|\/)(contracts|migrations|\.github|\.circleci|\.buildkite|\.husky)(\/|$)/.test(path)
-  || /(^|\/)(?:all-migrations\.ts|npm-shrinkwrap\.json|pnpm-lock\.ya?ml|yarn\.lock|bun\.lockb?)$/.test(path)
-  || /(^|\/)(?:Cargo\.(?:toml|lock)|pyproject\.toml|(?:poetry|uv)\.lock|requirements[^/]*\.txt|go\.(?:mod|sum)|Gemfile(?:\.lock)?|composer\.(?:json|lock)|pom\.xml|build\.gradle(?:\.kts)?|pnpm-workspace\.ya?ml|\.yarnrc\.ya?ml)$/.test(path)
-  || /(^|\/)(?:Jenkinsfile|(?:\.gitlab-ci|azure-pipelines|\.travis|\.?appveyor|bitbucket-pipelines|\.?drone|cloudbuild)\.ya?ml)$/.test(path)
-  || /^engine\/packages\/daemon\/src\/(?:index\.ts|startup\.ts|server\.ts|domain\/(?:plan-governance|queue-repository|workflow-runtime|scope-extension)\.ts|adapters\/(?:tmux\.ts|worker-launch[^/]*\.ts)|middleware\/|routes\/team-control\.ts)/.test(path)
-  || credentialExcluded(path);
 
 export class ScopeExtensionError extends Error {
   constructor(readonly code: "extension-pending" | "plan-change-required", readonly rule: string, readonly extension?: ScopeExtension) {
@@ -212,10 +201,16 @@ export class ScopeExtensions {
       if (task.assignment.role === "lead" && change.path === canonicalPath
         && (change.path === LEAD_PROPOSAL_PATH || change.path === LEAD_ESCALATION_PATH
           || change.path === leadRosterPath(run.binding.planRef))) continue;
+      // Project scope does not grant protected descendants of an otherwise assigned directory.
+      if (run.binding.writePaths.includes(".")
+        && (!bindingCovers(change.path, run.binding.writePaths) || !bindingCovers(canonicalPath, run.binding.writePaths))) {
+        throw new ScopeExtensionError("plan-change-required",
+          protectedPath(change.path) || protectedPath(canonicalPath) ? "protected-path" : "outside-write-paths");
+      }
       if (covers(change.path, task.assignment.paths) && covers(canonicalPath, task.assignment.paths)) continue;
       const dependency = dependencyPath(change.path);
       if (!dependency && covers(change.path, effective) && covers(canonicalPath, effective)) continue;
-      if (!covers(change.path, run.binding.writePaths) || !covers(canonicalPath, run.binding.writePaths)) {
+      if (!bindingCovers(change.path, run.binding.writePaths) || !bindingCovers(canonicalPath, run.binding.writePaths)) {
         throw new ScopeExtensionError("plan-change-required", "outside-write-paths");
       }
       if (change.path === run.binding.planRef || canonicalPath === run.binding.planRef || protectedPath(change.path) || protectedPath(canonicalPath)) {

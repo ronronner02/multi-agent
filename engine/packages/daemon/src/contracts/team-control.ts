@@ -121,6 +121,25 @@ export interface TeamLimits {
   maxReviewRounds: number;
 }
 
+export type ProjectDocumentKind = "brainstorm" | "requirements" | "plan";
+export type ProjectDocumentStage = "exploration" | "requirements" | "plan";
+export interface DocumentPin { versionId: string; hash: string }
+export interface DocumentPins { requirements: DocumentPin; plan: DocumentPin; brainstorm?: DocumentPin }
+export interface ProjectDocumentVersion {
+  id: string; kind: ProjectDocumentKind; version: number; path: string; content: string; hash: string;
+  requirementsVersionId: string | null; sourceAttemptId: string; createdAt: string;
+  confirmedAt: string | null; confirmedBy: string | null;
+}
+export interface ProjectDocumentWorkflow {
+  stage: ProjectDocumentStage;
+  confirmed: Record<ProjectDocumentKind, string | null>;
+  pendingStage: ProjectDocumentStage | null;
+  error: string | null;
+  versions: ProjectDocumentVersion[];
+  executionVersions: DocumentPins | null;
+  executionHistory: Array<{ bindingDigest: string; versions: DocumentPins; createdAt: string }>;
+}
+
 export interface PlanBinding {
   artifactContract: "spec-unified-plan/v1";
   artifactReadiness: "implementation-ready";
@@ -128,6 +147,7 @@ export interface PlanBinding {
   status: "active";
   planRef: string;
   planDigest: string;
+  documentVersions?: DocumentPins;
   repository: { root: string; identity: string };
   readPaths: string[];
   writePaths: string[];
@@ -425,6 +445,14 @@ export interface TeamReviewView {
    * row carries no body text. It is the task's own words, never a summary.
    */
   title: string | null;
+  /** Bounded, redacted task text; optional for compatibility with older owner reads. */
+  description?: { body: string; truncated: boolean } | null;
+  /** Verbatim explicit acceptance section, not verified progress. Null means none was declared separately. */
+  declaredAcceptanceCriteria?: { body: string; truncated: boolean } | null;
+  /** An already-known task candidate; absence never creates or adopts a worktree. */
+  workspace?: { root: string; sourceRoot: string; baseCommit: string | null } | null;
+  /** The run's recorded integration branch, distinct from a task's candidate checkout. */
+  integrationBranch?: string | null;
   /**
    * The assignment's declared dependencies. `[]` is a recorded "none", and
    * `null` means the row's assignment could not be read — the two stay distinct
@@ -612,6 +640,10 @@ export class TeamContractError extends Error {
  * read from `team_runs` or the rig it names.
  */
 export interface TeamRunSummary {
+  phase: "planning" | "delivery";
+  messageCount: number;
+  executionTaskCount: number;
+  resultCount: number;
   id: string;
   rigId: string;
   rigName: string;
@@ -690,6 +722,11 @@ export function relativePath(value: unknown, field: string): string {
   return result;
 }
 
+/** The project-root marker belongs only to owner binding scope, never to a task or output. */
+export function bindingScopePath(value: unknown, field: string): string {
+  return value === "." ? "." : relativePath(value, field);
+}
+
 function absolutePath(value: unknown, field: string): string {
   const result = text(value, field, 4096);
   if (!result.startsWith("/") || result === "/" || result.includes("\\")
@@ -714,6 +751,16 @@ export function parseProtocolVersion(value: unknown): string {
   return value;
 }
 
+export function parseDocumentPins(value: unknown): DocumentPins {
+  const v = object(value, "documentVersions");
+  if (Object.keys(v).some(key => !["requirements", "plan", "brainstorm"].includes(key))) throw new TeamContractError("documentVersions");
+  const pin = (value: unknown): DocumentPin => {
+    const p = object(value, "documentVersion");
+    return { versionId: text(p.versionId, "documentVersion.versionId", 256), hash: digest(p.hash, "documentVersion.hash") };
+  };
+  return { requirements: pin(v.requirements), plan: pin(v.plan), ...(v.brainstorm === undefined ? {} : { brainstorm: pin(v.brainstorm) }) };
+}
+
 export function parsePlanBinding(value: unknown): PlanBinding {
   const v = object(value, "binding");
   for (const [key, expected] of Object.entries({ artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active" })) {
@@ -726,13 +773,14 @@ export function parsePlanBinding(value: unknown): PlanBinding {
   const limits = object(v.limits, "limits");
   const roles = strings(v.roles, "roles").map(role);
   if (!roles.length) throw new TeamContractError("roles");
-  const readPaths = strings(v.readPaths, "readPaths", relativePath);
-  const writePaths = strings(v.writePaths, "writePaths", relativePath);
+  const readPaths = strings(v.readPaths, "readPaths", bindingScopePath);
+  const writePaths = strings(v.writePaths, "writePaths", bindingScopePath);
   if (!readPaths.length && !writePaths.length) throw new TeamContractError("scope");
   return {
     artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
     planRef: relativePath(v.planRef, "planRef"), planDigest: digest(v.planDigest, "planDigest"),
     repository: { root, identity }, readPaths, writePaths, roles,
+    ...(v.documentVersions === undefined ? {} : { documentVersions: parseDocumentPins(v.documentVersions) }),
     policyRevision: integer(v.policyRevision, "policyRevision", 1), policyFingerprint: digest(v.policyFingerprint, "policyFingerprint"),
     // U8 allows an owner Resume action to add bounded budget. The original defaults remain
     // small; these ceilings keep an owner increase finite without making the action a new plan.

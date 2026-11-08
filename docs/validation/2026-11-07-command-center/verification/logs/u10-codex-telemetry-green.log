@@ -1,0 +1,47 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/attempt-telemetry.test.ts (21 tests) 1549ms
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/agent-turn-view-telemetry.test.ts (24 tests) 1197ms
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('clients directory already present')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('clients directory already present')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('duplicate clients directories')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('duplicate clients directories')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('leading dash refused')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('leading dash refused')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('whitespace refused')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('whitespace refused')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+ ✓ test/direct-worker-launch.test.ts (13 tests) 8310ms
+   ✓ sweeps a native Codex stub to stopped ('valid thread and continuation')  3654ms
+   ✓ sweeps a native Codex stub to stopped ('clients directory already present')  1103ms
+   ✓ sweeps a native Codex stub to stopped ('duplicate clients directories')  1113ms
+   ✓ sweeps a native Codex stub to stopped ('leading dash refused')  1089ms
+   ✓ sweeps a native Codex stub to stopped ('whitespace refused')  1245ms
+
+ Test Files  3 passed (3)
+      Tests  58 passed (58)
+   Start at  16:06:25
+   Duration  9.42s (transform 2.72s, setup 94ms, collect 2.24s, tests 11.06s, environment 0ms, prepare 115ms)
+

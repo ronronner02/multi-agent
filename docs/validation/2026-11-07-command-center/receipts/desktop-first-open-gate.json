@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-11-07T13:18:19.944Z",
+  "url": "http://127.0.0.1:7433/team",
+  "initialLanguage": "zh-CN",
+  "englishGateVisible": true,
+  "bridgeKeys": [
+    "status",
+    "pickFolder",
+    "onStatus",
+    "run"
+  ],
+  "status": {
+    "phase": "ready",
+    "message": "Local runtime connected.",
+    "connected": true,
+    "project": "worktree",
+    "log": []
+  },
+  "automationObservations": [
+    {
+      "check": "initial-English-label",
+      "status": "failed",
+      "cause": "The fresh profile used the system Chinese locale. Selecting English exposes the expected label."
+    }
+  ],
+  "blockedExternalAssets": [
+    {
+      "origin": "https://fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "assessmentCorrection": "The fresh UI used the product default Chinese language. The earlier system-locale explanation was not established. The external font was blocked by the exact-origin test route."
+}

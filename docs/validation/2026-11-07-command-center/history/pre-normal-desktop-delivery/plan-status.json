@@ -1,0 +1,418 @@
+{
+  "checkedAt": "2026-11-07T15:26:36.114456+00:00",
+  "sourcePlan": "2026-11-06-001-feat-command-center-plan.md",
+  "sourcePlanSha256": "7d3c3172c30978fb6a88530e5266b46783fc267bd82d370742045d121ae09b8d",
+  "scope": "The active command-center plan; its explicitly deferred follow-ups remain out of scope.",
+  "units": [
+    {
+      "unit": "U1",
+      "title": "GitHub sign-in",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [],
+      "checks": [
+        "u10-plan-audit-daemon",
+        "u10-plan-audit-cli"
+      ],
+      "pullRequests": [
+        {
+          "number": 141,
+          "title": "feat(github): enable owner sign-in through the daemon",
+          "mergeCommit": "2fb4c7aad621c878b547026415103c930c15a33c",
+          "mergedAt": "2026-11-06T15:29:58Z",
+          "headRefName": "feat/cc-u1-github-signin",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ],
+          "commits": [
+            "dfd9efd09b9ebccc6bd189782b2e0e9987b4b682",
+            "4e11a2c6009ff1e7aa1cd5c2e58b3bee1a74f7cc"
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U2",
+      "title": "Create a project from a folder and a name",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [],
+      "checks": [
+        "u10-plan-audit-daemon",
+        "u10-plan-audit-cli-team"
+      ],
+      "pullRequests": [
+        {
+          "number": 143,
+          "title": "feat(team): create private GitHub projects from local folders",
+          "mergeCommit": "66d537f39f4055e2090583628a24f2e974e71756",
+          "mergedAt": "2026-11-06T17:51:07Z",
+          "headRefName": "feat/cc-u2-project-create",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U3",
+      "title": "Lead-built roster",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [
+        {
+          "path": "domain/scope-extension.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/daemon/src/domain/scope-extension.ts"
+        }
+      ],
+      "checks": [
+        "u10-plan-audit-daemon"
+      ],
+      "pullRequests": [
+        {
+          "number": 146,
+          "title": "feat(team): let the lead build and manage its roster",
+          "mergeCommit": "aa31c1706afb32b59f96ee848adc29a6209550c5",
+          "mergedAt": "2026-11-07T01:12:29Z",
+          "headRefName": "feat/cc-u3-lead-roster",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U4",
+      "title": "Turn telemetry",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [],
+      "checks": [
+        "u10-plan-audit-daemon",
+        "u10-plan-audit-ui"
+      ],
+      "pullRequests": [
+        {
+          "number": 144,
+          "title": "feat(telemetry): expose live tools and per-attempt usage",
+          "mergeCommit": "1573e626b74184ccc245e5191d1e1711d593c4a3",
+          "mergedAt": "2026-11-06T19:47:59Z",
+          "headRefName": "feat/cc-u4-turn-telemetry",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U5",
+      "title": "Command-center shell, theme and chat panel",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [],
+      "checks": [
+        "u10-plan-audit-ui"
+      ],
+      "pullRequests": [
+        {
+          "number": 142,
+          "title": "feat(ui): restore command-center shell and persistent lead chat",
+          "mergeCommit": "aafd4b61a5f846b57a77128f56b2d83cd5d45e50",
+          "mergedAt": "2026-11-06T16:17:03Z",
+          "headRefName": "feat/cc-u5-command-shell",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U6",
+      "title": "Overview, Tasks and the task stage",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [
+        {
+          "path": "engine/packages/daemon/src/domain/team-control-surface.ts",
+          "classification": "plan-location-correction",
+          "resolved": "engine/packages/daemon/src/team-control-surface.ts"
+        }
+      ],
+      "checks": [
+        "u10-plan-audit-ui",
+        "u10-plan-audit-cli-team"
+      ],
+      "pullRequests": [
+        {
+          "number": 148,
+          "title": "feat(ui): show task stages and run actions in the command center",
+          "mergeCommit": "6d8f3a415e9af10b56d382bbb66215e1a8493da5",
+          "mergedAt": "2026-11-07T03:48:48Z",
+          "headRefName": "feat/cc-u6-overview-tasks",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U7",
+      "title": "Workspace and Reviews",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [
+        {
+          "path": "workspace-view.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/workspace/workspace-view.tsx"
+        },
+        {
+          "path": "workspace-focus.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/workspace/workspace-focus.tsx"
+        },
+        {
+          "path": "engine/packages/daemon/src/domain/team-control-surface.ts",
+          "classification": "plan-location-correction",
+          "resolved": "engine/packages/daemon/src/team-control-surface.ts"
+        }
+      ],
+      "checks": [
+        "u10-plan-audit-ui"
+      ],
+      "pullRequests": [
+        {
+          "number": 149,
+          "title": "Show live agent workspaces and task reviews",
+          "mergeCommit": "4fd9a562c2918438537c9f9500a7aae02bc42fff",
+          "mergedAt": "2026-11-07T04:42:40Z",
+          "headRefName": "feat/cc-u7-workspace-reviews",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U8",
+      "title": "Analytics, Settings and the first-open gates",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [
+        {
+          "path": "analytics-charts.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/analytics-charts.tsx"
+        },
+        {
+          "path": "analytics-model.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/analytics-model.ts"
+        },
+        {
+          "path": "settings.test.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/__tests__/settings.test.tsx"
+        },
+        {
+          "path": "github-gate.test.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/__tests__/github-gate.test.tsx"
+        },
+        {
+          "path": "create-project.test.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/__tests__/create-project.test.tsx"
+        },
+        {
+          "path": "engine/packages/ui/src/team/run-home.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "teams-screen.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "task-screen.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "branch-screen.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "teams.test.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "run-home.test.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "task-detail.test.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "routes.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/routes.tsx"
+        }
+      ],
+      "checks": [
+        "u10-plan-audit-ui",
+        "u10-plan-audit-daemon"
+      ],
+      "pullRequests": [
+        {
+          "number": 150,
+          "title": "feat(ui): complete first-open projects and usage settings",
+          "mergeCommit": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+          "mergedAt": "2026-11-07T06:23:32Z",
+          "headRefName": "feat/cc-u8-first-open",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U9",
+      "title": "Desktop window and folder picker",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [],
+      "checks": [
+        "u10-plan-audit-desktop"
+      ],
+      "pullRequests": [
+        {
+          "number": 145,
+          "title": "feat(desktop): share command-center chrome and pick folders",
+          "mergeCommit": "6034f178f6504b3826849c0426f0d3f603d1d257",
+          "mergedAt": "2026-11-07T00:48:34Z",
+          "headRefName": "feat/cc-u9-desktop",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "liveAcceptanceLimitations": "Native folder selection, top-bar drag and close need the remaining isolated desktop check."
+    },
+    {
+      "unit": "U11",
+      "title": "Worker reports, failure classes and the owner slot",
+      "sourceStatus": "implemented-and-landed",
+      "declaredPathFindings": [
+        {
+          "path": "domain/attempt-completion.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/daemon/src/domain/attempt-completion.ts"
+        },
+        {
+          "path": "domain/pending-dispatch.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/daemon/src/domain/pending-dispatch.ts"
+        }
+      ],
+      "checks": [
+        "u10-plan-audit-daemon",
+        "u10-plan-audit-cli-team"
+      ],
+      "pullRequests": [
+        {
+          "number": 147,
+          "title": "feat(team): route worker blockers and preserve owner chat",
+          "mergeCommit": "9552609f2063e619e17f1cd0bb310d31cdc3aac2",
+          "mergedAt": "2026-11-07T02:45:01Z",
+          "headRefName": "feat/cc-u11-worker-reports",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "liveAcceptanceLimitations": "The reserved-slot regression passes; the final accurate live reply was observed with one reviewer active, not both worker slots occupied."
+    },
+    {
+      "unit": "U10",
+      "title": "Acceptance run and wrap-up",
+      "sourceStatus": "acceptance-repairs-uncommitted",
+      "declaredPathFindings": [
+        {
+          "path": "docs/validation/2026-11-xx-command-center/",
+          "classification": "dated-evidence-placeholder",
+          "resolved": "docs/validation/2026-11-07-command-center/"
+        }
+      ],
+      "checks": [],
+      "liveAcceptanceLimitations": "The combined desktop flow, fully occupied worker-slot reply and final delivery remain open."
+    }
+  ],
+  "remoteMain": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "sourcePatchSha256": "75c90e7289f18eef312f4792a58afb4ae2517079a34f55fbd44e95b6d0fe65f1",
+  "unresolvedDeclaredPathFindings": 0,
+  "legacyUiImportReferences": [],
+  "freshTestsPassed": 497,
+  "freshTestChecks": [
+    "u10-plan-audit-daemon",
+    "u10-plan-audit-ui",
+    "u10-plan-audit-cli",
+    "u10-plan-audit-cli-team",
+    "u10-plan-audit-desktop"
+  ],
+  "earlierFullDaemonSuite": "failed-with-three-documented-known-cases; not repeated for this audit",
+  "sourceChangesDuringAudit": false,
+  "pendingDecisions": [
+    "Resume isolated desktop/live acceptance, switch the idle port-7433 profile temporarily, and restore the working profile.",
+    "Lift the prior U10 delivery hold only after acceptance, required review and green CI."
+  ],
+  "evidence": [
+    "receipts/u10-plan-audit-paths.json",
+    "receipts/u10-plan-audit-delivery.json",
+    "receipts/u10-resume-remote-head.json",
+    "receipts/u10-resume-idle-check.json",
+    "receipts/u10-plan-audit-preservation.json",
+    "receipts/desktop-resume-observation.json",
+    "receipts/u10-plan-audit-remotes.json"
+  ],
+  "claimBoundary": "Merged source, scoped tests and plan-path accounting are distinct from completing all live acceptance and delivery gates.",
+  "syntheticRemotesVerifiedAt": "2026-11-07T15:27:04.218553+00:00"
+}

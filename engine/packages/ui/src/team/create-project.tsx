@@ -8,7 +8,6 @@ import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { FolderBrowser } from "./folder-browser.js";
 import { latestRunFor, teamsKey, type TeamSummary, type RunSummary } from "./hooks.js";
 import { clientLabel } from "./display.js";
-import { isRunActive } from "./clients.js";
 
 interface Preview { repository: string; name: string; action: "create" | "push" | "register"; fileCount: number; excludedPaths: string[] }
 const ERRORS: Record<string, MessageKey> = {
@@ -110,9 +109,10 @@ export function ProjectsScreen({ teams, runs, loading, onOpenProject, onOpenRun,
         const run = latestRunFor(runs, team.id);
         return <section className="plate ui-project-card" key={team.id}>
           <button className="ui-project-open" onClick={() => onOpenProject(team.id)}><strong>{team.name}</strong><span className="mono muted">{team.repository}</span></button>
-          <div className="seats">{team.seats.map((seat, index) => <span className="chip" key={index}>{t(`role.${seat.role}`)} · {clientLabel(seat.client, t)}</span>)}</div>
+          <div className="seats"><span className="chip">{t(team.kind === "test" ? "records.testProject" : "records.project")}</span>{team.seats.map((seat, index) => <span className="chip" key={index}>{t(`role.${seat.role}`)} · {clientLabel(seat.client, t)}</span>)}</div>
           {run && <button className="ui-project-run" onClick={() => onOpenRun(run.id)}><span>{run.displayName}</span>
-            <small className="muted">{t(isRunActive(run) ? "team.teams.running" : "team.teams.idle")}</small></button>}
+            <small className="muted">{t(run.phase === "planning" ? "planning.mode" : "execution.mode")} · {t(`status.run.${run.state}`)}
+              {(run.resultCount ?? 0) > 0 && <> · {t("records.resultCount", { count: run.resultCount })}</>}</small></button>}
           <button className="btn btn-outline" onClick={() => onNewWork(team.id)}>{t("team.teams.newWork")}</button>
         </section>;
       })}</div>}

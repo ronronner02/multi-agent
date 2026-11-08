@@ -1,0 +1,87 @@
+{
+  "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+  "attempts": [
+    {
+      "id": "18e6a624-90d1-474b-94c1-919fa44ddd57",
+      "qitem_id": "qitem-20261107112258-11d3cb7f",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "created_at": "2026-11-07T11:23:01.496Z",
+      "updated_at": "2026-11-07T11:24:00.088Z"
+    },
+    {
+      "id": "b3eb2629-6eb7-445b-bb5d-ff8a2e0e360c",
+      "qitem_id": "qitem-20261107112258-11d3cb7f",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "created_at": "2026-11-07T11:28:30.470Z",
+      "updated_at": "2026-11-07T11:29:06.934Z"
+    },
+    {
+      "id": "ba7da767-f236-4dac-8baf-620b300a918b",
+      "qitem_id": "qitem-20261107112910-5501be12",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "stopped",
+      "created_at": "2026-11-07T11:45:29.263Z",
+      "updated_at": "2026-11-07T11:46:10.862Z"
+    },
+    {
+      "id": "c5574c31-63d1-4c7d-9f41-0c431d4471e4",
+      "qitem_id": "qitem-20261107112910-9d5a87b2",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "stopped",
+      "created_at": "2026-11-07T11:45:29.437Z",
+      "updated_at": "2026-11-07T11:54:35.870Z"
+    },
+    {
+      "id": "817d8459-a79c-4014-9b8d-556f7dcb5c9f",
+      "qitem_id": "qitem-20261107114612-3afd2988",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "created_at": "2026-11-07T11:46:14.242Z",
+      "updated_at": "2026-11-07T11:46:40.571Z"
+    },
+    {
+      "id": "18aee13b-a05a-4fb9-be66-9963af60dc13",
+      "qitem_id": "qitem-20261107115437-d05c128a",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "running",
+      "created_at": "2026-11-07T11:54:42.114Z",
+      "updated_at": "2026-11-07T11:54:42.114Z"
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "task-1",
+      "qitem_id": "qitem-20261107112258-11d3cb7f",
+      "state": "done"
+    },
+    {
+      "task_id": "task-2",
+      "qitem_id": "qitem-20261107112910-5501be12",
+      "state": "done"
+    },
+    {
+      "task_id": "task-2-review-1",
+      "qitem_id": "qitem-20261107114612-3afd2988",
+      "state": "done"
+    },
+    {
+      "task_id": "task-3",
+      "qitem_id": "qitem-20261107112910-9d5a87b2",
+      "state": "done"
+    },
+    {
+      "task_id": "task-3-review-1",
+      "qitem_id": "qitem-20261107115437-d05c128a",
+      "state": "pending"
+    }
+  ],
+  "observedAt": "2026-11-07T11:54:43.092846+00:00"
+}

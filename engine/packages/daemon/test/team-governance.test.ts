@@ -51,6 +51,14 @@ describe("shared team control contracts", () => {
     expect(() => parsePlanBinding({ ...binding, ...change })).toThrow();
   });
 
+  it("accepts project-wide binding scope without granting a root task assignment", () => {
+    const project = parsePlanBinding({ ...binding, readPaths: ["."], writePaths: ["."] });
+    expect(project.writePaths).toEqual(["."]);
+    expect(() => parseAssignment({ taskId: "task", role: "implementer", paths: ["."], dependencies: [] })).toThrow();
+    expect(() => parsePlanBinding({ ...binding, writePaths: ["./src"] })).toThrow();
+    expect(() => parsePlanBinding({ ...binding, writePaths: ["src/../server"] })).toThrow();
+  });
+
   it("preserves exact-byte plan changes rather than normalizing approval digests", () => {
     expect(hashBytes(Buffer.from("plan\n"))).not.toBe(hashBytes(Buffer.from("plan\r\n")));
     expect(hashBinding(binding)).not.toBe(hashBinding({ ...binding, planDigest: sha("d") }));

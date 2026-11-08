@@ -1,0 +1,11 @@
+{
+  "check": "skin-range-lint",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "lint"
+  ],
+  "exit": 0,
+  "seconds": 26.18
+}

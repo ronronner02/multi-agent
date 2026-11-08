@@ -101,6 +101,27 @@ describe("owner-approved run growth", () => {
     expect(db.prepare("SELECT count(*) AS n FROM team_queue_authority").get()).toEqual({ n: 3 });
   });
 
+  it("requires an explicit owner decision to expand an existing run to project-wide scope", async () => {
+    await suspend();
+    const old = governance.getRun("run");
+    const request = command("growth", { writePaths: ["."], tasks: [task("B", ["package.json", "server"])],
+      expiresAt: "2026-11-04T01:00:00.000Z" });
+    const response = await post("growth", request);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(governance.getRun("run").bindingDigest).toBe(old.bindingDigest);
+    expect(governance.findTask("run", "B")).toBeNull();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect((await post("approvals/decide", decide(), "fixture-worker")).status).toBe(403);
+    expect(governance.getRun("run").bindingDigest).toBe(old.bindingDigest);
+    expect((await post("approvals/decide", decide())).status).toBe(200);
+    const expanded = governance.getRun("run");
+    expect(expanded.binding.writePaths).toEqual(["."]);
+    expect(expanded.binding.limits).toEqual(old.binding.limits);
+    expect(expanded.binding.repository).toEqual(old.binding.repository);
+    expect(governance.findTask("run", "B")?.assignment.paths).toEqual(["package.json", "server"]);
+    expect(dispatch).toHaveBeenCalledWith("run", "B");
+  });
+
   it("records rejection without changing the binding, admitting tasks or dispatching", async () => {
     await suspend();
     expect((await post("growth", proposal())).status).toBe(200);

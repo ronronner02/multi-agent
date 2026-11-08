@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-07T13:36:53.8454339Z",
+  "dialogName": "选择文件夹",
+  "dialogClass": "#32770",
+  "dialogHandle": 3344742,
+  "processId": 28996,
+  "inputControlId": "1152",
+  "confirmControlId": "1",
+  "selectedWindowsFolder": "<windows-project>",
+  "interaction": "Set native folder-name edit and activate native Select folder button",
+  "remoteEffect": "none",
+  "claimBoundary": "The dialog opened and a synthetic selection was attempted. A settled selection and preview were not verified."
+}

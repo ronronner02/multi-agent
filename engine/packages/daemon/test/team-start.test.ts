@@ -98,7 +98,7 @@ describe("MVP slice 2 — the owner starts team work", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { runs: Array<Record<string, string>> };
     expect(body.runs).toEqual([{ id: created.runId, rigId: "rig", rigName: "demo", state: "approved", planRef: "plan.md",
-      displayName: "First", createdAt: expect.any(String) }]);
+      displayName: "First", createdAt: expect.any(String), phase: "delivery", messageCount: 0, executionTaskCount: 1, resultCount: 0 }]);
   });
 
   /**

@@ -1,0 +1,133 @@
+{
+  "rootReview": {
+    "status": "complete-for-recorded-source-and-evidence",
+    "scope": [
+      "README.md",
+      "desktop/README.md",
+      "docs/known-failures.md",
+      "docs/operations.md",
+      "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "engine/packages/daemon/src/domain/agent-turn.ts",
+      "engine/packages/daemon/src/domain/integration-branch.ts",
+      "engine/packages/daemon/src/domain/seat-pane.ts",
+      "engine/packages/daemon/src/domain/startup-orchestrator.ts",
+      "engine/packages/daemon/src/domain/team-workspace.ts",
+      "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "engine/packages/daemon/src/startup.ts",
+      "engine/packages/daemon/src/team-control-surface.ts",
+      "engine/packages/daemon/test/agent-turn.test.ts",
+      "engine/packages/daemon/test/attempt-failure.test.ts",
+      "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "engine/packages/daemon/test/integration-branch.test.ts",
+      "engine/packages/daemon/test/lead-roster.test.ts",
+      "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "engine/packages/daemon/test/owner-slot.test.ts",
+      "engine/packages/daemon/test/run-recovery.test.ts",
+      "engine/packages/daemon/test/seat-pane-launch.test.ts",
+      "engine/packages/daemon/test/team-read-model.test.ts",
+      "engine/packages/daemon/test/team-workspace.test.ts",
+      "engine/packages/i18n/src/catalogs/en.json",
+      "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "engine/packages/ui/src/team/chat-panel.tsx",
+      "engine/packages/ui/src/team/clients.ts",
+      "engine/packages/ui/src/team/overview.tsx",
+      "docs/amendments/2026-11-07-command-center-acceptance.md",
+      "docs/validation/2026-11-07-command-center/",
+      "engine/packages/daemon/src/domain/github-cli.ts",
+      "engine/packages/daemon/test/team-github.test.ts",
+      "engine/packages/daemon/test/fixtures/stub-gh.mjs"
+    ],
+    "method": "Preserved source and changed-line reviews, current source-hash checks, settled UI observation and evidence consistency review.",
+    "newCodeFindings": [],
+    "runtimeObservations": "live-limitations.json",
+    "earlierReview": "history/pre-runtime/review.json",
+    "laterSeatDeltaReceipt": "receipts/u10-runtime-stale-seat-review.json",
+    "claims": "Installation, clean first open and sign-in are observed. Full desktop Create, drag/close and the fully saturated final reply remain incomplete; the daemon suite remains failed.",
+    "evidenceReview": {
+      "checkedAt": "2026-11-07T13:59:56.008038+00:00",
+      "status": "complete-with-recorded-limitations",
+      "checks": [
+        "All 385 prior manifest entries verified; historical structured originals preserved.",
+        "Current tracked source and standalone clone match the 34-path suite manifest.",
+        "Actual latest test counts and three known failure signatures match the bounded logs.",
+        "Desktop receipts and four inspected historical screenshots are allowlisted.",
+        "Recorded structured references resolve; JSON and event records parse.",
+        "Exact isolated-profile credential and forbidden-file scans pass.",
+        "Read-only process, backup-row and protected-file checks preserve the owner-requested working instance."
+      ],
+      "limitations": [
+        "Interactive desktop selection, full Create, drag and close remain owner-paused.",
+        "Full daemon suite remains failed with three known cases.",
+        "The final accurate busy reply is not a two-slot-saturation repeat.",
+        "Later seat and desktop parser deltas are locally reviewed, not independently reviewed.",
+        "The automation attachment is retained; no close, relaunch or profile switch was performed."
+      ]
+    },
+    "latestPlanAudit": {
+      "checkedAt": "2026-11-07T15:26:36.114456+00:00",
+      "scope": "Read-only requirement-path, merged-PR and focused-test consistency check. No code changes or new independent review.",
+      "evidence": "plan-status.json"
+    }
+  },
+  "initialIndependentReview": {
+    "receipt": "receipts/u10-independent-review.json",
+    "frozenManifestSha256": "4b049e818ac20ab34a3e59489bc657fd334319319965344813dd51c2d67776da",
+    "allFrozenFilesStillMatch": true,
+    "scope": "The original approval, candidate-base persistence and telemetry wiring fixes.",
+    "notCovered": [
+      "later run-action state fix",
+      "later native completion projection fix",
+      "later managed-launch fixture adjustment",
+      "final evidence bundle"
+    ]
+  },
+  "runtimeIndependentReview": {
+    "roundOne": "receipts/u10-runtime-independent-review.json",
+    "confirmation": "receipts/u10-runtime-independent-confirmation.json",
+    "initialVerdict": "CHANGES-REQUIRED",
+    "confirmationVerdict": "NO NEW P0/P1",
+    "closedFinding": "R1-1",
+    "scope": "The frozen 27-path runtime candidate and its amendment, followed by the R1-1 fix and direct delta regression confirmation.",
+    "integrity": "receipts/u10-runtime-review-integrity.json",
+    "independentlyExecutedTests": false,
+    "overallAcceptanceReassessed": false,
+    "notCovered": [
+      "later missing-seat production repair",
+      "later direct-dispatch fixture alignment",
+      "final acceptance run and evidence refresh",
+      "later desktop clipboard-prompt parser repair"
+    ],
+    "additionalReviewDispatched": false
+  },
+  "laterSeatDelta": {
+    "review": "root-only",
+    "receipt": "receipts/u10-runtime-stale-seat-review.json",
+    "finalVerification": "verification/final-index.json",
+    "note": "The later full daemon suite has three known failures; the earlier two-failure result remains historical."
+  },
+  "simplification": {
+    "sourceChangesDuringCloseout": false,
+    "reason": "No additional refactor or unrelated cleanup was introduced."
+  },
+  "shipping": {
+    "committed": false,
+    "pushed": false,
+    "pullRequestOpened": false,
+    "merged": false
+  },
+  "desktopParserDelta": {
+    "review": "local-source-and-receipt-review-only",
+    "checkedAt": "2026-11-07T13:58:15.992640+00:00",
+    "files": [
+      "engine/packages/daemon/src/domain/github-cli.ts",
+      "engine/packages/daemon/test/team-github.test.ts",
+      "engine/packages/daemon/test/fixtures/stub-gh.mjs"
+    ],
+    "findings": [],
+    "method": "Read the exact three-file delta and the saved failing-before, focused-green, build, typecheck, smoke and standalone-suite receipts. No tests were repeated for this evidence update.",
+    "independentReviewCoverageExtended": false,
+    "verification": "verification/final-index.json"
+  }
+}

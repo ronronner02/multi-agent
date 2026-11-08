@@ -1,0 +1,19 @@
+{
+  "at": "2026-11-08T01:03:40.971793+00:00",
+  "gitDiffCheckExit": 0,
+  "gitDiffCheckOutput": "",
+  "indexEmpty": true,
+  "dirtyEntries": 618,
+  "head": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "branch": "feat/cc-u10-acceptance",
+  "manifestEntriesVerified": 553,
+  "manifestMismatches": [],
+  "authoritativeNativeCreateGate": "observed",
+  "authoritativeBusyChatGate": "observed",
+  "sourceDeliveryHoldUnchanged": true,
+  "requiredNewReferencesPresent": [
+    "receipts/native-create-flow.json",
+    "receipts/native-create-remote-bootstrap.json",
+    "history/pre-native-create-final-01/index.json"
+  ]
+}

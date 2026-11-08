@@ -1,0 +1,13 @@
+{
+  "check": "u10-plan-audit-ui",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/node",
+    "../../node_modules/vitest/vitest.mjs",
+    "run",
+    "src/team/__tests__",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 9.34
+}

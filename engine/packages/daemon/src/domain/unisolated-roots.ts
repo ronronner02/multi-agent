@@ -1,4 +1,5 @@
-import { mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -13,7 +14,7 @@ import { join } from "node:path";
  * They are shaped like the policy's so the producer, the runtime and the launcher take
  * one object either way: `assignment_root/<worker>/<runId>-<taskId>` is the candidate,
  * `context_root/<worker>/<runId>/<attemptId>` the projection, and the mailbox root sits
- * under the control state directory.
+ * under the state home when its full socket path fits.
  */
 export interface ManagedWorkerRoots {
   assignmentRoot: string;
@@ -38,6 +39,24 @@ export const UNISOLATED_WORKER = "local";
  */
 const UNISOLATED_POLICY_REVISION = 4;
 
+function localMailboxRoot(home: string): string {
+  const preferred = join(home, "sock");
+  const endpoint = join(preferred, UNISOLATED_WORKER, "0".repeat(36), "mailbox.sock");
+  if (Buffer.byteLength(endpoint) < 108) return preferred;
+
+  // Linux counts bytes, including the terminating NUL. TMPDIR can itself be the
+  // deep profile, so use a short private root keyed to this user and profile.
+  const key = createHash("sha256").update(home).digest("hex").slice(0, 24);
+  const root = `/tmp/ma-${process.getuid!()}-${key}`;
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const stat = lstatSync(root);
+  if (!stat.isDirectory() || realpathSync(root) !== root || stat.uid !== process.getuid!()
+    || stat.gid !== process.getgid!() || (stat.mode & 0o7777) !== 0o700) {
+    throw new Error("Local mailbox root must be private and canonical");
+  }
+  return root;
+}
+
 /**
  * `home` is the daemon's per-user state directory (`$OPENRIG_HOME`).
  *
@@ -54,11 +73,7 @@ export function unisolatedWorkerRoots(home: string): ManagedWorkerRoots {
     worker: UNISOLATED_WORKER,
     workerRoot: join(stateRoot, "homes"),
     contextRoot: join(stateRoot, "context"),
-    // An attempt's mailbox socket lives four path segments below this root, and an
-    // attempt id alone is 36 bytes of a 108-byte AF_UNIX limit. The hardened path can
-    // afford a deeper root because provisioning installs it at `/var/lib/...`; this one
-    // sits under the user's home, so it is kept deliberately shallow.
-    mailboxRoot: join(home, "sock"),
+    mailboxRoot: localMailboxRoot(home),
     policyRevision: UNISOLATED_POLICY_REVISION,
     workerIdentities: [UNISOLATED_WORKER],
     frameworkRoot: join(stateRoot, "framework"),

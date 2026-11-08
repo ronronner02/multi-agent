@@ -1,0 +1,23 @@
+{
+  "at": "2026-11-07T23:52:33.343869+00:00",
+  "verifiedChangedSourceFiles": 57,
+  "roots": [
+    "/home/leo/scratch/cc-u10-acceptance/worktree",
+    "/home/leo/scratch/cc-u10-acceptance/daemon-suite"
+  ],
+  "mismatches": [],
+  "head": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "suiteHead": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "sourcePlanAuthority": "/home/leo/scratch/cc-plan/worktree/docs/plans/2026-11-06-001-feat-command-center-plan.md",
+  "sourcePlanSha256": "7d3c3172c30978fb6a88530e5266b46783fc267bd82d370742045d121ae09b8d",
+  "vitestProcesses": [],
+  "suiteProcesses": [],
+  "frozenCredentialReviewFilesVerified": 51,
+  "credentialFilesCurrentMatch": {
+    "desktop/src/main.js": true,
+    "desktop/src/preload.js": true,
+    "desktop/src/wsl.js": true,
+    "engine/packages/ui/src/hooks/useOwnerSession.ts": true,
+    "engine/packages/ui/test/owner-session.test.tsx": true
+  }
+}

@@ -22,7 +22,7 @@ export const SEAT_UNRESOLVED = "direct_launch_seat_unresolved";
 export interface SeatPaneDependencies {
   rigRepo: Pick<RigRepository, "getRig">;
   sessions: Pick<SessionRegistry, "db" | "findResumeContextByName" | "getLatestLiveSessions" | "updateBinding">;
-  tmux: Pick<TmuxAdapter, "createSession" | "listPanes" | "deliveryGuard">;
+  tmux: Pick<TmuxAdapter, "createSession" | "hasSession" | "listPanes" | "deliveryGuard">;
   /** The environment a launched seat's shell gets, exactly as `NodeLauncher` gives it. */
   sessionEnv?: Record<string, string | undefined>;
   runtimeSessionEnv?: Record<string, Record<string, string | undefined>>;
@@ -62,6 +62,8 @@ function resolveSeat(dependencies: SeatPaneDependencies, sessionName: string): {
 async function liveBoundPane(tmux: SeatPaneDependencies["tmux"], node: NodeWithBinding, sessionName: string): Promise<string | null> {
   const bound = node.binding;
   if (bound?.attachmentType !== "tmux" || bound.tmuxSession !== sessionName || !/^%[0-9]+$/.test(bound.tmuxPane ?? "")) return null;
+  // A missing named session throws in listPanes when another session keeps the server alive.
+  if (!await tmux.hasSession(sessionName)) return null;
   return (await tmux.listPanes(sessionName)).some(pane => pane.id === bound.tmuxPane) ? bound.tmuxPane! : null;
 }
 

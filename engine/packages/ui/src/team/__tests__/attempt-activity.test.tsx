@@ -7,6 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import type { AttemptActivity, TeamAttemptView } from "@openrig/daemon/team-control";
 import { useAttemptActivity } from "../../hooks/useAttemptActivity.js";
 import { ActivityFacts, ToolCalls } from "../workspace/workspace-view.js";
+import { useTeamChat } from "../hooks.js";
 import { attempt, RUN_ID } from "./fixtures.js";
 
 const session = vi.hoisted(() => ({ paired: true, request: vi.fn() }));
@@ -53,6 +54,24 @@ function tree(current?: TeamAttemptView) {
 }
 
 describe("visible attempt activity", () => {
+  it("refreshes active chat increments at 500 ms and returns to the history cadence when stopped", async () => {
+    let state = "running";
+    session.request.mockImplementation(async () => ({ phase: "planning", messages: [], pendingDecision: null,
+      liveTurn: { attemptId: "lead-live", state, progress: null, activity: null } }));
+    function ChatProbe() { const chat = useTeamChat(RUN_ID, true); return <p>{chat.data?.liveTurn?.state}</p>; }
+    const view = render(<QueryClientProvider client={client}><ChatProbe /></QueryClientProvider>);
+    await advance(); expect(screen.getByText("running")).toBeTruthy();
+    const initial = session.request.mock.calls.length;
+    await advance(500); await advance(); expect(session.request.mock.calls.length).toBe(initial + 1);
+    state = "stopped";
+    await advance(500); await advance(); expect(screen.getByText("stopped")).toBeTruthy();
+    const stopped = session.request.mock.calls.length;
+    await advance(1000); expect(session.request.mock.calls.length).toBe(stopped);
+    await advance(2000); await advance(); expect(session.request.mock.calls.length).toBe(stopped + 1);
+    view.unmount(); const unmounted = session.request.mock.calls.length;
+    await advance(4000); expect(session.request.mock.calls.length).toBe(unmounted);
+  });
+
   it("appends live calls and tokens, pauses when hidden, then reads the stopped attempt once without moving its rows", async () => {
     let frame = activity();
     session.request.mockImplementation(async (path: string) => {

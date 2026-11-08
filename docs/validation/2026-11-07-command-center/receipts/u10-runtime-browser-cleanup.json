@@ -1,0 +1,20 @@
+{
+  "closedAt": "2026-11-07T12:18:23.383Z",
+  "origin": "http://127.0.0.1:17433",
+  "revoke": {
+    "method": "DELETE",
+    "path": "/api/team-control/owner-session",
+    "httpStatus": 200
+  },
+  "protectedReadAfterRevoke": {
+    "status": 401,
+    "code": "control_auth_required"
+  },
+  "ownedPages": 1,
+  "exportedChecks": 14,
+  "pageErrors": 0,
+  "defaultPageBefore": "about:blank",
+  "defaultContextUntouched": true,
+  "closed": true,
+  "defaultPageAfter": "about:blank"
+}

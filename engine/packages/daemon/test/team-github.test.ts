@@ -109,6 +109,20 @@ describe("owner GitHub sign-in", () => {
     expect(calls().some(args => args.includes("setup-git"))).toBe(false);
   });
 
+  it("parses the split clipboard-code prompt used by desktop WSL launches", async () => {
+    writeFileSync(join(directory, "clipboard-code"), "");
+    const starting = call("POST", "/login");
+    try {
+      const pending = { state: "pending", code: "ABCD-1234", url: "https://github.com/login/device" };
+      await expect.poll(() => github.loginState()).toEqual(pending);
+      expect(await (await starting).json()).toEqual({ protocolVersion: "1.0", ...pending });
+      expect(calls().filter(args => args[1] === "login")).toHaveLength(1);
+    } finally {
+      await github.stop();
+      await starting;
+    }
+  });
+
   it.each(["failed", "expired", "denied"])("reports a %s device flow without exposing stderr", async mode => {
     expect((await call("POST", "/login")).status).toBe(200);
     writeFileSync(join(directory, "finish"), mode);

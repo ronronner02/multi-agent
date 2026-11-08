@@ -1,0 +1,88 @@
+{
+  "at": "2026-11-08T00:53:44.183810+00:00",
+  "passed": true,
+  "repositoryName": "desktop-create-20261108-aa15079f",
+  "private": true,
+  "visibility": "private",
+  "defaultBranch": "main",
+  "bootstrapCommit": "ab15cc5bf123bb719d587fdae92ee62a6f7e66fd",
+  "remoteBranchMatchesLocal": true,
+  "commitCount": 1,
+  "uploadedFiles": [
+    {
+      "path": ".gitignore",
+      "gitBlobSha": "ce06f67d8e33dd9463e96617dd691f031f552c91"
+    },
+    {
+      "path": "README.md",
+      "gitBlobSha": "deaf0871d46274d627a7e6b8cd8b54c375e2a9e1"
+    },
+    {
+      "path": "index.html",
+      "gitBlobSha": "8399ee46df48e3594a0cd7db7abdef7079a9aa7e"
+    },
+    {
+      "path": "package.json",
+      "gitBlobSha": "b5ba7cf8559108b33090149adbbbc597c6346a23"
+    },
+    {
+      "path": "src/status.js",
+      "gitBlobSha": "3b074c0cf11a1e8b5229f62c9726a9dd2164535b"
+    },
+    {
+      "path": "test/status.test.mjs",
+      "gitBlobSha": "edfb302bbd6ef0dd1d5cc7b3246acb6f439d578e"
+    }
+  ],
+  "previewFileCount": 6,
+  "remoteFileCount": 6,
+  "remoteFilesMatchLocalAndPreview": true,
+  "excludedSyntheticEnvironmentFileNotUploaded": true,
+  "initialSyntheticFilesUnchanged": {
+    "README.md": true,
+    "index.html": true,
+    "package.json": true,
+    "src/status.js": true,
+    "test/status.test.mjs": true,
+    ".env": true
+  },
+  "localWorktreeClean": true,
+  "registeredTeamId": "01M6WA84WXM28TVCZD8KYM3CMZ",
+  "runtimeCounts": {
+    "rigs": 2,
+    "team_runs": 0,
+    "team_attempts": 0,
+    "queue_items": 0
+  },
+  "verificationRequests": [
+    {
+      "method": "GET",
+      "repositoryName": "desktop-create-20261108-aa15079f",
+      "suffix": "",
+      "exit": 0
+    },
+    {
+      "method": "GET",
+      "repositoryName": "desktop-create-20261108-aa15079f",
+      "suffix": "/branches/main",
+      "exit": 0
+    },
+    {
+      "method": "GET",
+      "repositoryName": "desktop-create-20261108-aa15079f",
+      "suffix": "/git/trees/ab15cc5bf123bb719d587fdae92ee62a6f7e66fd?recursive=1",
+      "exit": 0
+    },
+    {
+      "method": "GET",
+      "repositoryName": "desktop-create-20261108-aa15079f",
+      "suffix": "/commits?per_page=2",
+      "exit": 0
+    }
+  ],
+  "repositoryCreatedBy": "Installed desktop Create control after the real native folder picker and settled upload preview.",
+  "directApiCreationUsed": false,
+  "nativeProcessId": 14236,
+  "existingOwnerProjectsTouched": false,
+  "userSignInProfileReused": true
+}

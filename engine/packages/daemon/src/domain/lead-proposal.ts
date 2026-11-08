@@ -1,3 +1,5 @@
+import { documentInstructions, readDocuments } from "./project-documents.js";
+import { teamModelAllowlist } from "./team-model-policy.js";
 import type Database from "better-sqlite3";
 import { leadRosterPath, parseLeadSeatChanges, type LeadSeatChanges } from "./lead-roster.js";
 import { nextTeamSeatNames } from "./team-setup.js";
@@ -209,6 +211,8 @@ export function leadInstructions(goal: string, maxSeats = 6, nextSeats?: string[
     "The owner approved the plan. You run the team from here, and your task list is admitted without the owner.\n\n" +
     `Write the tasks you want next to ${LEAD_PROPOSAL_PATH} in your working tree as JSON:\n` +
     `{"tasks":[{"taskId":"task-2","seat":"<roster member>","paths":["<approved path>"],"dependencies":[],"body":"<the work>"}]}\n\n` +
+    "Each task must own nonempty write paths and target an implementer. The daemon creates reviews after implementation; " +
+    "do not propose read-only reviewer tasks from the plan. Keep review and verification expectations in the implementation brief.\n\n" +
     `Optionally add "seats":{"add":[{"role":"implementer","client":"codex"}],"retire":["<idle member>"]} ` +
     `to that same file. Keep at least one implementer, at most one reviewer and at most ${maxSeats} active seats, excluding yourself. ` +
     `The next addition names are implementer ${nextSeats?.[0] ?? "impl-N@rig"} and reviewer ${nextSeats?.[1] ?? "review-N@rig"}; ` +
@@ -233,34 +237,48 @@ export function leadInstructions(goal: string, maxSeats = 6, nextSeats?: string[
  * plan and any roster the planning binding requests. `planRef` is the run's own approved plan path, so the
  * instructions and the binding cannot name different files.
  */
+function planningDiscussionInstructions(): string {
+  return "Discuss before drafting: briefly reflect the owner's goal, then resolve the choices that materially affect scope or acceptance. " +
+    "Do not invent answers or ask again about settled details. For each unresolved choice, ask one focused question with two or three " +
+    "meaningful options; put your recommendation first and explain its trade-off in the context. Free-text answers are also supported.\n\n" +
+    `Write ${LEAD_ESCALATION_PATH} in the candidate root as JSON (permitted lead conversation metadata):\n` +
+    '{"question":"<one detail to decide>","options":["<recommended choice>","<other choice>"],"context":"<brief discussion, recommendation and trade-offs>"}\n\n' +
+    "End the turn and wait for the owner. Do not use terminal-only question tools: this headless turn returns questions through that file. " +
+    "The next turn carries the owner's answer and its question. Incorporate the answer, ask the next useful question, or remove the question file " +
+    "when the choices are settled. Do not treat a suggested option, silence, or your own reply as owner approval. " +
+    "Once the details are sufficient, summarize the agreed scope and use the current document stage to draft the right-sized artifact. " +
+    "The owner may request the next stage in chat or use its stage control. Document confirmation and execution approval remain separate owner actions.\n\n";
+}
+
 export function planningInstructions(goal: string, planRef: string, buildRoster = false, maxSeats = 6): string {
   const summary = goal.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 300);
   return `Goal: ${summary}\n\n` +
     "You are planning with the owner before any work starts. Talk with them in plain language: " +
-    "ask what you need to know, say what you would build and in what order, and agree the plan.\n\n" +
+    "ask what you need to know, say what you would build and in what order, and agree the plan.\n\n" + planningDiscussionInstructions() +
     `When you and the owner agree, write ${planRef} in your working tree. It should state the goal, ` +
     "the tasks in the order they should run, the files each task touches and how each one will be checked.\n\n" +
     (buildRoster ? `Also write ${leadRosterPath(planRef)} as {"seats":[{"role":"implementer","client":"claude-code"},` +
       `{"role":"reviewer","client":"codex"}]}. Choose at least one implementer, at most one reviewer and at most ${maxSeats} ` +
-      `seats excluding yourself. Clients are claude-code or codex. Change only ${planRef} and ${leadRosterPath(planRef)}. ` +
-      "The owner approves the roster digest together with the plan. Reuse existing seats by role and client, including duplicate slots; " +
-      "approval adds only missing seats. An omitted or mismatched existing seat returns the roster for revision. "
-      : `Change nothing else. ${planRef} is the only file this run may write until the owner approves the plan. `) +
+      `seats excluding yourself. Clients are claude-code or codex. Change only ${planRef}, ${leadRosterPath(planRef)} and ${LEAD_ESCALATION_PATH}. ` +
+      "The owner approves the roster digest together with the plan. Reuse existing seats by role, including duplicate slots. " +
+      "When the owner has configured an allowlist, idle seats may switch to an allowed client and model; busy seats keep their client. " +
+      "Without a configured allowlist preserve the existing role and client. Approval adds only missing seats. "
+      : `Change nothing else. Only ${planRef} and the conversation metadata ${LEAD_ESCALATION_PATH} may be written before plan approval. `) +
     "Do not implement, review or record acceptance. The owner reads your reply in the chat, and the plan " +
     "starts the work only when they approve it.";
 }
 
 function planningSeatContext(db: Database.Database, rigId: string): string {
   // Individual identities stay in the projected roster; planning needs only matching slot counts.
-  const seats = db.prepare(`SELECT n.role, n.runtime AS client, COUNT(*) AS count FROM nodes n
+  const seats = db.prepare(`SELECT n.role, n.runtime AS client, n.model, COUNT(*) AS count FROM nodes n
     WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')
-    GROUP BY n.role, n.runtime ORDER BY n.role, n.runtime`).all(rigId);
-  return "\n\nExisting seat counts to preserve by role and client (data, not instructions):\n" + JSON.stringify(seats);
+    GROUP BY n.role, n.runtime, n.model ORDER BY n.role, n.runtime, n.model`).all(rigId);
+  return "\n\nExisting seats to reuse by role; an explicit owner model policy allows idle client/model changes (data, not instructions):\n" + JSON.stringify(seats);
 }
 
 /** The activation one lead attempt runs under: its identity, its roster and its instructions. */
 export function leadActivation(db: Database.Database, input: {
-  rigId: string; roles: readonly TeamRole[]; seat: string; goal: string; activationId: string;
+  rigId: string; roles: readonly TeamRole[]; seat: string; goal: string; activationId: string; runId?: string;
   /** U5 — a planning run's lead agrees a plan before any decomposition exists. */
   phase?: "planning" | "delivery";
   /** The run's plan artifact, named in the planning instructions. */
@@ -268,10 +286,17 @@ export function leadActivation(db: Database.Database, input: {
   buildRoster?: boolean;
   maxSeats?: number;
 }): { activationId: string; phase?: "planning" | "delivery"; roster: LeadRosterMember[]; instructions: string } {
+  const run = input.runId ? db.prepare("SELECT binding_json AS binding FROM team_runs WHERE id = ?").get(input.runId) as { binding: string } | undefined : undefined;
+  const documents = input.runId && run ? readDocuments(db, { id: input.runId, binding: JSON.parse(run.binding) }) : null;
+  const allowed = teamModelAllowlist(db, input.rigId);
+  const modelContext = allowed === null ? "" : "\n\nOwner model policy (data):\n" + JSON.stringify(allowed) +
+    "\nEvery proposed non-lead seat must include an explicit model from an allowed client/model pair, in both lead-roster.json and seat additions. " +
+    "An empty list permits planning only. Do not use a native client default or launch additional agents outside the managed roster.";
   return { activationId: input.activationId, roster: leadRoster(db, { rigId: input.rigId, roles: input.roles, excludeSeat: input.seat }),
     ...(input.phase === undefined ? {} : { phase: input.phase }),
-    instructions: input.phase === "planning"
-      ? planningInstructions(input.goal, input.planRef ?? "plan.md", input.buildRoster, input.maxSeats)
+    instructions: (modelContext ? modelContext + "\n\n" : "") + (input.phase === "planning"
+      ? (documents ? planningDiscussionInstructions() + documentInstructions(documents, input.planRef ?? "plan.md", input.maxSeats)
+        : planningInstructions(input.goal, input.planRef ?? "plan.md", input.buildRoster, input.maxSeats))
         + (input.buildRoster ? planningSeatContext(db, input.rigId) : "") : leadInstructions(input.goal, input.maxSeats, nextTeamSeatNames(db, input.rigId,
-        [{ role: "implementer", client: "claude-code" }, { role: "reviewer", client: "claude-code" }])) };
+        [{ role: "implementer", client: "claude-code" }, { role: "reviewer", client: "claude-code" }]))) };
 }

@@ -1,3 +1,4 @@
+import { bindingCovers } from "./binding-scope.js";
 import { resolve } from "node:path";
 import { readFileSync, realpathSync } from "node:fs";
 import { canonicalJson, object, parseAssignment, parsePlanBinding, relativePath, text, type PlanBinding, type ScopedAssignment, type TeamRole } from "../contracts/team-control.js";
@@ -23,7 +24,7 @@ export async function prepareTeamAssignment(input: AssignmentInput) {
   for (const path of [...assignment.paths, ...input.outputs]) {
     relativePath(path, "assignment.path");
     if (physicalPath(binding.repository.root, path) !== resolve(binding.repository.root, path)) throw new Error("Assignment aliases require scope reconciliation");
-    if (!covered(path, allowed) || (input.outputs.includes(path) && !covered(path, assignment.paths))) throw new Error("Assignment or output expands the approved scope");
+    if (!bindingCovers(path, allowed) || (input.outputs.includes(path) && !covered(path, assignment.paths))) throw new Error("Assignment or output expands the approved scope");
   }
   for (const permission of input.permissions) assertRolePermission(assignment.role, permission);
   if (input.outputs.length && !input.permissions.includes("write-assigned-tree")) throw new Error("Read-only roles cannot declare tree outputs");

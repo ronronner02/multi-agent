@@ -1,0 +1,23 @@
+{
+  "files": 3,
+  "checked": 42,
+  "failures": [
+    {
+      "kind": "path",
+      "value": "packages/daemon",
+      "line": 502,
+      "file": "docs/operations.md",
+      "against": "packages/daemon",
+      "reason": "missing repository path"
+    },
+    {
+      "kind": "path",
+      "value": "packages/cli",
+      "line": 502,
+      "file": "docs/operations.md",
+      "against": "packages/cli",
+      "reason": "missing repository path"
+    }
+  ],
+  "unchecked": []
+}

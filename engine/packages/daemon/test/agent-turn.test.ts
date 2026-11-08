@@ -14,7 +14,7 @@ import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-s
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import { composePendingDispatch, pendingTasks } from "../src/domain/pending-dispatch.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
-import { agentTurnPromptPath, continuationNote, managedTurnPrompt } from "../src/domain/agent-turn.js";
+import { agentTurnPromptPath, continuationNote, leadProgressNote, managedTurnPrompt } from "../src/domain/agent-turn.js";
 import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 
@@ -153,6 +153,48 @@ describe("what a continuation is told", () => {
     governance.decideApproval(command("initial", { approvalVersion: 1, decision: "approved" }), owner, binding);
   });
   afterEach(() => { db.close(); rmSync(root, { recursive: true, force: true }); });
+
+  it("reports lead progress at the admission limit and keeps another run and task bodies out", () => {
+    for (let index = 0; index < 100; index++) {
+      const taskId = `progress-${index}`;
+      const result = governance.createTask(command(taskId, { assignment: { taskId, role: "implementer", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: ["write-assigned-tree"], sourceSession: "lead@rig", destinationSession: "a@rig",
+        body: "Task body that must not enter a progress snapshot." }), binding);
+      expect(result.status, JSON.stringify(result)).toBe("accepted");
+    }
+    expect(governance.createTask(command("past-limit", {
+      assignment: { taskId: "past-limit", role: "implementer", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "lead@rig", destinationSession: "a@rig", body: "Beyond the task limit.",
+    }), binding)).toMatchObject({ status: "denied", reason: "Managed task limit reached" });
+    const note = leadProgressNote(db, "run", "2026-11-04T00:00:00.000Z");
+    const progress = JSON.parse(note.split("\n")[1]!);
+    expect(progress).toMatchObject({ runId: "run", observedAt: "2026-11-04T00:00:00.000Z", totalTasks: 100, truncated: false });
+    expect(progress.tasks).toHaveLength(100);
+    expect(progress.tasks[0]).toMatchObject({ taskId: "progress-0", queueState: "pending", latestAttempt: null, review: null });
+    expect(note).not.toContain("Task body that must not enter");
+    governance.createRun({ id: "another-run", rigId: "rig", binding });
+    expect(JSON.parse(leadProgressNote(db, "another-run").split("\n")[1]!))
+      .toMatchObject({ runId: "another-run", totalTasks: 0, truncated: false, tasks: [] });
+  });
+
+  it("carries only the latest recorded review verdict and its candidate, not raw findings", () => {
+    for (const [taskId, role, seat] of [["impl", "implementer", "a@rig"], ["review", "reviewer", "reviewer@rig"]] as const) {
+      expect(governance.createTask(command(taskId, { assignment: { taskId, role, paths: ["src"], dependencies: [],
+        ...(role === "reviewer" ? { reviewOf: "impl" } : {}) }, outputs: [], permissions: [],
+        sourceSession: "lead@rig", destinationSession: seat, body: "Scoped work." }), binding).status).toBe("accepted");
+    }
+    for (const verdict of ["changes-required", "approved"]) {
+      db.prepare("INSERT INTO events (rig_id, node_id, type, payload) VALUES ('rig', 'rev-node', 'team.control', ?)")
+        .run(JSON.stringify({ runId: "run", taskId: "impl", action: "review.verdict", payload: { reviewerTaskId: "review",
+          verdict, candidateDigest: "sha256:candidate", recordedAt: "2026-11-04T00:00:00.000Z",
+          findings: [{ scenario: "Finding body that must not enter progress." }] } }));
+    }
+    const note = leadProgressNote(db, "run");
+    const progress = JSON.parse(note.split("\n")[1]!);
+    expect(progress.tasks[1]).toMatchObject({ taskId: "review", reviewOf: "impl", latestAttempt: null,
+      review: { verdict: "approved", candidateDigest: "sha256:candidate", recordedAt: "2026-11-04T00:00:00.000Z" } });
+    expect(note).not.toContain("Finding body that must not enter");
+  });
 
   it("carries the reviewer's blocking findings into the implementer's rework", () => {
     // The durable record of a round is the `review.verdict` event; nothing else stores findings.

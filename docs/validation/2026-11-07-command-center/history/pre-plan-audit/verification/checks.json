@@ -1,0 +1,2260 @@
+[
+  {
+    "check": "u10-final-build",
+    "cwd": "engine",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npm",
+      "run",
+      "build"
+    ],
+    "exit": 0,
+    "seconds": 25.74,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-build.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-ui",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "test",
+      "-w",
+      "packages/ui",
+      "--",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 72.43,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-ui.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      "Test Files  217 passed (217)",
+      "Tests  1864 passed | 1 skipped (1865)"
+    ]
+  },
+  {
+    "check": "u10-final-smoke",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "smoke"
+    ],
+    "exit": 0,
+    "seconds": 56.58,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-smoke.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  32 passed (32)",
+      "Tests  730 passed (730)",
+      "Test Files  5 passed (5)",
+      "Tests  45 passed (45)",
+      "Test Files  2 passed (2)",
+      "Tests  45 passed (45)",
+      "Test Files  11 passed (11)",
+      "Tests  84 passed (84)"
+    ]
+  },
+  {
+    "check": "u10-final-lint",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "exit": 0,
+    "seconds": 27.64,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-lint.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-desktop",
+    "cwd": "desktop",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "exit": 0,
+    "seconds": 0.15,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-desktop.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-repo-checks",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "test:repo"
+    ],
+    "exit": 0,
+    "seconds": 107.55,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-repo-checks.log",
+    "logTailTruncated": true,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-full-daemon-2",
+    "root": "<standalone-suite>",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 580.41,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-full-daemon-2.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      "Test Files  2 failed | 1033 passed | 2 skipped (1037)",
+      "Tests  2 failed | 17068 passed | 5 skipped | 5 todo (17080)"
+    ],
+    "knownFailuresOnly": true,
+    "testCounts": {
+      "passed": 17068,
+      "failed": 2,
+      "skipped": 5,
+      "todo": 5
+    },
+    "fileCounts": {
+      "passed": 1033,
+      "failed": 2,
+      "skipped": 2
+    },
+    "knownFailures": [
+      {
+        "file": "test/auth-bearer-token.test.ts",
+        "symptom": "expected '198.18.0.76' to be null"
+      },
+      {
+        "file": "test/seat-fresh-launch.test.ts",
+        "symptom": "expected spy to be called 1 times, but got 2 times"
+      }
+    ]
+  },
+  {
+    "check": "u10-native-startup-green-2",
+    "root": "<standalone-suite>",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/managed-native-startup.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 0,
+    "seconds": 26.82,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-native-startup-green-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 passed (1)",
+      "Tests  191 passed (191)"
+    ]
+  },
+  {
+    "check": "u10-final-cli-rebuild",
+    "cwd": "engine",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npm",
+      "run",
+      "build",
+      "-w",
+      "packages/cli"
+    ],
+    "exit": 0,
+    "seconds": 2.97,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-cli-rebuild.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-cli-verified",
+    "cwd": ".",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/node",
+      "engine/packages/cli/dist/bin-wrapper.js",
+      "--version"
+    ],
+    "exit": 0,
+    "seconds": 0.27,
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-cli-verified.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-synthetic-focused",
+    "at": "2026-11-07T09:34:33.697953+00:00",
+    "command": [
+      "node",
+      "--test",
+      "src/stock-integration.test.mjs"
+    ],
+    "project": "windows-project",
+    "exit": 0,
+    "seconds": 0.09,
+    "head": "5b423f087892a6da19fc793e733d3865ccd428a4",
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-synthetic-focused.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-final-synthetic-all",
+    "at": "2026-11-07T09:34:33.901368+00:00",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "project": "windows-project",
+    "exit": 0,
+    "seconds": 0.18,
+    "head": "5b423f087892a6da19fc793e733d3865ccd428a4",
+    "ran": true,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-synthetic-all.log",
+    "logTailTruncated": false,
+    "summaryLines": []
+  },
+  {
+    "check": "u10-roster-payload-red",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/chat-panel.test.tsx",
+      "--maxWorkers=2",
+      "-t",
+      "submits the exact roster digest"
+    ],
+    "exit": 1,
+    "seconds": 1.14,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-roster-payload-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 16 skipped (17)"
+    ]
+  },
+  {
+    "check": "u10-roster-ui-verified",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/chat-panel.test.tsx",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 1.37,
+    "ran": true,
+    "status": "passed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-roster-ui-verified.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 passed (1)",
+      "Tests  18 passed (18)"
+    ]
+  },
+  {
+    "check": "u10-candidate-base-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "keeps an in-flight"
+    ],
+    "exit": 1,
+    "seconds": 4.9,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-candidate-base-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 1 passed | 21 skipped (23)"
+    ]
+  },
+  {
+    "check": "u10-candidate-base-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-candidate-adoption.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 12.12,
+    "ran": true,
+    "status": "passed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-candidate-base-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  3 passed (3)",
+      "Tests  75 passed (75)"
+    ]
+  },
+  {
+    "check": "u10-codex-sidecars-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/direct-worker-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "sweeps a native Codex stub to stopped.*valid thread"
+    ],
+    "exit": 1,
+    "seconds": 5.38,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-codex-sidecars-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 12 skipped (13)"
+    ]
+  },
+  {
+    "check": "u10-codex-telemetry-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/direct-worker-launch.test.ts",
+      "test/agent-turn-view-telemetry.test.ts",
+      "test/attempt-telemetry.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 9.83,
+    "ran": true,
+    "status": "passed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-codex-telemetry-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  3 passed (3)",
+      "Tests  58 passed (58)"
+    ]
+  },
+  {
+    "check": "u10-run-action-scope-red",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/overview.test.tsx",
+      "--maxWorkers=2"
+    ],
+    "exit": 1,
+    "seconds": 2.11,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-run-action-scope-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 failed (1)",
+      "Tests  2 failed | 12 passed (14)"
+    ]
+  },
+  {
+    "check": "u10-run-action-scope-green",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/overview.test.tsx",
+      "src/team/__tests__/shell.test.tsx",
+      "src/team/__tests__/new-task.test.tsx",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 1.96,
+    "ran": true,
+    "status": "passed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-run-action-scope-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  3 passed (3)",
+      "Tests  26 passed (26)"
+    ]
+  },
+  {
+    "check": "u10-native-review-projection-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/team-read-model.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 1,
+    "seconds": 5.74,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-native-review-projection-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 29 passed (30)"
+    ]
+  },
+  {
+    "check": "u10-native-review-projection-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/team-read-model.test.ts",
+      "test/review-evidence.test.ts",
+      "test/review-loop.test.ts",
+      "test/team-task-stage.test.ts",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 12.26,
+    "ran": true,
+    "status": "passed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-native-review-projection-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  4 passed (4)",
+      "Tests  74 passed (74)"
+    ]
+  },
+  {
+    "check": "u10-native-startup-green",
+    "root": "<standalone-suite>",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "test/managed-native-startup.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 18.57,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-native-startup-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "Test Files  1 failed (1)",
+      "Tests  2 failed | 189 passed (191)"
+    ]
+  },
+  {
+    "check": "u10-final-full-daemon",
+    "root": "<standalone-suite>",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 587.08,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "earlier-proof",
+    "log": "verification/logs/u10-final-full-daemon.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      "Test Files  3 failed | 1032 passed | 2 skipped (1037)",
+      "Tests  3 failed | 17067 passed | 5 skipped | 5 todo (17080)"
+    ]
+  },
+  {
+    "check": "u10-final-doc-references",
+    "cwd": ".",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/node",
+      "../check-u10-docs.mjs"
+    ],
+    "exit": 1,
+    "seconds": 0.28,
+    "ran": true,
+    "status": "failed",
+    "phase": "documentation-check",
+    "log": "verification/logs/u10-final-doc-references.log",
+    "limitation": "The diagnostic invocation lacked the TypeScript loader."
+  },
+  {
+    "check": "u10-final-doc-references-2",
+    "cwd": "engine",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/node",
+      "--import",
+      "tsx",
+      "<acceptance-scratch>/check-u10-docs.mjs"
+    ],
+    "exit": 1,
+    "seconds": 1.29,
+    "ran": true,
+    "status": "failed",
+    "phase": "documentation-check",
+    "log": "verification/logs/u10-final-doc-references-2.log",
+    "limitation": "The source reference parser resolves two npm workspace paths from the repository root rather than the documented engine directory."
+  },
+  {
+    "check": "u10-final-diff-check",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "cwd": ".",
+    "ran": true,
+    "exit": 0,
+    "status": "passed",
+    "phase": "final",
+    "log": "verification/logs/u10-final-diff-check.log"
+  },
+  {
+    "check": "u10-runtime-base-path-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--testNamePattern",
+      "saved base intact|safe legacy base-record",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 0,
+    "seconds": 4.11,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-base-path-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  1 passed (1)",
+      "      Tests  2 passed | 27 skipped (29)",
+      "   Duration  3.71s (transform 2.09s, setup 37ms, collect 3.06s, tests 449ms, environment 0ms, prepare 41ms)"
+    ],
+    "sourceReceiptSha256": "1dc702deaae838d5bab56749e0d1ba2ba5f875c5952626e44855c2d78b853dff",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-base-path-red-2",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--testNamePattern",
+      "saved base intact|safe legacy base-record",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 4.09,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-base-path-red-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps the safe legacy base-record filename for existing UUID runs",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps another task's saved base intact when an admitted task id contains path separators",
+      " Test Files  1 failed (1)",
+      "      Tests  2 failed | 27 skipped (29)",
+      "   Duration  3.66s (transform 2.11s, setup 34ms, collect 3.09s, tests 385ms, environment 0ms, prepare 40ms)"
+    ],
+    "sourceReceiptSha256": "b1bb8b37dd0c63a50427238ced89644d886339482e8aac80da383852ac1e121a",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-base-path-red-3",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--testNamePattern",
+      "saved base intact|safe legacy base-record",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 4.04,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-base-path-red-3.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps another task's saved base intact when an admitted task id contains path separators",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 1 passed | 27 skipped (29)",
+      "   Duration  3.63s (transform 2.08s, setup 38ms, collect 3.03s, tests 410ms, environment 0ms, prepare 36ms)"
+    ],
+    "sourceReceiptSha256": "04feae7865aeded7672551d4f3423d51298d34d7448c50a09fa04699349a15f7",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-base-path-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--testNamePattern",
+      "keeps another task's saved base intact",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 3.99,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-base-path-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps another task's saved base intact when an admitted task id contains path separators",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 27 skipped (28)",
+      "   Duration  3.55s (transform 2.08s, setup 36ms, collect 3.06s, tests 293ms, environment 0ms, prepare 43ms)"
+    ],
+    "sourceReceiptSha256": "0ea78144c0b1740bc60a7713e684840a58e0163d500f1f85269d5a89fa187412",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-build",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "exit": 0,
+    "seconds": 23.45,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "0e358cc10683bb0c956af3e6d8d1517ff879dccb94533a69bdfaa638e73570f8",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-daemon-focused-2",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "test/agent-turn.test.ts",
+      "test/seat-pane-launch.test.ts",
+      "test/lead-chat.test.ts",
+      "test/lead-manager.test.ts",
+      "test/managed-native-startup.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 0,
+    "seconds": 26.1,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-daemon-focused-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  9 passed (9)",
+      "      Tests  402 passed (402)",
+      "   Duration  25.46s (transform 2.95s, setup 126ms, collect 6.77s, tests 42.76s, environment 1ms, prepare 325ms)"
+    ],
+    "sourceReceiptSha256": "6ad16e259791ec8601db8d4e9199d2eeab1c82c38f419ff7db7667e02ea38811",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-daemon-focused",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "test/agent-turn.test.ts",
+      "test/seat-pane-launch.test.ts",
+      "test/lead-chat.test.ts",
+      "test/lead-manager.test.ts",
+      "test/managed-native-startup.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 29.76,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-daemon-focused.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/agent-turn.test.ts > what a continuation is told > bounds lead progress, reports truncation and keeps another run and task bodies out",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while no task's work has landed",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while any task has failed, the lead included",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while the delivery lead is pending",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while the delivery lead is in-progress",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while the delivery lead is blocked",
+      " Test Files  2 failed | 7 passed (9)",
+      "      Tests  6 failed | 396 passed (402)",
+      "   Duration  29.15s (transform 3.12s, setup 120ms, collect 6.28s, tests 43.19s, environment 1ms, prepare 318ms)"
+    ],
+    "sourceReceiptSha256": "691286f0aba146b7ee63a76544b650c83716c194be799873267deb5e5097d6f1",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-final-build",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "exit": 0,
+    "seconds": 24.74,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-final-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "8c53e93190df39a09eb8d275737b4e376f57340118778880bc9996a0377a9821",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-final-focused",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "test/agent-turn.test.ts",
+      "test/seat-pane-launch.test.ts",
+      "test/lead-chat.test.ts",
+      "test/lead-manager.test.ts",
+      "test/managed-native-startup.test.ts",
+      "test/direct-worker-launch.test.ts",
+      "test/team-read-model.test.ts",
+      "test/run-recovery.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 0,
+    "seconds": 36.34,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-final-focused.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  12 passed (12)",
+      "      Tests  466 passed (466)",
+      "   Duration  35.92s (transform 2.89s, setup 160ms, collect 5.59s, tests 54.53s, environment 1ms, prepare 414ms)"
+    ],
+    "sourceReceiptSha256": "253d4d9f50fb6bb043c0c8613f7840b5f94d45b46fee3e64701e9f70c416cc45",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-final-full-daemon",
+    "root": "<daemon-suite>",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 582.24,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-final-full-daemon.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)",
+      " FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance",
+      " Test Files  2 failed | 1033 passed | 2 skipped (1037)",
+      "      Tests  2 failed | 17084 passed | 5 skipped | 5 todo (17096)",
+      "   Duration  581.78s (transform 9.73s, setup 8.61s, collect 178.87s, tests 849.60s, environment 106ms, prepare 35.19s)"
+    ],
+    "sourceReceiptSha256": "0867b5bc49c2257a2e09b79dc94ec09e87e62a7ca0cb70ac3575f690dde5e9ca",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-final-lint",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "exit": 0,
+    "seconds": 27.36,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-final-lint.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "984651d83a05758a85a9cb29daa60f4378945a741435f6c312cb529bcfa872ff",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-final-smoke",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "smoke"
+    ],
+    "exit": 0,
+    "seconds": 55.27,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-final-smoke.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " Test Files  32 passed (32)",
+      "      Tests  740 passed (740)",
+      "   Duration  41.50s (transform 3.11s, setup 309ms, collect 13.33s, tests 64.99s, environment 3ms, prepare 1.07s)",
+      " Test Files  5 passed (5)",
+      "      Tests  45 passed (45)",
+      "   Duration  3.47s (transform 1.32s, setup 95ms, collect 5.25s, tests 368ms, environment 0ms, prepare 172ms)",
+      " Test Files  2 passed (2)",
+      "      Tests  45 passed (45)",
+      "   Duration  344ms (transform 71ms, setup 82ms, collect 91ms, tests 55ms, environment 0ms, prepare 138ms)",
+      " Test Files  11 passed (11)",
+      "      Tests  88 passed (88)",
+      "   Duration  6.62s (transform 1.43s, setup 532ms, collect 3.23s, tests 5.92s, environment 1.95s, prepare 428ms)"
+    ],
+    "sourceReceiptSha256": "2814cff5eeea05bd169bcff70ee6208c722031746fd91c0f635b944bc54a0372",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-final-suite-build",
+    "command": [
+      "npm",
+      "run",
+      "build",
+      "-w",
+      "packages/i18n",
+      "-w",
+      "packages/daemon",
+      "-w",
+      "packages/cli"
+    ],
+    "cwd": "<daemon-suite>/engine",
+    "exit": 0,
+    "seconds": 12.75,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-final-suite-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "e0b3320f7c8b58a6a70059e34d72db52bcc2a9c6da33257f58711c678dbdc1a0",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-full-daemon",
+    "root": "<daemon-suite>",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 577.96,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-full-daemon.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)",
+      " FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance",
+      " Test Files  2 failed | 1033 passed | 2 skipped (1037)",
+      "      Tests  2 failed | 17082 passed | 5 skipped | 5 todo (17094)",
+      "   Duration  577.44s (transform 9.57s, setup 8.74s, collect 178.31s, tests 841.26s, environment 110ms, prepare 35.06s)"
+    ],
+    "sourceReceiptSha256": "dd5259790ffe861b367d08bbef65ffe7bab913ea441e12c4ecee8302a8404f35",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lead-progress-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "writes durable review progress"
+    ],
+    "exit": 0,
+    "seconds": 5.08,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lead-progress-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  1 passed (1)",
+      "      Tests  1 passed | 5 skipped (6)",
+      "   Duration  4.45s (transform 2.60s, setup 35ms, collect 3.37s, tests 868ms, environment 0ms, prepare 50ms)"
+    ],
+    "sourceReceiptSha256": "b999e133777167876cb27f56143bcb83f4984a8db38c24cf1e4f1169e4885bc9",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lead-progress-red-2",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "writes durable review progress"
+    ],
+    "exit": 1,
+    "seconds": 4.28,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lead-progress-red-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 5 skipped (6)",
+      "   Duration  3.89s (transform 2.41s, setup 35ms, collect 3.17s, tests 528ms, environment 0ms, prepare 39ms)"
+    ],
+    "sourceReceiptSha256": "d78552868736261bcecadcc6061cc4b091eb80e6c56393a307b4cf125a5233ba",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lead-progress-red-3",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "writes durable review progress"
+    ],
+    "exit": 1,
+    "seconds": 64.88,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lead-progress-red-3.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 5 skipped (6)",
+      "   Duration  64.24s (transform 2.55s, setup 34ms, collect 3.33s, tests 60.71s, environment 0ms, prepare 46ms)"
+    ],
+    "sourceReceiptSha256": "cd8880d58e3a7f4249696dd1fa4d2d18c322c166c282d81b251785b61e972cc6",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lead-progress-red-4",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "writes durable review progress"
+    ],
+    "exit": 1,
+    "seconds": 5.01,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lead-progress-red-4.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 5 skipped (6)",
+      "   Duration  4.44s (transform 2.57s, setup 36ms, collect 3.35s, tests 880ms, environment 0ms, prepare 51ms)"
+    ],
+    "sourceReceiptSha256": "172006ce4d7e06ffa261557ef91d521f832d575ff6414df3eb1ca64a4569a283",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lead-progress-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "writes durable review progress"
+    ],
+    "exit": 1,
+    "seconds": 4.81,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lead-progress-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 5 skipped (6)",
+      "   Duration  4.18s (transform 2.58s, setup 34ms, collect 3.37s, tests 604ms, environment 0ms, prepare 48ms)"
+    ],
+    "sourceReceiptSha256": "74fe6800fa0fa3c4969eb388d7bc015ebbcad4fa8633c732cf074b3c77db81f1",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lead-progress-setup",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "writes durable review progress"
+    ],
+    "exit": 1,
+    "seconds": 4.19,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lead-progress-setup.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 5 skipped (6)",
+      "   Duration  3.79s (transform 2.35s, setup 33ms, collect 3.08s, tests 532ms, environment 0ms, prepare 38ms)"
+    ],
+    "sourceReceiptSha256": "8c21e08279e1a912ee0cdfdec536abab40b2e033db61412350389a48ec78659e",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-lint",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "exit": 0,
+    "seconds": 26.71,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-lint.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "3700b9281926ace43809912847c464230a28c546f3e08afdf589d8c0a15d1efe",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-merge-progress-green",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/overview.test.tsx",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 1.74,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-merge-progress-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  1 passed (1)",
+      "      Tests  18 passed (18)",
+      "   Duration  1.35s (transform 111ms, setup 112ms, collect 272ms, tests 292ms, environment 321ms, prepare 35ms)"
+    ],
+    "sourceReceiptSha256": "5a20cb74c91b7ff21a0cf050674194ad300f3ea0545cbd735a484a7f848b7065",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-merge-progress-red",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/overview.test.tsx",
+      "--maxWorkers=2",
+      "-t",
+      "uses observed Merge completion"
+    ],
+    "exit": 1,
+    "seconds": 1.53,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-merge-progress-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  src/team/__tests__/overview.test.tsx > Overview > uses observed Merge completion after refresh, not readiness: true",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 3 passed | 14 skipped (18)",
+      "   Duration  1.13s (transform 111ms, setup 102ms, collect 276ms, tests 97ms, environment 310ms, prepare 37ms)"
+    ],
+    "sourceReceiptSha256": "272e3962b1a6ca4ac70bb58bec42dd7e85a61f2bad3e7b2829d33911b49a7cf5",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-merge-state-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "keeps Merge completion observable"
+    ],
+    "exit": 0,
+    "seconds": 4.33,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-merge-state-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  1 passed (1)",
+      "      Tests  1 passed | 26 skipped (27)",
+      "   Duration  3.71s (transform 2.14s, setup 34ms, collect 3.10s, tests 402ms, environment 0ms, prepare 48ms)"
+    ],
+    "sourceReceiptSha256": "d4dac3e6c38e77e0312227c893ebad297166f225faf1f8681c8751ec0b69bfef",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-merge-state-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "keeps Merge completion observable"
+    ],
+    "exit": 1,
+    "seconds": 4.05,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-merge-state-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps Merge completion observable after refresh, restart and later owner commits",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 26 skipped (27)",
+      "   Duration  3.40s (transform 2.06s, setup 39ms, collect 3.06s, tests 140ms, environment 0ms, prepare 49ms)"
+    ],
+    "sourceReceiptSha256": "3dc00905acd45164ddb84b6f07d4b37d832c5534a304ea178bb8da08570f3832",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-post-seat-build",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "exit": 0,
+    "seconds": 25.02,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-build",
+    "log": "verification/logs/u10-runtime-post-seat-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "40ee74fb89cb6ac61259d539677bf8c57028d65cf2db334bb8294462b6ea5ff2",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-post-seat-focused-2",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/attempt-failure.test.ts",
+      "test/lead-roster.test.ts",
+      "test/owner-slot.test.ts",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "test/agent-turn.test.ts",
+      "test/seat-pane-launch.test.ts",
+      "test/lead-chat.test.ts",
+      "test/lead-manager.test.ts",
+      "test/managed-native-startup.test.ts",
+      "test/direct-worker-launch.test.ts",
+      "test/team-read-model.test.ts",
+      "test/run-recovery.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 0,
+    "seconds": 34.81,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-daemon-focused",
+    "log": "verification/logs/u10-runtime-post-seat-focused-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  15 passed (15)",
+      "      Tests  533 passed (533)",
+      "   Duration  34.39s (transform 2.93s, setup 176ms, collect 8.30s, tests 57.67s, environment 2ms, prepare 507ms)"
+    ],
+    "sourceReceiptSha256": "209ddbdc3f71a6d45a7bd9cd35781f20cdce464f3255b9c4aed3cead372864fa",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "passed": 533,
+      "files": 15
+    }
+  },
+  {
+    "check": "u10-runtime-post-seat-focused",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "test/agent-turn.test.ts",
+      "test/seat-pane-launch.test.ts",
+      "test/lead-chat.test.ts",
+      "test/lead-manager.test.ts",
+      "test/managed-native-startup.test.ts",
+      "test/direct-worker-launch.test.ts",
+      "test/team-read-model.test.ts",
+      "test/run-recovery.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 33.38,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-post-seat-focused.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, false",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: codex, codex_id, worker1, false",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, true",
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker2, false",
+      " Test Files  1 failed | 11 passed (12)",
+      "      Tests  4 failed | 464 passed (468)",
+      "   Duration  32.95s (transform 2.89s, setup 159ms, collect 7.52s, tests 54.05s, environment 1ms, prepare 402ms)"
+    ],
+    "sourceReceiptSha256": "74de4fa9afbd5e7942e4f129fdf78ad249de300431d44b831adaf13740a5f2ff",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-post-seat-full-daemon",
+    "root": "<daemon-suite>",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 586.89,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "final-full-daemon-suite",
+    "log": "verification/logs/u10-runtime-post-seat-full-daemon.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)",
+      " FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance",
+      " Test Files  2 failed | 1033 passed | 2 skipped (1037)",
+      "      Tests  2 failed | 17086 passed | 5 skipped | 5 todo (17098)",
+      "   Duration  586.40s (transform 10.03s, setup 8.84s, collect 183.19s, tests 851.66s, environment 110ms, prepare 35.68s)"
+    ],
+    "sourceReceiptSha256": "ec109d1a7f07b7effdeb5530d345fefd7b29b1aa0a4d19766f0a3685f0432cfa",
+    "newInvocationDuringEvidenceRefresh": false,
+    "classification": "known-failures-only",
+    "counts": {
+      "passed": 17086,
+      "failed": 2,
+      "skipped": 5,
+      "todo": 5,
+      "filesPassed": 1033,
+      "filesFailed": 2,
+      "filesSkipped": 2
+    }
+  },
+  {
+    "check": "u10-runtime-post-seat-lint",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "exit": 0,
+    "seconds": 27.97,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-typecheck",
+    "log": "verification/logs/u10-runtime-post-seat-lint.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "775c1cc53846039f39b77719eb8d2b2a2848156a4b0f5162b20612067afc2976",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-post-seat-smoke",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "smoke"
+    ],
+    "exit": 0,
+    "seconds": 57.3,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-smoke",
+    "log": "verification/logs/u10-runtime-post-seat-smoke.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " Test Files  32 passed (32)",
+      "      Tests  742 passed (742)",
+      "   Duration  42.77s (transform 3.20s, setup 308ms, collect 13.87s, tests 66.65s, environment 3ms, prepare 1.09s)",
+      " Test Files  5 passed (5)",
+      "      Tests  45 passed (45)",
+      "   Duration  3.51s (transform 1.32s, setup 109ms, collect 5.30s, tests 345ms, environment 1ms, prepare 180ms)",
+      " Test Files  2 passed (2)",
+      "      Tests  45 passed (45)",
+      "   Duration  370ms (transform 73ms, setup 88ms, collect 92ms, tests 57ms, environment 0ms, prepare 114ms)",
+      " Test Files  11 passed (11)",
+      "      Tests  88 passed (88)",
+      "   Duration  7.19s (transform 1.58s, setup 597ms, collect 3.52s, tests 6.33s, environment 2.20s, prepare 404ms)"
+    ],
+    "sourceReceiptSha256": "bd42d3d30d0710b3a6eeebb5d818ded6929a5790b4296af551d7a025447ec345",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "daemonPassed": 742,
+      "cliPassed": 45,
+      "i18nPassed": 45,
+      "uiPassed": 88
+    }
+  },
+  {
+    "check": "u10-runtime-post-seat-suite-build-2",
+    "command": [
+      "npm",
+      "run",
+      "build",
+      "-w",
+      "packages/i18n",
+      "-w",
+      "packages/daemon",
+      "-w",
+      "packages/cli"
+    ],
+    "cwd": "<daemon-suite>/engine",
+    "exit": 0,
+    "seconds": 12.58,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-post-seat-suite-build-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "56f5b72080df2f47bc4969e3fe7f9615ff160106ff8dd4e081537e47d4bbbeb0",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-post-seat-suite-build",
+    "command": [
+      "npm",
+      "run",
+      "build",
+      "-w",
+      "packages/i18n",
+      "-w",
+      "packages/daemon",
+      "-w",
+      "packages/cli"
+    ],
+    "cwd": "<daemon-suite>/engine",
+    "exit": 0,
+    "seconds": 12.73,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-post-seat-suite-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "9a9e58f4e5fbe625b92b5855a54b976e69eeb9d53fa630ba1377b5fc1d92a58d",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-preview-focused-2",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 13.09,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-preview-focused-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  4 passed (4)",
+      "      Tests  153 passed (153)",
+      "   Duration  12.49s (transform 2.33s, setup 90ms, collect 4.11s, tests 18.11s, environment 0ms, prepare 155ms)"
+    ],
+    "sourceReceiptSha256": "1cb059fa48c2c18b8c617442f7e7f4bb28cd83652e568f05c9df7be416fc5475",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-preview-focused",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "test/team-workspace.test.ts",
+      "test/team-candidate-launch.test.ts",
+      "test/team-result.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 1,
+    "seconds": 16.59,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-preview-focused.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps a completed result readable after Merge without a restart",
+      " Test Files  1 failed | 3 passed (4)",
+      "      Tests  1 failed | 152 passed (153)",
+      "   Duration  15.96s (transform 2.30s, setup 86ms, collect 5.27s, tests 17.77s, environment 0ms, prepare 166ms)"
+    ],
+    "sourceReceiptSha256": "df430da22a82ac0e2cbd879294561a5613c84ae6338010a6343d9652de23db2c",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-preview-green-2",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "keeps a completed result readable"
+    ],
+    "exit": 0,
+    "seconds": 4.3,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-preview-green-2.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  1 passed (1)",
+      "      Tests  1 passed | 23 skipped (24)",
+      "   Duration  3.68s (transform 2.13s, setup 34ms, collect 3.09s, tests 388ms, environment 0ms, prepare 47ms)"
+    ],
+    "sourceReceiptSha256": "a948ec4dfb0fb4a5fb6458011b5ce07d5082be1126971d8d14cfd4169b30cda1",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-preview-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "keeps a completed result readable"
+    ],
+    "exit": 1,
+    "seconds": 4.33,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-preview-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps a completed result readable after Merge without a restart",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 23 skipped (24)",
+      "   Duration  3.67s (transform 2.16s, setup 33ms, collect 3.11s, tests 370ms, environment 0ms, prepare 45ms)"
+    ],
+    "sourceReceiptSha256": "63d364b15fb3ee555a0104038669d2e3685dfdb1b2c603c8e5bc890d8fff4530",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-preview-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/integration-branch.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "keeps a completed result readable"
+    ],
+    "exit": 1,
+    "seconds": 4.26,
+    "ran": true,
+    "status": "failed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-preview-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps a completed result readable after Merge without a restart",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 23 skipped (24)",
+      "   Duration  3.66s (transform 2.15s, setup 42ms, collect 3.07s, tests 373ms, environment 0ms, prepare 50ms)"
+    ],
+    "sourceReceiptSha256": "7402e28e980be67fb10f8339fe92516ff97f61486e1582d4330c9065d8cba826",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-smoke",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "smoke"
+    ],
+    "exit": 0,
+    "seconds": 53.72,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-smoke.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " Test Files  32 passed (32)",
+      "      Tests  740 passed (740)",
+      "   Duration  40.20s (transform 2.89s, setup 297ms, collect 13.05s, tests 62.63s, environment 3ms, prepare 1.05s)",
+      " Test Files  5 passed (5)",
+      "      Tests  45 passed (45)",
+      "   Duration  3.44s (transform 1.28s, setup 101ms, collect 5.24s, tests 327ms, environment 1ms, prepare 167ms)",
+      " Test Files  2 passed (2)",
+      "      Tests  45 passed (45)",
+      "   Duration  343ms (transform 83ms, setup 91ms, collect 93ms, tests 52ms, environment 0ms, prepare 139ms)",
+      " Test Files  11 passed (11)",
+      "      Tests  88 passed (88)",
+      "   Duration  6.51s (transform 1.39s, setup 514ms, collect 3.13s, tests 5.93s, environment 1.87s, prepare 358ms)"
+    ],
+    "sourceReceiptSha256": "37e2ce3bb99f13d7877d4c318e8f0dbd884202652cbb938ce19680b7b546161a",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-stale-seat-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000",
+      "-t",
+      "recreates a removed bound seat|preserves a bound seat"
+    ],
+    "exit": 0,
+    "seconds": 4.76,
+    "ran": true,
+    "status": "passed",
+    "phase": "regression-after-fix",
+    "log": "verification/logs/u10-runtime-stale-seat-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  1 passed (1)",
+      "      Tests  2 passed | 6 skipped (8)",
+      "   Duration  4.33s (transform 2.55s, setup 38ms, collect 3.36s, tests 769ms, environment 0ms, prepare 39ms)"
+    ],
+    "sourceReceiptSha256": "2ac3e1156705e4f5d4348c0d36404a49d82af5327519eb22da356d7c3c5b542e",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-stale-seat-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "test/seat-pane-launch.test.ts",
+      "--maxWorkers=2",
+      "--testTimeout=60000",
+      "-t",
+      "recreates a removed bound seat"
+    ],
+    "exit": 1,
+    "seconds": 4.58,
+    "ran": true,
+    "status": "failed",
+    "phase": "causal-reproducer-before-fix",
+    "log": "verification/logs/u10-runtime-stale-seat-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 7 skipped (8)",
+      "   Duration  4.13s (transform 2.54s, setup 37ms, collect 3.34s, tests 596ms, environment 0ms, prepare 38ms)"
+    ],
+    "sourceReceiptSha256": "85dff90fa75f103c95d05ac3de77c315a04dd96cd6d71383e1676100e1854326",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-suite-build",
+    "command": [
+      "npm",
+      "run",
+      "build",
+      "-w",
+      "packages/i18n",
+      "-w",
+      "packages/daemon",
+      "-w",
+      "packages/cli"
+    ],
+    "cwd": "<daemon-suite>/engine",
+    "exit": 0,
+    "seconds": 12.43,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-suite-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "343eb69b74d7ad69f1f491954330b07f4fa5ddb4cc3327e14fb8bd09ea2f868a",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-synthetic-final-test",
+    "cwd": "<windows-synthetic-project>",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "exit": 0,
+    "seconds": 0.17,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-merged-synthetic-project",
+    "log": "verification/logs/u10-runtime-synthetic-final-test.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "1f187fa9f2a534ca757fa0b460d331c389dcb0f1ed5353413b91ed009aa989ac",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "passed": 57,
+      "failed": 0
+    }
+  },
+  {
+    "check": "u10-runtime-ui-all",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 67.42,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-ui-suite",
+    "log": "verification/logs/u10-runtime-ui-all.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " Test Files  217 passed (217)",
+      "      Tests  1868 passed | 1 skipped (1869)",
+      "   Duration  67.01s (transform 3.35s, setup 9.50s, collect 21.10s, tests 41.65s, environment 37.06s, prepare 7.11s)"
+    ],
+    "sourceReceiptSha256": "5afe60c6c8df80edbd9b246589952186a39cc702bb80a11daae9b088356b3149",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "passed": 1868,
+      "skipped": 1,
+      "files": 217
+    }
+  },
+  {
+    "check": "u10-runtime-ui-focused",
+    "cwd": "engine/packages/ui",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "src/team/__tests__/overview.test.tsx",
+      "src/team/__tests__/chat-panel.test.tsx",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 2.08,
+    "ran": true,
+    "status": "passed",
+    "phase": "runtime-repair-history",
+    "log": "verification/logs/u10-runtime-ui-focused.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  2 passed (2)",
+      "      Tests  36 passed (36)",
+      "   Duration  1.22s (transform 171ms, setup 221ms, collect 482ms, tests 722ms, environment 656ms, prepare 94ms)"
+    ],
+    "sourceReceiptSha256": "3fd2049b5b30c6206bed753ceea2ab55382e2f88fd873417ac0d2327e800874d",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-runtime-closeout-doc-without-loader",
+    "command": [
+      "node",
+      "--input-type=module",
+      "-e",
+      "import { checkReferences, loadAuthorities } from './engine/scripts/check-first-run-references.mjs';\nconst scope = ['README.md', 'desktop/README.md', 'docs/operations.md'].map(file => ({ file }));\nconst result = await checkReferences(process.cwd(), scope, await loadAuthorities(process.cwd() + '/engine'));\nconsole.log(JSON.stringify(result)); process.exitCode = result.failures.length ? 1 : 0;"
+    ],
+    "exit": 1,
+    "cwd": "<acceptance-worktree>",
+    "ran": true,
+    "status": "failed",
+    "phase": "verification-setup-history",
+    "reason": "Source imports require the documented TypeScript loader; the corrected invocation is recorded separately.",
+    "log": "verification/logs/u10-runtime-closeout-doc-without-loader.log"
+  },
+  {
+    "check": "u10-runtime-closeout-doc-references",
+    "cwd": "<acceptance-worktree>",
+    "command": [
+      "node",
+      "--import",
+      "./engine/node_modules/tsx/dist/loader.mjs",
+      "--input-type=module",
+      "-e",
+      "import { checkReferences, loadAuthorities } from './engine/scripts/check-first-run-references.mjs';\nconst scope = ['README.md', 'desktop/README.md', 'docs/operations.md'].map(file => ({ file }));\nconst result = await checkReferences(process.cwd(), scope, await loadAuthorities(process.cwd() + '/engine'));\nconsole.log(JSON.stringify(result)); process.exitCode = result.failures.length ? 1 : 0;"
+    ],
+    "exit": 1,
+    "seconds": 1.05,
+    "ran": true,
+    "status": "failed",
+    "classification": "two-parser-context-limitations-manually-resolved",
+    "phase": "evidence-closeout",
+    "log": "verification/logs/u10-runtime-closeout-doc-references.log",
+    "stdinDetached": true,
+    "newInvocationDuringEvidenceRefresh": true
+  },
+  {
+    "check": "u10-runtime-closeout-diff-check",
+    "cwd": "<acceptance-worktree>",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.01,
+    "ran": true,
+    "status": "passed",
+    "phase": "evidence-closeout",
+    "log": "verification/logs/u10-runtime-closeout-diff-check.log",
+    "stdinDetached": true,
+    "newInvocationDuringEvidenceRefresh": true
+  },
+  {
+    "check": "u10-desktop-install",
+    "cwd": "desktop",
+    "command": [
+      "env",
+      "ELECTRON_SKIP_BINARY_DOWNLOAD=1",
+      "npm",
+      "ci",
+      "--no-audit",
+      "--no-fund"
+    ],
+    "exit": 0,
+    "seconds": 73.54,
+    "ran": true,
+    "status": "passed",
+    "phase": "desktop-dependency-preparation",
+    "log": "verification/logs/u10-desktop-install.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "a7716ce74a5137d58a94dc79c5b8f941be7eacfa5a3f1b801964a0439d3f1d37",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-desktop-tests",
+    "cwd": "desktop",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "exit": 0,
+    "seconds": 0.22,
+    "ran": true,
+    "status": "passed",
+    "phase": "desktop-preflight-tests",
+    "log": "verification/logs/u10-desktop-tests.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "ℹ tests 26",
+      "ℹ pass 26",
+      "ℹ fail 0",
+      "ℹ duration_ms 52.479016"
+    ],
+    "sourceReceiptSha256": "ab377b75779f7f65d76b8cd9240d02dd25d2d72f6923095940e785f14dee9b73",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-desktop-gh-prompt-red",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/node",
+      "../../node_modules/vitest/vitest.mjs",
+      "run",
+      "test/team-github.test.ts",
+      "--maxWorkers=2",
+      "-t",
+      "clipboard-code prompt"
+    ],
+    "exit": 1,
+    "seconds": 4.63,
+    "ran": true,
+    "status": "failed",
+    "phase": "causal-reproducer-before-parser-fix",
+    "log": "verification/logs/u10-desktop-gh-prompt-red.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " FAIL  test/team-github.test.ts > owner GitHub sign-in > parses the split clipboard-code prompt used by desktop WSL launches",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed | 21 skipped (22)",
+      "   Duration  4.30s (transform 2.05s, setup 40ms, collect 3.01s, tests 1.08s, environment 0ms, prepare 50ms)"
+    ],
+    "sourceReceiptSha256": "e508724d10aae16342a0e3d7070089931ceada41eb4ce257e228a6fe233eecaf",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "failed": 1,
+      "skipped": 21
+    },
+    "classification": "expected-causal-failure-before-fix"
+  },
+  {
+    "check": "u10-desktop-gh-prompt-green",
+    "cwd": "engine/packages/daemon",
+    "command": [
+      "/opt/multi-agent/toolchain/node/bin/node",
+      "../../node_modules/vitest/vitest.mjs",
+      "run",
+      "test/team-github.test.ts",
+      "test/project-bootstrap.test.ts",
+      "--maxWorkers=2"
+    ],
+    "exit": 0,
+    "seconds": 10.84,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-sign-in-and-bootstrap-focused",
+    "log": "verification/logs/u10-desktop-gh-prompt-green.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      " Test Files  2 passed (2)",
+      "      Tests  48 passed (48)",
+      "   Duration  10.55s (transform 2.24s, setup 75ms, collect 6.35s, tests 10.21s, environment 0ms, prepare 78ms)"
+    ],
+    "sourceReceiptSha256": "467a93deb5830f56fb3a6567906e55c485762cbaea54cca21e28bc48b94201f3",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "passed": 48,
+      "files": 2
+    }
+  },
+  {
+    "check": "u10-desktop-parser-lint",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "exit": 0,
+    "seconds": 27.59,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-typecheck",
+    "log": "verification/logs/u10-desktop-parser-lint.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "b65c15064f6bc5fbf8e9987797eb948e2c22502b71a8dfd3afa7acdc93446050",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-desktop-parser-build",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "exit": 0,
+    "seconds": 24.4,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-build",
+    "log": "verification/logs/u10-desktop-parser-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "ed23867e42f13f1b83c8021bce7bfd0bd71474c79d0ded43871ba865444b2d48",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-desktop-parser-smoke",
+    "cwd": "engine",
+    "command": [
+      "npm",
+      "run",
+      "smoke"
+    ],
+    "exit": 0,
+    "seconds": 56.49,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-smoke",
+    "log": "verification/logs/u10-desktop-parser-smoke.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " Test Files  32 passed (32)",
+      "      Tests  742 passed (742)",
+      "   Duration  42.23s (transform 2.99s, setup 305ms, collect 13.76s, tests 65.97s, environment 3ms, prepare 1.11s)",
+      " Test Files  5 passed (5)",
+      "      Tests  45 passed (45)",
+      "   Duration  3.49s (transform 1.29s, setup 101ms, collect 5.30s, tests 342ms, environment 1ms, prepare 178ms)",
+      " Test Files  2 passed (2)",
+      "      Tests  45 passed (45)",
+      "   Duration  364ms (transform 68ms, setup 91ms, collect 94ms, tests 61ms, environment 0ms, prepare 110ms)",
+      " Test Files  11 passed (11)",
+      "      Tests  88 passed (88)",
+      "   Duration  6.98s (transform 1.42s, setup 625ms, collect 3.20s, tests 5.85s, environment 2.30s, prepare 379ms)"
+    ],
+    "sourceReceiptSha256": "4e6a587487a3063546a6e53c466f35f24c69add33423e91101aa1694b0ab85e9",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "daemonPassed": 742,
+      "cliPassed": 45,
+      "i18nPassed": 45,
+      "uiPassed": 88
+    }
+  },
+  {
+    "check": "u10-desktop-current-tests",
+    "cwd": "desktop",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "exit": 0,
+    "seconds": 0.15,
+    "ran": true,
+    "status": "passed",
+    "phase": "final-desktop-tests",
+    "log": "verification/logs/u10-desktop-current-tests.log",
+    "logTailTruncated": false,
+    "summaryLines": [
+      "ℹ tests 26",
+      "ℹ pass 26",
+      "ℹ fail 0",
+      "ℹ duration_ms 52.617093"
+    ],
+    "sourceReceiptSha256": "87cc42d471b4c82ab74041c377854c3f84cb43089d8d359a7f8cd410a8f63e9d",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "passed": 26,
+      "failed": 0
+    }
+  },
+  {
+    "check": "u10-desktop-final-suite-build",
+    "command": [
+      "npm",
+      "run",
+      "build",
+      "-w",
+      "packages/i18n",
+      "-w",
+      "packages/daemon",
+      "-w",
+      "packages/cli"
+    ],
+    "cwd": "standalone-clone/engine",
+    "exit": 0,
+    "seconds": 12.72,
+    "ran": true,
+    "status": "passed",
+    "phase": "standalone-suite-build",
+    "log": "verification/logs/u10-desktop-final-suite-build.log",
+    "logTailTruncated": false,
+    "summaryLines": [],
+    "sourceReceiptSha256": "1c1cf881ae8bce3a774af93999959f90cccb6a1cb7db80463dea9a6b5a5c05f9",
+    "newInvocationDuringEvidenceRefresh": false
+  },
+  {
+    "check": "u10-desktop-full-daemon",
+    "root": "<daemon-suite>",
+    "command": [
+      "npx",
+      "vitest",
+      "run",
+      "--maxWorkers=2",
+      "--testTimeout=60000"
+    ],
+    "exit": 1,
+    "seconds": 572.68,
+    "stdinDetached": true,
+    "noControllingTerminal": true,
+    "ran": true,
+    "status": "failed",
+    "phase": "final-full-daemon-suite",
+    "log": "verification/logs/u10-desktop-full-daemon.log",
+    "logTailTruncated": true,
+    "summaryLines": [
+      " FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)",
+      " FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance",
+      " FAIL  test/stub-runner-determinism.test.ts > stub-runner FULL determinism pin (PRD §5, R3) > produces a byte-identical pane transcript + activity sequence + asset stamps across a double-run",
+      " Test Files  3 failed | 1032 passed | 2 skipped (1037)",
+      "      Tests  3 failed | 17086 passed | 5 skipped | 5 todo (17099)",
+      "   Duration  572.07s (transform 9.22s, setup 8.31s, collect 174.12s, tests 839.20s, environment 109ms, prepare 34.11s)"
+    ],
+    "sourceReceiptSha256": "bfe57a45201cc2e6c30d947b0e7f74751edfa0b28383447c3d73f5f0d266e3c3",
+    "newInvocationDuringEvidenceRefresh": false,
+    "counts": {
+      "passed": 17086,
+      "failed": 3,
+      "skipped": 5,
+      "todo": 5,
+      "filesPassed": 1032,
+      "filesFailed": 3,
+      "filesSkipped": 2
+    },
+    "classification": "known-failures-only",
+    "failures": [
+      {
+        "test": "auth-bearer-token.test.ts:144",
+        "signature": "Intentionally-unresolvable hostname resolves to 198.18.0.76."
+      },
+      {
+        "test": "seat-fresh-launch.test.ts:214",
+        "signature": "Expected one startup submission, observed two."
+      },
+      {
+        "test": "stub-runner-determinism.test.ts:120",
+        "signature": "Stop and UserPromptSubmit activity ordering differs."
+      }
+    ]
+  },
+  {
+    "check": "u10-desktop-closeout-doc-references",
+    "cwd": "<acceptance-worktree>",
+    "command": [
+      "node",
+      "--import",
+      "./engine/node_modules/tsx/dist/loader.mjs",
+      "--input-type=module",
+      "-e",
+      "import { checkReferences, loadAuthorities } from './engine/scripts/check-first-run-references.mjs';\nconst scope = ['README.md', 'desktop/README.md', 'docs/operations.md'].map(file => ({ file }));\nconst result = await checkReferences(process.cwd(), scope, await loadAuthorities(process.cwd() + '/engine'));\nconsole.log(JSON.stringify(result)); process.exitCode = result.failures.length ? 1 : 0;"
+    ],
+    "exit": 1,
+    "seconds": 1.33,
+    "ran": true,
+    "status": "failed",
+    "classification": "two-parser-context-limitations-manually-resolved",
+    "phase": "desktop-evidence-closeout",
+    "log": "verification/logs/u10-desktop-closeout-doc-references.log",
+    "stdinDetached": true,
+    "newInvocationDuringEvidenceRefresh": true
+  },
+  {
+    "check": "u10-desktop-closeout-diff-check",
+    "cwd": "<acceptance-worktree>",
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.02,
+    "ran": true,
+    "status": "passed",
+    "phase": "desktop-evidence-closeout",
+    "log": "verification/logs/u10-desktop-closeout-diff-check.log",
+    "stdinDetached": true,
+    "newInvocationDuringEvidenceRefresh": true
+  }
+]

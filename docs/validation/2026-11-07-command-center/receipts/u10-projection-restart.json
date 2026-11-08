@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-07T08:49:24Z",
+  "reason": "Load the read-only native review projection fix with no active task attempts",
+  "activeAttempts": [],
+  "restart": {
+    "before": {
+      "pid": 2112602,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true,
+    "after": {
+      "pid": 2120739,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    }
+  },
+  "originalDaemonUnchanged": true
+}

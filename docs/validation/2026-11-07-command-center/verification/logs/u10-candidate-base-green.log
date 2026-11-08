@@ -1,0 +1,27 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/team-candidate-launch.test.ts (37 tests) 4077ms
+ ✓ test/team-candidate-adoption.test.ts (15 tests) 1427ms
+ ✓ test/integration-branch.test.ts (23 tests) 7903ms
+   ✓ U7 integration branch and merge > lands two approved tasks as two commits in approval order, and never touches the owner's checkout  389ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: null  504ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-proposal.json  516ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-escalation.json  519ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: src/health.ts  501ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, false  336ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: codex, codex_id, worker1, false  328ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, true  360ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker2, false  308ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: false)  403ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: true)  423ms
+   ✓ U7 integration branch and merge > fails the task with integration_conflict and leaves the branch unchanged when the patch will not apply  360ms
+   ✓ U7 integration branch and merge > makes one merge commit when the owner's branch diverged, and aborts a conflicting merge  439ms
+   ✓ U7 integration branch and merge > finds the branch and worktree again after a restart, and keeps landing on it  404ms
+   ✓ U7 integration branch and merge > serves the integration read and the merge to the owner only  301ms
+
+ Test Files  3 passed (3)
+      Tests  75 passed (75)
+   Start at  15:59:22
+   Duration  11.52s (transform 2.38s, setup 87ms, collect 4.85s, tests 13.41s, environment 0ms, prepare 130ms)
+

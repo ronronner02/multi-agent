@@ -1,0 +1,11 @@
+{
+  "check": "u10-runtime-post-seat-smoke",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "smoke"
+  ],
+  "exit": 0,
+  "seconds": 57.3
+}

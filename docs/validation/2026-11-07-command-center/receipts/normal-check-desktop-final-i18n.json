@@ -1,0 +1,12 @@
+{
+  "check": "desktop-final-i18n",
+  "cwd": "engine/packages/i18n",
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 2.61
+}

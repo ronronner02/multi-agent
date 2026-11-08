@@ -1,0 +1,11 @@
+{
+  "check": "u10-runtime-post-seat-build",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "exit": 0,
+  "seconds": 25.02
+}

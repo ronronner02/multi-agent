@@ -1,0 +1,11 @@
+{
+  "check": "u10-desktop-parser-smoke",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "smoke"
+  ],
+  "exit": 0,
+  "seconds": 56.49
+}

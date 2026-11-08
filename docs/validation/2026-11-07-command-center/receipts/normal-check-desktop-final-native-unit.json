@@ -1,0 +1,10 @@
+{
+  "check": "desktop-final-native-unit",
+  "cwd": "desktop",
+  "command": [
+    "npm",
+    "test"
+  ],
+  "exit": 0,
+  "seconds": 0.15
+}

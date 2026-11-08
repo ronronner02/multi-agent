@@ -1,0 +1,170 @@
+{
+  "head": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "branch": "feat/cc-u10-acceptance",
+  "verifiedSuitePatchSha256": "dfd6c5a8954a0263fc03ee6bdf027dca66e83acc5fbf583f5c11412e96947f69",
+  "productAndTestFilesUnchangedSinceSuite": [
+    {
+      "path": "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "20806d61a2c1c875737c9ffcd044c664d0c48751757ea56531db3cfbfe2ad10e"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "3d46912f6548c5226179f7e2319ffcb031b1faecf680f77a0fa21da46940247c"
+    },
+    {
+      "path": "engine/packages/daemon/src/team-control-surface.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "e8cbe11dd378eb4ced332d33fbdcf7a95893c833ef140241fb4b4f62f44e370b"
+    },
+    {
+      "path": "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "179f07736a4c0c72350fc9ed445bc82ba3e54c6b8ebc6cb631fe0350347013f4"
+    },
+    {
+      "path": "engine/packages/daemon/test/integration-branch.test.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "de9fc73561cbef9803e52d7a3dbd309ad62431cdbd1f4b9e3283c4ee40d89b8e"
+    },
+    {
+      "path": "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "c90cef22df91f85093f9139d049a212de346eb223d60d848bedfaf1aa2281527"
+    },
+    {
+      "path": "engine/packages/daemon/test/run-recovery.test.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "58500e81f0219346925545dc759bf000552519ef3ff3a005ac7f61b0aecff6a6"
+    },
+    {
+      "path": "engine/packages/daemon/test/team-read-model.test.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "14395af0d9262a92dbde9f63fc25f46392be96e482c39a3d6281a06025272116"
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/en.json",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "5a2b9a0ae500192c7fae55831be2ddf8c131ba9cc7ee837267c741be784030ac"
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "0d90c0e4c78cb1437c96c5747dad99addec48b2168f91e08310040717feb3ce1"
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "0e98e5c7d54bd947f3622a54496829711add2a3a3d316690886ac8ea0bb8235d"
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "e0923f6d6eb21c1cd62bea35c7ff0c937773cac12a9218d8beed7d8020c87f53"
+    },
+    {
+      "path": "engine/packages/ui/src/team/chat-panel.tsx",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "186444bb92302c5c662ccf4c17d9ed3846f0abe21c6da5cb7c600d9be2360667"
+    },
+    {
+      "path": "engine/packages/ui/src/team/clients.ts",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "2c8b6e384e427d423a8e3f4ec7b53bd9eae2b83881bb2de42b5d06306ff59943"
+    },
+    {
+      "path": "engine/packages/ui/src/team/overview.tsx",
+      "matchesVerifiedSuiteCandidate": true,
+      "sha256": "02e26338c2a5cd8253c067c8a3067e4f6c1df0fe4acd91be7279fe932ead8d4a"
+    }
+  ],
+  "laterChanges": "README evidence link, acceptance decisions and the evidence bundle only.",
+  "sourcePlan": {
+    "name": "2026-11-06-001-feat-command-center-plan.md",
+    "sha256": "7d3c3172c30978fb6a88530e5266b46783fc267bd82d370742045d121ae09b8d"
+  },
+  "modifiedTrackedFiles": [
+    {
+      "path": "README.md",
+      "sha256": "72f3748f9e5c8e17366e812646f52368995144a8cc841f237016393796e170c0"
+    },
+    {
+      "path": "desktop/README.md",
+      "sha256": "bdf63a0745a21170cec6b23ad4c0be80b00372635fcaba72e3dbcc4c4679a553"
+    },
+    {
+      "path": "docs/known-failures.md",
+      "sha256": "1a4b613648050e350464c06150b30608cca71f033ca51e0e88b51d3cd5de9060"
+    },
+    {
+      "path": "docs/operations.md",
+      "sha256": "63d58e505cc76adc22509e795fca4e87f7fbd5631651f65161e3e25277d91421"
+    },
+    {
+      "path": "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "sha256": "20806d61a2c1c875737c9ffcd044c664d0c48751757ea56531db3cfbfe2ad10e"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "sha256": "3d46912f6548c5226179f7e2319ffcb031b1faecf680f77a0fa21da46940247c"
+    },
+    {
+      "path": "engine/packages/daemon/src/team-control-surface.ts",
+      "sha256": "e8cbe11dd378eb4ced332d33fbdcf7a95893c833ef140241fb4b4f62f44e370b"
+    },
+    {
+      "path": "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "sha256": "179f07736a4c0c72350fc9ed445bc82ba3e54c6b8ebc6cb631fe0350347013f4"
+    },
+    {
+      "path": "engine/packages/daemon/test/integration-branch.test.ts",
+      "sha256": "de9fc73561cbef9803e52d7a3dbd309ad62431cdbd1f4b9e3283c4ee40d89b8e"
+    },
+    {
+      "path": "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "sha256": "c90cef22df91f85093f9139d049a212de346eb223d60d848bedfaf1aa2281527"
+    },
+    {
+      "path": "engine/packages/daemon/test/run-recovery.test.ts",
+      "sha256": "58500e81f0219346925545dc759bf000552519ef3ff3a005ac7f61b0aecff6a6"
+    },
+    {
+      "path": "engine/packages/daemon/test/team-read-model.test.ts",
+      "sha256": "14395af0d9262a92dbde9f63fc25f46392be96e482c39a3d6281a06025272116"
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/en.json",
+      "sha256": "5a2b9a0ae500192c7fae55831be2ddf8c131ba9cc7ee837267c741be784030ac"
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "sha256": "0d90c0e4c78cb1437c96c5747dad99addec48b2168f91e08310040717feb3ce1"
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "sha256": "0e98e5c7d54bd947f3622a54496829711add2a3a3d316690886ac8ea0bb8235d"
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "sha256": "e0923f6d6eb21c1cd62bea35c7ff0c937773cac12a9218d8beed7d8020c87f53"
+    },
+    {
+      "path": "engine/packages/ui/src/team/chat-panel.tsx",
+      "sha256": "186444bb92302c5c662ccf4c17d9ed3846f0abe21c6da5cb7c600d9be2360667"
+    },
+    {
+      "path": "engine/packages/ui/src/team/clients.ts",
+      "sha256": "2c8b6e384e427d423a8e3f4ec7b53bd9eae2b83881bb2de42b5d06306ff59943"
+    },
+    {
+      "path": "engine/packages/ui/src/team/overview.tsx",
+      "sha256": "02e26338c2a5cd8253c067c8a3067e4f6c1df0fe4acd91be7279fe932ead8d4a"
+    }
+  ],
+  "currentTrackedPatchSha256": "3eb404f1aebed025baace107151a5aef22485b4b7fb92bff6c3aec95d73c6514",
+  "acceptanceAmendment": {
+    "path": "docs/amendments/2026-11-07-command-center-acceptance.md",
+    "sha256": "231c2bb034911fa74af99917f56945cbe0703adc5225d893a3084032e30633b2"
+  }
+}

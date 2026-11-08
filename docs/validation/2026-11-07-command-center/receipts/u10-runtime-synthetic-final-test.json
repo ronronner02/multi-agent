@@ -1,0 +1,12 @@
+{
+  "check": "u10-runtime-synthetic-final-test",
+  "cwd": "<windows-synthetic-project>",
+  "command": [
+    "npm",
+    "test"
+  ],
+  "exit": 0,
+  "seconds": 0.17,
+  "stdinDetached": true,
+  "noControllingTerminal": true
+}

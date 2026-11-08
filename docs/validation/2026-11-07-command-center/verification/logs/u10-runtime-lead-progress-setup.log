@@ -1,0 +1,40 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+error connecting to /tmp/seat-pane-LDJe8S/tmux/tmux-1000/default (No such file or directory)
+ ❯ test/seat-pane-launch.test.ts (6 tests | 1 failed | 5 skipped) 532ms
+   ↓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+   × a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy 531ms
+     → {"status":"denied","runId":"lead-progress-run","entityVersion":6,"replayed":false,"effectMayStart":false,"value":null,"reason":"A permission is outside the assignment role's vocabulary","reasonKey":"team.reason.generic"}: expected 'denied' to be 'accepted' // Object.is equality
+   ↓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+   ↓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+   ↓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+   ↓ workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+AssertionError: {"status":"denied","runId":"lead-progress-run","entityVersion":6,"replayed":false,"effectMayStart":false,"value":null,"reason":"A permission is outside the assignment role's vocabulary","reasonKey":"team.reason.generic"}: expected 'denied' to be 'accepted' // Object.is equality
+
+Expected: "accepted"
+Received: "denied"
+
+ ❯ test/seat-pane-launch.test.ts:234:57
+    232|         sourceSession: "owner", destinationSession: seat, body: "Repor…
+    233|       }), binding);
+    234|       expect(admitted.status, JSON.stringify(admitted)).toBe("accepted…
+       |                                                         ^
+    235|     }
+    236|     const impl = governance.findTask(runId, "impl-task")!, review = go…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  18:38:12
+   Duration  3.79s (transform 2.35s, setup 33ms, collect 3.08s, tests 532ms, environment 0ms, prepare 38ms)
+

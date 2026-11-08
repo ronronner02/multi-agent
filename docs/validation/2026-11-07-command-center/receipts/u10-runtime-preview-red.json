@@ -1,0 +1,15 @@
+{
+  "check": "u10-runtime-preview-red",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/integration-branch.test.ts",
+    "--maxWorkers=2",
+    "-t",
+    "keeps a completed result readable"
+  ],
+  "exit": 1,
+  "seconds": 4.26
+}

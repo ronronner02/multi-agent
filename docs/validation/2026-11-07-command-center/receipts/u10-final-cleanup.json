@@ -1,0 +1,67 @@
+{
+  "checkedAt": "2026-11-07T09:53:50.439626+00:00",
+  "serviceStop": {
+    "before": {
+      "pid": 2376613,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true
+  },
+  "activeAttemptsBefore": 0,
+  "activeAttemptsAfter": 0,
+  "tmux": {
+    "ownedSocket": "<acceptance-scratch>/live/tmux/tmux-1000/default",
+    "serverBefore": {
+      "pid": 2065007,
+      "cwd": "<acceptance-worktree>",
+      "startTicks": 7316705
+    },
+    "closedSessions": [
+      {
+        "sessionId": "$0",
+        "name": "lead-1@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      },
+      {
+        "sessionId": "$1",
+        "name": "impl-1@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      },
+      {
+        "sessionId": "$2",
+        "name": "impl-2@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      },
+      {
+        "sessionId": "$3",
+        "name": "review-1@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      }
+    ],
+    "serverExited": true,
+    "broadKillServerUsed": false,
+    "originalDefaultSocketPreserved": true
+  },
+  "remainingTaskCwdProcesses": [],
+  "remainingTaskVitestProcesses": [],
+  "originalDaemon": {
+    "before": {
+      "pid": 1179,
+      "cwd": "<original-daemon-checkout>",
+      "startTicks": 68421
+    },
+    "after": {
+      "pid": 1179,
+      "cwd": "<original-daemon-checkout>",
+      "startTicks": 68421
+    },
+    "untouched": true
+  },
+  "installedApp": {
+    "installationPerformed": false,
+    "replacementPerformed": false
+  },
+  "retained": "Unmerged source, scoped evidence, two synthetic repositories and the private acceptance profile are preserved."
+}

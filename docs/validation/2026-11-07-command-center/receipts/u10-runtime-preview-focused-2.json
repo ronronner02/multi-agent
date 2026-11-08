@@ -1,0 +1,16 @@
+{
+  "check": "u10-runtime-preview-focused-2",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/integration-branch.test.ts",
+    "test/team-workspace.test.ts",
+    "test/team-candidate-launch.test.ts",
+    "test/team-result.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 13.09
+}

@@ -3,11 +3,13 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { createInterfaceI18n, type InterfaceI18n, type MessageKey } from "@openrig/i18n";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import { Bell, ChartColumn, CheckCircle2, GitBranch, House, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
+import { Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
-import { latestRunFor, useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
+import { useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
+import { DocumentsScreen } from "./documents.js";
+import { ProjectHome } from "./project-home.js";
 import { CreateProject, ProjectsScreen } from "./create-project.js";
 import { Overview } from "./overview.js";
 import { TasksScreen } from "./tasks.js";
@@ -15,7 +17,7 @@ import { WorkspaceScreen } from "./workspace/workspace-screen.js";
 import { ReviewsScreen } from "./reviews.js";
 import { SettingsScreen } from "./settings.js";
 import { AnalyticsScreen } from "./analytics.js";
-import { StartRunForm, NewWorkSheet } from "./new-task.js";
+import { NewWorkSheet } from "./new-task.js";
 import { isFinished, readableBranch, taskName } from "./display.js";
 import { isRunActive } from "./clients.js";
 import { TEAM_THEME_PREFERENCES, useThemePreference } from "./theme.js";
@@ -27,7 +29,7 @@ import "./fonts.js";
 import "./team.css";
 
 export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
-export const TEAM_SECTIONS = ["overview", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
+export const TEAM_SECTIONS = ["overview", "documents", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
 export type TeamSection = (typeof TEAM_SECTIONS)[number];
 type TeamDestination = TeamSection;
 const DESTINATIONS: readonly string[] = TEAM_SECTIONS;
@@ -39,25 +41,31 @@ export function teamSection(pathname: string): TeamDestination {
 }
 
 const SECTION_LABELS: Record<TeamDestination, MessageKey> = {
-  overview: "nav.overview", workspace: "nav.workspace", tasks: "nav.tasks", reviews: "nav.reviews",
+  documents: "nav.documents", overview: "nav.overview", workspace: "nav.workspace", tasks: "nav.tasks", reviews: "nav.reviews",
   analytics: "nav.analytics", settings: "nav.settings",
 };
-const NAV_ICONS = { overview: House, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
+const NAV_ICONS = { documents: FileText, overview: House, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
 
 export function Pairing() {
   const { t } = useTranslation();
-  const { paired, pair, revoke } = useOwnerSession();
+  const { paired, pair, revoke, reconnect, canReconnect } = useOwnerSession();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   return <div className="page page-narrow">
-    <section className="plate" aria-label={t("web.pair")}>
+    <section className="plate" aria-label={t(canReconnect ? "settings.connection" : "web.pair")}>
       {paired ? <>
         <h2 className="plate-title">{t("web.paired")}</h2>
         <div className="plate-foot"><button className="btn btn-outline" disabled={busy} onClick={async () => {
           setBusy(true); setFailed(false);
           try { await revoke(); } catch { setFailed(true); } finally { setBusy(false); }
         }}>{t("web.revoke")}</button></div>
+      </> : canReconnect ? <>
+        <h2 className="plate-title">{t("settings.connection")}</h2>
+        <button className="btn btn-primary" disabled={busy} onClick={async () => {
+          setBusy(true); setFailed(false);
+          try { if (!await reconnect()) setFailed(true); } catch { setFailed(true); } finally { setBusy(false); }
+        }}>{t(busy ? "team.connecting" : "action.retry")}</button>
       </> : <>
         <h2 className="plate-title">{t("web.pairRequired")}</h2>
         <form onSubmit={async event => {
@@ -74,7 +82,7 @@ export function Pairing() {
           </div>
         </form>
       </>}
-      {failed && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t(paired ? "web.sessionError" : "web.pairError")}</p>}
+      {failed && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t(paired || canReconnect ? "web.sessionError" : "web.pairError")}</p>}
     </section>
   </div>;
 }
@@ -236,20 +244,33 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
   });
   const canStartWork = showsNewWork(read) && runId !== "";
   const currentRuns = runs.data?.filter(run => run.rigId === selectedTeamId) ?? [];
-  const openProject = (id: string) => go("overview", { team: id || undefined, run: latestRunFor(runs.data, id)?.id, task: undefined });
+  const openProject = (id: string) => { setChatOpen(false); go("overview", { team: id || undefined, run: undefined, task: undefined }); };
+  const openChat = (opener: HTMLButtonElement) => {
+    chatOpener.current = opener;
+    const previous = currentRuns.find(run => run.phase === "planning" && !["canceled", "cancel_requested", "invalidated"].includes(run.state));
+    if (!runId && previous) go(section, { run: previous.id });
+    setChatOpen(true);
+  };
   const openCreate = (opener: HTMLButtonElement) => { createOpener.current = opener; setCreating(true); };
   let content: ReactNode;
   if (!paired) content = <Pairing />;
   else if (section === "settings") content = <SettingsScreen language={language} connection={connection}
     onLanguage={onLanguage} appearance={appearance} background={background} seats={read?.seats ?? team?.seats ?? []}
-    isolation={data.health.data?.runtime?.isolation ?? null} address={window.location.origin} />;
+    isolation={data.health.data?.runtime?.isolation ?? null} address={window.location.origin} teamId={team?.seats.some(seat => seat.role === "lead") ? team.id : undefined} />;
   else if (section === "analytics") content = <AnalyticsScreen teamId={selectedTeamId} seats={read?.seats} />;
-  else if (!runId) content = team ? <div className="page page-narrow"><div className="page-head"><h1 className="display">{team.name}</h1></div>
-    <StartRunForm teams={teams.data} presetTeamId={team.id} onStarted={nextRun => go("overview", { run: nextRun })} /></div>
+  else if (!runId && (teams.isError || runs.isError)) content = <div className="page"><p role="alert">{t("records.readFailed")}</p>
+    <button className="btn btn-outline" onClick={() => { void teams.refetch(); void runs.refetch(); }}>{t("action.retry")}</button></div>;
+  else if (!runId) content = team ? <ProjectHome team={team} runs={currentRuns} section={section}
+    onOpenRun={(id, destination) => go(destination, { run: id, task: undefined })} onDiscuss={openChat} onModels={() => go("settings")} />
     : <ProjectsScreen teams={teams.data} runs={runs.data} loading={teams.isPending} onOpenProject={openProject}
       onOpenRun={nextRun => go("overview", { run: nextRun, task: undefined })} onNewWork={setNewWorkFor} onCreate={openCreate} />;
+  else if (section === "documents") content = <DocumentsScreen key={`documents:${runId}`} read={read} chat={chat.data} failed={chat.isError}
+    onChanged={() => { void chat.refetch(); void data.read.refetch(); }} onDiscuss={(opener, body) => {
+      chatOpener.current = opener; if (body) setDraftContext({ runId, body }); setChatOpen(true);
+    }} />;
   else if (section === "tasks") content = <TasksScreen read={read} selectedTaskId={taskId}
-    onSelect={task => go("tasks", { task })} onNewTask={() => { if (selectedTeamId) setNewWorkFor(selectedTeamId); }} />;
+    onSelect={task => go("tasks", { task })} onOpenWorkspace={task => go("workspace", { task })}
+    onOpenReviews={task => go("reviews", { task })} onNewTask={() => { if (selectedTeamId) setNewWorkFor(selectedTeamId); }} />;
   else if (section === "workspace") content = <WorkspaceScreen key={"workspace-" + runId} read={read} selectedTaskId={taskId} />;
   else if (section === "reviews") content = <ReviewsScreen read={read} selectedTaskId={taskId} integration={integration.isError ? undefined : integration.data}
     onSelect={task => go("reviews", { task })} onAskLead={(task, opener) => {
@@ -257,25 +278,33 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
       setDraftContext({ runId, body: t("reviews.chatContext", { task: taskName(task, t) }) });
       setChatOpen(true);
     }} />;
-  else content = <Overview read={read} chat={chat.data} integration={integration.data}
+  else content = <Overview read={read} chat={chat.data} integration={integration.data} health={data.health.isError ? undefined : data.health.data}
+    onOpenWorkspace={task => go("workspace", { task })} onOpenReviews={task => go("reviews", { task })}
     onOpenTasks={() => go("tasks")} onOpenTask={task => go("tasks", { task })}
     onOpenChat={opener => { chatOpener.current = opener; setChatOpen(true); }} />;
 
-  return <ShellFrame language={language} section={section} appearance={appearance} backgroundMotion={background.motion} project={teamName} runName={runName}
+  return <ShellFrame language={language} section={section} appearance={appearance} backgroundMotion={background.motion} project={teamName} runName={runName ? runName + " · " + t(read?.run.phase === "planning" ? "planning.mode" : "execution.mode") : team ? t("records.projectHistory") : ""}
     coordinator={coordinator} connection={connection} branch={readableBranch(integration.data?.branch ?? "")}
-    notifications={paired ? pendingOwnerDecisions(read, chat.data).length : 0} canChat={paired && !!runId}
+    notifications={paired ? pendingOwnerDecisions(read, chat.data).length : 0} canChat={paired && (!!runId || !!team?.seats.some(seat => seat.role === "lead"))}
     projectPicker={<select className="ui-project-picker" aria-label={t("shell.project")} value={team?.id ?? ""} onChange={event => openProject(event.target.value)}>
       <option value="">{t("shell.allProjects")}</option>{teams.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
-    runPicker={currentRuns.length > 1 ? <select className="ui-runselect" aria-label={t("shell.run")} value={runId}
-      onChange={event => go("overview", { run: event.target.value })}>{currentRuns.map(run => <option key={run.id} value={run.id}>{run.displayName}</option>)}</select> : undefined}
+    runPicker={team ? <select className="ui-runselect" aria-label={t("shell.run")} value={runId}
+      onChange={event => go("overview", { run: event.target.value || undefined, task: undefined })}>
+      <option value="">{t("records.projectHistory")}</option>
+      {(["planning", "delivery"] as const).map(phase => <optgroup key={phase} label={t(phase === "planning" ? "records.planning" : "records.execution")}>
+        {currentRuns.filter(run => (run.phase ?? "delivery") === phase).map(run => <option key={run.id} value={run.id}>{run.displayName}</option>)}
+      </optgroup>)}</select> : undefined}
     onLanguage={onLanguage} hrefFor={next => `/team/${next}?${new URLSearchParams({ ...(runId ? { run: runId } : {}),
       ...(selectedTeamId ? { team: selectedTeamId } : {}), ...(["tasks", "workspace", "reviews"].includes(next) && taskId ? { task: taskId } : {}) })}`} onSelect={go}
-    onOpenChat={opener => { chatOpener.current = opener; setChatOpen(true); }}
+    onOpenChat={openChat}
     onSearch={opener => { paletteOpener.current = opener; setPaletteOpen(true); }}
     onCreateProject={openCreate}
     action={canStartWork ? <button className="btn btn-quiet ui-new-work" onClick={() => { if (selectedTeamId) setNewWorkFor(selectedTeamId); }}>{t("team.teams.newWork")}</button> : undefined}>
+    {read?.run.phase === "planning" && <p className="ui-phase-banner" role="status">{t("planning.executionGate")}</p>}
     {content}
-    {paired && runId && <ChatPanel key={runId} read={read} runId={runId} chat={chat.data} open={chatOpen} onOpenChange={setChatOpen} opener={chatOpener} draftContext={draftContext?.runId === runId ? draftContext : undefined} />}
+    {paired && (runId || team) && <ChatPanel key={`chat:${runId || team?.id}`} read={read} runId={runId} chat={chat.data} connectionError={chat.isError} project={team}
+      onStarted={nextRun => { void runs.refetch(); go("overview", { run: nextRun }); }}
+      onChanged={() => { void chat.refetch(); void data.read.refetch(); }} onOpenDocuments={() => { setChatOpen(false); go("documents"); }} open={chatOpen} onOpenChange={setChatOpen} opener={chatOpener} draftContext={draftContext?.runId === runId ? draftContext : undefined} />}
     <CommandPalette open={paired && paletteOpen} onOpenChange={setPaletteOpen} tasks={paired ? read?.tasks ?? [] : []}
       onChoose={task => go("tasks", { task })} opener={paletteOpener} />
     <CreateProject open={creating} onOpenChange={setCreating} opener={createOpener}

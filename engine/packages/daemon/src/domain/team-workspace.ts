@@ -41,6 +41,12 @@ export type WorkspaceBase =
   | { kind: "commit"; commit: string; files: readonly CandidateFile[] }
   | { kind: "snapshot"; baselineDigest: string; files: readonly CandidateFile[] };
 
+export interface SourceRefMove {
+  ref: string;
+  before: string;
+  after: string;
+}
+
 export interface SourceFingerprint {
   /** `null` while the repository is unborn. */
   head: string | null;
@@ -933,6 +939,11 @@ export function resolveWorkspaceBase(root: string): WorkspaceBase {
   return { kind: "snapshot", baselineDigest: digestManifest(files), files };
 }
 
+function sourceRefs(root: string): string[] {
+  return (gitOrNull(root, ["for-each-ref", "--format=%(refname) %(objectname)"])?.trim() ?? "")
+    .split("\n").filter(line => line && !line.startsWith(TEAM_REF_PREFIX));
+}
+
 /**
  * HEAD, every ref the owner's work can move, and the exact bytes of each dirty or untracked
  * file a change would move.
@@ -944,8 +955,7 @@ export function resolveWorkspaceBase(root: string): WorkspaceBase {
  */
 export function sourceFingerprint(root: string): SourceFingerprint {
   const head = gitOrNull(root, ["rev-parse", "--verify", "HEAD^{commit}"])?.trim() ?? null;
-  const refs = (gitOrNull(root, ["for-each-ref", "--format=%(refname) %(objectname)"])?.trim() ?? "")
-    .split("\n").filter(line => line && !line.startsWith(TEAM_REF_PREFIX)).join("\n");
+  const refs = sourceRefs(root).join("\n");
   const status = git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0").filter(Boolean);
   const dirty = new Map<string, string>();
   for (const entry of status) {
@@ -1227,6 +1237,21 @@ export function verifySourceUnchanged(workspace: CandidateWorkspace): { unchange
       && current.statusDigest === workspace.source.statusDigest && sameDirty,
     current,
   };
+}
+
+/** Account for exactly the ref transition made by a successful owner Merge. */
+export function acceptSourceRefMove(workspace: CandidateWorkspace, move: SourceRefMove): boolean {
+  if (!workspace.integrationSource) return false;
+  const refs = sourceRefs(workspace.sourceRoot);
+  const moved = `${move.ref} ${move.after}`;
+  if (!refs.includes(moved)) return false;
+  const previous = refs.map(ref => ref === moved ? `${move.ref} ${move.before}` : ref).join("\n");
+  // Restoring just this ref must reproduce the recorded digest: no other movement is accepted.
+  if (sha256(previous) !== workspace.source.refsDigest) return false;
+  const source = { ...workspace.source, refsDigest: sha256(refs.join("\n")) };
+  if (!verifySourceUnchanged({ ...workspace, source }).unchanged) return false;
+  workspace.source = source;
+  return true;
 }
 
 /** Whether `descendant` is `ancestor` or a commit reached from it, in one repository. */

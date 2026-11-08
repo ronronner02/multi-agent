@@ -6,7 +6,7 @@ import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
-import { classificationFor } from "../src/domain/attempt-failure.js";
+import { classificationFor, OWNER_ACTIONS } from "../src/domain/attempt-failure.js";
 import { TEAM_CONTROL_VERSION, LEAD_FAILED_REASON, type ControlRequest, type PlanBinding, type UsageEvidence } from "../src/contracts/team-control.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
 
@@ -140,13 +140,15 @@ describe("U8 automatic recovery and Resume", () => {
     }), binding).status).toBe("accepted");
     const qitemId = governance.findTask("run", "lead-task")!.qitemId;
 
-    failTask("lead-task", "lead@rig", "lead", "lead-attempt-1", "evidence_invalid");
+    failTask("lead-task", "lead@rig", "lead", "lead-attempt-1", "agent_error.provider_network");
     // One retry is spent by the daemon, and the lead's task is work nobody is doing again.
     expect(governance.getRun("run").retriesUsed).toBe(1);
     expect(governance.getRun("run").state).toBe("approved");
     expect(governance.queueState(qitemId)).toBe("pending");
+    expect(governance.getTask(qitemId)!.evidence?.retryNotBefore).toBe("2026-11-06T00:02:00.000Z");
 
-    failTask("lead-task", "lead@rig", "lead", "lead-attempt-2", "evidence_invalid");
+    now = new Date("2026-11-06T00:02:00.000Z");
+    failTask("lead-task", "lead@rig", "lead", "lead-attempt-2", "agent_error.provider_network");
     // No budget left and no one to wake: the owner gets the one Resume action that adds it.
     expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason: "retry limit exhausted",
       stateReasonKey: "team.reason.retryLimitExhausted" });
@@ -162,7 +164,10 @@ describe("U8 automatic recovery and Resume", () => {
    * the run must reach the owner as a blocked run Resume can restart. Before this, it stayed
    * `approved` with a failed lead task and nothing ever happened again.
    */
-  it("blocks a run whose lead failed without a retry, and Resume reopens the lead", () => {
+  it.each([
+    ["evidence_invalid", LEAD_FAILED_REASON, "team.reason.leadFailed"],
+    ["agent_error.provider_auth_or_access", OWNER_ACTIONS["agent_error.provider_auth_or_access"], "team.reason.generic"],
+  ] as const)("blocks a lead after %s without a retry, and Resume reopens it", (reasonCode, stateReason, stateReasonKey) => {
     approve();
     expect(governance.createTask(command("lead-task", {
       assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
@@ -170,10 +175,9 @@ describe("U8 automatic recovery and Resume", () => {
     }), binding).status).toBe("accepted");
     const qitemId = governance.findTask("run", "lead-task")!.qitemId;
 
-    failTask("lead-task", "lead@rig", "lead", "lead-attempt-1", "agent_error.provider_auth_or_access");
+    failTask("lead-task", "lead@rig", "lead", "lead-attempt-1", reasonCode);
     expect(governance.getRun("run").retriesUsed).toBe(0);
-    expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason: LEAD_FAILED_REASON,
-      stateReasonKey: "team.reason.leadFailed" });
+    expect(governance.getRun("run")).toMatchObject({ state: "blocked", stateReason, stateReasonKey });
     expect(governance.queueState(qitemId)).toBe("failed");
 
     // One plain Resume: no budget increase, because nothing was spent.
@@ -191,8 +195,10 @@ describe("U8 automatic recovery and Resume", () => {
     }), binding).status).toBe("accepted");
     const qitemId = governance.findTask("run", "task-1")!.qitemId;
 
-    failTask("task-1", "builder@rig", "implementer", "attempt-1", "evidence_invalid");
-    failTask("task-1", "builder@rig", "implementer", "attempt-2", "evidence_invalid");
+    failTask("task-1", "builder@rig", "implementer", "attempt-1", "agent_error.provider_network");
+    expect(governance.getTask(qitemId)!.evidence?.retryNotBefore).toBe("2026-11-06T00:02:00.000Z");
+    now = new Date("2026-11-06T00:02:00.000Z");
+    failTask("task-1", "builder@rig", "implementer", "attempt-2", "agent_error.provider_network");
     // The implementer's second failure is the lead's news: its budget is spent, but the lead can
     // still replace, split or re-scope the task without an owner decision.
     expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 1, stateReason: null });

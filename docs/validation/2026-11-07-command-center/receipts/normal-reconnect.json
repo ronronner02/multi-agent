@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-07T23:37:27.341Z",
+  "ownerCookiePresentBefore": true,
+  "cookieRestored": true,
+  "formValuePreserved": true,
+  "sameInput": true,
+  "sameDocument": true,
+  "url": "http://127.0.0.1:7433/team/overview",
+  "manualPairingVisible": false,
+  "skinTime": 22.8593,
+  "responses": [
+    {
+      "path": "/api/team-control/health",
+      "status": 401,
+      "method": "GET"
+    },
+    {
+      "path": "/api/team-control/health",
+      "status": 200,
+      "method": "GET"
+    }
+  ],
+  "pageErrors": [],
+  "applicationWrites": []
+}

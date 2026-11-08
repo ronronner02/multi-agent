@@ -109,7 +109,7 @@ describe("the owner's reserved lead slot", () => {
       return { ok: true, startupStatus: "ready" };
     });
     const dispatch = composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes: async () => [{ id: "%1" }] } as never,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }] } as never,
       startupOrchestrator: { startNode } as never,
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
       maxSessions: () => 2, liveSessions: live });
@@ -133,7 +133,7 @@ describe("the owner's reserved lead slot", () => {
     const startNode = vi.fn(async () => ({ ok: true, startupStatus: "ready" }));
     const respawnPane = vi.fn(async () => {});
     const dispatch = composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: true, code: 0 }), respawnPane } as never,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: true, code: 0 }), respawnPane } as never,
       startupOrchestrator: { startNode } as never,
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never, maxSessions: () => 2, liveSessions: live });
     await dispatch("run", "lead");
@@ -158,7 +158,7 @@ describe("the owner's reserved lead slot", () => {
     sessions.updateBinding("lead", { attachmentType: "tmux", tmuxSession: "lead@fixture", tmuxPane: "%1" });
     const startNode = vi.fn(async () => ({ ok: true, startupStatus: "ready" }));
     const dispatch = composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes: async () => [{ id: "%1" }] } as never, startupOrchestrator: { startNode } as never,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }] } as never, startupOrchestrator: { startNode } as never,
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never, maxSessions: () => 2, liveSessions: live });
     await dispatch("run", "lead");
     expect(startNode).not.toHaveBeenCalled();
@@ -241,7 +241,7 @@ describe("the owner's reserved lead slot", () => {
       .run(JSON.stringify({ retryNotBefore: "2026-11-07T00:02:00.000Z" }), task("lead").qitemId);
     const startNode = vi.fn(async () => ({ ok: true }));
     await composeTaskDispatch({ rigRepo: new RigRepository(db), sessions, now: () => new Date(now),
-      tmux: { listPanes: async () => [{ id: "%1" }] } as never, startupOrchestrator: { startNode } as never,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }] } as never, startupOrchestrator: { startNode } as never,
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
       maxSessions: () => 2, liveSessions: live })("run", "lead");
     expect(startNode).not.toHaveBeenCalled();

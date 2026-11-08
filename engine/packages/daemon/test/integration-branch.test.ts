@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
@@ -14,7 +14,9 @@ import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { composeTaskDispatch } from "../src/domain/task-dispatch.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
-import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
+import { WorkflowRuntime, dependencySatisfied } from "../src/domain/workflow-runtime.js";
+import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { sourceFingerprint } from "../src/domain/team-workspace.js";
 import { composeIntegration, type Integration } from "../src/domain/integration-branch.js";
 import { commitPlan, ensurePlanWorktree, runSlug } from "../src/domain/plan-branch.js";
 import { bindingForGoal, refreshPlanBinding, unisolatedPolicyCapability } from "../src/routes/team-start.js";
@@ -96,6 +98,7 @@ describe("U7 integration branch and merge", () => {
       assignmentRoot: () => assignments, defaultWorker: () => "worker1" });
     integration = composeIntegration({ db, governance, worktreeRoot: () => worktrees,
       candidateManifest: (id, taskId) => runtime.candidateManifestFor(id, taskId),
+      sourceRefMoved: (repository, move) => runtime.acceptOwnerMerge(repository, move),
       currentBinding, log: () => {} });
   };
 
@@ -210,6 +213,41 @@ describe("U7 integration branch and merge", () => {
     if (directory) { writable(directory); rmSync(directory, { recursive: true, force: true }); }
   });
 
+  it.each([false, true])("waits for reviewed dependencies to land before staging a dependent (restart: %s)", async restart => {
+    // The two tasks own disjoint files, as the live dependency graph requires.
+    const prerequisite = governance.findTask(runId, "task-a")!;
+    db.prepare("UPDATE team_queue_authority SET assignment_json = ? WHERE qitem_id = ?")
+      .run(JSON.stringify({ ...prerequisite.assignment, paths: ["src/health.ts"] }), prerequisite.qitemId);
+    expect(admit("consumer", "implementer", "consumer@rig", { paths: ["src/consumer.ts"], dependencies: ["task-a"] }).status).toBe("accepted");
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    const launch = () => {
+      const task = governance.findTask(runId, "consumer")!;
+      return runtime.admitForLaunch(runId, { attemptId: "consumer-attempt", worker: "worker1",
+        assignment: task.assignment, outputs: [], permissions: ["write-assigned-tree"],
+        context: { runId, role: "implementer", binding: currentBinding() } as ContextManifest });
+    };
+    const ready = () => dependencySatisfied(db, queue,
+      qitemId => governance.getTask(qitemId)?.evidence?.validated === true, runId, "task-a");
+    const consumerRoot = join(assignments, "worker1", `${runId}-consumer`);
+
+    complete("task-a");
+    expect(ready()).toBe(false);
+    expect(launch).toThrow("Dependency lacks validated success");
+    expect(existsSync(consumerRoot)).toBe(false);
+
+    approveReview("task-a");
+    expect(ready()).toBe(false);
+    expect(launch).toThrow("Dependency lacks validated success");
+    expect(existsSync(consumerRoot)).toBe(false);
+
+    expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
+    if (restart) { db.close(); open(); compose(); }
+    expect(ready()).toBe(true);
+    const admitted = launch();
+    expect(readFileSync(join(admitted.candidate, "src/health.ts"), "utf8")).toBe("export const health = () => 'ok';\n");
+    expect(git(admitted.candidate, "rev-parse", "HEAD").trim()).toBe(head());
+  });
+
   it("lands two approved tasks as two commits in approval order, and never touches the owner's checkout", async () => {
     const ownerHead = git(repo, "rev-parse", "HEAD").trim();
     const ownerStatus = git(repo, "status", "--porcelain=v1").trim();
@@ -250,6 +288,45 @@ describe("U7 integration branch and merge", () => {
    * failed, and the branch carried the plan commit but no task's work. The owner must never be
    * offered that merge, because it would land the plan and nothing the team was asked to do.
    */
+  it("keeps the safe legacy base-record filename for existing UUID runs", () => {
+    const legacyRun = "11111111-2222-4333-8444-555555555555";
+    const legacyBinding = currentBinding();
+    runId = legacyRun;
+    governance.createRun({ id: legacyRun, rigId: "rig", binding: legacyBinding });
+    governance.requestApproval(request("legacy-implementation", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(legacyBinding) }, targetDigest: hashBinding(legacyBinding),
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString() }), owner);
+    expect(governance.decideApproval(request("legacy-implementation", { approvalVersion: 1, decision: "approved" }),
+      owner, legacyBinding).status).toBe("accepted");
+    const candidate = runtime.candidateFor(legacyRun, "legacy-task", "worker1");
+    const savedPath = join(directory, "candidate-records", `${legacyRun}-legacy-task.lead-base.json`);
+    expect(JSON.parse(readFileSync(savedPath, "utf8"))).toEqual(candidate.base);
+    db.close(); open(); compose();
+    expect(runtime.candidateFor(legacyRun, "legacy-task", "worker1").base).toEqual(candidate.base);
+  });
+
+  it("keeps another task's saved base intact when an admitted task id contains path separators", async () => {
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    const records = join(directory, "candidate-records");
+    const savedNames = readdirSync(records, { recursive: true }).filter(name => String(name).endsWith(".lead-base.json"));
+    expect(savedNames).toHaveLength(1);
+    const savedName = String(savedNames[0]);
+    const savedPath = join(records, savedName);
+    const savedBase = readFileSync(savedPath, "utf8");
+    expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
+    const taskId = `pad/../../candidate-records/${savedName.slice(0, -".lead-base.json".length)}`;
+    expect(admit(taskId, "implementer", "impl@rig").status).toBe("accepted");
+    const added = runtime.candidateFor(runId, taskId, "worker1");
+    expect(added.base).not.toEqual(JSON.parse(savedBase));
+    expect(readFileSync(savedPath, "utf8")).toBe(savedBase);
+
+    db.close(); open(); compose();
+    expect(runtime.candidateFor(runId, "task-a", "worker1").base).toEqual(JSON.parse(savedBase));
+    expect(runtime.candidateFor(runId, taskId, "worker1").base).toEqual(added.base);
+  });
+
   it("does not offer a merge while no task's work has landed", async () => {
     const ownerHead = git(repo, "rev-parse", "HEAD").trim();
     stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
@@ -258,7 +335,7 @@ describe("U7 integration branch and merge", () => {
 
     const status = integration.status(runId);
     expect(status.commits).toEqual([]);
-    expect(status.merge).toEqual({ possible: false, reason: "No task's work has landed on the integration branch yet." });
+    expect(status.merge).toEqual({ possible: false, merged: false, reason: "No task's work has landed on the integration branch yet." });
     expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
     // The refusal is what keeps the owner's checkout exactly where it was.
     expect(git(repo, "rev-parse", "HEAD").trim()).toBe(ownerHead);
@@ -289,7 +366,7 @@ describe("U7 integration branch and merge", () => {
     expect(failed.status, JSON.stringify(failed)).toBe("observed");
 
     expect(governance.queueState(lead.qitemId)).toBe("failed");
-    expect(integration.status(runId).merge).toEqual({ possible: false, reason: "Task(s) failed: lead-task" });
+    expect(integration.status(runId).merge).toEqual({ possible: false, merged: false, reason: "Task(s) failed: lead-task" });
     expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
   });
 
@@ -352,13 +429,14 @@ describe("U7 integration branch and merge", () => {
         assignment: { taskId: "lead-task", role: "lead", paths: ["src"], dependencies: [] },
         outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Manage delivery",
       }), currentBinding()).status).toBe("accepted");
-      if (unsafe) {
-        startAttempt("lead-task", "attempt-lead", "lead");
-        expect(governance.recordUsage(request("attempt-lead", {
-          expectedAttemptVersion: governance.getAttempt("attempt-lead")!.entityVersion, state: "stopped", usage: unusedUsage,
-          failure: classificationFor("agent_error.provider_invalid_request"),
-        })).status).toBe("observed");
-      }
+      startAttempt("lead-task", "attempt-lead", "lead");
+      expect(governance.recordUsage(request("attempt-lead", {
+        expectedAttemptVersion: governance.getAttempt("attempt-lead")!.entityVersion, state: "stopped", usage: unusedUsage,
+        ...(unsafe ? { failure: classificationFor("agent_error.provider_invalid_request") } : {}),
+      })).status).toBe("observed");
+      db.prepare("INSERT INTO events (type, payload) VALUES ('managed.attempt.receipt', ?)").run(JSON.stringify({
+        sessionName: "lead@rig", receipt: { attemptId: "attempt-lead", runId, client, identity: { nativeSessionId: "lead-conversation" } },
+      }));
       mkdirSync(join(assignments, previousWorker), { recursive: true });
       const previous = runtime.candidateFor(runId, "lead-task", previousWorker);
       writeFileSync(join(previous.root, "lead-proposal.json"), "[]");
@@ -375,7 +453,7 @@ describe("U7 integration branch and merge", () => {
       expect(git(previous.root, "rev-parse", "HEAD").trim()).not.toBe(head());
       const started: Array<{ continueSessionId?: string }> = [];
       await composeTaskDispatch({
-        rigRepo, sessions, tmux: { listPanes: async () => [{ id: "%1" }] } as never,
+        rigRepo, sessions, tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }] } as never,
         startupOrchestrator: { startNode: async (input: { continueSessionId?: string }) => {
           started.push(input);
           return { ok: true, startupStatus: "ready", continuityOutcome: continued ? "resumed" : "fresh" };
@@ -405,11 +483,11 @@ describe("U7 integration branch and merge", () => {
       outputs: [], permissions: [], sourceSession: "owner", destinationSession: "lead@rig", body: "Manage delivery",
     }), currentBinding()).status).toBe("accepted");
     db.prepare("UPDATE queue_items SET state = ? WHERE qitem_id = ?").run(state, governance.findTask(runId, "lead-task")!.qitemId);
-    expect(integration.status(runId).merge).toEqual({ possible: false, reason: "Task(s) still open: lead-task" });
+    expect(integration.status(runId).merge).toEqual({ possible: false, merged: false, reason: "Task(s) still open: lead-task" });
     expect(integration.merge(runId)).toMatchObject({ status: "refused", code: "merge_not_ready" });
   });
 
-  it("keeps an in-flight candidate's recorded base and applies it on top of the moved head", async () => {
+  it.each([false, true])("keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: %s)", async restart => {
     expect(admit("task-b", "implementer", "impl@rig").status).toBe("accepted");
     // Both tasks start from the same head; the second candidate is staged before anything lands.
     const a = stage("task-a", "src/shared.ts", "export const shared = 'a';\n");
@@ -422,10 +500,14 @@ describe("U7 integration branch and merge", () => {
     expect((await integration.integrate(runId, "task-a")).status).toBe("committed");
     expect(head()).not.toBe(stagedAt);
 
+    if (restart) { db.close(); open(); compose(); }
+
     // The candidate was staged from a head the branch has moved past, and the daemon can still
     // read it: it keeps its own base, and its patch lands on top of the landed work.
     const manifest = runtime.candidateManifestFor(runId, "task-b");
     expect(manifest.baseIdentifier).toBe(stagedAt);
+    expect(taskCompletionEvidence({ role: "implementer", assignmentPaths: ["src/other.ts"], manifest }))
+      .toMatchObject({ validated: true, changedPaths: ["src/other.ts"], outsideAssignment: [] });
     complete("task-b");
     approveReview("task-b");
     expect((await integration.integrate(runId, "task-b")).status).toBe("committed");
@@ -507,6 +589,60 @@ describe("U7 integration branch and merge", () => {
     expect(integration.status(runId).commits).toHaveLength(1);
   });
 
+  it("keeps a completed result readable after Merge without a restart", async () => {
+    const candidate = stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    await integration.integrate(runId, "task-a");
+    const result = runtime.candidateManifestFor(runId, "task-a");
+    const beforeMerge = sourceFingerprint(candidate.sourceRoot);
+
+    expect(integration.merge(runId)).toMatchObject({ status: "merged", mode: "fast-forward" });
+    const afterMerge = sourceFingerprint(candidate.sourceRoot);
+    expect(afterMerge).toMatchObject({ head: beforeMerge.head, statusDigest: beforeMerge.statusDigest,
+      dirtyHashes: beforeMerge.dirtyHashes });
+    expect(afterMerge.refsDigest).not.toBe(beforeMerge.refsDigest);
+
+    // A fresh runtime and the existing runtime must read the same registered candidate.
+    const cachedRuntime = runtime;
+    compose();
+    expect(runtime.candidateManifestFor(runId, "task-a")).toEqual(result);
+    expect(cachedRuntime.candidateManifestFor(runId, "task-a")).toEqual(result);
+
+    const earlierRun = runId;
+    runId = "run-2";
+    const later = ensurePlanWorktree({ repositoryRoot: repo, worktreeRoot: worktrees, runId, name: runName }).path;
+    commitPlan({ worktree: later, planRef: "plan.md", plan: "# Plan\n\nAdd metrics.\n", message: "plan: metrics" });
+    binding = bindingForGoal({ root: later, planRef: "plan.md", writePaths: ["src"], policy });
+    governance.createRun({ id: runId, rigId: "rig", binding, reviewerSeat: "review@rig", displayName: runName });
+    governance.requestApproval(request("implementation-run-2", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding),
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString() }), { kind: "worker", sessionId: "lead@rig" });
+    expect(governance.decideApproval(request("implementation-run-2", { approvalVersion: 1, decision: "approved" }),
+      owner, binding).status).toBe("accepted");
+    expect(admit("task-b", "implementer", "impl@rig").status).toBe("accepted");
+    stage("task-b", "src/metrics.ts", "export const metrics = () => ({});\n");
+    complete("task-b");
+    approveReview("task-b");
+    expect((await integration.integrate(runId, "task-b")).status).toBe("committed");
+    expect(integration.merge(runId)).toMatchObject({ status: "merged", mode: "fast-forward" });
+    expect(runtime.candidateManifestFor(earlierRun, "task-a")).toEqual(result);
+  });
+
+  it.each([false, true])("does not forgive unrelated source changes during Merge (invalidated: %s)", async (invalidated) => {
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    await integration.integrate(runId, "task-a");
+    git(repo, "branch", "owner-other");
+    if (invalidated) {
+      expect(() => runtime.candidateManifestFor(runId, "task-a")).toThrow(/Source checkout changed/);
+      git(repo, "branch", "-D", "owner-other");
+    }
+    expect(integration.merge(runId).status).toBe("merged");
+    expect(() => runtime.candidateManifestFor(runId, "task-a")).toThrow(/Source checkout changed/);
+  });
+
   it("refuses a merge while work is open, fast-forwards a clean checkout, and refuses a dirty one", async () => {
     stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
     const stillOpen = integration.merge(runId);
@@ -527,6 +663,33 @@ describe("U7 integration branch and merge", () => {
     expect(merged).toMatchObject({ status: "merged", mode: "fast-forward", branch: branch() });
     expect(git(repo, "rev-parse", "HEAD").trim()).toBe(head());
     expect(git(repo, "show", "--format=", "--name-only", "HEAD").trim()).toBe("src/health.ts");
+  });
+
+  it("keeps Merge completion observable after refresh, restart and later owner commits", async () => {
+    const ownerBase = git(repo, "rev-parse", "HEAD").trim();
+    expect(integration.status(runId).merge.merged).toBe(false);
+    stage("task-a", "src/health.ts", "export const health = () => 'ok';\n");
+    complete("task-a");
+    approveReview("task-a");
+    await integration.integrate(runId, "task-a");
+    expect(integration.status(runId).merge.merged).toBe(false);
+    expect(integration.merge(runId).status).toBe("merged");
+    expect(integration.status(runId).merge.merged).toBe(true);
+
+    db.close();
+    open();
+    compose();
+    expect(integration.status(runId).merge.merged).toBe(true);
+    writeFileSync(join(repo, "src", "base.ts"), "export const base = 2;\n");
+    expect(integration.status(runId).merge).toMatchObject({ possible: false, merged: true });
+    git(repo, "add", "src/base.ts");
+    git(repo, "commit", "--quiet", "-m", "later owner work");
+    expect(integration.status(runId).merge.merged).toBe(true);
+
+    git(repo, "checkout", "-b", "different-owner-branch", ownerBase);
+    expect(integration.status(runId).merge.merged).toBe(false);
+    git(repo, "update-ref", "-d", `refs/heads/${branch()}`);
+    expect(integration.status(runId).merge.merged).toBeNull();
   });
 
   it("makes one merge commit when the owner's branch diverged, and aborts a conflicting merge", async () => {
@@ -619,6 +782,11 @@ describe("U7 integration branch and merge", () => {
     const merged = await call(`/runs/${runId}/merge`, "owner-fixture", "POST", mergeBody);
     expect(merged.status).toBe(200);
     expect(await merged.json()).toMatchObject({ status: "merged", mode: "fast-forward", branch: branch() });
+    const result = await call(`/runs/${runId}/tasks/task-a/result`, "owner-fixture");
+    expect(result.status).toBe(200);
+    expect(await result.json()).toMatchObject({ result: { patch: expect.stringContaining("export const health") } });
+    expect(await (await call(`/runs/${runId}/integration`, "owner-fixture")).json())
+      .toMatchObject({ integration: { merge: { merged: true } } });
     const again = await call(`/runs/${runId}/merge`, "owner-fixture", "POST", { ...mergeBody, idempotencyKey: "merge-route-2" });
     expect(again.status).toBe(200);
     expect(await again.json()).toMatchObject({ status: "merged", mode: "up-to-date" });

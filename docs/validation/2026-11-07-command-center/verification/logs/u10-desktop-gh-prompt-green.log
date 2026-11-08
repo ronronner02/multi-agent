@@ -1,0 +1,28 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/team-github.test.ts (22 tests) 3037ms
+   ✓ owner GitHub sign-in > holds a new login until sign-out completes while waiting for login-close  428ms
+   ✓ owner GitHub sign-in > holds a new login until sign-out completes while waiting for logout  372ms
+ ✓ test/project-bootstrap.test.ts (26 tests) 7177ms
+   ✓ project creation through the owner route > creates a missing folder, private origin, pushed initial commit, and configured lead only  387ms
+   ✓ project creation through the owner route > excludes credential paths without changing the owner's existing ignore file or index: own ignore false  389ms
+   ✓ project creation through the owner route > excludes credential paths without changing the owner's existing ignore file or index: own ignore true  389ms
+   ✓ project creation through the owner route > leaves no team on a name conflict, and allows a new name without another initial commit  402ms
+   ✓ project creation through the owner route > resumes a failed push after database reopen using the same team, remote, branch and commit  483ms
+   ✓ project creation through the owner route > refuses a changed origin on push retry rather than creating or pushing another repository  336ms
+   ✓ project creation through the owner route > keeps a push pending if the created repository is now public  408ms
+   ✓ project creation through the owner route > keeps an unchecked destination empty for a local insteadOf rewrite  464ms
+   ✓ project creation through the owner route > keeps an unchecked destination empty for a local pushInsteadOf rewrite  461ms
+   ✓ project creation through the owner route > keeps an unchecked destination empty for a global insteadOf rewrite  460ms
+   ✓ project creation through the owner route > keeps an unchecked destination empty for a global pushInsteadOf rewrite  458ms
+   ✓ project creation through the owner route > refuses explicit and multiple unchecked push URLs on retry  679ms
+   ✓ project creation through the owner route > serializes overlapping Create requests instead of creating a second remote or team  331ms
+   ✓ project creation through the owner route > recovers origin installed before its checkpoint and previews the pending push  469ms
+   ✓ project creation through the owner route > pushes only the selected existing commit while leaving other branches and dirty work local  480ms
+
+ Test Files  2 passed (2)
+      Tests  48 passed (48)
+   Start at  21:24:18
+   Duration  10.55s (transform 2.24s, setup 75ms, collect 6.35s, tests 10.21s, environment 0ms, prepare 78ms)
+

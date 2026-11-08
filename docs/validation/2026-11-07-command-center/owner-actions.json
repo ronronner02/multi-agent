@@ -1,0 +1,264 @@
+{
+  "window": "Four acceptance runs, including the failed first run, supplementary run and final runtime repeat.",
+  "recordedPostResponses": 25,
+  "submissionCounts": {
+    "technical-session": 4,
+    "owner-surface": 20,
+    "upload-preview": 2
+  },
+  "mainSubmissionKinds": {
+    "sign-in": 1,
+    "create-project": 2,
+    "start-work": 4,
+    "approve-plan": 5,
+    "chat": 4,
+    "cancel": 1,
+    "merge": 3
+  },
+  "externalDeviceApproval": {
+    "count": 1,
+    "evidence": "Owner confirmed the device sign-in; the isolated account subsequently verified."
+  },
+  "humanActionTotal": null,
+  "countingLimitations": [
+    "Counts describe recorded owner-surface submissions, not clicks, keystrokes or total human effort.",
+    "Technical pairing and upload previews are separated; the failed initial approval remains counted.",
+    "No claim of reduced escalations is made.",
+    "The runtime addition counts only the captured start, approval, chat, Merge and current-browser revocation. It is not a complete click or session-pairing count."
+  ],
+  "ledger": [
+    {
+      "sequence": 1,
+      "category": "technical-session",
+      "action": "pair-browser",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/owner-session/exchange"
+    },
+    {
+      "sequence": 2,
+      "category": "owner-surface",
+      "action": "sign-in",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/github/login"
+    },
+    {
+      "sequence": 3,
+      "category": "upload-preview",
+      "action": "preview-upload",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/teams"
+    },
+    {
+      "sequence": 4,
+      "category": "owner-surface",
+      "action": "create-project",
+      "runId": null,
+      "httpStatus": 201,
+      "path": "/api/team-control/teams"
+    },
+    {
+      "sequence": 5,
+      "category": "owner-surface",
+      "action": "start-work",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "httpStatus": 201,
+      "path": "/api/team-control/runs"
+    },
+    {
+      "sequence": 6,
+      "category": "owner-surface",
+      "action": "approve-plan",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "httpStatus": 409,
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/plan/approve"
+    },
+    {
+      "sequence": 7,
+      "category": "technical-session",
+      "action": "pair-browser",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/owner-session/exchange"
+    },
+    {
+      "sequence": 8,
+      "category": "owner-surface",
+      "action": "approve-plan",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/plan/approve"
+    },
+    {
+      "sequence": 9,
+      "category": "owner-surface",
+      "action": "chat",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/chat"
+    },
+    {
+      "sequence": 10,
+      "category": "owner-surface",
+      "action": "cancel",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/cancel"
+    },
+    {
+      "sequence": 11,
+      "category": "owner-surface",
+      "action": "start-work",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "httpStatus": 201,
+      "path": "/api/team-control/runs"
+    },
+    {
+      "sequence": 12,
+      "category": "owner-surface",
+      "action": "chat",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/chat"
+    },
+    {
+      "sequence": 13,
+      "category": "owner-surface",
+      "action": "approve-plan",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/plan/approve"
+    },
+    {
+      "sequence": 14,
+      "category": "owner-surface",
+      "action": "chat",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/chat"
+    },
+    {
+      "sequence": 15,
+      "category": "upload-preview",
+      "action": "preview-upload",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/teams"
+    },
+    {
+      "sequence": 16,
+      "category": "owner-surface",
+      "action": "create-project",
+      "runId": null,
+      "httpStatus": 201,
+      "path": "/api/team-control/teams"
+    },
+    {
+      "sequence": 17,
+      "category": "owner-surface",
+      "action": "merge",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/merge"
+    },
+    {
+      "sequence": 18,
+      "category": "owner-surface",
+      "action": "start-work",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "httpStatus": 201,
+      "path": "/api/team-control/runs"
+    },
+    {
+      "sequence": 19,
+      "category": "owner-surface",
+      "action": "approve-plan",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/1c5c5a86-2ff1-426e-ae2d-bf9bade7d152/plan/approve"
+    },
+    {
+      "sequence": 20,
+      "category": "owner-surface",
+      "action": "merge",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/1c5c5a86-2ff1-426e-ae2d-bf9bade7d152/merge"
+    },
+    {
+      "sequence": 21,
+      "category": "technical-session",
+      "action": "pair-browser",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/owner-session/exchange"
+    },
+    {
+      "sequence": 22,
+      "category": "owner-surface",
+      "action": "start-work",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "httpStatus": 201,
+      "path": "/api/team-control/runs",
+      "method": "POST",
+      "at": "2026-11-07T11:22:58.227Z"
+    },
+    {
+      "sequence": 23,
+      "category": "owner-surface",
+      "action": "approve-plan",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/2d7b2d64-49c5-4e3f-abf8-777fe4bfe086/plan/approve",
+      "method": "POST",
+      "at": "2026-11-07T11:28:23.268Z"
+    },
+    {
+      "sequence": 24,
+      "category": "owner-surface",
+      "action": "chat",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/2d7b2d64-49c5-4e3f-abf8-777fe4bfe086/chat",
+      "method": "POST",
+      "at": "2026-11-07T11:54:43.515Z"
+    },
+    {
+      "sequence": 25,
+      "category": "owner-surface",
+      "action": "merge",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "httpStatus": 200,
+      "path": "/api/team-control/runs/2d7b2d64-49c5-4e3f-abf8-777fe4bfe086/merge",
+      "method": "POST",
+      "at": "2026-11-07T11:59:15.736Z"
+    },
+    {
+      "sequence": 26,
+      "category": "technical-session",
+      "action": "revoke-browser",
+      "runId": null,
+      "httpStatus": 200,
+      "path": "/api/team-control/owner-session",
+      "method": "DELETE",
+      "at": "2026-11-07T12:18:23.383Z"
+    }
+  ],
+  "recordedDeleteResponses": 1,
+  "supplementaryNativeCreate": {
+    "at": "2026-11-08T01:02:16.043026+00:00",
+    "ownerApprovalCount": 1,
+    "nativeFolderSelectionCount": 1,
+    "settledUploadPreviewCount": 1,
+    "createButtonClickCount": 1,
+    "privateRepositoriesCreated": 1,
+    "manualPairingCount": 0,
+    "newSignInCount": 0,
+    "agentTasksStarted": 0,
+    "httpResponseCount": null,
+    "evidence": "receipts/native-create-flow.json",
+    "countingScope": "This supplementary native UI sequence is separate from the earlier HTTP submission ledger; no wire-level response count or total human-effort count is inferred."
+  }
+}

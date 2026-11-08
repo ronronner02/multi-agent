@@ -1,0 +1,11 @@
+{
+  "check": "u10-runtime-final-lint",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "lint"
+  ],
+  "exit": 0,
+  "seconds": 27.36
+}

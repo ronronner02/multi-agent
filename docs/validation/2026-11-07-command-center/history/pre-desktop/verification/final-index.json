@@ -1,0 +1,50 @@
+{
+  "evidenceRevalidatedAt": "2026-11-07T12:30:57.239376+00:00",
+  "sourcePatchSha256": "444b0aa5a97c7386f43b44143c5e212af9f448150a7965ab589324b96995f624",
+  "checks": [
+    {
+      "check": "u10-runtime-stale-seat-red",
+      "purpose": "causal-reproducer-before-fix"
+    },
+    {
+      "check": "u10-runtime-stale-seat-green",
+      "purpose": "regression-after-fix"
+    },
+    {
+      "check": "u10-runtime-post-seat-focused-2",
+      "purpose": "final-daemon-focused"
+    },
+    {
+      "check": "u10-runtime-post-seat-lint",
+      "purpose": "final-typecheck"
+    },
+    {
+      "check": "u10-runtime-post-seat-build",
+      "purpose": "final-build"
+    },
+    {
+      "check": "u10-runtime-post-seat-smoke",
+      "purpose": "final-smoke"
+    },
+    {
+      "check": "u10-runtime-ui-all",
+      "purpose": "final-ui-suite"
+    },
+    {
+      "check": "u10-runtime-post-seat-full-daemon",
+      "purpose": "final-full-daemon-suite"
+    },
+    {
+      "check": "u10-runtime-synthetic-final-test",
+      "purpose": "final-merged-synthetic-project"
+    }
+  ],
+  "fullDaemonSuiteStatus": "failed",
+  "fullDaemonSuiteClassification": "known-failures-only",
+  "suiteInvocationsDuringEvidenceRefresh": 0,
+  "candidateCountNote": "The final manifest has 31 paths. The earlier supervisor caption saying 28 paths was stale; it is not the synchronized manifest.",
+  "closeoutChecks": [
+    "u10-runtime-closeout-doc-references",
+    "u10-runtime-closeout-diff-check"
+  ]
+}

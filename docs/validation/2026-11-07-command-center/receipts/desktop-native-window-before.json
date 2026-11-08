@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-11-07T13:25:06.586Z",
+  "bounds": {
+    "x": 0,
+    "y": 0,
+    "width": 1280,
+    "height": 752
+  },
+  "contentBounds": {
+    "x": 1,
+    "y": 0,
+    "width": 1279,
+    "height": 752
+  },
+  "maximized": false,
+  "minimized": false,
+  "visible": true,
+  "display": {
+    "x": 0,
+    "y": 0,
+    "width": 1280,
+    "height": 752
+  },
+  "scaleFactor": 2
+}

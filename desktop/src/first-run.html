@@ -91,6 +91,8 @@
         pairing: () => '<p>Connecting this window to the local runtime…</p>',
         'start-failed': () => '<p>The local runtime did not answer on <code>127.0.0.1:7433</code>.</p>'
           + '<p class="muted">The setup output below says why. Retrying is safe.</p>',
+        'connection-failed': () => '<p>The desktop and runtime need the same local profile.</p>'
+          + '<p class="muted">Open the configured app shortcut, then retry. No pairing code is needed.</p>',
         unknown: () => '<p>The check did not finish.</p><p class="muted">Retrying is safe; nothing has been changed.</p>',
         ready: () => '<p>The team view is loading.</p>',
       };
@@ -101,6 +103,7 @@
         wsl1: [['Upgrade to WSL 2', 'install-wsl', true]],
         'no-repo': [['Download and set up', 'clone-repo', true]],
         'start-failed': [['Retry', 'retry', true]],
+        'connection-failed': [['Retry', 'retry', true]],
         unknown: [['Retry', 'retry', true]],
       };
 

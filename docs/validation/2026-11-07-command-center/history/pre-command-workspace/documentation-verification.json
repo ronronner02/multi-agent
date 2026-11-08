@@ -1,0 +1,125 @@
+{
+  "checkedAt": "2026-11-07T13:59:56.008038+00:00",
+  "parser": {
+    "checked": 42,
+    "status": "failed-with-context-limitations",
+    "exit": 1,
+    "limitations": [
+      {
+        "kind": "path",
+        "value": "packages/daemon",
+        "line": 502,
+        "file": "docs/operations.md",
+        "against": "packages/daemon",
+        "reason": "missing repository path"
+      },
+      {
+        "kind": "path",
+        "value": "packages/cli",
+        "line": 502,
+        "file": "docs/operations.md",
+        "against": "packages/cli",
+        "reason": "missing repository path"
+      }
+    ]
+  },
+  "manualContextResolutions": [
+    {
+      "reference": "packages/daemon",
+      "file": "docs/operations.md",
+      "line": 502,
+      "resolvedPath": "engine/packages/daemon",
+      "exists": true,
+      "context": "Workspace paths in the documented engine directory, not repository-root paths."
+    },
+    {
+      "reference": "packages/cli",
+      "file": "docs/operations.md",
+      "line": 502,
+      "resolvedPath": "engine/packages/cli",
+      "exists": true,
+      "context": "Workspace paths in the documented engine directory, not repository-root paths."
+    }
+  ],
+  "localLinks": [
+    {
+      "file": "README.md",
+      "link": "desktop/README.md",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/operations.md#pair-a-browser",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/operations.md#create-and-retry-behavior",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/operations.md#plan-and-deliver",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/operations.md#resume-a-blocked-run",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/operations.md",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/validation/2026-11-06-autonomous-team/README.md",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "README.md",
+      "link": "docs/validation/2026-11-07-command-center/acceptance.json",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "desktop/README.md",
+      "link": "../README.md",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "desktop/README.md",
+      "link": "../docs/operations.md",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "docs/operations.md",
+      "link": "../README.md#quick-start",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "docs/operations.md",
+      "link": "validation/2026-11-06-autonomous-team/README.md",
+      "exists": true,
+      "anchorVerified": true
+    },
+    {
+      "file": "docs/amendments/2026-11-07-command-center-acceptance.md",
+      "link": "../known-failures.md",
+      "exists": true,
+      "anchorVerified": true
+    }
+  ],
+  "claim": "Current source-grounded references and local links checked. The two parser context limitations remain explicit; this is not runtime acceptance."
+}

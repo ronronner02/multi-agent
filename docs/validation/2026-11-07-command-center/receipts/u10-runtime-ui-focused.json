@@ -1,0 +1,14 @@
+{
+  "check": "u10-runtime-ui-focused",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "src/team/__tests__/overview.test.tsx",
+    "src/team/__tests__/chat-panel.test.tsx",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 2.08
+}

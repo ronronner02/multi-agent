@@ -1,0 +1,469 @@
+{
+  "origin": "http://127.0.0.1:43182",
+  "checks": [
+    {
+      "check": "final-signed-out-gate",
+      "passed": true,
+      "projectReads": 0
+    },
+    {
+      "check": "final-signin-reopens-app",
+      "passed": true
+    },
+    {
+      "check": "final-settled-settings-sections",
+      "passed": true,
+      "sections": 5,
+      "viewports": [
+        1440,
+        390
+      ],
+      "themes": [
+        "dark",
+        "light"
+      ]
+    },
+    {
+      "check": "final-responsive-native-analytics",
+      "passed": true,
+      "metrics": [
+        {
+          "width": 1440,
+          "theme": "dark",
+          "minRenderedFontPx": 12
+        },
+        {
+          "width": 390,
+          "theme": "dark",
+          "minRenderedFontPx": 12
+        },
+        {
+          "width": 1440,
+          "theme": "light",
+          "minRenderedFontPx": 12
+        },
+        {
+          "width": 390,
+          "theme": "light",
+          "minRenderedFontPx": 12
+        }
+      ],
+      "days": 30
+    },
+    {
+      "check": "final-create-preview-and-desktop-focus-return",
+      "passed": true
+    },
+    {
+      "check": "final-mobile-create-focus-returns-to-menu",
+      "passed": true
+    },
+    {
+      "check": "final-ordinary-signout-restores-gate",
+      "passed": true
+    }
+  ],
+  "captures": [
+    {
+      "filename": "final-signin-gate-1440-dark.png",
+      "screen": "signin-gate",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-signin-gate-390-dark.png",
+      "screen": "signin-gate",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-signin-gate-1440-light.png",
+      "screen": "signin-gate",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-signin-gate-390-light.png",
+      "screen": "signin-gate",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-general-1440-dark.png",
+      "screen": "settings-general",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-general-390-dark.png",
+      "screen": "settings-general",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-general-1440-light.png",
+      "screen": "settings-general",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-general-390-light.png",
+      "screen": "settings-general",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-github-1440-dark.png",
+      "screen": "settings-github",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-github-390-dark.png",
+      "screen": "settings-github",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-github-1440-light.png",
+      "screen": "settings-github",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-github-390-light.png",
+      "screen": "settings-github",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-appearance-1440-dark.png",
+      "screen": "settings-appearance",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-appearance-390-dark.png",
+      "screen": "settings-appearance",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-appearance-1440-light.png",
+      "screen": "settings-appearance",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-appearance-390-light.png",
+      "screen": "settings-appearance",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-sessions-1440-dark.png",
+      "screen": "settings-sessions",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-sessions-390-dark.png",
+      "screen": "settings-sessions",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-sessions-1440-light.png",
+      "screen": "settings-sessions",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-sessions-390-light.png",
+      "screen": "settings-sessions",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-agents-1440-dark.png",
+      "screen": "settings-agents",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-agents-390-dark.png",
+      "screen": "settings-agents",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-settings-agents-1440-light.png",
+      "screen": "settings-agents",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-settings-agents-390-light.png",
+      "screen": "settings-agents",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-analytics-1440-dark.png",
+      "screen": "analytics",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-analytics-390-dark.png",
+      "screen": "analytics",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-analytics-1440-light.png",
+      "screen": "analytics",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-analytics-390-light.png",
+      "screen": "analytics",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-analytics-30d-390-light.png",
+      "screen": "analytics-30d",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-create-preview-1440-dark.png",
+      "screen": "create-preview",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-create-preview-390-dark.png",
+      "screen": "create-preview",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-create-preview-1440-light.png",
+      "screen": "create-preview",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-create-preview-390-light.png",
+      "screen": "create-preview",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-signed-out-1440-dark.png",
+      "screen": "signed-out",
+      "width": 1440,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-signed-out-390-dark.png",
+      "screen": "signed-out",
+      "width": 390,
+      "theme": "dark",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "filename": "final-signed-out-1440-light.png",
+      "screen": "signed-out",
+      "width": 1440,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440
+      }
+    },
+    {
+      "filename": "final-signed-out-390-light.png",
+      "screen": "signed-out",
+      "width": 390,
+      "theme": "light",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390
+      }
+    }
+  ],
+  "errors": [],
+  "excluded": [
+    "https://fonts.googleapis.com/css2",
+    "https://fonts.googleapis.com/css2",
+    "https://fonts.googleapis.com/css2",
+    "https://fonts.googleapis.com/css2"
+  ],
+  "requestFailures": [
+    {
+      "path": "/api/team-control/analytics",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "harnessErrors": [
+    {
+      "reason": "The final screenshot helper initially used the wrong chart accessible name. The source catalog names it Token usage over time; the app was healthy."
+    },
+    {
+      "reason": "The optional late-status browser interception probe did not receive the expected signed-in response. It supplies no race-reproduction evidence; the deterministic red/green regression and independent fix confirmation own that proof."
+    }
+  ],
+  "limitations": [
+    "Loopback synthetic fixture, not exact-origin wrapper conformance.",
+    "Screenshots use a fixture session initialized through the owner-session API; the actual first-open pairing flow is covered by the initial fixture run.",
+    "The optional browser race interception was inconclusive; only the deterministic regression supplies red/green race proof."
+  ],
+  "cleanup": {
+    "contextsClosed": 1,
+    "completedAt": "2026-11-07T06:05:50.389Z"
+  },
+  "responsesRef": "browser-network-final.json"
+}

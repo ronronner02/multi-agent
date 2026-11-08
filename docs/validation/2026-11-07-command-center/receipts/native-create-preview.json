@@ -1,0 +1,19 @@
+{
+  "at": "2026-11-08T00:51:19.1610299Z",
+  "action": "settled",
+  "pid": 14236,
+  "installedExecutable": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+  "originalWindowHandle": 47778090,
+  "normalInstanceReused": true,
+  "debuggingEnabled": false,
+  "previewText": [
+    "\u5305\u542b 6 \u4e2a\u6587\u4ef6",
+    "<synthetic-windows-project>",
+    "\u5df2\u6392\u9664\u7684\u8def\u5f84",
+    ".env",
+    ".env",
+    "\u521b\u5efa\u540d\u4e3a desktop-create-20261108-aa15079f \u7684 GitHub \u79c1\u6709\u4ed3\u5e93\uff0c\u5e76\u4e0a\u4f20\u6b64\u6587\u4ef6\u5939\u4e2d\u5305\u542b\u7684\u6587\u4ef6\u3002"
+  ],
+  "repository": "<synthetic-windows-project>",
+  "repositoryName": "desktop-create-20261108-aa15079f"
+}

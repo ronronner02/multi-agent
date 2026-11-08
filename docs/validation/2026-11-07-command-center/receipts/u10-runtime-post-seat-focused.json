@@ -1,0 +1,25 @@
+{
+  "check": "u10-runtime-post-seat-focused",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/integration-branch.test.ts",
+    "test/team-workspace.test.ts",
+    "test/team-candidate-launch.test.ts",
+    "test/team-result.test.ts",
+    "test/agent-turn.test.ts",
+    "test/seat-pane-launch.test.ts",
+    "test/lead-chat.test.ts",
+    "test/lead-manager.test.ts",
+    "test/managed-native-startup.test.ts",
+    "test/direct-worker-launch.test.ts",
+    "test/team-read-model.test.ts",
+    "test/run-recovery.test.ts",
+    "--maxWorkers=2",
+    "--testTimeout=60000"
+  ],
+  "exit": 1,
+  "seconds": 33.38
+}

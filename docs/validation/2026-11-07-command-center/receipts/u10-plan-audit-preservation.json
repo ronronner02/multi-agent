@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-11-07T15:25:36.609350+00:00",
+  "originalDaemonStopped": true,
+  "originalRecordTablesMatchBackup": {
+    "team_runs": true,
+    "team_attempts": true,
+    "queue_items": true
+  },
+  "originalTerminalPreserved": true,
+  "originalShellPreserved": true,
+  "originalConfigHashesUnchanged": true,
+  "protectedCheckoutStatusUnchanged": true,
+  "protectedCheckoutFilesUnchanged": true,
+  "candidate": {
+    "pid": 2806685,
+    "startTicks": 9504675,
+    "cwd": "<acceptance-worktree>",
+    "comm": "node"
+  },
+  "candidateHealthy": true,
+  "vitestProcessesRemaining": [],
+  "currentOwnerProjectRowsInspected": false,
+  "uiInteractionPerformed": false,
+  "serviceMutationPerformed": false
+}

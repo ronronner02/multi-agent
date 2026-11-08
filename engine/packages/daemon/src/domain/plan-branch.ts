@@ -1,5 +1,6 @@
+import { relativePath } from "../contracts/team-control.js";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { runName } from "./display-names.js";
 
@@ -72,15 +73,29 @@ function isWorktreeOf(root: string, path: string): boolean {
 }
 
 /** Write `planRef` into a worktree and commit it, unless the commit already holds those bytes. */
-export function commitPlan(input: { worktree: string; planRef: string; plan: string; message: string }): string {
-  const destination = join(input.worktree, input.planRef);
-  mkdirSync(dirname(destination), { recursive: true });
-  writeFileSync(destination, input.plan);
-  git(input.worktree, ["add", "--", input.planRef]);
+export function commitPlan(input: { worktree: string; planRef: string; plan: string; message: string;
+  documents?: readonly { path: string; content: string }[] }): string {
+  const files = new Map((input.documents ?? []).map(document => [document.path, document.content]));
+  files.set(input.planRef, input.plan);
+  // The source worktree may contain repository-provided links; never follow them while publishing documents.
+  for (const path of files.keys()) {
+    relativePath(path, "document.path");
+    let current = realpathSync(input.worktree);
+    for (const part of path.split("/")) {
+      current = join(current, part);
+      if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error("A document destination is a symbolic link");
+    }
+  }
+  for (const [path, content] of files) {
+    const destination = join(input.worktree, path);
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, content);
+  }
+  git(input.worktree, ["add", "--", ...files.keys()]);
   // `git diff --cached --quiet` is the "nothing to commit" answer without reading its message.
   try { git(input.worktree, ["diff", "--cached", "--quiet"]); return headOf(input.worktree); }
   catch { /* staged changes exist */ }
-  git(input.worktree, ["commit", "--quiet", "-m", input.message, "--", input.planRef]);
+  git(input.worktree, ["commit", "--quiet", "-m", input.message, "--", ...files.keys()]);
   return headOf(input.worktree);
 }
 

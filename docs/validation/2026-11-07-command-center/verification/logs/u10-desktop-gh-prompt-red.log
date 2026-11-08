@@ -1,0 +1,59 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ❯ test/team-github.test.ts (22 tests | 1 failed | 21 skipped) 1085ms
+   ↓ owner GitHub sign-in > returns only the signed-in account, never gh's token or raw output
+   ↓ owner GitHub sign-in > returns the protocol envelope required by the shared owner browser client
+   ↓ owner GitHub sign-in > reports signed out without treating the empty gh account list as an error
+   ↓ owner GitHub sign-in > reads only the account identity needed for a scoped initial commit
+   ↓ owner GitHub sign-in > rejects project operations when signed out without starting a device flow
+   ↓ owner GitHub sign-in > sanitizes a repo-exists failure without returning process output
+   ↓ owner GitHub sign-in > sanitizes a repo-failure failure without returning process output
+   ↓ owner GitHub sign-in > coalesces overlapping starts, parses split output, and settles when gh completes
+   × owner GitHub sign-in > parses the split clipboard-code prompt used by desktop WSL launches 1084ms
+     → Matcher did not succeed in time.
+   ↓ owner GitHub sign-in > reports a failed device flow without exposing stderr
+   ↓ owner GitHub sign-in > reports a expired device flow without exposing stderr
+   ↓ owner GitHub sign-in > reports a denied device flow without exposing stderr
+   ↓ owner GitHub sign-in > reports a child that exits before issuing a device code
+   ↓ owner GitHub sign-in > logs out the account after stopping an in-flight login and permits a new flow
+   ↓ owner GitHub sign-in > removes configured credentials when validation fails with exit 0
+   ↓ owner GitHub sign-in > removes configured credentials when validation fails with exit 1
+   ↓ owner GitHub sign-in > holds a new login until sign-out completes while waiting for login-close
+   ↓ owner GitHub sign-in > holds a new login until sign-out completes while waiting for logout
+   ↓ owner GitHub sign-in > stops the login child on daemon cleanup
+   ↓ owner GitHub sign-in > returns github_cli_missing from every route when the executable is absent
+   ↓ owner GitHub sign-in > denies workers, unpaired clients, legacy tokens and non-loopback owners before invoking gh
+   ↓ owner GitHub sign-in > scopes the credential helper to the daemon's git invocation
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/team-github.test.ts > owner GitHub sign-in > parses the split clipboard-code prompt used by desktop WSL launches
+Error: Matcher did not succeed in time.
+ ❯ test/team-github.test.ts:117:52
+    115|     try {
+    116|       const pending = { state: "pending", code: "ABCD-1234", url: "htt…
+    117|       await expect.poll(() => github.loginState()).toEqual(pending);
+       |                                                    ^
+    118|       expect(await (await starting).json()).toEqual({ protocolVersion:…
+    119|       expect(calls().filter(args => args[1] === "login")).toHaveLength…
+
+Caused by: AssertionError: expected { state: 'pending' } to deeply equal { state: 'pending', …(2) }
+
+- Expected
++ Received
+
+  {
+-   "code": "ABCD-1234",
+    "state": "pending",
+-   "url": "https://github.com/login/device",
+  }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 21 skipped (22)
+   Start at  21:23:45
+   Duration  4.30s (transform 2.05s, setup 40ms, collect 3.01s, tests 1.08s, environment 0ms, prepare 50ms)
+

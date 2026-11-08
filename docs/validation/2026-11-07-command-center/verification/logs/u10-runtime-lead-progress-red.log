@@ -1,0 +1,42 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+error connecting to /tmp/seat-pane-ORENQN/tmux/tmux-1000/default (No such file or directory)
+ ❯ test/seat-pane-launch.test.ts (6 tests | 1 failed | 5 skipped) 604ms
+   ↓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+   × a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy 604ms
+     → Control idempotency key is bound to another exact request
+   ↓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+   ↓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+   ↓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+   ↓ workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+Error: Control idempotency key is bound to another exact request
+ ❯ src/domain/plan-governance.ts:2169:59
+    2167|         .get(request.runId, request.idempotencyKey) as { request_diges…
+    2168|       if (prior) {
+    2169|         if (prior.request_digest !== requestDigest) throw new Error("C…
+       |                                                           ^
+    2170|         return { ...JSON.parse(prior.response_json) as ControlReceipt,…
+    2171|       }
+ ❯ src/domain/event-bus.ts:129:24
+ ❯ sqliteTransaction ../../node_modules/better-sqlite3/lib/methods/transaction.js:65:24
+ ❯ EventBus.withNotifyEnvelope src/domain/event-bus.ts:142:20
+ ❯ PlanGovernance.command src/domain/plan-governance.ts:2165:24
+ ❯ PlanGovernance.decideApproval src/domain/plan-governance.ts:1219:17
+ ❯ test/seat-pane-launch.test.ts:223:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  18:37:00
+   Duration  4.18s (transform 2.58s, setup 34ms, collect 3.37s, tests 604ms, environment 0ms, prepare 48ms)
+

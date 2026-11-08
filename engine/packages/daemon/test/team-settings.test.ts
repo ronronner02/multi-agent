@@ -34,6 +34,55 @@ describe("owner team settings", () => {
   });
   afterEach(() => { if (db?.open) db.close(); rmSync(directory, { recursive: true, force: true }); });
 
+  it("saves project model choices and exposes the persisted launch policy", async () => {
+    db.prepare("INSERT INTO rigs (id, name) VALUES ('project-1', 'model-project')").run();
+    db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime) VALUES ('lead-1', 'project-1', 'lead', 'lead', 'claude-code')").run();
+    const body = { lead: { client: "codex", model: "chosen-lead" },
+      allowedSubagents: [{ client: "claude-code", model: "allowed-worker" }], kind: "test" };
+    const result = await app.request("/api/team-control/teams/project-1/settings", { method: "PUT",
+      headers: { Authorization: "Bearer " + ownerToken, "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    expect(result.status).toBe(200);
+    expect(await result.json()).toMatchObject({ settings: { ...body, configured: true } });
+    const reloaded = await app.request("/api/team-control/teams/project-1/settings", {
+      headers: { Authorization: "Bearer " + ownerToken },
+    }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    expect(await reloaded.json()).toMatchObject({ settings: { ...body, configured: true } });
+    expect(db.prepare("SELECT runtime, model FROM nodes WHERE id = 'lead-1'").get())
+      .toEqual({ runtime: "codex", model: "chosen-lead" });
+  });
+
+  it("protects project model reads and writes with owner and browser anti-forgery boundaries", async () => {
+    db.prepare("INSERT INTO rigs (id, name) VALUES ('project-1', 'model-project')").run();
+    db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime) VALUES ('lead-1', 'project-1', 'lead', 'lead', 'claude-code')").run();
+    const input = { lead: { client: "codex", model: "chosen-lead" }, allowedSubagents: [], kind: "test" };
+    const call = (path: string, method: string, headers: Record<string, string>, body?: unknown, peer = "127.0.0.1") =>
+      app.request("http://localhost/api/team-control" + path, { method,
+        headers: { Host: "localhost", "Content-Type": "application/json", ...headers },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }, { incoming: { socket: { remoteAddress: peer } } });
+    const path = "/teams/project-1/settings";
+    for (const method of ["GET", "PUT"]) {
+      const body = method === "PUT" ? input : undefined;
+      expect((await call(path, method, {}, body)).status).toBe(401);
+      expect((await call(path, method, { Authorization: "Bearer worker-settings-fixture" }, body)).status).toBe(403);
+      expect((await call(path, method, { Authorization: "Bearer " + ownerToken }, body, "203.0.113.9")).status).toBe(403);
+    }
+    const minted = await call("/owner-session/pairing", "POST", { Authorization: "Bearer " + ownerToken });
+    const exchanged = await call("/owner-session/exchange", "POST", { Origin: "http://localhost" }, { code: (await minted.json()).code });
+    expect(exchanged.status).toBe(200);
+    const cookie = exchanged.headers.get("Set-Cookie")!.split(";")[0]!;
+    const { antiForgeryToken } = await exchanged.json();
+    const headers = { Origin: "http://localhost", Cookie: cookie, [OWNER_CSRF_HEADER]: antiForgeryToken };
+    expect((await call(path, "PUT", { Origin: "http://localhost", Cookie: cookie }, input)).status).toBe(403);
+    expect((await call(path, "PUT", { ...headers, Origin: "http://other.localhost" }, input)).status).toBe(403);
+    expect(db.prepare("SELECT team_model_allowlist FROM rigs WHERE id = 'project-1'").get()).toEqual({ team_model_allowlist: null });
+    expect((await call(path, "PUT", headers, input)).status).toBe(200);
+    const read = await call(path, "GET", headers);
+    expect(read.headers.get("Cache-Control")).toBe("no-store");
+    expect(await read.json()).toMatchObject({ settings: { ...input, configured: true } });
+  });
+
   it("reads only registered team preferences with their effective sources", async () => {
     const response = await request();
     expect(response.status).toBe(200);

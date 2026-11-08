@@ -99,6 +99,7 @@ PATH=${shellQuote(join(bin, "empty"))} ${executable} "$@"
     expect(readFileSync(join(directory, "client.args"), "utf8").split("\n")).toContain(firstFlag);
     expect(output).toContain("agent-turn-view.mjs");
     if (runtime === "claude-code") {
+      expect(readFileSync(join(directory, "client.args"), "utf8").split("\n")).toContain("--include-partial-messages");
       expect(output).toContain(`'-p' '--permission-mode' 'bypassPermissions'`);
     } else {
       expect(output).toContain(`'${executable}' '${firstFlag}' '--json'`);

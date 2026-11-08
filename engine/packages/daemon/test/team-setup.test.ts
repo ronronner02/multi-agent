@@ -92,7 +92,7 @@ describe("U3 — the owner creates a team", () => {
     const response = await create({ repository: root, seats: defaultSeats });
     expect(response.status).toBe(201);
     const body = await response.json() as Created;
-    expect(body.team).toEqual({ id: expect.any(String), name: "project", repository: root, seats: defaultSeats });
+    expect(body.team).toEqual({ id: expect.any(String), name: "project", kind: "project", repository: root, seats: defaultSeats });
     // The seat names are the daemon's own business: a tmux session name, not part of the contract.
     expect(JSON.stringify(body.team)).not.toContain("@project");
 
@@ -171,7 +171,7 @@ describe("U3 — the owner creates a team", () => {
     const response = await call("/api/team-control/teams");
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ protocolVersion: "1.0",
-      teams: [{ id: created.team.id, name: "project", repository: root, seats: defaultSeats }] });
+      teams: [{ id: created.team.id, name: "project", kind: "project", repository: root, seats: defaultSeats }] });
   });
 
   it("starts work on the team's lead and reviewer without the owner naming a seat", async () => {
@@ -235,7 +235,7 @@ describe("U3 — the owner creates a team", () => {
     const root = repository(directory);
     const team = createTeam(db, { repository: root, seats: [{ role: "implementer", client: "claude-code" },
       { role: "reviewer", client: "claude-code" }] });
-    expect(team).toEqual({ id: expect.any(String), name: "project", repository: root,
+    expect(team).toEqual({ id: expect.any(String), name: "project", kind: "project", repository: root,
       seats: [{ role: "implementer", client: "claude-code" }, { role: "reviewer", client: "claude-code" }] });
     expect(seatsOf(team.id).map(seat => seat.seat)).toEqual(["impl-1@project", "review-1@project"]);
   });

@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-11-07T09:35:39.936686+00:00",
+  "newRepositories": 0,
+  "projects": [
+    {
+      "defaultBranch": "main",
+      "private": true,
+      "repository": "ronronner02/cc-u10-win-20261107-2c433e64",
+      "at": "2026-11-07T09:35:38.050787+00:00",
+      "project": "windows-project",
+      "initialCommit": "42031f70f3e432fd2c513731beb8281a61d78049",
+      "remoteMain": "42031f70f3e432fd2c513731beb8281a61d78049",
+      "remoteIsBootstrapOnly": true,
+      "localHead": "5b423f087892a6da19fc793e733d3865ccd428a4",
+      "localBranch": "main",
+      "localStatus": "?? .openrig/context-collector.cjs",
+      "origin": "https://github.com/ronronner02/cc-u10-win-20261107-2c433e64.git",
+      "bootstrapFiles": [
+        ".gitignore",
+        "README.md",
+        "package.json",
+        "src/.gitkeep"
+      ],
+      "credentialSentinelExcluded": true,
+      "trackedFiles": [
+        ".gitignore",
+        "README.md",
+        "package.json",
+        "plan.md",
+        "src/.gitkeep",
+        "src/normalize-sku.mjs",
+        "src/normalize-sku.test.mjs",
+        "src/stock-integration.test.mjs",
+        "src/summarize-stock.mjs",
+        "src/summarize-stock.test.mjs"
+      ],
+      "deliveryPushPerformed": false,
+      "preservedUntrackedFile": {
+        "path": ".openrig/context-collector.cjs",
+        "sha256": "f4a809d0737baf60c4b314b3d7bc95d6a149090db3454aae66a9ef7beddc3bb8"
+      }
+    },
+    {
+      "defaultBranch": "main",
+      "private": true,
+      "repository": "ronronner02/cc-u10-wsl-20261107-2c433e64",
+      "at": "2026-11-07T09:35:39.934471+00:00",
+      "project": "wsl-project",
+      "initialCommit": "c9ebf31ebd6e6b367e143a061e552454a116ea97",
+      "remoteMain": "c9ebf31ebd6e6b367e143a061e552454a116ea97",
+      "remoteIsBootstrapOnly": true,
+      "localHead": "c9ebf31ebd6e6b367e143a061e552454a116ea97",
+      "localBranch": "main",
+      "localStatus": "",
+      "origin": "https://github.com/ronronner02/cc-u10-wsl-20261107-2c433e64.git",
+      "bootstrapFiles": [
+        ".gitignore",
+        "README.md",
+        "package.json",
+        "src/.gitkeep"
+      ],
+      "credentialSentinelExcluded": true,
+      "trackedFiles": [
+        ".gitignore",
+        "README.md",
+        "package.json",
+        "src/.gitkeep"
+      ],
+      "deliveryPushPerformed": false
+    }
+  ]
+}

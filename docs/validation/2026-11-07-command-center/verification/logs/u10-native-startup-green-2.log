@@ -1,0 +1,46 @@
+
+ RUN  v3.2.4 <standalone-suite>/engine/packages/daemon
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: VITEST=true — skipping kernel auto-boot
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: tracker-state=skipped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] gateway subsystem stopped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/managed-native-startup.test.ts (191 tests) 22953ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a null pane screen  460ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "" pane screen  501ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "Starting up..." pane screen  505ms
+   ✓ control-owned managed launch lifecycle > refuses to start over an unresolved intent from an earlier control, without closing it  354ms
+   ✓ control-owned managed launch lifecycle > stops an ambiguous start located by its command but never invents its native identity  313ms
+   ✓ production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only  4150ms
+   ✓ production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)  1122ms
+   ✓ offline fixture-daemon restart > keeps durable messages, wake limits and unresolved intents, but not admission or handout rights  2922ms
+
+ Test Files  1 passed (1)
+      Tests  191 passed (191)
+   Start at  17:08:49
+   Duration  26.01s (transform 4.37s, setup 66ms, collect 2.69s, tests 22.95s, environment 0ms, prepare 67ms)
+

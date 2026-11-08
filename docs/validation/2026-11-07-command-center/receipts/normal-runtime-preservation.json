@@ -1,0 +1,45 @@
+{
+  "at": "2026-11-08T00:29:00.319345+00:00",
+  "workingDaemon": {
+    "pid": 3401237,
+    "home": "/home/leo/scratch/cc-u10-acceptance/desktop-clean/home",
+    "healthy": true,
+    "counts": {
+      "team_runs": 0,
+      "team_attempts": 0,
+      "queue_items": 0
+    }
+  },
+  "protectedTablesUnchanged": {
+    "rigs": true,
+    "nodes": true,
+    "queue_items": true,
+    "project_classifications": true,
+    "projection_manifest": true,
+    "team_attempts": true,
+    "team_runs": true
+  },
+  "signInFilesUnchanged": {
+    "config.yml": true,
+    "hosts.yml": true
+  },
+  "videoRange": {
+    "status": 206,
+    "contentRange": "bytes 0-15/21539098",
+    "acceptRanges": "bytes",
+    "bytes": 16
+  },
+  "testPortsListening": {
+    "4177": false,
+    "4188": false,
+    "4189": false,
+    "27433": false,
+    "28433": false
+  },
+  "listenerCheckSource": "Kernel TCP and TCP6 LISTEN rows, not an unbounded connect probe",
+  "activeVitestProcesses": [],
+  "windowsSampleFilesMatchingArchive": 19,
+  "originalBenchmarkFilesUnchanged": 34,
+  "ownerProjectContentsReadOrChanged": false,
+  "normalWindowNotAutomatedAfterShortcutLaunch": true
+}

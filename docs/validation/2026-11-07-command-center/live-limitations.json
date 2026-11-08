@@ -1,0 +1,194 @@
+{
+  "resultPreview": {
+    "status": "closed-for-observed-flow",
+    "priorObservation": {
+      "status": "open",
+      "observedBefore": {
+        "at": "2026-11-07T09:24:44.398Z",
+        "status": 503,
+        "body": {
+          "code": "team_result_unavailable",
+          "error": "The task's candidate could not be read."
+        }
+      },
+      "recoveredReads": [
+        {
+          "task": "task-2",
+          "status": 200,
+          "at": "2026-11-07T09:37:05.885Z",
+          "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+          "manifestDigest": "sha256:55d9aad9a9d970bb862359d549b2d053c5f9291f5641519723cc12733ab0efb3",
+          "patchCharacters": 2889
+        },
+        {
+          "task": "task-3",
+          "status": 200,
+          "at": "2026-11-07T09:37:06.747Z",
+          "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+          "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50",
+          "patchCharacters": 10213
+        }
+      ],
+      "recoveryReceipt": "receipts/u10-result-preview-restart-2.json",
+      "rootCauseStatus": "Source-ref fingerprint invalidation is the leading explanation; the internal exception was not captured.",
+      "sourceReferences": [
+        "engine/packages/daemon/src/domain/workflow-runtime.ts:592-650",
+        "engine/packages/daemon/src/domain/team-workspace.ts:945-969",
+        "engine/packages/daemon/src/domain/team-workspace.ts:1219-1227"
+      ],
+      "sourceFix": false
+    },
+    "confirmedCause": "A successful owner Merge changed a cached source ref fingerprint. The repair acknowledges only the exact successful owner-ref transition; all other provenance checks remain.",
+    "sourceFix": true,
+    "finalBeforeMerge": [
+      {
+        "task": "task-2",
+        "status": 200,
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:55d9aad9a9d970bb862359d549b2d053c5f9291f5641519723cc12733ab0efb3",
+        "base": "commit",
+        "patchBytes": 2895,
+        "patchSha256": "06206dd2a6aafabe5575fc7d6276a0a1ceeb5c95553c97f8340e3a74503231d4"
+      },
+      {
+        "task": "task-3",
+        "status": 200,
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50",
+        "base": "commit",
+        "patchBytes": 10219,
+        "patchSha256": "901ed171319ec2a5249a6f508ba0890318bacbf4270942a9378cd4c122e77d4a"
+      }
+    ],
+    "finalAfterMergeWithoutRestart": [
+      {
+        "task": "task-2",
+        "status": 200,
+        "base": "commit",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:55d9aad9a9d970bb862359d549b2d053c5f9291f5641519723cc12733ab0efb3",
+        "patchBytes": 2895,
+        "patchSha256": "06206dd2a6aafabe5575fc7d6276a0a1ceeb5c95553c97f8340e3a74503231d4",
+        "matchesBefore": true
+      },
+      {
+        "task": "task-3",
+        "status": 200,
+        "base": "commit",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50",
+        "patchBytes": 10219,
+        "patchSha256": "901ed171319ec2a5249a6f508ba0890318bacbf4270942a9378cd4c122e77d4a",
+        "matchesBefore": true
+      }
+    ],
+    "finalAfterIdleRestart": [
+      {
+        "task": "task-2",
+        "status": 200,
+        "base": "commit",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:55d9aad9a9d970bb862359d549b2d053c5f9291f5641519723cc12733ab0efb3",
+        "patchBytes": 2895,
+        "patchSha256": "06206dd2a6aafabe5575fc7d6276a0a1ceeb5c95553c97f8340e3a74503231d4",
+        "matchesBefore": true
+      },
+      {
+        "task": "task-3",
+        "status": 200,
+        "base": "commit",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50",
+        "patchBytes": 10219,
+        "patchSha256": "901ed171319ec2a5249a6f508ba0890318bacbf4270942a9378cd4c122e77d4a",
+        "matchesBefore": true
+      }
+    ],
+    "identitiesMatch": true,
+    "evidence": [
+      "runtime-observations.json",
+      "verification/checks.json",
+      "receipts/u10-runtime-project-merge.json"
+    ],
+    "claimBoundary": "The recorded candidates and Merge transition were verified; unrelated source changes are still rejected."
+  },
+  "mergeProgress": {
+    "status": "closed-for-observed-flow",
+    "priorObservation": {
+      "status": "open",
+      "observation": "The Merge receipt succeeded, but the progress band still said Awaiting delivery decision.",
+      "evidence": [
+        "browser-observations.json",
+        "screenshots/live/final-overview-390-dark.png"
+      ]
+    },
+    "sourceFix": true,
+    "readOnlyContract": "merge.merged",
+    "beforeMerge": false,
+    "afterMergeRefreshAndRestart": true,
+    "allFourPhasesComplete": true,
+    "mergedButtonDisabled": true,
+    "evidence": [
+      "runtime-observations.json",
+      "screenshots/index.json"
+    ]
+  },
+  "busyReply": {
+    "status": "observed-at-two-slot-saturation",
+    "priorObservation": "history/pre-native-create-final-01/live-limitations.json",
+    "activeWorkerAttemptsAtQuestion": 2,
+    "finalRepeatAtTwoSlotSaturation": true,
+    "sameTwoWorkersStillRunningAtReply": true,
+    "replyObservedWithinSeconds": 10.041,
+    "evidence": [
+      "receipts/normal-saturated-owner-chat.json",
+      "receipts/normal-capacity-ui.json"
+    ],
+    "claimBoundary": "The bounded reply matched its captured run snapshot while both native workers remained occupied. No general response-time or universal accuracy guarantee is claimed."
+  },
+  "missingBoundSeat": {
+    "status": "closed-for-observed-flow",
+    "sourceFix": true,
+    "samePendingRunResumed": true,
+    "manualSessionOrDatabaseFabrication": false,
+    "evidence": [
+      "receipts/u10-runtime-stale-seat-observation.json",
+      "receipts/u10-runtime-stale-seat-review.json",
+      "verification/checks.json",
+      "runs.json"
+    ]
+  },
+  "reviewsTaskSelection": {
+    "status": "not-reproduced-as-product-defect",
+    "originalObservation": "An earlier Task B selection check waited for a result response, then still showed Task A with no task query. That timeout remains an automation observation.",
+    "currentExactLabelMatches": 0,
+    "observedComboboxMatches": 1,
+    "taskSelectionAndRefreshPassed": true,
+    "settledResultHttpStatus": 200,
+    "sourceChanged": false,
+    "evidence": [
+      "runtime-observations.json",
+      "screenshots/runtime/14-historical-task-b-settled.png"
+    ],
+    "waitLimitation": "A filename-only wait matched an existing review finding. The final repeat waited for the function inside the diff body."
+  },
+  "remainingGates": {
+    "desktopInstallation": "observed",
+    "desktopCleanProfileFirstOpen": "observed",
+    "desktopSignIn": "observed-after-fix",
+    "nativeFolderSelectionAndPreview": "observed",
+    "nativeWindowDragAndClose": "observed-in-identical-asar-isolated-profile",
+    "fullDesktopCreate": "observed-in-installed-normal-instance",
+    "fullDaemonSuite": "failed-with-two-exact-documented-cases",
+    "finalBusyReplyAtTwoSlotSaturation": "observed",
+    "U10SourceDelivery": "held-uncommitted-and-unmerged",
+    "allUsersLegacyShortcut": "unchanged; current-user launch entries verified"
+  },
+  "desktop": {
+    "evidence": "desktop-observations.json",
+    "ownerDecision": "Normal launch repair, the additive read-only task details, one-time skin entrance and one additional native synthetic Create are approved. The earlier U10 source-delivery hold remains.",
+    "currentOwnerProjectIncluded": false,
+    "latestEvidence": "receipts/native-create-flow.json"
+  },
+  "updatedAt": "2026-11-08T01:02:16.043026+00:00"
+}

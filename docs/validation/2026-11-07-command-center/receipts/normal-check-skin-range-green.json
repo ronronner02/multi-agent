@@ -1,0 +1,15 @@
+{
+  "check": "skin-range-green",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "test/managed-team-page.test.ts",
+    "test/server.test.ts",
+    "test/web-ui-default-off.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 4.59
+}

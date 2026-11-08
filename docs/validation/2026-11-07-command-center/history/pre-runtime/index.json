@@ -1,0 +1,76 @@
+{
+  "status": "historical",
+  "priorBundleManifestSha256": "c6adf44c423cfd91b370705ced89f06fe917020d1ab9e0224ce4bae0fa5f284f",
+  "priorManifestEntryCount": 235,
+  "files": [
+    {
+      "path": "acceptance.json",
+      "sha256": "c533c8cbc767a0d2cb39e36cf1a37b118d2973648a7421f30740286a4126d070"
+    },
+    {
+      "path": "browser-observations.json",
+      "sha256": "4b867c61fbc39cbf9abb752cd9b7ee129025869d0de3ec37cf60101de7f52088"
+    },
+    {
+      "path": "documentation-verification.json",
+      "sha256": "626f2297a5ca81c595a906b69d699d23cfd49d24a4325508a53f0b78e6fc84ad"
+    },
+    {
+      "path": "events.jsonl",
+      "sha256": "b6ee387845f053410cb7b81e411bd3334cf6842037e37ffa6b656d2579d3dd96"
+    },
+    {
+      "path": "live-limitations.json",
+      "sha256": "459cdbf40f7fa2028fa36edc262bdfb76dd38e359db4f4584e52fe54dbe18ad3"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "c6adf44c423cfd91b370705ced89f06fe917020d1ab9e0224ce4bae0fa5f284f"
+    },
+    {
+      "path": "owner-actions.json",
+      "sha256": "788a4a35a619054043ea3bc8c4d29d45810c1bfd3a8fbf021efa53763993f53d"
+    },
+    {
+      "path": "privacy-check.json",
+      "sha256": "6382588d5367d0cc0f7c9a25642b258cbcc038566b480856552e9aae2aa57ec9"
+    },
+    {
+      "path": "protected-state.json",
+      "sha256": "d17511688738324ced0b9787bb14275e1bb4e51874ba2d485f7f7da452d43552"
+    },
+    {
+      "path": "review.json",
+      "sha256": "2f1267cc4ad42800619ecce75982fe4675d6030fbafbb53ff4960ddbe8aa1df9"
+    },
+    {
+      "path": "rosters.json",
+      "sha256": "6692f9976988242683eae9b1a0b51afb271c6ab4a1fb25292faed6629dbf7207"
+    },
+    {
+      "path": "runs.json",
+      "sha256": "5c72c65e9cf0517f865301de17fe303f59ba77d9fc206c4da699f65021ad54ff"
+    },
+    {
+      "path": "screenshots/index.json",
+      "sha256": "bdf6f8215a864a78d1a6fde3484e1ea9a6e865716537bb6b32c117a161ba788e"
+    },
+    {
+      "path": "source-verification.json",
+      "sha256": "d31418f202abee660e6e720e6f40460010c1f26b4df7586a07a70c875696ab58"
+    },
+    {
+      "path": "telemetry.json",
+      "sha256": "7bd0d8430997d95ea9e72ca768758bcb55f918c514ab6fc697be57e3f56bd40c"
+    },
+    {
+      "path": "verification/checks.json",
+      "sha256": "00b951bf14ff9706c29ad4e1e02c8f9b083b20f93d1b0728cca257793543b65d"
+    },
+    {
+      "path": "worker-reports.json",
+      "sha256": "363320ed60d0be80664e7428f10272c95b42031971287461d9766637759cd885"
+    }
+  ],
+  "note": "These records retain the earlier failed observations and verification. They are not the current gate status."
+}

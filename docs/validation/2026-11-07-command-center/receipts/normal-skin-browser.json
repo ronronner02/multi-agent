@@ -1,0 +1,98 @@
+{
+  "origin": "http://127.0.0.1:4177",
+  "synthetic": true,
+  "checks": [
+    {
+      "name": "fresh-entry-starts-with-the-reveal",
+      "passed": true,
+      "evidence": {
+        "time": 0.0542,
+        "duration": 25.333333,
+        "loop": false,
+        "muted": true
+      }
+    },
+    {
+      "name": "inspector-displays-source-requirements-and-workspace",
+      "passed": true,
+      "evidence": {
+        "textObserved": true,
+        "declarationsDoNotRenderAsPassedCheckboxes": true
+      }
+    },
+    {
+      "name": "decoded-portrait-repeats-without-the-reveal-or-fade",
+      "passed": true,
+      "evidence": {
+        "frameCount": 1222,
+        "repeats": 3,
+        "min": 10,
+        "max": 23.041667,
+        "time": 11.8109,
+        "paused": false,
+        "decoded": 1958
+      }
+    },
+    {
+      "name": "portrait-pixels-remain-animated",
+      "passed": true,
+      "evidence": {
+        "before": {
+          "time": 11.8371,
+          "hash": 3598428948
+        },
+        "after": {
+          "time": 12.6575,
+          "hash": 515023642
+        }
+      }
+    },
+    {
+      "name": "navigation-and-reload-do-not-replay-the-entrance",
+      "passed": true,
+      "evidence": {
+        "time": 10.031
+      }
+    },
+    {
+      "name": "reduced-motion-uses-a-still-and-restores-the-portrait-phase",
+      "passed": true,
+      "evidence": {
+        "stillObserved": true,
+        "resumedAt": 10
+      }
+    },
+    {
+      "name": "task-inspector-fits-390",
+      "passed": true,
+      "evidence": {
+        "width": 390,
+        "scroll": 390
+      }
+    },
+    {
+      "name": "task-inspector-fits-320",
+      "passed": true,
+      "evidence": {
+        "width": 320,
+        "scroll": 320
+      }
+    }
+  ],
+  "errors": [],
+  "blocked": [
+    {
+      "origin": "https://fonts.googleapis.com",
+      "path": "/css2",
+      "method": "GET"
+    },
+    {
+      "origin": "https://fonts.googleapis.com",
+      "path": "/css2",
+      "method": "GET"
+    }
+  ],
+  "cleanup": true,
+  "networkLimitation": "Legacy font stylesheet requests were blocked before dispatch; all observed page traffic stayed on the fixture origin. Bundled fonts and fallbacks rendered the checked pages.",
+  "passed": true
+}

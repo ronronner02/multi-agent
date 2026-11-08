@@ -1,0 +1,17 @@
+{
+  "at": "2026-11-08T00:20:51.199Z",
+  "url": "http://127.0.0.1:28433/team/overview?team=01M6W6R3PDVFA7C3AF6WESHR8J&run=9d6de881-e4bd-49fd-a9a4-da19d92a0399",
+  "ownerReplyMarkerVisible": true,
+  "renderedReplyMatchesNativeReceipt": true,
+  "captureTiming": "After the native saturation measurement and cancellation; not a screenshot of simultaneous execution",
+  "pageErrors": [],
+  "applicationWrites": [],
+  "blockedRequests": [
+    {
+      "origin": "https://fonts.googleapis.com",
+      "path": "/css2",
+      "method": "GET"
+    }
+  ],
+  "browserOnlyReadActions": true
+}

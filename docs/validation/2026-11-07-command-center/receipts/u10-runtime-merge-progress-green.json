@@ -1,0 +1,13 @@
+{
+  "check": "u10-runtime-merge-progress-green",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "src/team/__tests__/overview.test.tsx",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 1.74
+}

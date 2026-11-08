@@ -1,0 +1,10 @@
+{
+  "at": 1794096255.2580562,
+  "runId": "b5fb8c99-8250-4a06-aeab-a40546c3efd5",
+  "exercisedSaturation": false,
+  "reason": "The harness omitted writePaths in its fresh run request. The normal admission boundary correctly rejected probe-a.txt and probe-b.txt outside the default src scope. No worker tasks started.",
+  "correction": "Cancel the first synthetic run through its owner action. Start one replacement run with the explicit two-file write scope, leaving original attempts and fixture baseline intact.",
+  "observerStoppedPids": [
+    3420463
+  ]
+}

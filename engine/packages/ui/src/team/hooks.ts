@@ -12,8 +12,9 @@ import { readIntegration, readChat, type ChatState, type IntegrationState } from
  */
 
 export interface TeamSeatSummary { role: "lead" | "implementer" | "reviewer"; client: string; model?: string }
-export interface TeamSummary { id: string; name: string; repository: string; seats: TeamSeatSummary[] }
+export interface TeamSummary { id: string; name: string; repository: string; seats: TeamSeatSummary[]; kind?: "project" | "test" }
 export interface RunSummary {
+  phase?: "planning" | "delivery"; messageCount?: number; executionTaskCount?: number; resultCount?: number;
   id: string; rigId: string; rigName: string; state: TeamRunState; planRef: string; displayName: string; createdAt: string;
 }
 
@@ -44,7 +45,8 @@ export function latestRunFor(runs: readonly RunSummary[] | undefined, teamId: st
 export function useTeamChat(runId: string, enabled: boolean) {
   const { paired, request } = useOwnerSession();
   return useQuery<ChatState>({
-    queryKey: ["team", runId, "chat"], enabled: paired && enabled && !!runId, retry: false, refetchInterval: 3_000,
+    queryKey: ["team", runId, "chat"], enabled: paired && enabled && !!runId, retry: false,
+    refetchInterval: query => query.state.status !== "error" && query.state.data?.liveTurn?.state === "running" ? 500 : 3_000,
     queryFn: ({ signal }) => readChat(request, runId, signal),
   });
 }

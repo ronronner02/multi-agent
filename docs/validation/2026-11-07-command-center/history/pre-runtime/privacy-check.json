@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-11-07T10:01:22.248455+00:00",
+  "status": "passed",
+  "textFilesScanned": 71,
+  "jsonFilesParsed": 43,
+  "exactScopedCredentialMatches": 0,
+  "credentialPatternMatches": 0,
+  "rawCredentialFilesIncluded": false,
+  "rawDatabaseIncluded": false,
+  "method": "Allowlisted scoped export, sensitive-key omission, exact comparison against isolated profile credentials and credential-pattern checks.",
+  "limitations": [
+    "No OCR claim is made for screenshots. The omitted pairing image and all retained final images were selected without a credential-entry screen."
+  ]
+}

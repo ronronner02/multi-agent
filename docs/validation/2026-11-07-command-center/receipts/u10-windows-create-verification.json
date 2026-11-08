@@ -1,0 +1,20 @@
+{
+  "remote": {
+    "defaultBranchRef": {
+      "name": "main"
+    },
+    "isPrivate": true,
+    "nameWithOwner": "ronronner02/cc-u10-win-20261107-2c433e64",
+    "url": "https://github.com/ronronner02/cc-u10-win-20261107-2c433e64"
+  },
+  "branch": "main",
+  "head": "42031f70f3e432fd2c513731beb8281a61d78049",
+  "origin": "https://github.com/ronronner02/cc-u10-win-20261107-2c433e64.git",
+  "tree": [
+    ".gitignore",
+    "README.md",
+    "package.json",
+    "src/.gitkeep"
+  ],
+  "remoteHead": "42031f70f3e432fd2c513731beb8281a61d78049"
+}

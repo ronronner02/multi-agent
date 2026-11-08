@@ -1,0 +1,1388 @@
+[Earlier output omitted; bounded tail follows.]
+y-coordinator.test.ts (14 tests) 596ms
+ ✓ test/team-dependencies.test.ts (21 tests) 578ms
+ ✓ test/rig-repository.test.ts (27 tests) 578ms
+ ✓ test/s03-bound-launch.test.ts (41 tests) 513ms
+ ✓ test/rig-expansion-route.test.ts (19 tests) 607ms
+ ✓ test/slack-sweep-selection.test.ts (13 tests) 564ms
+ ✓ test/reconcile-session.test.ts (19 tests) 568ms
+ ✓ test/slack-socket-retry-errors.test.ts (2 tests) 583ms
+   ✓ periodic retry logs a real storage fault, survives, and recovers exactly one delivery  306ms
+ ✓ test/refocus-occupant-baseline.test.ts (7 tests) 574ms
+ ✓ test/seat-activity-service.test.ts (16 tests) 599ms
+   ✓ SeatActivityService > pollAllRunningTmuxSeats > SINGLE-FLIGHT: a whole sweep started while another is in flight adds NO overlapping reads (mirrors seat-structural-activity-service MUST-FIX 2)  533ms
+ ✓ test/stopped-seat-preserved-shell-forecast.test.ts (3 tests) 551ms
+   ✓ stopped-seat preserved-shell forecast > a held seat in a rig whose other seats started can be started fresh on its own  447ms
+ ✓ test/attach-terminal-activity-and-work.test.ts (25 tests) 517ms
+ ✓ test/idle-gate-qitem-policy.test.ts (23 tests) 530ms
+ ✓ test/workflow-mission-boundary.test.ts (5 tests) 522ms
+ ✓ test/claim-service.test.ts (13 tests) 543ms
+ ✓ test/runtime-verifier.test.ts (14 tests) 576ms
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > scans <OPENRIG_HOME>/plugins and finds a plugin placed there
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > scans <OPENRIG_HOME>/plugins and finds a plugin placed there
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > scans <OPENRIG_HOME>/plugins and finds a plugin placed there
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > scans <OPENRIG_HOME>/plugins and finds a plugin placed there
+kernel-boot: tracker-state=skipped
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > scans <OPENRIG_HOME>/plugins and finds a plugin placed there
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > scans <OPENRIG_HOME>/plugins and finds a plugin placed there
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+[openrig] [plugin-vendor] global skill 'openrig-skills' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'openrig-skills' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'refocusing' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'refocusing' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+[openrig] [plugin-vendor] global skill 'rigs' 0.1.0 is equal/newer than bundled 0.1.0; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'rigs' 0.1.0 is equal/newer than bundled 0.1.0; leaving it unchanged
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+kernel-boot: tracker-state=skipped
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > starts with a historical openrig-lab refocus registration left by an upgrade
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+[openrig] [plugin-vendor] global skill 'openrig-skills' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'openrig-skills' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'refocusing' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'refocusing' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+[openrig] [plugin-vendor] global skill 'rigs' 0.1.0 is equal/newer than bundled 0.1.0; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'rigs' 0.1.0 is equal/newer than bundled 0.1.0; leaving it unchanged
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+kernel-boot: tracker-state=skipped
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/plugin-discovery-openrig-home-wiring.test.ts > plugin discovery honors OPENRIG_HOME (HG-1, HG-3, HG-4) > vendor + discovery resolve to the SAME OPENRIG_HOME-rooted path (path startsWith verification)
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+ ✓ test/plugin-discovery-openrig-home-wiring.test.ts (4 tests) 504ms
+ ✓ test/workflow-exception-item.test.ts (11 tests) 600ms
+ ✓ test/project-lifecycle-compiler.test.ts (11 tests) 500ms
+ ✓ test/snapshot-capture.test.ts (23 tests) 544ms
+ ✓ test/workflow-dependency-exception.test.ts (7 tests) 518ms
+ ✓ test/team-start.test.ts (7 tests) 537ms
+ ✓ test/team-result.test.ts (4 tests) 518ms
+ ✓ test/rigspec-exporter.test.ts (22 tests) 529ms
+ ✓ test/transcript-atomic-read.test.ts (2 tests) 364ms
+ ✓ test/queue-reopened-handoff-custody.test.ts (9 tests) 538ms
+ ✓ test/demo-fixture.test.ts (9 tests) 531ms
+   ✓ Demo fixture validation > demo rig teardown cleans up sessions and bindings  493ms
+stdout | test/rigspec-services.test.ts > RigSpec services contract > createDaemon wires the rig_services migration
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/rigspec-services.test.ts > RigSpec services contract > createDaemon wires the rig_services migration
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/rigspec-services.test.ts > RigSpec services contract > createDaemon wires the rig_services migration
+kernel-boot: VITEST=true — skipping kernel auto-boot
+
+stdout | test/rigspec-services.test.ts > RigSpec services contract > createDaemon wires the rig_services migration
+kernel-boot: tracker-state=skipped
+
+ ✓ test/queue-recovery-index.test.ts (11 tests) 494ms
+stdout | test/rigspec-services.test.ts > RigSpec services contract > createDaemon wires the rig_services migration
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/rigspec-services.test.ts > RigSpec services contract > createDaemon wires the rig_services migration
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+ ✓ test/rigspec-services.test.ts (8 tests) 348ms
+ ✓ test/exact-session-probe.test.ts (1 test) 477ms
+   ✓ probes exact native session names so a live prefix neighbor cannot hide a detached seat  477ms
+ ✓ test/workflow-runtime.test.ts (8 tests) 523ms
+ ✓ test/compaction-generation.test.ts (9 tests) 480ms
+ ✓ test/seat-handover-sources.test.ts (20 tests) 534ms
+ ✓ test/queue-recovery-read-work.test.ts (10 tests) 494ms
+stdout | test/unisolated-start-policy.test.ts > accepts an owner's start and launches the seat with no injected policy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/unisolated-start-policy.test.ts (1 test) 490ms
+   ✓ accepts an owner's start and launches the seat with no injected policy  490ms
+ ✓ test/rig-expansion-service.test.ts (18 tests) 514ms
+ ✓ test/restore-claude-activity.test.ts (13 tests) 389ms
+ ✓ test/claude-activity-hook-up-route.test.ts (1 test) 484ms
+   ✓ /api/up — managed activity-hook delivery-gap warning crosses the route (rc0) > apply of a claude_activity_hooks seat with MISSING delivery assets → rc0 + exact warning in the response  483ms
+ ✓ test/server.test.ts (12 tests) 483ms
+ ✓ test/workflow-role-resolution.test.ts (15 tests) 385ms
+ ✓ test/workflow-lifecycle-routes.test.ts (6 tests) 501ms
+ ✓ test/bundle-prelaunch-routing.test.ts (12 tests) 491ms
+ ✓ test/request-phase-observer.test.ts (9 tests) 479ms
+ ✓ test/external-nudge-accounting.test.ts (5 tests) 469ms
+ ✓ test/project-boundary-profile.test.ts (25 tests) 485ms
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 respawned)
+
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 respawned)
+
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 kept)
+
+stderr | test/attempt-failure.test.ts > the owner retry reads the recorded classification > recovers a seat whose last launch failed, once, and then launches it
+team dispatch: recovered seat builder@rig-1 for one launch (pane %1 kept)
+
+ ✓ test/attempt-failure.test.ts (17 tests) 504ms
+ ✓ test/periodic-snapshot-scheduler.test.ts (25 tests) 486ms
+ ✓ test/hosts-add-pair-routes.test.ts (30 tests) 465ms
+ ✓ test/agent-starter-adapter-claude.test.ts (1 test) 462ms
+   ✓ Agent Starter v1 vertical — real Claude adapter delivery (M2 R2) > real ClaudeCodeAdapter.deliverStartup writes STARTER content to CLAUDE.md via guidance_merge  461ms
+ ✓ test/add-member-route.test.ts (12 tests) 423ms
+ ✓ test/schema-discovery.test.ts (10 tests) 471ms
+ ✓ test/restore-check-rehydrate-eligibility.test.ts (14 tests) 480ms
+ ✓ test/path-parameter-identity.test.ts (10 tests) 454ms
+ ✓ test/p34-call-site-allowlist.test.ts (11 tests) 455ms
+ ✓ test/workflow-spec-retention.test.ts (9 tests) 453ms
+ ✓ test/event-loop-health-server.test.ts (3 tests) 450ms
+   ✓ OPR.0.4.3.21 — backend stress proof (the gate) > keeps /healthz within the proven responsiveness budget under topology route load, and captures route + event-loop evidence  368ms
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced return
+CLAUDE_STARTUP_CONTROL={"kind":"return","rcOptions":"himBH","steadyOptions":"himBHs","onlyPossibleStdinFlagDifferenceBeforeStagedLaunch":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced return
+CLAUDE_HISTORY_CONTROL={"kind":"return","ordinaryFlush":false,"priorHistoryPreserved":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced return
+CLAUDE_ISOLATION={"kind":"return","exit":0,"sameShellPid":true,"environmentUnchanged":true,"cwdUnchanged":true,"optionsUnchanged":true,"historyPathUnchanged":true,"ordinaryHistoryFlush":false,"priorHistoryPreserved":true,"scriptBodyNotInParentHistory":true,"scriptBytes":4249,"typedBytes":79,"scriptMode":384,"scriptUid":1000,"consumedFilesRemoved":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced exit
+CLAUDE_STARTUP_CONTROL={"kind":"exit","rcOptions":"himBH","steadyOptions":"himBHs","onlyPossibleStdinFlagDifferenceBeforeStagedLaunch":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced exit
+CLAUDE_HISTORY_CONTROL={"kind":"exit","ordinaryFlush":false,"priorHistoryPreserved":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced exit
+CLAUDE_ISOLATION={"kind":"exit","exit":7,"sameShellPid":true,"environmentUnchanged":true,"cwdUnchanged":true,"optionsUnchanged":true,"historyPathUnchanged":true,"ordinaryHistoryFlush":false,"priorHistoryPreserved":true,"scriptBodyNotInParentHistory":true,"scriptBytes":4254,"typedBytes":79,"scriptMode":384,"scriptUid":1000,"consumedFilesRemoved":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced errexit
+CLAUDE_STARTUP_CONTROL={"kind":"errexit","rcOptions":"himBH","steadyOptions":"himBHs","onlyPossibleStdinFlagDifferenceBeforeStagedLaunch":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced errexit
+CLAUDE_HISTORY_CONTROL={"kind":"errexit","ordinaryFlush":false,"priorHistoryPreserved":true}
+
+stdout | test/claude-interactive-isolation.test.ts > classic Claude pane-shell isolation > keeps pane environment, lifetime and history after sourced errexit
+CLAUDE_ISOLATION={"kind":"errexit","exit":1,"sameShellPid":true,"environmentUnchanged":true,"cwdUnchanged":true,"optionsUnchanged":true,"historyPathUnchanged":true,"ordinaryHistoryFlush":false,"priorHistoryPreserved":true,"scriptBodyNotInParentHistory":true,"scriptBytes":4325,"typedBytes":79,"scriptMode":384,"scriptUid":1000,"consumedFilesRemoved":true}
+
+ ✓ test/claude-interactive-isolation.test.ts (3 tests) 438ms
+ ✓ test/framework-context-manifest.test.ts (60 tests) 408ms
+ ✓ test/queue-legacy-handoff-custody.test.ts (12 tests) 426ms
+ ✓ test/seat-lifecycle-route.test.ts (12 tests) 394ms
+ ✓ test/agent-activity-store.test.ts (20 tests) 438ms
+ ✓ test/gateway-channel-lifecycle.test.ts (8 tests) 375ms
+ ✓ test/startup-proof.test.ts (20 tests) 408ms
+ ✓ test/rig-mode-store.test.ts (20 tests) 412ms
+ ✓ test/proof-source-root.test.ts (2 tests) 427ms
+   ✓ watches the owning project policy above a nested missions root  425ms
+ ✓ test/compaction-clock-injection.test.ts (7 tests) 473ms
+ ✓ test/whoami-service.test.ts (19 tests) 468ms
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > createDaemon exposes an ACTIVE gateway subsystem on AppDeps (daemon boot activates it in-process)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > createDaemon exposes an ACTIVE gateway subsystem on AppDeps (daemon boot activates it in-process)
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > createDaemon exposes an ACTIVE gateway subsystem on AppDeps (daemon boot activates it in-process)
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > createDaemon exposes an ACTIVE gateway subsystem on AppDeps (daemon boot activates it in-process)
+kernel-boot: tracker-state=skipped
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > createDaemon exposes an ACTIVE gateway subsystem on AppDeps (daemon boot activates it in-process)
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > createDaemon exposes an ACTIVE gateway subsystem on AppDeps (daemon boot activates it in-process)
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+[openrig] [plugin-vendor] bundled 'openrig-core' 0.1.9 equals installed 0.1.9; leaving installed bytes unchanged
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+[openrig] [plugin-vendor] global skill 'openrig-skills' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'openrig-skills' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'refocusing' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'refocusing' 0.1.9 is equal/newer than bundled 0.1.9; leaving it unchanged
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+[openrig] [plugin-vendor] global skill 'rigs' 0.1.0 is equal/newer than bundled 0.1.0; leaving it unchanged
+[openrig] [plugin-vendor] global skill 'rigs' 0.1.0 is equal/newer than bundled 0.1.0; leaving it unchanged
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+kernel-boot: tracker-state=skipped
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/gateway-subsystem-activation.test.ts > S10 gateway subsystem activation (RED at tip: no boot-time subsystem caller) > subsystem health is visible on a real surface: GET /api/health-summary/gateway
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+ ✓ test/gateway-subsystem-activation.test.ts (3 tests) 380ms
+ ✓ test/workflow-member-advisory.test.ts (15 tests) 498ms
+ ✓ test/external-install-executor.test.ts (10 tests) 434ms
+ ✓ test/queue-repository.test.ts (66 tests) 438ms
+ ✓ test/stub-runner-determinism.test.ts (1 test) 466ms
+   ✓ stub-runner FULL determinism pin (PRD §5, R3) > produces a byte-identical pane transcript + activity sequence + asset stamps across a double-run  465ms
+ ✓ test/install-verifier.test.ts (10 tests) 440ms
+ ✓ test/down-route.test.ts (12 tests) 417ms
+ ✓ test/team-permission-default.test.ts (17 tests) 398ms
+ ✓ test/rig-mode-routes.test.ts (18 tests) 400ms
+ ✓ test/event-notify-envelope.test.ts (17 tests) 374ms
+ ✓ test/health-correction.test.ts (5 tests) 383ms
+ ✓ test/add-member-to-pod.test.ts (14 tests) 400ms
+stderr | test/transcript-routes.test.ts > transcript routes > GET /tail returns 200 with stripped content for existing transcript
+[session-registry] occupant-tenure mint FAILED for node_id="01M6TNA9JSJS6DH2H54NMSXJPV" (kind=initial): no such table: occupant_tenures — registration proceeds, but generation-scoped ghost-stage protection is UNAVAILABLE for this node. Ensure migration 060_occupant_tenures ran. (Further mint failures suppressed this process.)
+
+ ✓ test/handover-park-wake-continuity.test.ts (12 tests) 333ms
+ ✓ test/transcript-routes.test.ts (19 tests) 385ms
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > first-hook, then same process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > late-hook, then same process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > first-hook, then replaced process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > late-hook, then replaced process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > first-hook, then deeper-third process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > first-hook, then deeper-node-hosted process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > first-hook, then deeper-no-os-name process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > first-hook, then deeper-node-options process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > late-hook, then replaced-before-hook process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-replacement.test.ts > a recorded Claude resume rotation after the qualifying process > late-hook, then replaced-during-readiness process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+ ✓ test/claude-resume-rotation-replacement.test.ts (10 tests) 334ms
+ ✓ test/held-wake-escalation.test.ts (6 tests) 390ms
+ ✓ test/proof-policy-reuse.test.ts (6 tests) 373ms
+stderr | test/seat-launch-environment.test.ts > seat launch environment after shell rc > same-pane successor reasserts its reserved generation, not tmux's predecessor environment
+[seat launch] Environment correction unavailable; using the previous launch command.
+
+stderr | test/seat-launch-environment.test.ts > seat launch environment after shell rc > preserves the previous command if the metadata transport is unavailable
+[seat launch] Environment correction unavailable; using the previous launch command.
+
+stderr | test/seat-launch-environment.test.ts > seat launch environment after shell rc > explicit allowlist never types unknown secrets or runtime/user variables
+[seat launch] URL omitted from typed metadata; retaining the existing environment channel.
+
+ ✓ test/seat-launch-environment.test.ts (13 tests) 372ms
+ ✓ test/agent-image-fork-route.test.ts (7 tests) 334ms
+ ✓ test/seat-switch-client-service.test.ts (17 tests) 396ms
+ ✓ test/restore-honesty-d1-d6.test.ts (14 tests) 362ms
+ ✓ test/workflow-resume.test.ts (7 tests) 372ms
+ ✓ test/team-messaging.test.ts (44 tests) 350ms
+ ✓ test/browser-boundary.test.ts (17 tests) 366ms
+   ✓ discovery controls > a timed-out lookup is bounded and never delays loopback/IP requests  302ms
+ ✓ test/workflow-bound-rig.test.ts (7 tests) 348ms
+ ✓ test/bundle-export-drift-warning.test.ts (8 tests) 344ms
+ ✓ test/role-orientation.test.ts (12 tests) 381ms
+ ✓ test/agentspec-restore.integration.test.ts (15 tests) 349ms
+ ✓ test/slice13-host-attribution-resume-type.test.ts (10 tests) 335ms
+ ✓ test/stub-runner-mid-turn-death-e2e.test.ts (1 test) 337ms
+   ✓ stub-runner mid_turn_death (real-spawn death) > exits with the death code, records the exited sidecar, and NEVER sends Stop  337ms
+ ✓ test/reconciler.test.ts (13 tests) 285ms
+ ✓ test/queue-nudge-summary.test.ts (14 tests) 303ms
+ ✓ test/context-monitor-readiness-wal.test.ts (6 tests) 301ms
+ ✓ test/one-honest-resolution-path.test.ts (19 tests) 317ms
+ ✓ test/transcript-boundary-dedup.test.ts (1 test) 349ms
+   ✓ native transcript boundary replay > does not accumulate a boundary line echoed in unchanged pane scrollback  349ms
+stderr | test/claude-context-collector.test.ts > ClaudeCodeAdapter Context Collector Provisioning > provisioning failure does not block node startup
+[openrig] context collector provisioning warning: disk full
+
+ ✓ test/claude-context-collector.test.ts (46 tests) 294ms
+ ✓ test/provider-usage-windows-service.test.ts (9 tests) 285ms
+ ✓ test/stub-runner-clock.test.ts (2 tests) 306ms
+ ✓ test/run-scenarios-flag-refusal.test.ts (2 tests) 309ms
+ ✓ test/seat-activity-retirement-hooks.test.ts (9 tests) 303ms
+ ✓ test/seat-switch-client-route.test.ts (9 tests) 289ms
+ ✓ test/terminal-takeover.test.ts (20 tests) 277ms
+ ✓ test/startup-route.test.ts (6 tests) 285ms
+ ✓ test/stream-routes.test.ts (24 tests) 287ms
+ ✓ test/scenario-determinism.test.ts (4 tests) 281ms
+ ✓ test/bundle-source-identity.test.ts (4 tests) 275ms
+ ✓ test/watchdog-jobs-repository.test.ts (45 tests) 275ms
+ ✓ test/gateway-transport-e2e.test.ts (4 tests) 276ms
+ ✓ test/restore-honesty-d1-consumers.test.ts (12 tests) 274ms
+ ✓ test/workflow-dependency-reentry.test.ts (3 tests) 272ms
+ ✓ test/self-attach-service.test.ts (6 tests) 299ms
+ ✓ test/tmux-batched-reads.test.ts (13 tests) 239ms
+ ✓ test/event-bus.test.ts (13 tests) 297ms
+ ✓ test/crash-cart-readmodel.test.ts (6 tests) 272ms
+ ✓ test/claude-relay-project-cleanup.test.ts (2 tests) 282ms
+ ✓ test/checkpoint-store.test.ts (12 tests) 269ms
+ ✓ test/display-names.test.ts (11 tests) 274ms
+stdout | test/browser-boundary-listener.test.ts > mirror of the server.ts order on a real listener: boundary, then terminal guard, then upgrade > actual Node headers: accepted names reach the inert handler once each; others never
+ADAPTER-HOST-FORM LOCALHOST -> 400; localhost. -> 200
+
+stdout | test/browser-boundary-listener.test.ts > mirror of the server.ts order on a real listener: boundary, then terminal guard, then upgrade > actual Node headers: accepted names reach the inert handler once each; others never
+MALFORMED-HOST-FORM "a b" -> 400 
+
+stdout | test/browser-boundary-listener.test.ts > mirror of the server.ts order on a real listener: boundary, then terminal guard, then upgrade > actual Node headers: accepted names reach the inert handler once each; others never
+MALFORMED-HOST-FORM "x@y:45963" -> 400 
+
+stdout | test/browser-boundary-listener.test.ts > mirror of the server.ts order on a real listener: boundary, then terminal guard, then upgrade > records what the real listener does with duplicate, missing and HTTP/1.0 Host forms
+LISTENER-FORMS duplicateHost=[HTTP/1.1 403 Forbidden] missingHost11=[HTTP/1.1 400 Bad Request] http10NoHost=[HTTP/1.1 200 OK] duplicateOrigin=[HTTP/1.1 403 Forbidden]
+
+stdout | test/browser-boundary-listener.test.ts > real request constructors against the real route table on a real listener > records whether Node fetch honours an explicit Host header (needed to present an unlisted name without DNS)
+CLI-HOST-OVERRIDE status=200 code=-
+
+ ✓ test/browser-boundary-listener.test.ts (7 tests) 263ms
+stdout | test/rigs-global-skill.test.ts > the rigs skill installed globally > startup installs it for both harnesses under OpenRig's version, and leaves a skills.sh copy alone
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/rigs-global-skill.test.ts > the rigs skill installed globally > startup installs it for both harnesses under OpenRig's version, and leaves a skills.sh copy alone
+[openrig] [plugin-vendor] global skill 'rigs' at /tmp/rigs-global-KxqJO6/.agents/skills/rigs is unversioned/external authority; leaving it unchanged
+
+stdout | test/rigs-global-skill.test.ts > the rigs skill installed globally > startup installs it for both harnesses under OpenRig's version, and leaves a skills.sh copy alone
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/rigs-global-skill.test.ts > the rigs skill installed globally > startup installs it for both harnesses under OpenRig's version, and leaves a skills.sh copy alone
+kernel-boot: tracker-state=skipped
+
+stdout | test/rigs-global-skill.test.ts > the rigs skill installed globally > startup installs it for both harnesses under OpenRig's version, and leaves a skills.sh copy alone
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/rigs-global-skill.test.ts > the rigs skill installed globally > startup installs it for both harnesses under OpenRig's version, and leaves a skills.sh copy alone
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+ ✓ test/rigs-global-skill.test.ts (3 tests) 276ms
+ ✓ test/identity-hook-token-persisted.test.ts (8 tests) 265ms
+ ✓ test/archived-duplicate-rig-seat.test.ts (10 tests) 257ms
+ ✓ test/shrink-exited-session.test.ts (1 test) 245ms
+ ✓ test/snapshot-repository.test.ts (35 tests) 243ms
+stdout | test/bundle-v2-apply-target.test.ts > v2 bundle apply: launch root lifetime and --target > apply with targetRoot launches from the target, and the cwd + agent refs survive extraction cleanup
+[lifetime] targetRoot=/tmp/bundle-lifetime-9MiwvP/project
+[lifetime] rigRoot handed to instantiate=/tmp/bundle-lifetime-9MiwvP/project
+[lifetime] resolved member cwd (cwd: ".")=/tmp/bundle-lifetime-9MiwvP/project exists-after-bootstrap=true
+[lifetime] agent.yaml /tmp/bundle-lifetime-9MiwvP/project/agents/impl/agent.yaml existed-at-launch=true exists-after-bootstrap=true
+
+ ✓ test/bundle-v2-apply-target.test.ts (4 tests) 234ms
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > POST /api/transport/send: refused origin or target reaches no handler; admitted reaches it once
+[openrig] browser boundary refused untrusted_host: evil.example (POST /api/transport/send)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > POST /api/transport/send: refused origin or target reaches no handler; admitted reaches it once
+[openrig] browser boundary refused browser_origin_refused: http://evil.example (POST /api/transport/send)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > POST /api/transport/send: refused origin or target reaches no handler; admitted reaches it once
+[openrig] browser boundary refused browser_origin_refused: null (POST /api/transport/send)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > POST /api/transport/send: refused origin or target reaches no handler; admitted reaches it once
+[openrig] browser boundary refused untrusted_host: unknown.example (POST /api/transport/send)
+
+ ✓ test/agent-starter-adapter-codex.test.ts (1 test) 257ms
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > GET /api/terminal/preview: a no-Origin read addressed to an attacker name reaches no handler
+[openrig] browser boundary refused untrusted_host: evil.example (GET /api/terminal/preview)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > POST /api/queue/create: a refused request writes no row; an admitted one does
+[openrig] browser boundary refused browser_origin_refused: http://evil.example (POST /api/queue/create)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > GET /api/ps?host=peer: refused before the read-through forwards; admitted forwards once
+[openrig] browser boundary refused browser_origin_refused: http://evil.example (GET /api/ps)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > GET /api/ps?host=peer: refused before the read-through forwards; admitted forwards once
+[openrig] browser boundary refused untrusted_host: evil.example (GET /api/ps)
+
+stderr | test/browser-boundary-routes.test.ts > browser boundary on the real route table > UI on admits the own UI origin through the real table; a token never waives an origin refusal
+[openrig] browser boundary refused browser_origin_refused: http://evil.example (GET /api/ps)
+
+ ✓ test/browser-boundary-routes.test.ts (6 tests) 237ms
+ ✓ test/chat-routes.test.ts (56 tests) 262ms
+ ✓ test/slack-long-human-ask.test.ts (22 tests) 236ms
+ ✓ test/resume-token-route.test.ts (7 tests) 223ms
+stdout | test/daemon-lifecycle-wiring.test.ts > P7 wiring pin — startup recordBoot ran at boot > the lifecycle boot row exists after createDaemon boot (removing the recordBoot call fails HERE)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/daemon-lifecycle-wiring.test.ts > P7 wiring pin — startup recordBoot ran at boot > the lifecycle boot row exists after createDaemon boot (removing the recordBoot call fails HERE)
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/daemon-lifecycle-wiring.test.ts > P7 wiring pin — startup recordBoot ran at boot > the lifecycle boot row exists after createDaemon boot (removing the recordBoot call fails HERE)
+kernel-boot: VITEST=true — skipping kernel auto-boot
+
+stdout | test/daemon-lifecycle-wiring.test.ts > P7 wiring pin — startup recordBoot ran at boot > the lifecycle boot row exists after createDaemon boot (removing the recordBoot call fails HERE)
+kernel-boot: tracker-state=skipped
+
+stdout | test/daemon-lifecycle-wiring.test.ts > P7 wiring pin — startup recordBoot ran at boot > the lifecycle boot row exists after createDaemon boot (removing the recordBoot call fails HERE)
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/daemon-lifecycle-wiring.test.ts > P7 wiring pin — startup recordBoot ran at boot > the lifecycle boot row exists after createDaemon boot (removing the recordBoot call fails HERE)
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+ ✓ test/daemon-lifecycle-wiring.test.ts (1 test) 232ms
+stdout | test/startup-wiring-pins.test.ts
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/startup-wiring-pins.test.ts
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/startup-wiring-pins.test.ts
+kernel-boot: OPENRIG_NO_KERNEL=1 — skipping kernel auto-boot
+
+stdout | test/startup-wiring-pins.test.ts
+kernel-boot: tracker-state=skipped
+
+ ✓ test/project-navigation.test.ts (4 tests) 242ms
+stdout | test/startup-wiring-pins.test.ts
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/startup-wiring-pins.test.ts
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+ ✓ test/startup-wiring-pins.test.ts (41 tests | 5 skipped) 229ms
+ ✓ test/refresh-probe-cleanup.test.ts (9 tests) 218ms
+stderr | test/web-ui-default-off.test.ts > web UI default off (ui.enabled) > registers the production terminal WebSocket only when enabled; HTTP terminal auth is unchanged
+[openrig] browser boundary refused browser_origin_refused: http://127.0.0.1:44911 (GET /api/terminal/seat-1)
+
+ ✓ test/web-ui-default-off.test.ts (5 tests) 248ms
+ ✓ test/slack-status-backlog.test.ts (8 tests) 236ms
+stderr | test/workflow-routes.test.ts > workflow routes (PL-004 Phase D) > POST /project closes packet + creates next packet
+workflow spec routes-fixture@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/eval-rig-session.test.ts (31 tests) 244ms
+ ✓ test/workflow-routes.test.ts (26 tests) 238ms
+ ✓ test/terminal-pipe-utf8.test.ts (1 test) 217ms
+ ✓ test/seat-status-service.test.ts (8 tests) 249ms
+ ✓ test/bundle-binary-bytes.test.ts (2 tests) 199ms
+ ✓ test/local-bare-identity.test.ts (5 tests) 237ms
+ ✓ test/managed-team-page.test.ts (7 tests) 237ms
+ ✓ test/remote-daemon-http.test.ts (16 tests) 248ms
+ ✓ test/spec-library-starters.test.ts (27 tests) 227ms
+ ✓ test/compaction-routes.test.ts (9 tests) 247ms
+ ✓ test/kernel-boot-tracker.test.ts (21 tests) 242ms
+ ✓ test/parked-owner-consumer.test.ts (31 tests) 242ms
+ ✓ test/archived-generation-pod-shrink.test.ts (8 tests) 235ms
+stderr | test/claude-resume-rotation-recovery.test.ts > managed Claude full down/up > independent recovery boundary: managed-resume
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-recovery.test.ts > managed Claude full down/up > independent recovery boundary: managed-delayed-ready-resume
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+ ✓ test/claude-resume-rotation-recovery.test.ts (6 tests) 218ms
+ ✓ test/event-loop-monitor.test.ts (6 tests) 234ms
+ ✓ test/permission-drift-observer.test.ts (5 tests) 236ms
+ ✓ test/ps-session-ordering.test.ts (9 tests) 212ms
+ ✓ test/archive-identity-provenance.test.ts (5 tests) 218ms
+ ✓ test/s02-p1-classification-persistence.test.ts (28 tests) 218ms
+ ✓ test/context-projection.test.ts (7 tests) 219ms
+ ✓ test/team-review-projection.test.ts (3 tests) 214ms
+ ✓ test/inventory-event-indexes.test.ts (3 tests) 218ms
+ ✓ test/keep-capture-on-kill-failure.test.ts (2 tests) 226ms
+ ✓ test/review-routes.test.ts (20 tests) 182ms
+ ✓ test/system-health.test.ts (15 tests) 216ms
+ ✓ test/rig-expansion-snapshot.test.ts (6 tests) 201ms
+ ✓ test/running-name-guard.test.ts (7 tests) 214ms
+ ✓ test/workflow-wait-representation.test.ts (3 tests) 202ms
+ ✓ test/service-teardown-warning.test.ts (4 tests) 178ms
+ ✓ test/self-host-identity.test.ts (6 tests) 206ms
+ ✓ test/slice-indexer.test.ts (67 tests) 225ms
+ ✓ test/continuity-policy-materializer.test.ts (14 tests) 232ms
+ ✓ test/stub-runner-restore-e2e.test.ts (1 test) 257ms
+ ✓ test/bootstrap-compose-project-name.test.ts (8 tests) 213ms
+ ✓ test/stub-runner-compaction-e2e.test.ts (3 tests) 206ms
+ ✓ test/opr-0.4.1.09-bridge-reader.test.ts (8 tests) 220ms
+ ✓ test/profile-resolver.test.ts (51 tests) 224ms
+ ✓ test/claude-adapter-record-projection.test.ts (2 tests) 204ms
+ ✓ test/workflow-wf2-spec-language.test.ts (31 tests) 212ms
+ ✓ test/queue-blocker-refusal-shape.test.ts (4 tests) 217ms
+ ✓ test/transcript-store.test.ts (39 tests) 203ms
+stderr | test/claude-full-restore.test.ts > managed Claude full down/up > keeps identity proof separate from ordinary delivery: exact
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-full-restore.test.ts > managed Claude full down/up > keeps identity proof separate from ordinary delivery: native
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-full-restore.test.ts > managed Claude full down/up > keeps identity proof separate from ordinary delivery: bare-shell
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-full-restore.test.ts > managed Claude full down/up > keeps identity proof separate from ordinary delivery: wrong-token
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-full-restore.test.ts > managed Claude full down/up > keeps identity proof separate from ordinary delivery: unobserved-pane-process
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-full-restore.test.ts > managed Claude full down/up > keeps identity proof separate from ordinary delivery: ambiguous
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+ ✓ test/claude-full-restore.test.ts (6 tests) 193ms
+ ✓ test/slack-echo-registration.test.ts (1 test) 178ms
+ ✓ test/tmux-session-env-native.test.ts (8 tests) 209ms
+ ✓ test/seat-handover-planner.test.ts (6 tests) 168ms
+ ✓ test/workflow-role-determinism.test.ts (15 tests) 200ms
+ ✓ test/seat-launch-environment-regression.test.ts (25 tests) 186ms
+ ✓ test/team-migration.test.ts (4 tests) 184ms
+ ✓ test/builtin-team-providers.test.ts (8 tests) 215ms
+ ✓ test/rig-status-routes.test.ts (5 tests) 180ms
+stderr | test/claude-resume-rotation-restore.test.ts > managed Claude full down/up > real restore hook ordering: resume-before-ready
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-restore.test.ts > managed Claude full down/up > real restore hook ordering: resume-before-join
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-restore.test.ts > managed Claude full down/up > real restore hook ordering: resume-after-ready
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+stderr | test/claude-resume-rotation-restore.test.ts > managed Claude full down/up > real restore hook ordering: clear-before-ready
+[openrig] claude bootstrap warning: managed.configPaths is not a function
+
+ ✓ test/claude-resume-rotation-restore.test.ts (4 tests) 161ms
+stdout | test/index.test.ts > daemon startServer > starts every composed legacy service only in legacy mode
+OpenRig daemon listening on http://127.0.0.1:7441
+
+stdout | test/index.test.ts > daemon startServer > starts none of the composed legacy services in managed mode
+OpenRig daemon listening on http://127.0.0.1:7441
+
+ ✓ test/index.test.ts (5 tests) 189ms
+ ✓ test/session-transport-cutover.test.ts (8 tests) 195ms
+ ✓ test/attention-needs-input-provenance.test.ts (8 tests) 174ms
+ ✓ test/claude-resume-rotation-process-binding.test.ts (2 tests) 179ms
+ ✓ test/slack-recovery-status.test.ts (3 tests) 178ms
+ ✓ test/bundle-preconditions.test.ts (23 tests) 153ms
+ ✓ test/services-snapshot-restore.test.ts (6 tests) 174ms
+ ✓ test/usage-samples-wiring.test.ts (3 tests) 143ms
+ ✓ test/session-identity.test.ts (17 tests) 165ms
+ ✓ test/execution-view-responsive.test.ts (1 test) 179ms
+ ✓ test/stub-compaction.test.ts (3 tests) 163ms
+ ✓ test/services-up.test.ts (5 tests) 176ms
+ ✓ test/openrig-skills-router-coverage.test.ts (6 tests) 144ms
+ ✓ test/session-source-fork.test.ts (41 tests) 177ms
+ ✓ test/watchdog-retention-ties.test.ts (3 tests) 154ms
+ ✓ test/workspace-scope.test.ts (7 tests) 165ms
+ ✓ test/session-source-rebuild.test.ts (26 tests) 170ms
+ ✓ test/rigspec-import-running-name.test.ts (4 tests) 158ms
+ ✓ test/notification-dispatcher.test.ts (9 tests) 163ms
+ ✓ test/claude-compaction-enforcer.test.ts (55 tests) 165ms
+ ✓ test/daemon-lifecycle-store.test.ts (6 tests) 146ms
+ ✓ test/openrig-core-plugin.test.ts (48 tests) 165ms
+ ✓ test/periodic-timer-overflow.test.ts (2 tests) 143ms
+ ✓ test/json-body-error.test.ts (9 tests) 146ms
+ ✓ test/whoami-routes.test.ts (6 tests) 157ms
+ ✓ test/skill-mirror-drift.test.ts (6 tests) 158ms
+ ✓ test/rig-archive.test.ts (5 tests) 157ms
+ ✓ test/projection-manifest-store.test.ts (6 tests) 141ms
+stderr | test/workflow-projector.test.ts > WorkflowProjector + WorkflowRuntime (PL-004 Phase D; transactional-scribe LOAD-BEARING) > project(handoff) persists Phase A queue closure metadata + transition row + queue.updated event
+workflow spec pd-three-step@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-projector.test.ts > WorkflowProjector + WorkflowRuntime (PL-004 Phase D; transactional-scribe LOAD-BEARING) > project(done) without exposed closure overrides defaults closure_reason to no-follow-on
+workflow spec pd-permissive@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/cmux-adapter.test.ts (33 tests) 160ms
+stderr | test/workflow-projector.test.ts > WorkflowProjector + WorkflowRuntime (PL-004 Phase D; transactional-scribe LOAD-BEARING) > project(handoff) follows next_hop.suggested_roles so a final review step can loop back to intake
+workflow spec loop-regression@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-projector.test.ts > WorkflowProjector + WorkflowRuntime (PL-004 Phase D; transactional-scribe LOAD-BEARING) > R2 resume regression: handoff → waiting on step N → done on same qitem closes step N (not N+1)
+workflow spec pd-resume-after-waiting@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/workflow-projector.test.ts (15 tests) 144ms
+ ✓ test/stub-runner-activity-e2e.test.ts (1 test) 159ms
+ ✓ test/herdr-socket-utf8.test.ts (7 tests) 162ms
+ ✓ test/provider-c3-seat-keyed-discovery.test.ts (4 tests) 164ms
+ ✓ test/stub-runner-slow-output-e2e.test.ts (1 test) 155ms
+ ✓ test/transcript-seat-env-native.test.ts (2 tests) 134ms
+ ✓ test/view-projector.test.ts (18 tests) 151ms
+ ✓ test/workflow-route.test.ts (10 tests) 146ms
+ ✓ test/seat-restart-in-place-route.test.ts (3 tests) 126ms
+ ✓ test/gateway-process.test.ts (2 tests) 145ms
+ ✓ test/permission-policy-plumb.test.ts (7 tests) 144ms
+ ✓ test/pod-repository.test.ts (6 tests) 140ms
+ ✓ test/applied-launch-observation-store.test.ts (6 tests) 141ms
+ ✓ test/context-usage-watchdog.test.ts (13 tests) 126ms
+ ✓ test/adapters-routes.test.ts (4 tests) 137ms
+ ✓ test/activity-ingest-seam.test.ts (8 tests) 132ms
+ ✓ test/effort-lifecycle-e2e.test.ts (4 tests) 123ms
+ ✓ test/mission-control-write-contract.test.ts (19 tests) 133ms
+stderr | test/p34-terminal-closing-writers.test.ts > P34 RED 1 — the CURRENT MISS: terminal close + successor create stages NO wake intent > workflow-projector.ts:466 — project(handoff) ROUTES branch stages the next-step packet's wake intent
+workflow spec p34-two-step@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/p34-terminal-closing-writers.test.ts (11 tests) 132ms
+stderr | test/workflow-spec-folder-scanner.test.ts > scanWorkflowSpecFolder (slice 11) > scans a valid YAML file → row in cache + scan summary 1/1/0/0
+workflow spec folder-test@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-spec-folder-scanner.test.ts > scanWorkflowSpecFolder (slice 11) > keeps scanning the folder when recording one file's parse error fails
+workflow spec scan: could not record the parse error for /tmp/wf-folder-x4fXVd/a-bad.yaml: diagnostic write failed
+
+stderr | test/workflow-spec-folder-scanner.test.ts > scanWorkflowSpecFolder (slice 11) > removes cache row when file disappears (OQ-4)
+workflow spec folder-test-2@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-spec-folder-scanner.test.ts > scanWorkflowSpecFolder (slice 11) > does NOT remove cache rows whose source_path is outside the scanned folder
+workflow spec external-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-spec-folder-scanner.test.ts > scanWorkflowSpecFolder: parse error and repair with several cached versions > keeps every cached version, with its row and content, through the error and the repair
+workflow spec folder-test@2 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/workflow-spec-folder-scanner.test.ts (23 tests) 126ms
+ ✓ test/health-summary.test.ts (5 tests) 131ms
+ ✓ test/proof-project-scope.test.ts (14 tests) 132ms
+ ✓ test/files-truncation.test.ts (10 tests) 116ms
+ ✓ test/provider-service-impl.test.ts (5 tests) 122ms
+ ✓ test/restore-check-service.test.ts (98 tests) 113ms
+ ✓ test/context-pack-profile-route.test.ts (29 tests) 108ms
+ ✓ test/topology-creation-ingress.test.ts (3 tests) 109ms
+ ✓ test/topology-converge.test.ts (9 tests) 112ms
+ ✓ test/seat-activity-retirement.test.ts (5 tests) 110ms
+ ✓ test/eval-ref-resolution.test.ts (5 tests) 118ms
+ ✓ test/review-read-indexes.test.ts (3 tests) 107ms
+ ✓ test/plugin-vendor-service.test.ts (25 tests) 112ms
+ ✓ test/up-route-running-name.test.ts (2 tests) 104ms
+ ✓ test/codex-update-input.test.ts (139 tests) 84ms
+ ✓ test/occupant-generation-producer-carry.test.ts (4 tests) 98ms
+ ✓ test/mission-control-read-layer.test.ts (9 tests) 96ms
+ ✓ test/workflow-replay-idempotency.test.ts (10 tests) 104ms
+ ✓ test/self-host-queue-sender.test.ts (2 tests) 107ms
+ ✓ test/slack-file-download.test.ts (3 tests) 101ms
+stderr | test/factory-rsi-starter.test.ts > OPR.0.4.6.FAC2 factory-rsi factory workflow > forward walk resolves each role to its 1:1 factory-rsi seat
+workflow spec factory-rsi@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/factory-rsi-starter.test.ts (4 tests) 104ms
+ ✓ test/test-app-hermeticity.test.ts (3 tests) 103ms
+ ✓ test/slack-deadletter-concurrent-retry.test.ts (2 tests) 104ms
+ ✓ test/generation-unconfirmed-routes.test.ts (2 tests) 105ms
+ ✓ test/role-charter.test.ts (12 tests) 111ms
+ ✓ test/progress-review-done-coherence.test.ts (20 tests) 107ms
+ ✓ test/rigspec-preflight.test.ts (32 tests) 96ms
+ ✓ test/views-routes.test.ts (13 tests) 98ms
+ ✓ test/rig-mode-drift-rule.test.ts (7 tests) 106ms
+ ✓ test/mission-control-routes.test.ts (18 tests) 110ms
+ ✓ test/tmux-batched-capture.test.ts (15 tests) 112ms
+ ✓ test/session-source-roundtrip.test.ts (2 tests) 114ms
+ ✓ test/s02-p3-worker.test.ts (22 tests) 114ms
+ ✓ test/pod-bundle-assembler.test.ts (78 tests) 93ms
+ ✓ test/crash-cart-load.test.ts (9 tests) 109ms
+ ✓ test/s23-silent-erasure.test.ts (5 tests) 79ms
+stderr | test/conveyor-starter.test.ts > 0.3.0 conveyor starter workflow specs > conveyor can run multiple active instances on the same rig
+workflow spec conveyor@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/conveyor-starter.test.ts > 0.3.0 conveyor starter workflow specs > basic-loop can move one packet end-to-end through close
+workflow spec basic-loop@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/conveyor-starter.test.ts (5 tests) 95ms
+ ✓ test/agent-image-fork-count-gate.test.ts (2 tests) 86ms
+ ✓ test/list-processes-async.test.ts (7 tests) 91ms
+ ✓ test/review-freeze.test.ts (13 tests) 125ms
+ ✓ test/kernel-role-orientation.test.ts (7 tests) 80ms
+ ✓ test/self-host-registry-alignment.test.ts (6 tests) 78ms
+ ✓ test/finite-telemetry.test.ts (18 tests) 85ms
+ ✓ test/slices-routes.test.ts (28 tests) 93ms
+ ✓ test/mission-control-routes-phase-b.test.ts (16 tests) 77ms
+stderr | test/browser-boundary-consolidation.test.ts > one browser boundary on the production API and terminal routes > still refuses unlisted origins before the terminal route
+[openrig] browser boundary refused browser_origin_refused: chrome-extension://other (GET /api/ps)
+
+stderr | test/browser-boundary-consolidation.test.ts > one browser boundary on the production API and terminal routes > still refuses unlisted origins before the terminal route
+[openrig] browser boundary refused browser_origin_refused: https://dashboard.example:444 (GET /api/ps)
+
+stderr | test/browser-boundary-consolidation.test.ts > one browser boundary on the production API and terminal routes > still refuses unlisted origins before the terminal route
+[openrig] browser boundary refused browser_origin_refused: http://dashboard.example (GET /api/ps)
+
+stderr | test/browser-boundary-consolidation.test.ts > one browser boundary on the production API and terminal routes > still refuses unlisted origins before the terminal route
+[openrig] browser boundary refused browser_origin_refused: null (GET /api/ps)
+
+stderr | test/browser-boundary-consolidation.test.ts > one browser boundary on the production API and terminal routes > still refuses unlisted origins before the terminal route
+[openrig] browser boundary refused browser_origin_refused: invalid (GET /api/ps)
+
+ ✓ test/browser-boundary-consolidation.test.ts (6 tests) 90ms
+ ✓ test/scope-audit-routes.test.ts (13 tests) 75ms
+ ✓ test/finite-telemetry-app.test.ts (2 tests) 84ms
+ ✓ test/control-plane-census.test.ts (19 tests) 85ms
+ ✓ test/workflow-keepalive-arming.test.ts (8 tests) 81ms
+ ✓ test/deliberate-none-amendment.test.ts (6 tests) 89ms
+ ✓ test/human-route-enforcer.test.ts (22 tests) 87ms
+ ✓ test/watchdog-routes.test.ts (30 tests) 86ms
+stderr | test/slice-detail-projector-v1.test.ts > PL-slice-story-view-v1 SliceDetailProjector — bound workflow_instance > populates workflowBinding + all four v1 dimensions when an instance is bound to the slice
+workflow spec test-loop@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/slice-detail-projector-v1.test.ts (15 tests) 80ms
+ ✓ test/workflow-deadline-read-surfaces.test.ts (4 tests) 88ms
+ ✓ test/workflow-deadline.test.ts (10 tests) 82ms
+ ✓ test/view-event-bridge.test.ts (14 tests) 77ms
+ ✓ test/tmux-pane-cwd-native.test.ts (1 test) 79ms
+ ✓ test/health-detectors.test.ts (11 tests) 72ms
+ ✓ test/restore-attempt-receipt.test.ts (3 tests) 84ms
+ ✓ test/scope-reapprove.test.ts (12 tests) 70ms
+ ✓ test/bundle-source-resolver.test.ts (9 tests) 79ms
+ ✓ test/queue-cross-host-create.test.ts (21 tests) 75ms
+ ✓ test/slack-inbound-complete-text.test.ts (1 test) 73ms
+ ✓ test/scope-approve.test.ts (23 tests) 71ms
+ ✓ test/request-diagnostic-recorder.test.ts (2 tests) 65ms
+ ✓ test/queue-note-state-honesty.test.ts (8 tests) 80ms
+ ✓ test/bundle-archive.test.ts (25 tests) 69ms
+ ✓ test/delivery-outcome-resolved.test.ts (5 tests) 72ms
+ ✓ test/effective-model-readers.test.ts (14 tests) 69ms
+ ✓ test/settings-browser.test.ts (15 tests) 65ms
+ ✓ test/projects-routes.test.ts (12 tests) 59ms
+ ✓ test/workflow-frontier-guard.test.ts (6 tests) 74ms
+ ✓ test/bundle-behaviour.test.ts (52 tests) 73ms
+ ✓ test/provider-blocking-reset.test.ts (1 test) 68ms
+ ✓ test/gateway-human-queue-journey.test.ts (3 tests) 66ms
+ ✓ test/native-channel-contract.test.ts (42 tests) 72ms
+ ✓ test/current-work.test.ts (14 tests) 66ms
+ ✓ test/activity-route-structural.test.ts (1 test) 66ms
+ ✓ test/find-polluter-script.test.ts (7 tests) 61ms
+ ✓ test/team-fs-dirs.test.ts (3 tests) 64ms
+stderr | test/schema-agentspec-runtime.test.ts > AgentSpec reboot schema migration (014) > registerClaimedSession sets startup_status=ready
+[session-registry] occupant-tenure mint FAILED for node_id="n1" (kind=adopt): no such table: occupant_tenures — registration proceeds, but generation-scoped ghost-stage protection is UNAVAILABLE for this node. Ensure migration 060_occupant_tenures ran. (Further mint failures suppressed this process.)
+
+ ✓ test/schema-agentspec-runtime.test.ts (12 tests) 66ms
+ ✓ test/spec-library-workflow-scanner.test.ts (19 tests) 57ms
+ ✓ test/watchdog-policy-engine.test.ts (21 tests) 63ms
+ ✓ test/codex-git-add-dirs.test.ts (10 tests) 70ms
+ ✓ test/slack-subsystem-cutover.test.ts (25 tests) 60ms
+ ✓ test/s02-p3-sender.test.ts (9 tests) 64ms
+ ✓ test/remote-up-leaf.test.ts (9 tests) 57ms
+ ✓ test/coordination-integration.test.ts (3 tests) 57ms
+ ✓ test/requirements-probe.test.ts (14 tests) 57ms
+ ✓ test/owner-terminal-host.test.ts (5 tests) 64ms
+ ✓ test/gateway-human-lifecycle.test.ts (23 tests) 56ms
+ ✓ test/rig-install-root.test.ts (1 test) 62ms
+ ✓ test/codex-profile-preflight.test.ts (13 tests) 58ms
+ ✓ test/queue-update-metadata-reject.test.ts (8 tests) 59ms
+ ✓ test/kernel-catalog-preview.test.ts (4 tests) 53ms
+ ✓ test/migration-067-i3-identity-provenance.test.ts (1 test) 54ms
+ ✓ test/staging-docker-invoker-fake.test.ts (4 tests) 56ms
+ ✓ test/tmux-adapter.test.ts (141 tests) 52ms
+ ✓ test/queue-target-repo.test.ts (8 tests) 60ms
+ ✓ test/missions-complete-endpoint.test.ts (13 tests) 55ms
+ ✓ test/provider-onboarding-profile.test.ts (5 tests) 52ms
+ ✓ test/scope-membership-agreement.test.ts (12 tests) 48ms
+ ✓ test/queue-cross-host-target-repo.test.ts (7 tests) 53ms
+ ✓ test/session-stop-intent-migration.test.ts (1 test) 61ms
+ ✓ test/agent-image-source-cwd.test.ts (12 tests) 50ms
+ ✓ test/slack-thread-routing.test.ts (14 tests) 47ms
+ ✓ test/mission-status-sidecar.test.ts (10 tests) 50ms
+ ✓ test/slack-images.test.ts (27 tests) 41ms
+ ✓ test/project-registration.test.ts (24 tests) 40ms
+ ✓ test/workflow-boot-sweep.test.ts (5 tests) 53ms
+ ✓ test/seat-structural-activity-service.test.ts (7 tests) 46ms
+ ✓ test/bundle-behaviour-route.test.ts (3 tests) 45ms
+ ✓ test/p18-provenance-thread.test.ts (6 tests) 48ms
+stderr | test/workflow-spec-cache.test.ts > WorkflowSpecCache (PL-004 Phase D) > getByNameVersion returns null for unknown spec; returns row for cached spec
+workflow spec test-three-step@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-spec-cache.test.ts > WorkflowSpecCache (PL-004 Phase D) > pruneNoiseDirRows removes cache rows from .worktrees/node_modules paths and preserves canonical-path rows
+workflow spec canonical-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+workflow spec stale-dist-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+workflow spec stale-node-modules-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+workflow spec stale-worktree-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-spec-cache.test.ts > WorkflowSpecCache (PL-004 Phase D) > pruneNoiseDirRows with installRoot preserves built-in rows under <installRoot>/dist while removing user noise
+workflow spec shipped-builtin-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+workflow spec user-noise-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/workflow-spec-cache.test.ts (14 tests) 52ms
+ ✓ test/tmux-parent-env-hook-native.test.ts (1 test) 99ms
+stderr | test/workflow-routes-specs.test.ts > GET /api/workflow/specs > returns each cached spec with the canonical fields
+workflow spec alpha-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-routes-specs.test.ts > GET /api/workflow/specs > mixed built-in + operator: each row gets the correct isBuiltIn flag
+workflow spec beta-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/workflow-routes-specs.test.ts (7 tests) 46ms
+stderr | test/missions-routes.test.ts > GET /api/missions/:missionId > workflow_spec + topology (slice 13) > returns topology.specGraph when workflow_spec declared AND the spec is in the cache
+workflow spec openrig-velocity@1.0 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/missions-routes.test.ts (9 tests) 42ms
+ ✓ test/slices-bound-to-workflow.test.ts (5 tests) 50ms
+ ✓ test/workflow-continue-honesty.test.ts (4 tests) 38ms
+stderr | test/workflow-cross-loop-three-step.test.ts > workflow cross-loop three-step (PL-004 Phase D PRD acceptance) > three steps × three actors → completed with continuous trail + zero orphans
+workflow spec cross-loop-three-step@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/workflow-cross-loop-three-step.test.ts (1 test) 42ms
+ ✓ test/spec-library-workflow-folder-route.test.ts (6 tests) 53ms
+ ✓ test/queue-cross-host-br1.test.ts (1 test) 42ms
+ ✓ test/restore-honesty-d1-continuity-order.test.ts (1 test) 42ms
+ ✓ test/scenario-pipeline.test.ts (11 tests) 44ms
+ ✓ test/workflow-guidance.test.ts (12 tests) 44ms
+ ✓ test/host-read-through.test.ts (17 tests) 42ms
+ ✓ test/spec-library-workflow-routes.test.ts (7 tests) 38ms
+ ✓ test/project-classifier.test.ts (9 tests) 40ms
+ ✓ test/effective-model-occupant-identity.test.ts (1 test) 38ms
+ ✓ test/restore-plan-preview.test.ts (12 tests) 39ms
+ ✓ test/context-pack-routes.test.ts (24 tests) 36ms
+ ✓ test/codex-daemon-optout.test.ts (33 tests) 33ms
+ ✓ test/queue-recent-transitions.test.ts (5 tests) 39ms
+ ✓ test/watchdog-scheduler.test.ts (16 tests) 38ms
+ ✓ test/spec-library-routes.test.ts (8 tests) 39ms
+ ✓ test/attention-aggregator.test.ts (9 tests) 39ms
+ ✓ test/skill-audit-route.test.ts (2 tests) 37ms
+ ✓ test/pi-session-identity-generation.test.ts (15 tests) 36ms
+ ✓ test/scaffold-cross-reader.test.ts (8 tests) 37ms
+ ✓ test/gateway-human-registry.test.ts (25 tests) 36ms
+ ✓ test/claude-runtime-adapter.test.ts (47 tests) 35ms
+ ✓ test/agent-image-routes.test.ts (10 tests) 34ms
+ ✓ test/user-settings-store.test.ts (68 tests) 35ms
+ ✓ test/scope-approve-append-only.test.ts (5 tests) 35ms
+ ✓ test/install-planner.test.ts (29 tests) 34ms
+stderr | test/workflow-specs-diagnostic-migration.test.ts > WorkflowSpecCache diagnostic methods (slice 11) > restores a repaired new diagnostic in place without a duplicate library row
+workflow spec valid-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+stderr | test/workflow-specs-diagnostic-migration.test.ts > WorkflowSpecCache diagnostic methods (slice 11) > listAll surfaces both valid and diagnostic rows
+workflow spec broken.yaml@ rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/workflow-specs-diagnostic-migration.test.ts (11 tests) 37ms
+ ✓ test/kernel-rig-spec-validate.test.ts (14 tests) 35ms
+ ✓ test/workflow-validation-strictness.test.ts (24 tests) 29ms
+ ✓ test/inbox-handler.test.ts (8 tests) 33ms
+ ✓ test/chat-repository.test.ts (20 tests) 36ms
+stderr | test/starter-spec-loader.test.ts > built-in workflow spec loader > cold start: seeds every .yaml spec in the directory
+workflow spec alpha-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+workflow spec beta-spec@1 rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.
+
+ ✓ test/starter-spec-loader.test.ts (7 tests) 34ms
+ ✓ test/agent-manifest.test.ts (46 tests) 34ms
+ ✓ test/scenario-stage.test.ts (14 tests) 34ms
+ ✓ test/slack-durability.test.ts (9 tests) 35ms
+ ✓ test/claude-activity-hook-delivery.test.ts (26 tests) 30ms
+ ✓ test/classifier-lease-manager.test.ts (16 tests) 29ms
+ ✓ test/queue-list-compact.test.ts (13 tests) 31ms
+ ✓ test/context-pack-store-recursion.test.ts (25 tests) 31ms
+ ✓ test/sweep-a-closure-coherence.test.ts (3 tests) 32ms
+ ✓ test/user-settings-routes.test.ts (28 tests) 32ms
+ ✓ test/stream-store.test.ts (11 tests) 31ms
+ ✓ test/files-routes.test.ts (19 tests) 30ms
+ ✓ test/activity-events-stream.test.ts (5 tests) 30ms
+ ✓ test/pi-runner.test.ts (60 tests) 33ms
+ ✓ test/plugin-files-routes.test.ts (18 tests) 33ms
+ ✓ test/review-composer.test.ts (82 tests) 31ms
+ ✓ test/package-manifest.test.ts (26 tests) 27ms
+ ✓ test/self-host-destination-teaching.test.ts (5 tests) 33ms
+ ✓ test/whoami-workspace.test.ts (4 tests) 29ms
+ ✓ test/transcript-adaptive-capture.test.ts (11 tests) 30ms
+ ✓ test/spec-md-shadowed-node.test.ts (7 tests) 27ms
+ ✓ test/scope-approve-named-root.test.ts (6 tests) 29ms
+ ✓ test/native-ps-locale.test.ts (6 tests) 27ms
+ ✓ test/mission-control-fleet-cli-capability.test.ts (15 tests) 30ms
+stdout | test/codex-network-default.test.ts > #275 codexNetworkDefaultArg > reads only the plain floor and returns the quoted override when Codex allows it
+[openrig] codex network default for dev-qa@rig: applied, 12 ms
+
+stdout | test/codex-network-default.test.ts > #275 codexNetworkDefaultArg > returns nothing without a reader, when Codex declines, or when the reader throws
+[openrig] codex network default for s: not applied (network access is set explicitly), 3 ms
+
+stdout | test/codex-network-default.test.ts > #275 codexNetworkDefaultArg > returns nothing without a reader, when Codex declines, or when the reader throws
+[openrig] codex network default for s: not applied (the reader failed: boom), 0 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > fresh: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for dev-qa@test-rig: applied, 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > fresh: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for dev-qa@test-rig: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > fork: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for dev-qa@test-rig: applied, 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > fork: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for dev-qa@test-rig: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > resume: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for dev-qa@test-rig: applied, 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > resume: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for dev-qa@test-rig: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > restore: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: applied, 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > restore: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > last: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: applied, 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > last: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+ ✓ test/codex-network-default.test.ts (40 tests) 24ms
+ ✓ test/cwd-expansion.test.ts (17 tests) 18ms
+ ✓ test/bundle-types.test.ts (70 tests) 26ms
+ ✓ test/occupant-shadow-integration.test.ts (12 tests) 28ms
+ ✓ test/healthz-wedge-events-index.test.ts (9 tests) 25ms
+ ✓ test/up-command-router.test.ts (26 tests) 25ms
+ ✓ test/terminal-provider-ride.test.ts (46 tests) 26ms
+ ✓ test/factory-rsi-rig.test.ts (5 tests) 25ms
+ ✓ test/kernel-boot.test.ts (25 tests) 27ms
+ ✓ test/session-name-parity.test.ts (66 tests) 25ms
+ ✓ test/skill-library-routes.test.ts (20 tests) 27ms
+ ✓ test/bundle-assembler.test.ts (16 tests) 28ms
+ ✓ test/crash-cart-probes.test.ts (20 tests) 29ms
+stderr | test/projection-planner-plugins.test.ts > Projection planner — plugin path semantics > resolves openrig-home: from configured RIGGED_HOME, not later shell values
+Warning: RIGGED_HOME is deprecated; use OPENRIG_HOME instead.
+
+ ✓ test/projection-planner-plugins.test.ts (14 tests) 26ms
+ ✓ test/workflow-step-trail-log.test.ts (8 tests) 24ms
+ ✓ test/context-pack-address-route.test.ts (8 tests) 24ms
+ ✓ test/audit-browse.test.ts (11 tests) 29ms
+ ✓ test/model-fidelity-enumeration-guard.test.ts (9 tests) 25ms
+ ✓ test/sdlc-role-startup.test.ts (5 tests) 21ms
+ ✓ test/ntfy-title-native.test.ts (1 test) 20ms
+ ✓ test/conflict-detector.test.ts (15 tests) 22ms
+ ✓ test/slack-secret-quotes.test.ts (2 tests) 28ms
+ ✓ test/resume-metadata-refresher.test.ts (27 tests) 24ms
+ ✓ test/shipped-skill-frontmatter.test.ts (3 tests) 23ms
+ ✓ test/mission-control-action-log.test.ts (8 tests) 22ms
+ ✓ test/pi-activity-generation.test.ts (8 tests) 23ms
+ ✓ test/workspace-routes.test.ts (11 tests) 21ms
+ ✓ test/rigspec-codec.test.ts (12 tests) 25ms
+ ✓ test/plugin-discovery-service.test.ts (23 tests) 24ms
+ ✓ test/native-process-lineage.test.ts (100 tests) 23ms
+ ✓ test/rigs-routes-pl019-current-qitems.test.ts (9 tests) 22ms
+ ✓ test/tmux-shell-command.test.ts (35 tests) 22ms
+ ✓ test/control-plane-json-generator.test.ts (11 tests) 24ms
+ ✓ test/spec-library-service.test.ts (9 tests) 23ms
+ ✓ test/slice-workflow-binding.test.ts (9 tests) 23ms
+ ✓ test/topology-route.test.ts (7 tests) 22ms
+ ✓ test/agent-resolver.test.ts (15 tests) 18ms
+ ✓ test/package-repository.test.ts (5 tests) 20ms
+ ✓ test/pod-bundle-readonly-staging.test.ts (2 tests) 20ms
+ ✓ test/schema-bindings.test.ts (13 tests) 22ms
+ ✓ test/topology-launcher.test.ts (16 tests) 21ms
+ ✓ test/watchdog-policies.test.ts (24 tests) 19ms
+ ✓ test/schema-events.test.ts (10 tests) 19ms
+ ✓ test/agent-image-manifest-roundtrip.test.ts (12 tests) 20ms
+ ✓ test/queue-list-grammar.test.ts (9 tests) 23ms
+ ✓ test/terminal-service.test.ts (71 tests) 21ms
+ ✓ test/context-pack-manifest-parser.test.ts (19 tests) 21ms
+ ✓ test/watchdog-history-log.test.ts (8 tests) 25ms
+ ✓ test/rigspec-local-validation.test.ts (8 tests) 24ms
+ ✓ test/crash-cart-route.test.ts (8 tests) 23ms
+ ✓ test/usage-series.test.ts (19 tests) 23ms
+stderr | test/transcript-capture.test.ts > transcript capture boot recovery > reattaches capture for running tmux sessions after a daemon restart
+[session-registry] occupant-tenure mint FAILED for node_id="01M6TNCYM86WWCTBCGPF9M9WD1" (kind=initial): no such table: occupant_tenures — registration proceeds, but generation-scoped ghost-stage protection is UNAVAILABLE for this node. Ensure migration 060_occupant_tenures ran. (Further mint failures suppressed this process.)
+
+ ✓ test/transcript-capture.test.ts (1 test) 24ms
+ ✓ test/env-routes.test.ts (26 tests) 23ms
+ ✓ test/bundle-integrity.test.ts (9 tests) 21ms
+ ✓ test/files-asset-range.test.ts (7 tests) 22ms
+ ✓ test/agent-activity-store-construction-site.test.ts (1 test) 20ms
+ ✓ test/workflow-keepalive-policy.test.ts (8 tests) 21ms
+ ✓ test/tcp-readiness-native.test.ts (2 tests) 31ms
+ ✓ test/context-pack-compose.test.ts (16 tests) 19ms
+ ✓ test/workflow-instance-store.test.ts (7 tests) 20ms
+ ✓ test/transcript-tail-malformed-utf8.test.ts (5 tests) 21ms
+ ✓ test/progress-indexer.test.ts (15 tests) 17ms
+ ✓ test/schema-resume-metadata.test.ts (7 tests) 19ms
+ ✓ test/slack-app-manifest.test.ts (15 tests) 16ms
+ ✓ test/preview-routes.test.ts (12 tests) 18ms
+ ✓ test/terminal-remote-shell-quoting.test.ts (1 test) 16ms
+ ✓ test/fleet-compose.test.ts (24 tests) 19ms
+ ✓ test/schema-snapshots.test.ts (8 tests) 20ms
+ ✓ test/activity-parked-rig-scope.test.ts (5 tests) 19ms
+ ✓ test/slack-inbound-files.test.ts (14 tests) 18ms
+ ✓ test/queue-retention.test.ts (14 tests) 18ms
+ ✓ test/schema-checkpoints.test.ts (8 tests) 17ms
+ ✓ test/files-asset-security-headers.test.ts (13 tests) 17ms
+ ✓ test/spec-review-routes.test.ts (5 tests) 16ms
+ ✓ test/context-pack-pack-taxonomy.test.ts (9 tests) 17ms
+ ✓ test/draft-rig-generator.test.ts (7 tests) 14ms
+ ✓ test/telemetry-routes.test.ts (5 tests) 17ms
+ ✓ test/pi-runtime-adapter.test.ts (47 tests) 16ms
+ ✓ test/terminal-routes.test.ts (14 tests) 16ms
+ ✓ test/policy-spec.test.ts (14 tests) 13ms
+ ✓ test/spec-review-service.test.ts (8 tests) 19ms
+ ✓ test/gateway-admission-gate.test.ts (4 tests) 15ms
+ ✓ test/framework-invocation.test.ts (67 tests) 15ms
+ ✓ test/db.test.ts (9 tests) 19ms
+ ✓ test/context-pack-library-service.test.ts (11 tests) 17ms
+ ✓ test/eval-fixtures.test.ts (2 tests) 20ms
+ ✓ test/event-nested-fanout.test.ts (3 tests) 28ms
+ ✓ test/fleet-route.test.ts (8 tests) 16ms
+ ✓ test/terminal-tile-tmux-path.test.ts (21 tests) 15ms
+ ✓ test/context-pack-rm.test.ts (5 tests) 17ms
+ ✓ test/mission-control-remote-action.test.ts (8 tests) 16ms
+ ✓ test/schema-node-spec-fields.test.ts (5 tests) 15ms
+ ✓ test/eval-behavior-bridge.test.ts (5 tests) 16ms
+ ✓ test/skill-discovery.test.ts (18 tests) 14ms
+ ✓ test/agent-image-library-service.test.ts (13 tests) 14ms
+ ✓ test/session-admin-auth-guard.test.ts (14 tests) 18ms
+ ✓ test/gateway-human-handle.test.ts (10 tests) 14ms
+ ✓ test/gateway-subsystem-wire.test.ts (7 tests) 14ms
+ ✓ test/usage-samples-store.test.ts (8 tests) 12ms
+ ✓ test/bundle-carried-context-pack.test.ts (5 tests) 12ms
+ ✓ test/skill-audit.test.ts (33 tests) 15ms
+ ✓ test/cmux-layout-service.test.ts (52 tests) 12ms
+ ✓ test/rigspec-schema.test.ts (69 tests) 13ms
+ ✓ test/omp-runner.test.ts (31 tests) 15ms
+ ✓ test/scope-view-projection.test.ts (11 tests) 15ms
+ ✓ test/workspace-doctor.test.ts (41 tests) 13ms
+ ✓ test/schema-core.test.ts (10 tests) 14ms
+ ✓ test/outbox-handler.test.ts (10 tests) 15ms
+ ✓ test/codex-thread-id.test.ts (7 tests) 13ms
+ ✓ test/codex-process-observation.test.ts (2 tests) 13ms
+ ✓ test/agent-image-manifest-parser.test.ts (11 tests) 12ms
+ ✓ test/scopes-routes.test.ts (1 test) 11ms
+ ✓ test/claude-resume.test.ts (34 tests) 12ms
+ ✓ test/provider-routes.test.ts (11 tests) 13ms
+ ✓ test/health-source-isolation.test.ts (4 tests) 14ms
+ ✓ test/rigspec-workspace.test.ts (10 tests) 11ms
+[openrig-settings] env override for transcripts.lines rejected: Invalid transcripts.lines: must be an integer in [1, 1000000]; falling back to file/default
+[openrig-settings] env override for transcripts.poll_interval_seconds rejected: Invalid value for transcripts.poll_interval_seconds: expected a number, got "not-a-number"; falling back to file/default
+ ✓ test/transcript-rotation.test.ts (17 tests) 15ms
+ ✓ test/bundle-context-packs-router.test.ts (15 tests) 11ms
+ ✓ test/s03-permission-corrections.test.ts (18 tests) 13ms
+ ✓ test/workflow-exception-router.test.ts (14 tests) 12ms
+ ✓ test/agent-manifest-plugins.test.ts (16 tests) 12ms
+ ✓ test/projection-planner.test.ts (19 tests) 11ms
+ ✓ test/seat-recap-store.test.ts (18 tests) 9ms
+ ✓ test/context-codex-rate-only.test.ts (5 tests) 13ms
+ ✓ test/native-resume-probe.test.ts (101 tests) 13ms
+ ✓ test/activity-rejects.test.ts (4 tests) 14ms
+ ✓ test/slice17-sendtext-preload.test.ts (5 tests) 13ms
+ ✓ test/codex-resume.test.ts (26 tests) 11ms
+ ✓ test/tmux-exact-target.test.ts (44 tests) 10ms
+ ✓ test/getting-started-narrative-parity.test.ts (3 tests) 9ms
+ ✓ test/compose-zero-tail-native.test.ts (4 tests) 14ms
+ ✓ test/agent-image-install-failure.test.ts (4 tests) 10ms
+ ✓ test/topology-manifest.test.ts (22 tests) 10ms
+ ✓ test/slack-thread-return.test.ts (2 tests) 10ms
+ ✓ test/bundle-behaviour-inspect.test.ts (2 tests) 11ms
+ ✓ test/s08-open-rig-herdr.test.ts (19 tests) 11ms
+ ✓ test/wake-resolve-service.test.ts (19 tests) 12ms
+ ✓ test/daemon-db-path.test.ts (7 tests) 10ms
+ ✓ test/attention-aggregate-route.test.ts (4 tests) 11ms
+ ✓ test/permission-policy-ref.test.ts (20 tests) 9ms
+ ✓ test/steering-composer.test.ts (13 tests) 10ms
+ ✓ test/provider-usage-route.test.ts (7 tests) 13ms
+ ✓ test/seat-recap-durability.test.ts (12 tests) 10ms
+ ✓ test/package-resolver.test.ts (5 tests) 10ms
+ ✓ test/crash-cart-copy-read.test.ts (5 tests) 11ms
+ ✓ test/agent-preflight.test.ts (3 tests) 8ms
+ ✓ test/reconcile-warning-order.test.ts (1 test) 10ms
+ ✓ test/health-projection.test.ts (18 tests) 11ms
+ ✓ test/notification-adapters.test.ts (13 tests) 8ms
+ ✓ test/gateway-human-readiness.test.ts (10 tests) 10ms
+ ✓ test/usage-burn-evidence.test.ts (5 tests) 11ms
+ ✓ test/stub-runtime-adapter.test.ts (4 tests) 10ms
+ ✓ test/self-host-alignment.test.ts (6 tests) 8ms
+ ✓ test/skill-refs-membership-chain.test.ts (5 tests) 10ms
+ ✓ test/kernel-status-route.test.ts (5 tests) 10ms
+ ✓ test/hosts-registry-parity.test.ts (36 tests) 8ms
+ ✓ test/eval-rig-runner.test.ts (4 tests) 11ms
+ ✓ test/system-world.test.ts (3 tests) 9ms
+ ✓ test/workspace-frontmatter-validator.test.ts (9 tests) 12ms
+ ✓ test/plugin-vendor-exec-mode.test.ts (5 tests) 9ms
+ ✓ test/activity-parked-route.test.ts (3 tests) 8ms
+ ✓ test/cmux-transport.test.ts (32 tests) 12ms
+ ✓ test/adapter-plugin-exec-mode.test.ts (3 tests) 9ms
+ ✓ test/model-divergence-monitor.test.ts (23 tests) 10ms
+ ✓ test/slack-attribution.test.ts (6 tests) 8ms
+ ✓ test/project-catalog-root-depth.test.ts (3 tests) 11ms
+ ✓ test/profile-composer.test.ts (11 tests) 7ms
+ ✓ test/spec-validation-service.test.ts (5 tests) 9ms
+ ✓ test/terminal-auth.test.ts (7 tests) 9ms
+ ✓ test/codex-activity-hooks.test.ts (23 tests) 10ms
+ ✓ test/opr-0.4.1.09-seat-scoped-extra.test.ts (8 tests) 10ms
+ ✓ test/restore-check-compact.test.ts (13 tests) 8ms
+ ✓ test/agent-image-evidence-guard.test.ts (7 tests) 8ms
+ ✓ test/restore-preconditions.test.ts (14 tests) 9ms
+ ✓ test/client-lock.test.ts (17 tests) 5ms
+ ✓ test/session-fingerprinter.test.ts (34 tests) 7ms
+ ✓ test/history-query.test.ts (12 tests) 7ms
+ ✓ test/workflow-validator.test.ts (22 tests) 6ms
+ ✓ test/slack-api.test.ts (10 tests) 8ms
+ ✓ test/transcript-live-settings.test.ts (7 tests) 7ms
+ ✓ test/scope-lineage-parity.test.ts (3 tests) 7ms
+ ✓ test/sender-identity-canonical.test.ts (7 tests) 7ms
+ ✓ test/seat-route-oracle-injection.test.ts (1 test) 7ms
+ ✓ test/scenario-container.test.ts (14 tests) 8ms
+ ✓ test/sender-identity-canonical-edges.test.ts (8 tests) 7ms
+ ✓ test/role-resolver.test.ts (11 tests) 6ms
+ ✓ test/slack-post-rate-limit.test.ts (5 tests) 6ms
+ ✓ test/slack-mention-injection.test.ts (4 tests) 6ms
+ ✓ test/slack-request-shape.test.ts (7 tests) 8ms
+ ✓ test/codex-hook-trust.test.ts (13 tests) 7ms
+ ✓ test/instance-initialization.test.ts (5 tests) 7ms
+ ✓ test/scaffold-placeholder.test.ts (26 tests) 5ms
+ ✓ test/files-path-safety.test.ts (18 tests) 7ms
+ ✓ test/plugin-manifest-detection.test.ts (10 tests) 7ms
+ ✓ test/pi-readiness.test.ts (34 tests) 6ms
+ ✓ test/tmux-discovery-scanner.test.ts (12 tests) 6ms
+ ✓ test/markdown-address.test.ts (24 tests) 5ms
+ ✓ test/activity-evidence-ladder.test.ts (11 tests) 5ms
+ ✓ test/scope-node-file-spec-md.test.ts (6 tests) 8ms
+ ✓ test/adapter-plugin-projection.test.ts (7 tests) 6ms
+ ✓ test/scenario-real-deps.test.ts (12 tests) 6ms
+ ✓ test/ask-service.test.ts (10 tests) 5ms
+ ✓ test/slack-config.test.ts (10 tests) 6ms
+ ✓ test/default-onboarding-pack.test.ts (7 tests) 5ms
+ ✓ test/slack-message.test.ts (23 tests) 6ms
+ ✓ test/slack-upload-title.test.ts (1 test) 6ms
+ ✓ test/current-generation-record.test.ts (8 tests) 4ms
+ ✓ test/agent-starter-resolver.test.ts (17 tests) 5ms
+ ✓ test/slack-reactions.test.ts (11 tests) 6ms
+ ✓ test/crash-cart-conductor.test.ts (30 tests) 7ms
+ ✓ test/s01-p2-probe-context.test.ts (6 tests) 6ms
+ ✓ test/graph-projection.test.ts (20 tests) 5ms
+ ✓ test/native-process-executable.test.ts (7 tests) 6ms
+ ✓ test/codex-team-workspace.test.ts (4 tests) 5ms
+ ✓ test/activity-relay-endpoint.test.ts (8 tests) 5ms
+ ✓ test/startup-submission-evidence.test.ts (45 tests) 4ms
+ ✓ test/omp-runtime-adapter.test.ts (5 tests) 6ms
+ ✓ test/codex-hooks-feature-flag.test.ts (11 tests) 6ms
+ ✓ test/migration-fixture-parity.test.ts (5 tests) 4ms
+ ✓ test/proof-source-boundary.test.ts (3 tests) 4ms
+ ✓ test/builtin-startup-files.test.ts (32 tests) 5ms
+ ✓ test/stub-runner-exec.test.ts (11 tests) 5ms
+ ✓ test/route-timing-recorder.test.ts (5 tests) 5ms
+ ✓ test/activity-adapter-rungs.test.ts (11 tests) 5ms
+ ✓ test/permission-drift.test.ts (19 tests) 5ms
+ ✓ test/activity-hook-rip-proof.test.ts (8 tests) 5ms
+ ✓ test/predecessor-recap-resolver.test.ts (9 tests) 5ms
+ ✓ test/bundle-agent-images-router.test.ts (10 tests) 5ms
+ ✓ test/info-routes.test.ts (1 test) 4ms
+ ✓ test/stub-script.test.ts (11 tests) 4ms
+ ✓ test/slack-channel-map.test.ts (16 tests) 5ms
+ ✓ test/rig-agents-compose.test.ts (17 tests) 5ms
+ ✓ test/codex-skill-projection.test.ts (10 tests) 5ms
+ ✓ test/builtin-policy-reference.test.ts (6 tests) 5ms
+ ✓ test/instance-environment.test.ts (2 tests | 1 skipped) 5ms
+ ✓ test/tmux-argv-exec.test.ts (7 tests) 5ms
+ ✓ test/occupant-invalidator.test.ts (6 tests) 4ms
+ ✓ test/slack-state-store.test.ts (10 tests) 4ms
+ ✓ test/ask-service-session.test.ts (2 tests) 4ms
+ ✓ test/provider-host-usage-rollup.test.ts (14 tests) 5ms
+ ✓ test/feed-host-subscriptions-config.test.ts (4 tests) 6ms
+ ✓ test/claude-nix-wrapped-identity.test.ts (17 tests) 5ms
+ ✓ test/pane-envelope.test.ts (27 tests) 3ms
+ ✓ test/transcript-store-path-safety.test.ts (4 tests) 2ms
+ ✓ test/review-brief-spine.test.ts (4 tests) 4ms
+ ✓ test/parked-query.test.ts (16 tests) 6ms
+ ✓ test/claude-versioned-identity.test.ts (18 tests) 5ms
+ ✓ test/cmux-adapter-layout-methods.test.ts (18 tests) 4ms
+ ✓ test/tmux-option-defaults.test.ts (12 tests) 6ms
+ ✓ test/slice-workflow-projection.test.ts (16 tests) 4ms
+ ✓ test/rig-mode-validator.test.ts (22 tests) 4ms
+ ✓ test/framework-catalog.test.ts (3 tests) 5ms
+ ✓ test/workflow-band.test.ts (14 tests) 4ms
+ ✓ test/openrig-compat.test.ts (2 tests) 5ms
+ ✓ test/cmux-transport-layout-methods.test.ts (10 tests) 5ms
+ ✓ test/spec-validation-advisory.test.ts (7 tests) 4ms
+ ✓ test/testbed-published-daemon.test.ts (12 tests) 5ms
+ ✓ test/bundle-workflow-specs-router.test.ts (11 tests) 4ms
+ ✓ test/continuity-stack-packets.test.ts (6 tests) 4ms
+ ✓ test/rig-mode-defaults.test.ts (7 tests) 4ms
+ ✓ test/projection-protect.test.ts (6 tests) 3ms
+ ✓ test/gateway-dispatcher.test.ts (4 tests) 4ms
+ ✓ test/slack-inbound-channel-identity.test.ts (3 tests) 4ms
+ ✓ test/hermetic-scaffold.test.ts (6 tests) 4ms
+ ✓ test/daemon-version.test.ts (6 tests) 3ms
+ ✓ test/scenario-daemon-mode.test.ts (8 tests) 3ms
+ ✓ test/transcript-backspace-native.test.ts (4 tests) 4ms
+ ✓ test/activity-structural-signal.test.ts (6 tests) 3ms
+ ✓ test/bundle-skills-router.test.ts (10 tests) 4ms
+ ✓ test/activity-motion-fold.test.ts (15 tests) 5ms
+ ✓ test/scenario-runner.test.ts (6 tests) 4ms
+ ✓ test/provider-codex-auth-reader.test.ts (4 tests) 4ms
+ ✓ test/active-lens-store.test.ts (8 tests) 6ms
+ ✓ test/review-import-audit.test.ts (4 tests) 3ms
+ ✓ test/agnostic-rip-out.test.ts (5 tests) 4ms
+ ✓ test/profile-source-resolver.test.ts (6 tests) 4ms
+ ✓ test/provider-collect.test.ts (9 tests) 4ms
+ ✓ test/resume-token-validation.test.ts (20 tests) 3ms
+ ✓ test/scenario-schema.test.ts (11 tests) 3ms
+ ✓ test/native-process-path-sampling.test.ts (2 tests) 3ms
+ ✓ test/eval-rig-provider.test.ts (6 tests) 5ms
+ ✓ test/agent-image-session-source.test.ts (7 tests) 3ms
+ ✓ test/workflow-exception.test.ts (10 tests) 3ms
+ ✓ test/startup-resolver.test.ts (10 tests) 4ms
+ ✓ test/managed-native-policy.test.ts (6 tests) 4ms
+ ✓ test/provider-claude-usage-reader.test.ts (6 tests) 4ms
+ ✓ test/rig-status-compose.test.ts (9 tests) 4ms
+ ✓ test/scenario-normalizer.test.ts (16 tests) 4ms
+ ✓ test/process-census.test.ts (4 tests) 4ms
+ ✓ test/scenario-run-record.test.ts (4 tests) 4ms
+ ✓ test/activity-taxonomy.test.ts (11 tests) 3ms
+ ✓ test/provider-policy.test.ts (7 tests) 3ms
+ ✓ test/lead-protocol.test.ts (5 tests) 4ms
+ ✓ test/session-name.test.ts (11 tests) 3ms
+ ✓ test/topology-defaults-installer.test.ts (7 tests) 4ms
+ ✓ test/context-pack-startup-files.test.ts (4 tests) 3ms
+ ✓ test/crash-cart-guard.test.ts (6 tests) 3ms
+ ✓ test/crash-cart-detect.test.ts (11 tests) 4ms
+ ✓ test/bundle-plugins-router.test.ts (9 tests) 4ms
+ ✓ test/slack-inbound-thread-broadcast.test.ts (5 tests) 4ms
+ ✓ test/agent-starter-schema.test.ts (12 tests) 6ms
+ ✓ test/context-pack-ref-safety.test.ts (23 tests) 3ms
+ ✓ test/hermetic-clock.test.ts (5 tests) 3ms
+ ✓ test/slack-inbound-gate.test.ts (5 tests) 4ms
+ ✓ test/bundle-audit.test.ts (10 tests) 5ms
+ ✓ test/history-query-seat.test.ts (3 tests) 3ms
+ ✓ test/external-install-planner.test.ts (10 tests) 4ms
+ ✓ test/provider-read-model.test.ts (5 tests) 3ms
+ ✓ test/rigspec-schema-docs.test.ts (10 tests) 3ms
+ ✓ test/hot-potato-enforcer.test.ts (20 tests) 3ms
+ ✓ test/provider-signals.test.ts (6 tests) 3ms
+ ✓ test/contract-source-selection.test.ts (8 tests) 3ms
+ ✓ test/gateway-dispatch-buffer.test.ts (5 tests) 4ms
+ ✓ test/workspace-resolver.test.ts (12 tests) 3ms
+ ✓ test/session-enricher.test.ts (8 tests) 4ms
+ ✓ test/spec-live-conformance.test.ts (10 tests) 3ms
+ ✓ test/markdown-address-indentation.test.ts (4 tests) 3ms
+ ✓ test/rig-mode-types.test.ts (6 tests) 3ms
+ ✓ test/activity-endpoint.test.ts (8 tests) 3ms
+ ✓ test/install-policy.test.ts (8 tests) 3ms
+ ✓ test/activity-consumers.test.ts (4 tests) 4ms
+ ✓ test/tmux-server.test.ts (6 tests) 5ms
+ ✓ test/ask-service-seat.test.ts (2 tests) 4ms
+ ✓ test/bundle-identity.test.ts (9 tests) 3ms
+ ✓ test/scenario-expect.test.ts (12 tests) 3ms
+ ✓ test/healthz-wedge-cheap-default.test.ts (3 tests) 3ms
+ ✓ test/scenario-schema-delta.test.ts (11 tests) 3ms
+ ✓ test/eval-production-refs.test.ts (2 tests) 3ms
+ ✓ test/slack-torn-append-native.test.ts (4 tests) 3ms
+ ✓ test/scenario-container-stage.test.ts (3 tests) 3ms
+ ✓ test/mission-slice-sop-plugin-parity.test.ts (7 tests) 3ms
+ ✓ test/graph-projection-pl019.test.ts (8 tests) 3ms
+ ✓ test/provider-precheck.test.ts (9 tests) 3ms
+ ✓ test/session-jsonl.test.ts (7 tests) 3ms
+ ✓ test/hermetic-env.test.ts (5 tests) 3ms
+ ✓ test/demo-rig-selector.test.ts (5 tests) 2ms
+ ✓ test/context-pack-bundle-assembler.test.ts (5 tests) 3ms
+ ✓ test/opr-0.4.1.31-node-cmux-no-current-workspace.test.ts (4 tests) 3ms
+ ✓ test/qitem-membership.test.ts (11 tests) 2ms
+ ✓ test/bundle-conflict-detector.test.ts (6 tests) 3ms
+ ✓ test/crash-cart-emit.test.ts (4 tests) 2ms
+ ✓ test/profile-source-read-errors.test.ts (4 tests) 3ms
+ ✓ test/projection-manifest-wiring.test.ts (7 tests) 2ms
+ ✓ test/gate-predicate.test.ts (5 tests) 2ms
+ ✓ test/eval-schema.test.ts (7 tests) 2ms
+ ✓ test/history-query-session.test.ts (2 tests) 4ms
+ ✓ test/resume-token-capture-pi.test.ts (7 tests) 3ms
+ ✓ test/wake-resolver.test.ts (5 tests) 3ms
+ ✓ test/terminal-adapter.test.ts (6 tests) 2ms
+ ✓ test/eval-grader.test.ts (6 tests) 2ms
+ ✓ test/eval-runner.test.ts (2 tests) 3ms
+ ✓ test/eval-report.test.ts (5 tests) 2ms
+ ✓ test/self-host-envelope-sweep.test.ts (3 tests) 2ms
+ ✓ test/settings-reset-failure.test.ts (2 tests) 2ms
+ ✓ test/continuity-observer-contract.test.ts (2 tests) 3ms
+ ✓ test/provider-signals-claude.test.ts (3 tests) 2ms
+ ✓ test/provider-signals-reactive.test.ts (4 tests) 2ms
+ ✓ test/external-admission.test.ts (6 tests) 2ms
+ ✓ test/router-stub.test.ts (7 tests) 2ms
+ ✓ test/gateway-protocol.test.ts (6 tests) 2ms
+ ✓ test/restore-packet-recap.test.ts (9 tests) 3ms
+ ✓ test/parent-session-env.test.ts (3 tests) 2ms
+ ✓ test/workflow-row-ref.test.ts (7 tests) 3ms
+ ✓ test/telemetry-state-paths.test.ts (4 tests) 2ms
+ ✓ test/daemon-url.test.ts (5 tests) 2ms
+ ✓ test/self-host-id-source.test.ts (7 tests) 3ms
+ ✓ test/conflict-detector-discrimination.test.ts (8 tests) 2ms
+ ✓ test/eval-entry.test.ts (2 tests) 2ms
+ ✓ test/sqlite-time.test.ts (2 tests) 2ms
+ ✓ test/bind-plan.test.ts (4 tests) 2ms
+ ✓ test/pi-runner-capabilities.test.ts (7 tests) 2ms
+ ✓ test/services-replica-readiness.test.ts (8 tests) 2ms
+ ✓ test/envelope-scope.test.ts (5 tests) 2ms
+ ✓ test/continuity-role-guidance.test.ts (3 tests) 2ms
+ ✓ test/resume-token-capture-omp.test.ts (2 tests) 2ms
+ ✓ test/managed-blocks-literal-text.test.ts (3 tests) 2ms
+ ✓ test/restore-check-activity-hooks.test.ts (2 tests) 2ms
+ ✓ test/eval-cases.test.ts (4 tests) 2ms
+ ✓ test/preview-rate-limiter.test.ts (6 tests) 2ms
+ ✓ test/build-info.test.ts (3 tests) 2ms
+ ✓ test/team-task-stage.test.ts (9 tests) 2ms
+ ✓ test/watchdog-target-gen-wiring.test.ts (2 tests) 2ms
+ ✓ test/startup-migrations-mirror.test.ts (2 tests) 2ms
+ ✓ test/slice16-starter-hygiene.test.ts (2 tests) 1ms
+ ✓ test/cwd-dot-prefix.test.ts (1 test) 2ms
+ ✓ test/self-host-envelope-triple.test.ts (2 tests) 3ms
+ ↓ test/seat-handover-model-fidelity-e2e.test.ts (1 test | 1 skipped)
+ ↓ test/seat-lifecycle-set-model-resume-e2e.test.ts (1 test | 1 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)
+AssertionError: expected '198.18.0.76' to be null
+
+- Expected: 
+null
+
++ Received: 
+"198.18.0.76"
+
+ ❯ test/auth-bearer-token.test.ts:144:18
+    142|     it("returns null for an intentionally-unresolvable hostname (HG-4)…
+    143|       const ip = await resolveToIpOrNull("this-host-does-not-exist.inv…
+    144|       expect(ip).toBeNull();
+       |                  ^
+    145|     });
+    146|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance
+AssertionError: expected "spy" to be called 1 times, but got 2 times
+ ❯ test/seat-fresh-launch.test.ts:214:18
+    212|     expect(await service.continueFreshStartup(seat.sessionName)).toMat…
+    213|     expect(launch).not.toHaveBeenCalled();
+    214|     expect(send).toHaveBeenCalledTimes(1);
+       |                  ^
+    215|     expect(db.prepare("SELECT id, resume_type, resume_token FROM sessi…
+    216|     expect(send.mock.calls[0]?.[1]).toContain("Configured startup inst…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 1033 passed | 2 skipped (1037)
+      Tests  2 failed | 17068 passed | 5 skipped | 5 todo (17080)
+   Start at  17:19:13
+   Duration  579.95s (transform 9.37s, setup 8.69s, collect 178.74s, tests 845.58s, environment 110ms, prepare 35.30s)
+

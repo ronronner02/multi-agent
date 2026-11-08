@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-08T00:51:37.145768+00:00",
+  "settledPreviewObserved": true,
+  "syntheticPathMatches": true,
+  "syntheticFilesOnly": true,
+  "syntheticExcludedPath": ".env",
+  "previewFileCount": 6,
+  "expectedUploadedPaths": [
+    ".gitignore",
+    "README.md",
+    "index.html",
+    "package.json",
+    "src/status.js",
+    "test/status.test.mjs"
+  ],
+  "counts": {
+    "rigs": 1,
+    "team_runs": 0,
+    "team_attempts": 0,
+    "queue_items": 0
+  },
+  "preexistingProjectRowsUnchanged": true,
+  "remoteCreateClicked": false,
+  "ownerProjectContentsRead": false
+}

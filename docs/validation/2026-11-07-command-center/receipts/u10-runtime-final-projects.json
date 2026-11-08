@@ -1,0 +1,80 @@
+{
+  "checkedAt": "2026-11-07T12:16:44.341681+00:00",
+  "newRepositories": 0,
+  "projects": [
+    {
+      "repository": "ronronner02/cc-u10-win-20261107-2c433e64",
+      "defaultBranch": "main",
+      "private": true,
+      "remoteHeads": [
+        {
+          "ref": "refs/heads/main",
+          "sha": "42031f70f3e432fd2c513731beb8281a61d78049"
+        }
+      ],
+      "initialCommit": "42031f70f3e432fd2c513731beb8281a61d78049",
+      "remoteIsBootstrapOnly": true,
+      "localHead": "59c47579bcda6f0576096cb5e9239c1df1337836",
+      "localBranch": "main",
+      "localStatus": "?? .openrig/context-collector.cjs",
+      "trackedFiles": [
+        ".gitignore",
+        "README.md",
+        "package.json",
+        "plan.md",
+        "src/.gitkeep",
+        "src/normalize-sku.mjs",
+        "src/normalize-sku.test.mjs",
+        "src/reorder-plan.mjs",
+        "src/reorder-plan.test.mjs",
+        "src/stock-integration.test.mjs",
+        "src/stock-label.mjs",
+        "src/stock-label.test.mjs",
+        "src/summarize-stock.mjs",
+        "src/summarize-stock.test.mjs"
+      ],
+      "deliveryPushPerformed": false,
+      "preservedUntrackedFile": {
+        "path": ".openrig/context-collector.cjs",
+        "sha256": "f4a809d0737baf60c4b314b3d7bc95d6a149090db3454aae66a9ef7beddc3bb8",
+        "unchanged": true
+      }
+    },
+    {
+      "repository": "ronronner02/cc-u10-wsl-20261107-2c433e64",
+      "defaultBranch": "main",
+      "private": true,
+      "remoteHeads": [
+        {
+          "ref": "refs/heads/main",
+          "sha": "c9ebf31ebd6e6b367e143a061e552454a116ea97"
+        }
+      ],
+      "initialCommit": "c9ebf31ebd6e6b367e143a061e552454a116ea97",
+      "remoteIsBootstrapOnly": true,
+      "localHead": "c9ebf31ebd6e6b367e143a061e552454a116ea97",
+      "localBranch": "main",
+      "localStatus": "",
+      "trackedFiles": [
+        ".gitignore",
+        "README.md",
+        "package.json",
+        "src/.gitkeep"
+      ],
+      "deliveryPushPerformed": false
+    }
+  ],
+  "sourceDeliveryActionsPerformed": false,
+  "remoteVerificationMethod": "Authenticated repository and branches GET API using only the isolated account configuration.",
+  "priorAttempt": {
+    "command": [
+      "git",
+      "ls-remote",
+      "--heads",
+      "origin"
+    ],
+    "status": "timed-out",
+    "timeoutSeconds": 40,
+    "reason": "No output before the bound; this is not a successful Git transport check."
+  }
+}

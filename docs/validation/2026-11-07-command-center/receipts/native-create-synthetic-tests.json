@@ -1,0 +1,8 @@
+{
+  "at": "2026-11-08T00:58:34.2020693Z",
+  "command": "node --test --test-reporter=tap test/status.test.mjs",
+  "exit": 0,
+  "passed": 1,
+  "failed": 0,
+  "scope": "Only the newly created synthetic project; not a product test suite."
+}

@@ -1,0 +1,25 @@
+{
+  "unit": "U7",
+  "branch": "feat/cc-u7-workspace-reviews",
+  "head": "ab49e69dcc0908d95bb34a77950df20877c78081",
+  "featureTree": "1efe4e53135f57ddf4f7296203c85241d2de9c59",
+  "pushFirstAttempt": "TLS handshake interrupted",
+  "status": "landed",
+  "prUrl": "https://github.com/ronronner02/multi-agent/pull/149",
+  "mergeCommit": "4fd9a562c2918438537c9f9500a7aae02bc42fff",
+  "landedTree": "1efe4e53135f57ddf4f7296203c85241d2de9c59",
+  "treeIdentical": true,
+  "mergedAt": "2026-11-07T04:42:40Z",
+  "ci": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-07T04:41:48Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/ronronner02/multi-agent/actions/runs/42339238786/job/128303003221",
+      "name": "smoke",
+      "startedAt": "2026-11-07T04:37:09Z",
+      "status": "COMPLETED",
+      "workflowName": "smoke"
+    }
+  ]
+}

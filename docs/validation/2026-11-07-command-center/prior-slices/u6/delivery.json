@@ -1,0 +1,10 @@
+{
+  "head": "a0d1ddbc03a142769a65d4d8396eec616a1efc16",
+  "branch": "feat/cc-u6-overview-tasks",
+  "base": "9552609f2063e619e17f1cd0bb310d31cdc3aac2",
+  "pr": 148,
+  "url": "https://github.com/ronronner02/multi-agent/pull/148",
+  "mergeCommit": "6d8f3a415e9af10b56d382bbb66215e1a8493da5",
+  "ci": "smoke passed",
+  "treeIdentical": true
+}

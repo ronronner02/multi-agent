@@ -1,0 +1,305 @@
+{
+  "unit": "U10",
+  "status": "local-acceptance-complete-with-known-failures-unmerged",
+  "checkedAt": "2026-11-08T01:02:16.043026+00:00",
+  "ownerDecision": "Normal launch repair, the additive read-only task details, one-time skin entrance and one additional native synthetic Create are approved. The earlier U10 source-delivery hold remains.",
+  "source": "source-verification.json",
+  "gates": {
+    "isolatedBrowserSignInAndWindowsCreate": {
+      "status": "observed",
+      "evidence": [
+        "receipts/u10-windows-create-verification.json",
+        "screenshots/live/02-github-gate.png",
+        "screenshots/live/03-signed-in-empty-projects.png"
+      ]
+    },
+    "leadPlanAndRosterApproval": {
+      "status": "observed-after-fix",
+      "evidence": "rosters.json"
+    },
+    "nativeDeliveryAndLocalMerge": {
+      "status": "observed",
+      "runs": [
+        "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+        "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086"
+      ],
+      "evidence": [
+        "runtime-observations.json",
+        "events.jsonl",
+        "receipts/u10-runtime-project-merge.json",
+        "receipts/u10-runtime-final-projects.json"
+      ],
+      "finalRun": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "finalSyntheticHead": "59c47579bcda6f0576096cb5e9239c1df1337836",
+      "finalSyntheticTestsPassed": 57
+    },
+    "midTurnRestart": {
+      "status": "observed",
+      "evidence": "receipts/u10-repeat-restart-evidence.json"
+    },
+    "busyOwnerChat": {
+      "status": "observed",
+      "ordinaryCap": 2,
+      "leadObservedWithinSeconds": 2.028,
+      "replyObservedWithinSeconds": 10.041,
+      "workersActiveAtReply": 2,
+      "evidence": [
+        "receipts/normal-saturated-owner-chat.json",
+        "receipts/normal-capacity-ui.json",
+        "screenshots/normal-saturated-owner-chat.png"
+      ],
+      "limitations": [
+        "The first fixture omitted explicit writePaths. Admission correctly held the tasks; that canceled run and its attempts remain recorded.",
+        "The native run used a deliberate foreground wait to keep both ordinary slots occupied. This is bounded capacity evidence, not a timing guarantee for every provider or task.",
+        "Browser harness failures and corrections remain in private scratch. No failed run has been rewritten as passed."
+      ],
+      "captureTiming": "After cancellation and an idle fixture restart, not a live saturation screenshot."
+    },
+    "nativeTelemetry": {
+      "status": "observed-with-missing-counters-retained",
+      "evidence": "telemetry.json",
+      "supplementaryAttempt": "4559079e-8897-40e3-9114-ee869096eb09",
+      "supplementaryTotalTokens": 428832,
+      "supplementaryModel": null,
+      "attemptCount": 33,
+      "finalRuntimeRun": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "usageStatusCounts": {
+        "available": 31,
+        "unavailable": 2
+      }
+    },
+    "wslFolderCreate": {
+      "status": "observed",
+      "evidence": "receipts/u10-wsl-create-verification.json"
+    },
+    "privateBootstrapOnlyRemotes": {
+      "status": "verified",
+      "verifiedAt": "2026-11-07T15:27:04.218553+00:00",
+      "evidence": [
+        "receipts/u10-plan-audit-remotes.json",
+        "receipts/u10-runtime-final-projects.json"
+      ],
+      "bothPrivate": true,
+      "headsUnchangedFromBootstrap": true,
+      "scope": "Only the two synthetic acceptance repositories were checked; no remote mutation.",
+      "additionalNativeRepository": {
+        "verifiedAt": "2026-11-08T00:53:44.183810+00:00",
+        "private": true,
+        "bootstrapCommitCount": 1,
+        "evidence": "receipts/native-create-remote-bootstrap.json",
+        "scope": "Only the newly approved native Create repository; earlier repository checks retain their original timestamps."
+      }
+    },
+    "installerBuildAndSourceIntegrity": {
+      "status": "passed",
+      "evidence": [
+        "receipts/u10-final-installer.json",
+        "receipts/u10-final-installer-integrity-2.json",
+        "receipts/u10-runtime-installer-integrity.json"
+      ]
+    },
+    "desktopInstallation": {
+      "status": "observed",
+      "evidence": [
+        "receipts/desktop-install-result.json",
+        "receipts/desktop-installed-integrity.json",
+        "receipts/desktop-preservation-check.json"
+      ],
+      "existingInstallationReplaced": false,
+      "repairedBuildNormalLaunch": "passed",
+      "normalEvidence": "receipts/normal-installed-desktop.json"
+    },
+    "desktopFirstOpen": {
+      "status": "observed",
+      "evidence": [
+        "receipts/desktop-first-launch.json",
+        "receipts/desktop-first-open-gate.json",
+        "receipts/u10-desktop-candidate-start.json"
+      ],
+      "repairedCandidateReopen": "Installed build reopened without manual pairing; fresh entrance and later portrait playback verified.",
+      "normalEvidence": "receipts/normal-cold-reopen.json"
+    },
+    "fullDaemonSuite": {
+      "status": "failed-known",
+      "passed": 17113,
+      "failed": 2,
+      "skipped": 5,
+      "todo": 5,
+      "filesPassed": 1034,
+      "filesFailed": 2,
+      "filesSkipped": 2,
+      "allGreen": false,
+      "failures": [
+        {
+          "test": "auth-bearer-token.test.ts",
+          "classification": "Exact documented DNS failure",
+          "knownFailuresLine": 7,
+          "error": "Expected null; local resolver returned 198.18.0.76 for the intentionally unresolvable hostname."
+        },
+        {
+          "test": "seat-fresh-launch.test.ts",
+          "classification": "Exact documented startup-consent failure",
+          "knownFailuresLine": 16,
+          "error": "Expected one send; observed two after late consent."
+        }
+      ],
+      "sourceFilesMatchingStandaloneSuite": 57,
+      "receipt": "receipts/normal-full-daemon-command.json",
+      "priorFailures": "Earlier failed suites, including the activity-ordering variant, remain in history and private command logs."
+    },
+    "resultPreviewAfterLaterMerge": {
+      "status": "observed-after-fix",
+      "evidence": [
+        "runtime-observations.json",
+        "live-limitations.json"
+      ]
+    },
+    "postMergeProgressLabel": {
+      "status": "observed-after-fix-and-restart",
+      "evidence": [
+        "runtime-observations.json",
+        "screenshots/index.json"
+      ]
+    },
+    "cleanup": {
+      "status": "scoped-preservation-confirmed",
+      "earlierFixtureCleanup": [
+        "receipts/u10-runtime-final-cleanup.json",
+        "receipts/u10-runtime-browser-cleanup.json"
+      ],
+      "currentReplacementKeptRunning": true,
+      "reason": "Keep the normal working desktop and daemon. Restore the prior All Projects view and minimized window state. The approved synthetic repository and project remain available; all owned test services are stopped.",
+      "evidence": [
+        "protected-state.json",
+        "receipts/u10-desktop-paused-preservation.json",
+        "receipts/desktop-preservation-check.json"
+      ],
+      "allOwnedFixturesStopped": true,
+      "currentWorkingDesktopKeptRunning": true,
+      "latestEvidence": [
+        "receipts/native-create-runtime-preservation.json",
+        "receipts/native-create-windows-preservation.json",
+        "receipts/native-create-restored-view.json"
+      ],
+      "approvedSyntheticProjectRetained": true
+    },
+    "reviewsTaskSelection": {
+      "status": "observed",
+      "evidence": [
+        "runtime-observations.json",
+        "screenshots/runtime/14-historical-task-b-settled.png"
+      ],
+      "sourceChange": false
+    },
+    "missingBoundSeatRecovery": {
+      "status": "observed-after-fix",
+      "evidence": [
+        "receipts/u10-runtime-stale-seat-observation.json",
+        "receipts/u10-runtime-stale-seat-review.json",
+        "runs.json"
+      ]
+    },
+    "evidenceBundle": {
+      "status": "refreshed-after-native-create",
+      "manifest": "manifest.json",
+      "privacy": "privacy-check.json",
+      "history": "history/pre-native-create-final-01/index.json",
+      "latestCheckpoint": "resume-final-checkpoint.json"
+    },
+    "desktopSignIn": {
+      "status": "observed-after-fix",
+      "evidence": [
+        "receipts/desktop-sign-in-after-fix.json",
+        "receipts/desktop-signed-in.json",
+        "verification/checks.json"
+      ]
+    },
+    "desktopNativeFolderAndCreate": {
+      "status": "observed",
+      "nativePicker": "Real native dialog, verified mapped selection and settled preview.",
+      "createScope": "Exactly one approved new private repository containing six previewed synthetic files; the excluded synthetic .env file was not uploaded.",
+      "evidence": [
+        "receipts/native-create-flow.json",
+        "receipts/native-create-remote-bootstrap.json"
+      ],
+      "sameInstalledProcess": true,
+      "directApiCreationUsed": false
+    },
+    "desktopWindowDragAndClose": {
+      "status": "observed-in-isolated-packaged-profile",
+      "evidence": "resume-final-checkpoint.json",
+      "normalInstalledLaunchAccepted": true
+    },
+    "benchmarkRecreation": {
+      "status": "passed-bounded-comparison",
+      "evidence": "resume-final-checkpoint.json"
+    }
+  },
+  "ownerActions": "owner-actions.json",
+  "workerReports": "worker-reports.json",
+  "screenshots": "screenshots/index.json",
+  "review": "review.json",
+  "privacy": {
+    "rawDatabaseIncluded": false,
+    "nativeTranscriptsIncluded": false,
+    "credentialStoresIncluded": false,
+    "cookiesAndHeadersIncluded": false
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "pullRequestOpened": false,
+    "merged": false,
+    "installedAppReplaced": false,
+    "initialSyntheticUploadsOnly": true,
+    "installedCandidateSeparately": true,
+    "currentOwnerProjectOutOfScope": true,
+    "normalLaunchDelivered": true,
+    "currentUserShortcutsUpdated": true,
+    "allUsersLegacyShortcutUpdated": false,
+    "oldInstallationRetained": true,
+    "sourceDeliveryHoldUnchanged": true,
+    "oneAdditionalSyntheticRepositoryCreated": true
+  },
+  "documentation": "documentation-verification.json",
+  "privacyCheck": "privacy-check.json",
+  "buildOutputNote": {
+    "observation": "Repository packaging checks left source-workspace CLI imports pointing at staged package output.",
+    "resolution": "A normal CLI workspace build restored the imports; CLI version, isolated restart and final stop all passed.",
+    "sourceChange": false,
+    "evidence": [
+      "verification/checks.json",
+      "receipts/u10-result-preview-restart-2.json",
+      "receipts/u10-final-cleanup.json",
+      "receipts/u10-runtime-final-cleanup.json"
+    ]
+  },
+  "runtimeEvidence": "runtime-observations.json",
+  "history": "history/pre-plan-audit/index.json",
+  "finalVerification": "verification/final-index.json",
+  "eventsScope": "events-scope.json",
+  "closeout": "Local acceptance is complete within the recorded scopes, now including the installed native folder-picker, settled preview and private repository Create. Two documented full-suite failures remain. The separate source-delivery hold remains; neither an all-green release nor one uninterrupted end-to-end run is claimed.",
+  "desktopEvidence": "desktop-observations.json",
+  "evidenceScopes": {
+    "priorSyntheticFlows": [
+      "browser-observations.json",
+      "runtime-observations.json",
+      "runs.json",
+      "rosters.json",
+      "telemetry.json",
+      "owner-actions.json",
+      "events-scope.json"
+    ],
+    "currentDesktop": "desktop-observations.json",
+    "currentOwnerProject": "excluded; not inspected during closeout"
+  },
+  "evidenceFinalizedAt": "2026-11-08T01:02:16.043026+00:00",
+  "latestPlanAudit": "plan-status.json",
+  "previousCheckpoint": {
+    "checkedAt": "2026-11-07T15:26:36.114456+00:00",
+    "acceptance": "history/pre-command-workspace/acceptance.json",
+    "note": "Earlier source, runtime and desktop records retain their original dates and scopes."
+  },
+  "latestCheckpoint": "resume-final-checkpoint.json"
+}

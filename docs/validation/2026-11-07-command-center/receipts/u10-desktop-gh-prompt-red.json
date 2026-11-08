@@ -1,0 +1,15 @@
+{
+  "check": "u10-desktop-gh-prompt-red",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/node",
+    "../../node_modules/vitest/vitest.mjs",
+    "run",
+    "test/team-github.test.ts",
+    "--maxWorkers=2",
+    "-t",
+    "clipboard-code prompt"
+  ],
+  "exit": 1,
+  "seconds": 4.63
+}

@@ -11,6 +11,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
+import { ScopeExtensions } from "../src/domain/scope-extension.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { removeReviewPacket, type ReviewPacket } from "../src/domain/team-workspace.js";
 import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
@@ -121,6 +122,17 @@ describe("task-local scope extensions at candidate staging", () => {
     return governance.decideApproval(command(id, { approvalVersion: approval.entityVersion, decision,
       expectedChainHead: head ?? approval.payload.expectedChainHead }), owner, binding);
   };
+
+  it.each(["src/.env.local", "src/.github/workflows/build.yml", "src/contracts/auth.ts"])(
+    "keeps project-wide protected files restricted inside an assigned parent: %s", path => {
+      const run = governance.getRun("run"), task = governance.findTask("run", "task")!;
+      const project = { ...run, binding: { ...run.binding, readPaths: ["."], writePaths: ["."] } };
+      const assigned = { ...task, assignment: { ...task.assignment, paths: ["src"] } };
+      expect(() => new ScopeExtensions(db).stage(project, assigned, {
+        root: candidate().root, candidateDigest: hashBytes(path), files: [path],
+        changes: [{ path, before: null, after: Buffer.from("fixture content") }],
+      }, "2026-10-28T08:00:00.000Z")).toThrow(/protected-path/);
+    });
 
   it("approves only this task's extension and includes its scope in review and delivery", () => {
     const before = governance.getRun("run"), otherScope = governance.scopeForTask("run", "other");
@@ -478,6 +490,37 @@ describe("task-local scope extensions at candidate staging", () => {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     writeFileSync(join(root, path), "{}");
     expect(() => packet(taskId)).toThrow(/plan-change-required: outside-write-paths/);
+  });
+
+  it("admits a project-wide task through role editing and native preflight with concrete ownership", () => {
+    const runId = "project-run", taskId = "application";
+    const project = { ...binding, readPaths: ["."], writePaths: ["."] };
+    governance.createRun({ id: runId, rigId: "rig", binding: project });
+    const request = (actionId: string, payload: unknown): ControlRequest<unknown> => ({
+      ...command(actionId, payload), runId, expectedEntityVersion: governance.getRun(runId).entityVersion,
+    });
+    governance.requestApproval(request("project-approval", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(project) }, targetDigest: hashBinding(project), expiresAt: "9999-01-01T00:00:00.000Z" }), owner);
+    expect(governance.decideApproval(request("project-approval", { approvalVersion: 1, decision: "approved" }), owner, project).status).toBe("accepted");
+    const assignment = { taskId, role: "implementer" as const, paths: ["package.json", "server", "client", "index.html"], dependencies: [] };
+    expect(governance.createTask(request(taskId, { assignment, outputs: [], permissions: [],
+      sourceSession: "owner", destinationSession: "application@rig", body: "Build the application." }), project).status).toBe("accepted");
+    expect(governance.editTask(request(taskId, {
+      expectedTaskVersion: governance.findTask(runId, taskId)!.entityVersion, changes: { role: "lead" },
+    }), owner, project).status).toBe("accepted");
+    expect(governance.editTask(request(taskId, {
+      expectedTaskVersion: governance.findTask(runId, taskId)!.entityVersion, changes: { role: "implementer" },
+    }), owner, project).status).toBe("accepted");
+    const context = { runId, binding: project, role: "implementer" } as Parameters<WorkflowRuntime["admitForLaunch"]>[1]["context"];
+    const input = { attemptId: "project-attempt", worker: "ma-worker1", assignment, context, outputs: [], permissions: [] };
+    const admitted = runtime.admitForLaunch(runId, input);
+    expect(existsSync(admitted.candidate)).toBe(true);
+    expect(admitted.manifestDigest).toMatch(/^sha256:/);
+    expect(governance.findTask(runId, taskId)?.assignment.paths).toEqual(assignment.paths);
+    expect(() => runtime.admitForLaunch(runId, { ...input, assignment: { ...assignment, paths: ["server/.env"] } }))
+      .toThrow(/expands the approved scope/);
+    expect(() => runtime.admitForLaunch(runId, { ...input, assignment: { ...assignment, paths: ["../outside"] } }))
+      .toThrow(/expands the approved scope/);
   });
 
   it("refuses an unregistered writing assignment before materializing its candidate", () => {

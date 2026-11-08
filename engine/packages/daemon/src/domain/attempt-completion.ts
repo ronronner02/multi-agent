@@ -84,6 +84,8 @@ export interface AttemptCompletionDependencies {
    * (a test, or a daemon under hardened isolation) wants.
    */
   dispatchPending?: (runId: string) => Promise<void>;
+  /** Persist native-turn documents before the stop write, while an interrupted capture can still be swept. */
+  captureTurnDocuments?: (attempt: import("../contracts/team-control.js").TeamAttempt) => void;
   /**
    * U5 — the end of one turn, after its stop is recorded and before the next task starts.
    *
@@ -267,6 +269,9 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
         // of this seat starts its client in a live shell instead of a dead one.
         const failure = await classify(attempt);
         dependencies.telemetry?.capture(attempt);
+        // A persisted stop is excluded from later sweeps. Save its exact documents first so a
+        // restart never needs to attribute the candidate's later mutable bytes to this turn.
+        dependencies.captureTurnDocuments?.(attempt);
         await releaseHeldPane(attempt.identity.paneId);
         const request: ControlRequest<unknown> = {
           protocolVersion: TEAM_CONTROL_VERSION, runId: attempt.runId, actionId: attempt.id,

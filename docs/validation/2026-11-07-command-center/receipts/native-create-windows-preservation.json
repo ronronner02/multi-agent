@@ -1,0 +1,27 @@
+{
+  "at": "2026-11-08T00:56:06.1676077Z",
+  "normalPid": 14236,
+  "sameNormalInstance": true,
+  "debuggingEnabled": false,
+  "oldInstallationFilesVerified": 74,
+  "oldInstallationFilesChanged": 0,
+  "originalProfileFilesVerified": 98,
+  "originalProfileFilesChanged": 0,
+  "installedAsarSha256": "bad7192df7d4f4202f1d912b03dbc1848799e657a21df5917cfce47ea267256d",
+  "stableInstallerSha256": "b98a6fc2ea4af9359da758118bda2f9c80d67c5400db10a5f5c1e5f5e5746c61",
+  "stableProjectArchiveSha256": "14e7918e6826771b02231b1846bc0f955f3c3e012e64ca2b763d5346b3b6d0a6",
+  "shortcuts": [
+    {
+      "path": "%USERPROFILE%\\Desktop\\Multi-Agent.lnk",
+      "target": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+      "arguments": "--user-data-dir=\"%LOCALAPPDATA%/Multi-Agent/profile\""
+    },
+    {
+      "path": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Multi-Agent.lnk",
+      "target": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+      "arguments": "--user-data-dir=\"%LOCALAPPDATA%/Multi-Agent/profile\""
+    }
+  ],
+  "allUsersLegacyShortcutUnchanged": true,
+  "originalViewRestored": true
+}

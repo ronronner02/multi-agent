@@ -30,7 +30,7 @@ describe("managed Codex turns", () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), "codex-turn-")); });
   afterEach(() => { writable(root); rmSync(root, { recursive: true, force: true }); });
 
-  const launch = async (options: Partial<WorkerLaunchInput> = {}) => {
+  const launch = async (options: Partial<WorkerLaunchInput> = {}, modelRefusal?: (input: WorkerLaunchInput) => string | null, documentRefusal?: (input: WorkerLaunchInput) => string | null) => {
     const context = {
       runId: "run", assignment: { taskId: "task", role: "implementer", paths: ["plan.md"], dependencies: [] },
       client: "codex", mutableStateRoot: root, projection: { attemptId: "attempt-1" },
@@ -43,7 +43,7 @@ describe("managed Codex turns", () => {
       getPanePid: vi.fn(async () => process.pid), getPaneCommand: vi.fn(async () => "node"),
       capturePaneScreen: vi.fn(async () => ""), getPaneExit: vi.fn(async () => ({ dead: true, code: 0 })),
     };
-    const launcher = new DirectWorkerLauncher({ tmux: terminal, resolvePane: async () => "%1",
+    const launcher = new DirectWorkerLauncher({ tmux: terminal, modelRefusal, documentRefusal, resolvePane: async () => "%1",
       resolveAssignedTree: () => join(root, "candidate tree"), tmuxServer: () => join(root, "tmux") });
     const input: WorkerLaunchInput = { client: "codex",
       attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context }, ...options };
@@ -55,6 +55,7 @@ describe("managed Codex turns", () => {
     const { result, line } = await launch({ model: "fixture-model", effort: "high" });
     expect(result).toMatchObject({ ok: true });
     expect(line).toContain("agent-turn-view.mjs");
+    expect(line).toContain("'--result-file' '" + join(root, "turns/attempt-1/last-message.txt") + "'");
     expect(line).toContain("'codex' 'exec' '--json' '-o' '" + join(root, "turns/attempt-1/last-message.txt") + "'");
     expect(line).toContain("'-C' '" + join(root, "candidate tree") + "' '-s' 'workspace-write'");
     expect(line).toContain("'-c' 'sandbox_workspace_write.network_access=true'");
@@ -84,6 +85,30 @@ describe("managed Codex turns", () => {
       expect(result).toMatchObject({ ok: false });
       expect(terminal.sendText).not.toHaveBeenCalled();
     }
+  });
+
+  it.each([undefined, threadId])("enforces model policy before fresh or resumed native commands (%s)", async continueSessionId => {
+    const { result, terminal } = await launch({ model: "outside-allowlist", continueSessionId }, () => "team_model_not_allowed");
+    expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: team_model_not_allowed" });
+    expect(terminal.sendText).not.toHaveBeenCalled();
+    expect(terminal.sendKeys).not.toHaveBeenCalled();
+  });
+
+  it("rechecks model policy after preparation and before submitting the native command", async () => {
+    const refusal = vi.fn().mockReturnValueOnce(null).mockReturnValue("team_model_not_allowed");
+    const { result, terminal } = await launch({ model: "changed-policy" }, refusal);
+    expect(refusal).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: team_model_not_allowed" });
+    expect(terminal.sendText).not.toHaveBeenCalled();
+    expect(terminal.sendKeys).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, threadId])("enforces approved document versions immediately before fresh or resumed launch (%s)", async continueSessionId => {
+    const refusal = vi.fn().mockReturnValueOnce(null).mockReturnValue("Approved document versions changed before launch");
+    const { result, terminal } = await launch({ continueSessionId }, undefined, refusal);
+    expect(refusal).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: Approved document versions changed before launch" });
+    expect(terminal.sendText).not.toHaveBeenCalled(); expect(terminal.sendKeys).not.toHaveBeenCalled();
   });
 
   it("treats a finished headless turn as ready without an interactive composer", async () => {
@@ -164,6 +189,8 @@ const output = args[args.indexOf('-o') + 1];
 fs.writeFileSync(output + '.launch.json', JSON.stringify({args, prompt:fs.readFileSync(0,'utf8'), cwd:process.cwd(), path:process.env.PATH}));
 console.log(JSON.stringify({type:'thread.started',thread_id:${JSON.stringify(reportedThread)}}));
 console.log(JSON.stringify({type:'turn.started'}));
+console.log(JSON.stringify({type:'item.started',item:{id:'command-1',type:'command_execution',command:'printf fixture',status:'in_progress'}}));
+console.log(JSON.stringify({type:'item.completed',item:{id:'command-1',type:'command_execution',command:'printf fixture',status:'completed',exit_code:0}}));
 fs.writeFileSync(output, 'The assigned plan was read.');
 console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'The assigned plan was read.'}}));
 const firstTurn = ${JSON.stringify(join(root, 'first-turn'))};
@@ -172,7 +199,7 @@ if (!fs.existsSync(firstTurn)) {
   console.log(JSON.stringify({type:'error',message:'Error: connect ECONNRESET'}));
   process.exit(1);
 }
-console.log(JSON.stringify({type:'turn.completed'}));
+console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:17,cached_input_tokens:3,output_tokens:5}}));
 `, { mode: 0o755 });
     vi.resetModules();
     const { createDaemon } = await import("../src/startup.js");
@@ -244,6 +271,13 @@ console.log(JSON.stringify({type:'turn.completed'}));
     expect(continued.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
     expect(second.identity?.nativeSessionId).toBe(threadId);
     expect(dirname(finalMessage)).not.toContain(initial.cwd);
+    const telemetryRoot = join(stateRoot, "turns", second.id);
+    const usage = JSON.parse(readFileSync(join(telemetryRoot, "usage.json"), "utf8"));
+    expect(usage).toMatchObject({ available: true, client: "codex", nativeSessionId: threadId, resumed: true,
+      counts: { inputTokens: 14, cacheReadInputTokens: 3, outputTokens: 5 } });
+    const activity = readFileSync(join(telemetryRoot, "activity.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+    expect(activity.map(record => record.status)).toEqual(["running", "completed"]);
+    expect(activity[0]).toMatchObject({ tool: "command_execution", summary: "printf fixture" });
   } finally {
     vi.useRealTimers();
     daemon?.deps.attemptCompletion?.stop();

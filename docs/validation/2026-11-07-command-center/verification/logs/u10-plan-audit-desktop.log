@@ -1,0 +1,38 @@
+
+> multi-agent-desktop@0.1.0 test
+> node --test test/*.test.js
+
+✔ keeps the native caption overlay aligned with the shared 48px strip (2.100845ms)
+✔ the actual preload and main picker return a POSIX path without any process call (2.107521ms)
+✔ the picker rejects a different window, subframe, origin or missing distro before opening (0.944857ms)
+✔ native cancellation is empty and a different distro is an error (1.75548ms)
+✔ preload preserves pairing and status but adds no title bar, footer or padding (0.559371ms)
+✔ decodes UTF-16LE console output and keeps non-ASCII text intact (1.304042ms)
+✔ falls back to UTF-8 when the output has no NUL bytes (0.117298ms)
+✔ parses the plain distro list, including the default marker (0.624853ms)
+✔ parses the verbose table and skips its header (0.251263ms)
+✔ decides WSL is missing when neither probe answers (0.12288ms)
+✔ decides no distro is installed when the list is empty (0.076688ms)
+✔ prefers the default WSL2 distro and reports its version (0.090269ms)
+✔ falls back to any WSL2 distro when the default one is WSL1 (0.070124ms)
+✔ reports WSL1 when every installed distro is version 1 (0.07992ms)
+✔ uses the list when the version table is unreadable (0.122543ms)
+✔ accepts only an absolute repository path (0.169216ms)
+✔ every in-distro command goes through -e and never through a shell string (0.142616ms)
+✔ the repository path is passed as an argv element, not interpolated into the script (0.050588ms)
+✔ the pairing script keeps both credentials inside the distro (0.102105ms)
+✔ reads a complete pairing result and rejects a partial one (0.212111ms)
+✔ accepts only a body that is this daemon, not any 200 (0.145081ms)
+✔ the install command elevates a fixed command string (0.062695ms)
+✔ allows only the daemon origin (0.231491ms)
+✔ maps absolute Windows drive folders without changing path characters (0.826443ms)
+✔ maps only the complete selected WSL distro and preserves path case (0.150219ms)
+✔ rejects relative paths, unrelated shares and ambiguous native path forms (0.087046ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 26
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 51.354296

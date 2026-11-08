@@ -1,0 +1,43 @@
+{
+  "checkedAt": "2026-11-07T12:02:00.955233+00:00",
+  "activeAttemptsBefore": 0,
+  "completedTasksBefore": [
+    {
+      "taskId": "task-1",
+      "state": "done"
+    },
+    {
+      "taskId": "task-2",
+      "state": "done"
+    },
+    {
+      "taskId": "task-2-review-1",
+      "state": "done"
+    },
+    {
+      "taskId": "task-3",
+      "state": "done"
+    },
+    {
+      "taskId": "task-3-review-1",
+      "state": "done"
+    }
+  ],
+  "sourceReceipt": "u10-runtime-post-seat-source-2.json",
+  "restart": {
+    "before": {
+      "pid": 2654804,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true,
+    "after": {
+      "pid": 2750871,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    }
+  },
+  "purpose": "Verify the merged read state after an idle restart of only the acceptance daemon."
+}

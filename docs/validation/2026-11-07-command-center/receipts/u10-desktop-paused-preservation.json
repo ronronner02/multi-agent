@@ -1,0 +1,94 @@
+{
+  "checkedAt": "2026-11-07T13:54:21.195721+00:00",
+  "readOnly": true,
+  "ownerDecision": "Keep this instance; pause interactive checks",
+  "originalDaemonStopped": true,
+  "originalRecordsUnchanged": true,
+  "originalRecords": {
+    "team_runs": {
+      "count": 5,
+      "matchesPrivateBackup": true,
+      "matchesPreStopCount": true,
+      "states": {
+        "approved": 3,
+        "cancel_requested": 2
+      }
+    },
+    "team_attempts": {
+      "count": 0,
+      "matchesPrivateBackup": true,
+      "matchesPreStopCount": true,
+      "states": {}
+    },
+    "queue_items": {
+      "count": 3,
+      "matchesPrivateBackup": true,
+      "matchesPreStopCount": true,
+      "states": {
+        "pending": 3
+      }
+    }
+  },
+  "privateBackupHashMatched": true,
+  "originalTerminalPreserved": true,
+  "originalShellPreserved": true,
+  "originalConfigUnchanged": true,
+  "protectedConfigChecks": [
+    {
+      "name": "owner.env",
+      "unchanged": true
+    },
+    {
+      "name": "config.json",
+      "unchanged": true
+    },
+    {
+      "name": "hosts.yml",
+      "unchanged": true
+    }
+  ],
+  "protectedCheckoutFilesUnchanged": true,
+  "protectedCheckoutFiles": [
+    {
+      "path": "docs/amendments/2026-11-02-mvp-multi-agent-scope.md",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/src/adapters/worker-launch.ts",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/test/fixtures/t038-live-daemon.mjs",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/test/worker-live-acceptance.test.ts",
+      "unchanged": true
+    }
+  ],
+  "protectedCheckoutStatusUnchanged": true,
+  "candidate": {
+    "pid": 2806685,
+    "startTicks": 9504675,
+    "state": "S",
+    "cwd": "<acceptance-worktree>",
+    "comm": "node"
+  },
+  "candidateHealthy": true,
+  "candidateLoopbackHosts": [
+    "127.0.0.1"
+  ],
+  "isolatedEnvironmentMatches": {
+    "OPENRIG_HOME": true,
+    "OPENRIG_DB": true,
+    "XDG_CONFIG_HOME": true,
+    "GH_CONFIG_DIR": true,
+    "TMUX_TMPDIR": true
+  },
+  "candidateCwdMatches": true,
+  "newSuiteProcesses": [],
+  "replacementProjectDataRead": false,
+  "uiAutomationPerformed": false,
+  "processStoppedOrStarted": false,
+  "probeLimitation": "The first read-only probe assumed every table had an id column. The final comparison uses sorted full rows and makes no schema or data change."
+}

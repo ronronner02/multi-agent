@@ -30,9 +30,11 @@ if (args[0] === "--version") {
     process.exit(1);
   }
   writeFileSync(join(root, "login.pid"), String(process.pid));
-  process.stderr.write("! First copy your one-");
+  const clipboard = existsSync(join(root, "clipboard-code"));
+  process.stderr.write(clipboard ? "! One-" : "! First copy your one-");
   setTimeout(() => {
-    process.stderr.write("time code: ABCD-1234\nOpen this URL to continue in your web browser: https://github.com/login/");
+    process.stderr.write((clipboard ? "time code (ABCD-1234) copied to clipboard" : "time code: ABCD-1234")
+      + "\nOpen this URL to continue in your web browser: https://github.com/login/");
     setTimeout(() => process.stderr.write("device\n"), 10);
   }, 10);
   const timer = setInterval(() => {

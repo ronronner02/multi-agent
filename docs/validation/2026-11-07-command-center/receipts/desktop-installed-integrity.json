@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-07T13:18:21.5430554Z",
+  "status": "passed",
+  "protectedFileCount": 115,
+  "originalWindowsFilesUnchanged": true,
+  "installedHashes": [
+    {
+      "Path": "<windows-task-scratch>\\desktop-installed\\Multi-Agent.exe",
+      "Hash": "AFB06983BDE93F7DFBF0E56D9DF229E7F12E4B8D9922DC1CF51B9A44F147E1A0"
+    },
+    {
+      "Path": "<windows-task-scratch>\\desktop-installed\\resources\\app.asar",
+      "Hash": "C2D11B02854466DFB0C936021D2033281FD6CF774308C3221A31F481E11C49A9"
+    }
+  ],
+  "newDefaultShortcutMovedToTaskScratch": true
+}

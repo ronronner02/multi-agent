@@ -1,3 +1,4 @@
+import { bindingCovers } from "./binding-scope.js";
 import type Database from "better-sqlite3";
 import { posix } from "node:path";
 import { canonicalJson, integer, object, parseAssignment, TeamContractError, type TeamRun } from "../contracts/team-control.js";
@@ -50,7 +51,7 @@ export function applyTaskEdit(db: Database.Database, queue: QueueRepository, run
     if (!["pending", "blocked"].includes(current.state)
       || db.prepare("SELECT 1 FROM team_attempts WHERE qitem_id=? AND state <> 'stopped'").get(current.qitemId)) return deny("Active or completed task assignments cannot be edited");
     if (!run.binding.roles.includes(next.role)) return deny("Role is outside the current plan binding");
-    const covers = (path: string) => run.binding.writePaths.some(root => path === root || path.startsWith(root + "/"));
+    const covers = (path: string) => bindingCovers(path, run.binding.writePaths);
     const extensions = new ScopeExtensions(db);
     const graph = tasks.map(task => {
       const assignment = task.parsed.taskId === taskId ? next : task.parsed;

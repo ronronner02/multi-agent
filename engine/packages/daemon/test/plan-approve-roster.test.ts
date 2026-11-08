@@ -14,6 +14,7 @@ import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import type { LeadRosterSeat } from "../src/domain/lead-roster.js";
 import { addTeamSeats, createTeam } from "../src/domain/team-setup.js";
 import { continuationNote } from "../src/domain/agent-turn.js";
+import { appendChatMessage, takeOwnerMessages } from "../src/domain/lead-chat.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
 import { createTestApp } from "./helpers/test-app.js";
 
@@ -45,6 +46,8 @@ describe("planning roster approval", () => {
       ...(planRef === undefined ? {} : { repository: { planRef } }) });
     expect(response.status, await response.clone().text()).toBe(201);
     runId = (await response.json() as { runId: string }).runId;
+    // The candidate plan and roster represent a completed turn, including consumption of the owner's goal.
+    takeOwnerMessages(db, runId, "completed-roster-fixture");
   };
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), "roster-approval-"));
@@ -73,6 +76,17 @@ describe("planning roster approval", () => {
     writeRoster({ seats });
   });
   afterEach(() => { if (db?.open) db.close(); rmSync(root, { recursive: true, force: true }); });
+
+  it("holds roster approval while a later owner message awaits a lead turn", async () => {
+    appendChatMessage(db, { id: "pending-roster-discussion", runId, body: "Explain the proposed staffing.",
+      createdAt: new Date().toISOString() });
+    const before = git(governance.getRun(runId).binding.repository.root, "rev-parse", "HEAD");
+    const response = await call(`/runs/${runId}/plan/approve`, command({ rosterDigest: rosterDigest() }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "plan_not_awaiting_approval" });
+    expect(recordedSeats()).toHaveLength(1);
+    expect(git(governance.getRun(runId).binding.repository.root, "rev-parse", "HEAD")).toBe(before);
+  });
 
   it("publishes the exact roster digest and creates its seats with plan approval", async () => {
     const read = await (await call(`/runs/${runId}/chat`)).json() as { planApproval: unknown };
@@ -178,7 +192,7 @@ describe("planning roster approval", () => {
     const existing = seedSeats(seats.map(seat => ({ ...seat, model: "existing-model" })));
     await start();
     const before = seatRows();
-    expect(governance.getRun(runId).binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
+    expect(governance.getRun(runId).binding.writePaths).toEqual(["plan.md", "lead-roster.json", "lead-escalation.json"]);
     const response = await call(`/runs/${runId}/plan/approve`, command({ rosterDigest: rosterDigest() }));
     expect(response.status, await response.clone().text()).toBe(200);
     expect(seatRows()).toEqual(before);

@@ -489,15 +489,32 @@ function safeResolveUiPath(uiDistDir: string, requestPath: string): string | nul
   return resolvedPath;
 }
 
-function fileResponse(filePath: string): Response {
+function fileResponse(filePath: string, rangeHeader?: string): Response {
   const ext = nodePath.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
   const body = fs.readFileSync(filePath);
-  return new Response(body, {
-    headers: {
-      "content-type": contentType,
-    },
-  });
+  const headers: Record<string, string> = { "content-type": contentType };
+  // Browsers need a seekable response to skip the skin's entrance on later playback.
+  if (ext === ".mp4") {
+    const size = body.length;
+    headers["accept-ranges"] = "bytes";
+    headers["content-length"] = String(size);
+    if (rangeHeader) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+      const start = match && match[1] !== "" ? Number(match[1])
+        : match && match[2] !== "" ? Math.max(0, size - Number(match[2])) : NaN;
+      const end = match && match[1] !== "" && match[2] !== "" ? Number(match[2]) : size - 1;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= size || end < start) {
+        return new Response(null, { status: 416,
+          headers: { "content-range": `bytes */${size}`, "accept-ranges": "bytes" } });
+      }
+      const boundedEnd = Math.min(end, size - 1);
+      headers["content-range"] = `bytes ${start}-${boundedEnd}/${size}`;
+      headers["content-length"] = String(boundedEnd - start + 1);
+      return new Response(new Uint8Array(body.subarray(start, boundedEnd + 1)), { status: 206, headers });
+    }
+  }
+  return new Response(body, { headers });
 }
 
 function isUiAssetRequestPath(requestPath: string): boolean {
@@ -920,6 +937,7 @@ export function createApp(deps: AppDeps): Hono {
   // decision, never an admission.
   app.route("/api/team-control", teamLeadRoutes(teamGovernance, {
     ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}),
+    ...(deps.attemptTelemetry ? { telemetry: deps.attemptTelemetry } : {}),
     credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     // U5 — the chat and plan routes start the lead's next turn through the same dispatch a
@@ -1153,7 +1171,7 @@ export function createApp(deps: AppDeps): Hono {
 
     const requestedFile = safeResolveUiPath(uiDistDir, requestPath);
     if (requestedFile && fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
-      return fileResponse(requestedFile);
+      return fileResponse(requestedFile, c.req.header("Range"));
     }
 
     if (isUiAssetRequestPath(requestPath)) {

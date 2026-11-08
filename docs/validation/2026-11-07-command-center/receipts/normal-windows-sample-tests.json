@@ -1,0 +1,9 @@
+{
+    "command":  [
+                    "node",
+                    "--test"
+                ],
+    "cwd":  "C:\\Users\\leo\\AppData\\Local\\Multi-Agent\\TestProjects\\2048-Recreation-20261108",
+    "seconds":  0.17942929999999999,
+    "exit":  0
+}

@@ -1,0 +1,78 @@
+{
+  "checkedAt": "2026-11-07T12:19:09.708630+00:00",
+  "activeAttempts": [],
+  "nonterminalQueueItems": [],
+  "originalProcesses": [
+    {
+      "pid": 1179,
+      "cwd": "<original-checkout>",
+      "startTicks": 68421,
+      "state": "S"
+    },
+    {
+      "pid": 1200,
+      "cwd": "<original-checkout>",
+      "startTicks": 68459,
+      "state": "S"
+    }
+  ],
+  "ownedTerminalServer": {
+    "pid": 2542779,
+    "cwd": "<acceptance-worktree>",
+    "startTicks": 8755065,
+    "state": "S"
+  },
+  "ownedSessions": [
+    {
+      "pid": "2542779",
+      "sessionId": "$1",
+      "name": "impl-1@cc-u10-win-20261107-2c433e64"
+    },
+    {
+      "pid": "2542779",
+      "sessionId": "$2",
+      "name": "impl-2@cc-u10-win-20261107-2c433e64"
+    },
+    {
+      "pid": "2542779",
+      "sessionId": "$0",
+      "name": "lead-1@cc-u10-win-20261107-2c433e64"
+    },
+    {
+      "pid": "2542779",
+      "sessionId": "$3",
+      "name": "review-1@cc-u10-win-20261107-2c433e64"
+    }
+  ],
+  "panes": [
+    {
+      "session": "impl-1@cc-u10-win-20261107-2c433e64",
+      "paneId": "%1",
+      "pid": "2654941",
+      "dead": "1"
+    },
+    {
+      "session": "impl-2@cc-u10-win-20261107-2c433e64",
+      "paneId": "%2",
+      "pid": "2655550",
+      "dead": "1"
+    },
+    {
+      "session": "lead-1@cc-u10-win-20261107-2c433e64",
+      "paneId": "%0",
+      "pid": "2738887",
+      "dead": "1"
+    },
+    {
+      "session": "review-1@cc-u10-win-20261107-2c433e64",
+      "paneId": "%3",
+      "pid": "2733167",
+      "dead": "1"
+    }
+  ],
+  "sessionRevocation": {
+    "changedRecords": 1,
+    "otherRecordsUnchanged": true,
+    "currentBrowserRevoked": true
+  }
+}

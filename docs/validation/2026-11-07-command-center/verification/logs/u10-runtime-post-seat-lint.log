@@ -1,0 +1,20 @@
+
+> openrig@0.1.0 lint
+> npm run typecheck:prep && npm run typecheck -w packages/i18n && tsc --noEmit --project packages/daemon/tsconfig.json && tsc --noEmit --project packages/ui/tsconfig.json && tsc --noEmit --project packages/cli/tsconfig.json
+
+
+> openrig@0.1.0 typecheck:prep
+> npm run build -w packages/i18n -w packages/daemon
+
+
+> @openrig/i18n@0.1.0 build
+> tsc
+
+
+> @openrig/daemon@0.1.0 build
+> tsc && node scripts/copy-workflow-specs.mjs
+
+
+> @openrig/i18n@0.1.0 typecheck
+> tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --noUncheckedIndexedAccess --skipLibCheck --resolveJsonModule --esModuleInterop test/catalog-parity.test.ts test/display-width.test.ts
+

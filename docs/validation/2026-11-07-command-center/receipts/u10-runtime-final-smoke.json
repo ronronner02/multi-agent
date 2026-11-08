@@ -1,0 +1,11 @@
+{
+  "check": "u10-runtime-final-smoke",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "smoke"
+  ],
+  "exit": 0,
+  "seconds": 55.27
+}

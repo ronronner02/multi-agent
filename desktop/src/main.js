@@ -22,7 +22,7 @@ const {
   DAEMON_ORIGIN, HEALTH_URL, TEAM_URL,
   cloneAndSetupArgv, decideWsl, enableUiArgv, installArgv, isAllowedNavigation, isDaemonHealth,
   listQuietArgv, listVerboseArgv, nativeFolderToWsl, normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable,
-  parsePairingResult, probeRepoArgv, startArgv, statusArgv, stopEngineArgv,
+  parsePairingResult, probeRepoArgv, runtimeEnvironment, startArgv, statusArgv, stopEngineArgv,
 } = require('./wsl.js');
 
 const BACKGROUND = '#151619';
@@ -140,7 +140,7 @@ function runWsl(argv, { timeoutMs = 20_000 } = {}) {
   return new Promise(resolve => {
     let child;
     try {
-      child = spawn('wsl.exe', argv, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      child = spawn('wsl.exe', argv, { windowsHide: true, env: runtimeEnvironment(process.env, readSettings().runtimeProfile), stdio: ['ignore', 'pipe', 'ignore'] });
     } catch {
       resolve({ ok: false, stdout: Buffer.alloc(0) });
       return;
@@ -165,7 +165,7 @@ function streamWsl(argv, { detached = false } = {}) {
   return new Promise(resolve => {
     let child;
     try {
-      child = spawn('wsl.exe', argv, { windowsHide: true, detached, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn('wsl.exe', argv, { windowsHide: true, detached, env: runtimeEnvironment(process.env, readSettings().runtimeProfile), stdio: ['ignore', 'pipe', 'pipe'] });
     } catch {
       resolve({ ok: false });
       return;
@@ -293,23 +293,42 @@ async function startEngine() {
  * Chromium's jar; the anti-forgery token lives in this tab's session storage.
  */
 async function openTeamView() {
-  const { distro } = resolved;
-  publish({ phase: 'pairing', message: 'Connecting to the local runtime…' });
-  let session = null;
-  if (distro) {
-    const paired = await runWsl(pairArgv(distro), { timeoutMs: 30_000 });
-    session = paired.ok ? parsePairingResult(paired.stdout.toString('utf8')) : null;
-    if (!session) appendLog('Pairing did not complete; the team view opens unpaired.');
+  publish({ phase: 'pairing', message: 'Connecting to the local runtime?' });
+  const token = await pairOwnerSession();
+  if (!token) {
+    publish({ phase: 'connection-failed', message: 'The desktop could not connect to the selected runtime profile.', connected: false });
+    return;
   }
-  if (session) await applySessionCookie(session.cookie);
-  await showTeam(session ? session.antiForgeryToken : null);
+  await showTeam(token);
 }
 
-/** Apply the session cookie to the window's own jar, so the page never has to see it. */
-async function applySessionCookie(value) {
-  await session.defaultSession.cookies.set({
-    url: DAEMON_ORIGIN, name: 'multi_agent_owner', value, httpOnly: true, sameSite: 'strict', path: '/api',
-  }).catch(() => undefined);
+async function pairOwnerSession() {
+  const { distro } = resolved;
+  if (!distro) return null;
+  const paired = await runWsl(pairArgv(distro), { timeoutMs: 30_000 });
+  const result = paired.ok ? parsePairingResult(paired.stdout.toString('utf8')) : null;
+  if (!result) return null;
+  try {
+    await session.defaultSession.cookies.set({
+      url: DAEMON_ORIGIN, name: 'multi_agent_owner', value: result.cookie, httpOnly: true, sameSite: 'strict', path: '/api',
+    });
+    return result.antiForgeryToken;
+  } catch {
+    return null;
+  }
+}
+
+function isTeamSender(event, target = window) {
+  return !!target && !target.isDestroyed() && event.sender === target.webContents
+    && event.senderFrame === target.webContents.mainFrame && isAllowedNavigation(event.senderFrame.url);
+}
+
+/** Renew through WSL without navigating away from the owner's current form or project. */
+async function reconnectOwnerSession(event) {
+  const currentWindow = window;
+  if (!isTeamSender(event, currentWindow)) throw new Error('Reconnection is available only in the active app window.');
+  const token = await pairOwnerSession();
+  return window === currentWindow && isTeamSender(event, currentWindow) ? token : null;
 }
 
 async function showTeam(token) {
@@ -331,8 +350,7 @@ async function showTeam(token) {
 async function pickFolder(event) {
   const currentWindow = window;
   const { distro } = resolved;
-  if (!currentWindow || currentWindow.isDestroyed() || event.sender !== currentWindow.webContents
-    || event.senderFrame !== currentWindow.webContents.mainFrame || !isAllowedNavigation(event.senderFrame.url) || !distro) {
+  if (!isTeamSender(event, currentWindow) || !distro) {
     throw new Error('Folder selection is available only in the active project window.');
   }
   const result = await dialog.showOpenDialog(currentWindow, { properties: ['openDirectory', 'createDirectory'] });
@@ -405,10 +423,11 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('desktop:get-state', () => publicState());
     ipcMain.handle('desktop:pick-folder', pickFolder);
+    ipcMain.handle('desktop:reconnect', reconnectOwnerSession);
     ipcMain.on('desktop:csrf-token', event => {
       // Synchronous by design: the preload needs the value before the page's scripts run.
       // Any sender other than our own window gets nothing.
-      event.returnValue = window && !window.isDestroyed() && event.sender === window.webContents ? csrfToken : null;
+      event.returnValue = isTeamSender(event) ? csrfToken : null;
     });
     ipcMain.handle('desktop:retry', async () => { await checkWsl(); return publicState(); });
     ipcMain.handle('desktop:install-wsl', () => { runInstall(); return publicState(); });

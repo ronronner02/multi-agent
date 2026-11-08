@@ -1,5 +1,5 @@
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createInterfaceI18n } from "@openrig/i18n";
@@ -31,17 +31,56 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); cache.clear(); });
 
-async function show(locale: "en" | "zh-CN" = "en", gated = false) {
+async function show(locale: "en" | "zh-CN" = "en", gated = false, teamId?: string) {
   const language = await createInterfaceI18n({ language: locale });
   const settings = <SettingsScreen language={language} onLanguage={onLanguage}
       appearance={{ preference: "dark", theme: "dark", setPreference }} background={{ motion: true, setMotion }}
-      connection="shell.connected" isolation="none" address="http://127.0.0.1:7433" seats={seats} />;
+      connection="shell.connected" isolation="none" address="http://127.0.0.1:7433" seats={seats} teamId={teamId} />;
   return render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}>
     {gated ? <GithubGate frame={content => content}>{settings}</GithubGate> : settings}
   </I18nextProvider></QueryClientProvider>);
 }
 
 describe("command-center settings", () => {
+  it("keeps every launch available in a named keyboard-scrollable evidence region", async () => {
+    const launches = Array.from({ length: 200 }, (_, index) => ({ attemptId: `attempt-${index}`,
+      client: "codex", requestedModel: `requested-${index}`, observedModel: `observed-${index}`, state: "stopped" }));
+    request.mockImplementation(async (path: string) => {
+      if (path !== "/teams/fixture-team/settings") throw new Error(path);
+      return { settings: { teamId: "fixture-team", kind: "project", configured: true,
+        lead: { client: "codex", model: "chosen-lead" }, allowedSubagents: [], launches } };
+    });
+    await show("en", false, "fixture-team");
+    const region = await screen.findByRole("region", { name: "Recent launch evidence" });
+    expect(region.tabIndex).toBe(0);
+    region.focus(); expect(document.activeElement).toBe(region);
+    expect(within(region).getAllByRole("row")).toHaveLength(201);
+    expect(within(region).getByText("observed-199")).toBeTruthy();
+    expect(within(region).getAllByRole("columnheader").every(header => header.getAttribute("scope") === "col")).toBe(true);
+    expect(request.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
+  });
+
+  it("edits project model IDs and shows the saved enforced policy separately from the draft", async () => {
+    let saved = { teamId: "fixture-team", kind: "project", configured: false,
+      lead: { client: "claude-code", model: null as string | null }, allowedSubagents: [] as object[], launches: [] };
+    request.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path !== "/teams/fixture-team/settings") throw new Error(path);
+      if (init?.method === "PUT") saved = { ...saved, ...JSON.parse(String(init.body)), configured: true };
+      return { settings: saved };
+    });
+    await show("en", false, "fixture-team");
+    fireEvent.change(await screen.findByLabelText("Lead client"), { target: { value: "codex" } });
+    fireEvent.change(screen.getByLabelText("Lead model"), { target: { value: "chosen-lead" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add allowed model" }));
+    fireEvent.change(screen.getByLabelText("Subagent model 1"), { target: { value: "allowed-worker" } });
+    expect(screen.getByText("Model policy is not configured. Native client defaults still apply.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save model settings" }));
+    await screen.findByText("Saved. Model policy is enforced on the next managed launch.");
+    expect(saved.lead).toEqual({ client: "codex", model: "chosen-lead" });
+    expect(saved.allowedSubagents).toEqual([{ client: "codex", model: "allowed-worker" }]);
+    expect(request).toHaveBeenCalledWith("/teams/fixture-team/settings", expect.objectContaining({ method: "PUT" }));
+  });
+
   it("reads and persists the default lead through the owner settings route", async () => {
     await show();
     const lead = await screen.findByRole("combobox", { name: "Default lead client" }) as HTMLSelectElement;

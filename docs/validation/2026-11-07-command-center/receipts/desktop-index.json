@@ -1,0 +1,146 @@
+{
+  "checkedAt": "2026-11-07T13:58:15.992640+00:00",
+  "files": [
+    {
+      "path": "receipts/u10-desktop-original-stop.json",
+      "sourceSha256": "3ff077ba1391a07d53dfa00467c22a090610e907d69db11740799e99e959b4d7",
+      "sanitizedSha256": "3ff077ba1391a07d53dfa00467c22a090610e907d69db11740799e99e959b4d7"
+    },
+    {
+      "path": "receipts/u10-desktop-candidate-start.json",
+      "sourceSha256": "3c756fcf1252cb6d3ad8dd2f72a8a92a33a1c79075e27c0ff1cf52528c670554",
+      "sanitizedSha256": "e99ddbb57760be519b8656b7c42d0decdc5a61c1a0349c526722355bc35fca2c"
+    },
+    {
+      "path": "receipts/u10-desktop-protected-check.json",
+      "sourceSha256": "57592bc4300b509e85e7791d888a207fd8f1af7e9a592f189e8a732c7b9bef20",
+      "sanitizedSha256": "9cbaadd1a0f8115f6d41cb574b227f0c385dde3bc069241bccbf5eb63e6d483b"
+    },
+    {
+      "path": "receipts/u10-desktop-parser-restart.json",
+      "sourceSha256": "45b8b17464067967df81f2dd01a22139e01c29749c47028c27a16468f73bab84",
+      "sanitizedSha256": "e2f4c6527953d658c38e5e9d258875f387d6c00b3a86e18f3c11d1729ce53b97"
+    },
+    {
+      "path": "receipts/u10-desktop-suite-candidate.json",
+      "sourceSha256": "023b61f8408e686fbaaa89dc4787c62c923ee659a8f68a20611446fac0035ef1",
+      "sanitizedSha256": "023b61f8408e686fbaaa89dc4787c62c923ee659a8f68a20611446fac0035ef1"
+    },
+    {
+      "path": "receipts/u10-desktop-paused-preservation.json",
+      "sourceSha256": "f2e828115cae0f1170617fb7aca6fc7549d4978a4b076e9233689531ec73fe5a",
+      "sanitizedSha256": "3998a619d9cb1b6fa63d4727babb645749e8f1bcf90209c818d1e25f0989cd96"
+    },
+    {
+      "path": "receipts/desktop-env-probe.json",
+      "sourceSha256": "3249c109464f5e63d9be4850a025a8053eccd30d56752789348260a75cfeca67",
+      "sanitizedSha256": "693fc22859736c55f2638064b51fbb3ed648f23e78be35b412a617067a1e8fef"
+    },
+    {
+      "path": "receipts/desktop-install-result.json",
+      "sourceSha256": "6f8e95966398a660878e1ba580e5279bc7a079a8650f6f198ff63c2120f70364",
+      "sanitizedSha256": "67dfb18cde09da3e61dd87dbf265e55ff56f88445aedab93ee9a7d24659c1e0b"
+    },
+    {
+      "path": "receipts/desktop-installed-integrity.json",
+      "sourceSha256": "6551066c2318b93f20c400b8ccf61aee64f123bb0df7d4c1c9405d90b7eb1298",
+      "sanitizedSha256": "4f104cbabdf0df71f3ebe2bb6e890a89855ca02a9bef56eae1fe9d9368811fe9"
+    },
+    {
+      "path": "receipts/desktop-first-launch.json",
+      "sourceSha256": "1adc04051ec50652db25a363f4971119603e41126601ba9d3d0006cabaf0125b",
+      "sanitizedSha256": "8ace36876b9383232761de5eaf489640a0a381644a35d3a8ea52772e05bd326a"
+    },
+    {
+      "path": "receipts/desktop-first-open-gate.json",
+      "sourceSha256": "765a2a5d9e96f728702d0bcd0bf417383f51c6c73ce6b8ad1f9216bdcbdb83f1",
+      "sanitizedSha256": "4188da699134cef29107629c855b4cab30601378f399a8020d58e15be0703d04"
+    },
+    {
+      "path": "receipts/desktop-sign-in-first-attempt.json",
+      "sourceSha256": "5572036f6f06a92ee5a175095edabc62ffda1ab17fc9efcc5db7c6be76ded74c",
+      "sanitizedSha256": "01d73874c3adce50d9e56bcd328b1bf23548d5b5622a27117262e112018068f0"
+    },
+    {
+      "path": "receipts/desktop-sign-in-after-fix.json",
+      "sourceSha256": "ab9c6e804678763a9da091c130bea99abb5aef820e7c7d394fbc47db73abd00e",
+      "sanitizedSha256": "a0d96963b5e15bf8e0bb521134f5b86f043a89352adfdacb556c8dd9d84bc3ec"
+    },
+    {
+      "path": "receipts/desktop-signed-in.json",
+      "sourceSha256": "c0637bcf5eba1f6b2cb0edeb0b293998ae43e0eced3da2b4eccbd5a71ca15c39",
+      "sanitizedSha256": "1fc07f11d2690717eca2cd901d4240017c534649045bc5360d242e71ab682ecc"
+    },
+    {
+      "path": "receipts/desktop-native-window-before.json",
+      "sourceSha256": "494097884733ed01e9ad1bde2df921195636b78d715d96b0e202d32c0ae9257c",
+      "sanitizedSha256": "494097884733ed01e9ad1bde2df921195636b78d715d96b0e202d32c0ae9257c"
+    },
+    {
+      "path": "receipts/desktop-native-picker-interaction.json",
+      "sourceSha256": "121d6d7991e30084da9ebc185946e65c726d714e3e3ee8eb902cd102b686078a",
+      "sanitizedSha256": "368ca8f6d0096d58837d1e372947b522c97220716c2961d148ba1b12c48603a3"
+    },
+    {
+      "path": "receipts/desktop-preservation-check.json",
+      "sourceSha256": "a4b4ac6087eb6d5e4f448b9e4b7c66e25ff568dfc8f21f0625245ffb6624f7b9",
+      "sanitizedSha256": "e6be1c83d8f5e6dd894bffbedcc81fae39df3e8526da860a2cea68ad0bb2581f"
+    },
+    {
+      "path": "receipts/u10-desktop-gh-output-diagnostic.json",
+      "sourceSha256": "293f8434aaee074640c00bb4af95291b38200e901c918217a619bd1da61e86f1",
+      "sanitizedSha256": "b4b33267fbd262ee0ec64d2ac0a2c8a6cba21c345e7a6ee6f38b76f5d36e1500"
+    },
+    {
+      "path": "receipts/u10-desktop-install.json",
+      "sourceSha256": "a7716ce74a5137d58a94dc79c5b8f941be7eacfa5a3f1b801964a0439d3f1d37",
+      "sanitizedSha256": "a7716ce74a5137d58a94dc79c5b8f941be7eacfa5a3f1b801964a0439d3f1d37"
+    },
+    {
+      "path": "receipts/u10-desktop-tests.json",
+      "sourceSha256": "ab377b75779f7f65d76b8cd9240d02dd25d2d72f6923095940e785f14dee9b73",
+      "sanitizedSha256": "ab377b75779f7f65d76b8cd9240d02dd25d2d72f6923095940e785f14dee9b73"
+    },
+    {
+      "path": "receipts/u10-desktop-gh-prompt-red.json",
+      "sourceSha256": "e508724d10aae16342a0e3d7070089931ceada41eb4ce257e228a6fe233eecaf",
+      "sanitizedSha256": "e508724d10aae16342a0e3d7070089931ceada41eb4ce257e228a6fe233eecaf"
+    },
+    {
+      "path": "receipts/u10-desktop-gh-prompt-green.json",
+      "sourceSha256": "467a93deb5830f56fb3a6567906e55c485762cbaea54cca21e28bc48b94201f3",
+      "sanitizedSha256": "467a93deb5830f56fb3a6567906e55c485762cbaea54cca21e28bc48b94201f3"
+    },
+    {
+      "path": "receipts/u10-desktop-parser-lint.json",
+      "sourceSha256": "b65c15064f6bc5fbf8e9987797eb948e2c22502b71a8dfd3afa7acdc93446050",
+      "sanitizedSha256": "b65c15064f6bc5fbf8e9987797eb948e2c22502b71a8dfd3afa7acdc93446050"
+    },
+    {
+      "path": "receipts/u10-desktop-parser-build.json",
+      "sourceSha256": "ed23867e42f13f1b83c8021bce7bfd0bd71474c79d0ded43871ba865444b2d48",
+      "sanitizedSha256": "ed23867e42f13f1b83c8021bce7bfd0bd71474c79d0ded43871ba865444b2d48"
+    },
+    {
+      "path": "receipts/u10-desktop-parser-smoke.json",
+      "sourceSha256": "4e6a587487a3063546a6e53c466f35f24c69add33423e91101aa1694b0ab85e9",
+      "sanitizedSha256": "4e6a587487a3063546a6e53c466f35f24c69add33423e91101aa1694b0ab85e9"
+    },
+    {
+      "path": "receipts/u10-desktop-current-tests.json",
+      "sourceSha256": "87cc42d471b4c82ab74041c377854c3f84cb43089d8d359a7f8cd410a8f63e9d",
+      "sanitizedSha256": "87cc42d471b4c82ab74041c377854c3f84cb43089d8d359a7f8cd410a8f63e9d"
+    },
+    {
+      "path": "receipts/u10-desktop-final-suite-build.json",
+      "sourceSha256": "1c1cf881ae8bce3a774af93999959f90cccb6a1cb7db80463dea9a6b5a5c05f9",
+      "sanitizedSha256": "1c1cf881ae8bce3a774af93999959f90cccb6a1cb7db80463dea9a6b5a5c05f9"
+    },
+    {
+      "path": "receipts/u10-desktop-full-daemon.json",
+      "sourceSha256": "bfe57a45201cc2e6c30d947b0e7f74751edfa0b28383447c3d73f5f0d266e3c3",
+      "sanitizedSha256": "2f0936af3c6dfb468315d2123fc3a7a0346984e76d8893ad1d009d68bfdeaca1"
+    }
+  ],
+  "method": "Allowlisted structured receipts and bounded command logs. Machine paths and credential fields are omitted or replaced; source hashes identify private originals. Unscoped form observations are not exported."
+}

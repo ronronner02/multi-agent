@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createInterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
 import { OwnerReadError } from "../../hooks/useOwnerSession.js";
-import { CreateProject } from "../create-project.js";
+import { CreateProject, ProjectsScreen } from "../create-project.js";
 
 const request = vi.fn(), onCreated = vi.fn();
 vi.mock("../../hooks/useOwnerSession.js", async importOriginal => ({
@@ -149,5 +149,30 @@ describe("project creation", () => {
     expect(screen.getByRole("button", { name: "Close" })).toHaveProperty("disabled", true);
     await act(async () => finish({ preview: { repository: "/home/fixture/sample", name: "sample", action, fileCount: 2, excludedPaths: [] } }));
     expect(screen.getByRole("button", { name: "Create" })).toHaveProperty("disabled", false);
+  });
+});
+
+
+describe("project record status", () => {
+  it.each([
+    { state: "approved" as const, resultCount: 0, label: "Approved" },
+    { state: "approved" as const, resultCount: 2, label: "Approved" },
+    { state: "blocked" as const, resultCount: 1, label: "Blocked" },
+    { state: "canceled" as const, resultCount: 1, label: "Canceled" },
+  ])("shows $state authority and $resultCount recorded results without inferring activity", async ({ state, resultCount, label }) => {
+    const language = await createInterfaceI18n({ language: "en" }), onOpenRun = vi.fn();
+    render(<I18nextProvider i18n={language.instance}><ProjectsScreen
+      teams={[{ id: "project", name: "Fixture", repository: "/fixture", seats: [] }]}
+      runs={[{ id: "record", rigId: "project", rigName: "Fixture", displayName: "Retained work", state,
+        phase: "delivery", planRef: "plan.md", createdAt: "2026-11-08", resultCount }]}
+      loading={false} onOpenProject={() => {}} onOpenRun={onOpenRun} onNewWork={() => {}} onCreate={() => {}}
+    /></I18nextProvider>);
+    const record = screen.getByRole("button", { name: /Retained work/ });
+    expect(record.textContent).toContain(`Execution · ${label}`);
+    expect(record.textContent).not.toMatch(/Running|Idle|Done/);
+    if (resultCount > 0) expect(record.textContent).toContain(`${resultCount} integrated results`);
+    else expect(record.textContent).not.toContain("integrated results");
+    fireEvent.click(record);
+    expect(onOpenRun).toHaveBeenCalledWith("record");
   });
 });

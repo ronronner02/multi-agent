@@ -13,7 +13,7 @@ const {
   DAEMON_ORIGIN, PAIR_SCRIPT, cloneAndSetupArgv, decodeWslOutput, decideWsl, enableUiArgv,
   installArgv, isAllowedNavigation, isDaemonHealth, listQuietArgv, listVerboseArgv,
   nativeFolderToWsl, normalizeRepoPath, pairArgv, parseDistroList, parseDistroTable, parsePairingResult,
-  probeRepoArgv, setupArgv, startArgv, statusArgv, stopEngineArgv,
+  probeRepoArgv, runtimeEnvironment, setupArgv, startArgv, statusArgv, stopEngineArgv,
 } = require('../src/wsl.js');
 
 /** Encode text the way `wsl.exe` does: UTF-16LE, with a BOM. */
@@ -220,4 +220,33 @@ test('rejects relative paths, unrelated shares and ambiguous native path forms',
     assert.equal(nativeFolderToWsl(input, 'Ubuntu'), null, String(input));
   }
   assert.equal(nativeFolderToWsl(String.raw`D:\code\app`, null), null);
+});
+
+
+test('a normal shortcut reuses the saved runtime profile without carrying tokens between profiles', () => {
+  const inherited = { PATH: 'fixture-path', HTTPS_PROXY: 'http://fixture-proxy', WSLENV: 'WT_SESSION:GH_TOKEN/u:XDG_CONFIG_HOME/p',
+    XDG_CONFIG_HOME: '/old/config', OPENRIG_DB: '/old/db', OPENRIG_HOME: '/old/home',
+    GH_TOKEN: 'fixture-secret', MULTI_AGENT_OWNER_TOKEN: 'fixture-secret' };
+  const profile = { XDG_CONFIG_HOME: '/fixture/config', GH_CONFIG_DIR: '/fixture/gh', OPENRIG_HOME: '/fixture/home',
+    OPENRIG_DB: '/fixture/home/state.sqlite', OPENRIG_PORT: '7433', OPENRIG_HOST: '127.0.0.1',
+    GH_TOKEN: 'ignored', PATH: '/ignored', NODE_OPTIONS: '--require ignored' };
+  const env = runtimeEnvironment(inherited, profile);
+  assert.equal(env.XDG_CONFIG_HOME, '/fixture/config');
+  assert.equal(env.OPENRIG_DB, '/fixture/home/state.sqlite');
+  assert.equal(env.PATH, inherited.PATH);
+  assert.equal(env.HTTPS_PROXY, inherited.HTTPS_PROXY);
+  assert.equal(env.GH_TOKEN, undefined);
+  assert.equal(env.MULTI_AGENT_OWNER_TOKEN, undefined);
+  assert.equal(env.NODE_OPTIONS, undefined);
+  assert.ok(env.WSLENV.split(':').includes('XDG_CONFIG_HOME/u'));
+  assert.ok(!env.WSLENV.includes('GH_TOKEN') && !env.WSLENV.includes('XDG_CONFIG_HOME/p'));
+  assert.equal(inherited.XDG_CONFIG_HOME, '/old/config');
+});
+
+test('the default profile keeps its existing launch environment and ignores malformed profile settings', () => {
+  const inherited = { PATH: 'fixture', WSLENV: 'WT_SESSION', XDG_CONFIG_HOME: '/default' };
+  assert.deepEqual(runtimeEnvironment(inherited, undefined), inherited);
+  assert.deepEqual(runtimeEnvironment(inherited, []), inherited);
+  const env = runtimeEnvironment(inherited, { XDG_CONFIG_HOME: 42, OPENRIG_DB: '/bad\0path' });
+  assert.equal(env.OPENRIG_DB, undefined);
 });

@@ -1,0 +1,256 @@
+{
+  "unit": "U10",
+  "status": "incomplete-unmerged",
+  "checkedAt": "2026-11-07T19:37:28.780035+00:00",
+  "ownerDecision": "Normal launch-entry repair is approved, with working projects, sign-ins and the old installation preserved. The U10 uncommitted/unmerged hold remains. One additional credential confirmation awaits the already-requested owner decision.",
+  "source": "source-verification.json",
+  "gates": {
+    "isolatedBrowserSignInAndWindowsCreate": {
+      "status": "observed",
+      "evidence": [
+        "receipts/u10-windows-create-verification.json",
+        "screenshots/live/02-github-gate.png",
+        "screenshots/live/03-signed-in-empty-projects.png"
+      ]
+    },
+    "leadPlanAndRosterApproval": {
+      "status": "observed-after-fix",
+      "evidence": "rosters.json"
+    },
+    "nativeDeliveryAndLocalMerge": {
+      "status": "observed",
+      "runs": [
+        "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+        "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086"
+      ],
+      "evidence": [
+        "runtime-observations.json",
+        "events.jsonl",
+        "receipts/u10-runtime-project-merge.json",
+        "receipts/u10-runtime-final-projects.json"
+      ],
+      "finalRun": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "finalSyntheticHead": "59c47579bcda6f0576096cb5e9239c1df1337836",
+      "finalSyntheticTestsPassed": 57
+    },
+    "midTurnRestart": {
+      "status": "observed",
+      "evidence": "receipts/u10-repeat-restart-evidence.json"
+    },
+    "busyOwnerChat": {
+      "status": "partial",
+      "evidence": [
+        "receipts/u10-runtime-native-progress.json",
+        "receipts/u10-repeat-busy-slots.json",
+        "live-limitations.json"
+      ],
+      "limitation": "The final reply is accurate at its stated snapshot time with one reviewer active. Earlier two-slot saturation and current reserved-capacity regression are separate evidence, not a fully saturated final live repeat."
+    },
+    "nativeTelemetry": {
+      "status": "observed-with-missing-counters-retained",
+      "evidence": "telemetry.json",
+      "supplementaryAttempt": "4559079e-8897-40e3-9114-ee869096eb09",
+      "supplementaryTotalTokens": 428832,
+      "supplementaryModel": null,
+      "attemptCount": 33,
+      "finalRuntimeRun": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "usageStatusCounts": {
+        "available": 31,
+        "unavailable": 2
+      }
+    },
+    "wslFolderCreate": {
+      "status": "observed",
+      "evidence": "receipts/u10-wsl-create-verification.json"
+    },
+    "privateBootstrapOnlyRemotes": {
+      "status": "verified",
+      "verifiedAt": "2026-11-07T15:27:04.218553+00:00",
+      "evidence": [
+        "receipts/u10-plan-audit-remotes.json",
+        "receipts/u10-runtime-final-projects.json"
+      ],
+      "bothPrivate": true,
+      "headsUnchangedFromBootstrap": true,
+      "scope": "Only the two synthetic acceptance repositories were checked; no remote mutation."
+    },
+    "installerBuildAndSourceIntegrity": {
+      "status": "passed",
+      "evidence": [
+        "receipts/u10-final-installer.json",
+        "receipts/u10-final-installer-integrity-2.json",
+        "receipts/u10-runtime-installer-integrity.json"
+      ]
+    },
+    "desktopInstallation": {
+      "status": "observed",
+      "evidence": [
+        "receipts/desktop-install-result.json",
+        "receipts/desktop-installed-integrity.json",
+        "receipts/desktop-preservation-check.json"
+      ],
+      "existingInstallationReplaced": false,
+      "repairedBuildNormalLaunch": "pending"
+    },
+    "desktopFirstOpen": {
+      "status": "observed",
+      "evidence": [
+        "receipts/desktop-first-launch.json",
+        "receipts/desktop-first-open-gate.json",
+        "receipts/u10-desktop-candidate-start.json"
+      ],
+      "repairedCandidateReopen": "Observed in the separate packaged profile; normal installed entry remains pending."
+    },
+    "fullDaemonSuite": {
+      "status": "failed",
+      "exit": 1,
+      "passed": 17096,
+      "failed": 3,
+      "skipped": 5,
+      "todo": 5,
+      "filesPassed": 1033,
+      "filesFailed": 3,
+      "filesSkipped": 2,
+      "classification": "Two exact documented failures and one activity-ordering variant not reproduced on the bounded baseline probe.",
+      "evidence": "resume-final-checkpoint.json"
+    },
+    "resultPreviewAfterLaterMerge": {
+      "status": "observed-after-fix",
+      "evidence": [
+        "runtime-observations.json",
+        "live-limitations.json"
+      ]
+    },
+    "postMergeProgressLabel": {
+      "status": "observed-after-fix-and-restart",
+      "evidence": [
+        "runtime-observations.json",
+        "screenshots/index.json"
+      ]
+    },
+    "cleanup": {
+      "status": "scoped-preservation-confirmed",
+      "earlierFixtureCleanup": [
+        "receipts/u10-runtime-final-cleanup.json",
+        "receipts/u10-runtime-browser-cleanup.json"
+      ],
+      "currentReplacementKeptRunning": true,
+      "reason": "Owner requested keeping the current working instance and pausing interactive checks.",
+      "evidence": [
+        "protected-state.json",
+        "receipts/u10-desktop-paused-preservation.json",
+        "receipts/desktop-preservation-check.json"
+      ]
+    },
+    "reviewsTaskSelection": {
+      "status": "observed",
+      "evidence": [
+        "runtime-observations.json",
+        "screenshots/runtime/14-historical-task-b-settled.png"
+      ],
+      "sourceChange": false
+    },
+    "missingBoundSeatRecovery": {
+      "status": "observed-after-fix",
+      "evidence": [
+        "receipts/u10-runtime-stale-seat-observation.json",
+        "receipts/u10-runtime-stale-seat-review.json",
+        "runs.json"
+      ]
+    },
+    "evidenceBundle": {
+      "status": "verified-with-recorded-limitations",
+      "manifest": "manifest.json",
+      "privacy": "privacy-check.json",
+      "history": "history/pre-plan-audit/index.json",
+      "latestCheckpoint": "resume-final-checkpoint.json"
+    },
+    "desktopSignIn": {
+      "status": "observed-after-fix",
+      "evidence": [
+        "receipts/desktop-sign-in-after-fix.json",
+        "receipts/desktop-signed-in.json",
+        "verification/checks.json"
+      ]
+    },
+    "desktopNativeFolderAndCreate": {
+      "status": "partial",
+      "nativePicker": "Cancellation, mapped selection and focus restoration observed in the isolated packaged profile.",
+      "createScope": "No additional project Create or upload performed; the working owner project remains out of scope.",
+      "evidence": [
+        "desktop-observations.json",
+        "resume-final-checkpoint.json"
+      ]
+    },
+    "desktopWindowDragAndClose": {
+      "status": "observed-in-isolated-packaged-profile",
+      "evidence": "resume-final-checkpoint.json",
+      "normalInstalledLaunchAccepted": false
+    },
+    "benchmarkRecreation": {
+      "status": "passed-bounded-comparison",
+      "evidence": "resume-final-checkpoint.json"
+    }
+  },
+  "ownerActions": "owner-actions.json",
+  "workerReports": "worker-reports.json",
+  "screenshots": "screenshots/index.json",
+  "review": "review.json",
+  "privacy": {
+    "rawDatabaseIncluded": false,
+    "nativeTranscriptsIncluded": false,
+    "credentialStoresIncluded": false,
+    "cookiesAndHeadersIncluded": false
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "pullRequestOpened": false,
+    "merged": false,
+    "installedAppReplaced": false,
+    "initialSyntheticUploadsOnly": true,
+    "installedCandidateSeparately": true,
+    "currentOwnerProjectOutOfScope": true
+  },
+  "documentation": "documentation-verification.json",
+  "privacyCheck": "privacy-check.json",
+  "buildOutputNote": {
+    "observation": "Repository packaging checks left source-workspace CLI imports pointing at staged package output.",
+    "resolution": "A normal CLI workspace build restored the imports; CLI version, isolated restart and final stop all passed.",
+    "sourceChange": false,
+    "evidence": [
+      "verification/checks.json",
+      "receipts/u10-result-preview-restart-2.json",
+      "receipts/u10-final-cleanup.json",
+      "receipts/u10-runtime-final-cleanup.json"
+    ]
+  },
+  "runtimeEvidence": "runtime-observations.json",
+  "history": "history/pre-plan-audit/index.json",
+  "finalVerification": "verification/final-index.json",
+  "eventsScope": "events-scope.json",
+  "closeout": "The reference-style task workspace, visible ink-wash backdrop and native reconnect candidate are implemented. The recreated benchmark passed all frozen checks, merged locally through the product and retained its merged state across restart. Current documentation checks and smoke passed. The normal launch entry, working-profile update and owner-daemon refresh remain pending the extra credential-confirmation decision. No U10 commit, push or merge was made.",
+  "desktopEvidence": "desktop-observations.json",
+  "evidenceScopes": {
+    "priorSyntheticFlows": [
+      "browser-observations.json",
+      "runtime-observations.json",
+      "runs.json",
+      "rosters.json",
+      "telemetry.json",
+      "owner-actions.json",
+      "events-scope.json"
+    ],
+    "currentDesktop": "desktop-observations.json",
+    "currentOwnerProject": "excluded; not inspected during closeout"
+  },
+  "evidenceFinalizedAt": "2026-11-07T15:29:13.200306+00:00",
+  "latestPlanAudit": "plan-status.json",
+  "previousCheckpoint": {
+    "checkedAt": "2026-11-07T15:26:36.114456+00:00",
+    "acceptance": "history/pre-command-workspace/acceptance.json",
+    "note": "Earlier source, runtime and desktop records retain their original dates and scopes."
+  },
+  "latestCheckpoint": "resume-final-checkpoint.json"
+}

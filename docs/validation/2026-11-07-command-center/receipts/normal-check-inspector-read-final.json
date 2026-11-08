@@ -1,0 +1,13 @@
+{
+  "check": "inspector-read-final",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "test/team-read-model.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 5.39
+}

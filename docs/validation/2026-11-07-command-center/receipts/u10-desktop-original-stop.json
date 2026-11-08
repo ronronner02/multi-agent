@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-11-07T13:15:32.317044+00:00",
+  "action": "owner-authorized original daemon stop",
+  "status": "passed",
+  "signal": "SIGTERM",
+  "signalsSent": 1,
+  "originalPid": 1179,
+  "originalStartTicks": 68421,
+  "backupCreated": true,
+  "backupPrivate": true,
+  "originalRecordsUnchanged": true,
+  "records": {
+    "team_runs": {
+      "count": 5,
+      "sha256": "e95ed6c88dfcb9accc28de9bc0f643257967435bd34b1ad2c5f3fba6215fd753",
+      "states": {
+        "approved": 3,
+        "cancel_requested": 2
+      }
+    },
+    "team_attempts": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "states": {}
+    },
+    "queue_items": {
+      "count": 3,
+      "sha256": "ca59d2c156c4ae22e7c9091a1afbe80b186db1ca2c0723364ee1677ae8c7ae73",
+      "states": {
+        "pending": 3
+      }
+    }
+  },
+  "idleTerminalPreserved": true,
+  "protectedConfigUnchanged": true,
+  "port7433Free": true,
+  "shutdown": {
+    "schema": "openrig.daemon-shutdown/v1",
+    "pid": 1179,
+    "startedAt": "2026-11-07T13:15:32.117Z",
+    "completedAt": "2026-11-07T13:15:32.194Z",
+    "outcome": "clean",
+    "phase": "complete",
+    "failures": []
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "instrumentedFile": "engine/packages/daemon/src/adapters/worker-launch.ts",
+  "workspace": "daemon-suite",
+  "beforeSha256": "7ecb3c4c2f02f2f8e6c3e8b1559e1b0bf4baf9fea938069d9e148f19570cd798",
+  "restoredSha256": "7ecb3c4c2f02f2f8e6c3e8b1559e1b0bf4baf9fea938069d9e148f19570cd798",
+  "restored": true
+}

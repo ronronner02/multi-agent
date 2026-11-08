@@ -27,12 +27,12 @@ export interface TeamChatMessage {
   runId: string;
   sender: "owner" | "lead";
   /**
-   * U6 — `decision` is the lead asking the owner to choose; `text` is everything else.
+   * `decision` asks the owner to choose; `confirmation` records an accepted owner action.
    *
    * The two are the same row because they are the same conversation: a decision is a lead
    * message with two-to-four options and an answer, and the chat lists it where the lead said it.
    */
-  kind: "text" | "decision";
+  kind: "text" | "decision" | "confirmation";
   body: string;
   /** The choices a decision offers, in the lead's order; null on every other message. */
   options: string[] | null;
@@ -64,7 +64,7 @@ export function chatBody(value: unknown, field: string): string {
 function rowToMessage(row: { id: string; runId: string; sender: string; kind: string; body: string; optionsJson: string | null;
   answeredBy: string | null; attemptId: string | null; deliveredAttempt: string | null; createdAt: string }): TeamChatMessage {
   return { id: row.id, runId: row.runId, sender: row.sender === "lead" ? "lead" : "owner",
-    kind: row.kind === "decision" ? "decision" : "text", body: row.body,
+    kind: row.kind === "decision" || row.kind === "confirmation" ? row.kind : "text", body: row.body,
     // The options are this row's own bytes, written by the daemon when it stored the decision.
     // A row whose JSON the daemon cannot read is still a message, so it renders as one.
     options: row.optionsJson === null ? null : parseOptions(row.optionsJson),
@@ -84,10 +84,10 @@ const COLUMNS = `id, run_id AS runId, sender, kind, body, options_json AS option
 
 /** Append one owner message. Called inside the caller's transaction; it never opens its own. */
 export function appendChatMessage(db: Database.Database, input: {
-  id: string; runId: string; body: string; createdAt: string;
+  id: string; runId: string; body: string; createdAt: string; kind?: "confirmation";
 }): TeamChatMessage {
-  db.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, created_at)
-    VALUES (?, ?, 'owner', ?, ?)`).run(input.id, input.runId, input.body, input.createdAt);
+  db.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, kind, body, created_at)
+    VALUES (?, ?, 'owner', ?, ?, ?)`).run(input.id, input.runId, input.kind ?? "text", input.body, input.createdAt);
   return getChatMessage(db, input.id)!;
 }
 
@@ -107,7 +107,7 @@ export function listChatMessages(db: Database.Database, runId: string): TeamChat
 /** Owner messages no lead prompt has carried yet, oldest first. */
 export function pendingOwnerMessages(db: Database.Database, runId: string): TeamChatMessage[] {
   const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages
-    WHERE run_id = ? AND sender = 'owner' AND delivered_attempt IS NULL ORDER BY rowid`).all(runId) as
+    WHERE run_id = ? AND sender = 'owner' AND kind = 'text' AND delivered_attempt IS NULL ORDER BY rowid`).all(runId) as
     Array<Parameters<typeof rowToMessage>[0]>;
   return rows.map(rowToMessage);
 }
@@ -115,7 +115,7 @@ export function pendingOwnerMessages(db: Database.Database, runId: string): Team
 /** One extra slot belongs only to this run's lead carrying an owner message. */
 export function ownerMessageSlot(db: Database.Database, runId: string, taskId: string, attemptId?: string): number {
   if (runLeadTask(db, runId)?.taskId !== taskId) return 0;
-  return db.prepare(`SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'owner'
+  return db.prepare(`SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'owner' AND kind = 'text'
     AND (delivered_attempt IS NULL OR delivered_attempt = ?) LIMIT 1`).get(runId, attemptId ?? null) ? 1 : 0;
 }
 
@@ -137,11 +137,11 @@ function returnUnansweredMessages(db: Database.Database, runId: string, attemptI
  */
 export function takeOwnerMessages(db: Database.Database, runId: string, attemptId: string): TeamChatMessage[] {
   const pending = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages
-    WHERE run_id = ? AND sender = 'owner' AND (delivered_attempt IS NULL OR delivered_attempt = ?) ORDER BY rowid`)
+    WHERE run_id = ? AND sender = 'owner' AND kind = 'text' AND (delivered_attempt IS NULL OR delivered_attempt = ?) ORDER BY rowid`)
     .all(runId, attemptId) as Array<Parameters<typeof rowToMessage>[0]>;
   if (!pending.length) return [];
   db.prepare(`UPDATE team_chat_messages SET delivered_attempt = ?
-    WHERE run_id = ? AND sender = 'owner' AND delivered_attempt IS NULL`).run(attemptId, runId);
+    WHERE run_id = ? AND sender = 'owner' AND kind = 'text' AND delivered_attempt IS NULL`).run(attemptId, runId);
   return pending.map(rowToMessage);
 }
 
@@ -213,10 +213,15 @@ export function runLeadTask(db: Database.Database, runId: string): { taskId: str
  * which the daemon stores as its reply. The bound is the message's own, so a long message is
  * delivered whole rather than cut where its instruction is.
  */
-export function leadChatTurnNote(messages: readonly TeamChatMessage[]): string | null {
+export function leadChatTurnNote(messages: readonly TeamChatMessage[], history: readonly TeamChatMessage[] = []): string | null {
   if (!messages.length) return null;
   return ["The owner wrote to you in the run's chat:",
-    ...messages.map(message => `Owner: ${message.body}`),
+    ...messages.map(message => {
+      const question = history.find(turn => turn.kind === "decision" && turn.answeredBy === message.id);
+      return question ? `Question being answered: ${question.body}\nOptions: ${JSON.stringify(question.options)}\nOwner: ${message.body}`
+        : `Owner: ${message.body}`;
+    }),
+    "Brief public progress updates are shown live while you work. Describe current actions and results, not private reasoning.",
     "Answer the owner in your final message. They read that message as your reply."].join("\n\n");
 }
 
@@ -238,6 +243,7 @@ export interface LeadTurnEndDependencies {
    * boundary refuses, and the turn's message is still stored.
    */
   readEscalation?: (runId: string, taskId: string) => import("./lead-proposal.js").LeadEscalation | null;
+  captureDocuments?: (attempt: { id: string; runId: string; qitemId: string | null; role: string }) => void;
   /** The daemon's dispatch, read at use so a host that composes it later is still the owner. */
   dispatch: () => ((runId: string, taskId: string) => Promise<void>) | undefined;
   now?: () => Date;
@@ -282,6 +288,7 @@ export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (atte
   };
   return async (attempt) => {
     if (attempt.role !== "lead") return;
+    dependencies.captureDocuments?.(attempt);
     // One reader for either client: a Claude turn's view records its stream-json `result` in
     // this file and a Codex turn writes it through `-o`, so a Codex lead's reply is chat too.
     const body = dependencies.turnStateRoot

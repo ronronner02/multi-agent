@@ -3,6 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import {
   TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, text, type ControlActor,
 } from "../contracts/team-control.js";
+import { readTeamModelSettings, saveTeamModelSettings, TeamModelError } from "../domain/team-model-policy.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import { bootstrapProject, listProjectDirectories, previewProject, ProjectBootstrapError } from "../domain/project-bootstrap.js";
 import { GithubCliError, type GithubCli } from "../domain/github-cli.js";
@@ -51,6 +52,19 @@ export function teamSetupRoutes(
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, teams: listTeams(rigRepo.db) });
   });
 
+  app.get("/teams/:teamId/settings", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, settings: readTeamModelSettings(rigRepo.db, c.req.param("teamId")) });
+  });
+  app.put("/teams/:teamId/settings", async c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, settings: saveTeamModelSettings(rigRepo.db, c.req.param("teamId"), await c.req.json()) });
+  });
+
   app.post("/teams", async (c) => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner create is required." }, 403);
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
@@ -81,6 +95,7 @@ export function teamSetupRoutes(
     if (error instanceof TeamContractError || error instanceof SyntaxError) {
       return c.json({ code: "invalid_team_contract", error: "The team request is malformed or incompatible." }, 400);
     }
+    if (error instanceof TeamModelError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSetupError) {
       const status = error.code === "team_exists" || error.code === "team_name_taken" ? 409 : 400;
       return c.json({ code: error.code, error: error.message }, status);

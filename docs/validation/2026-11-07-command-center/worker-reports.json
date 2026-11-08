@@ -1,0 +1,7 @@
+{
+  "observedReports": 0,
+  "taskAuthorityRowsExamined": 17,
+  "records": [],
+  "scope": "Persisted evidence.taskReport, the same authority used by the read projection.",
+  "limitation": "Zero observed reports does not demonstrate fewer escalations."
+}

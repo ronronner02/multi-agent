@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createInterfaceI18n } from "@openrig/i18n";
@@ -7,7 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { Overview, verifiedChecks } from "../overview.js";
 import { observedTokens } from "../hooks.js";
-import type { ChatState, IntegrationState } from "../clients.js";
+import { readIntegration, type ChatState, type IntegrationState } from "../clients.js";
 import { attempt, read, RUN_ID, task } from "./fixtures.js";
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
@@ -26,14 +26,27 @@ async function show(snapshot: TeamOwnerRead = read(), options: { integration?: I
   const language = await createInterfaceI18n({ language: options.locale ?? "en" });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
   const onOpenChat = vi.fn(), onOpenTask = vi.fn(), onOpenTasks = vi.fn();
-  const view = render(<QueryClientProvider client={client}><I18nextProvider i18n={language.instance}>
-    <Overview read={snapshot} chat={options.chat ?? noChat} integration={options.integration ?? integration}
+  const content = (next: TeamOwnerRead) => <QueryClientProvider client={client}><I18nextProvider i18n={language.instance}>
+    <Overview read={next} chat={options.chat ?? noChat} integration={options.integration ?? integration}
       onOpenChat={onOpenChat} onOpenTask={onOpenTask} onOpenTasks={onOpenTasks} />
-  </I18nextProvider></QueryClientProvider>);
-  return { ...view, onOpenChat, onOpenTask, onOpenTasks };
+  </I18nextProvider></QueryClientProvider>;
+  const view = render(content(snapshot));
+  return { ...view, rerenderRead: (next: TeamOwnerRead) => view.rerender(content(next)), onOpenChat, onOpenTask, onOpenTasks };
 }
 
 describe("Overview", () => {
+  it("keeps the task list, a non-modal inspector and honest system status together", async () => {
+    await show(read({ tasks: [task(), task({ taskId: "second", displayName: "Keyboard access", stage: "running" })] }));
+    const list = screen.getByRole("region", { name: "Task list" });
+    fireEvent.click(within(list).getByRole("button", { name: /Keyboard access/ }));
+    const inspector = screen.getByRole("region", { name: "Task detail" });
+    expect(within(inspector).getByRole("heading", { name: "Keyboard access" })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const health = screen.getByRole("region", { name: "System status" });
+    expect(within(health).getAllByText("Unknown")).toHaveLength(6);
+    expect(within(health).queryByText("OK")).toBeNull();
+  });
+
   it("keeps the integration commit list and task links in folded details", async () => {
     const { onOpenTask } = await show(read(), { integration: { ...integration,
       commits: [{ hash: "a".repeat(40), subject: "Status filter", task: "task-1" }] } });
@@ -44,6 +57,29 @@ describe("Overview", () => {
     fireEvent.click(within(history).getByRole("button", { name: "Status filter" }));
     expect(onOpenTask).toHaveBeenCalledWith("task-1");
     expect(history.querySelectorAll("li")).toHaveLength(1);
+  });
+
+  it("shows completed work by default and keeps the result before supporting status cards", async () => {
+    await show(read({ tasks: [task({ stage: "done", queueState: "done" })] }), { integration: {
+      ...integration, tasksDone: true, commits: [{ hash: "a".repeat(40), subject: "Status filter", task: "task-1" }],
+    } });
+    expect(screen.getByRole("combobox", { name: "Task status" })).toHaveProperty("value", "all");
+    expect(within(screen.getByRole("region", { name: "Task list" })).getByRole("button", { name: /Status filter/ })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Commits" }).compareDocumentPosition(screen.getByRole("region", { name: "System status" }))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("follows completion until the owner chooses a specific task filter", async () => {
+    const snapshot = read({ tasks: [task({ stage: "running" })] });
+    const view = await show(snapshot);
+    const filter = screen.getByRole("combobox", { name: "Task status" });
+    expect(filter).toHaveProperty("value", "active");
+    view.rerenderRead({ ...snapshot, tasks: [task({ stage: "done", queueState: "done" })] });
+    expect(filter).toHaveProperty("value", "all");
+    fireEvent.change(filter, { target: { value: "active" } });
+    view.rerenderRead({ ...snapshot, tasks: [task({ stage: "done", queueState: "done" })] });
+    expect(filter).toHaveProperty("value", "active");
+    expect(screen.queryByRole("region", { name: "Task detail" })).toBeNull();
   });
 
   it("keeps retired seats out of the active fleet", async () => {
@@ -57,7 +93,7 @@ describe("Overview", () => {
   it("leaves healthy owner attention empty and keeps worker reports with the lead", async () => {
     await show(read({ tasks: [task({ stage: "lead/report", queueState: "blocked" })] }));
     expect(screen.queryByRole("region", { name: "Needs attention" })).toBeNull();
-    expect(within(screen.getByRole("region", { name: "Active tasks" })).getByText("Waiting on lead")).toBeTruthy();
+    expect(within(within(screen.getByRole("region", { name: "Task list" })).getByRole("list")).getByText("Waiting on lead")).toBeTruthy();
   });
 
   it("opens the existing chat for plan approval and uses the same decision count", async () => {
@@ -104,6 +140,19 @@ describe("Overview", () => {
     expect(document.body.textContent).not.toContain("task-private-id");
   });
 
+  it.each([true, false, null, undefined])("uses observed Merge completion after refresh, not readiness: %s", async (merged) => {
+    const decoded = await readIntegration(vi.fn().mockResolvedValue({ integration: {
+      ...integration, tasksDone: true, merge: { possible: true, reason: null, merged },
+    } }), RUN_ID);
+    expect(decoded.merge.merged).toBe(merged ?? null);
+    await show(read({ tasks: [task({ stage: "done", queueState: "done" })] }), { integration: decoded });
+    const phase = within(screen.getByRole("region", { name: "Verified progress" })).getByText("Merge").closest("li");
+    expect(phase?.getAttribute("data-state")).toBe(merged === true ? "complete" : "awaiting-decision");
+    const button = screen.getByRole("button", { name: merged === true ? "Merged" : "Merge" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(merged === true);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("confirms Cancel and sends the existing run-level command only after confirmation", async () => {
     await show();
     vi.mocked(window.confirm).mockReturnValueOnce(false);
@@ -117,18 +166,35 @@ describe("Overview", () => {
     });
   });
 
-  it("shows the observed cancellation rather than a pending request after the daemon stops the run", async () => {
+  it("shows observed cancellation only for the run that was canceled", async () => {
     request.mockResolvedValue({ status: "observed", value: { state: "canceled" } });
-    await show();
+    const view = await show();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect((await screen.findByRole("status")).textContent).toBe("Canceled");
+    const next = read(); next.runId = "next-run"; next.run = { ...next.run, id: next.runId };
+    view.rerenderRead(next);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not carry a pending action or its late result into another run", async () => {
+    let finish!: (value: unknown) => void;
+    request.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const view = await show();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    const next = read(); next.runId = "next-run"; next.run = { ...next.run, id: next.runId };
+    view.rerenderRead(next);
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => finish({ status: "observed", value: { state: "canceled" } }));
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("keeps unknown progress distinct from verified criteria without inventing an estimate", async () => {
     const tasks = [task({ stage: "queued" }), task({ taskId: "second", displayName: "Verified task", stage: "running",
       criteria: { verified: 2, total: 4, source: "evidence" } })];
     await show(read({ tasks }));
-    expect(screen.getByText("Progress unknown")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Task list" })).getByText("Progress unknown")).toBeTruthy();
     const bar = screen.getByRole("progressbar") as HTMLProgressElement;
     expect(bar.value).toBe(2); expect(bar.max).toBe(4);
     expect(verifiedChecks(tasks)).toBeNull();
@@ -157,7 +223,12 @@ describe("Overview", () => {
   it("localises the restored screens without exposing identifiers", async () => {
     await show(read({ tasks: [task({ stage: "queued" })] }), { locale: "zh-CN" });
     expect(screen.getByRole("heading", { name: "总览" })).toBeTruthy();
-    expect(screen.getByText("进度未知")).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/tasks\.|overview\.|progress\.|qitem-|task-1|3f2b0c9e/);
+    expect(within(screen.getByRole("region", { name: "任务列表" })).getByText("进度未知")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/tasks\.|overview\.|progress\./);
+    for (const element of document.querySelectorAll(".ui-overview *")) {
+      if (element.children.length === 0 && /qitem-|task-1|3f2b0c9e/.test(element.textContent ?? "")) {
+        expect(element.closest("details")).not.toBeNull();
+      }
+    }
   });
 });

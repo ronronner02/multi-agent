@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-07T13:28:29.137429+00:00",
+  "newPid": 2806685,
+  "oldCandidatePid": 2787973,
+  "oldCandidateStopped": true,
+  "cleanShutdown": {
+    "schema": "openrig.daemon-shutdown/v1",
+    "pid": 2787973,
+    "startedAt": "2026-11-07T13:27:53.562Z",
+    "completedAt": "2026-11-07T13:27:53.567Z",
+    "outcome": "clean",
+    "phase": "complete",
+    "failures": []
+  },
+  "profileUnchanged": true,
+  "engineCwd": "<acceptance-worktree>",
+  "compiledGithubParserSha256": "13aa8e96616c8d62bdbe010fbe97350191f1fa46062a42e75fafd17feb7eb581",
+  "sourceGithubParserSha256": "8615ecb3db5fe240008b0ada99a31427dfcb144933630bdeff01c4471208be40"
+}

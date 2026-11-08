@@ -24,8 +24,8 @@ import { resolveReadinessTimeoutMs } from "./readiness-timeout.js";
 import { SettingsStore } from "./user-settings/settings-store.js";
 import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
-import { agentTurnOutputPaths, continuationNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
-import { leadChatTurnNote, takeOwnerMessages } from "./lead-chat.js";
+import { agentTurnOutputPaths, continuationNote, leadProgressNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
+import { leadChatTurnNote, listChatMessages, takeOwnerMessages } from "./lead-chat.js";
 
 /**
  * MVP — whether this launch starts a headless turn rather than an interactive session.
@@ -75,6 +75,8 @@ export interface StartupInput {
    * ambiguous seat, and a real review turn would run with no attempt behind it.
    */
   taskId?: string;
+  /** Task IDs repeat across project records; a dispatched launch names both identities. */
+  runId?: string;
   /** Resume token for restore path. Mutually exclusive with forkSource. */
   resumeToken?: string;
   /**
@@ -414,7 +416,7 @@ export class StartupOrchestrator {
               if (receiptSession) this.eventBus.emit({ type: "managed.attempt.receipt",
                 rigId: input.rigId, nodeId: input.nodeId, sessionId: input.sessionId,
                 runId: launchResult.managedSession.runId,
-                sessionName: receiptSession, receipt: launchResult.managedSession });
+                sessionName: receiptSession, requestedModel: input.binding.model ?? null, receipt: launchResult.managedSession });
             }
             if (input.adapter.runtime === "claude-code" && launchResumeToken?.trim()) {
               await this.recordClaudeResumeLaunch(input.sessionId, input.binding.tmuxPane ?? input.binding.tmuxSession, launchResumeToken.trim(), launchResult.launchedProcess);
@@ -833,14 +835,15 @@ export class StartupOrchestrator {
     // client starts. Anything the owner sends afterwards is pending, and the turn-end owner
     // starts the next turn for it.
     const chat = assignment.role === "lead"
-      ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attempt.context.projection.attemptId))
+      ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attempt.context.projection.attemptId), listChatMessages(this.db, runId))
       : null;
     return managedTurnPrompt({ identity: identityAction?.value ?? "", bundle, runId, assignment, taskBody: task.body,
       outputs, permissions, instructions: turnInstructions(attempt.context),
       ...(["implementer", "reviewer"].includes(assignment.role) ? {
         taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.context.projection.attemptId).taskReport,
       } : {}),
-      continuation: [continuationNote(this.db, runId, assignment.taskId, assignment.role), chat].filter(Boolean).join("\n\n") || null });
+      continuation: [continuationNote(this.db, runId, assignment.taskId, assignment.role), chat,
+        assignment.role === "lead" ? leadProgressNote(this.db, runId) : null].filter(Boolean).join("\n\n") || null });
   }
 
   private async deliverInitialSessionPrompt(

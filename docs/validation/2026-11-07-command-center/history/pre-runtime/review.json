@@ -1,0 +1,66 @@
+{
+  "rootReview": {
+    "status": "complete-for-current-diff",
+    "scope": [
+      "README.md",
+      "desktop/README.md",
+      "docs/known-failures.md",
+      "docs/operations.md",
+      "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "engine/packages/daemon/src/team-control-surface.ts",
+      "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "engine/packages/daemon/test/integration-branch.test.ts",
+      "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "engine/packages/daemon/test/run-recovery.test.ts",
+      "engine/packages/daemon/test/team-read-model.test.ts",
+      "engine/packages/i18n/src/catalogs/en.json",
+      "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "engine/packages/ui/src/team/chat-panel.tsx",
+      "engine/packages/ui/src/team/clients.ts",
+      "engine/packages/ui/src/team/overview.tsx",
+      "docs/amendments/2026-11-07-command-center-acceptance.md",
+      "docs/validation/2026-11-07-command-center/"
+    ],
+    "method": "Manual source, test and documentation diff review against the selected plan and amendments.",
+    "newCodeFindings": [],
+    "runtimeObservations": "live-limitations.json",
+    "claims": "No completed desktop acceptance or all-green full-suite claim.",
+    "evidenceReview": {
+      "status": "complete",
+      "checks": [
+        "Copied JSON/JSONL parsing",
+        "Scoped exact-value and credential-pattern scan",
+        "Current product/test hashes equal the full-suite candidate",
+        "Changed-doc local links and anchors resolve",
+        "Original daemon and protected dirty checkout match recorded identities",
+        "Task-only browser, daemon and tmux resources closed"
+      ],
+      "limitations": "Known failures and live limitations remain; independent review coverage is not extended."
+    }
+  },
+  "independentReview": {
+    "receipt": "receipts/u10-independent-review.json",
+    "frozenManifestSha256": "4b049e818ac20ab34a3e59489bc657fd334319319965344813dd51c2d67776da",
+    "allFrozenFilesStillMatch": true,
+    "scope": "The original approval, candidate-base persistence and telemetry wiring fixes.",
+    "notCovered": [
+      "later run-action state fix",
+      "later native completion projection fix",
+      "later managed-launch fixture adjustment",
+      "final evidence bundle"
+    ]
+  },
+  "simplification": {
+    "sourceChanges": false,
+    "reason": "The five production changes are narrow existing-owner repairs. No unused helper or abandoned source was found in the diff."
+  },
+  "shipping": {
+    "committed": false,
+    "pushed": false,
+    "pullRequestOpened": false,
+    "merged": false
+  }
+}

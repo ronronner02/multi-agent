@@ -1,0 +1,166 @@
+[
+  {
+    "sample": "initial",
+    "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+    "proposal": {
+      "plan": {
+        "content": "# Plan\n\nGoal: Build a small dependency-free stock utility library (ES modules, Node built-ins only)\nwith two independent functions, `normalizeSku` and `summarizeStock`, each with its own\n`node:test` suite, validated by `npm test`.\n\n## Constraints (all tasks)\n\n- Write only under `src/`. Do not touch `package.json`, `README.md`, `.gitignore`, `plan.md`\n  or anything else outside `src/`.\n- No dependencies, no network calls, no remote pushes.\n- Tests use only `node:test` and `node:assert/strict`.\n- All data is synthetic.\n- `npm test` runs `node --test src/*.test.mjs`, so each test file must be named `src/*.test.mjs`.\n\n## Shared SKU format\n\nA canonical SKU matches `^[A-Z0-9]+(-[A-Z0-9]+)*$`: one or more groups of ASCII uppercase\nletters/digits, joined by single hyphens. No leading, trailing or doubled hyphens. No other\ncharacters, including non-ASCII letters and internal whitespace.\n\n## Tasks and order\n\nTasks A and B are independent: neither imports the other's module or reads the other's\nfiles, so both run concurrently. Task C (review) runs after both finish.\n\n### Task A: normalizeSku (implementer, Claude Code)\n\nFiles (exclusive to this task):\n- `src/normalize-sku.mjs`\n- `src/normalize-sku.test.mjs`\n\nBehaviour: named export `normalizeSku(value)`.\n- If `value` is not a primitive string (`typeof value !== \"string\"`), throw `TypeError`.\n- Trim surrounding whitespace with `String.prototype.trim`.\n- Uppercase ASCII letters `a-z` only. Leave other characters as they are; any non-ASCII\n  character then fails validation.\n- If the result is empty or does not match the canonical SKU format, throw `RangeError`.\n- Return the canonical string.\n\nTests must cover at least: trimming and uppercasing (`\"  ab-12 \"` -> `\"AB-12\"`); an\nalready-canonical value; digits only; a single character; non-strings (`undefined`, `null`,\na number, a `String` object, an array) throw `TypeError`; empty and whitespace-only strings\nthrow `RangeError`; leading, trailing and doubled hyphens, internal spaces, underscores and\nother punctuation, and non-ASCII letters (for example `\"é\"`, and `\"ß\"`, which must not be\nuppercased to `\"SS\"`) throw `RangeError`.\n\nCheck: `node --test src/normalize-sku.test.mjs` passes, then `npm test` passes.\n\n### Task B: summarizeStock (implementer, Codex)\n\nFiles (exclusive to this task):\n- `src/summarize-stock.mjs`\n- `src/summarize-stock.test.mjs`\n\nBehaviour: named export `summarizeStock(entries)`.\n- `entries` must be an array of `{ sku, quantity }` objects. `sku` must already be a\n  canonical SKU (validated against the shared format; no trimming or case folding).\n  `quantity` must be a nonnegative safe integer (`Number.isSafeInteger(q) && q >= 0`).\n- Error types:\n  - `TypeError`: `entries` is not an array; an entry is not a non-null, non-array object;\n    `sku` is not a string; `quantity` is not a number.\n  - `RangeError`: `sku` is a string that does not match the canonical format (including the\n    empty string); `quantity` is negative, non-integer, `NaN`, infinite or above\n    `Number.MAX_SAFE_INTEGER`; a per-SKU aggregate or `totalQuantity` would exceed\n    `Number.MAX_SAFE_INTEGER`.\n- Aggregate duplicate SKUs by summing quantities. Zero-quantity SKUs stay in `items`.\n- Sort `items` by ASCII (UTF-16 code unit) SKU order, i.e. plain `<` comparison, not\n  `localeCompare`.\n- Return `{ items, totalQuantity, distinctSkus }`, where `items` is a new array of new\n  `{ sku, quantity }` objects, `totalQuantity` is the sum of all quantities and\n  `distinctSkus` is `items.length`.\n- An empty array returns `{ items: [], totalQuantity: 0, distinctSkus: 0 }`.\n- Do not mutate the input array or its entries.\n- Do not import `src/normalize-sku.mjs`, so Task B does not depend on Task A.\n\nTests must cover at least: empty list; a single entry; duplicates aggregated; ASCII ordering\n(for example digits sort before letters, and `\"A-1\"` vs `\"A1\"` vs `\"AB\"`); zero quantity;\ninput not mutated; each `TypeError` and `RangeError` case above; overflow when two\nquantities that are each safe sum past `Number.MAX_SAFE_INTEGER`, both for one SKU and across\ndifferent SKUs.\n\nCheck: `node --test src/summarize-stock.test.mjs` passes, then `npm test` passes.\n\n### Task C: review (reviewer, Claude Code), after A and B\n\nFiles: read-only. The reviewer writes nothing under `src/`.\n\nCheck:\n- `npm test` passes on the combined result, with both test files discovered.\n- Each implementation matches the behaviour and error types above. The reviewer spot-checks\n  edge cases beyond the submitted tests and reports any gaps.\n- `git diff --name-only` against the planning commit lists only the four `src/` files above\n  (and optionally the removal of `src/.gitkeep`). `package.json` is unchanged and there are\n  no new dependencies, network calls or lockfiles.\n- Report findings as pass or rework per task, with evidence.\n\n## Roster\n\nThe lead stays as is. Seats in `lead-roster.json`:\n- implementer, claude-code: Task A\n- implementer, codex: Task B\n- reviewer, claude-code: Task C\n",
+        "hash": "sha256:3d7d705a16ff49cea5e3ad3d242899138f082e03ad45b7b864508620509d0391"
+      },
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "error": null
+    },
+    "approval": null
+  },
+  {
+    "sample": "repeat",
+    "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+    "proposal": {
+      "plan": {
+        "content": "# Plan\n\nGoal: Acceptance repeat: dependency-free stock utilities. Build two independent ES modules,\n`normalizeSku` and `summarizeStock`, each with its own `node:test` suite, using only Node\nbuilt-ins and synthetic data. Leave the result ready for the owner's local Merge action.\n\n## Constraints (all tasks)\n\n- Implementation and test writes stay in the four assigned `src/` files below. Leave\n  `package.json`, `README.md`, `.gitignore`, `src/.gitkeep` and every other existing project\n  file unchanged. Planning files (`plan.md`, `lead-roster.json`) are lead-owned.\n- ES modules and Node built-ins only. No dependencies, lockfiles, network calls or remote\n  pushes.\n- Tests use only `node:test` and `node:assert/strict`, with synthetic data.\n- `npm test` runs `node --test src/*.test.mjs`, so both suites are discovered by that glob.\n\nCanonical SKU format: `/^[A-Z0-9]+(-[A-Z0-9]+)*$/`.\n\n## Tasks and order\n\nTasks A and B are independent and run at the same time. Neither imports or reads the other's\nmodule. After each one finishes, the daemon creates its review for the reviewer seat.\n\n### Task A: normalizeSku (implementer, Claude Code)\n\nFiles: `src/normalize-sku.mjs`, `src/normalize-sku.test.mjs`.\n\nBehaviour: named export `normalizeSku(value)`.\n- `typeof value !== \"string\"` (including boxed `String` objects) throws `TypeError`.\n- Trim surrounding whitespace with `String.prototype.trim`.\n- Uppercase only ASCII `a-z`; leave every other character unchanged, so non-ASCII letters\n  such as `ß` never normalize into ASCII (no `\"SS\"`) and then fail validation.\n- If the result is empty or fails the canonical format, throw `RangeError`; otherwise return it.\n\nTests cover: canonical, digits-only and single-character input; trimming; case conversion;\nnon-strings (`undefined`, `null`, number, boolean, object, array, `new String(\"A\")`) throw\n`TypeError`; empty and whitespace-only strings throw `RangeError`; leading, trailing and\ndoubled hyphens; punctuation and underscores; internal spaces; non-ASCII input (`ß`, `é`).\n\nCheck: `node --test src/normalize-sku.test.mjs` and `npm test` both pass; the implementer\nsubmits both commands with their unedited output as evidence.\n\n### Task B: summarizeStock (implementer, Codex)\n\nFiles: `src/summarize-stock.mjs`, `src/summarize-stock.test.mjs`.\n\nBehaviour: named export `summarizeStock(entries)`.\n- `TypeError`: `entries` is not an array; an entry is null, a non-object or an array; `sku`\n  is not a string; `quantity` is not a number.\n- `RangeError`: `sku` is a string that fails the canonical format (including `\"\"`);\n  `quantity` is negative, non-integer, `NaN`, infinite or unsafe; a per-SKU sum or the total\n  exceeds `Number.MAX_SAFE_INTEGER`.\n- Aggregate duplicate SKUs; keep zero-quantity SKUs; sort by ASCII code-unit order (plain\n  `<`, not `localeCompare`).\n- Return a fresh `{ items: [{ sku, quantity }], totalQuantity, distinctSkus }` with new\n  item objects; `distinctSkus` is `items.length`. Empty input gives\n  `{ items: [], totalQuantity: 0, distinctSkus: 0 }`.\n- Never mutate the input. Do not import `src/normalize-sku.mjs`.\n\nTests cover: every `TypeError` and `RangeError` case above; ordering (digits before letters,\n`\"A-1\"` < `\"A1\"` < `\"AB\"`); duplicates; zero quantity; empty input; immutability of the input\narray and entries; overflow within one SKU and across different SKUs, plus sums exactly at\n`Number.MAX_SAFE_INTEGER` accepted.\n\nCheck: `node --test src/summarize-stock.test.mjs` and `npm test` both pass; the implementer\nsubmits both commands with their unedited output as evidence.\n\n### Review (reviewer, Claude Code), per finished task\n\nThe reviewer writes nothing. For each task it checks:\n- The behaviour and error types match this plan, including edge cases beyond the tests.\n- The change touches only that task's two assigned files; `package.json`, `README.md`,\n  `.gitignore`, `src/.gitkeep` and other files are unchanged; no dependencies, lockfiles,\n  network calls or non-`node:` imports; Task B does not import Task A.\n- Once both tasks are in, the combined `npm test` discovers and passes both suites.\n\nThe verdict is pass or rework, with commands and output as evidence. Nothing is pushed; the\nresult waits for the owner's local Merge.\n\n## Roster\n\nThe lead stays as is. `lead-roster.json` keeps the existing seats:\n- implementer, claude-code: Task A\n- implementer, codex: Task B\n- reviewer, claude-code: reviews of both tasks\n",
+        "hash": "sha256:85daa334f6df4ca6e61feb1c48caf03d2171bcc818b484de4a08a840aa9735ae"
+      },
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "error": null
+    },
+    "approval": {
+      "planHash": "sha256:85daa334f6df4ca6e61feb1c48caf03d2171bcc818b484de4a08a840aa9735ae",
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "renderedPlanMatched": true,
+      "sent": {
+        "protocolVersion": "1.0",
+        "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "actionId": "98f0c81b-e2e6-4739-adc8-3aa23ab474e9",
+        "expectedEntityVersion": 9,
+        "idempotencyKey": "225174a9-ad9b-41b6-ad71-9d2cf58f2296",
+        "payload": {
+          "rosterDigest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+        }
+      },
+      "httpStatus": 200,
+      "receipt": {
+        "status": "accepted",
+        "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "entityVersion": 10,
+        "replayed": false,
+        "effectMayStart": true,
+        "value": {
+          "bindingDigest": "sha256:2d859aac188a8979f9a506f24cbd336eb5790f6cb9dd99b5de48969ae62078f9",
+          "phase": "delivery",
+          "planRef": "plan.md"
+        },
+        "revisionTaskId": "task-1",
+        "reason": null,
+        "reasonKey": null
+      },
+      "at": "2026-11-07T08:27:56.206Z"
+    },
+    "submittedDigestMatchesDisplayed": true
+  },
+  {
+    "sample": "supplement",
+    "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+    "proposal": {
+      "plan": {
+        "content": "# Plan\n\nGoal: Synthetic integration check: compose the stock utilities. Add one test-only file that\nimports the existing `normalizeSku` (`src/normalize-sku.mjs`) and `summarizeStock`\n(`src/summarize-stock.mjs`) and tests them together on synthetic raw stock rows. Leave the\nresult for the owner's local Merge.\n\n## Constraints\n\n- The only delivery write is the new file `src/stock-integration.test.mjs`.\n- Do not modify `src/normalize-sku.mjs`, `src/summarize-stock.mjs`, their existing test files,\n  `src/.gitkeep`, `package.json`, `README.md`, `.gitignore` or any other existing file.\n  Planning files (`plan.md`, `lead-roster.json`) are lead-owned and separate.\n- Use only `node:test` and `node:assert/strict`, plus the two existing modules. No dependencies,\n  lockfiles, network calls, new remote repositories or pushes. All data is synthetic.\n- The file name matches `npm test`'s glob (`node --test src/*.test.mjs`), so it is discovered.\n\n## Tasks and order\n\nThere is one task. `impl-1` (Claude Code implementer) stays idle.\n\n### Task 1: integration test (implementer `impl-2`, Codex)\n\nFile: `src/stock-integration.test.mjs` (new).\n\nWork: build synthetic raw rows such as `{ sku: \"  ab-12 \", quantity: 3 }`, map each row to\n`{ sku: normalizeSku(row.sku), quantity: row.quantity }`, pass the result to\n`summarizeStock`, and assert:\n- lowercase SKUs with surrounding whitespace are normalized (trimmed and uppercased);\n- raw rows that normalize to the same SKU (for example `\" ab-12\"` and `\"AB-12 \"`) are\n  aggregated into one item with the summed quantity;\n- a zero-quantity row produces an item with quantity 0;\n- `items` is in ASCII code-unit order, checked with `deepEqual` against the exact expected\n  array;\n- `totalQuantity` and `distinctSkus` equal the expected values;\n- the original raw rows are unchanged, checked by `deepEqual` against a copy taken before the\n  call, and the rows are not the same objects as the returned items.\n\nCheck: `node --test src/stock-integration.test.mjs` and `npm test` both pass, and `npm test`\ndiscovers all three suites. The implementer submits both commands with their unedited output\nand pass/fail counts.\n\n### Review (reviewer `review-1`, Claude Code), after Task 1\n\nThe reviewer writes nothing. It checks:\n- The change against this plan's commit is exactly one added file,\n  `src/stock-integration.test.mjs`; both implementations, the existing tests, `src/.gitkeep`\n  and all other files are unchanged.\n- The test imports only `node:test`, `node:assert/strict`, `./normalize-sku.mjs` and\n  `./summarize-stock.mjs`, and it covers every point listed for Task 1.\n- `node --test src/stock-integration.test.mjs` and `npm test` pass on the result.\n\nThe verdict is pass or rework, with commands and output as evidence. Nothing is pushed.\n\n## Roster\n\nThe current roster is unchanged; `lead-roster.json` lists the existing seats:\n- implementer, claude-code (`impl-1`): idle\n- implementer, codex (`impl-2`): Task 1\n- reviewer, claude-code (`review-1`): review of Task 1\n",
+        "hash": "sha256:a44890a29a636109ea608e22a459fe39e473630ac40db94282ed5e366de8c30f"
+      },
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "error": null
+    },
+    "approval": {
+      "at": "2026-11-07T09:01:32.215Z",
+      "status": 200,
+      "payload": {
+        "protocolVersion": "1.0",
+        "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+        "actionId": "8ac0cf95-cf4c-4c16-9db2-8ac137bbd819",
+        "expectedEntityVersion": 6,
+        "idempotencyKey": "24daea0b-6243-4452-9de9-81c2f6b4bc75",
+        "payload": {
+          "rosterDigest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+        }
+      },
+      "body": {
+        "status": "accepted",
+        "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+        "entityVersion": 7,
+        "replayed": false,
+        "effectMayStart": true,
+        "value": {
+          "bindingDigest": "sha256:6360c81ce66c6672c99c63477fe53a209a16a975813f50def9be303504584adc",
+          "phase": "delivery",
+          "planRef": "plan.md"
+        },
+        "revisionTaskId": "task-1",
+        "reason": null,
+        "reasonKey": null
+      }
+    },
+    "submittedDigestMatchesDisplayed": true
+  }
+]

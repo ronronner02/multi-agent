@@ -1,0 +1,74 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ❯ test/team-read-model.test.ts (30 tests | 1 failed) 1716ms
+   ✓ T052 managed owner read projections > serves the composed owner read while worker, unauthenticated and cross-run reads fail 92ms
+   ✓ T052 managed owner read projections > keeps legacy admission unchanged: the legacy events route still answers on its own terms 47ms
+   ✓ T052 managed owner read projections > publishes each task's title and declared dependencies 51ms
+   ✓ T052 managed owner read projections > publishes the daemon-owned task stage and exact assigned seat 47ms
+   ✓ T052 managed owner read projections > routes a recorded worker report to the lead and preserves owner precedence 55ms
+   ✓ T052 managed owner read projections > uses open chat decisions, not a running queue heuristic, and restores the running stage after an answer 47ms
+   ✓ T052 managed owner read projections > keeps dropped work done when another task waits for the owner or a review seat exists 49ms
+   ✓ T052 managed owner read projections > keeps canceled retries and canceled review work in Done 55ms
+   ✓ T052 managed owner read projections > keeps required review open until the latest verdict approves the current candidate 51ms
+   × T052 managed owner read projections > projects the validated native completion candidate before and after its matching review 58ms
+     → expected { taskId: 'native-task', …(17) } to match object { …(5) }
+(14 matching properties omitted from actual)
+   ✓ T052 managed owner read projections > does not publish an unvalidated or unreadable completion candidate: {"validated":false,"manifestDigest":"sha256:dda18a0e21ae47c53b4309434cbc02ae8bf764fa83a6defbb719431242722aa7"} 46ms
+   ✓ T052 managed owner read projections > does not publish an unvalidated or unreadable completion candidate: {"manifestDigest":"sha256:dda18a0e21ae47c53b4309434cbc02ae8bf764fa83a6defbb719431242722aa7"} 46ms
+   ✓ T052 managed owner read projections > does not publish an unvalidated or unreadable completion candidate: {"validated":true,"manifestDigest":42} 45ms
+   ✓ T052 managed owner read projections > bounds a long title to one display line and never invents one 54ms
+   ✓ T052 managed owner read projections > binds criteria and reviews to candidate identity, keeps missing reviews unavailable, and Finalize awaiting decision 59ms
+   ✓ T052 managed owner read projections > publishes each attempt's own recorded usage and recording time 60ms
+   ✓ T052 managed owner read projections > bounds, redacts and correlates log records, and reports an explicit replay gap 52ms
+   ✓ T052 managed owner read projections > reconstructs one final state from a cursor plus paginated replay, with concurrent publication 228ms
+   ✓ T052 managed owner read projections > leaves durable state, files, sessions and provider state unchanged across reads 55ms
+   ✓ T052 managed owner read projections > keeps health unknown rather than healthy when the reader is missing or times out 53ms
+   ✓ T052 managed owner read projections > refuses a read when the run does not exist 49ms
+   ✓ T052 managed owner read projections > does not attribute a reused session's earlier output to this run 54ms
+   ✓ T052 managed owner read projections > keeps seat windows disjoint when two attempts share a recording instant 53ms
+   ✓ T052 managed owner read projections > completes review and integration stages only when every task has the evidence 58ms
+   ✓ T052 managed owner read projections > does not treat a pending delivery request as an owner decision 51ms
+   ✓ T052 managed owner read projections > publishes the same bounded redacted body through replay as through the snapshot 48ms
+   ✓ T052 managed owner read projections > keeps the projection and its replay cursor on one snapshot 47ms
+   ✓ T052 managed owner read projections > streams a run's live events with subscribe-before-replay ordering 103ms
+   ✓ T052 log body bound > strips control sequences, redacts secrets and truncates at the bound 0ms
+   ✓ T052 log body bound > leaves a short body untruncated 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/team-read-model.test.ts > T052 managed owner read projections > projects the validated native completion candidate before and after its matching review
+AssertionError: expected { taskId: 'native-task', …(17) } to match object { …(5) }
+(14 matching properties omitted from actual)
+
+- Expected
++ Received
+
+@@ -2,9 +2,9 @@
+    "acceptance": null,
+    "criteria": {
+      "total": null,
+      "verified": null,
+    },
+-   "currentCandidateDigest": "sha256:95de057691188efae94e5f3739663fffa3dfe619aa6d7215c6f844ff646b153c",
++   "currentCandidateDigest": null,
+    "reviewAvailable": false,
+    "stage": "review",
+  }
+
+ ❯ test/team-read-model.test.ts:292:40
+    290|     }, qitem), { kind: "daemon", sessionId: "daemon" });
+    291|     expect(receipt.status).toBe("observed");
+    292|     expect(model.read("run").tasks[0]).toMatchObject({
+       |                                        ^
+    293|       currentCandidateDigest: digest, stage: "review", reviewAvailable…
+    294|       criteria: { verified: null, total: null }, acceptance: null,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 29 passed (30)
+   Start at  16:43:41
+   Duration  5.14s (transform 2.16s, setup 34ms, collect 3.21s, tests 1.72s, environment 0ms, prepare 48ms)
+

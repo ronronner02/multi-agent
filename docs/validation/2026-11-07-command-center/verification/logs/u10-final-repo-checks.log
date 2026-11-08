@@ -1,0 +1,596 @@
+[Earlier output omitted; bounded tail follows.]
+ig --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+✔ full mode scans tracked files and fails loudly on a planted leak (39.075317ms)
+✔ full mode passes a clean tracked tree and ignores untracked files (38.622245ms)
+✔ optional exact-line rules reach the full guard and malformed values are refused (183.172621ms)
+✔ staged mode reads index bytes rather than the worktree (38.015619ms)
+✔ staged mode handles rename and deletion without reading missing worktree paths (41.455674ms)
+✔ range mode scans exact committed bytes between from and to (49.232942ms)
+✔ range mode rejects a leak from an intermediate pushed commit even when cleaned at to (56.54468ms)
+✔ each explicit mode refuses a missing generated rules file (101.154103ms)
+✔ each explicit mode refuses an empty generated rules object (104.23717ms)
+✔ tree mode scans the actual packaging subtree, including an untracked seeded fixture (47.63247ms)
+✔ full artifact mode scans exactly the packager manifest and reports its file set (22.997004ms)
+✔ Plain B keeps guard enforcement out of root test:repo while fixture tests remain discovered (0.158444ms)
+✔ T6: build-package.sh stages daemon policies into the assembled package (0.499424ms)
+✔ T7: the canonical repo-source built-ins are exactly the known five, byte-equal to authority (0.818478ms)
+✔ npm pack of @openrig/cli includes scripts/check-abi.mjs in tarball (4142.529784ms)
+✔ factory topology defaults have a clean-checkout source and package path (0.517918ms)
+✔ build-package scans the complete daemon specs tree before LP-7 copies it (0.12098ms)
+✔ build-package emits the substance roots from the staging branches that actually ran (0.214562ms)
+✔ the private product-factory VPS runbook and its pointers do not ship (4.083391ms)
+✔ build-package stages the conventions doc as the daemon's stable-path input, and the package allowlist ships it (0.210864ms)
+✔ staged conventions doc is byte-identical to the repo source (skipped when no assembled package present) (0.133157ms)
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+✔ the content scan executes the named full-mode guard with the artifact boundary (467.888709ms)
+✔ the named substance gate writes a cut-bound, per-surface receipt and records the full scan (247.296926ms)
+✔ an internal-path contribution is refused with its class and all fix paths (216.538541ms)
+✔ human judgment cannot be synthesized: every current file hash needs a reasoned verdict (254.36457ms)
+✔ a human refusal preserves the classifier class and teaches every fix path (243.367242ms)
+✔ a dirty worktree cannot produce a receipt bound to its unchanged HEAD (54.950067ms)
+✔ every mechanical S15 candidate needs its own disposition (235.581557ms)
+✔ duplicate same-line mechanical candidates consume dispositions by occurrence (246.76606ms)
+✔ the gate runs the full scanner over packager files outside the human-review roots (243.990785ms)
+✔ derived artifacts retain injection checks (730.048868ms)
+✔ derived archaeology terms do not block and the receipt records the exact active rules (250.042783ms)
+✔ exact-line allowances reach content and derived scans and are recorded in the receipt (477.818102ms)
+✔ the release ceremony names the gate and its durable receipt (1.407719ms)
+✔ the CLI build carries the unchanged repository LICENSE and README into npm pack (271.454812ms)
+✔ candidate binding: tracked dirt refuses before the first cleanup mutation (60.480045ms)
+✔ candidate binding: a Git-visible untracked file refuses (50.691116ms)
+✔ candidate binding: same verdict basename at a different path is not excluded (48.959952ms)
+✔ candidate binding: a foreign verdict destination is refused without replacing owner data (46.542246ms)
+✔ candidate binding: only the canonical verdict path may be present and the verdict binds HEAD (56.527523ms)
+✔ candidate binding: HEAD drift during the gate refuses before writing a verdict (2061.11ms)
+✔ candidate binding: Git-visible input added during the gate refuses before writing a verdict (81.889479ms)
+✔ consumer refuses loudly when no verdict exists (46.939747ms)
+✔ consumer refuses and retains a verdict with no candidateSha (38.341163ms)
+✔ consumer derives current HEAD and refuses a stale candidateSha (39.583135ms)
+✔ consumer refuses and retains a matching-SHA failed verdict (34.452661ms)
+✔ consumer refuses and retains a smoke:true verdict (37.119616ms)
+✔ consumer refuses and retains a verdict whose smoke field is absent (34.685419ms)
+✔ consumer honors only a matching real PASS and removes the consumed artifact (33.358002ms)
+✔ dependency root: absent node_modules refuses before the gate mutates (56.409425ms)
+✔ dependency root: a symlinked node_modules root refuses (49.969929ms)
+✔ dependency root: a scoped link escaping to another tree refuses and prints both operands (54.675654ms)
+✔ dependency root: a scoped link swapped to another in-tree package refuses (51.317501ms)
+✔ dependency root: a lock deriving zero scoped links refuses instead of vacuously passing (49.824567ms)
+✔ dependency root: exact lock-derived target passes and prints the actual/expected pair (55.002957ms)
+✔ dependency root: a later refusal invalidates a same-HEAD prior PASS (137.048484ms)
+✔ dependency root: drift during the gate refuses before writing a verdict (87.868537ms)
+✔ rail 3 — a resident missing receipt/owner/expiry is REJECTED (each named) (0.628359ms)
+✔ rail 3 — LEDGER_ENTRY_FIELDS names the required schema (receipt+owner+expiry+suite+reason) (0.098244ms)
+✔ rail 4 — a resident whose expiry EXCEEDS the cut ceiling is REJECTED (0.344924ms)
+✔ rail 4 — a well-formed resident within the ceiling VALIDATES clean (0.402786ms)
+✔ rail 4 — CUT_CEILING_ISO is a real ISO date (the mechanism has a concrete ceiling) (0.176913ms)
+✔ rail 1 — a failure COVERED by an active resident → gate PASS, the exclusion is NAMED (0.260023ms)
+✔ rail 1 — an UNCOVERED failure → gate FAIL (no resident to hide behind) (0.114245ms)
+✔ rail 2 — an EXPIRED resident no longer covers its failure → gate FAIL (0.098999ms)
+✔ rail 2 — an expired resident forces RED even when its suite PASSES now (stale exclusion must be removed) (0.125609ms)
+✔ EMPTY SEED — zero residents + zero failures → clean PASS, no exclusions named (3.425518ms)
+✔ EMPTY SEED — zero residents + any failure → FAIL (the gate is strict by default) (0.121516ms)
+✔ rail 3 — expiry must be a calendar date, not a coerced or truncated value (0.196709ms)
+✔ rail 3 — leap days validate only in leap years (0.07457ms)
+✔ acquires the lane on a free port + writes holder-info (pid, started-at) (6.550158ms)
+✔ gate-vs-gate contention → HARD-REFUSE naming the holder (pid/started-at), non-blocking (14.32163ms)
+✔ FOREIGN process on the port + NO holder-info → FAIL-CLOSED 'foreign-holder' (load-115) (19.807611ms)
+✔ P2 exclusivity (no SO_REUSEPORT): a second CONCURRENT bind on the same port MUST fail (21.333161ms)
+✔ P3: GATE_LANE_PORT is the ONE named lock (numeric, valid range, env-overridable) (0.141957ms)
+✔ P4 best-effort: a failed holder-info write does NOT lose the already-held lane (bind is the lock) (9.860402ms)
+✔ release frees the lane (kernel-released) so a subsequent acquire succeeds (21.906448ms)
+✔ gate lock rejects ephemeral and invalid ports before announcing a holder (0.643593ms)
+✔ configured gate port does not accept a partial numeric prefix (24.230864ms)
+[smoke] skip: npm run lint
+[smoke] skip: npm run test
+✔ P5 refusal — gate holder is NAMED (pid/started-at) + teaches the port constant, always refuses (0.676595ms)
+✔ P5 refusal — foreign squatter is HONEST-UNKNOWN + still teaches the port constant + refuses (0.155773ms)
+✔ runLegs runs the two supported legs — and the web-UI leg is ruled OUT, never present (0.277838ms)
+✔ green = typecheck AND vitest BOTH — one failed leg fails the gate (0.313954ms)
+✔ advisory foreign-load — counts foreign node/vitest/tsc processes + loadavg (never the gate's own pid) (0.649405ms)
+✔ C2 verdict — a GREEN carries the foreign-load context it ran under (recorded, not just printed) (0.102242ms)
+✔ exclusion-ledger — empty seed stays STRICT; an active resident covering a failed leg → PASS + named (0.448821ms)
+✔ gate cleans a stale vendored daemon bundle at start so a desk leftover can't poison test:repo (0.494255ms)
+✔ SELF-DESCRIBING (pm GATE CONDITION): verdict.smoke tracks WHAT RAN via runGate — the SHIPPED wiring, not a mirror (0.74618ms)
+✔ SELF-DESCRIBING: per-leg durationMs recorded (the mixed-mode discriminator a whole-run total hides) (3.512307ms)
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - skills/core/bad: manifest invalid — manifest at skills/core/bad/manifest.yaml files[1].path 'notes..md' must be a relative path inside the pack (no '..' segments, no leading '/')
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - Internal content leak detected:
+  world/install/a.md: line 3: founder
+Remedy: Move the detail to an internal sidecar, fence it, genericize it, or keep the whole file host-only.
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - Internal content leak detected:
+  world/install/a.md: line 3: openrig-work/
+Remedy: Move the detail to an internal sidecar, fence it, genericize it, or keep the whole file host-only.
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - Internal content leak detected:
+  world/install/a.md: line 3: @v-openrig-build
+Remedy: Move the detail to an internal sidecar, fence it, genericize it, or keep the whole file host-only.
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - Internal content leak detected:
+  world/install/PROVENANCE.yaml: line 1: openrig-work/
+Remedy: Move the detail to an internal sidecar, fence it, genericize it, or keep the whole file host-only.
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - Internal content leak detected:
+  PROVENANCE-world-install.yaml: line 1: openrig-work/
+Remedy: Move the detail to an internal sidecar, fence it, genericize it, or keep the whole file host-only.
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - lore/private: lore-class refusal: taxonomy: lore is structurally unshippable. Genericize the content, cite its public home, or re-home it to the internal pack root.
+[generate-context-packs] 1 invalid pack(s) — FAILING THE BUILD:
+  - duplicate pack ref 'skills/world/install' — a skill projection and a static pack (or two packs) collide; the write would silently overwrite one validated pack with another
+[generate-context-packs] unexpected failure: Error: static pack symlink /tmp/r061-static-symlink-uSAeuv/static/linked/b.md must point to a file under docs/reference/
+    at isStaticContentFile (file://<acceptance-worktree>/engine/scripts/generate-context-packs.mjs:246:11)
+    at walk (file://<acceptance-worktree>/engine/scripts/generate-context-packs.mjs:297:16)
+    at walk (file://<acceptance-worktree>/engine/scripts/generate-context-packs.mjs:296:32)
+    at scanStaticSource (file://<acceptance-worktree>/engine/scripts/generate-context-packs.mjs:300:3)
+    at main (file://<acceptance-worktree>/engine/scripts/generate-context-packs.mjs:364:23)
+✔ generates a valid, daemon-parseable pack per skill; SKILL.md is the instruction (90.679286ms)
+✔ MALFORMED PROJECTION FAILS THE BUILD — a '..' content path is rejected at package time, non-zero exit (96.739583ms)
+✔ --check validates without writing (the build/CI drift gate) (82.380081ms)
+✔ STALENESS BY CONSTRUCTION — editing canon after generation does not change generated bytes (87.789027ms)
+✔ deterministic — two runs produce byte-identical manifests (157.771862ms)
+✔ REAL CANON: projected membership == the mirror ship set (no narrowing) — r2 HIGH-1 (93.326389ms)
+✔ REAL CANON: referenced helpers are DELIVERED in the served bundle (packed-path proof) — r2 HIGH-1 (111.934489ms)
+✔ PRODUCTION PUBLIC PLUGIN-ONLY: mission-slice-sop catalogs once and helper assets ship byte-identically (119.020694ms)
+✔ STATIC PACK PROJECTED: a committed world pack lands in the builtin root with its atoms graph, version stamped (58.883382ms)
+✔ STATIC PACK LEAK GUARD runs the FULL committed authority: charged term, path prefix, AND seat/rig identity each FAIL THE BUILD (172.487335ms)
+✔ STATIC PACK SIDECARS are part of the leak boundary regardless of suffix (54.335485ms)
+✔ STATIC SOURCE provenance sidecars cannot hide beside, rather than inside, a pack (57.509975ms)
+✔ LORE PACK REFUSAL is structural even when its content has no leak-rule token (55.122205ms)
+✔ REF COLLISION across sources FAILS THE BUILD with no output mutation (B3) (58.705283ms)
+✔ PRODUCTION LIBRARY: only the public help, onboarding-width, reference, world, and example static packs ship (98.395845ms)
+✔ OPR.0.5.6.10 GENERATOR STAMPS — skill-projected packs carry pack-level taxonomy: skills (78.741768ms)
+✔ STATIC PACK SYMLINKS: a link into docs/reference ships as a real file; any other link fails the build (112.310628ms)
+✔ HELP ADDRESSES: every guide address taught in help.md resolves through the real address route; help stays small (152.426778ms)
+✔ HELP ADDRESSES: the checker fails when a taught address has no target (1.390495ms)
+✔ HELP FALLBACK PATHS: source links resolve, and the installed path matches the package copy (2.622554ms)
+✔ dry run needs no tools and only prints the complete plan (4.760351ms)
+✔ missing node reports the prerequisite step (1.591699ms)
+✔ missing npm reports the prerequisite step (1.429296ms)
+✔ npm install -g @openrig/cli failure preserves status and native output (2.81771ms)
+✔ npm prefix -g failure preserves status and native output (2.980471ms)
+✔ npm root -g failure preserves status and native output (3.927672ms)
+✔ check-abi.mjs failure preserves status and native output (26.71573ms)
+✔ setup --dry-run failure preserves status and native output (25.74876ms)
+✔ setup failure preserves status and native output (26.582654ms)
+✔ installed rig wins over stale PATH and a prefix containing spaces works (28.398128ms)
+✔ skipped npm postinstall still checks the installed package before setup (27.883352ms)
+✔ missing installed checker is explicitly skipped without claiming success (4.914963ms)
+✔ missing installed executable never falls back to a stale rig (3.571979ms)
+✔ the actual HTTP download piped to sh preserves setup failure (46.826798ms)
+✔ scanner blocks internal paths before reading content (2.154015ms)
+✔ scanner reports case-insensitive text tokens with file, token, line, and remedy (0.5027ms)
+✔ scanner honors an allowed-context substring on the same line only (0.167109ms)
+✔ scanner finds tokens in NUL-containing bytes and does not crash on clean binary bytes (0.461448ms)
+✔ exact-line allowances preserve modified lines, adjacent findings and internal paths (0.413802ms)
+✔ generated rules allow the shipped compaction template and still detect concrete paths (5.531505ms)
+✔ scanner returns findings in deterministic path/token/line order (0.363744ms)
+✔ parseChanges extracts file-change and deletion lines from itemize-changes output (1.117224ms)
+✔ parseChanges returns empty array on a clean (already-mirrored) run (0.132556ms)
+✔ buildStaleMessage names the npm script and lists the pending changes (0.14663ms)
+✔ EXCLUDES bars curation-cycle bookkeeping and runtime artifacts from public surface (0.097757ms)
+✔ source SKILL.md inventory is non-empty (sanity check) (0.791846ms)
+✔ mirror is in sync with source (drift-detect via --check) (56.067414ms)
+✔ excluded patterns are absent in the mirror target (1.056632ms)
+✔ stagePublicSkills applies membership, path, frontmatter, and fence transforms (2.089766ms)
+✔ stagePublicSkills preserves prose and executable source modes (0.577697ms)
+✔ stagePublicSkills applies existing EXCLUDES before scanning or copying (0.640553ms)
+✔ stagePublicSkills recursively strips configured keys and internal values while preserving clean metadata (0.629366ms)
+✔ stagePublicSkills aborts an unmatched internal fence with file and line (0.736269ms)
+✔ stagePublicSkills strips internal fences from non-SKILL Markdown without sanitizing ordinary content (0.604229ms)
+✔ stagePublicSkills rejects an unmatched fence in non-SKILL Markdown with file and line (0.4564ms)
+✔ stagePublicSkills rejects canon file symlinks before reading or staging outside bytes (1.371009ms)
+✔ stagePublicSkills rejects canon directory symlinks before recursion or staging outside bytes (0.350431ms)
+✔ stagePublicSkills is deterministic for the same clean input (1.582584ms)
+✔ shipSetFromMembership consumes exactly the six shipping categories (0.134768ms)
+✔ shipSetFromMembership subtracts not_public and pending overlaps (0.102986ms)
+✔ checkGeneratedEdges detects layout and digest drift without invoking the leak scanner (2.169981ms)
+✔ checkGeneratedEdges — external-canon-pending allowlist: named-missing tolerated, OTHER-missing loud, reappearance flagged stale (1.126458ms)
+✔ checkGeneratedEdges fails closed on empty or malformed control manifests (0.418774ms)
+✔ authoring regeneration stages canon and projects exact manifest layouts to all three edges (141.52678ms)
+✔ authoring regeneration reports and repairs permission-only drift on all three edges (408.657339ms)
+✔ default apply refreshes controls after regeneration and enumerates every diff (0.64279ms)
+✔ mirror main --check uses layout/digests and never activates the provisional scanner (0.138613ms)
+✔ permission-drift detection is itemization-width portable: rsync 3.x and openrsync forms both detect, non-permission forms never do (0.105239ms)
+✔ checkModeAbsolute retains its one-source/one-target checksum contract (0.06323ms)
+✔ reads only added lines with their new line numbers (1.701453ms)
+✔ reports each principle's typical cases (1.238593ms)
+✔ placeholders, loopback, documentation ranges and product names are not reported (0.132312ms)
+✔ the report never repeats a suspected credential (0.264269ms)
+✔ a credential on the same line as another finding is withheld from every category (0.213545ms)
+✔ locations-only output names file and line without quoting the matched text (0.154026ms)
+✔ the report says so when nothing is found and groups findings when something is (0.095829ms)
+✔ the CLI executes through a script path containing spaces and a hash (25.320965ms)
+✔ the CLI executes with preserve-symlinks-main and imports without argv remain inert (46.45662ms)
+✔ keeps added header-shaped text as source content inside a hunk (0.259757ms)
+✔ accepts a healthy run and a specifically observed post-restart lost baton (0.64288ms)
+✔ library admission requires its own seed, failing step, and exact destination (2.250492ms)
+✔ rejects a surviving mutant and a failure before the seeded boundary (0.240857ms)
+✔ refuses timeout, setup error, missing injection, or an unrelated failing assertion (0.247005ms)
+✔ requires the actual baton state and destination, never tokens in a diff or body (5.024006ms)
+✔ requires the actual runner ledger to agree with the returned result (0.278415ms)
+✔ a passing-only case admits only a clean PASS of its own scenario (1.20276ms)
+✔ only one structured outcome is allowed amid human-readable logs (0.250139ms)
+✔ CLI build copies assets and root documents without shell utilities (2.006391ms)
+✔ CLI preparation follows file symlinks like the old cp glob (0.447475ms)
+✔ CLI preparation fails when a source glob would have no matches (0.730227ms)
+✔ preparation rejects unknown workspaces (0.144061ms)
+✔ regeneration preserves product policy bytes in place and when exporting (59.777773ms)
+✔ legacy YAML inputs refuse with product pointers before changing policy files (113.571025ms)
+✔ authoring apply uses product policy despite conflicting legacy YAML environment (276.834195ms)
+✔ rewrites static, side-effect, re-export and dynamic imports in nested CLI paths (6.751023ms)
+✔ leaves prose, comments and non-import strings unchanged (2.015526ms)
+✔ fails on a subpath with no exports entry, including the bare package name (0.912778ms)
+✔ fails when the mapped target was not staged (0.435901ms)
+✔ a second run is a no-op (0.639961ms)
+✔ leaves import-shaped text in comments, strings and templates unchanged (0.688759ms)
+✔ rewrites real imports that carry comments or use a template literal (0.934167ms)
+✔ fails on an unmapped subpath hidden behind a comment (0.436227ms)
+✔ fails on a non-literal module argument naming the package, and on unparseable files (1.684795ms)
+✔ runs when executed directly from paths with spaces, # or a symlinked parent (898.575405ms)
+✔ still fails the build when executed directly with an unmapped import (180.327378ms)
+✔ target follows the Docker server, not this client platform (1.451108ms)
+✔ deadline wrapper preserves actual successful and nonzero exits (36.403721ms)
+Cannot run /nonexistent/openrig-test-program: spawn /nonexistent/openrig-test-program ENOENT
+✔ deadline expires even when the child ignores TERM (403.870742ms)
+✔ a missing executable and an invalid deadline cannot report success (1.933221ms)
+✔ the platform CLI queries a fake remote server and writes its actual receipt (26.346182ms)
+✔ ordinary invocation and ambiguous remote selection refuse before any build (24.550119ms)
+DRIFT: packages/daemon/src/domain/scope/attestation-lineage.generated.ts does not match the canonical derivation.
+Re-run: node scripts/sync-scope-lineage.mjs
+DRIFT: packages/daemon/src/domain/scope/attestation-lineage.generated.ts does not match the canonical derivation.
+Re-run: node scripts/sync-scope-lineage.mjs
+✔ the repo is in sync (--check passes on the committed tree) (22.848403ms)
+✔ a hand-edited generated mirror is DRIFT: --check exits 1 naming the fix (23.553854ms)
+✔ a canonical mutation propagates to BOTH surfaces in one sync (the drift class is structurally dead) (66.258285ms)
+✔ npm daemon tests leave an inherited OPENRIG instance untouched (3877.789565ms)
+✔ npm daemon tests leave an inherited RIGGED instance untouched (3772.330099ms)
+✔ produces a 64-hex digest + a sorted per-file census receipt over the asset set (2.80166ms)
+✔ REBUILD CONTRACT: identical files => identical digest, INDEPENDENT of input list order (0.530326ms)
+✔ content sensitivity: changing ANY file's bytes changes the digest (0.797988ms)
+✔ path sensitivity: same content at a different path changes the digest (path is identity) (0.312389ms)
+✔ set sensitivity: adding or dropping a file changes the digest (0.368667ms)
+✔ forgery-resistance: a delimiter/quote in a path cannot forge another honest set's digest (0.271782ms)
+✔ loud-fail: empty asset set (never a silent empty receipt) (0.388486ms)
+✔ loud-fail: a named asset that does not exist on disk (0.281309ms)
+✔ loud-fail: a path escaping the asset root (containment guard) (0.398854ms)
+✔ parseDigestPinnedBase accepts a digest-pinned ref and returns its name + sha256 digest (0.323806ms)
+✔ parseDigestPinnedBase REFUSES a tag-floating (non-@sha256) base — the fence (0.089052ms)
+✔ parseDigestPinnedBase REFUSES a malformed digest (short hex / non-hex / wrong algo) (0.101672ms)
+✔ parseDigestPinnedBase REFUSES empty / non-string input (0.062683ms)
+✔ readBaseImage reads a comment-tolerant single digest-pinned ref from a file (0.20969ms)
+✔ readBaseImage loud-fails on an UNRESOLVED slot (comment-only — no ref yet) (0.131704ms)
+✔ readBaseImage loud-fails on multiple refs (ambiguous) and on a missing file (0.184291ms)
+✔ Dockerfile exists at docker/testbed/Dockerfile (0.77505ms)
+✔ base is parameterized via ARG BASE_IMAGE + FROM ${BASE_IMAGE} — no floating tag baked in (0.821412ms)
+✔ installs the PTY/tmux substrate: tmux AND git (0.117566ms)
+✔ node is pinned via ARG NODE_VERSION to an in-range (even LTS) engines version (0.17368ms)
+✔ OpenRig is installed from a COPY'd local tarball, NEVER the npm registry (0.183724ms)
+✔ runs as a non-root `openrig` user (creates it + a trailing USER openrig) (0.215976ms)
+✔ entrypoint execs under tini/dumb-init (PID1 reaping) (0.152285ms)
+✔ stages the stub runtime assets into the image (layer 4) (0.106186ms)
+✔ emits a manifest.json wiring the host-resolved base digest + stub census + identity (2.831232ms)
+✔ also writes the stub-assets census receipt alongside the manifest (0.460529ms)
+✔ REBUILD CONTRACT: same inputs => byte-identical manifest.json + receipt on disk (0.414927ms)
+✔ loud-fail propagates when the base-image slot is unresolved (never a partial manifest) (0.412704ms)
+✔ loud-fail on a missing required identity input (delegated to the manifest validator) (0.350944ms)
+✔ CLI shim emits the manifest from an inputs.json + outDir (exit 0) (28.933337ms)
+✔ CLI shim fails LOUDLY (non-zero + stderr) on an unresolved base-image slot (25.500377ms)
+✔ produces the four identity fields + image tag + a sha256 manifest digest (0.812432ms)
+✔ REBUILD CONTRACT: same inputs => byte-identical manifest JSON + identical digest (0.433029ms)
+✔ per-field sensitivity: changing ANY identity field changes the digest (no collision) (0.18598ms)
+✔ forgery-resistance: a delimiter/quote inside a value cannot forge another input set's digest (0.107539ms)
+✔ loud-fail on a missing or empty required identity field (never a silent partial manifest) (0.330915ms)
+✔ stub-assets.list census is populated (empty census = L0.2 FAIL, build verb refuses) (0.943803ms)
+✔ census names EXACTLY the stub trio and every listed file exists (0.491586ms)
+✔ L0.2 receipt: deriveStubAssetsHash lists exactly the trio, each with a 64-hex sha256 (1.675884ms)
+✔ lint builds the daemon dist BEFORE the cli tsc (0.394481ms)
+✔ typecheck:prep builds the daemon (emitting the dist the cli tsc consumes) (0.160889ms)
+ℹ tests 291
+ℹ suites 0
+ℹ pass 290
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 97920.169233
+first-project is now starter (a Claude builder and a Codex reviewer); on a Codex-only machine, ask your OpenRig operator to adapt it
+UNCHECKED packages/daemon/specs/rigs/launch/kernel/agents/operator/agent/guidance/role.md:89: "workshop" — outside this repository; existence not checked; external authority https://github.com/mvschwarz/openrig-world (external bundle)
+UNCHECKED packages/daemon/specs/rigs/launch/kernel/agents/operator/agent/guidance/role.md:219: "orch-lead@workshop" — outside this repository; existence not checked; external authority https://github.com/mvschwarz/openrig-world (external bundle)
+UNCHECKED docs/reference/getting-started.md:398: "orch-lead@workshop" — outside this repository; existence not checked; external authority https://github.com/mvschwarz/openrig-world (external bundle)
+UNCHECKED docs/reference/getting-started.md:398: "workshop" — outside this repository; existence not checked; external authority https://github.com/mvschwarz/openrig-world (external bundle)
+UNCHECKED packages/cli/src/commands/setup.ts:630: "workshop" — outside this repository; existence not checked; external authority https://github.com/mvschwarz/openrig-world (external bundle)
+First-run references: 9 files, 352 checked, 0 failures, 5 external references unchecked.
+[generate-context-packs] --check OK: 57 pack(s) project + validate clean (version 0.1.0).

@@ -1,0 +1,63 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/team-workspace.test.ts (86 tests) 4731ms
+   ✓ T044 commit-lane manifest without a git in the candidate > T054 plain git over a control-owned copy > copies a realistic candidate in well under a few seconds  315ms
+ ✓ test/team-candidate-launch.test.ts (37 tests) 3864ms
+ ✓ test/team-result.test.ts (4 tests) 505ms
+ ❯ test/integration-branch.test.ts (26 tests | 1 failed) 8667ms
+   ✓ U7 integration branch and merge > lands two approved tasks as two commits in approval order, and never touches the owner's checkout  391ms
+   ✓ U7 integration branch and merge > does not offer a merge while no task's work has landed 172ms
+   ✓ U7 integration branch and merge > does not offer a merge while any task has failed, the lead included 221ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: null  479ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-proposal.json  493ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-escalation.json  511ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: src/health.ts  512ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, false  321ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: codex, codex_id, worker1, false  320ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, true  332ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker2, false  301ms
+   ✓ U7 integration branch and merge > does not offer a merge while the delivery lead is pending 231ms
+   ✓ U7 integration branch and merge > does not offer a merge while the delivery lead is in-progress 224ms
+   ✓ U7 integration branch and merge > does not offer a merge while the delivery lead is blocked 224ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: false)  381ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: true)  417ms
+   ✓ U7 integration branch and merge > fails the task with integration_conflict and leaves the branch unchanged when the patch will not apply  353ms
+   ✓ U7 integration branch and merge > still refuses an in-flight candidate when the owner's own source moved 140ms
+   ✓ U7 integration branch and merge > lands the commit when the daemon's own sweep records an approving review 274ms
+   × U7 integration branch and merge > keeps a completed result readable after Merge without a restart 403ms
+     → UNIQUE constraint failed: team_approvals.id
+   ✓ U7 integration branch and merge > does not forgive unrelated source changes during Merge (invalidated: false) 260ms
+   ✓ U7 integration branch and merge > does not forgive unrelated source changes during Merge (invalidated: true) 259ms
+   ✓ U7 integration branch and merge > refuses a merge while work is open, fast-forwards a clean checkout, and refuses a dirty one 290ms
+   ✓ U7 integration branch and merge > makes one merge commit when the owner's branch diverged, and aborts a conflicting merge  436ms
+   ✓ U7 integration branch and merge > finds the branch and worktree again after a restart, and keeps landing on it  384ms
+   ✓ U7 integration branch and merge > serves the integration read and the merge to the owner only  340ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps a completed result readable after Merge without a restart
+SqliteError: UNIQUE constraint failed: team_approvals.id
+ ❯ src/domain/plan-governance.ts:1211:63
+    1209|       this.db.prepare(`INSERT INTO team_approvals
+    1210|         (id, run_id, kind, action, payload_json, payload_digest, targe…
+    1211|         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`).run(ctx.…
+       |                                                               ^
+    1212|         canonicalJson(approval.payload), approval.payloadDigest, appro…
+    1213|       return { status: "accepted", value: this.getApproval(ctx.request…
+ ❯ src/domain/plan-governance.ts:2178:22
+ ❯ src/domain/event-bus.ts:129:24
+ ❯ sqliteTransaction ../../node_modules/better-sqlite3/lib/methods/transaction.js:65:24
+ ❯ EventBus.withNotifyEnvelope src/domain/event-bus.ts:142:20
+ ❯ PlanGovernance.command src/domain/plan-governance.ts:2165:24
+ ❯ PlanGovernance.requestApproval src/domain/plan-governance.ts:1190:17
+ ❯ test/integration-branch.test.ts:542:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 152 passed (153)
+   Start at  18:21:54
+   Duration  15.96s (transform 2.30s, setup 86ms, collect 5.27s, tests 17.77s, environment 0ms, prepare 166ms)
+
