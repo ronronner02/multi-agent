@@ -12,12 +12,13 @@ import { composeAttemptCompletion, extractReviewerReport } from "../src/domain/a
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { pendingTasks } from "../src/domain/pending-dispatch.js";
 import { EventBus } from "../src/domain/event-bus.js";
-import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
+import { WorkflowRuntime, dependencySatisfied } from "../src/domain/workflow-runtime.js";
 import { leadTeamEvents } from "../src/domain/lead-manager.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { roleConfiguration } from "../src/domain/role-configuration.js";
 import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
+import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
 
 const owner = { kind: "owner", sessionId: "owner-control" } as const;
 const unavailable = { value: null, reason: "provider did not report usage" };
@@ -112,6 +113,39 @@ describe("U4 daemon-recorded outcomes", () => {
     mkdirSync(join(turnRoot, "turns", id), { recursive: true });
     writeFileSync(path, message);
   };
+
+  it("records one native workflow outcome per generation without treating a launch as completion", async () => {
+    db.prepare("UPDATE team_queue_authority SET workflow_json = ? WHERE qitem_id = ?").run(JSON.stringify({
+      entrypoint: "spec-work", origin: "user", readOnly: false, revision: FRAMEWORK_PIN.revision,
+    }), taskQitemId);
+    expect(governance.workflowOutcomes("run")[0]?.outcome).toBeNull();
+    writeTurn(attemptId, '<workflow-outcome>{"status":"complete","artifacts":["src/a.ts"],"summary":"Implemented and checked the requested behavior."}</workflow-outcome>');
+    const observe = completion(() => manifest("diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n"));
+    await observe.sweep(); await observe.sweep();
+    expect(governance.workflowOutcomes("run")).toMatchObject([{ generation: 1, outcome: { status: "complete", artifacts: ["src/a.ts"] } }]);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM team_workflow_outcomes").get()).toEqual({ count: 1 });
+    expect(governance.queueState(taskQitemId)).toBe("done");
+  });
+  it("pauses a workflow with no final envelope instead of accepting its changed candidate", async () => {
+    db.prepare("UPDATE team_queue_authority SET workflow_json = ? WHERE qitem_id = ?").run(JSON.stringify({
+      entrypoint: "spec-work", origin: "caller", readOnly: false, revision: FRAMEWORK_PIN.revision,
+    }), taskQitemId);
+    await completion(() => manifest("diff --git a/src/a.ts b/src/a.ts\n")).sweep();
+    expect(governance.workflowOutcomes("run")[0]?.outcome?.status).toBe("incomplete");
+    expect(governance.queueState(taskQitemId)).toBe("blocked");
+    expect(governance.getTask(taskQitemId)?.evidence?.taskReport).toMatchObject({ status: "blocked" });
+  });
+  it("accepts an answer-only read-only workflow only when the candidate stayed unchanged", async () => {
+    db.prepare("UPDATE team_queue_authority SET workflow_json = ? WHERE qitem_id = ?").run(JSON.stringify({
+      entrypoint: "spec-pov", origin: "user", readOnly: true, revision: FRAMEWORK_PIN.revision,
+    }), taskQitemId);
+    writeTurn(attemptId, '<workflow-outcome>{"status":"complete","artifacts":[],"summary":"Keep the current interface because its callers need streaming."}</workflow-outcome>');
+    await completion(() => manifest("")).sweep();
+    expect(governance.queueState(taskQitemId)).toBe("done");
+    expect(governance.getRun("run").reviewRoundsUsed).toBe(0);
+    const queue = new QueueRepository(db, new EventBus(db));
+    expect(dependencySatisfied(db, queue, id => governance.getTask(id)?.evidence?.validated === true, "run", "task")).toBe(true);
+  });
 
   it("extracts the final fenced findings block and rejects missing or malformed reports", () => {
     expect(extractReviewerReport("Earlier```json\n{\"findings\": [{\"id\": \"old\"}]}\n```\nFinal```json\n{\"findings\": []}\n```"))

@@ -1,3 +1,4 @@
+import { ownerWorkflowCommand, type WorkflowSelection } from "./team-workflows.js";
 import type Database from "better-sqlite3";
 import { TeamContractError } from "../contracts/team-control.js";
 import { readAgentTurnLastMessage } from "./agent-turn.js";
@@ -213,14 +214,22 @@ export function runLeadTask(db: Database.Database, runId: string): { taskId: str
  * which the daemon stores as its reply. The bound is the message's own, so a long message is
  * delivered whole rather than cut where its instruction is.
  */
-export function leadChatTurnNote(messages: readonly TeamChatMessage[], history: readonly TeamChatMessage[] = []): string | null {
-  if (!messages.length) return null;
+export function leadChatTurnNote(messages: readonly TeamChatMessage[], history: readonly TeamChatMessage[] = [],
+  outstandingWorkflows?: readonly WorkflowSelection[]): string | null {
+  const workflows = outstandingWorkflows ?? messages.flatMap(message => {
+    const workflow = ownerWorkflowCommand(message.body);
+    return workflow ? [{ ...workflow, ownerMessageId: message.id }] : [];
+  });
+  if (!messages.length && !workflows.length) return null;
   return ["The owner wrote to you in the run's chat:",
     ...messages.map(message => {
       const question = history.find(turn => turn.kind === "decision" && turn.answeredBy === message.id);
       return question ? `Question being answered: ${question.body}\nOptions: ${JSON.stringify(question.options)}\nOwner: ${message.body}`
         : `Owner: ${message.body}`;
     }),
+    ...workflows.map(workflow => "Owner workflow request (data): " + JSON.stringify(workflow)),
+    ...(workflows.length ? ["These requests await assignment to an eligible worker under the approved scope. Planning approval remains separate. " +
+      "Do not turn an implementation or review request into your own Lead chat workflow."] : []),
     "Brief public progress updates are shown live while you work. Describe current actions and results, not private reasoning.",
     "Answer the owner in your final message. They read that message as your reply."].join("\n\n");
 }

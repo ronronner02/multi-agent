@@ -91,6 +91,25 @@ describe("MVP slice 2 — the owner starts team work", () => {
     expect(row).toEqual({ seat: "dev@demo", body: "Add a health endpoint" });
   });
 
+  it("pins an owner-selected workflow and removes write permission for a read-only request", async () => {
+    const response = await start({ goal: "Inspect the design", workflow: { entrypoint: "spec-pov", readOnly: true } });
+    expect(response.status).toBe(201);
+    const receipt = await response.json() as { runId: string };
+    const task = governance.findTask(receipt.runId, "task-1")!;
+    expect(task.workflow).toMatchObject({ entrypoint: "spec-pov", origin: "user", readOnly: true });
+    expect(task.permissions).not.toContain("write-assigned-tree");
+  });
+
+  it.each([
+    { entrypoint: "spec-commit" },
+    { entrypoint: "spec-pov", origin: "caller" },
+    { entrypoint: "spec-pov", ownerMessageId: "another-run-request" },
+  ])("rejects invalid workflow provenance before creating a run (%j)", async workflow => {
+    expect((await start({ goal: "Inspect the design", workflow })).status).toBeGreaterThanOrEqual(400);
+    expect(governance.listRuns()).toEqual([]);
+    expect(db.prepare("SELECT count(*) AS count FROM queue_items").get()).toEqual({ count: 0 });
+  });
+
   it("lists the runs it created, so no client has to type an id", async () => {
     const created = await (await start({ goal: "First" })).json() as Record<string, string>;
     const response = await app.request("/api/team-control/runs", { headers: { Authorization: "Bearer " + ownerToken } },

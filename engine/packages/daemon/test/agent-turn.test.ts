@@ -121,6 +121,16 @@ describe("the managed turn's command line", () => {
     // A plain continuation says nothing about why; the reason is the continuation's own job.
     expect(text).not.toContain("continues your earlier attempt");
   });
+
+  it.each([false, true])("only advertises a writable task report for write-enabled turns (read-only: %s)", readOnly => {
+    const context = manifest("attempt-1");
+    const prompt = managedTurnPrompt({ identity: "", bundle: "", runId: "run", assignment: context.assignment,
+      taskBody: "Inspect the source", outputs: [], permissions: [], instructions: [], continuation: null,
+      taskReportPath: "/state/task-report.json", workflow: { client: "codex", entrypoint: "spec-pov", origin: "user",
+        binding: context.binding, input: "Inspect the source", readOnly, revision: "pin", nativeInvocation: "$spec-pov" } });
+    expect(prompt.includes("Task report file:")).toBe(!readOnly);
+    expect(prompt).toContain("<workflow-outcome>");
+  });
 });
 
 describe("what a continuation is told", () => {

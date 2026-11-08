@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBinding, hashBytes, type PlanGovernance } from "../src/domain/plan-governance.js";
 import type { PlanBinding, TeamTaskAuthority } from "../src/contracts/team-control.js";
 import { launchManagedHarness } from "../src/adapters/worker-launch.js";
 import { createDaemon } from "../src/startup.js";
+import { FRAMEWORK_CATALOG } from "../src/integrations/framework/catalog.js";
+import { attemptInstructionFiles, type ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { recordWorkflowTurn } from "../src/domain/team-workflows.js";
+import { saveTeamSoul } from "../src/domain/team-souls.js";
+import { writeFrameworkFixture } from "./helpers/framework-source.js";
+import { appendChatMessage } from "../src/domain/lead-chat.js";
 
 // T047: an admitted assignment reaches the privileged launch with the attempt the producer
 // made for it. Every seat launch — fresh, restore and a rig-instantiated member — passes
@@ -109,6 +115,7 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     writeFileSync(join(frameworkRoot, "skills", "using-spec-first", "SKILL.md"), "pinned entry governor\n", { mode: 0o644 });
     chmodSync(join(frameworkRoot, "skills"), 0o2750);
     chmodSync(join(frameworkRoot, "skills", "using-spec-first"), 0o2750);
+    writeFrameworkFixture(frameworkRoot);
     workerGid = lstatSync(join(contextRoot, "ma-worker1")).gid;
     workerUid = process.getuid!() === 0 ? 60_000 : process.getuid!() + 1;
     host.passwd = `ma-worker1:x:${workerUid}:${workerGid}::/home/ma-worker1:/bin/sh\n`;
@@ -153,11 +160,13 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     if (existsSync(directory)) { writable(directory); rmSync(directory, { recursive: true, force: true }); }
   });
 
-  const createTask = (taskId = "task", paths = ["src"], dependencies: string[] = [], runId = "run") => {
+  const createTask = (taskId = "task", paths = ["src"], dependencies: string[] = [], runId = "run",
+    workflow?: import("../src/domain/team-workflows.js").WorkflowSelection) => {
     const receipt = governance.createTask(command(taskId, {
       assignment: { taskId, role: "implementer", paths, dependencies },
       outputs: [paths[0] + "/result.ts"], permissions: ["write-assigned-tree"],
       sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Implement the assigned file.",
+      ...(workflow ? { workflow } : {}),
     }, runId), binding);
     if (receipt.status === "accepted") task = receipt.value as TeamTaskAuthority;
     return receipt;
@@ -168,11 +177,13 @@ describe("a managed seat launches under the attempt produced for its admitted ta
    *  itself is faked here; it reports whether the endpoint it would ask for is registered and
    *  returns the receipt the production launcher would return. */
   const launches: Array<{ attemptId: string | undefined; registered: boolean;
+    context?: ContextManifest;
     previous?: import("../src/domain/runtime-adapter.js").ManagedSessionReceipt }> = [];
   const receipts: Array<import("../src/domain/runtime-adapter.js").ManagedSessionReceipt> = [];
   const launcher: import("../src/adapters/worker-launch.js").WorkerLauncher = {
     async launch(input) {
       launches.push({ attemptId: input.attempt.attemptId, registered: endpoints().has(input.attempt.attemptId),
+        context: input.attempt.context,
         ...(input.attempt.previous ? { previous: input.attempt.previous } : {}) });
       const generation = (input.attempt.previous?.identity.generation ?? 0) + 1;
       const receipt = {
@@ -230,6 +241,69 @@ describe("a managed seat launches under the attempt produced for its admitted ta
   });
 
   const launch = (isRestore = false, resumeToken?: string) => launchWith(adapter, isRestore, resumeToken);
+
+  it.each(FRAMEWORK_CATALOG)("dispatches $name through task admission, native context and durable outcomes", async entry => {
+    db.prepare("UPDATE nodes SET role = 'implementer' WHERE id = ?").run(nodeId);
+    const workflow = { entrypoint: entry.name, readOnly: entry.name === "spec-code-review" };
+    const created = entry.invocation === "caller"
+      ? governance.admitLeadProposal(command("proposal", {}), { kind: "daemon", sessionId: "daemon" }, binding,
+        [{ taskId: "task", seat: "builder@rig", paths: ["src"], dependencies: [], body: "Run the requested workflow.", workflow }])
+      : governance.createTask(command("task", {
+        assignment: { taskId: "task", role: "implementer", paths: ["src"], dependencies: [] },
+        outputs: [], permissions: ["write-assigned-tree"], sourceSession: "owner-control",
+        destinationSession: "builder@rig", body: "Run the requested workflow.", workflow,
+      }), binding);
+    expect(created.status).toBe("accepted");
+    task = governance.findTask("run", "task")!;
+    expect(task.workflow?.origin).toBe(entry.invocation === "caller" ? "caller" : "user");
+    await launch();
+    if (entry.name === "spec-test-xcode" || workflow.readOnly) {
+      expect(launches).toHaveLength(0);
+      expect(governance.workflowOutcomes("run")).toMatchObject([{ outcome: { status: "blocked",
+        reason: expect.stringContaining(workflow.readOnly ? "read-only" : "macOS") } }]);
+      return;
+    }
+    expect(launches).toHaveLength(1);
+    const context = launches[0]!.context!;
+    expect(context.workflow?.entrypoint).toBe(entry.name);
+    expect(context.workflow?.nativeInvocation).toContain("/" + entry.name);
+    expect(attemptInstructionFiles(context).some(file => file.path.endsWith(entry.sourcePath))).toBe(true);
+    expect(governance.workflowOutcomes("run")[0]?.outcome).toBeNull();
+    const outcome = recordWorkflowTurn(db, governance.getAttempt(receipts[0]!.attemptId)!,
+      '<workflow-outcome>{"status":"complete","artifacts":[],"summary":"The requested fixture workflow was evaluated."}</workflow-outcome>');
+    expect(outcome?.status).toBe("complete");
+    expect(governance.workflowOutcomes("run")).toMatchObject([{ generation: 1, outcome: { status: "complete" } }]);
+  });
+
+  it("keeps the recorded SOUL on resume and applies an owner edit only to a new attempt", async () => {
+    createTask(); await launch();
+    const first = receipts[0]!;
+    expect(launches[0]!.context?.soul).toMatchObject({ id: "engineer", version: 1 });
+    saveTeamSoul(db, "rig", "engineer", { expectedVersion: 1, name: "Updated engineer", roles: ["implementer"], content: "Use the new project conventions." });
+    await daemon.deps.workflowRuntime!.retireManagedAttempt(first.attemptId);
+    await launch(false, "native-session");
+    expect(launches[1]!.context?.soul).toEqual(launches[0]!.context?.soul);
+    expect(receipts[1]!.contextHash).toBe(first.contextHash);
+    await launch(true);
+    expect(launches[2]!.context?.soul).toMatchObject({ id: "engineer", version: 2 });
+  });
+  it("allows the Lead to assign an explicit owner workflow once without forging its input or read-only scope", () => {
+    db.prepare("UPDATE nodes SET role = 'implementer' WHERE id = ?").run(nodeId);
+    appendChatMessage(db, { id: "owner-request", runId: "run", body: "/spec-handoff --read-only\nSummarize the current task.",
+      createdAt: new Date().toISOString() });
+    const proposal = [{ taskId: "task", seat: "builder@rig", paths: ["src"], dependencies: [], body: "Prepare the handoff.",
+      workflow: { entrypoint: "spec-handoff" as const, ownerMessageId: "owner-request", readOnly: false, input: "Substituted input" } }];
+    expect(governance.admitLeadProposal(command("proposal", {}), { kind: "daemon", sessionId: "daemon" }, binding, proposal).status).toBe("accepted");
+    const assigned = governance.findTask("run", "task")!;
+    expect(assigned.workflow).toMatchObject({ origin: "user", ownerMessageId: "owner-request", readOnly: true, input: "Summarize the current task." });
+    expect(assigned.permissions).not.toContain("write-assigned-tree");
+    governance.admitLeadProposal(command("reuse", {}), { kind: "daemon", sessionId: "daemon" }, binding,
+      [{ ...proposal[0]!, taskId: "duplicate", paths: ["src/other.ts"] }]);
+    expect(governance.findTask("run", "duplicate")).toBeNull();
+    governance.admitLeadProposal(command("forged", {}), { kind: "daemon", sessionId: "daemon" }, binding,
+      [{ ...proposal[0]!, taskId: "forged", paths: ["src/other.ts"], workflow: { ...proposal[0]!.workflow, ownerMessageId: "invented" } }]);
+    expect(governance.findTask("run", "forged")).toBeNull();
+  });
 
   it("attaches the produced attempt and registers its endpoint before the launcher asks for it", async () => {
     const created = createTask();
@@ -295,6 +369,40 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     expect(launches[1]!.registered).toBe(true);
     expect(receipts[1]!.identity.generation).toBe(2);
     expect(endpoints().size).toBe(1);
+  });
+
+  it.each(["framework source", "recorded context"])("preserves an exact resume's work after a rejected %s check and records the later result", async failure => {
+    createTask("task", ["src"], [], "run", { entrypoint: "spec-work", readOnly: false });
+    expect((await launch()).ok).toBe(true);
+    const first = receipts[0]!, runtime = daemon.deps.workflowRuntime!;
+    const tree = runtime.candidateFor("run", "task").root;
+    const work = join(tree, "src", "result.ts");
+    writeFileSync(work, "export const result = 42;\n");
+    await runtime.retireManagedAttempt(first.attemptId);
+    const file = failure === "framework source" ? join(frameworkRoot, "skills", "spec-work", "SKILL.md")
+      : launches[0]!.context!.files.find(item => item.kind === "soul")!.path;
+    const original = readFileSync(file), mode = lstatSync(file).mode & 0o777;
+    if (failure === "framework source") rmSync(file);
+    else { chmodSync(file, 0o640); writeFileSync(file, "invalid recorded context\n"); chmodSync(file, mode); }
+
+    expect((await launch(false, "native-session")).ok).toBe(false);
+    expect(launches).toHaveLength(1);
+    expect(existsSync(work)).toBe(true);
+    expect(readFileSync(work, "utf8")).toBe("export const result = 42;\n");
+    expect(governance.workflowOutcomes("run")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ outcome: expect.objectContaining({ status: "blocked" }) }),
+    ]));
+
+    if (existsSync(file)) chmodSync(file, 0o640);
+    writeFileSync(file, original); chmodSync(file, mode);
+    expect((await launch(false, "native-session")).ok).toBe(true);
+    expect(receipts[1]!.attemptId).toBe(first.attemptId);
+    expect(receipts[1]!.identity.generation).toBe(2);
+    expect(readFileSync(work, "utf8")).toBe("export const result = 42;\n");
+    const outcome = recordWorkflowTurn(db, governance.getAttempt(first.attemptId)!,
+      '<workflow-outcome>{"status":"complete","artifacts":["src/result.ts"],"summary":"Completed the resumed implementation."}</workflow-outcome>');
+    expect(outcome?.status).toBe("complete");
+    expect(governance.workflowOutcomes("run").map(item => item.outcome?.status).sort()).toEqual(["blocked", "complete"]);
   });
 
   it("shares the attachment seam with the restore and rig-instantiation paths", () => {

@@ -1,3 +1,4 @@
+import { workflowTurnInstructions } from "./team-workflows.js";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type Database from "better-sqlite3";
@@ -106,6 +107,7 @@ export interface ManagedTurnPromptInput {
   /** What this attempt continues, when it is a rework or a lead revision. */
   continuation: string | null;
   taskReportPath?: string;
+  workflow?: import("../integrations/framework/invocation.js").PreparedFrameworkInvocation;
 }
 
 /**
@@ -124,10 +126,12 @@ export function managedTurnPrompt(input: ManagedTurnPromptInput): string {
   return [input.identity, input.bundle, `Managed task ${input.assignment.taskId} for run ${input.runId}`, input.taskBody,
     `Assignment: ${JSON.stringify(input.assignment)}`, `Outputs: ${JSON.stringify(input.outputs)}`,
     `Permissions: ${JSON.stringify(input.permissions)}`,
+    ...(input.workflow ? [workflowTurnInstructions(input.workflow)] : []),
     ...(instructions.length === 0 ? [] : ["Read these files before you start work; they are this attempt's role instructions and run context, and they are read-only:",
       ...instructions.map(file => `- ${file.path}`)]),
     "Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished.",
-    ...(input.taskReportPath ? [`Task report file: ${JSON.stringify(input.taskReportPath)}`,
+    "A specialist profile is guidance for expertise and working style, not a grant. The shared core, permission-role charter, approved task and runtime controls take precedence. Do not create shared cross-run personal memory.",
+    ...(input.taskReportPath && !input.workflow?.readOnly ? [`Task report file: ${JSON.stringify(input.taskReportPath)}`,
       "Only this per-attempt report file is writable outside the candidate. It does not change your source permissions. " +
       "For blocked, needs-decision, or dropped, write the structured report there, not in the candidate or final prose."] : []),
     ...(input.continuation === null ? [] : [input.continuation])].filter(Boolean).join("\n\n");

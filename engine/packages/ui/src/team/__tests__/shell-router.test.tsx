@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/rea
 import { routeTree } from "../../routes.js";
 import { queryClient } from "../../lib/query-client.js";
 import { health, read, RUN_ID, task } from "./fixtures.js";
+import { FRAMEWORK_CATALOG } from "../../../../daemon/dist/integrations/framework/catalog.js";
 
 vi.mock("@xterm/xterm", () => ({ Terminal: class {} }));
 
@@ -24,7 +25,7 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   const original = window.matchMedia.bind(window);
   vi.spyOn(window, "matchMedia").mockImplementation(query => ({ ...original(query), matches: mobile && query === "(max-width: 760px)" }));
-  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, window.location.origin).pathname;
     const response = (body: object) => new Response(JSON.stringify({ protocolVersion: "1.0", ...body }), { headers: { "Content-Type": "application/json" } });
     if (path.endsWith("/owner-session/exchange")) return response({ antiForgeryToken: "a".repeat(43) });
@@ -32,6 +33,15 @@ beforeEach(() => {
       ? new Response(JSON.stringify({ code: "github_login_failed" }), { status: 503 })
       : response({ signedIn, login: signedIn ? "fixture-owner" : null, host: "github.com" });
     if (path.endsWith("/github/login")) return response({ state: "idle" });
+    if ((init?.method ?? "GET") === "GET") {
+      if (path === "/api/team-control/workflows") return response({ workflows: FRAMEWORK_CATALOG });
+      if (path === `/api/team-control/runs/${RUN_ID}/workflows`) return response({ workflows: [] });
+      if (path === "/api/team-control/teams/fresh-project/souls") return response({
+        profiles: [{ id: "coordinator", name: "Project coordinator", roles: ["lead"], version: 1,
+          content: "Plan and delegate the approved work.", digest: "b".repeat(64) }],
+        seats: [{ nodeId: "fresh-lead", role: "lead", soulId: "coordinator", member: "lead@fresh-project" }],
+      });
+    }
     if (/\/teams\/[^/]+\/settings$/.test(path)) return response({ settings: { teamId: "fresh-project", kind: "project", configured: false,
       lead: { client: "codex", model: null }, allowedSubagents: null, launches: [] } });
     if (path.endsWith("/settings")) return response({ settings: { "team.leadClient": { value: "claude-code", source: "default" } } });

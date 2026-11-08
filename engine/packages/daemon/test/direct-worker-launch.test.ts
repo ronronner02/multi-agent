@@ -30,10 +30,12 @@ describe("managed Codex turns", () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), "codex-turn-")); });
   afterEach(() => { writable(root); rmSync(root, { recursive: true, force: true }); });
 
-  const launch = async (options: Partial<WorkerLaunchInput> = {}, modelRefusal?: (input: WorkerLaunchInput) => string | null, documentRefusal?: (input: WorkerLaunchInput) => string | null) => {
+  const launch = async (options: Partial<WorkerLaunchInput> & { readOnly?: boolean } = {}, modelRefusal?: (input: WorkerLaunchInput) => string | null, documentRefusal?: (input: WorkerLaunchInput) => string | null) => {
+    const { readOnly, ...launchOptions } = options;
     const context = {
       runId: "run", assignment: { taskId: "task", role: "implementer", paths: ["plan.md"], dependencies: [] },
-      client: "codex", mutableStateRoot: root, projection: { attemptId: "attempt-1" },
+      client: options.client ?? "codex", mutableStateRoot: root, projection: { attemptId: "attempt-1" },
+      ...(readOnly ? { workflow: { readOnly: true } } : {}),
       binding: { policyFingerprint: "sha256:" + "b".repeat(64) }, generatedHash: "sha256:" + "a".repeat(64),
     } as ContextManifest;
     writeAgentTurnPrompt(context, "Read the assigned plan.\n");
@@ -46,7 +48,7 @@ describe("managed Codex turns", () => {
     const launcher = new DirectWorkerLauncher({ tmux: terminal, modelRefusal, documentRefusal, resolvePane: async () => "%1",
       resolveAssignedTree: () => join(root, "candidate tree"), tmuxServer: () => join(root, "tmux") });
     const input: WorkerLaunchInput = { client: "codex",
-      attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context }, ...options };
+      attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context }, ...launchOptions };
     const result = await launcher.launch(input);
     return { result, input, launcher, terminal, line: terminal.sendText.mock.calls[0]?.[1] ?? "" };
   };
@@ -77,6 +79,24 @@ describe("managed Codex turns", () => {
     expect(line).toContain("cd '" + join(root, "candidate tree") + "'");
     expect(line).not.toContain("'-C'");
     expect(line).not.toContain("'-s'");
+  });
+
+  it.each([undefined, "resumeToken", "continueSessionId"] as const)("keeps read-only workflows read-only for fresh and continued turns (%s)", async key => {
+    const { result, line } = await launch({ readOnly: true, ...(key ? { [key]: threadId } : {}) });
+    expect(result).toMatchObject({ ok: true });
+    expect(line).toContain(key ? "'-c' 'sandbox_mode=read-only'" : "'-s' 'read-only'");
+    expect(line).toContain("'-c' 'approval_policy=never'");
+    expect(line).not.toContain("workspace-write");
+    expect(line).not.toContain("sandbox_workspace_write");
+  });
+
+  it("runs a read-only alternate-client workflow with read tools and no inherited external tools", async () => {
+    const { result, line } = await launch({ client: "claude-code", readOnly: true });
+    expect(result).toMatchObject({ ok: true });
+    expect(line).toContain("'--permission-mode' 'plan'");
+    expect(line).toContain("'--tools' 'Read,Glob,Grep'");
+    expect(line).toContain("'--strict-mcp-config'");
+    expect(line).not.toContain("bypassPermissions");
   });
 
   it.each(["resumeToken", "continueSessionId"] as const)("refuses hostile %s values before submitting a command", async key => {

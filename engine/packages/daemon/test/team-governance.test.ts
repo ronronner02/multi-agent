@@ -384,6 +384,23 @@ describe("transactional plan governance", () => {
     expect(observed.map((event) => event.action)).toEqual(["task.created", "task.transitioned"]);
   });
 
+  it("admits read-only workflow inputs from the read binding without granting writes", () => {
+    approvePlan();
+    const payload = { assignment: { taskId: "inspect", role: "implementer", paths: ["test/spec.ts"], dependencies: [] },
+      outputs: [], permissions: ["write-assigned-tree", "submit-evidence"], sourceSession: "owner-session",
+      destinationSession: "builder@rig-1", body: "Inspect the tests", workflow: { entrypoint: "spec-pov", readOnly: true } };
+    const result = governance.createTask(command("inspect", payload), binding);
+    expect(result.status, result.reason).toBe("accepted");
+    expect(governance.findTask("run-1", "inspect")?.permissions).toEqual(["submit-evidence"]);
+    for (const [taskId, paths, outputs, readOnly] of [
+      ["write", ["test/spec.ts"], [], false], ["outside", ["other/spec.ts"], [], true],
+      ["output", ["test/spec.ts"], ["test/spec.ts"], true],
+    ] as const) {
+      expect(governance.createTask(command(taskId, { ...payload, assignment: { ...payload.assignment, taskId, paths },
+        outputs, workflow: { ...payload.workflow, readOnly } }), binding).status).toBe("denied");
+    }
+  });
+
   it("rolls back the queue, authority record and all events on persistence failure", () => {
     approvePlan();
     const before = db.prepare("SELECT count(*) AS count FROM events").get();

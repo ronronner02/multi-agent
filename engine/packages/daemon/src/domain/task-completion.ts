@@ -69,6 +69,7 @@ export function taskCompletionEvidence(input: {
   assignmentPaths: readonly string[];
   manifest: CandidateFacts | null;
   unavailableReason?: string;
+  workflow?: { readOnly: boolean; outcome: import("../integrations/framework/invocation.js").FrameworkOutcome };
 }): TaskCompletionEvidence {
   const empty: TaskCompletionEvidence = { validated: false, manifestDigest: null, base: null, baseIdentifier: null,
     fileCount: 0, changedPaths: [], outsideAssignment: [], reasons: [] };
@@ -82,7 +83,10 @@ export function taskCompletionEvidence(input: {
   // The snapshot lane has no base commit to diff, so the daemon cannot say what moved. A
   // reviewer's candidate is the implementer's tree, which this reads the same way.
   if (manifest.base === "snapshot") reasons.push("The candidate has no base commit to diff against");
-  if (manifest.base === "commit" && paths.length === 0) reasons.push("The candidate moves no path");
+  if (manifest.base === "commit" && paths.length === 0 && !(input.workflow?.readOnly && input.workflow.outcome.status === "complete")) reasons.push("The candidate moves no path");
+  if (input.workflow?.readOnly && manifest.patch.trim()) reasons.push("A read-only workflow changed the candidate");
+  if (input.workflow?.outcome.artifacts.some(path => !manifest.files.some(file => file.path === path))) reasons.push("A reported workflow artifact is missing from the candidate");
+  if (input.workflow && input.workflow.outcome.status !== "complete") reasons.push("The workflow did not complete: " + input.workflow.outcome.reason);
   if (outside.length) reasons.push(`${outside.length} changed path(s) fall outside the assignment`);
   return { validated: reasons.length === 0, manifestDigest: manifest.manifestDigest, base: manifest.base,
     baseIdentifier: manifest.baseIdentifier, fileCount: manifest.files.length, changedPaths: paths,

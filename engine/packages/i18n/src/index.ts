@@ -18,6 +18,7 @@ export const CATALOGS = Object.freeze({
 // JSON imports preserve keys, but widen message values to string. Keep the
 // interpolation type contract explicit and check it against both catalogs.
 export const MESSAGE_PARAMETERS = {
+  "souls.seat": ["index"],
   "chat.documentConfirmationConsequence": ["kind", "version"],
   "chat.stageRequestConsequence": ["stage"],
   "documents.discussContext": ["kind", "version", "hash"],

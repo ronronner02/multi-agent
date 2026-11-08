@@ -93,6 +93,14 @@ describe("delivery roster changes", () => {
     expect(state()).toEqual(before);
   });
 
+  it.each(["pending", "in-progress", "blocked"])("keeps specialist identity stable while a seat has %s work", state => {
+    const qitem = addTask("assigned", "impl-1@demo");
+    db.prepare("UPDATE queue_items SET state = ? WHERE qitem_id = ?").run(state, qitem);
+    expect(governance.planRosterRefusal("run", [{ ...implementer, soulId: "frontend" }, reviewer], 6)).toContain("busy");
+    expect(governance.planRosterRefusal("run", [{ ...implementer, soulId: "engineer" }, reviewer], 6)).toBeNull();
+    expect(db.prepare("SELECT soul_id FROM nodes WHERE role = 'implementer'").get()).toEqual({ soul_id: null });
+  });
+
   it("adds and assigns together, then allocates the next role index on another proposal", () => {
     for (const index of [2, 3]) {
       const receipt = governance.admitLeadProposal(request("add-" + index, {}), daemon, binding,

@@ -17,6 +17,7 @@ import { composeAttemptCompletion, processIdentityAlive } from "../src/domain/at
 import { changedPaths, leadCompletionEvidence, taskCompletionEvidence } from "../src/domain/task-completion.js";
 import { reviewerTaskId } from "../src/domain/review-loop.js";
 import { roleConfiguration } from "../src/domain/role-configuration.js";
+import { admittedWorkflow, recordWorkflowTurn } from "../src/domain/team-workflows.js";
 import type { PlanBinding } from "../src/contracts/team-control.js";
 import { createTestApp } from "./helpers/test-app.js";
 
@@ -243,6 +244,56 @@ describe("MVP — the completion path", () => {
     expect(governance.findTask("run", reviewerTaskId("task", 1))?.assignment).toMatchObject({ role: "reviewer", reviewOf: "task" });
   });
 
+  it("uses the recorded read-only workflow in owner completion without creating an implementation review", async () => {
+    const task = governance.findTask("run", "task")!;
+    db.prepare("UPDATE team_queue_authority SET workflow_json = ?, outputs_json = '[]', permissions_json = '[]' WHERE qitem_id = ?")
+      .run(JSON.stringify(admittedWorkflow({ entrypoint: "spec-pov", readOnly: true }, "user")), task.qitemId);
+    receipt("attempt-1", "builder@rig", 4242);
+    const owner = completion();
+    await owner.sweep(); alive = false; await owner.sweep();
+    runtime.candidateFor("run", "task");
+    recordWorkflowTurn(db, governance.getAttempt("attempt-1")!,
+      '<workflow-outcome>{"status":"complete","artifacts":[],"summary":"The current design meets the stated goal."}</workflow-outcome>');
+    const before = governance.workflowOutcomes("run");
+    const read = await (await request("/api/team-control/runs/run/tasks/task/completion")).json() as {
+      completion: { actorSession: string; blockedReason: string | null; attempt: { attemptId: string; entityVersion: number };
+        evidence: { validated: boolean; reasons: string[]; changedPaths: string[] } } };
+    expect(read.completion.blockedReason).toBeNull();
+    expect(read.completion.evidence).toMatchObject({ validated: true, reasons: [], changedPaths: [] });
+    expect(governance.workflowOutcomes("run")).toEqual(before);
+    const result = governance.recordTaskOutcome(command(task.qitemId, {
+      expectedTaskVersion: governance.getTask(task.qitemId)!.entityVersion, state: "done", closureReason: "no-follow-on",
+      actorSession: read.completion.actorSession, attemptId: read.completion.attempt.attemptId,
+      expectedAttemptVersion: read.completion.attempt.entityVersion, evidence: read.completion.evidence,
+    }), { kind: "owner", sessionId: "owner-control" });
+    expect(result.status).toBe("observed");
+    expect(governance.findTask("run", reviewerTaskId("task", 1))).toBeNull();
+  });
+
+  it.each([true, false])("requires the latest native generation's workflow result in owner completion (read-only: %s)", async readOnly => {
+    const task = governance.findTask("run", "task")!;
+    db.prepare("UPDATE team_queue_authority SET workflow_json = ?, outputs_json = '[]', permissions_json = '[]' WHERE qitem_id = ?")
+      .run(JSON.stringify(admittedWorkflow({ entrypoint: "spec-pov", readOnly }, "user")), task.qitemId);
+    receipt("attempt-1", "builder@rig", 4242);
+    const owner = completion();
+    await owner.sweep(); alive = false; await owner.sweep();
+    const tree = runtime.candidateFor("run", "task").root;
+    if (!readOnly) writeFileSync(join(tree, "src", "result.ts"), "export const result = 42;\n");
+    recordWorkflowTurn(db, governance.getAttempt("attempt-1")!,
+      '<workflow-outcome>{"status":"complete","artifacts":[],"summary":"The first native turn completed."}</workflow-outcome>');
+    db.prepare("UPDATE team_attempts SET identity_json = json_set(identity_json, '$.generation', 2) WHERE id = 'attempt-1'").run();
+    const read = async () => (await (await request("/api/team-control/runs/run/tasks/task/completion")).json() as {
+      completion: { evidence: { validated: boolean; reasons: string[] } } }).completion.evidence;
+    expect(await read()).toMatchObject({ validated: false, reasons: expect.arrayContaining([
+      "The workflow did not complete: workflow-outcome-not-recorded",
+    ]) });
+    recordWorkflowTurn(db, governance.getAttempt("attempt-1")!,
+      '<workflow-outcome>{"status":"blocked","artifacts":[],"reason":"The required capability is missing."}</workflow-outcome>');
+    expect(await read()).toMatchObject({ validated: false, reasons: expect.arrayContaining([
+      "The workflow did not complete: The required capability is missing.",
+    ]) });
+  });
+
   /**
    * C3 — a lead task's completion is recordable.
    *
@@ -327,6 +378,21 @@ describe("the completion path's pure rules", () => {
     // An unreadable candidate is its own reason, not an empty one.
     expect(taskCompletionEvidence({ role: "implementer", assignmentPaths: ["src"], manifest: null, unavailableReason: "gone" }))
       .toMatchObject({ validated: false, reasons: ["gone"], manifestDigest: null });
+  });
+
+  it.each([
+    "diff --git a/src/a.ts b/src/a.ts\n",
+    'diff --git "a/src/quoted\\tname.ts" "b/src/quoted\\tname.ts"\n',
+  ])("rejects every changed read-only candidate, including quoted patch paths (%s)", patch => {
+    expect(taskCompletionEvidence({ role: "implementer", assignmentPaths: ["src"], manifest: manifest(patch),
+      workflow: { readOnly: true, outcome: { status: "complete", artifacts: [], reason: "", summary: "Reviewed the source." } },
+    })).toMatchObject({ validated: false, reasons: expect.arrayContaining(["A read-only workflow changed the candidate"]) });
+  });
+
+  it("requires a reported workflow artifact to exist even when the candidate otherwise validates", () => {
+    expect(taskCompletionEvidence({ role: "implementer", assignmentPaths: ["src"], manifest: manifest("diff --git a/src/a.ts b/src/a.ts\n"),
+      workflow: { readOnly: false, outcome: { status: "complete", artifacts: ["missing.md"], reason: "" } },
+    })).toMatchObject({ validated: false, reasons: ["A reported workflow artifact is missing from the candidate"] });
   });
 
   /**

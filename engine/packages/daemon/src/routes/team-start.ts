@@ -16,7 +16,8 @@ import { LEAD_ESCALATION_PATH, leadRoster } from "../domain/lead-proposal.js";
 import { isRetiredTeamNode } from "../domain/team-setup.js";
 import { leadRosterPath } from "../domain/lead-roster.js";
 import { documentPaths } from "../domain/project-documents.js";
-import { appendChatMessage } from "../domain/lead-chat.js";
+import { appendChatMessage, chatBody } from "../domain/lead-chat.js";
+import { parseWorkflowSelection, workflowAdmissionRefusal } from "../domain/team-workflows.js";
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { Rig } from "../domain/types.js";
@@ -164,6 +165,10 @@ export function teamStartRoutes(
     // The goal is prose: the owner types it into a textarea and it becomes the task's brief, so
     // its line breaks are its meaning.
     const goal = prose(v.goal, "goal", 262_144);
+    const workflow = v.workflow === undefined ? undefined : parseWorkflowSelection(v.workflow);
+    if (workflow?.ownerMessageId) throw new TeamContractError("workflow.ownerMessageId");
+    const workflowError = workflow && workflowAdmissionRefusal(workflow, "user");
+    if (workflowError) return c.json({ code: "workflow_invocation_denied", error: workflowError }, 403);
     // Every default below is a fact about the rig the owner already runs: its agent node's
     // working directory, the canonical plan name and the source tree. A request that names
     // none of them still lands on something the daemon can verify.
@@ -203,6 +208,9 @@ export function teamStartRoutes(
       return c.json({ code: "lead_required",
         error: "A planning run needs a lead seat: name one, or create a team with `rig team create`." }, 400);
     }
+    // The generated command header is not part of the owner's input limit.
+    const initialWorkflowRequest = workflow && leadSeat !== null
+      ? `/${workflow.entrypoint}${workflow.readOnly ? " --read-only" : ""}\n${workflow.input ?? chatBody(goal, "workflow.input")}` : null;
     const seat = v.seat === undefined ? (node ? defaultSeat(rigRepo, node, rig.name) : null) : text(v.seat, "seat", 256);
     if (leadSeat === null && !seat) return c.json({ code: "seat_required", error: "The rig has no agent seat; name the seat to route the task to." }, 400);
     // C2 — the seat every review round of this run routes to. A start that names none keeps
@@ -295,12 +303,13 @@ export function teamStartRoutes(
     const created = governance.createTask(request(taskId, {
       assignment, outputs: [], permissions: [...roleConfiguration[assignment.role].permissions],
       sourceSession: actor.sessionId, destinationSession: taskSeat, body: goal,
+      ...(workflow && leadSeat === null ? { workflow } : {}),
     }), binding);
     if (created.status !== "accepted") {
       return c.json({ code: "start_refused", runId: run.id, error: created.reason ?? "The task was refused." }, 409);
     }
-    if (planning) appendChatMessage(rigRepo.db, { id: run.id + ":initial", runId: run.id,
-      body: goal, createdAt: run.createdAt });
+    if (planning || initialWorkflowRequest) appendChatMessage(rigRepo.db, { id: run.id + ":initial", runId: run.id,
+      body: initialWorkflowRequest ?? goal, createdAt: run.createdAt });
     // The task exists, so the agent that has to do it starts now. This runs after the response
     // is built rather than inside the request: opening a seat's terminal and waiting for its
     // client to become ready is a launch, and a launch is not what a start request waits on.

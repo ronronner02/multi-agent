@@ -362,6 +362,7 @@ export function dependencySatisfied(
       const awaitingIntegration = db.prepare(`SELECT 1 FROM team_queue_authority a
         JOIN team_runs r ON r.id = a.run_id WHERE a.qitem_id = ?
           AND r.reviewer_seat IS NOT NULL AND json_extract(a.assignment_json, '$.role') = 'implementer'
+          AND COALESCE(json_extract(a.workflow_json, '$.readOnly'), 0) = 0
           AND NOT EXISTS (SELECT 1 FROM team_integration_commits c
             WHERE c.run_id = a.run_id AND c.task_id = a.task_id)`).get(item.qitemId);
       return awaitingIntegration === undefined;
@@ -387,6 +388,7 @@ export function dependencySatisfied(
 export interface GraphTask {
   taskId: string;
   role: string;
+  readOnly?: boolean;
   paths: readonly string[];
   dependencies: readonly string[];
 }
@@ -447,7 +449,7 @@ export function validateDependencyGraph(tasks: readonly GraphTask[]): GraphVerdi
     // `write-assigned-tree`, and its one output is its own decomposition. C2's reviewer is
     // exempt for the same reason, so neither contributes a claim another task could conflict
     // with; their dependency edges still count.
-    if (task.role === "reviewer" || task.role === "lead") continue;
+    if (task.role === "reviewer" || task.role === "lead" || task.readOnly) continue;
     for (const path of task.paths) {
       const normalized = normalizeClaim(path);
       for (const [owned, owner] of claimed) {
@@ -477,7 +479,7 @@ function readProjectedDescriptors(root: string, frameworkFiles: readonly { path:
       if (entry.isDirectory()) { walk(path); continue; }
       const relative = path.slice(root.length + 1);
       const kind: ContextFile["kind"] | undefined = relative === "plan" ? "plan" : relative === "role" ? "role"
-        : relative === "core" ? "core" : relative === "charter" ? "charter"
+        : relative === "core" ? "core" : relative === "charter" ? "charter" : relative === "soul" ? "soul" : relative === "workflow" ? "workflow"
         : relative === "protocol" ? "protocol" : relative === "roster" ? "roster"
         : relative === "run" ? "run" : sourceOf.has(relative) ? "framework" : undefined;
       if (!kind) continue;
@@ -1105,7 +1107,9 @@ export class WorkflowRuntime {
     if (assignment.reviewOf !== undefined && (assignment.role !== "reviewer" || !this.isRunImplementer(runId, assignment.reviewOf))) {
       throw new Error("Review target is not this run's implementer");
     }
-    const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
+    const readOnly = input.context.workflow?.readOnly === true;
+    if (readOnly && (input.outputs.length || input.permissions.includes("write-assigned-tree"))) throw new Error("Read-only workflows cannot declare tree writes");
+    const allowed = assignment.role === "reviewer" || readOnly ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
     const covered = (path: string) => bindingCovers(path, allowed);
     for (const path of [...assignment.paths, ...input.outputs]) if (!covered(path)) throw new Error("Assignment or output expands the approved scope");
     // T053: the task's own record is the store for outputs and permissions, so admission is
@@ -1297,7 +1301,7 @@ export class WorkflowRuntime {
 
     const admitted = this.admitForLaunch(runId, { attemptId, worker, assignment: input.assignment,
       outputs: input.outputs, permissions: input.permissions,
-      context: { binding: this.managedBinding(runId), runId, role: input.role } as ContextManifest });
+      context: { binding: this.managedBinding(runId), runId, role: input.role, workflow: context.workflow } as ContextManifest });
     const binding = governance.getRun(runId).binding;
     const root = resolve(roots.contextRoot, worker, runId, attemptId);
     // Declared outside the try because the failure path needs it: only a projection this
@@ -1371,12 +1375,9 @@ export class WorkflowRuntime {
       this.startingAttempts.delete(attemptId);
       return produced;
     } catch (error) {
-      // Admission retained the candidate claim when it handed this attempt its tree, so
-      // every later failure has to give it back: a claim nobody releases would hold the
-      // task's tree for the life of the daemon. A review launch took no claim, so this is
-      // the no-op `releaseCandidate` documents — it releases the implementation attempt's
-      // own owner key only.
-      this.releaseCandidate(runId, input.assignment.taskId, attemptId);
+      // Only a fresh admission gives its claim back. An exact resume retained the previous
+      // attempt's owner key, so releasing it here would delete that attempt's durable work.
+      if (!input.previous) this.releaseCandidate(runId, input.assignment.taskId, attemptId);
       // A half-written projection would also wedge the attempt id for good: the next
       // produce would find the directory, treat it as a resume, and be refused for an
       // owner-writable root. Only a projection this call created is removed; one that
@@ -1469,6 +1470,7 @@ export class WorkflowRuntime {
     previousContextHash?: string;
   }): ContextManifest {
     const { roots, root, role, client } = input;
+    const context = { ...input.context };
     const frameworkRoot = roots.frameworkRoot;
     // The projection holds more than instructions: the plan the approval bound, the
     // role configuration, the pinned framework entries, and — KTD28 — the shared core
@@ -1508,6 +1510,12 @@ export class WorkflowRuntime {
       // the pinned framework source it was copied from — the manifest re-verifies that
       // source, so a projection copied into the attempt root could not stand in for it.
       files = readProjectedDescriptors(root, input.frameworkFiles);
+      const recordedSoul = files.find(file => file.kind === "soul");
+      if (recordedSoul) context.soul = JSON.parse(readFileSync(recordedSoul.path, "utf8")) as ContextInput["soul"];
+      else delete context.soul;
+      const recordedWorkflow = files.find(file => file.kind === "workflow");
+      if (recordedWorkflow) context.workflow = JSON.parse(readFileSync(recordedWorkflow.path, "utf8")) as ContextInput["workflow"];
+      else delete context.workflow;
       // The native policy's expected paths and hashes come from the policy itself, so a
       // resumed projection supplies the same descriptors the creating produce did.
       for (const file of input.nativePolicy?.files ?? []) {
@@ -1531,6 +1539,8 @@ export class WorkflowRuntime {
         write("plan", readFileSync(join(input.binding.repository.root, input.binding.planRef), "utf8"), "plan"),
         write("role", canonicalJson(roleConfiguration), "role"),
         ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
+        ...(context.soul ? [write("soul", canonicalJson(context.soul), "soul")] : []),
+        ...(context.workflow ? [write("workflow", canonicalJson(context.workflow), "workflow")] : []),
         // C3 — a lead activation's roster and run instructions. The protocol entry is already
         // written above: `roleInstructionEntries("lead")` projects it as this role's charter,
         // and the manifest requires exactly one. A member role adds nothing here.
@@ -1560,7 +1570,7 @@ export class WorkflowRuntime {
     // look like a changed context.
     files.sort((left, right) => left.path.localeCompare(right.path));
     const input_ = {
-      ...input.context,
+      ...context,
       // Revision 5 and later requires the pinned native policy, and the manifest also
       // checks that its files are actually projected, so the producer supplies both.
       ...(input.nativePolicy ? { nativePolicy: input.nativePolicy } : {}),
@@ -1617,10 +1627,11 @@ export class WorkflowRuntime {
    */
   private runGraph(runId: string, admitted: AssignmentInput["assignment"]): GraphTask[] {
     const rows = this.db.prepare(
-      `SELECT a.task_id AS taskId, a.assignment_json AS assignment, q.state AS state
+      `SELECT a.task_id AS taskId, a.assignment_json AS assignment, q.state AS state,
+         COALESCE(json_extract(a.workflow_json, '$.readOnly'), 0) AS readOnly
        FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
        WHERE a.run_id = ?`)
-      .all(runId) as { taskId: string; assignment: string; state: string }[];
+      .all(runId) as { taskId: string; assignment: string; state: string; readOnly: number }[];
     // The repository already names this set: `blocked` is still in play (it can
     // resume), while `handed-off` is terminal, so a local list would both miss a
     // live claim and keep a finished one.
@@ -1631,7 +1642,7 @@ export class WorkflowRuntime {
       .flatMap(record => record.paths.flatMap(path => [path.path, path.canonicalPath]));
     const tasks = rows.map(row => {
       const assignment = JSON.parse(row.assignment) as { role?: string; paths?: string[]; dependencies?: string[] };
-      return { taskId: row.taskId, role: assignment.role ?? admitted.role,
+      return { taskId: row.taskId, role: assignment.role ?? admitted.role, readOnly: row.readOnly === 1,
         // A settled task keeps its edges but drops its claim.
         paths: live(row.state) ? [...(assignment.paths ?? []), ...extended(row.taskId)] : [],
         dependencies: [...(assignment.dependencies ?? [])] };
@@ -1639,7 +1650,8 @@ export class WorkflowRuntime {
     // The admitted assignment wins over its stored row: a stale row would otherwise
     // let an earlier, narrower claim stand in for the one about to launch.
     return [...tasks.filter(task => task.taskId !== admitted.taskId),
-      { taskId: admitted.taskId, role: admitted.role, paths: [...admitted.paths, ...extended(admitted.taskId)], dependencies: [...admitted.dependencies] }];
+      { taskId: admitted.taskId, role: admitted.role, readOnly: tasks.find(task => task.taskId === admitted.taskId)?.readOnly,
+        paths: [...admitted.paths, ...extended(admitted.taskId)], dependencies: [...admitted.dependencies] }];
   }
 
   /**
@@ -1682,6 +1694,7 @@ export class WorkflowRuntime {
       const verdict = validateDependencyGraph([...claimedBy.filter(task => task.taskId !== input.assignment.taskId), {
         taskId: input.assignment.taskId,
         role: input.assignment.role,
+        readOnly: input.context.workflow?.readOnly,
         paths: [...declared.paths],
         dependencies: [...declared.dependencies],
       }]);

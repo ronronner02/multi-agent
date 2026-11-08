@@ -14,6 +14,7 @@ export interface FrameworkOutcome {
   status: "complete" | "incomplete" | "blocked" | "failed";
   artifacts: string[];
   reason: string;
+  summary?: string;
 }
 export interface FrameworkBridge {
   checkReadiness(request: PreparedFrameworkInvocation, entry: FrameworkEntry): Promise<{ ready: boolean; reason?: string }>;
@@ -21,13 +22,12 @@ export interface FrameworkBridge {
   invoke(request: PreparedFrameworkInvocation): Promise<unknown>;
 }
 
-export async function invokeFramework(request: FrameworkRequest, bridge: FrameworkBridge): Promise<FrameworkOutcome> {
+export function prepareFrameworkInvocation(request: FrameworkRequest): PreparedFrameworkInvocation | FrameworkOutcome {
   const blocked = (reason: string): FrameworkOutcome => ({ status: "blocked", artifacts: [], reason });
   const entry = frameworkEntry(request.entrypoint);
   if (!entry) return blocked("unknown-framework-entrypoint");
   if (!["claude-code", "codex"].includes(request.client) || !["user", "caller"].includes(request.origin)
       || typeof request.input !== "string" || typeof request.readOnly !== "boolean") return blocked("invalid-framework-request");
-  if (entry.status === "deferred") return blocked(entry.prerequisite);
   if (entry.invocation !== "workflow" && entry.invocation !== request.origin) return blocked(`${entry.invocation}-invocation-required`);
   let binding: PlanBinding;
   try { binding = parsePlanBinding(request.binding); }
@@ -42,23 +42,35 @@ export async function invokeFramework(request: FrameworkRequest, bridge: Framewo
     if (value !== null && typeof value === "object") Object.freeze(value);
   }
   Object.freeze(binding);
-  const prepared: PreparedFrameworkInvocation = Object.freeze({
+  return Object.freeze({
     client: request.client, entrypoint: entry.name, origin: request.origin,
     binding, input: request.input, readOnly, revision: FRAMEWORK_PIN.revision,
     nativeInvocation: `${request.client === "codex" ? "$" : "/"}${entry.name}${review ? " mode:agent" : ""}`,
   });
+}
+
+export async function invokeFramework(request: FrameworkRequest, bridge: FrameworkBridge): Promise<FrameworkOutcome> {
+  const prepared = prepareFrameworkInvocation(request);
+  if ("status" in prepared) return prepared;
+  const entry = frameworkEntry(prepared.entrypoint)!;
   // Catalog availability never substitutes for the upstream owner's readiness or grant checks.
   const readiness = await bridge.checkReadiness(prepared, entry);
-  if (readiness?.ready !== true) return blocked(typeof readiness?.reason === "string" && readiness.reason.trim()
-    ? readiness.reason : entry.status === "gated" ? entry.prerequisite : "framework-not-ready");
-  const output = await bridge.invoke(prepared);
+  if (readiness?.ready !== true) return { status: "blocked", artifacts: [], reason: typeof readiness?.reason === "string" && readiness.reason.trim()
+    ? readiness.reason : entry.status === "gated" ? entry.prerequisite : "framework-not-ready" };
+  return normalizeFrameworkOutcome(await bridge.invoke(prepared));
+}
+
+export function normalizeFrameworkOutcome(output: unknown): FrameworkOutcome {
   const incomplete: FrameworkOutcome = { status: "incomplete", artifacts: [], reason: "malformed-framework-outcome" };
   if (output === null || typeof output !== "object") return incomplete;
-  const { status, artifacts, reason = "" } = output as Record<string, unknown>;
+  const { status, artifacts, reason = "", summary } = output as Record<string, unknown>;
   if (typeof status !== "string" || !["complete", "incomplete", "blocked", "failed"].includes(status)
       || !Array.isArray(artifacts) || !Array.from(artifacts).every(path => typeof path === "string" && path.trim())
-      || typeof reason !== "string" || (status === "complete" ? !artifacts.length : !reason.trim())) return incomplete;
+      || typeof reason !== "string" || reason.length > 16_384
+      || (summary !== undefined && (typeof summary !== "string" || !summary.trim() || summary.length > 16_384))
+      || (status === "complete" ? !artifacts.length && !summary : !reason.trim())) return incomplete;
   try { for (const path of artifacts) relativePath(path, "frameworkOutcome.artifacts"); }
   catch { return incomplete; }
-  return { status: status as FrameworkOutcome["status"], artifacts: [...artifacts], reason };
+  return { status: status as FrameworkOutcome["status"], artifacts: [...artifacts], reason,
+    ...(summary === undefined ? {} : { summary: summary as string }) };
 }

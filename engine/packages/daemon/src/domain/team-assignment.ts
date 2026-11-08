@@ -19,7 +19,9 @@ export async function prepareTeamAssignment(input: AssignmentInput) {
   if (hashBinding(binding) !== hashBinding(current) || hashBinding(binding) !== hashBinding(input.context.binding)) throw new Error("Plan, repository or policy changed");
   if (realpathSync(binding.repository.root) !== binding.repository.root || hashBytes(readFileSync(physicalPath(binding.repository.root, binding.planRef))) !== binding.planDigest) throw new Error("Source plan or repository changed");
   if (assignment.role !== input.context.role || !binding.roles.includes(assignment.role)) throw new Error("Assignment role is outside the approval");
-  const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
+  const readOnly = input.context.workflow?.readOnly === true;
+  if (readOnly && (input.outputs.length || input.permissions.includes("write-assigned-tree"))) throw new Error("Read-only workflows cannot declare tree writes");
+  const allowed = assignment.role === "reviewer" || readOnly ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
   const covered = (path: string, paths: string[]) => paths.some(p => path === p || path.startsWith(`${p}/`));
   for (const path of [...assignment.paths, ...input.outputs]) {
     relativePath(path, "assignment.path");

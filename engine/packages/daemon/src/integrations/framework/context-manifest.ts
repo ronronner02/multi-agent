@@ -6,14 +6,18 @@ import { canonicalJson, parseAssignment, parsePlanBinding, text, type PlanBindin
 import { immutable, roleConfiguration } from "../../domain/role-configuration.js";
 import { hashBinding, hashBytes } from "../../domain/plan-governance.js";
 import { FRAMEWORK_PIN } from "./catalog.js";
+import { soulDigest, type SpecialistSoul } from "../../domain/team-souls.js";
+import { prepareFrameworkInvocation, type PreparedFrameworkInvocation } from "./invocation.js";
 
-export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy" | "core" | "charter"; readOnly: true; source?: string }
+export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy" | "core" | "charter" | "soul" | "workflow"; readOnly: true; source?: string }
 export interface ContextMountPolicy {
   policy_revision: number; worker_identities: string[];
   paths: { context_root: string; framework_dir: string };
   sandbox: { context: string; framework: string };
 }
 export interface ContextInput {
+  soul?: SpecialistSoul;
+  workflow?: PreparedFrameworkInvocation;
   nativePolicy?: ManagedNativePolicy;
   projection: { worker: string; attemptId: string; controlUid: number; workerGid: number; policy: ContextMountPolicy };
   runId: string; assignment: ScopedAssignment; outputs: string[]; permissions: string[]; role: TeamRole; client: "claude-code" | "codex"; binding: PlanBinding;
@@ -231,7 +235,7 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
   const required = spec.sameIdentity ? ["role", "plan"] : ["framework", "role", "plan"];
   if (!required.every(k => kinds.includes(k as ContextFile["kind"])) || new Set(spec.files.map(f => f.path)).size !== spec.files.length) throw new Error("Missing or duplicate context files");
   for (const f of spec.files) {
-    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
+    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter", "soul", "workflow"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
     workerContextPath(spec.projection.policy, spec.root, f.path);
     if (within(spec.root, f.path)) {
       const s = lstatSync(f.path);
@@ -245,6 +249,22 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
     if (f.kind === "role" && canonicalJson(JSON.parse(readFileSync(f.path, "utf8"))) !== canonicalJson(roleConfiguration)) throw new Error("Role configuration changed");
   }
   const single = (kind: ContextFile["kind"]) => spec.files.filter(f => f.kind === kind);
+  const workflows = single("workflow");
+  if (spec.workflow) {
+    const expected = prepareFrameworkInvocation({ ...spec.workflow, binding: spec.binding, client: spec.client });
+    if ("status" in expected || workflows.length !== 1 || canonicalJson(spec.workflow) !== canonicalJson(expected)
+      || canonicalJson(JSON.parse(readFileSync(workflows[0]!.path, "utf8"))) !== canonicalJson(expected)) {
+      throw new Error("Missing or changed workflow invocation");
+    }
+  } else if (workflows.length) throw new Error("Unrecorded workflow invocation");
+  const souls = single("soul");
+  if (spec.soul) {
+    const { digest, ...profile } = spec.soul;
+    if (souls.length !== 1 || digest !== soulDigest(profile) || !profile.roles.includes(spec.role)
+      || canonicalJson(JSON.parse(readFileSync(souls[0]!.path, "utf8"))) !== canonicalJson(spec.soul)) {
+      throw new Error("Missing, changed or incompatible specialist profile");
+    }
+  } else if (souls.length) throw new Error("Unrecorded specialist profile");
   // Each file's bytes already match its recorded hash above; a new attempt must also match today's source.
   const current = mode === "create" ? loadRoleInstructions(spec.role) : null;
   const cores = single("core");
@@ -292,11 +312,17 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
  * The path is the mount path a sandboxed worker sees, or the host path when the worker is the
  * daemon's own user and no mount stands between them. Naming the mount path to an unisolated
  * client would point it at a `/context` that does not exist on the host.
+ * Framework entries use their verified source package so relative references and scripts
+ * resolve beside the skill, rather than beside the single-file projection.
  */
 export function attemptInstructionFiles(manifest: ContextManifest): { kind: ContextFile["kind"]; path: string }[] {
-  const order: ContextFile["kind"][] = ["core", "charter", "protocol", "roster", "run"];
+  const order: ContextFile["kind"][] = ["core", "charter", "protocol", "soul", "framework", "workflow", "roster", "run"];
   return order.flatMap(kind => manifest.files.filter(file => file.kind === kind)
-    .map(file => ({ kind, path: manifest.sameIdentity ? file.path : file.workerPath })));
+    .map(file => {
+      if (kind === "framework") return { kind, path: manifest.sameIdentity ? file.source!
+        : workerContextPath(manifest.projection.policy, manifest.root, file.source!) };
+      return { kind, path: manifest.sameIdentity ? file.path : file.workerPath };
+    }));
 }
 
 export function verifyEffectiveContext(manifest: ContextManifest, observed: ContextObservation): string {

@@ -24,8 +24,8 @@ rig config set ui.enabled true
 ./scripts/start.sh
 ```
 
-Setup installs and builds the engine, makes GitHub CLI available, and creates your
-owner credential. Agents run as your user in task worktrees with
+Setup installs and builds the engine and its pinned workflow source, makes GitHub
+CLI available, and creates your owner credential. Agents run as your user in task worktrees with
 `workers.isolation: none`, the default.
 
 ## Sign in and create a project
@@ -56,7 +56,9 @@ using an existing repository.
 
 Enter your goal on the new project's start form. For another run, choose **New work**.
 Chat with the lead while it drafts the plan and proposes the seats and clients it
-needs. **Approve plan** approves the plan and the proposed roster together; the
+needs. **Approve plan** approves the plan and the proposed roster together, including
+ordinary implementation files throughout the selected project. Protected paths,
+external actions, budget increases and final merge remain separate decisions. The
 owner does not manually assemble a team in the UI.
 
 Use the project and run selectors to change context. **Overview** combines progress,
@@ -66,7 +68,7 @@ list beside a persistent inspector with attempts, reports and diffs; **Board** k
 the dependency-stage view. **Reviews** shows candidate findings. **Analytics** shows
 captured native token use for the selected project over 7 or 30 days, not monetary
 estimates. Missing counters stay unavailable. **Settings** contains General, GitHub,
-Appearance, Sessions and the read-only Agents view.
+Appearance, Sessions and Agents, with model policy and specialist profile settings.
 
 After GitHub sign-in, the same project flow is available from the setup shell:
 
@@ -82,8 +84,36 @@ rig team approve-plan <run-id>
 
 Review the preview before confirming Create. Use the team name printed by Create and
 the run id printed by Start. `--rig` may be omitted when there is exactly one team.
-The default delivery scope is `src`; use `--write <path...>` on CLI Start for another
-scope, as described in [operations](docs/operations.md#plan-and-deliver).
+Planning defaults to project-wide implementation after approval. Use
+`--write <path...>` to narrow that grant; a direct, non-planning CLI Start still
+defaults to `src`. See [operations](docs/operations.md#plan-and-deliver).
+
+## Workflows and specialist identities
+
+The **Workflow** selector on New work and lead chat exposes all 38 catalog entries.
+Leave it on **Automatic** for ordinary delegation, or select a workflow to request
+from the Lead. Initial selections wait for execution approval during planning and
+remain visible to the Lead until assigned to a worker. A run without a Lead dispatches
+the selection directly to its worker. Caller-only helpers are listed
+but not offered as direct owner commands. Results appear under **Workflow outcomes**
+in chat; they are distinct from task validation, independent review and acceptance.
+
+```bash
+rig team start "Inspect the current architecture" --workflow spec-pov --read-only
+rig team chat <run-id> $'/spec-handoff --read-only\nSummarize the current task.'
+```
+
+In **Settings → Agents → Specialist profiles**, edit a SOUL, create a specialist or
+assign a compatible profile to an idle seat. Seven defaults cover coordination,
+engineering, architecture, frontend, backend, verification and independent review.
+The lead selects profiles and the team size within the approved limits. Permission
+role, specialist identity and client/model remain separate choices.
+
+Profile edits create new versions. New attempts use the current version; exact
+resumes keep their recorded profile. A SOUL guides expertise and working style,
+not permissions, and is not shared personal memory. See the
+[workflow and profile guide](docs/operations.md#workflows-and-specialist-profiles)
+for source installation, provenance and capability limits.
 
 ## Resume and merge
 

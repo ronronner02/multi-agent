@@ -7,7 +7,8 @@ import { I18nextProvider } from "react-i18next";
 import { StartRunForm } from "../new-task.js";
 import type { TeamSummary } from "../hooks.js";
 
-const request = vi.fn(async () => ({ runId: "3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f" }));
+const request = vi.fn(async (path: string, _init?: RequestInit) => path === "/workflows"
+  ? { workflows: [] } : { runId: "3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f" });
 
 vi.mock("../../hooks/useOwnerSession.js", () => ({
   OwnerReadError: class OwnerReadError extends Error {
@@ -39,8 +40,8 @@ async function show(teams: TeamSummary[], presetTeamId?: string) {
 async function start(goal: string, planning = false) {
   fireEvent.change(screen.getByLabelText("What should the team do?"), { target: { value: goal } });
   fireEvent.click(screen.getByRole("button", { name: planning ? "Start planning" : "Start task" }));
-  await waitFor(() => expect(request).toHaveBeenCalled());
-  const [path, init] = request.mock.calls[0] as unknown as [string, RequestInit];
+  await waitFor(() => expect(request.mock.calls.some(([path]) => path === "/runs")).toBe(true));
+  const [path, init] = request.mock.calls.find(([path]) => path === "/runs") as [string, RequestInit];
   expect(path).toBe("/runs");
   return JSON.parse(String(init.body)) as Record<string, unknown>;
 }

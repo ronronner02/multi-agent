@@ -1,3 +1,5 @@
+import { defaultSoulId, rosterSoulRefusal, seatHasUnfinishedWork } from "./team-souls.js";
+import { parseWorkflowSelection, readRunWorkflows, resolveAdmittedWorkflow, type TaskWorkflow } from "./team-workflows.js";
 import { approvalDocumentPins, captureDocuments as persistDocumentCapture, currentConfirmed, documentDispatchRefusal,
   documentKind, documentSourceRefusal, documentStage, initializeDocuments, latestDocument, readDocuments,
   type DocumentEvidence } from "./project-documents.js";
@@ -209,10 +211,15 @@ function taskDefinition(binding: import("../contracts/team-control.js").PlanBind
   const v = object(payload, "task"), assignment = parseAssignment(v.assignment);
   if (taskId !== undefined && assignment.taskId !== taskId) throw new TeamContractError("assignment.taskId");
   if (!binding.roles.includes(assignment.role)) return "Assignment role is outside the binding";
-  const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
+  const workflow = v.workflow === undefined ? undefined : parseWorkflowSelection(v.workflow);
+  const allowed = assignment.role === "reviewer" || workflow?.readOnly ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
   const covers = (paths: string[], entry: string) => paths.some(path => entry === path || entry.startsWith(path + "/"));
   if (assignment.paths.some(path => !bindingCovers(path, allowed))) return "Assignment path is outside the binding";
   const inputs = parseTaskInputs(v);
+  if (workflow?.readOnly) {
+    inputs.permissions = inputs.permissions.filter(permission => permission !== "write-assigned-tree");
+    if (inputs.outputs.length) return "A read-only workflow cannot declare written outputs";
+  }
   if (inputs.outputs.some(path => !covers(assignment.paths, path) || !bindingCovers(path, binding.writePaths))) {
     return "An output is outside the assignment's reviewable write paths";
   }
@@ -220,7 +227,7 @@ function taskDefinition(binding: import("../contracts/team-control.js").PlanBind
     return "A permission is outside the assignment role's vocabulary";
   }
   if (typeof v.body !== "string" || !v.body.trim() || v.body.length > 262_144) throw new TeamContractError("task.body");
-  return { assignment, ...inputs, body: v.body, sourceSession: text(v.sourceSession, "sourceSession"),
+  return { assignment, ...inputs, ...(workflow ? { workflow } : {}), body: v.body, sourceSession: text(v.sourceSession, "sourceSession"),
     destinationSession: text(v.destinationSession, "destinationSession") };
 }
 
@@ -416,21 +423,27 @@ export class PlanGovernance {
 
   getTask(qitemId: string): TeamTaskAuthority | null {
     const row = this.db.prepare(`SELECT qitem_id AS qitemId, run_id AS runId, assignment_json AS assignmentJson,
-      outputs_json AS outputsJson, permissions_json AS permissionsJson,
+      outputs_json AS outputsJson, permissions_json AS permissionsJson, workflow_json AS workflowJson,
       entity_version AS entityVersion, evidence_json AS evidenceJson FROM team_queue_authority WHERE qitem_id = ?`)
-      .get(qitemId) as (Omit<TeamTaskAuthority, "assignment" | "outputs" | "permissions" | "evidence">
-        & { assignmentJson: string; outputsJson: string | null; permissionsJson: string | null; evidenceJson: string | null }) | undefined;
+      .get(qitemId) as (Omit<TeamTaskAuthority, "assignment" | "outputs" | "permissions" | "evidence" | "workflow">
+        & { assignmentJson: string; outputsJson: string | null; permissionsJson: string | null; evidenceJson: string | null; workflowJson: string | null }) | undefined;
     if (!row) return null;
-    const { assignmentJson, outputsJson, permissionsJson, evidenceJson, ...task } = row;
+    const { assignmentJson, outputsJson, permissionsJson, evidenceJson, workflowJson, ...task } = row;
     return { ...task, assignment: parseAssignment(JSON.parse(assignmentJson)),
       // `null` is "this row predates the record", which is different from a task that
       // declared nothing: only a recorded value can be compared with a caller's.
       outputs: outputsJson === null ? null : JSON.parse(outputsJson) as string[],
       permissions: permissionsJson === null ? null : JSON.parse(permissionsJson) as string[],
+      workflow: workflowJson === null ? null : JSON.parse(workflowJson) as TaskWorkflow,
       evidence: evidenceJson === null ? null : JSON.parse(evidenceJson) as JsonObject };
   }
 
   /** T053 — the run's recorded task for a plan task id, or null when `task.created` never ran for it. */
+  workflowOutcomes(runId: string) {
+    this.getRun(runId);
+    return readRunWorkflows(this.db, runId);
+  }
+
   findTask(runId: string, taskId: string): TeamTaskAuthority | null {
     const row = this.db.prepare("SELECT qitem_id AS qitemId FROM team_queue_authority WHERE run_id = ? AND task_id = ?")
       .get(runId, taskId) as { qitemId: string } | undefined;
@@ -634,7 +647,7 @@ export class PlanGovernance {
       const batch = this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
         assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
-        destinationSession: task.seat })), owner.sessionId);
+        destinationSession: task.seat, ...(task.workflow ? { workflow: task.workflow } : {}) })), owner.sessionId);
       if (typeof batch === "string") return deny(batch);
       // A lead chooses seats from its roster, and the roster lists roles too. The batch this
       // boundary builds is always implementer work, so a seat that declares another role would
@@ -669,7 +682,7 @@ export class PlanGovernance {
     if (typeof tasks === "string") throw new Error("Lead task admission conflict: " + tasks);
     for (const task of tasks) {
       const taskId = task.assignment.taskId;
-      const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } });
+      const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } }, "caller");
       if (result.status !== "accepted") throw new Error("Lead task admission conflict: " + result.reason);
       this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
         valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
@@ -736,6 +749,8 @@ export class PlanGovernance {
    * plan on the lead's behalf.
    */
   private prepareSeatChanges(ctx: CommandContext, changes: LeadSeatChanges, maxSeats: number) {
+    const soulError = rosterSoulRefusal(this.db, ctx.run.rigId, changes.add);
+    if (soulError) return soulError;
     const current = this.db.prepare(`SELECT n.id, n.role, n.runtime AS client, n.model,
         (SELECT session_name FROM sessions WHERE node_id = n.id ORDER BY created_at DESC, id DESC LIMIT 1) AS member
       FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')`)
@@ -821,9 +836,17 @@ export class PlanGovernance {
       const batch = leadTasks.length === 0 && resolved.length > 0 ? [] : this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
         assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
-        destinationSession: task.seat })), "daemon",
+        destinationSession: task.seat, ...(task.workflow ? { workflow: task.workflow } : {}) })), "daemon",
         resolved.filter(item => item.resolution.action === "drop").map(item => item.task.assignment.taskId));
       if (typeof batch === "string") return this.refuseLeadProposal(ctx, batch);
+      const workflowError = batch.flatMap(task => {
+        if (!task.workflow) return [];
+        const resolved = resolveAdmittedWorkflow(this.db, ctx.run.id, task.workflow, "caller");
+        return "error" in resolved ? [resolved.error] : [];
+      })[0];
+      if (workflowError) return this.refuseLeadProposal(ctx, workflowError);
+      const ownerRequests = batch.flatMap(task => task.workflow?.ownerMessageId ? [task.workflow.ownerMessageId] : []);
+      if (new Set(ownerRequests).size !== ownerRequests.length) return this.refuseLeadProposal(ctx, "Assign each owner workflow request to only one task.");
       const notImplementer = batch.find(task => seatChanges ? !seatChanges.implementers.has(task.destinationSession)
         : !this.implementerSeat(ctx.run.rigId, task.destinationSession));
       if (notImplementer) {
@@ -850,7 +873,7 @@ export class PlanGovernance {
       }
       for (const task of batch) {
         const taskId = task.assignment.taskId;
-        const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } });
+        const result = this.writeTask({ ...ctx, request: { ...ctx.request, actionId: taskId, payload: jsonValue(task) } }, "caller");
         if (result.status !== "accepted") throw new Error("Lead task admission conflict: " + result.reason);
         this.emit(ctx.run, ctx.register, "task.created", { actionId: taskId, status: "accepted",
           valueDigest: hashBytes(canonicalJson(result.value)) }, taskId);
@@ -1201,17 +1224,17 @@ export class PlanGovernance {
   }
 
   private reconcilePlanRoster(rigId: string, seats: readonly LeadRosterSeat[], maxSeats: number):
-    { reason: string } | { missing: LeadRosterSeat[]; updated: Array<{ id: string; client: "claude-code" | "codex"; model: string | null }>; reviewerSeat: string | null } {
-    const reason = rosterRefusal(seats, maxSeats) ?? rosterModelRefusal(this.db, rigId, seats);
+    { reason: string } | { missing: LeadRosterSeat[]; updated: Array<{ id: string; client: "claude-code" | "codex"; model: string | null; soulId: string | null }>; reviewerSeat: string | null } {
+    const reason = rosterRefusal(seats, maxSeats) ?? rosterModelRefusal(this.db, rigId, seats) ?? rosterSoulRefusal(this.db, rigId, seats);
     if (reason) return { reason };
-    const existing = this.db.prepare(`SELECT n.id, n.model, n.logical_id AS logicalId, n.role, n.runtime AS client,
+    const existing = this.db.prepare(`SELECT n.id, n.model, n.soul_id AS soulId, n.logical_id AS logicalId, n.role, n.runtime AS client,
       (SELECT s.session_name FROM sessions s WHERE s.node_id = n.id ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS member
       FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')
       ORDER BY n.logical_id`).all(rigId) as Array<{
-        id: string; model: string | null; logicalId: string; role: LeadRosterSeat["role"]; client: string | null; member: string | null;
+        id: string; model: string | null; soulId: string | null; logicalId: string; role: LeadRosterSeat["role"]; client: string | null; member: string | null;
       }>;
     const missing = [...seats];
-    const updated: Array<{ id: string; client: "claude-code" | "codex"; model: string | null }> = [];
+    const updated: Array<{ id: string; client: "claude-code" | "codex"; model: string | null; soulId: string | null }> = [];
     let reviewerSeat: string | null = null;
     for (const seat of existing) {
       const name = seat.member ?? seat.logicalId;
@@ -1225,14 +1248,16 @@ export class PlanGovernance {
         return { reason: `Existing seat ${name} (${seat.role}, ${seat.client}) is not included in the proposed roster. Keep its role and client and revise the roster.` };
       }
       const requested = missing[index]!;
-      if (requested.client !== seat.client || requested.model !== undefined && requested.model !== seat.model) {
+      const soulChanged = requested.soulId !== undefined && requested.soulId !== (seat.soulId ?? defaultSoulId(seat.role));
+      if (requested.client !== seat.client || requested.model !== undefined && requested.model !== seat.model || soulChanged) {
         const live = this.db.prepare(`SELECT 1 FROM team_attempts a JOIN queue_items q ON q.qitem_id = a.qitem_id
           WHERE a.state <> 'stopped' AND q.destination_session = ? LIMIT 1`).get(seat.member);
         const runs = this.db.prepare("SELECT id FROM team_runs WHERE rig_id = ?").all(rigId) as Array<{ id: string }>;
-        if (live || runs.some(run => this.nativeLaunchIntents(run.id).some(intent => intent.state === "admitted" && intent.sessionId === seat.member))) {
-          return { reason: `Existing seat ${name} is busy; its client or model can change after its attempt stops.` };
+        if (live || soulChanged && seatHasUnfinishedWork(this.db, seat.member)
+          || runs.some(run => this.nativeLaunchIntents(run.id).some(intent => intent.state === "admitted" && intent.sessionId === seat.member))) {
+          return { reason: `Existing seat ${name} is busy; its client, model or specialist identity can change after its assigned work finishes.` };
         }
-        updated.push({ id: seat.id, client: requested.client, model: requested.model ?? (requested.client === seat.client ? seat.model : null) });
+        updated.push({ id: seat.id, client: requested.client, model: requested.model ?? (requested.client === seat.client ? seat.model : null), soulId: requested.soulId ?? seat.soulId });
       }
       missing.splice(index, 1);
       if (seat.role === "reviewer") reviewerSeat = seat.member;
@@ -1283,7 +1308,7 @@ export class PlanGovernance {
         const reconciled = this.reconcilePlanRoster(ctx.run.rigId, roster.seats, roster.maxSeats);
         if ("reason" in reconciled) return this.refuseLeadProposal(ctx, reconciled.reason);
         for (const updated of reconciled.updated) {
-          this.db.prepare("UPDATE nodes SET runtime = ?, model = ? WHERE id = ?").run(updated.client, updated.model, updated.id);
+          this.db.prepare("UPDATE nodes SET runtime = ?, model = ?, soul_id = ? WHERE id = ?").run(updated.client, updated.model, updated.soulId, updated.id);
           const sessions = this.db.prepare("SELECT id FROM sessions WHERE node_id = ?").all(updated.id) as Array<{ id: string }>;
           const registry = new SessionRegistry(this.db);
           for (const session of sessions) registry.clearResumeToken(session.id);
@@ -1675,9 +1700,9 @@ export class PlanGovernance {
     });
   }
 
-  private writeTask(ctx: CommandContext): Result {
+  private writeTask(ctx: CommandContext, origin: TaskWorkflow["origin"] = "user"): Result {
     const task = taskDefinition(ctx.run.binding, ctx.request.payload, ctx.request.actionId);
-    return typeof task === "string" ? deny(task) : this.admitTask(ctx, task);
+    return typeof task === "string" ? deny(task) : this.admitTask(ctx, task, origin);
   }
 
   /**
@@ -1687,8 +1712,15 @@ export class PlanGovernance {
    * it with a reviewer assignment it derived from the run's own records, so there is one
    * queue write and one authority row per task no matter which path admitted it.
    */
-  private admitTask(ctx: CommandContext, task: Exclude<ReturnType<typeof taskDefinition>, string>): Result {
+  private admitTask(ctx: CommandContext, task: Exclude<ReturnType<typeof taskDefinition>, string>, origin: TaskWorkflow["origin"] = "caller"): Result {
     const { assignment, outputs, permissions, sourceSession, destinationSession, body } = task;
+    const selected = task.workflow ? resolveAdmittedWorkflow(this.db, ctx.run.id, task.workflow, origin) : null;
+    if (selected && "error" in selected) return deny(selected.error);
+    if (selected?.workflow.readOnly) {
+      if (outputs.length) return deny("A read-only workflow cannot declare written outputs");
+      const index = permissions.indexOf("write-assigned-tree");
+      if (index !== -1) permissions.splice(index, 1);
+    }
     const documentError = documentDispatchRefusal(this.db, ctx.run, assignment.role);
     if (documentError) return deny(documentError);
     const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id=?")
@@ -1703,9 +1735,10 @@ export class PlanGovernance {
     const displayName = assignment.role === "reviewer" && assignment.reviewOf
       ? this.reviewDisplayName(ctx.run.id, assignment.reviewOf) : taskName(body);
     this.db.prepare(`INSERT INTO team_queue_authority
-      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json,display_name,document_versions_json) VALUES (?,?,?,?,?,?,?,?)`)
+      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json,display_name,document_versions_json,workflow_json) VALUES (?,?,?,?,?,?,?,?,?)`)
       .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions), displayName,
-        ctx.run.binding.documentVersions ? canonicalJson(ctx.run.binding.documentVersions) : null);
+        ctx.run.binding.documentVersions ? canonicalJson(ctx.run.binding.documentVersions) : null,
+        selected ? canonicalJson(selected.workflow) : null);
     ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
     return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
   }
@@ -1930,6 +1963,7 @@ export class PlanGovernance {
     // reviewer seat keeps the pre-C2 behaviour: the completion stands and no review exists,
     // and so does a refusal the loop itself decided (no second seat to route to).
     if (observedOutcome && task.assignment.role === "implementer" && v.state === "done"
+      && !task.workflow?.readOnly
       && (evidence as JsonObject | null)?.validated === true) {
       const review = this.createReview(ctx, this.getTask(task.qitemId)!);
       if (typeof review === "string") {

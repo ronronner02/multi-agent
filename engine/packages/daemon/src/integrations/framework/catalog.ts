@@ -36,7 +36,7 @@ const entries = [
   ["spec-strategy", "supported", "workflow", ""],
   ["spec-sweep", "gated", "user", "Configured feedback sources and their communication permissions"],
   ["spec-test-browser", "gated", "workflow", "Browser capability and an exact authorized origin"],
-  ["spec-test-xcode", "deferred", "user", "A macOS node with Xcode and simulator capability"],
+  ["spec-test-xcode", "gated", "user", "A macOS node with Xcode and simulator capability"],
   ["spec-work", "supported", "workflow", ""],
   ["spec-worktree", "gated", "caller", "A governed caller contract and explicit isolation authorization"],
   ["spec-write-skill", "gated", "user", "An explicit source skill package maintenance request"],

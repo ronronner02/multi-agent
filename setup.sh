@@ -32,6 +32,11 @@ bash "$REPO_ROOT/scripts/install-gh.sh"
 cd "$ENGINE"
 npm ci --no-audit --no-fund
 npm run build
+node --input-type=module <<'NODE'
+import { installPinnedFramework } from "./packages/daemon/dist/integrations/framework/source.js";
+import { OPENRIG_HOME } from "./packages/daemon/dist/openrig-compat.js";
+console.log("Verified workflow source at " + installPinnedFramework(OPENRIG_HOME));
+NODE
 # npm links a workspace bin only when its build output already exists, so a fresh
 # clone's `npm ci` leaves `rig` unlinked. Relinking after the build fixes that.
 npm rebuild -w packages/cli >/dev/null
