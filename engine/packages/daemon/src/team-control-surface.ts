@@ -706,3 +706,7 @@ export { TEAM_WORKFLOW_STAGES };
 export type { TeamStageState, TeamWorkflowStage };
 
 export type { TeamModelChoice, TeamModelSettings } from "./domain/team-model-policy.js";
+export type { SpecialistSoul } from "./domain/team-souls.js";
+export type { WorkflowSelection, TaskWorkflow } from "./domain/team-workflows.js";
+export type { FrameworkEntry } from "./integrations/framework/catalog.js";
+export type { FrameworkOutcome } from "./integrations/framework/invocation.js";

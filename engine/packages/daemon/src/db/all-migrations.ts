@@ -125,6 +125,7 @@ import { attemptTelemetrySchema } from "./migrations/118_attempt_telemetry.js";
 import { teamModelPolicySchema } from "./migrations/119_team_model_policy.js";
 
 import { projectDocumentsSchema } from "./migrations/120_project_documents.js";
+import { workflowSoulsSchema } from "./migrations/121_workflow_souls.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -242,4 +243,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   attemptTelemetrySchema,
   teamModelPolicySchema,
   projectDocumentsSchema,
+  workflowSoulsSchema,
 ];

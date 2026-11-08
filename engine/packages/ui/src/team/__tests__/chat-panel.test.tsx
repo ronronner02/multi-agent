@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render as renderView, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n } from "@openrig/i18n";
 import { I18nextProvider } from "react-i18next";
@@ -7,8 +8,11 @@ import { ChatPanel, pendingOwnerDecisions } from "../chat-panel.js";
 import { readChat, type ChatState } from "../clients.js";
 import { attempt, read, RUN_ID } from "./fixtures.js";
 
-const { request } = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("../../hooks/useOwnerSession.js", () => ({ useOwnerSession: () => ({ request }) }));
+const { request, workflowRead } = vi.hoisted(() => ({ request: vi.fn(), workflowRead: vi.fn() }));
+vi.mock("../../hooks/useOwnerSession.js", () => ({ useOwnerSession: () => ({ paired: true,
+  request: (path: string, init?: RequestInit) => path === "/workflows" || /^\/runs\/[^/]+\/workflows$/.test(path)
+    ? workflowRead(path, init) : request(path, init),
+}) }));
 const chat: ChatState = { available: true, phase: "delivery", pendingDecision: null, messages: [] };
 const planApproval = {
   plan: { content: "# Stock utilities\n\nBuild two independent modules.", hash: "plan-hash" },
@@ -31,8 +35,17 @@ const documentChat = (confirmed = false): ChatState => ({ ...planningChat(),
       requirementsVersionId: "requirements-1", sourceAttemptId: "turn-2", createdAt: "2026-11-08T00:00:00.000Z", confirmedAt: null, confirmedBy: null }] },
 });
 
-beforeEach(() => { request.mockReset().mockResolvedValue({}); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+let queryClient: QueryClient;
+beforeEach(() => {
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  request.mockReset().mockResolvedValue({});
+  workflowRead.mockReset().mockResolvedValue({ workflows: [] });
+});
+afterEach(() => { cleanup(); queryClient.clear(); vi.restoreAllMocks(); });
+
+function render(ui: React.ReactElement) {
+  return renderView(ui, { wrapper: ({ children }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider> });
+}
 
 async function show(data = read(), conversation = chat, connectionError = false) {
   const language = await createInterfaceI18n({ language: "en" });
@@ -197,6 +210,39 @@ describe("persistent lead chat", () => {
     expect(request).toHaveBeenCalledWith("/runs", expect.objectContaining({ method: "POST",
       body: JSON.stringify({ goal: "Let's refine the scope first.", rig: "project-1", planning: true, documentWorkflow: true }),
     }));
+  });
+
+  it("sends a selected delivery workflow as an explicit owner request without extra mutations", async () => {
+    workflowRead.mockImplementation(async (path: string) => ({ workflows: path === "/workflows"
+      ? [{ name: "spec-handoff", invocation: "user" }] : [] }));
+    await show(); fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    await screen.findByRole("option", { name: "spec-handoff" });
+    expect(request).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), { target: { value: "spec-handoff" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Read-only execution" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Summarize the current task." } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload.body).toBe("/spec-handoff --read-only\nSummarize the current task.");
+    expect(workflowRead).toHaveBeenCalledWith("/workflows", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(workflowRead).toHaveBeenCalledWith(`/runs/${RUN_ID}/workflows`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  });
+
+  it("includes a selected workflow in the initial owner request while keeping plan approval separate", async () => {
+    const language = await createInterfaceI18n({ language: "en" });
+    const onStarted = vi.fn();
+    request.mockResolvedValue({ runId: "planning-record" });
+    workflowRead.mockResolvedValue({ workflows: [{ name: "spec-plan", invocation: "workflow" }] });
+    render(<I18nextProvider i18n={language.instance}><ChatPanel open onOpenChange={() => {}}
+      opener={{ current: null }} runId="" project={{ id: "project-1", name: "My project" }} onStarted={onStarted} /></I18nextProvider>);
+    await screen.findByRole("option", { name: "spec-plan" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), { target: { value: "spec-plan" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Plan the next milestone." } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith("planning-record"));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(request.mock.calls[0]![1].body)).toEqual({ goal: "Plan the next milestone.", rig: "project-1",
+      planning: true, documentWorkflow: true, workflow: { entrypoint: "spec-plan", readOnly: false } });
   });
 
   it.each(["Coordinator", "Top bar chat"])("opens from %s and returns focus on Escape", async name => {

@@ -26,6 +26,7 @@ import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
 import { agentTurnOutputPaths, continuationNote, leadProgressNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
 import { leadChatTurnNote, listChatMessages, takeOwnerMessages } from "./lead-chat.js";
+import { unassignedOwnerWorkflows } from "./team-workflows.js";
 
 /**
  * MVP — whether this launch starts a headless turn rather than an interactive session.
@@ -835,10 +836,11 @@ export class StartupOrchestrator {
     // client starts. Anything the owner sends afterwards is pending, and the turn-end owner
     // starts the next turn for it.
     const chat = assignment.role === "lead"
-      ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attempt.context.projection.attemptId), listChatMessages(this.db, runId))
+      ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attempt.context.projection.attemptId), listChatMessages(this.db, runId),
+        unassignedOwnerWorkflows(this.db, runId))
       : null;
     return managedTurnPrompt({ identity: identityAction?.value ?? "", bundle, runId, assignment, taskBody: task.body,
-      outputs, permissions, instructions: turnInstructions(attempt.context),
+      outputs, permissions, instructions: turnInstructions(attempt.context), workflow: attempt.context.workflow,
       ...(["implementer", "reviewer"].includes(assignment.role) ? {
         taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.context.projection.attemptId).taskReport,
       } : {}),

@@ -2,9 +2,10 @@ import { posix } from "node:path";
 import { object, text, TeamContractError, type PlanBinding } from "../contracts/team-control.js";
 import { modelId } from "./team-model-policy.js";
 import type { TeamClient } from "./team-setup.js";
+import { soulId } from "./team-souls.js";
 
 export const LEAD_ROSTER_PATH = "lead-roster.json";
-export interface LeadRosterSeat { role: "implementer" | "reviewer"; client: TeamClient; model?: string }
+export interface LeadRosterSeat { role: "implementer" | "reviewer"; client: TeamClient; model?: string; soulId?: string }
 export interface LeadRosterEvidence { seats: LeadRosterSeat[]; digest: string }
 
 export function leadRosterPath(planRef: string): string {
@@ -20,10 +21,11 @@ export function parseRosterSeats(value: unknown): LeadRosterSeat[] {
   if (!Array.isArray(value)) throw new TeamContractError("roster.seats");
   return value.map(entry => {
     const seat = object(entry, "roster.seat");
-    if (Object.keys(seat).some(key => key !== "role" && key !== "client" && key !== "model")
+    if (Object.keys(seat).some(key => !["role", "client", "model", "soulId"].includes(key))
       || (seat.role !== "implementer" && seat.role !== "reviewer")
       || (seat.client !== "claude-code" && seat.client !== "codex")) throw new TeamContractError("roster.seat");
-    return { role: seat.role, client: seat.client, ...(seat.model === undefined ? {} : { model: modelId(seat.model) }) };
+    return { role: seat.role, client: seat.client, ...(seat.model === undefined ? {} : { model: modelId(seat.model) }),
+      ...(seat.soulId === undefined ? {} : { soulId: soulId(seat.soulId) }) };
   });
 }
 

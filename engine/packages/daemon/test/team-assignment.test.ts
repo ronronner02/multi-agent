@@ -9,6 +9,7 @@ import { prepareTeamAssignment, type AssignmentInput } from "../src/domain/team-
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import type { TeamRun, TeamTaskAuthority } from "../src/contracts/team-control.js";
 import { PlanGovernance, hashBytes } from "../src/domain/plan-governance.js";
+import { prepareFrameworkInvocation } from "../src/integrations/framework/invocation.js";
 vi.mock("../src/integrations/framework/context-manifest.js", async original => ({ ...await original<typeof import("../src/integrations/framework/context-manifest.js")>(), verifyEffectiveContext: vi.fn(() => "observed-hash") }));
 const roots: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); for (const p of roots.splice(0)) rmSync(p, { recursive: true, force: true }); });
@@ -20,6 +21,22 @@ function fixture(): AssignmentInput {
 }
 function receipt(input: AssignmentInput) { return { identity_basis: "source-plan-path+body-hash", task_pack_path: join(input.binding.repository.root, "tasks.md"), schema_version: "task-pack-validation/v1", task_pack_validity: "valid", deterministic_handoff: true, artifact_root: input.binding.repository.root, source_plan: { path: "plan.md" }, validation: { source_plan_hash: "matched", task_pack_contract: "valid", source_plan_lifecycle: "active" }, task_pack: { contract: { tasks: [{ task_id: "T007", target_repo: "fixture", files: ["src"], dependencies: [] }] } } }; }
 it("supports direct plan assignment with minimal staffing and immutable scope", async () => { const input = fixture(), result = await prepareTeamAssignment(input); expect(result.assignment.role).toBe("implementer"); expect(result.client).toBe("claude-code"); expect(result.observedHash).toBe("observed-hash"); expect(Object.isFrozen(result.binding.writePaths)).toBe(true); expect(input.binding.writePaths).toEqual(["src"]); });
+it("prepares read-only workflow inputs from the read scope without accepting write authority", async () => {
+  const input = fixture();
+  mkdirSync(join(input.binding.repository.root, "test"));
+  input.assignment.paths = ["test"];
+  input.outputs = []; input.permissions = ["submit-evidence"];
+  const workflow = prepareFrameworkInvocation({ client: "claude-code", entrypoint: "spec-pov", origin: "user",
+    binding: input.binding, input: "Inspect the tests", readOnly: true });
+  if ("status" in workflow) throw new Error(workflow.reason);
+  input.context = { ...input.context, outputs: input.outputs, permissions: input.permissions, workflow };
+  expect((await prepareTeamAssignment(input)).assignment.paths).toEqual(["test"]);
+  input.permissions.push("write-assigned-tree");
+  await expect(prepareTeamAssignment(input)).rejects.toThrow("Read-only workflows");
+  input.permissions.pop();
+  input.assignment.paths = ["outside"];
+  await expect(prepareTeamAssignment(input)).rejects.toThrow("expands the approved scope");
+});
 it("prepares project-wide assignments while retaining concrete outputs and protected paths", async () => {
   const input = fixture();
   input.binding.readPaths = ["."];

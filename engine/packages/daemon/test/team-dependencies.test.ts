@@ -166,6 +166,13 @@ describe("declared work graph", () => {
   const task = (taskId: string, dependencies: string[] = [], paths: string[] = [`src/${taskId}`], role = "implementer") =>
     ({ taskId, role, paths, dependencies });
 
+  it("does not turn a read-only workflow's inputs into exclusive write claims", () => {
+    expect(validateDependencyGraph([
+      { ...task("analyze", [], ["src"]), readOnly: true }, task("implement", ["analyze"], ["src"]),
+    ])).toEqual({ ok: true });
+    expect(validateDependencyGraph([{ ...task("analyze", ["missing"], ["src"]), readOnly: true }])).toMatchObject({ ok: false });
+  });
+
   it("accepts a consistent graph, including disjoint files under one directory", () => {
     expect(validateDependencyGraph([
       task("schema"), task("api", ["schema"], ["src/api"]), task("ui", ["schema"], ["src/ui"]),

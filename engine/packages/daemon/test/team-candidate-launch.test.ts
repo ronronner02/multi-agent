@@ -294,6 +294,23 @@ describe("production launch runs through runtime eligibility and one candidate w
     expect(calls.preflight).toBe(0);
   });
 
+  it("admits a read-only workflow candidate for approved inputs outside the write scope", () => {
+    binding = { ...binding, readPaths: ["src", "plan.md"] };
+    db.prepare("UPDATE team_runs SET binding_json = ?, binding_digest = ? WHERE id = 'run-1'")
+      .run(JSON.stringify(binding), hashBinding(binding));
+    const selected = { entrypoint: "spec-pov", origin: "user", readOnly: true, revision: "fixture" };
+    context = contextFor({ assignment: { ...context.assignment, paths: ["plan.md"] }, outputs: [], permissions: ["submit-evidence"],
+      workflow: selected as ContextManifest["workflow"] });
+    db.prepare("UPDATE team_queue_authority SET assignment_json = ?, workflow_json = ? WHERE qitem_id = 'impl-item'")
+      .run(JSON.stringify(context.assignment), JSON.stringify(selected));
+    const admitted = runtime.admitForLaunch("run-1", { attemptId: "read-only-input", worker: "ma-worker1",
+      assignment: context.assignment, outputs: [], permissions: context.permissions, context });
+    expect(admitted.candidate).toBe(candidateDir("ma-worker1"));
+    expect(() => runtime.admitForLaunch("run-1", { attemptId: "write-input", worker: "ma-worker1",
+      assignment: context.assignment, outputs: [], permissions: ["write-assigned-tree"], context }))
+      .toThrow("Read-only workflows");
+  });
+
   it("refuses a launch whose control resolves a different tree than the admitted candidate", async () => {
     const { fake } = control({ assignedTree: repo });
     const result = await launcher(fake).launch(launchInput());

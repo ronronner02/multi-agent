@@ -10,6 +10,7 @@ import { leadCompletionEvidence, taskCompletionEvidence, type CandidateFacts, ty
 import { recordedFindings } from "./review-loop.js";
 import type { AttemptOutcome, AttemptTelemetry } from "./attempt-telemetry.js";
 import { unreadableTaskReport, type TaskReport } from "./task-report.js";
+import { recordWorkflowTurn } from "./team-workflows.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -350,6 +351,8 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     if (stoppedAttempt.qitemId === null) return;
     const task = governance.getTask(stoppedAttempt.qitemId);
     if (!task || !["lead", "implementer", "reviewer"].includes(task.assignment.role)) return;
+    const workflowOutcome = recordWorkflowTurn(dependencies.db, stoppedAttempt, dependencies.turnStateRoot
+      ? readAgentTurnLastMessage(dependencies.turnStateRoot, stoppedAttempt.id) : null);
     // A planning lead task is the owner↔lead chat conversation, not a delivery task. Its turn
     // ends in a chat reply and is reopened by the next owner message; completion evidence applies
     // once the run enters delivery and the lead writes its decomposition proposal.
@@ -362,6 +365,10 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     if (task.assignment.role !== "lead" && dependencies.readTaskReport) {
       try { taskReport = dependencies.readTaskReport(stoppedAttempt.runId, stoppedAttempt.id); }
       catch (error) { taskReport = unreadableTaskReport(error); }
+    }
+    if (!taskReport && workflowOutcome && task.assignment.role !== "lead"
+      && (workflowOutcome.status === "blocked" || workflowOutcome.status === "incomplete")) {
+      taskReport = { status: "blocked", evidence: workflowOutcome.reason };
     }
     let evidence: Record<string, unknown>;
     let reasonCode: AttemptReasonCode | null = null;
@@ -428,9 +435,10 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
         completion = leadCompletionEvidence({ manifest, proposal, planRef: governance.getRun(stoppedAttempt.runId).binding.planRef,
           ...(dependencies.readLeadEscalation ? { escalation, managementTurn: true } : {}), unavailableReason });
       } else {
-        completion = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest, unavailableReason });
+        completion = taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths, manifest, unavailableReason,
+          ...(task.workflow && workflowOutcome ? { workflow: { readOnly: task.workflow.readOnly, outcome: workflowOutcome } } : {}) });
       }
-      evidence = completion as unknown as Record<string, unknown>;
+      evidence = { ...completion, ...(workflowOutcome ? { workflowOutcome } : {}) } as unknown as Record<string, unknown>;
       if (completion.validated) state = "done";
       else {
         state = "failed";

@@ -4,6 +4,8 @@ import {
   TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, text, type ControlActor,
 } from "../contracts/team-control.js";
 import { readTeamModelSettings, saveTeamModelSettings, TeamModelError } from "../domain/team-model-policy.js";
+import { FRAMEWORK_CATALOG, FRAMEWORK_PIN } from "../integrations/framework/catalog.js";
+import { assignSeatSoul, saveTeamSoul, soulId, teamSoulSettings, TeamSoulError } from "../domain/team-souls.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import { bootstrapProject, listProjectDirectories, previewProject, ProjectBootstrapError } from "../domain/project-bootstrap.js";
 import { GithubCliError, type GithubCli } from "../domain/github-cli.js";
@@ -34,7 +36,7 @@ export function teamSetupRoutes(
 ): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
   app.use("*", teamControlAuthentication(() => options.credentials, legacyTokens));
-  app.use("*", bodyLimit({ maxSize: 65_536,
+  app.use("/teams/*", bodyLimit({ maxSize: 65_536,
     onError: c => c.json({ code: "invalid_team_contract", error: "The team request exceeds its size limit." }, 413) }));
   const owner = (c: { get: (key: "controlActor") => ControlActor }) =>
     c.get("controlActor").kind === "owner" ? c.get("controlActor") : null;
@@ -51,12 +53,38 @@ export function teamSetupRoutes(
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, teams: listTeams(rigRepo.db) });
   });
+  app.get("/workflows", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, revision: FRAMEWORK_PIN.revision, workflows: FRAMEWORK_CATALOG });
+  });
 
   app.get("/teams/:teamId/settings", c => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     c.header("Cache-Control", "no-store");
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, settings: readTeamModelSettings(rigRepo.db, c.req.param("teamId")) });
+  });
+  app.get("/teams/:teamId/souls", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...teamSoulSettings(rigRepo.db, c.req.param("teamId")) });
+  });
+  app.put("/teams/:teamId/souls/:soulId", async c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION,
+      profile: saveTeamSoul(rigRepo.db, c.req.param("teamId"), c.req.param("soulId"), await c.req.json()) });
+  });
+  app.put("/teams/:teamId/seats/:nodeId/soul", async c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    assignSeatSoul(rigRepo.db, c.req.param("teamId"), c.req.param("nodeId"), await c.req.json());
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...teamSoulSettings(rigRepo.db, c.req.param("teamId")) });
   });
   app.put("/teams/:teamId/settings", async c => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
@@ -96,6 +124,7 @@ export function teamSetupRoutes(
       return c.json({ code: "invalid_team_contract", error: "The team request is malformed or incompatible." }, 400);
     }
     if (error instanceof TeamModelError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (error instanceof TeamSoulError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSetupError) {
       const status = error.code === "team_exists" || error.code === "team_name_taken" ? 409 : 400;
       return c.json({ code: error.code, error: error.message }, status);
@@ -124,6 +153,7 @@ function seats(value: unknown): TeamSeatInput[] {
     const client = parseTeamClient(text(v.client, "seats.client", 32));
     if (!client) throw new TeamContractError("seats.client");
     return { role: role as TeamSeatInput["role"], client,
-      ...(v.model === undefined ? {} : { model: text(v.model, "seats.model", 128) }) };
+      ...(v.model === undefined ? {} : { model: text(v.model, "seats.model", 128) }),
+      ...(v.soulId === undefined ? {} : { soulId: soulId(v.soulId) }) };
   });
 }

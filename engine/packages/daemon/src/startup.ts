@@ -159,6 +159,10 @@ import { WorkerControlAccess } from "./domain/worker-control-access.js";
 import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
 import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
+import { resolveTeamSoul } from "./domain/team-souls.js";
+import { recordWorkflowOutcome, workflowCapabilityRefusal } from "./domain/team-workflows.js";
+import { prepareFrameworkInvocation } from "./integrations/framework/invocation.js";
+import { frameworkInstructionSources } from "./integrations/framework/source.js";
 import { createSystemHealthReader, attemptsFromManagedWorkerEvidence, attemptsFromRecords, type SystemHealthProbeResult } from "./domain/system-health.js";
 import { parseAttemptClassification } from "./domain/attempt-failure.js";
 import { TeamReadModel } from "./team-control-surface.js";
@@ -586,10 +590,24 @@ function composeManagedAttemptAttachment(dependencies: {
     // admission for this attempt, which is idempotent and re-takes the same claim.
     const admitted = runtime.admitForLaunch(row.runId, { attemptId, worker, assignment,
       outputs, permissions,
-      context: { binding: run.binding, runId: row.runId, role: assignment.role } as
+      context: { binding: run.binding, runId: row.runId, role: assignment.role, workflow: task.workflow } as
         unknown as import("./integrations/framework/context-manifest.js").ContextManifest });
     let produced: Awaited<ReturnType<WorkflowRuntime["produceManagedAttempt"]>>;
     try {
+      const selected = task.workflow;
+      if (selected && selected.revision !== FRAMEWORK_PIN.revision) throw new Error("The task's workflow source revision changed");
+      const workflow = selected ? prepareFrameworkInvocation({ client, entrypoint: selected.entrypoint,
+        origin: selected.origin, binding: run.binding, input: selected.input ??
+          (dependencies.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(task.qitemId) as { body: string }).body,
+        readOnly: selected.readOnly }) : undefined;
+      if (workflow && "status" in workflow) throw new Error(workflow.reason);
+      const capabilityError = selected ? workflowCapabilityRefusal(selected.entrypoint) : null;
+      if (capabilityError) throw new Error(capabilityError);
+      if (workflow?.readOnly && !dependencies.unisolated && assignment.role !== "reviewer") {
+        throw new Error("The hardened policy has no read-only candidate mount for this seat role.");
+      }
+      const frameworkFiles = frameworkInstructionSources(roots.frameworkRoot,
+        selected?.entrypoint ?? (dependencies.unisolated ? undefined : "using-spec-first"));
       // C3 — a lead activation carries its protocol, roster and run instructions, and nothing
       // else does. The roster is the rig's seats whose role the approval covers, and the
       // instructions are the daemon's own words about where the decomposition goes; both are
@@ -608,21 +626,22 @@ function composeManagedAttemptAttachment(dependencies: {
         rigId: run.rigId, taskId: row.taskId, recipients: row.sourceSession ? [row.sourceSession] : [],
         deadline, isCurrent: () => true, ...(previous ? { previous } : {}),
         delivery, chat, context: { client, discoveryRoots: [], mutableStateRoot: identity.scratch,
+          ...(workflow ? { workflow } : {}),
+          soul: resolveTeamSoul(dependencies.db, run.rigId, assignment.role,
+            (dependencies.db.prepare(`SELECT n.soul_id AS id FROM nodes n JOIN sessions s ON s.node_id = n.id
+              WHERE n.rig_id = ? AND s.session_name = ? ORDER BY s.rowid DESC LIMIT 1`).get(run.rigId, seat) as { id: string | null } | undefined)?.id ?? undefined),
           ...(lead ? { lead } : {}) },
-        // Every managed attempt routes substantial work through the pinned framework, so its
-        // entry governor is the one pinned file the manifest always binds. The full framework
-        // tree is already mounted read-only at `/framework`; this entry is the attempt's
-        // instruction-discovery proof, not a second copy of the catalog.
-        //
-        // MVP — an unisolated host installs no framework tree (`./setup.sh` installs nothing
-        // outside the repo), so this attempt binds none rather than naming a file that is not
-        // there. The plan, the role configuration and the role instructions are unaffected.
-        frameworkFiles: dependencies.unisolated ? [] : [{ path: "skills/using-spec-first/SKILL.md",
-          source: nodePath.join(roots.frameworkRoot, "skills/using-spec-first/SKILL.md") }],
+        frameworkFiles,
       });    } catch (error) {
-      // An admission whose attempt was never produced would otherwise hold the candidate for
-      // the life of the daemon. The release is the no-op a review assignment documents.
-      runtime.releaseCandidate(row.runId, assignment.taskId, attemptId);
+      if (task.workflow) recordWorkflowOutcome(dependencies.db, {
+        // A refused resume did not start its next native generation. Keep its launch block
+        // separate so retrying that generation can still record the actual native result.
+        attemptId: previous ? randomUUID() : attemptId, qitemId: task.qitemId, generation: 1, workflow: task.workflow,
+        outcome: { status: "blocked", artifacts: [], reason: (error instanceof Error ? error.message : "Workflow launch failed").slice(0, 16_384) },
+      });
+      // A fresh failed admission gives its claim back. An exact resume reuses an earlier
+      // owner's claim and must preserve that attempt's work for a later retry.
+      if (!previous) runtime.releaseCandidate(row.runId, assignment.taskId, attemptId);
       throw error;
     }
     dependencies.endpoints.set(attemptId, produced.bridge);

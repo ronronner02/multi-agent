@@ -200,6 +200,11 @@ export function teamControlRoutes(
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     return c.json(governance.taskForEdit(c.req.param("runId"), c.req.param("taskId")));
   });
+  app.get("/runs/:runId/workflows", c => {
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, workflows: governance.workflowOutcomes(c.req.param("runId")) });
+  });
   app.post("/runs/:runId/tasks/:taskId/edit", async c => {
     const request = parseControlRequest(await c.req.json());
     if (request.runId !== c.req.param("runId") || request.actionId !== c.req.param("taskId")) return c.json({ code: "control_scope_denied" }, 403);

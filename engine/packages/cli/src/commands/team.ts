@@ -125,8 +125,15 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .option("--plan <path>", "plan artifact, relative to the repository (default: plan.md)")
     .option("--write <path...>", "repository-relative paths the task may write (default: src)")
     .option("--planning", "start a planning run: the lead agrees a plan with you before any work")
+    .option("--workflow <entrypoint>", "select a workflow for direct execution or Lead delegation")
+    .option("--read-only", "run the selected workflow without candidate or external writes")
     .option("--json", "print the daemon's receipt as JSON")
     .action(async (goal: string, opts: Record<string, unknown>) => {
+      if (opts.readOnly && !opts.workflow) {
+        console.error("error: --read-only requires --workflow.");
+        process.exitCode = 1;
+        return;
+      }
       const token = ownerToken(deps());
       if (!token) {
         console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
@@ -137,6 +144,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (!daemonStatusGuard(status)) return;
       const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
       const body = { goal, ...(opts.rig ? { rig: String(opts.rig) } : {}), ...(opts.seat ? { seat: String(opts.seat) } : {}),
+        ...(opts.workflow ? { workflow: { entrypoint: String(opts.workflow), readOnly: opts.readOnly === true } } : {}),
         ...(opts.lead ? { lead: String(opts.lead) } : {}),
         ...(opts.reviewer ? { reviewerSeat: String(opts.reviewer) } : {}),
         ...(opts.planning ? { planning: true } : {}),

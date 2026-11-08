@@ -909,6 +909,10 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 }
 
 .team-shell .composer-confirmation { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--muted); }
+.team-shell .composer .ui-workflow-picker { grid-column: 1 / -1; }
+.ui-workflow-picker { display: grid; gap: 8px; min-width: 0; }
+.ui-soul-content { height: auto; min-height: 12rem; resize: vertical; line-height: 1.5; }
+.ui-workflow-outcomes { margin-block: 12px; overflow-wrap: anywhere; }
 
 .team-shell .ui-chat-latest { align-self: center; margin-bottom: 8px; }
 

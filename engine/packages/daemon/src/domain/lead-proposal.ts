@@ -1,5 +1,8 @@
 import { documentInstructions, readDocuments } from "./project-documents.js";
 import { teamModelAllowlist } from "./team-model-policy.js";
+import { listTeamSouls } from "./team-souls.js";
+import { parseWorkflowSelection, type WorkflowSelection } from "./team-workflows.js";
+import { FRAMEWORK_CATALOG } from "../integrations/framework/catalog.js";
 import type Database from "better-sqlite3";
 import { leadRosterPath, parseLeadSeatChanges, type LeadSeatChanges } from "./lead-roster.js";
 import { nextTeamSeatNames } from "./team-setup.js";
@@ -55,9 +58,10 @@ export interface LeadTask {
   paths: string[];
   dependencies: string[];
   body: string;
+  workflow?: WorkflowSelection;
 }
 
-const FIELDS = ["taskId", "seat", "paths", "dependencies", "body"] as const;
+const FIELDS = ["taskId", "seat", "paths", "dependencies", "body", "workflow"] as const;
 
 /**
  * The proposal a lead wrote, validated at the boundary that reads it.
@@ -83,7 +87,8 @@ export function parseLeadProposal(value: unknown): LeadTask[] {
     if (typeof task.body !== "string" || !task.body.trim() || task.body.length > 262_144) throw new TeamContractError("proposal.body");
     return { taskId: text(task.taskId, "taskId", 256), seat: text(task.seat, "seat", 256),
       paths: list(task.paths, "paths").map(path => relativePath(path, "paths")),
-      dependencies: list(task.dependencies, "dependencies"), body: task.body };
+      dependencies: list(task.dependencies, "dependencies"), body: task.body,
+      ...(task.workflow === undefined ? {} : { workflow: parseWorkflowSelection(task.workflow) }) };
   });
   // A task with no paths claims nothing, and `parseAssignment` would refuse it later with a
   // field error the owner cannot act on. The boundary says what is wrong instead.
@@ -172,6 +177,7 @@ export interface LeadRosterMember {
   member: string;
   role: TeamRole;
   mailbox: string;
+  soulId?: string;
 }
 
 /**
@@ -182,15 +188,16 @@ export interface LeadRosterMember {
  * not offered: inventing a role for it would hand the lead an assignment nobody approved.
  */
 export function leadRoster(db: Database.Database, input: { rigId: string; roles: readonly TeamRole[]; excludeSeat: string }): LeadRosterMember[] {
-  const rows = db.prepare(`SELECT n.role AS role,
+  const rows = db.prepare(`SELECT n.role AS role, n.soul_id AS soulId,
       (SELECT s.session_name FROM sessions s WHERE s.node_id = n.id ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS seat
     FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.runtime IS NOT NULL AND n.runtime <> 'terminal' ORDER BY n.logical_id`).all(input.rigId) as
-    Array<{ role: string | null; seat: string | null }>;
+    Array<{ role: string | null; seat: string | null; soulId: string | null }>;
   const seen = new Set<string>([input.excludeSeat]);
   return rows.flatMap(row => {
     if (!row.seat || !row.role || seen.has(row.seat) || !input.roles.includes(row.role as TeamRole)) return [];
     seen.add(row.seat);
-    return [{ member: row.seat, role: row.role as TeamRole, mailbox: row.seat }];
+    return [{ member: row.seat, role: row.role as TeamRole, mailbox: row.seat,
+      ...(row.soulId ? { soulId: row.soulId } : {}) }];
   });
 }
 
@@ -289,12 +296,23 @@ export function leadActivation(db: Database.Database, input: {
   const run = input.runId ? db.prepare("SELECT binding_json AS binding FROM team_runs WHERE id = ?").get(input.runId) as { binding: string } | undefined : undefined;
   const documents = input.runId && run ? readDocuments(db, { id: input.runId, binding: JSON.parse(run.binding) }) : null;
   const allowed = teamModelAllowlist(db, input.rigId);
+  const specialists = listTeamSouls(db, input.rigId).map(({ id, name, roles, version }) => ({ id, name, roles, version }));
+  const soulContext = "\n\nAvailable specialist profiles (data):\n" + JSON.stringify(specialists) +
+    "\nChoose an optional soulId in each proposed roster seat or seat addition. Match expertise to the task; reuse existing seats. " +
+    "Specialist identity is separate from permission role and client/model. Profiles grant no new permissions. " +
+    "The owner edits profiles; you select them and determine the necessary team size within the approved limits.";
+  const workflowContext = "\n\nWorkflow entrypoints and invocation requirements (data):\n" +
+    JSON.stringify(FRAMEWORK_CATALOG.map(entry => [entry.name, entry.invocation])) +
+    '\nOptionally set workflow: {"entrypoint":"spec-work","input":"<workflow input>","readOnly":false} on each proposed task. ' +
+    "The daemon records caller provenance and native outcomes. User-only entrypoints require an explicit owner invocation. " +
+    "When chat provides an Owner workflow request, copy its ownerMessageId into the proposed workflow; the daemon verifies and assigns it once. " +
+    "A task body is not an owner grant. Capability, caller-contract and external-action checks still apply.";
   const modelContext = allowed === null ? "" : "\n\nOwner model policy (data):\n" + JSON.stringify(allowed) +
     "\nEvery proposed non-lead seat must include an explicit model from an allowed client/model pair, in both lead-roster.json and seat additions. " +
     "An empty list permits planning only. Do not use a native client default or launch additional agents outside the managed roster.";
   return { activationId: input.activationId, roster: leadRoster(db, { rigId: input.rigId, roles: input.roles, excludeSeat: input.seat }),
     ...(input.phase === undefined ? {} : { phase: input.phase }),
-    instructions: (modelContext ? modelContext + "\n\n" : "") + (input.phase === "planning"
+    instructions: (modelContext ? modelContext + "\n\n" : "") + soulContext + workflowContext + "\n\n" + (input.phase === "planning"
       ? (documents ? planningDiscussionInstructions() + documentInstructions(documents, input.planRef ?? "plan.md", input.maxSeats)
         : planningInstructions(input.goal, input.planRef ?? "plan.md", input.buildRoster, input.maxSeats))
         + (input.buildRoster ? planningSeatContext(db, input.rigId) : "") : leadInstructions(input.goal, input.maxSeats, nextTeamSeatNames(db, input.rigId,

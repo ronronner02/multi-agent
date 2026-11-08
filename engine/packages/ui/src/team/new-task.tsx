@@ -5,6 +5,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { Caret, Close } from "./glyphs.js";
 import { runsKey, type TeamSummary } from "./hooks.js";
+import type { WorkflowSelection } from "@openrig/daemon/team-control";
+import { WorkflowPicker } from "./workflows.js";
 
 /**
  * U10 — start a run from the UI.
@@ -24,6 +26,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
   const session = useOwnerSession();
   const cache = useQueryClient();
   const [goal, setGoal] = useState("");
+  const [workflow, setWorkflow] = useState<WorkflowSelection | undefined>();
   const [team, setTeam] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -40,7 +43,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
       try {
         const receipt = await session.request<{ runId: string }>("/runs", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: goal.trim(), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true, documentWorkflow: true } : {}) }),
+          body: JSON.stringify({ goal: goal.trim(), ...(workflow ? { workflow } : {}), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true, documentWorkflow: true } : {}) }),
         });
         if (!receipt?.runId) throw new Error("no run");
         await cache.invalidateQueries({ queryKey: runsKey });
@@ -64,6 +67,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
           <Caret />
         </label>
       </div>}
+      <WorkflowPicker value={workflow} onChange={setWorkflow} disabled={busy} />
       {failure && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.startRefused")}</p>}
       <div className="plate-foot">
         <button className="btn btn-primary" type="submit" disabled={busy || !goal.trim() || !session.paired}>{t(hasLead ? "planning.start" : "web.startTask")}</button>

@@ -242,6 +242,7 @@ export interface TeamApproval {
 }
 
 export interface TeamTaskAuthority {
+  workflow: import("../domain/team-workflows.js").TaskWorkflow | null;
   qitemId: string;
   runId: string;
   assignment: ScopedAssignment;

@@ -236,8 +236,17 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     expect(instructions).not.toContain("reviewer@rig");
     expect(instructions).not.toContain("lead@rig");
     expect(instructions.length).toBeLessThanOrEqual(8_192);
+    const planningBody = planningInstructions("Plan the work", "plan.md", true);
+    const bodyStart = instructions.indexOf(planningBody);
+    expect(bodyStart).toBeGreaterThan(0);
+    const catalogContext = instructions.slice(0, bodyStart);
+    expect(catalogContext).toContain("Available specialist profiles (data):");
+    expect(catalogContext).toContain("Workflow entrypoints and invocation requirements (data):");
+    expect(catalogContext).not.toContain("Existing seats to reuse");
+    expect(catalogContext).not.toContain('"client":');
     for (const buildRoster of [false, undefined]) {
-      expect(leadActivation(db, { ...input, buildRoster }).instructions).toBe(planningInstructions("Plan the work", "plan.md"));
+      expect(leadActivation(db, { ...input, buildRoster }).instructions)
+        .toBe(catalogContext + planningInstructions("Plan the work", "plan.md"));
     }
     for (const phase of ["delivery", undefined] as const) {
       expect(leadActivation(db, { ...input, phase, buildRoster: true }).instructions)

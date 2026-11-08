@@ -148,11 +148,13 @@ rig team approve-plan <run-id>
 ```
 
 Use the team name printed by Create and the run id printed by Start. `--rig` may be
-omitted when there is exactly one team. Start uses `plan.md` and a delivery write
-scope of `src` by default, including from the UI. For another scope, start through
-the CLI with `--write <path...>` (for example `--write src test`); `--plan <path>`
-selects another repository-relative plan artifact. Planning writes the plan and its
-proposal artifacts, not delivery code. Approval binds the current plan and roster.
+omitted when there is exactly one team. Start uses `plan.md`. Planning grants ordinary
+project-wide implementation only after approval; protected paths, work outside the
+project, external actions, budget increases and final merge remain separate decisions.
+Use `--write <path...>` to narrow that grant (for example `--write src test`). A direct
+non-planning CLI Start still defaults to `src`. `--plan <path>` selects another
+repository-relative plan artifact. Planning writes its agreement and proposal
+artifacts, not delivery code. Approval binds the current plan and roster.
 
 Once approved, the lead assigns implementer tasks. The daemon records outcomes,
 creates reviews, routes rework and commits approved candidates to `team/…`. Workers
@@ -161,9 +163,11 @@ verdicts require no owner action. Answer an escalation when the lead needs a dec
 about scope, budget or an unresolved conflict. Owner chat has reserved lead capacity
 even when worker slots are full; a provider-wide limit may still delay the reply.
 
-For a run with a reviewer, an implementer dependency is ready only after validated
+For a run with a reviewer, an implementation dependency is ready only after validated
 completion and its integration commit. Worker completion or review approval alone
 does not start a dependent candidate before the accepted files reach the run branch.
+An explicitly read-only workflow requires validated completion but no implementation
+review or empty integration commit; its read paths are not exclusive write claims.
 Validated task drops and settled, integrated tasks release their write-path claims
 for later admitted work without deleting their records. Pending review, unintegrated
 work and active attempts keep their claims.
@@ -178,7 +182,7 @@ sections keep their own view of that context:
 | Tasks | Searchable List and persistent inspector with attempts, reports and diffs; Board retains dependency stages. |
 | Reviews | Candidate findings and the action to ask the lead for follow-up. |
 | Analytics | Project-scoped captured stopped attempts over 7 or 30 days, grouped in UTC. |
-| Settings | General, GitHub, Appearance, Sessions and the read-only Agents roster. |
+| Settings | General, GitHub, Appearance, Sessions, model policy and specialist profiles. |
 
 Analytics uses native input, cache and output counters without monetary estimates.
 Missing counters remain unavailable, not zero. Outcome rates show their denominators;
@@ -192,7 +196,109 @@ controls theme and the Shuimo Danqing backdrop's motion. The entrance plays once
 app/browser session, then only the complete portrait segment repeats. Navigation,
 reload and reconnect do not restart the entrance. Reduced motion uses the portrait
 still; animation pauses when the window loses focus or the page is hidden.
-Agents is a view of the roster, not a manual seat editor.
+Agents edits model policy and specialist identities, not the team's size or permission
+roles. The lead proposes those choices through the existing roster approval path.
+
+## Workflows and specialist profiles
+
+### Dispatch and outcomes
+
+New work and the initial project chat accept an optional **Workflow** selection.
+In a Lead-led run, an initial selection becomes a recorded owner request, not a
+permanent workflow on the Lead's chat task. It remains in subsequent Lead prompts
+until assigned once to a worker; planning requests still wait for execution approval.
+A run without a Lead dispatches the selection directly to its worker.
+Delivery-phase chat uses the same owner-request path, with commands such as:
+
+```text
+/spec-handoff --read-only
+Summarize the current task.
+```
+
+The lead receives that request's recorded message ID. It can put
+`workflow: {"entrypoint":"spec-handoff","ownerMessageId":"<message-id>","readOnly":true}`
+on an ordinary proposed task. Admission checks the owner, run, entrypoint and original
+input, preserves read-only scope, and permits only one assigned task per owner request.
+An ordinary lead-selected workflow has caller provenance; putting an owner-only
+entrypoint in a task body does not supply an owner grant. Caller-only helpers remain
+internal to their governed caller contracts. No second scheduler is started.
+
+CLI Start supports `--workflow <entrypoint>` and optional `--read-only`; the latter
+requires the former. Workflow selection does not approve the plan, commit, push,
+merge, external actions or a larger budget. Existing protected-path rules still apply.
+
+The owner API provides `GET /api/team-control/workflows` and
+`GET /api/team-control/runs/:runId/workflows`. Each native turn reports an outcome
+envelope, retained with its attempt and generation. Missing or malformed output is
+`incomplete`; the workflow reports missing capabilities as `blocked`; native process failure overrides
+a claimed success. A complete answer-only, read-only workflow may have no files, but
+needs a substantive summary and an unchanged candidate. Reported file artifacts must
+exist before task evidence validates. The history displays native outcomes separately
+from task validation, review verdicts and owner acceptance.
+
+The owner completion read uses the outcome for the latest attempt's exact native
+generation, so it applies the same workflow evidence rules as automatic completion.
+A failed exact-resume preflight preserves the earlier candidate and context. Its
+launch-block record is separate from the native generation that a later retry starts.
+
+All 38 entries use the same admission, attempt-context and completion path. This is
+dispatch coverage, not a claim that every external capability is installed or that
+all 38 upstream workflows have passed live acceptance. Browser workflows need their
+browser capability and exact target origin. The pinned browser workflow owns its
+wrapper probe, exact-origin validation and checks before browser effects. Starting a
+native client lets it evaluate those prerequisites; it neither authorizes browser
+effects nor attests that the browser checks passed. The daemon does not produce a
+browser conformance receipt. Xcode workflows record a capability block on Linux/WSL;
+macOS execution remains outside the supported host matrix.
+
+In direct mode, read-only turns use the native client's read-only settings: the
+shell sandbox is read-only with no approval escalation, or the alternate client is
+limited to Read/Glob/Grep in planning mode without inherited external tools. These
+settings do not turn same-user direct mode into the hardened OS boundary; configured
+external tools remain subject to the existing approval protocol. The experimental
+hardened policy supports a physically read-only candidate only for reviewer seats;
+a read-only workflow on another role records a capability block before native launch.
+Read-only assignments may use the binding's approved read paths as inputs without
+acquiring write permission or declaring written outputs.
+
+### Pinned source installation
+
+`./setup.sh` installs the exact catalog revision under
+`$OPENRIG_HOME/framework/<revision>` (using the application's normal per-user state
+home when `OPENRIG_HOME` is unset). Git must be able to fetch the pinned repository.
+To use an already installed, verified source package, set
+`MULTI_AGENT_FRAMEWORK_ROOT` to its absolute path before setup and daemon launch.
+
+Installation checks the fetched revision and records the complete file set and
+SHA-256 hashes. Repository link blobs are checked out as inert files, not followed
+as runtime mirrors. Launch verifies the source package, including supporting
+references, and reads canonical source entrypoints. It never downloads at launch,
+silently replaces an unverified nonempty directory, or substitutes generated skill
+mirrors. Legacy launches with no installed source remain available; explicit workflow
+requests record a block until source is installed.
+
+### Versioned SOUL profiles
+
+**Settings → Agents → Specialist profiles** contains seven built-in profiles and
+owner-created profiles. A profile has an ID, display name, compatible permission
+roles, instructions, version and content digest. Saving appends a project-scoped
+revision with an optimistic version check; it does not overwrite an earlier saved
+revision. Owner routes are:
+
+- `GET /api/team-control/teams/:teamId/souls`
+- `PUT /api/team-control/teams/:teamId/souls/:soulId`
+- `PUT /api/team-control/teams/:teamId/seats/:nodeId/soul`
+
+The lead sees the available profile IDs, names, roles and versions and can select
+`soulId` in a proposed roster seat or seat addition. Permission role and client/model
+are independent of that identity. A profile cannot grant permissions, change a
+binding or replace the approved task. The existing runtime `profile` field retains
+its meaning; specialist identity is stored separately.
+
+Each attempt records the selected profile's exact version, content and digest in its
+context. A profile edit affects new attempts; an exact resume keeps its old snapshot.
+Changing a seat's identity waits until its assigned work has finished and clears that
+seat's continuation tokens. No cross-run personal memory is added.
 
 ## Resume a blocked run
 

@@ -17,7 +17,7 @@ describe("pinned framework catalog", () => {
       expect(entry.sourcePath).toBe(`skills/${entry.name}/SKILL.md`);
       if (entry.status !== "supported") expect(entry.prerequisite.trim()).not.toBe("");
     }
-    expect(frameworkEntry("spec-test-xcode")).toMatchObject({ status: "deferred" });
+    expect(frameworkEntry("spec-test-xcode")).toMatchObject({ status: "gated" });
     expect(frameworkEntry("spec-test-xcode")?.prerequisite).toContain("macOS");
     expect(frameworkEntry("review")).toBeUndefined();
   });

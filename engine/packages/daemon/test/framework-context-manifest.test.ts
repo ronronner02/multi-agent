@@ -5,9 +5,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { prepareTeamAssignment } from "../src/domain/team-assignment.js";
 import { hashBytes } from "../src/domain/plan-governance.js";
-import { buildManagedNativePolicy, createContextManifest, recordedContextManifest, projectContext, verifyEffectiveContext, workerContextPath, roleConfiguration, leadProtocol, roleInstructionEntries, coreInstructions, roleCharters, LEAD_PROTOCOL_VERSION, type ContextInput } from "../src/integrations/framework/context-manifest.js";
+import { attemptInstructionFiles, buildManagedNativePolicy, createContextManifest, recordedContextManifest, projectContext, verifyEffectiveContext, workerContextPath, roleConfiguration, leadProtocol, roleInstructionEntries, coreInstructions, roleCharters, LEAD_PROTOCOL_VERSION, type ContextInput } from "../src/integrations/framework/context-manifest.js";
 import { canonicalJson } from "../src/contracts/team-control.js";
-import { FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
+import { FRAMEWORK_CATALOG, FRAMEWORK_PIN } from "../src/integrations/framework/catalog.js";
+import { soulDigest } from "../src/domain/team-souls.js";
 const roots: string[] = [];
 afterEach(() => {
   const writable = (p: string) => { chmodSync(p, 0o755); for (const entry of readdirSync(p, { withFileTypes: true })) if (entry.isDirectory()) writable(join(p, entry.name)); };
@@ -34,7 +35,44 @@ function fixture(role: "implementer" | "reviewer" = "implementer") {
     policy: { policy_revision: 4, worker_identities: ["ma-worker1", "ma-worker2"], paths: { context_root: join(base, "context"), framework_dir: join(base, "framework") }, sandbox: { context: "/context", framework: "/framework" } } }, runId: "run", assignment: { taskId: "T007", role, paths: ["src"], dependencies: [] }, outputs: role === "reviewer" ? [] : ["src/result.ts"], permissions: role === "reviewer" ? ["submit-review"] : ["write-assigned-tree"], role, client: "claude-code", binding, root, mutableStateRoot: join(base, "state"), frameworkRoot: join(base, "framework"), frameworkRevision: FRAMEWORK_PIN.revision, workerUid: process.getuid!() + 100000, workerGroups: [], discoveryRoots: [root], files };
   const observed = { discoveryRoots: ["/context"], files: files.map(({ kind, hash }) => ({ path: "/context/" + kind, hash })) }; return { base, input, observed };
 }
+it("pins a specialist identity and rejects content or role substitution", () => {
+  const { input } = fixture();
+  const profile = { id: "frontend", version: 2, name: "Frontend specialist", roles: ["implementer" as const], content: "Verify browser flows." };
+  input.soul = { ...profile, digest: soulDigest(profile) };
+  chmodSync(input.root, 0o750);
+  const path = join(input.root, "soul"), content = canonicalJson(input.soul);
+  writeFileSync(path, content, { mode: 0o440 }); chmodSync(input.root, 0o550);
+  input.files.push({ path, hash: hashBytes(content), kind: "soul", readOnly: true });
+  const manifest = createContextManifest(input);
+  expect(manifest.soul?.version).toBe(2);
+  expect(attemptInstructionFiles(manifest).map(file => file.kind)).toEqual(["core", "charter", "soul", "framework"]);
+  expect(recordedContextManifest(input).generatedHash).toBe(manifest.generatedHash);
+  input.soul.content = "A newer owner edit";
+  expect(() => recordedContextManifest(input)).toThrow(/specialist profile/);
+  input.soul = { ...profile, roles: ["lead"], digest: soulDigest({ ...profile, roles: ["lead"] }) };
+  expect(() => createContextManifest(input)).toThrow(/specialist profile/);
+});
 it.each(["claude-code", "codex"] as const)("%s binds generated and observed hashes and freezes projected authority", client => { const { input, observed } = fixture(); input.client = client; const m = createContextManifest(input); expect(verifyEffectiveContext(m, observed)).toBe(hashBytes(canonicalJson(observed))); expect(Object.isFrozen(m.files[0])).toBe(true); expect(Object.isFrozen(m.binding.writePaths)).toBe(true); expect(readFileSync(m.files[0]!.path, "utf8")).toBe("pinned instructions"); });
+it.each(FRAMEWORK_CATALOG.flatMap(entry => [false, true].map(sameIdentity => ({ entry, sameIdentity }))))(
+  "delivers $entry.name from its complete source package (same identity: $sameIdentity)", ({ entry, sameIdentity }) => {
+    const { input } = fixture();
+    input.sameIdentity = sameIdentity;
+    const source = join(input.frameworkRoot, entry.sourcePath);
+    mkdirSync(dirname(source), { recursive: true });
+    writeFileSync(source, "pinned instructions");
+    mkdirSync(join(dirname(source), "references"));
+    writeFileSync(join(dirname(source), "references", "check.md"), "supporting workflow instructions");
+    input.files[0]!.source = source;
+    const instructions = attemptInstructionFiles(createContextManifest(input));
+    expect(instructions.slice(0, 2).map(file => file.kind)).toEqual(["core", "charter"]);
+    expect(instructions.find(file => file.kind === "framework")).toEqual({
+      kind: "framework", path: sameIdentity ? source : `/framework/${entry.sourcePath}`,
+    });
+    if (sameIdentity) {
+      const path = instructions.find(file => file.kind === "framework")!.path;
+      expect(readFileSync(join(dirname(path), "references", "check.md"), "utf8")).toBe("supporting workflow instructions");
+    }
+  });
 it.each(["parent", "global", "unobserved"])("rejects %s instruction contamination", kind => { const { input, observed } = fixture(), m = createContextManifest(input); if (kind === "unobserved") observed.files.pop(); else observed.files.push({ path: kind === "parent" ? join(input.root, "..", "AGENTS.md") : "/global/CLAUDE.md", hash: hashBytes("extra") }); expect(() => verifyEffectiveContext(m, observed)).toThrow(); });
 it.each(["file", "parent", "owner", "state", "pin", "source", "alias", "role", "unreadable", "unsearchable"])("rejects invalid projected context: %s", kind => { const { base, input } = fixture(); if (kind === "unreadable") chmodSync(input.files[0]!.path, 0o400); if (kind === "unsearchable") chmodSync(base, 0o700); if (kind === "file") chmodSync(input.files[0]!.path, 0o666); if (kind === "parent") chmodSync(input.root, 0o777); if (kind === "owner") input.workerUid = process.getuid!(); if (kind === "state") input.mutableStateRoot = input.root; if (kind === "pin") input.frameworkRevision = "wrong"; if (kind === "source") { const d = join(input.frameworkRoot, ".agents"); mkdirSync(d); const p = join(d, "skill.md"); writeFileSync(p, "pinned instructions"); input.files[0]!.source = p; } if (kind === "alias") { const p = join(base, "alias"); symlinkSync(input.root, p); input.root = p; } if (kind === "role") input.client = "unsupported" as "codex"; expect(() => createContextManifest(input)).toThrow(); });
 it("blocks changed projected bytes on resume", () => { const { input, observed } = fixture(), m = createContextManifest(input); chmodSync(input.files[0]!.path, 0o644); writeFileSync(input.files[0]!.path, "changed"); expect(() => verifyEffectiveContext(m, observed)).toThrow(); });

@@ -50,6 +50,24 @@ async function run(argv: string[], startDeps: TeamStartDeps): Promise<{ lines: s
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("rig team start", () => {
+  it.each([false, true])("sends the selected workflow with read-only set to %s", async readOnly => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(receipt), { status: 201 }));
+    const result = await run(["team", "start", "Inspect the current plan", "--workflow", "spec-plan",
+      ...(readOnly ? ["--read-only"] : [])], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const init = (fetchImpl.mock.calls as unknown as Array<[string, RequestInit]>)[0]![1];
+    expect(JSON.parse(String(init.body))).toEqual({ goal: "Inspect the current plan", workflow: { entrypoint: "spec-plan", readOnly } });
+  });
+
+  it("rejects --read-only without a selected workflow before contacting the daemon", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(receipt), { status: 201 }));
+    const result = await run(["team", "start", "Inspect the current plan", "--read-only"], deps(fetchImpl));
+    expect(result.code).toBe(1);
+    expect(result.lines.join("\n")).toContain("--read-only requires --workflow");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("posts the goal with the named options and prints the run to watch", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(receipt), { status: 201 })) as unknown as typeof fetch;
     const result = await run(["team", "start", "Add a health endpoint", "--rig", "demo", "--seat", "dev@demo",

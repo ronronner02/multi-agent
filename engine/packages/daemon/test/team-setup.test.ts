@@ -13,6 +13,8 @@ import { PlanGovernance, fixDaemonMode } from "../src/domain/plan-governance.js"
 import { addTeamSeats, createTeam } from "../src/domain/team-setup.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
 import { createTestApp } from "./helpers/test-app.js";
+import { listChatMessages, leadChatTurnNote, takeOwnerMessages } from "../src/domain/lead-chat.js";
+import { ownerWorkflowCommand, unassignedOwnerWorkflows } from "../src/domain/team-workflows.js";
 
 /**
  * U3 — the owner creates a team for any local git repository.
@@ -82,10 +84,143 @@ describe("U3 — the owner creates a team", () => {
     dispatch = vi.fn(async () => {});
     app = createTestApp(db, { appDeps: { eventBus: bus, queueRepo: queue, teamGovernance: governance,
       teamControl: { credentials: { ownerToken, workers: [{ token: workerToken, sessionId: "dev@demo", runId: "other" }] },
-        readPolicyCapability: () => policy, dispatch: dispatch as unknown as (runId: string, taskId: string) => Promise<void> } } }).app;
+        readPolicyCapability: () => policy, planWorktreeRoot: () => join(directory, "plans"),
+        dispatch: dispatch as unknown as (runId: string, taskId: string) => Promise<void> } } }).app;
   });
 
   afterEach(() => { if (db?.open) db.close(); rmSync(directory, { recursive: true, force: true }); });
+
+  it("serves and versions specialist profiles only through owner controls", async () => {
+    const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
+    const path = `/api/team-control/teams/${team.id}/souls`;
+    const initial = await call(path);
+    expect(initial.status).toBe(200);
+    const data = await initial.json() as { profiles: Array<{ id: string; version: number }>; seats: Array<{ nodeId: string; role: string }> };
+    expect(data.profiles.find(item => item.id === "frontend")?.version).toBe(1);
+    expect((await call(path, {}, workerToken)).status).toBe(403);
+    const body = { expectedVersion: 1, name: "Project frontend", roles: ["implementer"], content: "Verify keyboard navigation." };
+    expect((await call(path + "/frontend", { method: "PUT", body: JSON.stringify(body) }, workerToken)).status).toBe(403);
+    const saved = await call(path + "/frontend", { method: "PUT", body: JSON.stringify(body) });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({ profile: { id: "frontend", version: 2, content: body.content } });
+    expect((await call(path + "/frontend", { method: "PUT", body: JSON.stringify(body) })).status).toBe(409);
+    const seat = data.seats.find(item => item.role === "implementer")!;
+    const assigned = await call(`/api/team-control/teams/${team.id}/seats/${seat.nodeId}/soul`,
+      { method: "PUT", body: JSON.stringify({ soulId: "frontend" }) });
+    expect(assigned.status).toBe(200);
+    expect(db.prepare("SELECT soul_id FROM nodes WHERE id = ?").get(seat.nodeId)).toEqual({ soul_id: "frontend" });
+  });
+
+  it("exposes all workflows and records explicit owner provenance without accepting a forged origin", async () => {
+    const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
+    const catalog = await call("/api/team-control/workflows");
+    expect(catalog.status).toBe(200);
+    expect((await catalog.json() as { workflows: unknown[] }).workflows).toHaveLength(38);
+    expect((await call("/api/team-control/workflows", {}, workerToken)).status).toBe(403);
+    const response = await start({ rig: team.id, goal: "Explain the design", workflow: { entrypoint: "spec-explain", readOnly: true } });
+    expect(response.status).toBe(201);
+    const run = await response.json() as { runId: string };
+    expect(governance.findTask(run.runId, "task-1")?.workflow).toBeNull();
+    const message = listChatMessages(db, run.runId)[0]!;
+    expect(message).toMatchObject({ sender: "owner", body: "/spec-explain --read-only\nExplain the design" });
+    expect(leadChatTurnNote([message], [])).toContain(message.id);
+    takeOwnerMessages(db, run.runId, "first-chat-turn");
+    expect(leadChatTurnNote([], [], unassignedOwnerWorkflows(db, run.runId))).toContain(message.id);
+    const current = governance.getRun(run.runId);
+    const assigned = governance.admitLeadProposal({ protocolVersion: "1.0", runId: current.id,
+      actionId: "workflow-request", expectedEntityVersion: current.entityVersion, idempotencyKey: "workflow-request", payload: {} },
+    { kind: "daemon", sessionId: "daemon" }, current.binding, [{ taskId: "explain", seat: "impl-1@project", paths: ["src"],
+      dependencies: [], body: "Explain the design", workflow: { ...ownerWorkflowCommand(message.body)!, ownerMessageId: message.id } }]);
+    expect(assigned.status, assigned.reason).toBe("accepted");
+    expect(governance.findTask(run.runId, "explain")?.workflow).toMatchObject({ entrypoint: "spec-explain", origin: "user",
+      readOnly: true, ownerMessageId: message.id, input: "Explain the design" });
+    expect(leadChatTurnNote([], [], unassignedOwnerWorkflows(db, run.runId))).toBeNull();
+    const forbidden = await start({ rig: team.id, goal: "Run a caller helper", workflow: { entrypoint: "spec-commit" } });
+    expect(forbidden.status).toBe(403);
+    expect((await start({ rig: team.id, goal: "Spoof", workflow: { entrypoint: "spec-work", origin: "caller" } })).status).toBe(400);
+  });
+
+  it("keeps an initial workflow request out of the long-lived planning task", async () => {
+    const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
+    const response = await start({ rig: team.id, goal: "Plan the next change", planning: true,
+      workflow: { entrypoint: "spec-code-review", input: "Inspect the current interface." } });
+    expect(response.status).toBe(201);
+    const { runId } = await response.json() as { runId: string };
+    expect(governance.findTask(runId, "task-1")).toMatchObject({ assignment: { role: "lead" }, workflow: null });
+    expect(governance.getRun(runId).phase).toBe("planning");
+    expect(listChatMessages(db, runId)).toMatchObject([{ sender: "owner",
+      body: "/spec-code-review --read-only\nInspect the current interface." }]);
+    expect(governance.workflowOutcomes(runId)).toEqual([]);
+  });
+
+  it.each([
+    { name: "maximum explicit input", goal: "Evaluate the design", input: "x".repeat(65_536), readOnly: true },
+    { name: "maximum fallback goal", goal: "g".repeat(65_536), input: undefined, readOnly: false },
+    { name: "explicitly empty input", goal: "Keep the input empty", input: "", readOnly: false },
+  ])("preserves $name when recording an initial workflow request", async ({ goal, input, readOnly }) => {
+    const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
+    const response = await start({ rig: team.id, goal, workflow: { entrypoint: "spec-pov", input, readOnly } });
+    expect(response.status, await response.clone().text()).toBe(201);
+    const { runId } = await response.json() as { runId: string };
+    const messages = listChatMessages(db, runId);
+    expect(messages).toHaveLength(1);
+    const expectedInput = input ?? goal;
+    expect(messages[0]!.body).toBe(`/spec-pov${readOnly ? " --read-only" : ""}\n${expectedInput}`);
+    expect(ownerWorkflowCommand(messages[0]!.body)).toEqual({ entrypoint: "spec-pov", input: expectedInput, readOnly });
+  });
+
+  it.each([
+    { name: "oversized explicit input", goal: "Evaluate the design", input: "x".repeat(65_537) },
+    { name: "oversized fallback goal", goal: "g".repeat(65_537), input: undefined },
+  ])("rejects $name before recording an initial workflow request", async ({ goal, input }) => {
+    const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
+    const response = await start({ rig: team.id, goal, workflow: { entrypoint: "spec-pov", input } });
+    expect(response.status).toBe(400);
+    expect(db.prepare("SELECT count(*) AS count FROM team_chat_messages").get()).toEqual({ count: 0 });
+  });
+
+  it.each([
+    { path: "/api/team-control/teams", method: "POST" },
+    { path: "/api/team-control/teams/unknown/souls/frontend", method: "PUT" },
+  ])("retains the team request body limit on $method $path", async ({ path, method }) => {
+    const body = JSON.stringify({ content: "x".repeat(65_536) });
+    const response = await app.request(path, { method, body, headers: {
+      "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)), Authorization: "Bearer " + ownerToken,
+    } }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ code: "invalid_team_contract", error: "The team request exceeds its size limit." });
+    expect(db.prepare("SELECT count(*) AS count FROM rigs").get()).toEqual({ count: 0 });
+  });
+
+  it("preserves recorded conversations and their constraints when adding workflow header storage", async () => {
+    const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
+    const { runId } = await (await start({ rig: team.id, goal: "Preserve the conversation" })).json() as { runId: string };
+    const legacy = createDb();
+    try {
+      migrate(legacy, ALL_MIGRATIONS.filter(migration => migration.name !== "121_workflow_souls.sql"));
+      legacy.prepare("INSERT INTO rigs (id, name) VALUES (?, 'project')").run(team.id);
+      const bus = new EventBus(legacy), queue = new QueueRepository(legacy, bus);
+      new PlanGovernance(legacy, bus, queue, undefined, () => policy).createRun({ id: runId, rigId: team.id,
+        binding: governance.getRun(runId).binding });
+      const insert = legacy.prepare(`INSERT INTO team_chat_messages
+        (rowid, id, run_id, sender, body, attempt_id, delivered_attempt, created_at, kind, options_json, answered_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      insert.run(7, "owner-message", runId, "owner", "Consider these constraints", null, "lead-turn", "2026-01-01T00:00:00Z", "text", null, null);
+      insert.run(19, "decision", runId, "lead", "Choose an approach", "lead-turn", null, "2026-01-01T00:00:01Z", "decision", '["A","B"]', "answer");
+      insert.run(23, "answer", runId, "owner", "Use A", null, null, "2026-01-01T00:00:02Z", "confirmation", null, null);
+      const before = legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all();
+      migrate(legacy, ALL_MIGRATIONS);
+      expect(legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all()).toEqual(before);
+      expect(legacy.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      const append = legacy.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, attempt_id, created_at)
+        VALUES (?, ?, ?, ?, ?, '2026-01-01T00:00:03Z')`);
+      expect(() => append.run("duplicate", runId, "lead", "Repeated", "lead-turn")).toThrow(/UNIQUE/);
+      expect(() => append.run("too-long", runId, "owner", "x".repeat(65_537), null)).toThrow(/CHECK/);
+      expect(() => append.run(runId + ":initial", runId, "lead", "x".repeat(65_537), "another-turn")).toThrow(/CHECK/);
+      expect(() => append.run(runId + ":initial", runId, "owner", "x".repeat(65_793), null)).toThrow(/CHECK/);
+      expect(() => append.run(runId + ":initial", runId, "owner", "/spec-pov\n" + "x".repeat(65_536), null)).not.toThrow();
+    } finally { legacy.close(); }
+  });
 
   it("creates one rig with the requested seats, and returns roles and clients rather than seat names", async () => {
     const root = repository(directory);

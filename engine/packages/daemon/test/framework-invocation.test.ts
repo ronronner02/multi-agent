@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PlanBinding } from "../src/contracts/team-control.js";
-import { FRAMEWORK_PIN, frameworkEntry } from "../src/integrations/framework/catalog.js";
+import { FRAMEWORK_CATALOG, FRAMEWORK_PIN, frameworkEntry } from "../src/integrations/framework/catalog.js";
 import { invokeFramework, type FrameworkRequest } from "../src/integrations/framework/invocation.js";
 
 function fixture(client: FrameworkRequest["client"] = "claude-code") {
@@ -21,6 +21,16 @@ function fixture(client: FrameworkRequest["client"] = "claude-code") {
 }
 
 describe("bounded framework invocation", () => {
+  it.each(FRAMEWORK_CATALOG.flatMap(entry => (["claude-code", "codex"] as const).map(client => ({ entry, client }))))(
+    "routes $entry.name on $client after its invocation and capability gates", async ({ entry, client }) => {
+      const { request, bridge } = fixture(client);
+      const result = await invokeFramework({ ...request, entrypoint: entry.name, origin: entry.invocation === "user" ? "user" : "caller" }, bridge);
+      expect(result.status).toBe("complete");
+      expect(bridge.invoke).toHaveBeenCalledWith(expect.objectContaining({ entrypoint: entry.name, client, revision: FRAMEWORK_PIN.revision }));
+      bridge.checkReadiness.mockResolvedValue({ ready: false, reason: "required-capability-missing" });
+      expect((await invokeFramework({ ...request, entrypoint: entry.name, origin: entry.invocation === "user" ? "user" : "caller" }, bridge)).status).toBe("blocked");
+      expect(bridge.invoke).toHaveBeenCalledTimes(1);
+    });
   it.each(["claude-code", "codex"] as const)("%s preserves the approved scope and uses the pinned native entrypoint", async client => {
     const { request, bridge } = fixture(client);
     expect(await invokeFramework(request, bridge)).toEqual({ status: "complete", artifacts: ["evidence/result.md"], reason: "" });

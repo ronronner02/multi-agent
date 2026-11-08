@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { localFrameworkRoot } from "../integrations/framework/source.js";
 
 /**
  * MVP — the roots a managed worker uses when `workers.isolation: none`.
@@ -60,9 +61,8 @@ function localMailboxRoot(home: string): string {
 /**
  * `home` is the daemon's per-user state directory (`$OPENRIG_HOME`).
  *
- * `frameworkRoot` is a directory this daemon owns rather than an installed tree: no
- * provisioning step runs here, and the projection only requires the path to exist and be
- * canonical once an attempt binds no framework entry.
+ * Setup installs the pinned workflow source per user. An explicit source override can
+ * point to an existing verified package without copying it into each attempt.
  */
 export function unisolatedWorkerRoots(home: string): ManagedWorkerRoots {
   const stateRoot = join(home, "state", "workers");
@@ -76,7 +76,7 @@ export function unisolatedWorkerRoots(home: string): ManagedWorkerRoots {
     mailboxRoot: localMailboxRoot(home),
     policyRevision: UNISOLATED_POLICY_REVISION,
     workerIdentities: [UNISOLATED_WORKER],
-    frameworkRoot: join(stateRoot, "framework"),
+    frameworkRoot: localFrameworkRoot(home),
     toolchainDir: "",
   };
   // The producer creates the per-attempt directories itself, but its ancestry checks read

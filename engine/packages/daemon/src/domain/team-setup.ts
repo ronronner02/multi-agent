@@ -5,6 +5,7 @@ import type Database from "better-sqlite3";
 import type { TeamRole } from "../contracts/team-control.js";
 import { RigRepository } from "./rig-repository.js";
 import { SessionRegistry } from "./session-registry.js";
+import { rosterSoulRefusal, soulId } from "./team-souls.js";
 
 /**
  * U3 — one team for one repository.
@@ -27,6 +28,7 @@ export interface TeamSeatInput {
   client: TeamClient;
   /** The one per-launch setting this slice passes through (KTD6: everything else is local config). */
   model?: string;
+  soulId?: string;
 }
 
 /** What a team looks like to its owner: roles and clients, never the internal seat names. */
@@ -34,6 +36,7 @@ export interface TeamSeat {
   role: TeamRole;
   client: TeamClient;
   model?: string;
+  soulId?: string;
 }
 
 export interface Team {
@@ -85,8 +88,11 @@ export function createTeam(db: Database.Database, input: {
   const root = repositoryRoot(input.repository);
   const rigs = new RigRepository(db);
   const name = availableTeamName(db, root, input.name);
-  const rig = rigs.createRig(name, root);
-  addTeamSeats(db, rig.id, seats);
+  const rig = db.transaction(() => {
+    const created = rigs.createRig(name, root);
+    addTeamSeats(db, created.id, seats);
+    return created;
+  })();
   // Read back through the same projection the list uses, so a create and a later read of the
   // same team cannot report its seats in different orders.
   return { id: rig.id, name, repository: root, seats: recordedSeats(db, rig.id), kind: "project" };
@@ -120,12 +126,15 @@ export function addTeamSeats(db: Database.Database, rigId: string, seats: readon
   if (!rig) throw new Error("Rig not found");
   const root = rigs.getRigInstallRoot(rigId) ?? repositoryOf(db, rigId);
   if (!root) throw new Error("The team's repository is unavailable");
+  const soulError = rosterSoulRefusal(db, rigId, seats);
+  if (soulError) throw new TeamSetupError("team_seats_invalid", soulError);
   const names = nextTeamSeatNames(db, rigId, seats);
   return seats.map((seat, index) => {
     const member = names[index]!;
     const node = rigs.addNode(rigId, `${rig.name}.${member.slice(0, -rig.name.length - 1)}`, {
       role: seat.role, runtime: seat.client, cwd: root, ...(seat.model === undefined ? {} : { model: seat.model }),
     });
+    if (seat.soulId) db.prepare("UPDATE nodes SET soul_id = ? WHERE id = ?").run(seat.soulId, node.id);
     sessions.registerSession(node.id, member);
     return { ...seat, member };
   });
@@ -175,7 +184,8 @@ function validatedSeats(seats: readonly TeamSeatInput[]): TeamSeat[] {
     }
     seen.set(seat.role, count);
     const model = seat.model?.trim();
-    return model ? { role: seat.role, client, model } : { role: seat.role, client };
+    return { role: seat.role, client, ...(model ? { model } : {}),
+      ...(seat.soulId === undefined ? {} : { soulId: soulId(seat.soulId) }) };
   });
 }
 
@@ -258,11 +268,12 @@ function sanitiseName(value: string): string {
 /** The seats a rig records: the team's own order, lead first and reviewer last, then by seat. */
 function recordedSeats(db: Database.Database, rigId: string): TeamSeat[] {
   const rows = db.prepare(
-    `SELECT role, runtime, model FROM nodes WHERE rig_id = ? AND retired_at IS NULL AND runtime IN ('claude-code', 'codex')
+    `SELECT role, runtime, model, soul_id AS soulId FROM nodes WHERE rig_id = ? AND retired_at IS NULL AND runtime IN ('claude-code', 'codex')
       ORDER BY CASE role WHEN 'lead' THEN 0 WHEN 'implementer' THEN 1 WHEN 'reviewer' THEN 2 ELSE 3 END,
-        logical_id`).all(rigId) as Array<{ role: string | null; runtime: string; model: string | null }>;
+        logical_id`).all(rigId) as Array<{ role: string | null; runtime: string; model: string | null; soulId: string | null }>;
   return rows.flatMap(row => TEAM_ROLES.includes(row.role as TeamRole)
-    ? [{ role: row.role as TeamRole, client: row.runtime as TeamClient, ...(row.model ? { model: row.model } : {}) }]
+    ? [{ role: row.role as TeamRole, client: row.runtime as TeamClient, ...(row.model ? { model: row.model } : {}),
+      ...(row.soulId ? { soulId: row.soulId } : {}) }]
     : []);
 }
 

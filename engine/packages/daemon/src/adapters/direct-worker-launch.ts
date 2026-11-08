@@ -281,17 +281,21 @@ private turnCommand(argv: string[], injected: boolean, threadIdPath?: string, re
    * in the candidate via the shell's cd, and sets its sandbox through the supported config flag.
    */
   private nativeArgs(client: WorkerClient, input: WorkerLaunchInput, sessionId: string, tree: string): string[] {
+    const readOnly = input.attempt.context.workflow?.readOnly === true;
     if (client === "claude-code") {
-      return ["claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+      return ["claude", "-p", "--permission-mode", readOnly ? "plan" : "bypassPermissions", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+        ...(readOnly ? ["--tools", "Read,Glob,Grep", "--strict-mcp-config"] : []),
         ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
         ...(input.continueSessionId || input.resumeToken ? ["--resume", sessionId] : ["--session-id", sessionId])];
     }
     const continuing = input.continueSessionId !== undefined || input.resumeToken !== undefined;
     const output = agentTurnOutputPaths(input.attempt.context.mutableStateRoot, input.attempt.attemptId);
+    const sandbox = readOnly ? "read-only" : "workspace-write";
     return ["codex", "exec", ...(continuing ? ["resume"] : []), "--json", "-o", output.lastMessage,
-      ...(continuing ? ["-c", "sandbox_mode=workspace-write"] : ["-C", tree, "-s", "workspace-write"]),
-      "-c", "sandbox_workspace_write.network_access=true", "-c", "check_for_update_on_startup=false",
-      ...(["implementer", "reviewer"].includes(input.attempt.context.assignment.role)
+      ...(continuing ? ["-c", "sandbox_mode=" + sandbox] : ["-C", tree, "-s", sandbox]),
+      ...(readOnly ? ["-c", "approval_policy=never"] : ["-c", "sandbox_workspace_write.network_access=true"]),
+      "-c", "check_for_update_on_startup=false",
+      ...(!readOnly && ["implementer", "reviewer"].includes(input.attempt.context.assignment.role)
         ? ["-c", "sandbox_workspace_write.writable_roots=" + JSON.stringify([dirname(output.taskReport)])] : []),
       ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + input.effort] : []),
       ...(continuing ? [sessionId] : []), "-"];

@@ -3,7 +3,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import { FileText, X } from "lucide-react";
 import { TextPreview } from "./text-preview.js";
-import type { TeamOwnerRead } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, WorkflowSelection } from "@openrig/daemon/team-control";
+import { WorkflowOutcomes, WorkflowPicker } from "./workflows.js";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { approvePlan, confirmDocument, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
 import { documentDiscussionPending, DocumentStages } from "./documents.js";
@@ -89,6 +90,7 @@ export function LeadConversation({ read, runId, chat, connectionError, draft, on
       setFollowing(element.scrollHeight - element.scrollTop - element.clientHeight < 80);
     }}>
       {documentTools}
+      <WorkflowOutcomes runId={runId} />
       {chat?.available && chat.messages.filter(message => message.kind !== "decision" || message.answeredBy)
         .map(message => <Turn key={message.id} message={message} />)}
       {chat?.liveTurn && <LiveOutput key={chat.liveTurn.attemptId} turn={chat.liveTurn} connectionError={connectionError} />}
@@ -195,6 +197,7 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
 }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
+  const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowSelection | undefined>();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const question = chat?.pendingDecision ?? chat?.messages.filter(message => message.kind === "decision" && !message.answeredBy).at(-1);
@@ -218,7 +221,8 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
     try {
       if (!runId && projectId) {
         const started = await request<{ runId: string }>("/runs", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: body.trim(), rig: projectId, planning: true, documentWorkflow: true }) });
+          body: JSON.stringify({ goal: body.trim(), rig: projectId, planning: true, documentWorkflow: true,
+            ...(selectedWorkflow ? { workflow: selectedWorkflow } : {}) }) });
         if (!started.runId) throw new Error("Missing planning record");
         onStarted?.(started.runId);
       } else if (nextStage) {
@@ -228,11 +232,16 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
           { ownerMessage: body.trim(), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) });
       } else if (intent && version) {
         await confirmDocument(request, runId, entityVersion, version, body.trim());
-      } else await sendChatMessage(request, runId, body.trim(), entityVersion, question?.id);
+      } else await sendChatMessage(request, runId, selectedWorkflow
+        ? `/${selectedWorkflow.entrypoint}${selectedWorkflow.readOnly ? " --read-only" : ""}\n${body.trim()}`
+        : body.trim(), entityVersion, question?.id);
+      setSelectedWorkflow(undefined);
       onBodyChange(""); onChanged?.();
     }
     catch (cause) { setFailed(cause instanceof Error ? cause.message : t("web.error")); } finally { setBusy(false); }
   }}>
+    {(!runId || read?.run.phase === "delivery") && !question &&
+      <WorkflowPicker value={selectedWorkflow} onChange={setSelectedWorkflow} disabled={busy} />}
     {question && <p className="composer-confirmation">{t("chat.answerQuestion")}</p>}
     {nextStage && <p className="composer-confirmation" role="status">{!ready ? t("chat.stageWaiting")
       : t("chat.stageRequestConsequence", { stage: t(`documents.stage.${nextStage}`) })}</p>}

@@ -10,6 +10,7 @@ import { RestrictedWorkerLauncher } from "../src/adapters/worker-launch.js";
 import type { StartupInput } from "../src/domain/startup-orchestrator.js";
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import { createDaemon, selectIsolation } from "../src/startup.js";
+import { writeFrameworkFixture } from "./helpers/framework-source.js";
 
 // MVP slice 1 — `workers.isolation: none` runs a managed worker as the daemon's own user.
 //
@@ -93,15 +94,17 @@ describe("workers.isolation: none launches a managed worker as the current user"
     directory = realpathSync(mkdtempSync(join(tmpdir(), "mvp1-launch-")));
     home = join(directory, "home");
     mkdirSync(join(directory, "tmux"), { recursive: true });
-    savedEnv = { OPENRIG_HOME: process.env.OPENRIG_HOME, TMUX_TMPDIR: process.env.TMUX_TMPDIR };
+    savedEnv = { OPENRIG_HOME: process.env.OPENRIG_HOME, TMUX_TMPDIR: process.env.TMUX_TMPDIR,
+      MULTI_AGENT_FRAMEWORK_ROOT: process.env.MULTI_AGENT_FRAMEWORK_ROOT };
     process.env.OPENRIG_HOME = home;
     process.env.TMUX_TMPDIR = join(directory, "tmux");
+    process.env.MULTI_AGENT_FRAMEWORK_ROOT = join(directory, "framework");
     repo = repository(directory);
     binding = {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
       planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
       repository: { root: repo, identity: "git:" + "a".repeat(40) },
-      readPaths: ["src"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
+      readPaths: ["src", "plan.md"], writePaths: ["src"], roles: ["lead", "implementer", "reviewer"],
       policyRevision: 4, policyFingerprint: hashBytes("policy"),
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
@@ -167,6 +170,23 @@ describe("workers.isolation: none launches a managed worker as the current user"
     expect(daemon.deps.managedLaunch!.launcher).toBeInstanceOf(DirectWorkerLauncher);
     // Nothing was read from the provisioned host: the fs mock above would have thrown.
     expect(daemon.deps.runtimeAdapters!["claude-code"]!.workerLauncher).toBe(daemon.deps.managedLaunch!.launcher);
+  });
+
+  it("launches a read-only workflow through both admission steps using the approved read-only input path", async () => {
+    writeFrameworkFixture(join(directory, "framework"));
+    const created = daemon.deps.teamGovernance!.createTask(command("analysis", {
+      assignment: { taskId: "analysis", role: "implementer", paths: ["plan.md"], dependencies: [] },
+      outputs: [], permissions: [], sourceSession: "owner-control", destinationSession: "builder@rig",
+      body: "Assess the approved plan without changing it.", workflow: { entrypoint: "spec-pov", readOnly: true },
+    }), binding);
+    expect(created.status).toBe("accepted");
+    const observedLaunch = vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch");
+    const result = await launch({ runId: "run", taskId: "analysis" });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    const context = observedLaunch.mock.calls[0]![0].attempt.context;
+    expect(context.workflow).toMatchObject({ entrypoint: "spec-pov", readOnly: true, binding: { writePaths: [] } });
+    expect(context.assignment.paths).toEqual(["plan.md"]);
+    expect(context.permissions).not.toContain("write-assigned-tree");
   });
 
   it.each([

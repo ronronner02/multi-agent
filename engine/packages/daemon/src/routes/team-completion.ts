@@ -75,18 +75,22 @@ export function teamCompletionRoutes(governance: PlanGovernance, options: {
     let evidence: TaskCompletionEvidence;
     try {
       const manifest = options.runtime ? options.runtime.candidateManifestFor(runId, subject) : null;
+      const workflowOutcome = task.workflow ? governance.workflowOutcomes(runId).find(row =>
+        row.attemptId === attempt?.id && row.generation === attempt?.identity?.generation)?.outcome : null;
       // C3 — a lead's deliverable is its decomposition, not a code change, so its evidence is
       // its own rule: the only path the candidate moves must be the proposal, and that file
       // must be one the boundary accepts. The read is the daemon's, never the owner's claim.
       // U6 — a delivery lead's turn may deliver an escalation instead of a decomposition, and a
-    // management turn that wrote neither is still the answer the daemon asked for.
-    const delivery = governance.getRun(runId).phase === "delivery";
-    evidence = task.assignment.role === "lead"
+      // management turn that wrote neither is still the answer the daemon asked for.
+      const delivery = governance.getRun(runId).phase === "delivery";
+      evidence = task.assignment.role === "lead"
         ? leadCompletionEvidence({ manifest, planRef: governance.getRun(runId).binding.planRef, proposal: options.readLeadProposal ? proposalFor(runId, taskId) : null,
             ...(options.readLeadEscalation && delivery ? { escalation: escalationFor(runId, taskId), managementTurn: true } : {}),
             ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }) })
         : taskCompletionEvidence({ role: task.assignment.role, assignmentPaths: task.assignment.paths,
-            manifest, ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }) });
+            manifest, ...(options.runtime ? {} : { unavailableReason: "Candidate trees are not composed in this daemon" }),
+            ...(task.workflow ? { workflow: { readOnly: task.workflow.readOnly, outcome: workflowOutcome
+              ?? { status: "incomplete", artifacts: [], reason: "workflow-outcome-not-recorded" } } } : {}) });
     } catch (error) {
       // A candidate the control cannot read is missing evidence, not a crash. The reason is the
       // daemon's own, so the owner sees one sentence instead of an internal message.
