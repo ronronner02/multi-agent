@@ -42,6 +42,7 @@ export interface Team {
   /** The canonical repository root the team works on. */
   repository: string;
   seats: TeamSeat[];
+  kind?: "project" | "test";
 }
 
 export type TeamSetupCode =
@@ -88,7 +89,7 @@ export function createTeam(db: Database.Database, input: {
   addTeamSeats(db, rig.id, seats);
   // Read back through the same projection the list uses, so a create and a later read of the
   // same team cannot report its seats in different orders.
-  return { id: rig.id, name, repository: root, seats: recordedSeats(db, rig.id) };
+  return { id: rig.id, name, repository: root, seats: recordedSeats(db, rig.id), kind: "project" };
 }
 
 /** Allocate above every recorded index, including retired seats and earlier session names. */
@@ -148,7 +149,8 @@ export function listTeams(db: Database.Database): Team[] {
   return new RigRepository(db).listRigs().flatMap(rig => {
     const seats = recordedSeats(db, rig.id);
     if (!seats.length) return [];
-    return [{ id: rig.id, name: rig.name, repository: repositoryOf(db, rig.id) ?? "", seats }];
+    const metadata = db.prepare("SELECT team_kind AS kind FROM rigs WHERE id = ?").get(rig.id) as { kind: "project" | "test" };
+    return [{ id: rig.id, name: rig.name, repository: repositoryOf(db, rig.id) ?? "", seats, kind: metadata.kind }];
   });
 }
 

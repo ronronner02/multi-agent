@@ -1,3 +1,8 @@
+import { approvalDocumentPins, captureDocuments as persistDocumentCapture, currentConfirmed, documentDispatchRefusal,
+  documentKind, documentSourceRefusal, documentStage, initializeDocuments, latestDocument, readDocuments,
+  type DocumentEvidence } from "./project-documents.js";
+import { rosterModelRefusal, teamModelAllowlist } from "./team-model-policy.js";
+import { SessionRegistry } from "./session-registry.js";
 import type Database from "better-sqlite3";
 import { validateDependencyGraph } from "./workflow-runtime.js";
 import { applyTaskEdit, readTaskEdit } from "./task-edit.js";
@@ -12,6 +17,7 @@ import {
   type TeamRun, type TeamRunPhase, type TeamTaskAuthority, type UsageEvidence, type UsageMetric, type TeamOwnerCommand,
 } from "../contracts/team-control.js";
 import { roleConfiguration } from "./role-configuration.js";
+import { bindingCovers } from "./binding-scope.js";
 import { ordinalRunName, reviewName, taskName } from "./display-names.js";
 import { automaticRetryAt, retryIsDue, classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
 import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
@@ -205,9 +211,9 @@ function taskDefinition(binding: import("../contracts/team-control.js").PlanBind
   if (!binding.roles.includes(assignment.role)) return "Assignment role is outside the binding";
   const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
   const covers = (paths: string[], entry: string) => paths.some(path => entry === path || entry.startsWith(path + "/"));
-  if (assignment.paths.some(path => !covers(allowed, path))) return "Assignment path is outside the binding";
+  if (assignment.paths.some(path => !bindingCovers(path, allowed))) return "Assignment path is outside the binding";
   const inputs = parseTaskInputs(v);
-  if (inputs.outputs.some(path => !covers(assignment.paths, path) || !covers(binding.writePaths, path))) {
+  if (inputs.outputs.some(path => !covers(assignment.paths, path) || !bindingCovers(path, binding.writePaths))) {
     return "An output is outside the assignment's reviewable write paths";
   }
   if (inputs.permissions.some(permission => !roleConfiguration[assignment.role].permissions.includes(permission))) {
@@ -250,7 +256,7 @@ export class PlanGovernance {
   }
 
   createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null; displayName?: string | null;
-    phase?: TeamRunPhase }): TeamRun {
+    phase?: TeamRunPhase; documentWorkflow?: boolean }): TeamRun {
     this.assertStandalone();
     if (daemonModeOf(this.db) === "legacy") throw new Error("A legacy-mode daemon cannot register managed authority; restart in managed mode");
     const id = text(input.id, "runId", 256);
@@ -276,6 +282,7 @@ export class PlanGovernance {
       const now = this.clock().toISOString();
       this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, display_name, phase, state, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, displayName, phase, now, now);
+      if (input.documentWorkflow) initializeDocuments(this.db, id);
       const run = this.getRun(id);
       this.emit(run, register, "run.created", { bindingDigest, state: "pending" });
       return run;
@@ -461,7 +468,8 @@ export class PlanGovernance {
       || (latest && (latest.id !== attemptId || latest.state !== "running"))) {
       throw new Error("Continuation conflict: the run, task or attempt changed");
     }
-    const reason = this.eligibility({ run, now: this.clock().toISOString() }, attemptId);
+    const reason = documentDispatchRefusal(this.db, run, task.assignment.role, taskId, parsePlanBinding(currentBinding))
+      ?? this.eligibility({ run, now: this.clock().toISOString() }, attemptId);
     if (reason) throw new Error(`Continuation conflict: ${reason}`);
   }
 
@@ -557,7 +565,7 @@ export class PlanGovernance {
   }
 
   private growthTasks(ctx: CommandContext, binding: import("../contracts/team-control.js").PlanBinding,
-    value: unknown, sourceSession?: string) {
+    value: unknown, sourceSession?: string, droppedTaskIds: readonly string[] = []) {
     if (!Array.isArray(value) || !value.length || value.length > 100) throw new TeamContractError("growth.tasks");
     const tasks = [];
     for (const input of value) {
@@ -569,11 +577,26 @@ export class PlanGovernance {
     }
     const existing = (this.db.prepare("SELECT assignment_json AS assignment FROM team_queue_authority WHERE run_id=?")
       .all(ctx.run.id) as Array<{ assignment: string }>).map(row => parseAssignment(JSON.parse(row.assignment)));
-    const covers = (path: string) => binding.writePaths.some(root => path === root || path.startsWith(root + "/"));
+    const covers = (path: string) => bindingCovers(path, binding.writePaths);
     if (existing.some(task => task.role !== "reviewer" && task.paths.some(path => !covers(path)))) {
       return "The replacement binding must preserve existing task scopes";
     }
-    const graph = validateDependencyGraph([...existing, ...tasks.map(task => task.assignment)]);
+    // A settled task keeps its identity and dependency edges, not a permanent write
+    // claim. In-flight work and completed work awaiting integration still own theirs.
+    const released = new Set(droppedTaskIds);
+    const integrated = new Set(this.integrationRecord(ctx.run.id).commits.map(commit => commit.taskId));
+    const launches = this.nativeLaunchIntents(ctx.run.id);
+    for (const assignment of existing) {
+      const task = this.findTask(ctx.run.id, assignment.taskId)!;
+      const dropped = (task.evidence?.resolution as LeadResolution | undefined)?.action === "drop";
+      if (this.queueState(task.qitemId) === "done" && (integrated.has(assignment.taskId) || dropped)
+        && this.openAttemptCount(task.qitemId) === 0
+        && !launches.some(launch => launch.qitemId === task.qitemId && ["admitted", "running"].includes(launch.state))) {
+        released.add(assignment.taskId);
+      }
+    }
+    const graph = validateDependencyGraph([...existing.map(task => ({ ...task,
+      paths: released.has(task.taskId) ? [] : task.paths })), ...tasks.map(task => task.assignment)]);
     return graph.ok ? tasks : graph.reason;
   }
 
@@ -713,7 +736,7 @@ export class PlanGovernance {
    * plan on the lead's behalf.
    */
   private prepareSeatChanges(ctx: CommandContext, changes: LeadSeatChanges, maxSeats: number) {
-    const current = this.db.prepare(`SELECT n.id, n.role, n.runtime AS client,
+    const current = this.db.prepare(`SELECT n.id, n.role, n.runtime AS client, n.model,
         (SELECT session_name FROM sessions WHERE node_id = n.id ORDER BY created_at DESC, id DESC LIMIT 1) AS member
       FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')`)
       .all(ctx.run.rigId) as Array<LeadRosterSeat & { id: string; member: string | null }>;
@@ -753,7 +776,7 @@ export class PlanGovernance {
     const names = nextTeamSeatNames(this.db, ctx.run.rigId, changes.add);
     const final = [...current.filter(seat => !retired.includes(seat)),
       ...changes.add.map((seat, index) => ({ ...seat, member: names[index]! }))];
-    const refusal = rosterRefusal(final, maxSeats);
+    const refusal = rosterRefusal(final, maxSeats) ?? rosterModelRefusal(this.db, ctx.run.rigId, final);
     if (refusal) return refusal;
     return { retired, added: changes.add, reviewer: final.find(seat => seat.role === "reviewer")?.member ?? null,
       implementers: new Set(final.filter(seat => seat.role === "implementer").map(seat => seat.member)),
@@ -798,7 +821,8 @@ export class PlanGovernance {
       const batch = leadTasks.length === 0 && resolved.length > 0 ? [] : this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
         assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
-        destinationSession: task.seat })), "daemon");
+        destinationSession: task.seat })), "daemon",
+        resolved.filter(item => item.resolution.action === "drop").map(item => item.task.assignment.taskId));
       if (typeof batch === "string") return this.refuseLeadProposal(ctx, batch);
       const notImplementer = batch.find(task => seatChanges ? !seatChanges.implementers.has(task.destinationSession)
         : !this.implementerSeat(ctx.run.rigId, task.destinationSession));
@@ -1035,6 +1059,109 @@ export class PlanGovernance {
     });
   }
 
+  documents(runId: string) { return readDocuments(this.db, this.getRun(runId)); }
+
+  captureLeadDocuments(runId: string, attemptId: string, evidence: DocumentEvidence, error?: string): void {
+    const run = this.getRun(runId);
+    if (!this.documents(runId) || this.db.prepare("SELECT 1 FROM team_document_captures WHERE run_id = ? AND attempt_id = ?").get(runId, attemptId)) return;
+    this.command("documents.captured", { protocolVersion: TEAM_CONTROL_VERSION, runId, actionId: attemptId,
+      expectedEntityVersion: run.entityVersion, idempotencyKey: `documents:${attemptId}`, payload: {} },
+    { kind: "daemon", sessionId: "daemon" }, ctx => {
+      const result = persistDocumentCapture(this.db, ctx.run, attemptId, evidence, ctx.now);
+      if (error) this.db.prepare("UPDATE team_document_workflows SET error = ? WHERE run_id = ?").run(error, runId);
+      if (ctx.run.phase === "delivery" && (result.invalidated || error)) {
+        ctx.run.state = "blocked";
+        ctx.run.stateReason = "Approved documents changed; confirm requirements and plan again";
+        this.invalidateUnused(ctx);
+      }
+      return { status: "observed", value: { changed: result.changed, error: error ?? this.documents(runId)?.error ?? null }, observedBy: "daemon" };
+    });
+  }
+
+  confirmDocument(raw: ControlRequest<unknown>, actor: ControlActor, evidence: DocumentEvidence): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("document.confirmed", raw, owner, ctx => {
+      const state = this.documents(ctx.run.id);
+      if (!state) return deny("This record has no versioned document workflow");
+      if (ctx.run.phase !== "planning" || ctx.run.state !== "approved" || state.pendingStage
+        || this.planningApprovalPending(ctx.run.id)) return deny("Wait for the current discussion to finish before confirming a version");
+      if (state.error) return deny(state.error);
+      const sourceError = documentSourceRefusal(state, evidence);
+      if (sourceError) return deny(sourceError);
+      const payload = object(ctx.request.payload, "documentConfirmation"), kind = documentKind(payload.kind);
+      const version = latestDocument(state, kind);
+      if (!version || !version.content.trim() || payload.versionId !== version.id || payload.hash !== version.hash) {
+        return deny("The document version changed. Read the current version before confirming.");
+      }
+      if (kind === "plan" && (!currentConfirmed(state, "requirements") || version.requirementsVersionId !== state.confirmed.requirements)) {
+        return deny("The plan must be regenerated from the confirmed requirements version");
+      }
+      if (payload.ownerMessage !== undefined) appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
+        body: chatBody(payload.ownerMessage, "ownerMessage"), kind: "confirmation", createdAt: ctx.now });
+      this.db.prepare(`UPDATE team_document_workflows SET confirmed_${kind} = ? WHERE run_id = ?`).run(version.id, ctx.run.id);
+      this.db.prepare("UPDATE team_document_versions SET confirmed_at = ?, confirmed_by = ? WHERE id = ?")
+        .run(ctx.now, owner.sessionId, version.id);
+      return { status: "accepted", value: { kind, versionId: version.id, hash: version.hash }, observedBy: owner.sessionId };
+    });
+  }
+
+  selectDocumentStage(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("documents.stage", raw, owner, ctx => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      const state = this.documents(ctx.run.id);
+      if (!state) return deny("This record has no versioned document workflow");
+      if (["canceled", "cancel_requested", "invalidated"].includes(ctx.run.state)) return deny("This record is closed to document revision");
+      if (ctx.run.state === "blocked" && ctx.run.stateReason !== "Document revision is pending; execution is suspended"
+        && ctx.run.stateReason !== "Approved documents changed; confirm requirements and plan again") {
+        return deny(ctx.run.stateReason ?? "Resolve the run's stop before changing document stage");
+      }
+      const payload = object(ctx.request.payload, "documentStage"), stage = documentStage(payload.stage);
+      const ownerMessage = payload.ownerMessage === undefined ? null : chatBody(payload.ownerMessage, "ownerMessage");
+      if (stage === "plan" && (!currentConfirmed(state, "requirements") || state.error)) {
+        return deny("Confirm the current requirements before generating a plan");
+      }
+      if (this.unresolvedAttempts(ctx.run.id).length) {
+        if (ctx.run.phase === "planning") return deny("Wait for the lead's current discussion to finish");
+        this.db.prepare("UPDATE team_document_workflows SET pending_stage = ? WHERE run_id = ?").run(stage, ctx.run.id);
+        ctx.run.state = "blocked";
+        ctx.run.stateReason = "Document revision is pending; execution is suspended";
+        this.invalidateUnused(ctx);
+        return { status: "pending-execution", value: { pendingStage: stage }, observedBy: owner.sessionId,
+          reason: "New launches are suspended. Continue revision after the current attempts stop." };
+      }
+      if (ctx.run.phase === "planning" && this.planningApprovalPending(ctx.run.id)) return deny("Wait for the lead to answer the queued discussion before changing stage");
+      if (ctx.run.phase === "delivery") {
+        this.cancelOpenTasks(ctx, true);
+        this.invalidateUnused(ctx);
+        const { documentVersions: _previous, ...binding } = ctx.run.binding;
+        ctx.run.binding = binding;
+        ctx.run.bindingDigest = hashBinding(binding);
+        const payload = { bindingDigest: ctx.run.bindingDigest };
+        this.db.prepare(`INSERT INTO team_approvals
+          (id,run_id,kind,action,payload_json,payload_digest,target_digest,binding_digest,state,expires_at,decision_actor,created_at,updated_at)
+          VALUES (?,?,'orchestrator','implementation',?,?,?,?,'approved',?,?,?,?)`).run(randomUUID(), ctx.run.id,
+          canonicalJson(payload), hashBytes(canonicalJson(payload)), ctx.run.bindingDigest, ctx.run.bindingDigest,
+          new Date(Date.parse(ctx.now) + ctx.run.binding.limits.maxActiveMs).toISOString(), owner.sessionId, ctx.now, ctx.now);
+        ctx.run.phase = "planning";
+      }
+      ctx.run.state = "approved";
+      ctx.run.stateReason = null;
+      this.db.prepare("UPDATE team_document_workflows SET stage = ?, pending_stage = NULL, confirmed_plan = NULL WHERE run_id = ?")
+        .run(stage, ctx.run.id);
+      if (stage !== "plan") this.db.prepare("UPDATE team_document_workflows SET confirmed_requirements = NULL WHERE run_id = ?").run(ctx.run.id);
+      if (stage === "exploration") this.db.prepare("UPDATE team_document_workflows SET confirmed_brainstorm = NULL WHERE run_id = ?").run(ctx.run.id);
+      const body = stage === "exploration" ? "Continue exploring the idea. Preserve decisions, trade-offs and open questions; do not execute."
+        : stage === "requirements" ? "Prepare or revise the requirements document from our discussion. Keep unresolved questions explicit; do not execute."
+          : "Generate or revise the plan from the exact confirmed requirements version. Include ordered tasks, dependencies, file scope and verification; do not execute.";
+      appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id, body: ownerMessage ?? body, createdAt: ctx.now });
+      this.reopenLeadTask(ctx, "The owner selected the next document stage");
+      this.reopenFailedLeadTask(ctx);
+      const lead = runLeadTask(this.db, ctx.run.id);
+      return { status: "accepted", value: { stage }, effectMayStart: true, revisionTaskId: lead?.taskId, observedBy: owner.sessionId };
+    });
+  }
+
   /** U6 — the decision the run is waiting on, as the chat read publishes it. */
   chatDecision(runId: string): TeamChatMessage | null {
     this.getRun(runId);
@@ -1074,30 +1201,49 @@ export class PlanGovernance {
   }
 
   private reconcilePlanRoster(rigId: string, seats: readonly LeadRosterSeat[], maxSeats: number):
-    { reason: string } | { missing: LeadRosterSeat[]; reviewerSeat: string | null } {
-    const reason = rosterRefusal(seats, maxSeats);
+    { reason: string } | { missing: LeadRosterSeat[]; updated: Array<{ id: string; client: "claude-code" | "codex"; model: string | null }>; reviewerSeat: string | null } {
+    const reason = rosterRefusal(seats, maxSeats) ?? rosterModelRefusal(this.db, rigId, seats);
     if (reason) return { reason };
-    const existing = this.db.prepare(`SELECT n.logical_id AS logicalId, n.role, n.runtime AS client,
+    const existing = this.db.prepare(`SELECT n.id, n.model, n.logical_id AS logicalId, n.role, n.runtime AS client,
       (SELECT s.session_name FROM sessions s WHERE s.node_id = n.id ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS member
       FROM nodes n WHERE n.rig_id = ? AND n.retired_at IS NULL AND n.role IN ('implementer', 'reviewer')
       ORDER BY n.logical_id`).all(rigId) as Array<{
-        logicalId: string; role: LeadRosterSeat["role"]; client: string | null; member: string | null;
+        id: string; model: string | null; logicalId: string; role: LeadRosterSeat["role"]; client: string | null; member: string | null;
       }>;
     const missing = [...seats];
+    const updated: Array<{ id: string; client: "claude-code" | "codex"; model: string | null }> = [];
     let reviewerSeat: string | null = null;
     for (const seat of existing) {
       const name = seat.member ?? seat.logicalId;
       if (!seat.member || (seat.client !== "claude-code" && seat.client !== "codex")) {
         return { reason: `Existing seat ${name} (${seat.role}, ${seat.client ?? "no client"}) needs a supported client and session before approval.` };
       }
-      const index = missing.findIndex(requested => requested.role === seat.role && requested.client === seat.client);
+      let index = missing.findIndex(requested => requested.role === seat.role && requested.client === seat.client && requested.model === seat.model);
+      if (index < 0) index = missing.findIndex(requested => requested.role === seat.role && requested.client === seat.client);
+      if (index < 0 && teamModelAllowlist(this.db, rigId) !== null) index = missing.findIndex(requested => requested.role === seat.role);
       if (index < 0) {
         return { reason: `Existing seat ${name} (${seat.role}, ${seat.client}) is not included in the proposed roster. Keep its role and client and revise the roster.` };
+      }
+      const requested = missing[index]!;
+      if (requested.client !== seat.client || requested.model !== undefined && requested.model !== seat.model) {
+        const live = this.db.prepare(`SELECT 1 FROM team_attempts a JOIN queue_items q ON q.qitem_id = a.qitem_id
+          WHERE a.state <> 'stopped' AND q.destination_session = ? LIMIT 1`).get(seat.member);
+        const runs = this.db.prepare("SELECT id FROM team_runs WHERE rig_id = ?").all(rigId) as Array<{ id: string }>;
+        if (live || runs.some(run => this.nativeLaunchIntents(run.id).some(intent => intent.state === "admitted" && intent.sessionId === seat.member))) {
+          return { reason: `Existing seat ${name} is busy; its client or model can change after its attempt stops.` };
+        }
+        updated.push({ id: seat.id, client: requested.client, model: requested.model ?? (requested.client === seat.client ? seat.model : null) });
       }
       missing.splice(index, 1);
       if (seat.role === "reviewer") reviewerSeat = seat.member;
     }
-    return { missing, reviewerSeat };
+    return { missing, updated, reviewerSeat };
+  }
+
+  planningApprovalPending(runId: string): boolean {
+    const lead = runLeadTask(this.db, runId);
+    return pendingDecision(this.db, runId) !== null || pendingOwnerMessages(this.db, runId).length > 0 || !!lead && (this.openAttemptCount(lead.qitemId) > 0
+      || this.nativeLaunchIntents(runId).some(intent => intent.qitemId === lead.qitemId && intent.state === "admitted"));
   }
 
   approvePlan(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown, approved: unknown,
@@ -1107,7 +1253,14 @@ export class PlanGovernance {
       if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
       if (ctx.run.phase !== "planning") return deny("This run's plan was already approved");
       if (ctx.run.state !== "approved") return deny(`Run is closed to plan approval (${ctx.run.state})`);
+      if (this.planningApprovalPending(ctx.run.id)) return deny("Wait for the lead to finish the planning discussion before approving.");
       const binding = parsePlanBinding(approved);
+      const documents = this.documents(ctx.run.id);
+      if (documents) {
+        let pins;
+        try { pins = approvalDocumentPins(documents); } catch (error) { return deny((error as Error).message); }
+        if (canonicalJson(pins) !== canonicalJson(binding.documentVersions ?? null)) return deny("Approve the exact confirmed document versions");
+      }
       // Everything the owner did not decide with this approval is the bootstrap's: the same
       // repository, plan path, roles and limits, and a write scope that still covers the lead
       // task the run already admitted. A plan that moved the repository would be a different
@@ -1117,7 +1270,7 @@ export class PlanGovernance {
         || canonicalJson(binding.limits) !== canonicalJson(ctx.run.binding.limits)) {
         return deny("Approving a plan keeps the run's repository, plan path, roles and limits");
       }
-      const covers = (path: string) => binding.writePaths.some(root => path === root || path.startsWith(root + "/"));
+      const covers = (path: string) => bindingCovers(path, binding.writePaths);
       const admitted = (this.db.prepare("SELECT assignment_json AS assignment FROM team_queue_authority WHERE run_id = ?")
         .all(ctx.run.id) as Array<{ assignment: string }>).map(row => parseAssignment(JSON.parse(row.assignment)));
       if (admitted.some(task => task.role !== "reviewer" && task.paths.some(path => !covers(path)))) {
@@ -1129,6 +1282,12 @@ export class PlanGovernance {
         if (!roster) return this.refuseLeadProposal(ctx, "Read and approve the lead-roster.json digest with the plan.");
         const reconciled = this.reconcilePlanRoster(ctx.run.rigId, roster.seats, roster.maxSeats);
         if ("reason" in reconciled) return this.refuseLeadProposal(ctx, reconciled.reason);
+        for (const updated of reconciled.updated) {
+          this.db.prepare("UPDATE nodes SET runtime = ?, model = ? WHERE id = ?").run(updated.client, updated.model, updated.id);
+          const sessions = this.db.prepare("SELECT id FROM sessions WHERE node_id = ?").all(updated.id) as Array<{ id: string }>;
+          const registry = new SessionRegistry(this.db);
+          for (const session of sessions) registry.clearResumeToken(session.id);
+        }
         const added = addTeamSeats(this.db, ctx.run.rigId, reconciled.missing);
         ctx.run.reviewerSeat = reconciled.reviewerSeat ?? added.find(seat => seat.role === "reviewer")?.member ?? null;
         this.db.prepare("UPDATE team_runs SET reviewer_seat = ? WHERE id = ?").run(ctx.run.reviewerSeat, ctx.run.id);
@@ -1145,6 +1304,12 @@ export class PlanGovernance {
         // approved, and a second expiry a day later would close a run nobody had finished.
         new Date(this.clock().getTime() + ctx.run.binding.limits.maxActiveMs).toISOString(),
         owner.sessionId, ctx.now, ctx.now);
+      const ownerMessage = (ctx.request.payload as Record<string, unknown> | null)?.ownerMessage;
+      if (ownerMessage !== undefined) appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
+        body: chatBody(ownerMessage, "ownerMessage"), kind: "confirmation", createdAt: ctx.now });
+      if (binding.documentVersions) this.emit(ctx.run, ctx.register, "documents.execution-approved", {
+        bindingDigest: ctx.run.bindingDigest, documentVersions: jsonValue(binding.documentVersions),
+      });
       ctx.run.phase = "delivery";
       ctx.run.state = "approved";
       ctx.run.stateReason = null;
@@ -1333,16 +1498,17 @@ export class PlanGovernance {
    * still accepted. `canceled` is the queue's own terminal state, written through the same
    * update the rework path uses, so the transition log and the dependency gate see it.
    */
-  private cancelOpenTasks(ctx: CommandContext): string[] {
+  private cancelOpenTasks(ctx: CommandContext, preserveLead = false): string[] {
     const rows = this.db.prepare("SELECT qitem_id AS qitemId FROM team_queue_authority WHERE run_id = ? ORDER BY task_id")
       .all(ctx.run.id) as Array<{ qitemId: string }>;
     const canceled: string[] = [];
     for (const row of rows) {
       const item = this.queue.getById(row.qitemId);
-      if (!item || !["pending", "in-progress", "blocked"].includes(item.state)) continue;
+      if (preserveLead && this.getTask(row.qitemId)?.assignment.role === "lead") continue;
+      if (!item || !["pending", "in-progress", "blocked", ...(preserveLead ? ["failed"] : [])].includes(item.state)) continue;
       const updated = withQueueWrite(this.db, { operation: "update", qitemId: row.qitemId }, () => this.queue.updateWithinTransaction({
         qitemId: row.qitemId, actorSession: ctx.run.id, state: "canceled",
-        transitionNote: "Run canceled; the owner observed every attempt end",
+        transitionNote: preserveLead ? "Superseded by document revision" : "Run canceled; the owner observed every attempt end",
       }));
       for (const event of updated.persistedEvents) ctx.register(event);
       canceled.push(this.getTask(row.qitemId)!.assignment.taskId);
@@ -1397,6 +1563,8 @@ export class PlanGovernance {
       const payload = object(ctx.request.payload, "ownerCommand");
       if (operation === "resume") {
         if (ctx.run.state !== "blocked") return deny("Only a blocked run can resume");
+        const documentError = documentDispatchRefusal(this.db, ctx.run, "lead");
+        if (documentError) return deny(documentError);
         const option = (name: string): number => {
           const value = payload[name];
           if (value === undefined) return 0;
@@ -1521,6 +1689,8 @@ export class PlanGovernance {
    */
   private admitTask(ctx: CommandContext, task: Exclude<ReturnType<typeof taskDefinition>, string>): Result {
     const { assignment, outputs, permissions, sourceSession, destinationSession, body } = task;
+    const documentError = documentDispatchRefusal(this.db, ctx.run, assignment.role);
+    if (documentError) return deny(documentError);
     const count = this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id=?")
       .get(ctx.run.id) as { count: number };
     if (count.count >= 100) return deny("Managed task limit reached");
@@ -1533,8 +1703,9 @@ export class PlanGovernance {
     const displayName = assignment.role === "reviewer" && assignment.reviewOf
       ? this.reviewDisplayName(ctx.run.id, assignment.reviewOf) : taskName(body);
     this.db.prepare(`INSERT INTO team_queue_authority
-      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json,display_name) VALUES (?,?,?,?,?,?,?)`)
-      .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions), displayName);
+      (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json,display_name,document_versions_json) VALUES (?,?,?,?,?,?,?,?)`)
+      .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions), displayName,
+        ctx.run.binding.documentVersions ? canonicalJson(ctx.run.binding.documentVersions) : null);
     ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
     return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
   }
@@ -1610,7 +1781,8 @@ export class PlanGovernance {
           && canonicalJson(binding.readPaths) === canonicalJson(current.readPaths)
           && canonicalJson(binding.writePaths) === canonicalJson(current.writePaths)
           && canonicalJson(binding.roles) === canonicalJson(current.roles)
-          && canonicalJson(binding.limits) === canonicalJson(current.limits);
+          && canonicalJson(binding.limits) === canonicalJson(current.limits)
+          && canonicalJson(binding.documentVersions ?? null) === canonicalJson(current.documentVersions ?? null);
         if (!unchanged) return deny("An integration commit preserves everything the owner approved");
         if (hashBinding(binding) !== ctx.run.bindingDigest) {
           const prior = this.db.prepare(`SELECT expires_at AS expiresAt FROM team_approvals
@@ -1973,6 +2145,8 @@ export class PlanGovernance {
     const v = object(ctx.request.payload, "nativeLaunch"), qitemId = text(v.qitemId, "qitemId", 256);
     const task = this.getTask(qitemId), item = this.queue.getById(qitemId);
     if (!task || task.runId !== ctx.run.id || !item) throw new Error("Task not found in this run");
+    const documentError = documentDispatchRefusal(this.db, ctx.run, task.assignment.role, task.assignment.taskId);
+    if (documentError) return documentError;
     if (integer(v.expectedTaskVersion, "expectedTaskVersion", 1) !== task.entityVersion) throw new Error("Task version conflict");
     const sessionId = text(v.sessionId, "sessionId", 256), commandDigest = digest(v.commandDigest, "commandDigest");
     const command = v.command === undefined ? undefined : jsonValue(object(v.command, "nativeLaunch.command")) as JsonObject;
@@ -2228,6 +2402,8 @@ export class PlanGovernance {
 
   private eligibility(ctx: Pick<CommandContext, "run" | "now">, reconcilingAttemptId?: string): string | null {
     if (ctx.run.state !== "approved") return `Run is closed to dispatch (${ctx.run.state})`;
+    const documentError = documentDispatchRefusal(this.db, ctx.run, "lead");
+    if (documentError) return documentError;
     if (!this.db.prepare(`SELECT id FROM team_approvals WHERE run_id = ? AND kind = 'orchestrator' AND action = 'implementation'
       AND binding_digest = ? AND state = 'approved' AND expires_at > ?`).get(ctx.run.id, ctx.run.bindingDigest, ctx.now)) return "Implementation approval is not active";
     if (this.db.prepare("SELECT id FROM team_attempts WHERE run_id = ? AND state = 'unknown' AND id <> ? LIMIT 1").get(ctx.run.id, reconcilingAttemptId ?? "")) return "Native identity is unknown; reconciliation is required";

@@ -1,0 +1,114 @@
+{
+  "updatedAt": "2026-11-07T13:58:15.992640+00:00",
+  "status": "partial-owner-paused",
+  "decision": "Keep this instance; pause interactive checks",
+  "installation": {
+    "status": "observed",
+    "perUserDestinationSeparate": true,
+    "exit": 0,
+    "receipt": "receipts/desktop-install-result.json",
+    "integrity": "receipts/desktop-installed-integrity.json",
+    "existingInstallationReplaced": false,
+    "newPerUserUninstallEntry": true,
+    "newStartMenuShortcutMovedToTaskScratch": true
+  },
+  "firstOpen": {
+    "status": "observed",
+    "cleanProfile": true,
+    "automaticEngineStartupAndPairing": true,
+    "origin": "http://127.0.0.1:7433",
+    "evidence": [
+      "receipts/desktop-env-probe.json",
+      "receipts/desktop-first-launch.json",
+      "receipts/desktop-first-open-gate.json",
+      "receipts/u10-desktop-candidate-start.json"
+    ]
+  },
+  "signIn": {
+    "status": "observed-after-parser-fix",
+    "confirmedAt": "2026-11-07T13:33:32.561Z",
+    "evidence": [
+      "receipts/u10-desktop-gh-output-diagnostic.json",
+      "receipts/desktop-sign-in-first-attempt.json",
+      "receipts/desktop-sign-in-after-fix.json",
+      "receipts/desktop-signed-in.json",
+      "verification/checks.json"
+    ],
+    "deviceCodeExported": false,
+    "newCredentialStoreOnly": true,
+    "currentUserSessionNotRecheckedAfterPause": true
+  },
+  "nativeWindow": {
+    "maximizedCaption": "observed-in-saved-image",
+    "minimizeAndRestore": "reported-observed-in-prior-interactive-checks; not repeated during closeout",
+    "drag": "not-completed-owner-paused",
+    "close": "not-run-owner-paused",
+    "evidence": [
+      "receipts/desktop-native-window-before.json",
+      "screenshots/desktop/desktop-05-native-caption-maximized.png"
+    ],
+    "claimBoundary": "The saved maximized image shows the native caption. A new minimize, drag or close action was not performed after the owner pause."
+  },
+  "nativeFolder": {
+    "dialog": "observed",
+    "syntheticSelectionAndPreview": "incomplete-owner-paused",
+    "fullDesktopCreate": "not-completed-owner-paused",
+    "evidence": [
+      "receipts/desktop-native-picker-interaction.json"
+    ],
+    "claimBoundary": "An attempted selection is not a settled preview. Incorrect labels and unsettled observations are not classified as a product defect."
+  },
+  "preservation": {
+    "currentDaemon": {
+      "pid": 2806685,
+      "startTicks": 9504675,
+      "state": "S",
+      "cwd": "<acceptance-worktree>",
+      "comm": "node"
+    },
+    "currentDesktop": {
+      "pid": 28996,
+      "exe": "<windows-task-scratch>\\desktop-installed\\Multi-Agent.exe",
+      "startTime": "2026-11-07T13:16:20.9215912Z",
+      "windowHandle": 9438762,
+      "responding": true,
+      "matchesInstalledCandidate": true
+    },
+    "projectStateInspectedAfterPause": false,
+    "newUiActionsAfterPause": 0,
+    "newScreenshotsAfterPause": 0,
+    "serviceOrProfileSwitchAfterPause": false,
+    "leaveRunning": true,
+    "evidence": [
+      "receipts/u10-desktop-paused-preservation.json",
+      "receipts/desktop-preservation-check.json"
+    ]
+  },
+  "scopeNotes": [
+    "The earlier browser and native synthetic flows remain separate evidence; they do not complete the desktop Create sequence.",
+    "No files or database rows from the current owner project are exported.",
+    "The initial language was the product default; locale inference was not established.",
+    "The two diagnostic 403s omitted the anti-forgery header.",
+    "The exact-origin test route blocked an external font; this is a harness limitation.",
+    "The automation attachment remains open to preserve the current window. The task-local normal launch helper was syntax-checked earlier but was not executed."
+  ],
+  "latestReadOnlyObservation": {
+    "checkedAt": "2026-11-07T15:24:51.0263750Z",
+    "candidateDesktopProcesses": [],
+    "priorDesktopProcessNoLongerRunning": true,
+    "causeNotInferred": true,
+    "daemonStillHealthy": true,
+    "evidence": [
+      "receipts/desktop-resume-observation.json",
+      "receipts/u10-plan-audit-preservation.json"
+    ],
+    "newUiInteraction": false
+  },
+  "latestInstalledAcceptance": {
+    "checkedAt": "2026-11-08T00:32:50.313535+00:00",
+    "normalLaunchDelivered": true,
+    "evidence": "receipts/normal-installed-desktop.json",
+    "currentOwnerProjectCapturesPrivate": true,
+    "allUsersLegacyShortcutUnchanged": true
+  }
+}

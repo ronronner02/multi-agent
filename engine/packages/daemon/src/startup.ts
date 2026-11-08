@@ -1,3 +1,5 @@
+import { documentDispatchRefusal } from "./domain/project-documents.js";
+import { managedModelRefusal } from "./domain/team-model-policy.js";
 import { fileURLToPath } from "node:url";
 import { discoverTailscaleSelfNames } from "./middleware/browser-boundary.js";
 import { configureShadowCapture } from "./domain/shadow-capture.js";
@@ -419,6 +421,7 @@ function composeManagedLaunch(dependencies: {
  * not built at all.
  */
 function composeDirectLaunch(dependencies: {
+  governance: PlanGovernance;
   rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
   /** The environment a launched seat's shell gets, so a seat pane this daemon opens matches one it launched. */
   sessionEnv?: Record<string, string | undefined>;
@@ -438,6 +441,12 @@ function composeDirectLaunch(dependencies: {
   const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
   const launcher = new DirectWorkerLauncher({
     tmux,
+    modelRefusal: input => managedModelRefusal(rigRepo.db, input),
+    documentRefusal: input => {
+      const { runId, assignment, binding } = input.attempt.context;
+      const run = dependencies.governance.getRun(runId);
+      return documentDispatchRefusal(rigRepo.db, run, assignment.role, assignment.taskId, binding);
+    },
     launchPath: dependencies.sessionEnv?.PATH,
     // The seat is the task's recorded destination: exactly one live session on the run's rig,
     // bound to one tmux pane. A fresh install never runs `rig up`, so under `none` a seat with
@@ -451,7 +460,10 @@ function composeDirectLaunch(dependencies: {
       return runtime.assignedTreeFor(runId, assignment);
     },
     ...(dependencies.command ? { command: dependencies.command } : {}),
-    tmuxServer: () => daemonTmuxServerArgs().join(" ") || "/tmp",
+    tmuxServer: () => {
+      const server = daemonTmuxServerArgs();
+      return server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + process.getuid!(), server[1] ?? "default");
+    },
   });
   // The channel reader is the same owner the hardened chain uses, so a seat's mailbox view is
   // built the same way; an unisolated launch records no channel evidence, so it stays closed.
@@ -526,14 +538,11 @@ function composeManagedAttemptAttachment(dependencies: {
       JOIN queue_items q ON q.qitem_id = a.qitem_id
       JOIN team_runs r ON r.id = a.run_id
       WHERE q.destination_session = ? AND q.state IN ('pending', 'in-progress') AND r.state = 'approved'
-      LIMIT 2`).all(seat) as Array<{ qitemId: string; runId: string; taskId: string;
-        sourceSession: string | null }>;
-    if (rows.length === 0) return undefined;
-    if (rows.length > 1) {
-      const named = input.taskId === undefined ? [] : rows.filter(row => row.taskId === input.taskId);
-      if (named.length !== 1) throw new Error("Managed launch task is ambiguous");
-      rows.splice(0, rows.length, named[0]!);
-    }
+        AND (? IS NULL OR a.run_id = ?) AND (? IS NULL OR a.task_id = ?)
+      LIMIT 2`).all(seat, input.runId ?? null, input.runId ?? null, input.taskId ?? null, input.taskId ?? null) as
+        Array<{ qitemId: string; runId: string; taskId: string; sourceSession: string | null }>;
+    if (rows.length === 0 && input.runId === undefined && input.taskId === undefined) return undefined;
+    if (rows.length !== 1) throw new Error("Managed launch task is ambiguous");
     const row = rows[0]!;
     const task = dependencies.governance.getTask(row.qitemId);
     // T053 made the task record the store for outputs and permissions; a row without one
@@ -586,7 +595,7 @@ function composeManagedAttemptAttachment(dependencies: {
       // instructions are the daemon's own words about where the decomposition goes; both are
       // read-only entries the manifest projects, so the lead cannot rewrite what it must obey.
       const lead = assignment.role === "lead" ? leadActivation(dependencies.db, {
-        rigId: run.rigId, roles: run.binding.roles, seat, activationId: attemptId,
+        rigId: run.rigId, runId: run.id, roles: run.binding.roles, seat, activationId: attemptId,
         goal: (dependencies.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(task.qitemId) as { body: string }).body,
         // U5 — a planning run's lead agrees a plan with the owner first; every other lead
         // activation is the decomposition protocol C3 already had.
@@ -1199,7 +1208,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       })()
     : managedWorkerRoots;
   const managedLaunch = managed ? (unisolated
-    ? composeDirectLaunch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter, sessionEnv: launchSessionEnv, runtimeSessionEnv,
+    ? composeDirectLaunch({ governance: teamGovernance, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter, sessionEnv: launchSessionEnv, runtimeSessionEnv,
         workflowRuntime: () => workflowRuntime,
         ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}) })
     : composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
@@ -1250,6 +1259,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       db,
       governance: teamGovernance,
       events: eventBus,
+      readTaskWorkspace: (runId, taskId) => {
+        const candidate = workflowRuntime?.existingCandidate(runId, taskId);
+        return candidate ? { root: candidate.root, sourceRoot: candidate.sourceRoot,
+          baseCommit: candidate.base.kind === "commit" ? candidate.base.commit : null } : null;
+      },
       readTaskRows: (runId: string) => (db.prepare(
         `SELECT a.qitem_id AS qitemId, a.task_id AS taskId,
           json_extract(a.assignment_json, '$.role') AS role,
@@ -2240,6 +2254,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
           if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
           return workflowRuntime.candidateManifestFor(runId, taskId);
         },
+        sourceRefMoved: (repository, move) => workflowRuntime?.acceptOwnerMerge(repository, move),
         // The binding every other command reads: the plan at the worktree's current head. A
         // commit the daemon just landed moves that head, and the recorded binding has to move
         // with it or the next dispatch would see a run whose plan changed under it.
@@ -3267,6 +3282,17 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     deps.attemptTelemetry = telemetry;
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
       turnStateRoot, telemetry,
+      captureTurnDocuments: attempt => {
+        if (attempt.role !== "lead" || !teamGovernance.documents(attempt.runId)) return;
+        const run = teamGovernance.getRun(attempt.runId), lead = teamGovernance.leadTask(attempt.runId);
+        try {
+          if (!lead || !workflowRuntime) throw new Error("The document reader is not available.");
+          teamGovernance.captureLeadDocuments(attempt.runId, attempt.id,
+            workflowRuntime.documentsFor(attempt.runId, lead.taskId, run.binding.planRef));
+        } catch {
+          teamGovernance.captureLeadDocuments(attempt.runId, attempt.id, {}, "The lead's document files could not be saved. Ask the lead to repair them.");
+        }
+      },
       readTaskReport: (runId, attemptId) => {
         if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
         return workflowRuntime.taskReportFor(runId, attemptId, turnStateRoot);

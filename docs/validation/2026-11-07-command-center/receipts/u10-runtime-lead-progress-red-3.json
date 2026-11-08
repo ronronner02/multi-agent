@@ -1,0 +1,15 @@
+{
+  "check": "u10-runtime-lead-progress-red-3",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/seat-pane-launch.test.ts",
+    "--maxWorkers=2",
+    "-t",
+    "writes durable review progress"
+  ],
+  "exit": 1,
+  "seconds": 64.88
+}

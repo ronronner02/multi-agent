@@ -1,0 +1,15 @@
+{
+  "check": "u10-runtime-merge-state-red",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/integration-branch.test.ts",
+    "--maxWorkers=2",
+    "-t",
+    "keeps Merge completion observable"
+  ],
+  "exit": 1,
+  "seconds": 4.05
+}

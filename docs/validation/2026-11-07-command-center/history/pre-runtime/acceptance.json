@@ -1,0 +1,130 @@
+{
+  "unit": "U10",
+  "status": "incomplete-unmerged",
+  "checkedAt": "2026-11-07T10:01:22.248455+00:00",
+  "ownerDecision": "Keep U10 unmerged; finish the remaining checks. Leave the original daemon and installed app untouched.",
+  "source": "source-verification.json",
+  "gates": {
+    "isolatedBrowserSignInAndWindowsCreate": {
+      "status": "observed",
+      "evidence": [
+        "receipts/u10-windows-create-verification.json",
+        "screenshots/live/02-github-gate.png",
+        "screenshots/live/03-signed-in-empty-projects.png"
+      ]
+    },
+    "leadPlanAndRosterApproval": {
+      "status": "observed-after-fix",
+      "evidence": "rosters.json"
+    },
+    "nativeDeliveryAndLocalMerge": {
+      "status": "observed",
+      "runs": [
+        "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152"
+      ],
+      "evidence": [
+        "browser-observations.json",
+        "events.jsonl",
+        "receipts/u10-final-projects.json"
+      ]
+    },
+    "midTurnRestart": {
+      "status": "observed",
+      "evidence": "receipts/u10-repeat-restart-evidence.json"
+    },
+    "busyOwnerChat": {
+      "status": "partial",
+      "evidence": [
+        "receipts/u10-repeat-busy-slots.json",
+        "live-limitations.json"
+      ],
+      "limitation": "The reply arrived through reserved capacity, but its review-status statement was inaccurate."
+    },
+    "nativeTelemetry": {
+      "status": "observed-with-missing-counters-retained",
+      "evidence": "telemetry.json",
+      "supplementaryAttempt": "4559079e-8897-40e3-9114-ee869096eb09",
+      "supplementaryTotalTokens": 428832,
+      "supplementaryModel": null
+    },
+    "wslFolderCreate": {
+      "status": "observed",
+      "evidence": "receipts/u10-wsl-create-verification.json"
+    },
+    "privateBootstrapOnlyRemotes": {
+      "status": "verified",
+      "evidence": "receipts/u10-final-projects.json"
+    },
+    "installerBuildAndSourceIntegrity": {
+      "status": "passed",
+      "evidence": [
+        "receipts/u10-final-installer.json",
+        "receipts/u10-final-installer-integrity-2.json"
+      ]
+    },
+    "desktopInstallation": {
+      "status": "not-run",
+      "reason": "A clean port-7433 environment remains unavailable under the owner decision to preserve the original daemon and installed app."
+    },
+    "desktopFirstOpen": {
+      "status": "not-run",
+      "reason": "The isolated browser flow does not replace the required desktop first-open check."
+    },
+    "fullDaemonSuite": {
+      "status": "known-failures-only",
+      "exit": 1,
+      "passed": 17068,
+      "failed": 2,
+      "skipped": 5,
+      "todo": 5,
+      "evidence": "verification/checks.json"
+    },
+    "resultPreviewAfterLaterMerge": {
+      "status": "open",
+      "evidence": "live-limitations.json"
+    },
+    "postMergeProgressLabel": {
+      "status": "open",
+      "evidence": "live-limitations.json"
+    },
+    "cleanup": {
+      "status": "passed",
+      "evidence": [
+        "receipts/u10-final-cleanup.json",
+        "receipts/u10-browser-cleanup.json",
+        "protected-state.json"
+      ]
+    }
+  },
+  "ownerActions": "owner-actions.json",
+  "workerReports": "worker-reports.json",
+  "screenshots": "screenshots/index.json",
+  "review": "review.json",
+  "privacy": {
+    "rawDatabaseIncluded": false,
+    "nativeTranscriptsIncluded": false,
+    "credentialStoresIncluded": false,
+    "cookiesAndHeadersIncluded": false
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "pullRequestOpened": false,
+    "merged": false,
+    "installedAppReplaced": false,
+    "initialSyntheticUploadsOnly": true
+  },
+  "documentation": "documentation-verification.json",
+  "privacyCheck": "privacy-check.json",
+  "buildOutputNote": {
+    "observation": "Repository packaging checks left source-workspace CLI imports pointing at staged package output.",
+    "resolution": "A normal CLI workspace build restored the imports; CLI version, isolated restart and final stop all passed.",
+    "sourceChange": false,
+    "evidence": [
+      "verification/checks.json",
+      "receipts/u10-result-preview-restart-2.json",
+      "receipts/u10-final-cleanup.json"
+    ]
+  }
+}

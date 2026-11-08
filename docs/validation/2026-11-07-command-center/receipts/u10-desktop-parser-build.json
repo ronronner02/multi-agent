@@ -1,0 +1,11 @@
+{
+  "check": "u10-desktop-parser-build",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "exit": 0,
+  "seconds": 24.4
+}

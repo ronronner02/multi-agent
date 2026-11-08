@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/cli
+
+ ✓ test/github-command.test.ts (8 tests) 49ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  23:23:06
+   Duration  2.43s (transform 1.41s, setup 39ms, collect 2.19s, tests 49ms, environment 0ms, prepare 47ms)
+

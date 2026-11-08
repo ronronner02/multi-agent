@@ -1,0 +1,10 @@
+{
+  "check": "u10-plan-audit-desktop",
+  "cwd": "desktop",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/npm",
+    "test"
+  ],
+  "exit": 0,
+  "seconds": 0.17
+}

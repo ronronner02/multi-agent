@@ -1,0 +1,34 @@
+{
+  "round": 1,
+  "verdict": "CHANGES-REQUIRED",
+  "manifestSha256": "8b8251fefaa6a2d209fe23fda1a2e4b9324b3b5432394d195501fb0a359b3b79",
+  "patchSha256": "d2aa21a63898ddf9da0a161610cb3f6b8a4b33d579c6b14d01f87acfdf59fc8c",
+  "findings": [
+    {
+      "id": "R1-1",
+      "severity": "P0",
+      "file": "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "category": "correctness/security",
+      "citation": "Candidate starting-base provenance and acceptance amendment lines 70-76",
+      "scenario": "An admitted task ID with path separators normalizes its base-record destination to another task's existing file; newly generalized persistence overwrites the saved commit, and restart adopts the wrong base.",
+      "reviewerExecutedReproducer": false,
+      "rootReproducer": "u10-runtime-base-path-red-3.json"
+    }
+  ],
+  "integrity": {
+    "sourceFiles": 41,
+    "evidenceFiles": 24,
+    "supplementFiles": 4,
+    "allHashesMatched": true,
+    "newSideHunksVerified": 94
+  },
+  "coverage": "Complete 27-path tracked candidate, acceptance amendment, relevant reference source and supplied receipts. No reviewer-executed tests, browser actions, runtime operations or source mutation.",
+  "doneSignal": false,
+  "openGates": [
+    "R1-1 confirmation",
+    "current verification",
+    "bounded live acceptance",
+    "evidence refresh",
+    "desktop installation and first open"
+  ]
+}

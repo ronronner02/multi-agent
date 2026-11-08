@@ -1,0 +1,89 @@
+{
+  "status": "historical",
+  "priorBundleManifestSha256": "9117c55e82a15cee8c7091795b67a90ee4d11f9b551acc5d9176198a33468865",
+  "priorManifestEntryCount": 385,
+  "allPriorManifestEntriesVerified": true,
+  "files": [
+    {
+      "path": "acceptance.json",
+      "sha256": "c5eb1c782a8d88f4be011763f9f26f9496c038f4b4f6e4a1df3b35b3cb5588c5"
+    },
+    {
+      "path": "browser-observations.json",
+      "sha256": "380d89e133284afa993747bafeb21921d6b2c6bca9c3352b48e32ade50054ffb"
+    },
+    {
+      "path": "documentation-verification.json",
+      "sha256": "55790a024ad5412f3be01515c9b62466752ce4f0ac3542f11864df742f75ced9"
+    },
+    {
+      "path": "events-scope.json",
+      "sha256": "ece0c06f52a1872af08c811b4b431d3e1c404fbbe0df911c87d7ace82c23657d"
+    },
+    {
+      "path": "events.jsonl",
+      "sha256": "8f4daf54285548096ed4efc3fa546fb8eae4bcc6ac74808b4f0ec4e40e6e3e7c"
+    },
+    {
+      "path": "live-limitations.json",
+      "sha256": "2e5658485a4ae8435104ebaebbda3375ad71d4039293af40e42a7fe666b14d86"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "9117c55e82a15cee8c7091795b67a90ee4d11f9b551acc5d9176198a33468865"
+    },
+    {
+      "path": "owner-actions.json",
+      "sha256": "56b3f0147d3709e4604073610c97f370a46dd1f82d4864021504f5b7c6ac61b3"
+    },
+    {
+      "path": "privacy-check.json",
+      "sha256": "e08e97f72129d5096c5813176c190b89d4045a5270aaa30696f26d9277f0ac04"
+    },
+    {
+      "path": "protected-state.json",
+      "sha256": "95dfd299449eb764430cb9032caafbb681cd872b3501f50869804caed4141f28"
+    },
+    {
+      "path": "review.json",
+      "sha256": "91d519115e55b22a910e2ac69c945191d158ab300f3fab9c4d18f7bd0646f787"
+    },
+    {
+      "path": "rosters.json",
+      "sha256": "3010ef1ea551dfaec6026276d8ed21962dda937779822f1c69be92603419b85f"
+    },
+    {
+      "path": "runs.json",
+      "sha256": "9513d6e03f8ce58472fa9beda4d7a3187655086ebca5093374e6a3c2e9363592"
+    },
+    {
+      "path": "runtime-observations.json",
+      "sha256": "92dd9ba2820b4b643c3ba5e41605ef3d46793656b40e75c52ea73d438b791645"
+    },
+    {
+      "path": "screenshots/index.json",
+      "sha256": "0d7d0c938564f875292a92297b24b251aaf9295164da3b96a1b29377ba0897d0"
+    },
+    {
+      "path": "source-verification.json",
+      "sha256": "70086429c386e9aa86abc232a4d307a6a14e9a92e0b13414fd508bc6b644c233"
+    },
+    {
+      "path": "telemetry.json",
+      "sha256": "d792a8c98c970fdf68345fa5c351f76140c32bddc22fbc927c8ceecaac100f64"
+    },
+    {
+      "path": "verification/checks.json",
+      "sha256": "a3dc0d63fed84b716baef5654ba9f23a205f422df940c44668116918497e96e3"
+    },
+    {
+      "path": "verification/final-index.json",
+      "sha256": "553adafaa0cd46c8c18446854edf1487274f19344710c6869dd5cf16097a0868"
+    },
+    {
+      "path": "worker-reports.json",
+      "sha256": "b08cbf63b1b759a4a6efab94b007d1e6af1b02250201c68d9e66908815f3f4cb"
+    }
+  ],
+  "note": "These records preserve the earlier runtime checkpoint. Desktop not-run, 31-path source, two-failure suite and stopped-resource statements are historical, not current gates. Unchanged prior artifacts remain in the bundle."
+}

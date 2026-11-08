@@ -1,0 +1,451 @@
+etwork-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > restore: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > last: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: applied, 5 ms
+
+stdout | test/codex-network-default.test.ts > #275 every Codex launch site adds the override only when the reader applies it > last: the override follows the floor flag when applied; a declined read leaves the command unchanged
+[openrig] codex network default for r01-qa: not applied (network access is set explicitly in Codex configuration), 5 ms
+
+ ✓ test/codex-network-default.test.ts (40 tests) 24ms
+ ✓ test/package-manifest.test.ts (26 tests) 29ms
+ ✓ test/skill-library-routes.test.ts (20 tests) 28ms
+ ✓ test/classifier-lease-manager.test.ts (16 tests) 34ms
+ ✓ test/tcp-readiness-native.test.ts (2 tests) 18ms
+ ✓ test/self-host-destination-teaching.test.ts (5 tests) 28ms
+stderr | test/projection-planner-plugins.test.ts > Projection planner — plugin path semantics > resolves openrig-home: from configured RIGGED_HOME, not later shell values
+Warning: RIGGED_HOME is deprecated; use OPENRIG_HOME instead.
+
+ ✓ test/projection-planner-plugins.test.ts (14 tests) 30ms
+ ✓ test/control-plane-json-generator.test.ts (11 tests) 24ms
+ ✓ test/transcript-adaptive-capture.test.ts (11 tests) 28ms
+ ✓ test/bundle-assembler.test.ts (16 tests) 25ms
+ ✓ test/native-ps-locale.test.ts (6 tests) 26ms
+ ✓ test/spec-md-shadowed-node.test.ts (7 tests) 28ms
+ ✓ test/whoami-workspace.test.ts (4 tests) 27ms
+ ✓ test/context-pack-address-route.test.ts (8 tests) 24ms
+ ✓ test/crash-cart-probes.test.ts (20 tests) 28ms
+ ✓ test/model-fidelity-enumeration-guard.test.ts (9 tests) 26ms
+ ✓ test/bundle-types.test.ts (70 tests) 27ms
+ ✓ test/terminal-provider-ride.test.ts (46 tests) 25ms
+ ✓ test/plugin-discovery-service.test.ts (23 tests) 28ms
+ ✓ test/factory-rsi-rig.test.ts (5 tests) 26ms
+ ✓ test/slack-secret-quotes.test.ts (2 tests) 28ms
+ ✓ test/session-name-parity.test.ts (66 tests) 26ms
+ ✓ test/pi-activity-generation.test.ts (8 tests) 25ms
+ ✓ test/crash-cart-route.test.ts (8 tests) 21ms
+ ✓ test/rigspec-codec.test.ts (12 tests) 23ms
+ ✓ test/healthz-wedge-events-index.test.ts (9 tests) 27ms
+ ✓ test/kernel-boot.test.ts (25 tests) 24ms
+ ✓ test/audit-browse.test.ts (11 tests) 25ms
+ ✓ test/up-command-router.test.ts (26 tests) 26ms
+ ✓ test/sdlc-role-startup.test.ts (5 tests) 24ms
+ ✓ test/workflow-step-trail-log.test.ts (8 tests) 21ms
+ ✓ test/native-process-lineage.test.ts (100 tests) 32ms
+ ✓ test/shipped-skill-frontmatter.test.ts (3 tests) 24ms
+ ✓ test/topology-route.test.ts (7 tests) 24ms
+ ✓ test/watchdog-history-log.test.ts (8 tests) 22ms
+ ✓ test/resume-metadata-refresher.test.ts (27 tests) 26ms
+ ✓ test/spec-library-service.test.ts (9 tests) 21ms
+ ✓ test/package-repository.test.ts (5 tests) 22ms
+ ✓ test/topology-launcher.test.ts (16 tests) 20ms
+ ✓ test/slice-workflow-binding.test.ts (9 tests) 22ms
+ ✓ test/ntfy-title-native.test.ts (1 test) 19ms
+ ✓ test/terminal-service.test.ts (71 tests) 20ms
+ ✓ test/usage-series.test.ts (19 tests) 21ms
+ ✓ test/pod-bundle-readonly-staging.test.ts (2 tests) 24ms
+ ✓ test/workspace-routes.test.ts (11 tests) 22ms
+ ✓ test/schema-bindings.test.ts (13 tests) 21ms
+ ✓ test/files-asset-range.test.ts (7 tests) 22ms
+ ✓ test/mission-control-action-log.test.ts (8 tests) 20ms
+ ✓ test/queue-list-grammar.test.ts (9 tests) 19ms
+ ✓ test/tmux-shell-command.test.ts (35 tests) 20ms
+ ✓ test/conflict-detector.test.ts (15 tests) 22ms
+ ✓ test/rigs-routes-pl019-current-qitems.test.ts (9 tests) 23ms
+ ✓ test/schema-events.test.ts (10 tests) 21ms
+ ✓ test/agent-activity-store-construction-site.test.ts (1 test) 20ms
+ ✓ test/rigspec-local-validation.test.ts (8 tests) 20ms
+ ✓ test/env-routes.test.ts (26 tests) 20ms
+ ✓ test/watchdog-policies.test.ts (24 tests) 19ms
+ ✓ test/workflow-keepalive-policy.test.ts (8 tests) 20ms
+ ✓ test/context-pack-manifest-parser.test.ts (19 tests) 20ms
+stderr | test/transcript-capture.test.ts > transcript capture boot recovery > reattaches capture for running tmux sessions after a daemon restart
+[session-registry] occupant-tenure mint FAILED for node_id="01M6TWREDKN1VKDKNSD10TCGN2" (kind=initial): no such table: occupant_tenures — registration proceeds, but generation-scoped ghost-stage protection is UNAVAILABLE for this node. Ensure migration 060_occupant_tenures ran. (Further mint failures suppressed this process.)
+
+ ✓ test/transcript-capture.test.ts (1 test) 21ms
+ ✓ test/eval-fixtures.test.ts (2 tests) 17ms
+ ✓ test/workflow-instance-store.test.ts (7 tests) 19ms
+ ✓ test/bundle-integrity.test.ts (9 tests) 17ms
+ ✓ test/transcript-tail-malformed-utf8.test.ts (5 tests) 18ms
+ ✓ test/telemetry-routes.test.ts (5 tests) 19ms
+ ✓ test/agent-resolver.test.ts (15 tests) 18ms
+ ✓ test/fleet-route.test.ts (8 tests) 13ms
+ ✓ test/context-pack-compose.test.ts (16 tests) 19ms
+ ✓ test/cwd-expansion.test.ts (17 tests) 20ms
+ ✓ test/pi-runtime-adapter.test.ts (47 tests) 17ms
+ ✓ test/schema-checkpoints.test.ts (8 tests) 17ms
+ ✓ test/agent-image-manifest-roundtrip.test.ts (12 tests) 18ms
+ ✓ test/framework-invocation.test.ts (67 tests) 16ms
+ ✓ test/schema-snapshots.test.ts (8 tests) 18ms
+ ✓ test/fleet-compose.test.ts (24 tests) 17ms
+ ✓ test/spec-review-routes.test.ts (5 tests) 16ms
+ ✓ test/queue-retention.test.ts (14 tests) 19ms
+ ✓ test/session-admin-auth-guard.test.ts (14 tests) 16ms
+ ✓ test/slack-inbound-files.test.ts (14 tests) 16ms
+ ✓ test/preview-routes.test.ts (12 tests) 17ms
+ ✓ test/eval-behavior-bridge.test.ts (5 tests) 15ms
+ ✓ test/progress-indexer.test.ts (15 tests) 18ms
+ ✓ test/context-pack-library-service.test.ts (11 tests) 14ms
+ ✓ test/activity-parked-rig-scope.test.ts (5 tests) 20ms
+ ✓ test/db.test.ts (9 tests) 17ms
+ ✓ test/terminal-remote-shell-quoting.test.ts (1 test) 17ms
+ ✓ test/context-pack-pack-taxonomy.test.ts (9 tests) 18ms
+ ✓ test/files-asset-security-headers.test.ts (13 tests) 17ms
+ ✓ test/schema-resume-metadata.test.ts (7 tests) 16ms
+ ✓ test/gateway-human-handle.test.ts (10 tests) 14ms
+ ✓ test/slack-app-manifest.test.ts (15 tests) 16ms
+ ✓ test/schema-node-spec-fields.test.ts (5 tests) 16ms
+ ✓ test/context-pack-rm.test.ts (5 tests) 17ms
+ ✓ test/spec-review-service.test.ts (8 tests) 15ms
+ ✓ test/mission-control-remote-action.test.ts (8 tests) 15ms
+ ✓ test/codex-thread-id.test.ts (7 tests) 14ms
+ ✓ test/gateway-admission-gate.test.ts (4 tests) 16ms
+ ✓ test/terminal-routes.test.ts (14 tests) 16ms
+ ✓ test/agent-image-library-service.test.ts (13 tests) 15ms
+ ✓ test/event-nested-fanout.test.ts (3 tests) 16ms
+ ✓ test/gateway-subsystem-wire.test.ts (7 tests) 12ms
+ ✓ test/draft-rig-generator.test.ts (7 tests) 16ms
+ ✓ test/skill-audit.test.ts (33 tests) 14ms
+ ✓ test/terminal-tile-tmux-path.test.ts (21 tests) 14ms
+ ✓ test/activity-rejects.test.ts (4 tests) 12ms
+ ✓ test/compose-zero-tail-native.test.ts (4 tests) 13ms
+ ✓ test/rigspec-schema.test.ts (69 tests) 11ms
+ ✓ test/policy-spec.test.ts (14 tests) 14ms
+ ✓ test/outbox-handler.test.ts (10 tests) 15ms
+ ✓ test/schema-core.test.ts (10 tests) 18ms
+[openrig-settings] env override for transcripts.lines rejected: Invalid transcripts.lines: must be an integer in [1, 1000000]; falling back to file/default
+[openrig-settings] env override for transcripts.poll_interval_seconds rejected: Invalid value for transcripts.poll_interval_seconds: expected a number, got "not-a-number"; falling back to file/default
+ ✓ test/transcript-rotation.test.ts (17 tests) 12ms
+ ✓ test/skill-discovery.test.ts (18 tests) 12ms
+ ✓ test/usage-burn-evidence.test.ts (5 tests) 12ms
+ ✓ test/slice17-sendtext-preload.test.ts (5 tests) 14ms
+ ✓ test/provider-routes.test.ts (11 tests) 11ms
+ ✓ test/health-source-isolation.test.ts (4 tests) 13ms
+ ✓ test/daemon-db-path.test.ts (7 tests) 8ms
+ ✓ test/wake-resolve-service.test.ts (19 tests) 15ms
+ ✓ test/agent-manifest-plugins.test.ts (16 tests) 13ms
+ ✓ test/workflow-exception-router.test.ts (14 tests) 13ms
+ ✓ test/projection-planner.test.ts (19 tests) 14ms
+ ✓ test/claude-resume.test.ts (34 tests) 13ms
+ ✓ test/workspace-doctor.test.ts (41 tests) 15ms
+ ✓ test/s03-permission-corrections.test.ts (18 tests) 13ms
+ ✓ test/bundle-carried-context-pack.test.ts (5 tests) 13ms
+ ✓ test/cmux-layout-service.test.ts (52 tests) 13ms
+ ✓ test/usage-samples-store.test.ts (8 tests) 16ms
+ ✓ test/agent-image-manifest-parser.test.ts (11 tests) 12ms
+ ✓ test/agent-image-install-failure.test.ts (4 tests) 10ms
+ ✓ test/codex-resume.test.ts (26 tests) 12ms
+ ✓ test/topology-manifest.test.ts (22 tests) 10ms
+ ✓ test/omp-runner.test.ts (31 tests) 13ms
+ ✓ test/codex-process-observation.test.ts (2 tests) 12ms
+ ✓ test/seat-recap-store.test.ts (18 tests) 11ms
+ ✓ test/bundle-context-packs-router.test.ts (15 tests) 11ms
+ ✓ test/scopes-routes.test.ts (1 test) 11ms
+ ✓ test/rigspec-workspace.test.ts (10 tests) 11ms
+ ✓ test/slack-thread-return.test.ts (2 tests) 13ms
+ ✓ test/health-projection.test.ts (18 tests) 11ms
+ ✓ test/crash-cart-copy-read.test.ts (5 tests) 11ms
+ ✓ test/native-resume-probe.test.ts (101 tests) 16ms
+ ✓ test/provider-usage-route.test.ts (7 tests) 10ms
+ ✓ test/attention-aggregate-route.test.ts (4 tests) 10ms
+ ✓ test/tmux-exact-target.test.ts (44 tests) 10ms
+ ✓ test/steering-composer.test.ts (13 tests) 12ms
+ ✓ test/plugin-vendor-exec-mode.test.ts (5 tests) 8ms
+ ✓ test/gateway-human-readiness.test.ts (10 tests) 10ms
+ ✓ test/getting-started-narrative-parity.test.ts (3 tests) 8ms
+ ✓ test/scope-view-projection.test.ts (11 tests) 10ms
+ ✓ test/codex-activity-hooks.test.ts (23 tests) 9ms
+ ✓ test/context-codex-rate-only.test.ts (5 tests) 10ms
+ ✓ test/package-resolver.test.ts (5 tests) 10ms
+ ✓ test/kernel-status-route.test.ts (5 tests) 11ms
+ ✓ test/reconcile-warning-order.test.ts (1 test) 9ms
+ ✓ test/s08-open-rig-herdr.test.ts (19 tests) 12ms
+ ✓ test/seat-recap-durability.test.ts (12 tests) 11ms
+ ✓ test/eval-rig-runner.test.ts (4 tests) 10ms
+ ✓ test/skill-refs-membership-chain.test.ts (5 tests) 10ms
+ ✓ test/bundle-behaviour-inspect.test.ts (2 tests) 11ms
+ ✓ test/stub-runtime-adapter.test.ts (4 tests) 9ms
+ ✓ test/workspace-frontmatter-validator.test.ts (9 tests) 8ms
+ ✓ test/opr-0.4.1.09-seat-scoped-extra.test.ts (8 tests) 9ms
+ ✓ test/permission-policy-ref.test.ts (20 tests) 10ms
+ ✓ test/spec-validation-service.test.ts (5 tests) 8ms
+ ✓ test/cmux-transport.test.ts (32 tests) 8ms
+ ✓ test/hosts-registry-parity.test.ts (36 tests) 10ms
+ ✓ test/agent-image-evidence-guard.test.ts (7 tests) 9ms
+ ✓ test/notification-adapters.test.ts (13 tests) 8ms
+ ✓ test/self-host-alignment.test.ts (6 tests) 7ms
+ ✓ test/restore-preconditions.test.ts (14 tests) 8ms
+ ✓ test/slack-post-rate-limit.test.ts (5 tests) 7ms
+ ✓ test/model-divergence-monitor.test.ts (23 tests) 9ms
+ ✓ test/scope-node-file-spec-md.test.ts (6 tests) 9ms
+ ✓ test/codex-team-workspace.test.ts (4 tests) 5ms
+ ✓ test/scope-lineage-parity.test.ts (3 tests) 6ms
+ ✓ test/activity-parked-route.test.ts (3 tests) 7ms
+ ✓ test/restore-check-compact.test.ts (13 tests) 7ms
+ ✓ test/sender-identity-canonical.test.ts (7 tests) 7ms
+ ✓ test/agent-preflight.test.ts (3 tests) 8ms
+ ✓ test/sender-identity-canonical-edges.test.ts (8 tests) 7ms
+ ✓ test/crash-cart-conductor.test.ts (30 tests) 7ms
+ ✓ test/system-world.test.ts (3 tests) 9ms
+ ✓ test/terminal-auth.test.ts (7 tests) 8ms
+ ✓ test/slack-request-shape.test.ts (7 tests) 8ms
+ ✓ test/adapter-plugin-exec-mode.test.ts (3 tests) 8ms
+ ✓ test/files-path-safety.test.ts (18 tests) 7ms
+ ✓ test/seat-route-oracle-injection.test.ts (1 test) 6ms
+ ✓ test/route-timing-recorder.test.ts (5 tests) 7ms
+ ✓ test/pi-readiness.test.ts (34 tests) 7ms
+ ✓ test/project-catalog-root-depth.test.ts (3 tests) 7ms
+ ✓ test/scenario-container.test.ts (14 tests) 8ms
+ ✓ test/plugin-manifest-detection.test.ts (10 tests) 7ms
+ ✓ test/instance-initialization.test.ts (5 tests) 7ms
+ ✓ test/slack-api.test.ts (10 tests) 8ms
+ ✓ test/slack-config.test.ts (10 tests) 6ms
+ ✓ test/client-lock.test.ts (17 tests) 7ms
+ ✓ test/activity-evidence-ladder.test.ts (11 tests) 5ms
+ ✓ test/transcript-live-settings.test.ts (7 tests) 7ms
+ ✓ test/slack-attribution.test.ts (6 tests) 8ms
+ ✓ test/tmux-discovery-scanner.test.ts (12 tests) 7ms
+ ✓ test/profile-composer.test.ts (11 tests) 8ms
+ ✓ test/slack-message.test.ts (23 tests) 6ms
+ ✓ test/adapter-plugin-projection.test.ts (7 tests) 7ms
+ ✓ test/slack-mention-injection.test.ts (4 tests) 6ms
+ ✓ test/feed-host-subscriptions-config.test.ts (4 tests) 6ms
+ ✓ test/codex-hook-trust.test.ts (13 tests) 6ms
+ ✓ test/history-query.test.ts (12 tests) 6ms
+ ✓ test/session-fingerprinter.test.ts (34 tests) 7ms
+ ✓ test/slack-reactions.test.ts (11 tests) 8ms
+ ✓ test/s01-p2-probe-context.test.ts (6 tests) 6ms
+ ✓ test/current-generation-record.test.ts (8 tests) 4ms
+ ✓ test/scenario-real-deps.test.ts (12 tests) 5ms
+ ✓ test/native-process-executable.test.ts (7 tests) 5ms
+ ✓ test/continuity-stack-packets.test.ts (6 tests) 4ms
+ ✓ test/spec-validation-advisory.test.ts (7 tests) 4ms
+ ✓ test/markdown-address.test.ts (24 tests) 5ms
+ ✓ test/slack-upload-title.test.ts (1 test) 6ms
+ ✓ test/role-resolver.test.ts (11 tests) 6ms
+ ✓ test/omp-runtime-adapter.test.ts (5 tests) 7ms
+ ✓ test/builtin-policy-reference.test.ts (6 tests) 7ms
+ ✓ test/activity-consumers.test.ts (4 tests) 4ms
+ ✓ test/slack-channel-map.test.ts (16 tests) 5ms
+ ✓ test/agent-starter-resolver.test.ts (17 tests) 7ms
+ ✓ test/default-onboarding-pack.test.ts (7 tests) 7ms
+ ✓ test/tmux-option-defaults.test.ts (12 tests) 5ms
+ ✓ test/activity-hook-rip-proof.test.ts (8 tests) 5ms
+ ✓ test/workflow-validator.test.ts (22 tests) 5ms
+ ✓ test/parked-query.test.ts (16 tests) 4ms
+ ✓ test/session-jsonl.test.ts (7 tests) 5ms
+ ✓ test/predecessor-recap-resolver.test.ts (9 tests) 5ms
+ ✓ test/permission-drift.test.ts (19 tests) 5ms
+ ✓ test/codex-skill-projection.test.ts (10 tests) 6ms
+ ✓ test/startup-resolver.test.ts (10 tests) 4ms
+ ✓ test/builtin-startup-files.test.ts (32 tests) 6ms
+ ✓ test/mission-slice-sop-plugin-parity.test.ts (7 tests) 4ms
+ ✓ test/ask-service.test.ts (10 tests) 6ms
+ ✓ test/stub-runner-exec.test.ts (11 tests) 5ms
+ ✓ test/openrig-compat.test.ts (2 tests) 4ms
+ ✓ test/codex-hooks-feature-flag.test.ts (11 tests) 6ms
+ ✓ test/activity-relay-endpoint.test.ts (8 tests) 4ms
+ ✓ test/scaffold-placeholder.test.ts (26 tests) 5ms
+ ✓ test/activity-adapter-rungs.test.ts (11 tests) 4ms
+ ✓ test/instance-environment.test.ts (2 tests | 1 skipped) 4ms
+ ✓ test/ask-service-session.test.ts (2 tests) 3ms
+ ✓ test/activity-endpoint.test.ts (8 tests) 4ms
+ ✓ test/graph-projection.test.ts (20 tests) 5ms
+ ✓ test/slack-inbound-channel-identity.test.ts (3 tests) 4ms
+ ✓ test/ask-service-seat.test.ts (2 tests) 3ms
+ ✓ test/tmux-argv-exec.test.ts (7 tests) 5ms
+ ✓ test/cmux-adapter-layout-methods.test.ts (18 tests) 4ms
+ ✓ test/bundle-workflow-specs-router.test.ts (11 tests) 4ms
+ ✓ test/provider-collect.test.ts (9 tests) 4ms
+ ✓ test/migration-fixture-parity.test.ts (5 tests) 3ms
+ ✓ test/workflow-band.test.ts (14 tests) 7ms
+ ✓ test/provider-host-usage-rollup.test.ts (14 tests) 5ms
+ ✓ test/contract-source-selection.test.ts (8 tests) 3ms
+ ✓ test/active-lens-store.test.ts (8 tests) 5ms
+ ✓ test/external-install-planner.test.ts (10 tests) 4ms
+ ✓ test/session-enricher.test.ts (8 tests) 4ms
+ ✓ test/proof-source-boundary.test.ts (3 tests) 4ms
+ ✓ test/info-routes.test.ts (1 test) 4ms
+ ✓ test/cmux-transport-layout-methods.test.ts (10 tests) 5ms
+ ✓ test/rig-mode-validator.test.ts (22 tests) 4ms
+ ✓ test/rig-agents-compose.test.ts (17 tests) 4ms
+ ✓ test/provider-codex-auth-reader.test.ts (4 tests) 4ms
+ ✓ test/profile-source-resolver.test.ts (6 tests) 4ms
+ ✓ test/claude-versioned-identity.test.ts (18 tests) 5ms
+ ✓ test/hermetic-scaffold.test.ts (6 tests) 5ms
+ ✓ test/occupant-invalidator.test.ts (6 tests) 5ms
+ ✓ test/review-brief-spine.test.ts (4 tests) 5ms
+ ✓ test/agnostic-rip-out.test.ts (5 tests) 5ms
+ ✓ test/bundle-agent-images-router.test.ts (10 tests) 5ms
+ ✓ test/testbed-published-daemon.test.ts (12 tests) 6ms
+ ✓ test/eval-rig-provider.test.ts (6 tests) 4ms
+ ✓ test/scenario-runner.test.ts (6 tests) 5ms
+ ✓ test/slack-inbound-thread-broadcast.test.ts (5 tests) 4ms
+ ✓ test/provider-claude-usage-reader.test.ts (6 tests) 4ms
+ ✓ test/activity-motion-fold.test.ts (15 tests) 4ms
+ ✓ test/slack-state-store.test.ts (10 tests) 5ms
+ ✓ test/framework-catalog.test.ts (3 tests) 6ms
+ ✓ test/scenario-container-stage.test.ts (3 tests) 3ms
+ ✓ test/transcript-backspace-native.test.ts (4 tests) 4ms
+ ✓ test/claude-nix-wrapped-identity.test.ts (17 tests) 5ms
+ ✓ test/topology-defaults-installer.test.ts (7 tests) 4ms
+ ✓ test/crash-cart-detect.test.ts (11 tests) 4ms
+ ✓ test/slack-inbound-gate.test.ts (5 tests) 4ms
+ ✓ test/scenario-normalizer.test.ts (16 tests) 5ms
+ ✓ test/agent-starter-schema.test.ts (12 tests) 4ms
+ ✓ test/gateway-dispatcher.test.ts (4 tests) 3ms
+ ✓ test/slice-workflow-projection.test.ts (16 tests) 5ms
+ ✓ test/scenario-daemon-mode.test.ts (8 tests) 4ms
+ ✓ test/history-query-seat.test.ts (3 tests) 4ms
+ ✓ test/install-policy.test.ts (8 tests) 3ms
+ ✓ test/pane-envelope.test.ts (27 tests) 6ms
+ ✓ test/scenario-schema.test.ts (11 tests) 4ms
+ ✓ test/context-pack-startup-files.test.ts (4 tests) 3ms
+ ✓ test/slack-torn-append-native.test.ts (4 tests) 3ms
+ ✓ test/bundle-plugins-router.test.ts (9 tests) 4ms
+ ✓ test/bundle-skills-router.test.ts (10 tests) 4ms
+ ✓ test/managed-native-policy.test.ts (6 tests) 4ms
+ ✓ test/workflow-exception.test.ts (10 tests) 4ms
+ ✓ test/scenario-schema-delta.test.ts (11 tests) 3ms
+ ✓ test/tmux-server.test.ts (6 tests) 4ms
+ ✓ test/provider-signals.test.ts (6 tests) 4ms
+ ✓ test/hot-potato-enforcer.test.ts (20 tests) 4ms
+ ✓ test/stub-script.test.ts (11 tests) 4ms
+ ✓ test/lead-protocol.test.ts (5 tests) 3ms
+ ✓ test/healthz-wedge-cheap-default.test.ts (3 tests) 4ms
+ ✓ test/scenario-expect.test.ts (12 tests) 3ms
+ ✓ test/opr-0.4.1.31-node-cmux-no-current-workspace.test.ts (4 tests) 3ms
+ ✓ test/activity-structural-signal.test.ts (6 tests) 3ms
+ ✓ test/rigspec-schema-docs.test.ts (10 tests) 4ms
+ ✓ test/graph-projection-pl019.test.ts (8 tests) 4ms
+ ✓ test/rig-mode-types.test.ts (6 tests) 3ms
+ ✓ test/bundle-identity.test.ts (9 tests) 3ms
+ ✓ test/crash-cart-emit.test.ts (4 tests) 3ms
+ ✓ test/gateway-dispatch-buffer.test.ts (5 tests) 4ms
+ ✓ test/rig-status-compose.test.ts (9 tests) 4ms
+ ✓ test/bundle-audit.test.ts (10 tests) 4ms
+ ✓ test/resume-token-validation.test.ts (20 tests) 3ms
+ ✓ test/rig-mode-defaults.test.ts (7 tests) 7ms
+ ✓ test/startup-submission-evidence.test.ts (45 tests) 4ms
+ ✓ test/provider-read-model.test.ts (5 tests) 3ms
+ ✓ test/scenario-run-record.test.ts (4 tests) 3ms
+ ✓ test/workspace-resolver.test.ts (12 tests) 3ms
+ ✓ test/review-import-audit.test.ts (4 tests) 4ms
+ ✓ test/crash-cart-guard.test.ts (6 tests) 4ms
+ ✓ test/activity-taxonomy.test.ts (11 tests) 3ms
+ ✓ test/spec-live-conformance.test.ts (10 tests) 4ms
+ ✓ test/native-process-path-sampling.test.ts (2 tests) 5ms
+ ✓ test/markdown-address-indentation.test.ts (4 tests) 3ms
+ ✓ test/hermetic-clock.test.ts (5 tests) 4ms
+ ✓ test/session-name.test.ts (11 tests) 4ms
+ ✓ test/provider-precheck.test.ts (9 tests) 3ms
+ ✓ test/context-pack-ref-safety.test.ts (23 tests) 4ms
+ ✓ test/wake-resolver.test.ts (5 tests) 3ms
+ ✓ test/hermetic-env.test.ts (5 tests) 3ms
+ ✓ test/daemon-version.test.ts (6 tests) 3ms
+ ✓ test/history-query-session.test.ts (2 tests) 3ms
+ ✓ test/provider-policy.test.ts (7 tests) 3ms
+ ✓ test/agent-image-session-source.test.ts (7 tests) 3ms
+ ✓ test/eval-schema.test.ts (7 tests) 3ms
+ ✓ test/process-census.test.ts (4 tests) 3ms
+ ✓ test/projection-protect.test.ts (6 tests) 3ms
+ ✓ test/bundle-conflict-detector.test.ts (6 tests) 3ms
+ ✓ test/eval-production-refs.test.ts (2 tests) 3ms
+ ✓ test/self-host-id-source.test.ts (7 tests) 3ms
+ ✓ test/context-pack-bundle-assembler.test.ts (5 tests) 3ms
+ ✓ test/profile-source-read-errors.test.ts (4 tests) 3ms
+ ✓ test/gateway-protocol.test.ts (6 tests) 2ms
+ ✓ test/projection-manifest-wiring.test.ts (7 tests) 3ms
+ ✓ test/continuity-role-guidance.test.ts (3 tests) 2ms
+ ✓ test/transcript-store-path-safety.test.ts (4 tests) 3ms
+ ✓ test/eval-runner.test.ts (2 tests) 3ms
+ ✓ test/demo-rig-selector.test.ts (5 tests) 3ms
+ ✓ test/restore-packet-recap.test.ts (9 tests) 3ms
+ ✓ test/qitem-membership.test.ts (11 tests) 3ms
+ ✓ test/continuity-observer-contract.test.ts (2 tests) 2ms
+ ✓ test/self-host-envelope-triple.test.ts (2 tests) 2ms
+ ✓ test/envelope-scope.test.ts (5 tests) 2ms
+ ✓ test/router-stub.test.ts (7 tests) 3ms
+ ✓ test/workflow-row-ref.test.ts (7 tests) 2ms
+ ✓ test/resume-token-capture-pi.test.ts (7 tests) 2ms
+ ✓ test/services-replica-readiness.test.ts (8 tests) 3ms
+ ✓ test/gate-predicate.test.ts (5 tests) 2ms
+ ✓ test/terminal-adapter.test.ts (6 tests) 2ms
+ ✓ test/eval-report.test.ts (5 tests) 2ms
+ ✓ test/bind-plan.test.ts (4 tests) 2ms
+ ✓ test/conflict-detector-discrimination.test.ts (8 tests) 3ms
+ ✓ test/provider-signals-claude.test.ts (3 tests) 3ms
+ ✓ test/self-host-envelope-sweep.test.ts (3 tests) 2ms
+ ✓ test/build-info.test.ts (3 tests) 2ms
+ ✓ test/daemon-url.test.ts (5 tests) 2ms
+ ✓ test/provider-signals-reactive.test.ts (4 tests) 2ms
+ ✓ test/pi-runner-capabilities.test.ts (7 tests) 2ms
+ ✓ test/settings-reset-failure.test.ts (2 tests) 2ms
+ ✓ test/external-admission.test.ts (6 tests) 3ms
+ ✓ test/managed-blocks-literal-text.test.ts (3 tests) 2ms
+ ✓ test/parent-session-env.test.ts (3 tests) 2ms
+ ✓ test/sqlite-time.test.ts (2 tests) 2ms
+ ✓ test/eval-cases.test.ts (4 tests) 2ms
+ ✓ test/cwd-dot-prefix.test.ts (1 test) 2ms
+ ✓ test/eval-grader.test.ts (6 tests) 2ms
+ ✓ test/resume-token-capture-omp.test.ts (2 tests) 2ms
+ ✓ test/eval-entry.test.ts (2 tests) 2ms
+ ✓ test/restore-check-activity-hooks.test.ts (2 tests) 2ms
+ ✓ test/team-task-stage.test.ts (9 tests) 2ms
+ ✓ test/startup-migrations-mirror.test.ts (2 tests) 2ms
+ ✓ test/watchdog-target-gen-wiring.test.ts (2 tests) 1ms
+ ✓ test/preview-rate-limiter.test.ts (6 tests) 2ms
+ ✓ test/slice16-starter-hygiene.test.ts (2 tests) 2ms
+ ✓ test/telemetry-state-paths.test.ts (4 tests) 2ms
+ ↓ test/seat-handover-model-fidelity-e2e.test.ts (1 test | 1 skipped)
+ ↓ test/seat-lifecycle-set-model-resume-e2e.test.ts (1 test | 1 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/auth-bearer-token.test.ts > auth-bearer-token middleware (PL-005 Phase B) > resolveToIpOrNull > returns null for an intentionally-unresolvable hostname (HG-4)
+AssertionError: expected '198.18.0.76' to be null
+
+- Expected: 
+null
+
++ Received: 
+"198.18.0.76"
+
+ ❯ test/auth-bearer-token.test.ts:144:18
+    142|     it("returns null for an intentionally-unresolvable hostname (HG-4)…
+    143|       const ip = await resolveToIpOrNull("this-host-does-not-exist.inv…
+    144|       expect(ip).toBeNull();
+       |                  ^
+    145|     });
+    146|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/seat-fresh-launch.test.ts > SeatLifecycleService.launchFresh > default-path consent retains context and continues the same occupant once after late acceptance
+AssertionError: expected "spy" to be called 1 times, but got 2 times
+ ❯ test/seat-fresh-launch.test.ts:214:18
+    212|     expect(await service.continueFreshStartup(seat.sessionName)).toMat…
+    213|     expect(launch).not.toHaveBeenCalled();
+    214|     expect(send).toHaveBeenCalledTimes(1);
+       |                  ^
+    215|     expect(db.prepare("SELECT id, resume_type, resume_token FROM sessi…
+    216|     expect(send.mock.calls[0]?.[1]).toContain("Configured startup inst…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 1033 passed | 2 skipped (1037)
+      Tests  2 failed | 17084 passed | 5 skipped | 5 todo (17096)
+   Start at  19:27:47
+   Duration  581.78s (transform 9.73s, setup 8.61s, collect 178.87s, tests 849.60s, environment 106ms, prepare 35.19s)
+

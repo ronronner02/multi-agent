@@ -1,0 +1,26 @@
+{
+  "check": "u10-plan-audit-daemon",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/node",
+    "../../node_modules/vitest/vitest.mjs",
+    "run",
+    "test/team-github.test.ts",
+    "test/project-bootstrap.test.ts",
+    "test/lead-roster.test.ts",
+    "test/plan-approve-roster.test.ts",
+    "test/agent-turn-view-telemetry.test.ts",
+    "test/attempt-telemetry.test.ts",
+    "test/team-telemetry-routes.test.ts",
+    "test/task-report.test.ts",
+    "test/owner-slot.test.ts",
+    "test/lead-chat.test.ts",
+    "test/attempt-failure-class.test.ts",
+    "test/team-settings.test.ts",
+    "test/team-fs-dirs.test.ts",
+    "test/role-charter.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 18.78
+}

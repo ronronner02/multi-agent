@@ -1,0 +1,17 @@
+{
+  "url": "http://127.0.0.1:7433/team/overview",
+  "connected": true,
+  "phase": "ready",
+  "signedIn": true,
+  "githubStatus": 200,
+  "pairingFormVisible": false,
+  "skin": {
+    "currentTime": 11.1093,
+    "frames": 52,
+    "minFrameTime": 10,
+    "maxFrameTime": 11.083333,
+    "paused": false,
+    "loop": false
+  },
+  "pageErrors": []
+}

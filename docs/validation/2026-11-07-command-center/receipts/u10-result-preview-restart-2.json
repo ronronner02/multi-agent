@@ -1,0 +1,31 @@
+{
+  "at": "2026-11-07T09:31:14.489674+00:00",
+  "exit": 0,
+  "seconds": 2.19,
+  "activeAttemptCountBefore": 0,
+  "originalBefore": {
+    "pid": 1179,
+    "cwd": "<original-daemon-checkout>",
+    "startTicks": 68421
+  },
+  "result": {
+    "before": {
+      "pid": 2120739,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true,
+    "after": {
+      "pid": 2376613,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    }
+  },
+  "originalAfter": {
+    "pid": 1179,
+    "cwd": "<original-daemon-checkout>",
+    "startTicks": 68421
+  }
+}

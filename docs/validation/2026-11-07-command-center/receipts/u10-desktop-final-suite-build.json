@@ -1,0 +1,17 @@
+{
+  "check": "u10-desktop-final-suite-build",
+  "command": [
+    "npm",
+    "run",
+    "build",
+    "-w",
+    "packages/i18n",
+    "-w",
+    "packages/daemon",
+    "-w",
+    "packages/cli"
+  ],
+  "cwd": "standalone-clone/engine",
+  "exit": 0,
+  "seconds": 12.72
+}

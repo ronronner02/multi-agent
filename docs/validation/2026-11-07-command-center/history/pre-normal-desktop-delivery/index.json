@@ -1,0 +1,47 @@
+{
+  "status": "historical",
+  "previousManifestSha256": "89eb58180aaed6157e6f4a916e59138026e703b73eb82bc1adfcca519d741839",
+  "files": [
+    {
+      "path": "acceptance.json",
+      "sha256": "4aa8e689056f6c051a42aea4305053abbc987d29d5701de2a4adcc2ee5e370e9"
+    },
+    {
+      "path": "resume-final-checkpoint.json",
+      "sha256": "282f4f69d2b766955b0365037a5bdc696c2aad0052d28fd17c606c102aff4ffc"
+    },
+    {
+      "path": "desktop-observations.json",
+      "sha256": "db02a671da9ee2f2701a70d75a15325fbdce032d9d5b970d91d6f54ef7c06f02"
+    },
+    {
+      "path": "source-verification.json",
+      "sha256": "32031cfb4512080fa336f499b5b032eb1a8796fca169e95f1282bfbbdb53dffa"
+    },
+    {
+      "path": "review.json",
+      "sha256": "505e3ccfad8e959caef16963ec6f437bc4eaccac8ded31ecfaf93723e5d3123c"
+    },
+    {
+      "path": "privacy-check.json",
+      "sha256": "ac5a6ae445e4ee9720fc259da7de5a8d74a600c0bbdb58fe901df9831f931c03"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "89eb58180aaed6157e6f4a916e59138026e703b73eb82bc1adfcca519d741839"
+    },
+    {
+      "path": "verification/checks.json",
+      "sha256": "f6caa50888875d0ba4b88afd302fec7408062d6a5638e3b9337912aa0901f729"
+    },
+    {
+      "path": "verification/final-index.json",
+      "sha256": "0244d106ea010ae54b94ba2e4e7af07fdee5745701338a55ca906b8ec85fd7ec"
+    },
+    {
+      "path": "plan-status.json",
+      "sha256": "d39a55f611eee7edca599bbac3a5b1a511302b18bc2663b9757961f42640b4aa"
+    }
+  ],
+  "note": "Original scopes, failed attempts and earlier acceptance limits remain intact. The current checkpoint adds the later installed-desktop and saturated-chat evidence."
+}

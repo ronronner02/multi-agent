@@ -1,0 +1,47 @@
+{
+  "at": "2026-11-07T23:42:42.694Z",
+  "start": {
+    "url": "http://127.0.0.1:7433/team",
+    "phase": "ready",
+    "connected": true,
+    "entranceKeyAtDocumentStart": null,
+    "firstFrameTimes": [
+      0,
+      0.041667,
+      0.083333,
+      0.125,
+      0.166667,
+      0.208333,
+      0.25,
+      0.291667
+    ],
+    "manualPairingVisible": false
+  },
+  "playback": {
+    "frames": 1628,
+    "firstFrameTimes": [
+      0,
+      0.041667,
+      0.083333,
+      0.125,
+      0.166667,
+      0.208333,
+      0.25,
+      0.291667
+    ],
+    "portraitRepetitions": 5,
+    "portraitMin": 10,
+    "portraitMax": 23.041667,
+    "distinctPortraitHashes": 66,
+    "currentTime": 11.2802,
+    "paused": false
+  },
+  "pageErrors": [],
+  "blockedRequests": [
+    {
+      "origin": "https://fonts.googleapis.com",
+      "path": "/css2",
+      "method": "GET"
+    }
+  ]
+}

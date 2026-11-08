@@ -1,0 +1,19 @@
+{
+  "round": 1,
+  "verdict": "NO NEW P0/P1",
+  "findings": [],
+  "snapshot": "review-candidate-u10-v1",
+  "manifestSha256": "4b049e818ac20ab34a3e59489bc657fd334319319965344813dd51c2d67776da",
+  "verifiedFiles": 41,
+  "verifiedNewSideHunks": 23,
+  "deltaFiles": 9,
+  "scope": "Three integration fixes and direct interactions; report-only source and producer-receipt inspection",
+  "overallAcceptance": "open",
+  "openAtReview": [
+    "fresh fixed-source live repeat",
+    "final build and smoke",
+    "desktop installation and first-open"
+  ],
+  "independentlyExecutedTests": false,
+  "snapshotUnchangedAtCloseout": true
+}

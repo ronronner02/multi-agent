@@ -1,0 +1,390 @@
+{
+  "outDir": "C:/Users/leo/AppData/Local/Temp/cc-u6-browser-2179d7e0d1f84a3896ab41d13110399b",
+  "captures": [
+    {
+      "filename": "before-overview-1440-dark.png",
+      "name": "before",
+      "screen": "overview",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-tasks-1440-dark.png",
+      "name": "before",
+      "screen": "tasks",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-overview-390-dark.png",
+      "name": "before",
+      "screen": "overview",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-tasks-390-dark.png",
+      "name": "before",
+      "screen": "tasks",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-overview-1440-light.png",
+      "name": "before",
+      "screen": "overview",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-tasks-1440-light.png",
+      "name": "before",
+      "screen": "tasks",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-overview-390-light.png",
+      "name": "before",
+      "screen": "overview",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-tasks-390-light.png",
+      "name": "before",
+      "screen": "tasks",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-overview-1440-dark.png",
+      "name": "after",
+      "screen": "overview",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-tasks-1440-dark.png",
+      "name": "after",
+      "screen": "tasks",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-board",
+            "width": 1204,
+            "scrollWidth": 1204
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-overview-390-dark.png",
+      "name": "after",
+      "screen": "overview",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-tasks-390-dark.png",
+      "name": "after",
+      "screen": "tasks",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-board",
+            "width": 358,
+            "scrollWidth": 358
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-overview-1440-light.png",
+      "name": "after",
+      "screen": "overview",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-tasks-1440-light.png",
+      "name": "after",
+      "screen": "tasks",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-board",
+            "width": 1204,
+            "scrollWidth": 1204
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-overview-390-light.png",
+      "name": "after",
+      "screen": "overview",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-tasks-390-light.png",
+      "name": "after",
+      "screen": "tasks",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-board",
+            "width": 358,
+            "scrollWidth": 358
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "checks": [
+    {
+      "check": "drawer-report-folded-identifiers-focus-trap-escape",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "check": "drawer-report-folded-identifiers-focus-trap-escape",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "check": "healthy-attention-empty-merge-disabled-overview-routing-new-task-entry",
+      "passed": true
+    },
+    {
+      "check": "planning-review-phase-remains-pending",
+      "passed": true
+    },
+    {
+      "check": "planning-attention-count-and-chat-entry",
+      "passed": true
+    },
+    {
+      "check": "confirmed-cancel-real-route-and-stale-attention-cleared",
+      "passed": true,
+      "httpStatus": 202,
+      "confirmation": "Request cancellation; process termination remains unobserved."
+    }
+  ],
+  "excludedRequests": 22,
+  "scope": "loopback-only synthetic fixtures; real database/governance/read-model/app; not whole-product live acceptance",
+  "browserCleanup": {
+    "contextsClosed": 2
+  },
+  "sourceBase": "9552609f2063e619e17f1cd0bb310d31cdc3aac2"
+}

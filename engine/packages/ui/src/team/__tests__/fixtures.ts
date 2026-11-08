@@ -1,4 +1,4 @@
-import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun, TeamSeatView } from "@openrig/daemon/team-control";
+import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun, TeamSeatView, TeamSystemHealth } from "@openrig/daemon/team-control";
 
 /**
  * One demo-shaped run, shared by the team surface's tests.
@@ -56,4 +56,10 @@ export function read(overrides: Partial<TeamOwnerRead> = {}): TeamOwnerRead {
   return { schema: "multi-agent-team-read/v1", protocolVersion: "1.0", runId: RUN_ID, generatedAt: "2026-10-31T00:00:00.000Z",
     run, workflow: { current: "review", stages: [] }, tasks: [task()], seats, attempts: [], approvals: [], logs: [],
     replay: { retainedFrom: 1, latestSeq: 1 }, ...overrides };
+}
+export function health(): TeamSystemHealth {
+  const light = { state: "unknown" as const, checkedAt: run.createdAt, evidenceRef: null, reason: "No live probe in this fixture." };
+  return { schema: "multi-agent-system-health/v1", protocolVersion: "1.0", checkedAt: run.createdAt, timeoutMs: 5000,
+    overall: "unknown", runtime: { isolation: "none" }, latestAttempts: {},
+    lights: { database: light, queueMailbox: light, controlTmux: light, workerBoundary: light, sandboxNetwork: light, clients: light } };
 }

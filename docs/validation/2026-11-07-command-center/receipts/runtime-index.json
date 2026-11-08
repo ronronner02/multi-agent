@@ -1,0 +1,106 @@
+{
+  "checkedAt": "2026-11-07T12:30:57.239376+00:00",
+  "files": [
+    {
+      "path": "receipts/u10-runtime-post-seat-source-2.json",
+      "sourceSha256": "28c0a3000dd8daf2d3fee5f427615369a825e8d05c7f17c7b77a958093126ae2",
+      "sanitizedSha256": "28c0a3000dd8daf2d3fee5f427615369a825e8d05c7f17c7b77a958093126ae2"
+    },
+    {
+      "path": "receipts/u10-runtime-post-seat-suite-candidate-2.json",
+      "sourceSha256": "e4e7de8f02a2de088ef11e8f575f1d4bf09c34adcae766745b20a16e72ebc567",
+      "sanitizedSha256": "3f1a1e1ecb0e0c4a97101bed43be04c56bd46a54683ea2ccdbc497ae321a6f1c"
+    },
+    {
+      "path": "receipts/u10-runtime-independent-review.json",
+      "sourceSha256": "b4826f322398f973671a18bc2ff6d6c5bc7a717efc9bb334c7b91cf40faf90ba",
+      "sanitizedSha256": "b4826f322398f973671a18bc2ff6d6c5bc7a717efc9bb334c7b91cf40faf90ba"
+    },
+    {
+      "path": "receipts/u10-runtime-independent-confirmation.json",
+      "sourceSha256": "c78bd227e37d72f85b53ea5d3955ed3475dcf942284c971636636b924cd22f0c",
+      "sanitizedSha256": "c78bd227e37d72f85b53ea5d3955ed3475dcf942284c971636636b924cd22f0c"
+    },
+    {
+      "path": "receipts/u10-runtime-stale-seat-review.json",
+      "sourceSha256": "b4432e442bcc32ad0f04105878f2a8f7ed241d51bb5c23ce9a60a37bfaffe937",
+      "sanitizedSha256": "b4432e442bcc32ad0f04105878f2a8f7ed241d51bb5c23ce9a60a37bfaffe937"
+    },
+    {
+      "path": "receipts/u10-runtime-stale-seat-observation.json",
+      "sourceSha256": "7a10fe313f97ae59582bd215e1bf202e30cb6a9c88e82ba69726520be44fd792",
+      "sanitizedSha256": "4466e39aa9997f75fe085a42c423b196164f429ee9183685f61a0b699e20a84c"
+    },
+    {
+      "path": "receipts/u10-runtime-stale-seat-restart.json",
+      "sourceSha256": "ce08384d83dbaba0c7adfcb92f8d7fee72914bcd46823c9b0d48847418e92251",
+      "sanitizedSha256": "a94bfe9b602374bb50fec2346f1684eb4860cb3a8bf0212120ff90a8a6413ce0"
+    },
+    {
+      "path": "receipts/u10-runtime-live-restart-before.json",
+      "sourceSha256": "e42e67cc5c11b01ea5bbb48bcbee875a7d66d5f7fe0e9e7aad62caff4afc3434",
+      "sanitizedSha256": "ab75c6e5a46515bab1d2f053de337637017b7796e8e6d00578cb11438497c6bc"
+    },
+    {
+      "path": "receipts/u10-runtime-before-merge-project.json",
+      "sourceSha256": "5aaf3e5829cfffb8582a4f09554a8d1e58b7b92ba1dbd6966df16e24816d1dcc",
+      "sanitizedSha256": "5aaf3e5829cfffb8582a4f09554a8d1e58b7b92ba1dbd6966df16e24816d1dcc"
+    },
+    {
+      "path": "receipts/u10-runtime-project-merge.json",
+      "sourceSha256": "d5b79decb21efa0315481371f27655c11abbde49b1ec13e7653ed8debc4f0dcc",
+      "sanitizedSha256": "d5b79decb21efa0315481371f27655c11abbde49b1ec13e7653ed8debc4f0dcc"
+    },
+    {
+      "path": "receipts/u10-runtime-merged-idle-restart.json",
+      "sourceSha256": "8863b4520618ad3bda06dcb99277db798c70307c708df34ba6df9047da944936",
+      "sanitizedSha256": "7b24fbcc4ebebabac8be8d32e0707afb38091f5ac8675bedf7adca69d43a50f2"
+    },
+    {
+      "path": "receipts/u10-runtime-native-progress.json",
+      "sourceSha256": "792e80db032ff8afd068463aa97281ab31a31f1b7ed2550666f172c41774e82c",
+      "sanitizedSha256": "792e80db032ff8afd068463aa97281ab31a31f1b7ed2550666f172c41774e82c"
+    },
+    {
+      "path": "receipts/u10-runtime-native-progress-prompt.json",
+      "sourceSha256": "ecd6f78d9e32dc43dfee9991a3582f9e796878c3eed62f0ab476e75a7a38dc08",
+      "sanitizedSha256": "ecd6f78d9e32dc43dfee9991a3582f9e796878c3eed62f0ab476e75a7a38dc08"
+    },
+    {
+      "path": "receipts/u10-runtime-reviewer-busy.json",
+      "sourceSha256": "8e688345e2f1014ba72bb61f09f47e169fd1aec5dd2b305e23bf63ce1a3af7ae",
+      "sanitizedSha256": "8e688345e2f1014ba72bb61f09f47e169fd1aec5dd2b305e23bf63ce1a3af7ae"
+    },
+    {
+      "path": "receipts/u10-runtime-installer-integrity.json",
+      "sourceSha256": "2fcac679c5fce2ada434e6bef5e7885d77c4686612c79951e4bb7c614273466f",
+      "sanitizedSha256": "2fcac679c5fce2ada434e6bef5e7885d77c4686612c79951e4bb7c614273466f"
+    },
+    {
+      "path": "receipts/u10-runtime-final-projects.json",
+      "sourceSha256": "50b9ae6b300d747b07703027c6cea75821494f4789d6a912eaf60e2c79c7e477",
+      "sanitizedSha256": "50b9ae6b300d747b07703027c6cea75821494f4789d6a912eaf60e2c79c7e477"
+    },
+    {
+      "path": "receipts/u10-runtime-final-protected-state.json",
+      "sourceSha256": "e591af8c905096a3eab6f90fb330e0b71d4afe3f0d2f1f7b77839e808fcd045f",
+      "sanitizedSha256": "1b887aaba1ae29eb42a734e9ae705e107ffd29af522b3c98a4525a1bc0ac2c25"
+    },
+    {
+      "path": "receipts/u10-runtime-final-cleanup.json",
+      "sourceSha256": "0b9d1fa378a37273abc0bfcf31bb3d67bd5a04189e544c9873defd87d664d524",
+      "sanitizedSha256": "b63ead2a492f8f2db459c1db9b81ad91eaf8de284088c81e240494238d9aceda"
+    },
+    {
+      "path": "receipts/u10-runtime-browser-cleanup.json",
+      "sourceSha256": "0f0539c8b772b8f29649547679a5fe09e4630a3dba1cedeaa62df30a71b06ccf",
+      "sanitizedSha256": "0f0539c8b772b8f29649547679a5fe09e4630a3dba1cedeaa62df30a71b06ccf"
+    },
+    {
+      "path": "receipts/u10-runtime-cleanup-preflight.json",
+      "sourceSha256": "1e9c071372a562a7380f7c0524a1a3ba9e15fe700328e9a8bfac93ebd744cb34",
+      "sanitizedSha256": "4674e62b3e2e1d2e9639bfa988bf009c300d18ec9d5ec6aa3a7db6b158afd7b1"
+    }
+  ],
+  "method": "Allowlisted structured receipts; machine paths and credential fields are omitted or replaced. Source hashes identify the private originals."
+}

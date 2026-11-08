@@ -1,0 +1,23 @@
+{
+  "check": "u10-final-installer",
+  "sourceHead": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "command": [
+    "node",
+    "electron-builder/cli.js",
+    "--projectDir",
+    "desktop",
+    "--win",
+    "nsis",
+    "--publish",
+    "never",
+    "--config.directories.output=dist/u10-refresh"
+  ],
+  "exit": 0,
+  "seconds": 87.41,
+  "platform": "Windows",
+  "publication": "disabled",
+  "automaticSigning": "disabled",
+  "output": "desktop/dist/u10-refresh",
+  "previousArtifact": "preserved",
+  "installation": "not-run"
+}

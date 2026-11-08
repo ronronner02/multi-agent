@@ -29,8 +29,11 @@ npm run test -w packages/daemon -- \
   test/team-start.test.ts \
   test/team-setup.test.ts \
   test/team-settings.test.ts \
+  test/team-model-policy.test.ts \
+  test/lead-roster.test.ts \
   test/team-lead.test.ts \
   test/lead-chat.test.ts \
+  test/project-documents.test.ts \
   test/run-growth.test.ts \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
@@ -57,4 +60,6 @@ npm run test -w packages/ui -- \
   src/team/__tests__/overview.test.tsx src/team/__tests__/tasks.test.tsx src/team/__tests__/reviews.test.tsx \
   src/team/__tests__/analytics.test.tsx src/team/__tests__/settings.test.tsx \
   src/team/__tests__/github-gate.test.tsx src/team/__tests__/create-project.test.tsx \
+  src/team/__tests__/project-home.test.tsx src/team/__tests__/chat-panel.test.tsx \
+  src/team/__tests__/documents.test.tsx \
   src/team/__tests__/new-task.test.tsx src/team/__tests__/diff.test.tsx --maxWorkers=2

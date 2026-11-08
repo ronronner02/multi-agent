@@ -18,7 +18,7 @@ import type { TaskReport } from "./domain/task-report.js";
 
 /** C2 — the shape a review round's durable verdict carries, for a client that renders it. */
 export type { ReviewFinding, ReviewVerdictRecord } from "./domain/review-evidence.js";
-export type { AttemptActivity, ToolActivityRecord, TurnUsage } from "./domain/attempt-telemetry.js";
+export type { AttemptActivity, ToolActivityRecord, TurnUsage, TurnProgress } from "./domain/attempt-telemetry.js";
 export type TeamAnalytics = ReturnType<import("./domain/attempt-telemetry.js").AttemptTelemetry["analytics"]>;
 
 /**
@@ -59,6 +59,8 @@ export interface TeamReadModelDeps {
   events: EventBus;
   /** The queue's own destination-session map, so a task's seat is read from its owner. */
   readTaskRows: (runId: string) => Array<{ qitemId: string; taskId: string; role: string; queueState: string; session: string | null }>;
+  /** Read an already-known candidate only; never acquire a workspace while projecting a task. */
+  readTaskWorkspace?: (runId: string, taskId: string) => NonNullable<TeamReviewView["workspace"]> | null;
   /** The run's review evidence, folded from the durable team log. */
   now?: () => Date;
 }
@@ -74,6 +76,28 @@ export function boundedLogBody(raw: string): { body: string; truncated: boolean 
   const redacted = redactTranscriptContent(withoutControls);
   if (redacted.length <= LOG_BODY_LIMIT) return { body: redacted, truncated: false };
   return { body: redacted.slice(0, LOG_BODY_LIMIT), truncated: true };
+}
+
+/** Extract only an explicit Markdown section; never infer criteria from prose or code examples. */
+function declaredAcceptanceCriteria(body: string): TeamReviewView["declaredAcceptanceCriteria"] {
+  const lines = body.split("\n");
+  let start = -1, depth = 0, fence = "";
+  for (const [index, line] of lines.entries()) {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (marker && marker[1]![0] === fence[0] && marker[1]!.length >= fence.length
+        && line.slice(marker[0].length).trim() === "") fence = "";
+      continue;
+    }
+    if (marker) { fence = marker[1]!; continue; }
+    const heading = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(line);
+    if (!heading) continue;
+    if (start >= 0 && heading[1]!.length <= depth) return boundedLogBody(lines.slice(start, index).join("\n").trim());
+    if (start < 0 && /^(?:acceptance criteria|acceptance|\u9a8c\u6536\u6807\u51c6):?$/i.test(heading[2]!)) {
+      start = index + 1; depth = heading[1]!.length;
+    }
+  }
+  return start < 0 ? null : boundedLogBody(lines.slice(start).join("\n").trim());
 }
 
 export class TeamReadModel {
@@ -95,15 +119,20 @@ export class TeamReadModel {
     const identities = new Map(rows.map((row) => [row.qitemId, this.identity(row.qitemId)]));
     const names = this.taskNames(rows, identities);
     const run = this.deps.governance.getRun(runId);
+    const integrationBranch = this.deps.governance.integrationRecord(runId).branch;
     const actionable = run.state !== "canceled" && run.state !== "cancel_requested";
     const ownerDecision = actionable && (run.phase === "planning" || this.deps.governance.chatDecision(runId) !== null);
     return rows.map((row) => {
       const state = foldReviewState(row.taskId, this.reviewEntries(runId, row.taskId));
-      const criteria = this.criteria(row.qitemId, state.currentManifestDigest);
+      const evidence = this.deps.governance.getTask(row.qitemId)?.evidence;
+      // Native implementer completion records its candidate in the authority row, not the legacy ledger.
+      const currentCandidateDigest = state.currentManifestDigest ?? (row.role === "implementer"
+        && ["done", "handed-off"].includes(row.queueState) && evidence?.validated === true
+        && typeof evidence.manifestDigest === "string" ? evidence.manifestDigest : null);
+      const criteria = this.criteria(row.qitemId, currentCandidateDigest);
       const identity = identities.get(row.qitemId)!;
       // U9 — built from these same rows above, so every task has a name.
       const name = names.get(row.taskId)!;
-      const evidence = this.deps.governance.getTask(row.qitemId)?.evidence;
       const report = evidence?.taskReport as unknown as TaskReport | undefined;
       const reportBody = report ? boundedLogBody(report.evidence) : null;
       const resolution = evidence?.resolution as { action: "rework" | "reassign" | "drop" } | undefined;
@@ -117,7 +146,7 @@ export class TeamReadModel {
       const verdict = state.verdicts.at(-1);
       const awaitingReview = actionable && row.role === "implementer" && run.reviewerSeat !== null
         && ["done", "handed-off"].includes(row.queueState) && report?.status !== "dropped" && resolution?.action !== "drop"
-        && !(verdict?.verdict === "approved" && verdict.candidateDigest === state.currentManifestDigest);
+        && !(verdict?.verdict === "approved" && verdict.candidateDigest === currentCandidateDigest);
       // A run-wide decision gates unfinished work, not tasks that already finished.
       // The lead remains its representative even after its planning turn has stopped.
       const waiting = row.role === "lead" || liveAttempt || awaitingReview
@@ -141,9 +170,13 @@ export class TeamReadModel {
         displayName: name.displayName,
         displayNameParts: name.parts,
         title: identity.title,
+        description: identity.body.trim() ? boundedLogBody(identity.body) : null,
+        declaredAcceptanceCriteria: declaredAcceptanceCriteria(identity.body),
+        workspace: this.deps.readTaskWorkspace?.(runId, identity.reviewOf ?? row.taskId) ?? null,
+        integrationBranch,
         dependencies: identity.dependencies,
         criteria,
-        currentCandidateDigest: state.currentManifestDigest,
+        currentCandidateDigest,
         rounds: state.rounds.length + state.verdicts.length,
         openP0P1: state.openP0P1,
         // C2 — the run's own review rounds, so a client can show the verdict that sent the
@@ -671,3 +704,5 @@ export class TeamReadModel {
 /** Stage list re-exported so a client can render the stepper without the contract module. */
 export { TEAM_WORKFLOW_STAGES };
 export type { TeamStageState, TeamWorkflowStage };
+
+export type { TeamModelChoice, TeamModelSettings } from "./domain/team-model-policy.js";

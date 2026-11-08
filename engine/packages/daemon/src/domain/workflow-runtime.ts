@@ -1,3 +1,5 @@
+import { bindingCovers } from "./binding-scope.js";
+import { documentPaths, documentDispatchRefusal, type DocumentEvidence } from "./project-documents.js";
 import { leadRosterPath, parseLeadRoster, type LeadRosterEvidence } from "./lead-roster.js";
 import { ScopeExtensions } from "./scope-extension.js";
 import { PlanGovernance, hashBinding, hashBytes } from "./plan-governance.js";
@@ -15,6 +17,7 @@ import { inspectGraph, recoverGraphOperation, reviseGraph } from "./workflow-rec
 import { lifecycleObligations, requiredLifecycleSteps, type LifecycleObligation } from "./lifecycle-obligations.js";
 import { ReviewEvidenceLedger, deliveryVerdict, evaluateProgressGate, type AssigneeFacts, type CandidateIdentity } from "./review-evidence.js";
 import {
+  acceptSourceRefMove,
   candidateIdentity,
   candidateManifest,
   checkedOutBranch,
@@ -26,10 +29,12 @@ import {
   resolveWorkspaceBase,
   snapshotCandidateRecorded,
   sourceFingerprint,
+  sourceWorktrees,
   TEAM_BRANCH_PREFIX,
   verifySourceUnchanged,
   readWorkspacePath,
   type CandidateWorkspace,
+  type SourceRefMove,
   type WorkspaceBase,
 } from "./team-workspace.js";
 import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH, LeadProposalMissingError, parseLeadEscalation, parseLeadProposalFile, type LeadProposal,
@@ -156,7 +161,7 @@ export interface WorkflowRuntimeDeps {
    * the worker sandbox neither mounts nor makes reachable. A function so a re-installed policy is
    * read at use. Absent, the snapshot lane refuses to create or adopt a candidate rather than
    * adopting a directory it cannot account for.
-   * Delivery lead turns also keep their starting base here for recovery after a restart.
+   * Candidates also keep their starting base here for recovery after a restart.
    */
   candidateRecordsRoot?: () => string;
   /**
@@ -350,7 +355,17 @@ export function dependencySatisfied(
     seen.add(current);
     const item = queueRepo.getById(current);
     if (!item) return false;
-    if (item.state === "done") return validated(item.qitemId);
+    if (item.state === "done") {
+      if (!validated(item.qitemId)) return false;
+      // Completion starts review; only integration makes a reviewed implementer's
+      // files available in the base from which a dependent candidate is staged.
+      const awaitingIntegration = db.prepare(`SELECT 1 FROM team_queue_authority a
+        JOIN team_runs r ON r.id = a.run_id WHERE a.qitem_id = ?
+          AND r.reviewer_seat IS NOT NULL AND json_extract(a.assignment_json, '$.role') = 'implementer'
+          AND NOT EXISTS (SELECT 1 FROM team_integration_commits c
+            WHERE c.run_id = a.run_id AND c.task_id = a.task_id)`).get(item.qitemId);
+      return awaitingIntegration === undefined;
+    }
     if (item.state !== "handed-off" || !item.handedOffTo) return false;
     const successor = db.prepare("SELECT qitem_id AS id FROM queue_items WHERE handed_off_from = ? AND destination_session = ?")
       .all(item.qitemId, item.handedOffTo) as { id: string }[];
@@ -683,10 +698,10 @@ export class WorkflowRuntime {
     const recordPath = base.kind === "snapshot" ? this.snapshotRecordPath(runId, taskId) : undefined;
     const integratedSource = (checkedOutBranch(sourceRoot) ?? "").startsWith(TEAM_BRANCH_PREFIX);
     const adopted = this.adoptCandidate(runId, taskId, workspaceRoot, base, recordPath, sourceRoot);
-    // A delivery turn keeps its starting base even if integration advanced before a restart.
-    const leadBasePath = this.candidateRecordsRoot && this.leadTurnBasePath(runId, taskId);
-    if (adopted && leadBasePath && existsSync(leadBasePath)) {
-      adopted.base = JSON.parse(readFileSync(leadBasePath, "utf8")) as WorkspaceBase;
+    // Every in-flight task keeps its starting base when another task lands across a restart.
+    const basePath = this.candidateRecordsRoot && this.candidateBasePath(runId, taskId);
+    if (adopted && basePath && existsSync(basePath)) {
+      adopted.base = JSON.parse(readFileSync(basePath, "utf8")) as WorkspaceBase;
     }
     // T043: a review launch may adopt the tree a restart left behind, but must never
     // create one. Staging here would hand the reviewer a checkout nobody wrote — the
@@ -718,17 +733,19 @@ export class WorkflowRuntime {
         if (this.present(workspaceRoot)) this.quarantineCandidate(workspaceRoot);
         throw error;
       }
-      if (recordPath) {
-        // The record has to exist before this call returns: a candidate the control cannot account
-        // for is one a restart would have to refuse, and its work would strand. A record that
-        // cannot be written removes the tree again rather than leaving it unexplained.
-        try {
+      // Persist control-owned provenance before returning a newly created candidate.
+      try {
+        if (recordPath) {
           recordSnapshotCandidate(recordPath, { runId, taskId, root: workspace.root });
-        } catch (error) {
-          removeCandidateWorkspace(workspace);
-          throw error;
+          workspace = { ...workspace, recordPath };
         }
-        workspace = { ...workspace, recordPath };
+        if (basePath) {
+          mkdirSync(dirname(basePath), { recursive: true });
+          writeFileSync(basePath, JSON.stringify(workspace.base), { mode: 0o600 });
+        }
+      } catch (error) {
+        removeCandidateWorkspace(workspace);
+        throw error;
       }
     }
     workspace = { ...workspace, integrationSource: integratedSource };
@@ -921,11 +938,32 @@ export class WorkflowRuntime {
     return { seats: parseLeadRoster(value), digest: read.hash };
   }
 
+  documentsFor(runId: string, taskId: string, planRef: string): DocumentEvidence {
+    const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
+    const evidence: DocumentEvidence = {};
+    for (const [kind, path] of Object.entries(documentPaths(planRef))) {
+      const read = readWorkspacePath(workspace.root, path, () => false);
+      if (read.kind === "directory") throw new Error("A document path is a directory");
+      if (read.kind === "file") evidence[kind as keyof DocumentEvidence] = { content: read.content, hash: read.hash };
+    }
+    return evidence;
+  }
+
   planFor(runId: string, taskId: string, planRef: string): { content: string; hash: string } {
     const workspace = this.candidateFor(runId, taskId, undefined, { adoptOnly: true });
     const read = readWorkspacePath(workspace.root, planRef, () => false);
     if (read.kind !== "file") throw new Error("The lead wrote no plan at " + planRef);
     return { content: read.content, hash: read.hash };
+  }
+
+  /** Keep candidate proofs current after this repository's owner Merge, without re-adoption. */
+  acceptOwnerMerge(repository: string, move: SourceRefMove): void {
+    const sources = sourceWorktrees(repository);
+    for (const [key, workspace] of this.candidates) {
+      if (this.invalidCandidates.has(key) || !sources.has(workspace.sourceRoot)) continue;
+      try { acceptSourceRefMove(workspace, move); }
+      catch { /* An unreadable source keeps its old proof and stays unavailable. */ }
+    }
   }
 
   /**
@@ -952,23 +990,25 @@ export class WorkflowRuntime {
     const run = governance.getRun(runId);
     if (run.phase !== "delivery" || run.state !== "approved"
       || governance.findTask(runId, taskId)?.assignment.role !== "lead") return false;
-    const basePath = this.leadTurnBasePath(runId, taskId);
+    const basePath = this.candidateBasePath(runId, taskId);
     const previous = this.candidateFor(runId, taskId);
     this.removeWorkspace(previous);
     this.forgetCandidate(runId, taskId);
     this.candidateOwners.delete(`${runId}\u0000${taskId}`);
     rmSync(basePath, { force: true });
     const candidate = this.candidateFor(runId, taskId);
-    mkdirSync(dirname(basePath), { recursive: true });
-    writeFileSync(basePath, JSON.stringify(candidate.base), { mode: 0o600 });
     // Native sessions can resume after a tree refresh when their cwd stays the same.
     return candidate.root !== previous.root;
   }
 
-  private leadTurnBasePath(runId: string, taskId: string): string {
+  private candidateBasePath(runId: string, taskId: string): string {
     const root = this.candidateRecordsRoot?.();
     if (!root) throw new Error("Candidate provenance is not configured");
-    return join(root, `${runId}-${taskId}.lead-base.json`);
+    // Fixed-width UUID runs keep safe legacy names so active turns survive an upgrade.
+    // Other identifiers use a separate tuple-keyed namespace, never caller-controlled path segments.
+    const legacy = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(runId) && !/[\\/]/.test(taskId);
+    return legacy ? join(root, `${runId}-${taskId}.lead-base.json`)
+      : join(root, "keyed-bases", `${hashBytes(JSON.stringify([runId, taskId])).slice(7)}.lead-base.json`);
   }
 
   /**
@@ -1053,6 +1093,8 @@ export class WorkflowRuntime {
     if (run.state !== "approved" || input.context.runId !== runId
       || hashBinding(run.binding) !== hashBinding(input.context.binding)) throw new Error("Run is not approved for this assignment");
     const binding = run.binding, assignment = input.assignment;
+    const documentError = documentDispatchRefusal(this.db, run, assignment.role, assignment.taskId, input.context.binding);
+    if (documentError) throw new Error(documentError);
     if (assignment.role !== input.context.role || !binding.roles.includes(assignment.role)) throw new Error("Assignment role is outside the approval");
     // Plan U5: the link is checked against the run's own recorded rows, never against the
     // launch's claim. A reviewer naming a task this run did not record as an implementer is
@@ -1064,7 +1106,7 @@ export class WorkflowRuntime {
       throw new Error("Review target is not this run's implementer");
     }
     const allowed = assignment.role === "reviewer" ? [...binding.readPaths, ...binding.writePaths] : binding.writePaths;
-    const covered = (path: string) => allowed.some(prefix => path === prefix || path.startsWith(`${prefix}/`));
+    const covered = (path: string) => bindingCovers(path, allowed);
     for (const path of [...assignment.paths, ...input.outputs]) if (!covered(path)) throw new Error("Assignment or output expands the approved scope");
     // T053: the task's own record is the store for outputs and permissions, so admission is
     // where a caller's claim is checked — both the producer and a direct launch pass through

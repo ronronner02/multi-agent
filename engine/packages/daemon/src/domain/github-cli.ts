@@ -181,7 +181,7 @@ export class GithubCli {
     const read = (chunk: Buffer) => {
       if (this.flow !== flow || flow.stopping || this.state.code) return;
       output = (output + chunk.toString("utf8")).slice(-8192);
-      const code = /one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})/i.exec(output)?.[1];
+      const code = /one-time code(?::\s*|\s+\()([A-Z0-9]{4}-[A-Z0-9]{4})/i.exec(output)?.[1];
       if (code && output.includes(DEVICE_URL)) {
         this.state = { state: "pending", code, url: DEVICE_URL };
         output = "";

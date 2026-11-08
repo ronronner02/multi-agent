@@ -1,10 +1,14 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { FileText, X } from "lucide-react";
+import { TextPreview } from "./text-preview.js";
 import type { TeamOwnerRead } from "@openrig/daemon/team-control";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
-import { approvePlan, sendChatMessage, type ChatMessage, type ChatState } from "./clients.js";
+import { approvePlan, confirmDocument, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
+import { documentDiscussionPending, DocumentStages } from "./documents.js";
+import { mergeToolCalls } from "../hooks/useAttemptActivity.js";
+import { ToolCalls } from "./workspace/workspace-view.js";
 import { Check, ChevronRight } from "./glyphs.js";
 
 type OwnerDecision = { kind: "plan" } | { kind: "resume" } | { kind: "message"; message: ChatMessage };
@@ -13,7 +17,7 @@ type OwnerDecision = { kind: "plan" } | { kind: "resume" } | { kind: "message"; 
 export function pendingOwnerDecisions(read: TeamOwnerRead | undefined, chat: ChatState | undefined): OwnerDecision[] {
   const decisions: OwnerDecision[] = [];
   if (read?.run.state === "canceled" || read?.run.state === "cancel_requested") return decisions;
-  if (read?.run.phase === "planning") decisions.push({ kind: "plan" });
+  if (read?.run.phase === "planning" && (!chat?.documentWorkflow || chat.documentWorkflow.stage === "plan")) decisions.push({ kind: "plan" });
   if (read?.run.state === "blocked") decisions.push({ kind: "resume" });
   for (const message of chat?.available ? chat.messages : []) {
     if (message.kind === "decision" && !message.answeredBy) decisions.push({ kind: "message", message });
@@ -21,9 +25,11 @@ export function pendingOwnerDecisions(read: TeamOwnerRead | undefined, chat: Cha
   return decisions;
 }
 
-export function ChatPanel({ open, onOpenChange, opener, read, runId, chat, draftContext }: {
+export function ChatPanel({ open, onOpenChange, opener, read, runId, chat, connectionError, draftContext, project, onStarted, onOpenDocuments, onChanged }: {
   open: boolean; onOpenChange: (open: boolean) => void; opener: RefObject<HTMLButtonElement | null>;
-  read?: TeamOwnerRead; runId: string; chat?: ChatState; draftContext?: { body: string };
+  read?: TeamOwnerRead; runId: string; chat?: ChatState; connectionError?: boolean; draftContext?: { body: string };
+  project?: { id: string; name: string }; onStarted?: (runId: string) => void;
+  onOpenDocuments?: () => void; onChanged?: () => void;
 }) {
   const { t } = useTranslation();
   // The shell keeps this component mounted; closing its dialog or changing sections keeps the draft.
@@ -46,38 +52,78 @@ export function ChatPanel({ open, onOpenChange, opener, read, runId, chat, draft
       event.preventDefault(); opener.current?.focus();
     }}>
       <header className="ui-panel-heading">
-        <div><Dialog.Title>{t("shell.leadChat")}</Dialog.Title>
-          <Dialog.Description>{read?.run.displayName || t("shell.noRun")}</Dialog.Description></div>
+        <div><div className="ui-chat-title"><Dialog.Title>{t("shell.leadChat")}</Dialog.Title>
+          <span className="chip">{t(!runId || read?.run.phase === "planning" ? "planning.mode" : "execution.mode")}</span></div>
+          <Dialog.Description><TextPreview text={read?.run.displayName || project?.name || t("shell.noRun")} /></Dialog.Description></div>
+        {chat?.documentWorkflow && onOpenDocuments && <button type="button" className="ui-icon-button"
+          aria-label={t("documents.open")} title={t("documents.open")} onClick={onOpenDocuments}><FileText aria-hidden="true" /></button>}
         <Dialog.Close className="ui-icon-button" aria-label={t("shell.closeChat")}><X aria-hidden="true" /></Dialog.Close>
       </header>
-      <LeadConversation read={read} runId={runId} chat={chat} draft={draft} onDraftChange={setDraft} />
+      {!runId && project ? <section className="chat" aria-label={t("team.chat.message")}>
+        <div className="chat-log"><p className="muted">{t("planning.beforeExecution")}</p></div>
+        <Composer runId="" entityVersion={0} body={draft} onBodyChange={setDraft} projectId={project.id} onStarted={onStarted} />
+      </section> : <LeadConversation read={read} runId={runId} chat={chat} connectionError={connectionError} draft={draft} onDraftChange={setDraft} onChanged={onChanged}
+        documentTools={chat?.documentWorkflow && <div className="ui-chat-documents"><DocumentStages read={read} chat={chat} onChanged={onChanged} /></div>} />}
     </Dialog.Content>
   </Dialog.Root>;
 }
 
 /** Shared with the retained run page, including its existing approval and resume controls. */
-export function LeadConversation({ read, runId, chat, draft, onDraftChange }: {
-  read?: TeamOwnerRead; runId: string; chat?: ChatState; draft: string; onDraftChange: (draft: string) => void;
+export function LeadConversation({ read, runId, chat, connectionError, draft, onDraftChange, onChanged, documentTools }: {
+  read?: TeamOwnerRead; runId: string; chat?: ChatState; connectionError?: boolean; draft: string; onDraftChange: (draft: string) => void; onChanged?: () => void;
+  documentTools?: ReactNode;
 }) {
   const { t } = useTranslation();
   const entityVersion = read?.run.entityVersion ?? 0;
   const pending = pendingOwnerDecisions(read, chat);
+  const log = useRef<HTMLDivElement>(null);
+  const [following, setFollowing] = useState(true);
+  const revision = [chat?.messages.at(-1)?.id, chat?.liveTurn?.attemptId, chat?.liveTurn?.progress?.sequence,
+    chat?.liveTurn?.activity?.nextSeq].join(":");
+  useEffect(() => {
+    if (following && log.current) log.current.scrollTop = log.current.scrollHeight;
+  }, [revision, following]);
   return <section className="chat" aria-label={t("team.chat.message")}>
-    <div className="chat-log">
-      {pending.length > 0 && <section aria-label={t("shell.ownerDecisions")}>
-        <h3 className="ui-attention-heading">{t("shell.ownerDecisions")}</h3>
-        <ul className="ui-decision-list">{pending.map(decision => <li key={decision.kind === "message" ? decision.message.id : decision.kind}>
-          {decision.kind === "plan" ? <PlanPlate read={read} runId={runId} entityVersion={entityVersion} />
-            : decision.kind === "resume" ? <ResumePlate read={read!} />
-              : <DecisionPlate message={decision.message} runId={runId} entityVersion={entityVersion} />}
-        </li>)}</ul>
-      </section>}
+    <div className="chat-log" ref={log} onScroll={event => {
+      const element = event.currentTarget;
+      setFollowing(element.scrollHeight - element.scrollTop - element.clientHeight < 80);
+    }}>
+      {documentTools}
       {chat?.available && chat.messages.filter(message => message.kind !== "decision" || message.answeredBy)
         .map(message => <Turn key={message.id} message={message} />)}
+      {chat?.liveTurn && <LiveOutput key={chat.liveTurn.attemptId} turn={chat.liveTurn} connectionError={connectionError} />}
+      {connectionError && <p role="alert" className="ui-muted">{t("chat.liveInterrupted")}</p>}
+      {pending.length > 0 && <section aria-label={t("shell.ownerDecisions")}>
+        <h3 className="ui-attention-heading">{t("shell.ownerDecisions")}</h3>
+        {pending.some(decision => decision.kind === "message") && <p className="ui-muted" role="status">{t("chat.questionWaiting")}</p>}
+        <ul className="ui-decision-list">{pending.map(decision => <li key={decision.kind === "message" ? decision.message.id : decision.kind}>
+          {decision.kind === "plan" ? <PlanPlate read={read} runId={runId} entityVersion={entityVersion} chat={chat} />
+            : decision.kind === "resume" ? <ResumePlate read={read!} />
+              : <DecisionPlate message={decision.message} runId={runId} entityVersion={entityVersion} onChanged={onChanged} />}
+        </li>)}</ul>
+      </section>}
       {read?.run.phase !== "planning" && <PlanPlate read={read} runId={runId} entityVersion={entityVersion} />}
       {chat && !chat.available && <p className="muted">{t("team.chat.unavailable")}</p>}
     </div>
-    {chat?.available && <Composer runId={runId} entityVersion={entityVersion} body={draft} onBodyChange={onDraftChange} />}
+    {!following && <button className="btn btn-outline ui-chat-latest" onClick={() => setFollowing(true)}>{t("chat.latest")}</button>}
+    {chat?.available && <Composer runId={runId} entityVersion={entityVersion} body={draft} onBodyChange={onDraftChange} read={read} chat={chat} onChanged={onChanged} />}
+  </section>;
+}
+
+function LiveOutput({ turn, connectionError }: { turn: LiveLeadTurn; connectionError?: boolean }) {
+  const { t } = useTranslation();
+  const progress = turn.progress;
+  const activity = turn.activity ? { ...turn.activity, records: mergeToolCalls([], turn.activity.records) } : undefined;
+  const state = turn.state === "running" ? progress?.status ?? "working" : progress?.status === "failed" ? "failed" : "stopped";
+  const active = !connectionError && turn.state === "running" && !["completed", "failed", "stopped"].includes(state);
+  return <section className="turn ui-chat-live" aria-label={t("chat.live")} aria-busy={active} data-attempt={turn.attemptId}>
+    <div className="turn-who"><span>{t("role.lead")}</span>
+      {!connectionError && <span className="ui-chat-status" role="status" data-active={active}>
+        <span aria-hidden="true" />{t(`chat.progress.${state}`)}</span>}
+    </div>
+    {progress?.blocks.filter(block => block.text).map(block => <p key={block.id} className="turn-body">{block.text}</p>)}
+    {activity && <details className="ui-chat-tools"><summary>{t("chat.tools")}</summary><ToolCalls activity={activity} /></details>}
+    {progress?.truncated && <p className="ui-muted">{t("chat.liveTruncated")}</p>}
   </section>;
 }
 
@@ -86,7 +132,8 @@ function Turn({ message }: { message: ChatMessage }) {
   const owner = message.sender === "owner";
   return <div className={owner ? "turn turn-owner" : "turn"}>
     <div className="turn-who">{owner ? t("team.chat.you") : t("role.lead")}</div>
-    <p className="turn-body" style={{ whiteSpace: "pre-line" }}>{message.body}</p>
+    <p className="turn-body" style={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{message.body}</p>
+    {message.kind === "confirmation" && <span className="plate-done"><Check />{t("chat.confirmationRecorded")}</span>}
   </div>;
 }
 
@@ -95,7 +142,7 @@ function Turn({ message }: { message: ChatMessage }) {
  * sends that option's text back with `answerTo`, which is the only thing that tells the lead
  * which question was answered.
  */
-function DecisionPlate({ message, runId, entityVersion }: { message: ChatMessage; runId: string; entityVersion: number }) {
+function DecisionPlate({ message, runId, entityVersion, onChanged }: { message: ChatMessage; runId: string; entityVersion: number; onChanged?: () => void }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);
@@ -104,7 +151,8 @@ function DecisionPlate({ message, runId, entityVersion }: { message: ChatMessage
   const answer = async (option: string) => {
     if (busy) return;
     setBusy(true); setFailed(false);
-    try { await sendChatMessage(request, runId, option, entityVersion, message.id); } catch { setFailed(true); } finally { setBusy(false); }
+    try { await sendChatMessage(request, runId, option, entityVersion, message.id); onChanged?.(); }
+    catch { setFailed(true); setBusy(false); }
   };
   return <div className="plate plate-waiting" role="group" aria-label={t("team.chat.message")}>
     <h2 className="plate-title">{question}</h2>
@@ -119,48 +167,132 @@ function DecisionPlate({ message, runId, entityVersion }: { message: ChatMessage
   </div>;
 }
 
-function Composer({ runId, entityVersion, body, onBodyChange }: {
+/** Exact affirmative phrases are shortcuts to owner controls, not permission inferred by a model. */
+function confirmationIntent(body: string): "brainstorm" | "requirements" | "plan" | "execute" | null {
+  const value = body.trim().toLowerCase().replace(/[。.!！]+$/u, "").trim();
+  if (/^(确认|同意|批准)(当前|这版|这份)?(需求|需求文档|prd)$/.test(value)
+    || /^(confirm|approve)( the)?( current)? (requirements|prd)( document)?$/.test(value)) return "requirements";
+  if (/^(确认|同意|批准)(当前|这版|这份)?计划$/.test(value)
+    || /^(confirm|approve)( the)?( current)? plan$/.test(value)) return "plan";
+  if (/^(确认|同意)(当前|这版|这份)?(探索记录|brainstorm)$/.test(value)
+    || /^(confirm|approve)( the)? brainstorm$/.test(value)) return "brainstorm";
+  if (/^(批准|同意|开始)(开始)?执行$/.test(value) || /^(approve|start) execution$/.test(value)) return "execute";
+  return null;
+}
+
+function stageIntent(body: string): "exploration" | "requirements" | "plan" | null {
+  const value = body.trim().toLowerCase().replace(/[。.!！]+$/u, "").trim();
+  if (/^(继续探索|探索想法|开始探索)$/.test(value) || /^(explore ideas|continue exploring)$/.test(value)) return "exploration";
+  if (/^(整理|生成|编写|准备)(需求|需求文档|prd)$/.test(value)
+    || /^(prepare|write|generate)( the)? (requirements|prd)( document)?$/.test(value)) return "requirements";
+  if (/^(生成|制定|编写)(计划|plan)$/.test(value) || /^(generate|write|prepare)( the)? plan$/.test(value)) return "plan";
+  return null;
+}
+
+function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStarted, read, chat, onChanged }: {
   runId: string; entityVersion: number; body: string; onBodyChange: (body: string) => void;
+  projectId?: string; onStarted?: (runId: string) => void; read?: TeamOwnerRead; chat?: ChatState; onChanged?: () => void;
 }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const question = chat?.pendingDecision ?? chat?.messages.filter(message => message.kind === "decision" && !message.answeredBy).at(-1);
+  const planning = runId && read?.run.phase === "planning";
+  const workflow = chat?.documentWorkflow, proposal = chat?.planApproval;
+  const intent = planning && !question ? confirmationIntent(body) : null;
+  const nextStage = planning && workflow && !question ? stageIntent(body) : null;
+  const version = workflow?.versions.find(document => document.kind === intent);
+  const requirements = workflow?.versions.find(document => document.kind === "requirements");
+  const requirementsConfirmed = !!requirements && requirements.id === workflow?.confirmed.requirements;
+  const execution = intent === "execute" || intent === "plan" && !workflow;
+  const settled = !!read && read.run.state === "approved" && !documentDiscussionPending(read, chat);
+  const legacyApproval = proposal === null && !workflow;
+  const ready = nextStage ? settled && !workflow?.pendingStage && (nextStage !== "plan" || requirementsConfirmed && !workflow?.error)
+    : !intent || settled && (execution ? legacyApproval || !!proposal?.plan?.content.trim() && !!proposal.roster?.digest && !proposal.error
+      && (!workflow || !!proposal.documentVersions) : !!version && !workflow?.error && !workflow?.pendingStage);
   return <form className="composer" onSubmit={async event => {
     event.preventDefault();
-    if (!body.trim() || busy) return;
-    setBusy(true); setFailed(false);
-    try { await sendChatMessage(request, runId, body.trim(), entityVersion); onBodyChange(""); }
-    catch { setFailed(true); } finally { setBusy(false); }
+    if (!body.trim() || busy || !ready) return;
+    setBusy(true); setFailed(null);
+    try {
+      if (!runId && projectId) {
+        const started = await request<{ runId: string }>("/runs", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ goal: body.trim(), rig: projectId, planning: true, documentWorkflow: true }) });
+        if (!started.runId) throw new Error("Missing planning record");
+        onStarted?.(started.runId);
+      } else if (nextStage) {
+        await selectDocumentStage(request, runId, entityVersion, nextStage, body.trim());
+      } else if (intent && execution && (legacyApproval || proposal?.plan)) {
+        await approvePlan(request, runId, entityVersion, proposal?.roster?.digest, proposal?.documentVersions,
+          { ownerMessage: body.trim(), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) });
+      } else if (intent && version) {
+        await confirmDocument(request, runId, entityVersion, version, body.trim());
+      } else await sendChatMessage(request, runId, body.trim(), entityVersion, question?.id);
+      onBodyChange(""); onChanged?.();
+    }
+    catch (cause) { setFailed(cause instanceof Error ? cause.message : t("web.error")); } finally { setBusy(false); }
   }}>
-    {failed && <p role="alert" className="composer-error">{t("web.error")}</p>}
-    <textarea rows={1} aria-label={t("team.chat.message")} value={body} onChange={event => onBodyChange(event.target.value)} />
-    <button className="btn btn-primary" type="submit" disabled={busy || !body.trim()}>{t("team.chat.send")}</button>
+    {question && <p className="composer-confirmation">{t("chat.answerQuestion")}</p>}
+    {nextStage && <p className="composer-confirmation" role="status">{!ready ? t("chat.stageWaiting")
+      : t("chat.stageRequestConsequence", { stage: t(`documents.stage.${nextStage}`) })}</p>}
+    {intent && <p className="composer-confirmation" role="status">{!ready ? t("chat.confirmationWaiting") : execution
+      ? t(read?.run.binding.readPaths.includes(".") ? "team.plan.projectScopeConsequence"
+        : workflow ? "documents.approveConsequence" : "chat.legacyApprovalConsequence")
+      : t("chat.documentConfirmationConsequence", { kind: t(`documents.kind.${version!.kind}`), version: version!.version })}</p>}
+    {failed && <p role="alert" className="composer-error">{failed}</p>}
+    <textarea rows={1} maxLength={65_536} aria-label={t("team.chat.message")} value={body} onChange={event => onBodyChange(event.target.value)} />
+    <button className="btn btn-primary" type="submit" disabled={busy || !body.trim() || !ready}>{t("team.chat.send")}</button>
   </form>;
 }
 
-/**
- * The plan, as the record's first plate. It carries the plan's title and how many tasks the
- * work became; the breakdown itself is the lead's, so the plate approves the plan and shows
- * nothing to approve item by item.
- */
-function PlanPlate({ read, runId, entityVersion }: { read?: TeamOwnerRead; runId: string; entityVersion: number }) {
+/** Approval carries the digest of the proposal displayed here, never an unseen re-read. */
+function PlanPlate({ read, runId, entityVersion, chat }: {
+  read?: TeamOwnerRead; runId: string; entityVersion: number; chat?: ChatState;
+}) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   if (!read) return null;
   const approved = read.run.phase !== "planning";
+  const proposal = chat?.planApproval;
+  const proposalReady = proposal === null || (!!proposal?.plan?.content.trim() && !!proposal.roster?.digest && !proposal.error);
+  const updating = !approved && documentDiscussionPending(read, chat);
+  const canApprove = chat?.available && chat.phase === "planning" && proposalReady && !updating && read.run.state === "approved"
+    && (!chat.documentWorkflow || !!proposal?.documentVersions);
   const work = read.tasks.filter(task => task.role !== "reviewer").length;
   return <div className={approved ? "plate" : "plate plate-waiting"} role="group" aria-label={t("team.plan.approve")}>
     <h2 className="plate-title">{read.run.displayName}</h2>
-    <div className="plate-meta">{t("team.plan.work", { count: work })}</div>
-    {failed && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.error")}</p>}
+    {approved && <div className="plate-meta">{t("team.plan.work", { count: work })}</div>}
+    {!approved && proposal?.plan && <details className="plate-meta">
+      <summary>{t("team.plan")}</summary>
+      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", maxHeight: 260, overflow: "auto" }}>{proposal.plan.content}</pre>
+    </details>}
+    {!approved && proposal?.roster && <div role="group" aria-label={t("team.plan.roster")}>
+      <h3 className="plate-meta">{t("team.plan.roster")}</h3>
+      {proposal.roster.seats.map((seat, index) => <p key={index} className="plate-meta">
+        {t(`role.${seat.role}`)} · {t(`team.client.${seat.client}`)}{seat.model ? " · " + seat.model : ""}
+      </p>)}
+    </div>}
+    {!approved && (updating || !proposalReady) && !proposal?.error && <p className="plate-meta">{t("team.plan.preparing")}</p>}
+    {(!updating && proposal?.error || failed) && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>
+      {proposal?.error || t("team.plan.approvalFailed")}
+    </p>}
+    {!approved && (chat?.documentWorkflow || read.run.binding.readPaths.includes(".")) && <p className="plate-meta">
+      {t(read.run.binding.readPaths.includes(".") ? "team.plan.projectScopeConsequence" : "documents.approveConsequence")}
+    </p>}
     <div className="plate-foot">
+      {!approved && !updating && proposal?.error && <button className="btn btn-outline" disabled={busy} onClick={async () => {
+        setBusy(true); setFailed(false);
+        try { await sendChatMessage(request, runId, t("chat.repairPlanMessage"), entityVersion); }
+        catch { setFailed(true); } finally { setBusy(false); }
+      }}>{t("chat.repairPlan")}</button>}
       {approved ? <span className="plate-done"><Check />{t("team.plan.approvedShort")}</span>
-        : <button className="btn btn-primary" disabled={busy} onClick={async () => {
+        : <button className="btn btn-primary" disabled={busy || !canApprove} onClick={async () => {
           setBusy(true); setFailed(false);
-          try { await approvePlan(request, runId, entityVersion); } catch { setFailed(true); } finally { setBusy(false); }
+          try { await approvePlan(request, runId, entityVersion, proposal?.roster?.digest, proposal?.documentVersions); }
+          catch { setFailed(true); } finally { setBusy(false); }
         }}>{t("team.plan.approve")}</button>}
     </div>
   </div>;

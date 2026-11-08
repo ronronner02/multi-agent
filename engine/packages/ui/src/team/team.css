@@ -5,6 +5,9 @@
   color-scheme: dark;
   --ui-canvas: #151619;
   --ui-surface: #1c1d21;
+  --ui-glass-surface: rgb(28 29 33 / .54);
+  --ui-glass-border: rgb(255 255 255 / .16);
+  --ui-glass-highlight: rgb(255 255 255 / .09);
   --ui-raised: #232429;
   --ui-divider: #2c2d34;
   --ui-divider-soft: #24252b;
@@ -35,6 +38,9 @@
   color-scheme: light;
   --ui-canvas: #f6f6f8;
   --ui-surface: #ffffff;
+  --ui-glass-surface: rgb(255 255 255 / .58);
+  --ui-glass-border: rgb(255 255 255 / .46);
+  --ui-glass-highlight: rgb(255 255 255 / .70);
   --ui-raised: #ffffff;
   --ui-divider: #e0e1e7;
   --ui-divider-soft: #edeef2;
@@ -160,9 +166,21 @@ body:has(.team-shell) > #root { height: 100%; }
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg);
   padding: 12px 16px; color: var(--ink); max-width: 54ch;
 }
+/* Glass belongs to card surfaces, not their foreground content or the skin artwork. */
+.team-shell :is(.plate, .ui-card, .ui-column, .ui-task-card, .ui-page-head, .ui-snapshot-warning) {
+  --ui-muted: var(--ui-text-secondary); --ui-faint: var(--ui-text-secondary);
+  --muted: var(--ui-text-secondary); --faint: var(--ui-text-secondary);
+  background: var(--ui-glass-surface);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  backdrop-filter: blur(8px) saturate(1.1);
+  box-shadow: inset 0 1px 0 var(--ui-glass-highlight), 0 8px 24px var(--ui-shadow);
+}
+.team-shell :is(.ui-card, .ui-column) :is(.plate, .ui-task-card) {
+  background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
+}
 /* --- plates: the only three consequential objects in the conversation --- */
 .team-shell .plate {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  border: 1px solid var(--ui-glass-border); border-radius: var(--r-lg);
   padding: 14px 18px;
   display: grid; gap: 10px;
   animation: plate-in var(--t-base) var(--ease) both;
@@ -246,7 +264,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .input.mono { font-family: var(--font-mono); font-size: 13px; }
 .team-shell .select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
 .team-shell .select svg { width: 14px; height: 14px; color: var(--faint); }
-.team-shell .diff { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; min-height: 420px; }
+.team-shell .diff { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; min-height: 0; }
 .team-shell .files { display: flex; align-items: center; gap: 2px; padding: 6px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; flex: 0 0 auto; }
 .team-shell .file { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); text-align: left; white-space: nowrap; }
 .team-shell .file:hover { background: var(--surface-2); }
@@ -254,7 +272,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .file .counts { font-size: 12px; color: var(--faint); white-space: nowrap; }
 .team-shell .file .counts .a { color: var(--add-ink); }
 .team-shell .file .counts .d { color: var(--remove-ink); }
-.team-shell .code { overflow: auto; display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.team-shell .code { max-height: min(560px, 62dvh); overflow: auto; display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .team-shell .code-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 .team-shell .code-body { font-family: var(--font-mono); font-size: 13px; line-height: 21px; min-width: max-content; }
 .team-shell .hunk-head { padding: 4px 14px; background: var(--surface-2); color: var(--faint); font-size: 12px; border-bottom: 1px solid var(--line-soft); }
@@ -275,9 +293,6 @@ body:has(.team-shell) > #root { height: 100%; }
   .team-shell *, .team-shell *::before, .team-shell *::after { animation: none !important; transition: none !important; }
 }
 
-@media (max-width: 1119px) {
-  .team-shell .diff { min-height: 520px; }
-}
 @media (max-width: 767px) {
   .team-shell body { font-size: 15px; }
   .team-shell .topbar { padding: 0 var(--sp-4); gap: var(--sp-2); }
@@ -325,7 +340,7 @@ body:has(.team-shell) > #root { height: 100%; }
 }
 
 /* A sheet holds the start form itself, so the form does not draw a second card inside it. */
-.team-shell .sheet-body .plate { border: 0; background: none; padding: 0; }
+.team-shell .sheet-body .plate { border: 0; background: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
 
 /* --- shell chrome ------------------------------------------------------- */
 .team-shell .ui-sidebar {
@@ -380,7 +395,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .ui-bell { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; padding: 6px; border-color: transparent; background: transparent; color: var(--ui-muted); }
 .team-shell .ui-bell svg { width: 18px; height: 18px; }
 .team-shell .ui-bell:hover { background: var(--ui-raised); }
-.team-shell .ui-snapshot-warning { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--ui-warn); border-radius: var(--ui-radius); background: var(--ui-surface); }
+.team-shell .ui-snapshot-warning { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--ui-warn); border-radius: var(--ui-radius); }
 .team-shell .ui-snapshot-warning > svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 3px; color: var(--ui-warn); }
 .team-shell .ui-snapshot-warning p { margin: 0; }
 .team-shell .ui-snapshot-warning strong { color: var(--ui-warn); }
@@ -395,10 +410,10 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .ui-dot[data-state="failed"], .ui-dot[data-state="blocked"] { background: var(--ui-error); }
 
 
-/* Background surfaces remain opaque; motion is a low-contrast layer in the canvas gutters. */
+/* One canvas owns the artwork; translucent cards reveal it without a second skin layer. */
 .team-shell .team-backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-.team-shell .team-backdrop :is(video, img) { width: 100%; height: 100%; object-fit: cover; opacity: .08; }
-.team-shell .team-backdrop::after { content: ""; position: absolute; inset: 0; background: var(--ui-canvas); opacity: .85; }
+.team-shell .team-backdrop :is(video, img) { width: 100%; height: 100%; object-fit: cover; opacity: .64; }
+.team-shell .team-backdrop::after { content: ""; position: absolute; inset: 0; background: var(--ui-canvas); opacity: .36; }
 .team-shell .ui-sidebar, .team-shell .ui-content { position: relative; z-index: 1; }
 .team-shell .ui-sidebar { min-height: 0; overflow-y: auto; }
 .team-shell .ui-content { min-height: 0; overflow: hidden; }
@@ -423,7 +438,7 @@ body:has(.team-shell) > #root { height: 100%; }
 .team-shell .ui-icon-button { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--ui-radius); color: var(--ui-muted); }
 .team-shell .ui-icon-button svg { width: 18px; height: 18px; }
 .team-shell .ui-icon-button:hover:not(:disabled) { background: var(--ui-raised); color: var(--ui-text); }
-.team-shell .ui-main { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; }
+.team-shell .ui-main { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; container: workspace / inline-size; }
 .team-shell h1.display { font-family: var(--ui-sans); font-size: 24px; line-height: 1.3; }
 .team-shell .ui-footer { display: flex; justify-content: space-between; gap: 16px; min-height: 28px; padding: 4px 16px; border-top: 1px solid var(--ui-divider); background: var(--ui-surface); color: var(--ui-muted); font-size: 11px; }
 .team-shell .ui-footer > span { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -508,7 +523,7 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .ui-sections button { padding: 8px 16px; border-radius: var(--ui-radius); text-align: left; color: var(--ui-muted); }
 .team-shell .ui-sections button:hover { background: var(--ui-raised); }
 .team-shell .ui-sections [aria-pressed="true"] { background: var(--ui-accent-soft); color: var(--ui-text); }
-.team-shell .ui-settings-pane { min-width: 0; }
+.team-shell .ui-settings-pane { min-width: 0; display: grid; gap: 16px; align-content: start; }
 .team-shell .ui-settings-panel { padding: 24px; gap: 24px; }
 .team-shell .ui-settings-panel h2, .team-shell .ui-analytics h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .team-shell .ui-settings-panel > p { margin: 0; }
@@ -568,7 +583,7 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .ui-folder-list:empty { border: 0; }
 .team-shell .ui-folder-list button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px; text-align: left; overflow-wrap: anywhere; }
 .team-shell .ui-folder-list button:hover { background: var(--ui-selection); }
-.team-shell .ui-project-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 24px; }
+.team-shell .ui-project-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 24px; align-items: start; }
 .team-shell .ui-project-card { padding: 24px; gap: 16px; align-content: start; }
 .team-shell .ui-project-open { display: grid; gap: 8px; text-align: left; overflow-wrap: anywhere; }
 .team-shell .ui-project-open strong { font-size: 16px; font-weight: 600; }
@@ -594,8 +609,11 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 
 
 /* --- command-center Overview and task board ------------------------------ */
-.team-shell .ui-screen { min-width: 0; padding: 24px; display: grid; gap: 24px; align-content: start; }
-.team-shell .ui-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.team-shell .ui-screen { min-width: 0; padding: 24px; display: grid; gap: 16px; align-content: start; }
+.team-shell .ui-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.team-shell :is(.ui-page-head, .page-head) > div:first-child { min-width: 0; flex: 1 1 280px; }
+.team-shell :is(.ui-page-actions, .plate-foot, .page-head) { flex-wrap: wrap; }
+.team-shell .ui-page-head:not(.ui-command-hero) { padding: 16px 20px; border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius); }
 .team-shell .ui-page-head h1 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 600; }
 .team-shell .ui-subtitle { margin: 8px 0 0; color: var(--ui-muted); overflow-wrap: anywhere; }
 .team-shell .ui-page-actions { display: flex; align-items: center; gap: 8px; }
@@ -603,7 +621,7 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .ui-run-actions { display: grid; gap: 8px; justify-items: end; text-align: right; }
 .team-shell .ui-run-actions p { margin: 0; max-width: 280px; font-size: 12px; }
 .team-shell .ui-screen [role="alert"] { color: var(--ui-error); }
-.team-shell .ui-card { min-width: 0; padding: 24px; background: var(--ui-surface); border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); }
+.team-shell .ui-card { min-width: 0; padding: 20px; border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius); overflow-wrap: anywhere; }
 .team-shell .ui-card h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 14px; font-weight: 600; }
 .team-shell .ui-muted { color: var(--ui-muted); }
 .team-shell .ui-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; padding: 0 8px; border-radius: var(--ui-radius); background: var(--ui-raised); color: var(--ui-muted); font-size: 12px; font-weight: 400; }
@@ -621,9 +639,6 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .ui-phase-strip [data-state="active"], .team-shell .ui-phase-strip [data-state="awaiting-decision"] { border-color: var(--ui-accent); }
 .team-shell .ui-phase-strip [data-state="complete"] .ui-dot, .team-shell .ui-dot[data-state="running"] { background: var(--ui-ok); }
 .team-shell .ui-phase-strip [data-state="active"] .ui-dot { background: var(--ui-accent); }
-.team-shell .ui-overview-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); gap: 24px; }
-.team-shell .ui-overview-grid-solo { grid-template-columns: minmax(0, 1fr); }
-.team-shell .ui-overview-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .team-shell .ui-section-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
 .team-shell .ui-section-head h2 { margin: 0; }
 .team-shell .ui-section-head .btn { font-size: 12px; }
@@ -656,17 +671,17 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .ui-screen summary, .team-shell .ui-drawer-body summary { color: var(--ui-muted); cursor: pointer; }
 .team-shell .ui-screen pre, .team-shell .ui-drawer-body pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.6 var(--font-mono); }
 .team-shell .ui-board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 16px; }
-.team-shell .ui-column { min-width: 0; background: var(--ui-surface); border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); padding: 16px; }
+.team-shell .ui-column { min-width: 0; border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius); padding: 16px; }
 .team-shell .ui-column h2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; margin: 0 0 16px; font-size: 12px; font-weight: 500; }
 .team-shell .ui-column > ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
 .team-shell .ui-column-empty { margin: 0; padding: 8px 0; font-size: 12px; }
-.team-shell .ui-task-card { display: grid; gap: 16px; width: 100%; padding: 16px; text-align: left; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-raised); }
+.team-shell .ui-task-card { display: grid; gap: 16px; width: 100%; padding: 16px; text-align: left; border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius); }
 .team-shell .ui-task-card:hover, .team-shell .ui-task-card[aria-pressed="true"] { border-color: var(--ui-accent); }
 .team-shell .ui-task-card strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .team-shell .ui-task-card > .ui-muted { font-size: 11px; overflow-wrap: anywhere; }
 .team-shell .ui-task-drawer { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(480px, 100vw); display: flex; flex-direction: column; background: var(--ui-surface); border-left: 1px solid var(--ui-divider); box-shadow: -16px 0 48px var(--ui-shadow); }
 .team-shell .ui-task-drawer .ui-panel-heading > div { min-width: 0; overflow-wrap: anywhere; }
-.team-shell .ui-drawer-body { overflow: auto; padding: 24px; display: grid; gap: 24px; }
+.team-shell .ui-drawer-body { min-height: 0; min-width: 0; overflow: auto; padding: 20px; display: grid; gap: 20px; align-content: start; }
 .team-shell .ui-drawer-body > p { margin: 0; }
 .team-shell .ui-drawer-body h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .team-shell .ui-drawer-body section { min-width: 0; }
@@ -675,7 +690,6 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .ui-technical-details dd { margin: 4px 0 16px; overflow-wrap: anywhere; font: 11px/1.6 var(--font-mono); }
 @media (max-width: 1250px) {
   .team-shell .ui-board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .team-shell .ui-overview-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
   .team-shell .ui-screen { padding: 16px; gap: 16px; }
@@ -688,7 +702,7 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
   .team-shell .ui-phase-strip { gap: 8px; }
   .team-shell .ui-phase-strip li { display: flex; flex-wrap: wrap; align-content: start; }
   .team-shell .ui-phase-strip small { flex-basis: 100%; }
-  .team-shell .ui-overview-foot, .team-shell .ui-board { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .team-shell .ui-board { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .team-shell .ui-section-head { flex-wrap: wrap; gap: 8px; }
   .team-shell .ui-active-list button { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
   .team-shell .ui-active-list .ui-task-progress { grid-column: 1 / -1; }
@@ -754,4 +768,209 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
   .team-shell .ui-agent-detail, .team-shell .ui-reviews-body { gap: 16px; }
   .team-shell .ui-layout-switch button, .team-shell .ui-detail-tabs button { padding-inline: 12px; }
   .team-shell .ui-focus-select, .team-shell .ui-review-select { grid-template-columns: auto minmax(0, 1fr); }
+}
+
+
+/* The list and inspector share one task evidence component with the board drawer. */
+.team-shell .ui-task-view-switch { justify-self: start; }
+.team-shell .ui-task-workbench { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 16px; min-width: 0; align-items: stretch; }
+.team-shell .ui-task-workbench[data-empty="true"] { grid-template-columns: minmax(0, 1fr); }
+.team-shell .ui-workbench-list { padding: 16px; display: flex; flex-direction: column; }
+.team-shell :is(.ui-workbench-list, .ui-task-inspector) { min-height: 0; max-height: min(640px, 70dvh); }
+.team-shell :is(.ui-workbench-list, .ui-task-inspector) > :not(.ui-active-list, .ui-drawer-body) { flex-shrink: 0; }
+.team-shell .ui-workbench-list .ui-section-head { gap: 8px; flex-wrap: wrap; }
+.team-shell .ui-workbench-list .ui-section-head .btn { padding: 4px 0; }
+.team-shell .ui-task-filters { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--ui-divider); }
+.team-shell .ui-task-search { display: flex; align-items: center; flex: 1 1 144px; min-width: 0; gap: 8px; padding: 0 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-canvas); }
+.team-shell .ui-task-search svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--ui-muted); }
+.team-shell .ui-task-search input { min-width: 0; width: 100%; height: 34px; border: 0; background: transparent; color: var(--ui-text); font-size: 12px; }
+.team-shell .ui-task-search:focus-within { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.team-shell .ui-task-search input:focus { outline: none; }
+.team-shell .ui-task-filters select { min-height: 34px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-canvas); color: var(--ui-text); font-size: 12px; }
+.team-shell .ui-workbench-list > .ui-active-list { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.team-shell .ui-workbench-list .ui-active-list button { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 14px 8px; border: 1px solid transparent; border-radius: var(--ui-radius); }
+.team-shell .ui-workbench-list .ui-active-list button:hover { background: var(--ui-raised); }
+.team-shell .ui-workbench-list .ui-active-list button[aria-pressed="true"] { border-color: var(--ui-accent); background: var(--ui-accent-soft); }
+.team-shell .ui-workbench-list .ui-task-progress { grid-column: 1 / -1; }
+.team-shell .ui-task-inspector { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.team-shell .ui-task-inspector .ui-panel-heading { align-items: start; padding: 16px; }
+.team-shell .ui-task-inspector .ui-panel-heading > div { min-width: 0; overflow-wrap: anywhere; }
+.team-shell .ui-task-inspector .ui-panel-heading h2 { margin: 0; }
+.team-shell .ui-task-inspector .ui-drawer-body { padding: 16px; gap: 20px; flex: 1 1 auto; }
+.team-shell .ui-task-inspector[hidden] { display: none; }
+.team-shell .ui-workbench-empty { padding: 24px 16px; font-size: 13px; }
+@container workspace (max-width: 720px) {
+  .team-shell .ui-task-workbench { grid-template-columns: minmax(0, 1fr); }
+  .team-shell :is(.ui-workbench-list, .ui-task-inspector) { max-height: none; }
+  .team-shell .ui-workbench-list > .ui-active-list { max-height: 340px; }
+}
+
+
+.team-shell .ui-overview { gap: 16px; padding: 20px; }
+.team-shell .ui-command-hero { align-items: start; padding: 16px 20px; border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius); }
+.team-shell .ui-command-hero > div:first-child { min-width: 0; }
+.team-shell .ui-command-hero .ui-run-actions { padding: 0; }
+.team-shell .ui-command-summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: stretch; }
+.team-shell .ui-overview .ui-summary { padding: 12px 20px; }
+.team-shell .ui-overview .ui-summary dd { font-size: 22px; margin-top: 4px; }
+.team-shell .ui-overview .ui-summary small { margin-top: 2px; }
+.team-shell .ui-overview .ui-progress { padding: 16px 20px; }
+.team-shell .ui-overview .ui-progress h2 { margin-bottom: 8px; }
+.team-shell .ui-overview .ui-phase-strip { margin-top: 0; }
+.team-shell .ui-overview .ui-phase-strip li { padding-top: 10px; }
+.team-shell .ui-system-rail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-width: 0; align-items: start; }
+.team-shell .ui-system-rail .ui-card { padding: 16px; }
+.team-shell .ui-system-rail h2 { margin-bottom: 8px; }
+.team-shell .ui-system-rail .ui-fleet-list li { padding: 10px 0; }
+.team-shell .ui-system-rail .ui-fleet-list .ui-muted { font-size: 12px; }
+.team-shell .ui-system-rail .ui-event-list li { gap: 8px; }
+.team-shell .ui-system-status ul { list-style: none; margin: 0; padding: 0; }
+.team-shell .ui-system-status li { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; padding: 8px 0; font-size: 11px; }
+.team-shell .ui-system-status li details { margin: 0; min-width: 0; }
+.team-shell .ui-system-status summary { display: flex; align-items: start; justify-content: space-between; gap: 8px; font-size: 11px; }
+.team-shell .ui-system-status summary strong { color: var(--ui-text-secondary); font-weight: 500; }
+.team-shell .ui-system-status details p { overflow-wrap: anywhere; }
+.team-shell .ui-inspector-links { display: flex; gap: 16px; padding: 4px 16px; border-bottom: 1px solid var(--ui-divider); }
+.team-shell .ui-inspector-links .btn { font-size: 12px; }
+@container workspace (max-width: 900px) {
+  .team-shell .ui-command-summary { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-system-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .team-shell .ui-system-rail > :last-child { grid-column: 1 / -1; }
+}
+@container workspace (max-width: 600px) {
+  .team-shell .ui-system-rail { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .team-shell .ui-overview { padding: 16px; }
+  .team-shell .ui-command-hero { padding: 16px; }
+  .team-shell .ui-command-hero > div:first-child { max-width: 100%; }
+  .team-shell .ui-system-rail { grid-template-columns: minmax(0, 1fr); }
+}
+
+.ui-task-brief { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ui-task-location { display: grid; gap: 4px; font-size: 12px; }
+.ui-task-location dt { color: var(--ui-muted); }
+.ui-task-location dd { margin: 0 0 8px; overflow-wrap: anywhere; }
+
+.ui-model-form { display: grid; gap: 16px; }
+.ui-model-row { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.ui-model-row .field { flex: 1 1 180px; min-width: 0; }
+.ui-model-allowlist { border: 0; padding: 0; margin: 0; display: grid; gap: 12px; }
+.ui-model-allowlist legend { margin-bottom: 12px; }
+.ui-model-effective { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 16px; }
+.ui-model-effective h3 { font-size: 14px; margin: 12px 0; }
+.ui-model-launches { max-height: min(320px, 45dvh); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border: 1px solid var(--line-soft); border-radius: var(--r-md); }
+.ui-model-launches table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ui-model-launches th, .ui-model-launches td { padding: 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.ui-model-launches th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.ui-model-launches th:first-child { width: 44%; }
+.ui-model-launches th:last-child { width: 20%; }
+.ui-model-launches td { border-top: 1px solid var(--line-soft); }
+
+.ui-history-group { margin-top: 20px; }
+.ui-history-group h2 { margin: 0 0 12px; font-size: 16px; }
+.ui-history-group ul { list-style: none; padding: 0; margin: 0; }
+.ui-history-open { width: 100%; border: 0; background: transparent; color: inherit; text-align: left; display: grid; gap: 6px; padding: 14px 0; cursor: pointer; }
+.ui-history-open:hover strong { text-decoration: underline; }
+.ui-project-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ui-project-path { margin: 12px 0 0; overflow-wrap: anywhere; }
+.team-shell .page > .ui-page-head { margin-bottom: 16px; }
+.ui-phase-banner { padding: 10px 28px; margin: 0; border-bottom: 1px solid var(--line); background: var(--plate); font-size: 13px; }
+
+/* Document reading uses the shared glass card; the page owns the single skin layer. */
+.team-shell .ui-document-stage-buttons, .team-shell .ui-document-toolbar, .team-shell .ui-document-status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.team-shell .ui-document-stage-buttons [aria-current="step"] { border-color: var(--accent); color: var(--accent); }
+.team-shell .ui-document-stages > p { margin: 12px 0 0; font-size: 13px; line-height: 1.6; }
+.team-shell .ui-document-binding { margin: 16px 0 0; font-size: 13px; }
+.team-shell .ui-document-layout { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); gap: 20px; margin-top: 20px; align-items: start; }
+.team-shell .ui-document-list { padding: 8px; }
+.team-shell .ui-document-kind { display: grid; gap: 8px; width: 100%; padding: 16px 12px; text-align: left; border: 0; border-radius: 8px; background: transparent; color: inherit; }
+.team-shell .ui-document-kind[aria-pressed="true"] { background: var(--sel); box-shadow: inset 3px 0 var(--accent); }
+.team-shell .ui-document-kind span { font-size: 12px; }
+.team-shell .ui-document-reader { min-width: 0; }
+.team-shell .ui-document-toolbar { align-items: end; }
+.team-shell .ui-document-toolbar label { display: grid; gap: 6px; min-width: 140px; font-size: 12px; flex: 1; }
+.team-shell .ui-document-toolbar select { max-width: 100%; }
+.team-shell .ui-document-status { margin: 18px 0; font-size: 12px; }
+.team-shell .ui-document-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.team-shell .ui-document-comparison article, .team-shell .ui-document-single article { min-width: 0; }
+.team-shell .ui-document-comparison h2, .team-shell .ui-document-single h2 { font-size: 13px; margin: 0 0 12px; }
+.team-shell .ui-document-content { margin: 0; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 14px; line-height: 1.75; max-height: 62vh; overflow: auto; }
+.team-shell .ui-document-evidence { font-size: 12px; margin-top: 16px; overflow-wrap: anywhere; }
+.team-shell .ui-document-evidence p { font-size: 11px; }
+.team-shell .ui-chat-documents { flex-shrink: 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.team-shell .ui-chat-documents .btn { font-size: 12px; padding: 6px 10px; }
+@media (max-width: 760px) {
+  .team-shell .ui-document-layout { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-document-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .team-shell .ui-document-kind { padding: 12px 8px; font-size: 12px; }
+  .team-shell .ui-document-comparison { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-document-content { max-height: 50vh; }
+}
+
+.team-shell .composer-confirmation { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--muted); }
+
+.team-shell .ui-chat-latest { align-self: center; margin-bottom: 8px; }
+
+.team-shell .ui-chat-live { min-width: 0; padding: 12px 0; }
+.team-shell .ui-chat-live .turn-body { white-space: pre-wrap; overflow-wrap: anywhere; text-wrap: wrap; }
+.team-shell .ui-chat-status { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); }
+.team-shell .ui-chat-status > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.team-shell .ui-chat-status[data-active="true"] > span { animation: ui-chat-pulse 1.4s ease-in-out infinite; }
+.team-shell .ui-chat-tools { font-size: 12px; color: var(--muted); }
+.team-shell .ui-chat-tools summary { cursor: pointer; padding: 6px 0; }
+.team-shell .ui-chat-tools .ui-tool-call p { overflow-wrap: anywhere; }
+@keyframes ui-chat-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .team-shell .ui-chat-status[data-active="true"] > span { animation: none; } }
+
+/* Shared content rules: compact summaries, complete detail, and bounded reading surfaces. */
+.team-shell :is(.plate, .field, .ui-panel-heading > div, .ui-text-preview, .ui-text-preview-body) { min-width: 0; }
+.team-shell :is(.plate, .ui-panel-heading, .page-head, .ui-subtitle, .turn-body, .option, .ui-history-open) { overflow-wrap: anywhere; }
+.team-shell :is(.ui-panel-heading, .ui-inspector-links, .ui-detail-tabs, .ui-layout-switch) { flex-shrink: 0; flex-wrap: wrap; }
+.team-shell .ui-panel-heading > div { flex: 1 1 180px; }
+.team-shell .ui-chat-panel .ui-panel-heading { flex-wrap: nowrap; align-items: flex-start; }
+.team-shell .ui-chat-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.team-shell .ui-chat-panel .ui-text-preview:not([data-expanded="true"]) .ui-text-preview-body { -webkit-line-clamp: 2; }
+.team-shell .ui-panel-heading > div:first-child { max-height: 36dvh; overflow: auto; }
+.team-shell .ui-breadcrumb .ui-runselect { min-width: 0; flex-shrink: 1; }
+.team-shell .ui-topstrip .ui-search { min-width: 32px; }
+.team-shell :is(.ui-history-open strong, .ui-project-open strong, .ui-project-run > span:first-child, .ui-active-list strong, .ui-task-card > strong) {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+}
+.team-shell .ui-text-preview { display: block; font: inherit; color: inherit; }
+.team-shell .ui-text-preview-body {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.team-shell .ui-text-preview[data-expanded="true"] .ui-text-preview-body {
+  display: block; -webkit-line-clamp: unset; max-height: min(320px, 40dvh); overflow: auto; overscroll-behavior: contain;
+}
+.team-shell .ui-text-preview-toggle { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; min-height: 28px; color: var(--ui-accent); font-size: 12px; font-weight: 500; }
+.team-shell .ui-text-preview-toggle svg { width: 14px; height: 14px; }
+.team-shell .ui-text-preview-toggle:hover { text-decoration: underline; }
+.team-shell .ui-task-card { gap: 12px; }
+.team-shell .ui-column > ul { max-height: min(560px, 64dvh); overflow: auto; overscroll-behavior: contain; }
+.team-shell .ui-system-rail :is(.ui-fleet-list, .ui-event-list), .team-shell .ui-findings { max-height: min(352px, 48dvh); overflow: auto; overscroll-behavior: contain; }
+.team-shell .ui-event-list .ui-text-preview { font-size: 12px; }
+.team-shell .ui-event-list pre { max-height: 240px; overflow: auto; }
+.team-shell .ui-attention-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; }
+.team-shell .ui-attention-list > li > .btn { grid-column: 2; grid-row: 1 / 3; }
+.team-shell .ui-attention-list > li > .plate { grid-column: 1 / -1; }
+.team-shell .ui-attention-list p { margin: 0; font-size: 12px; }
+.team-shell .ui-system-status li, .team-shell .ui-system-status summary { font-size: 12px; }
+.team-shell .ui-agent-card .ui-tool-calls { max-height: 240px; overflow: auto; }
+.team-shell .ui-agent-grid .ui-agent-task, .team-shell .ui-seat-choice .ui-agent-task { max-height: 4.5em; overflow: auto; }
+.team-shell .ui-table-scroll, .ui-model-launches { min-width: 0; max-width: 100%; }
+.team-shell .ui-model-launches table { table-layout: fixed; }
+.team-shell .ui-document-toolbar label { min-width: min(140px, 100%); }
+.team-shell .ui-screen pre { max-width: 100%; }
+@container workspace (max-width: 800px) {
+  .team-shell .ui-reviews-body, .team-shell .ui-workspace-split { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-reviews-inspector { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-document-comparison { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .team-shell .page { padding: 16px; }
+  .team-shell .page-head { align-items: start; gap: 16px; }
+  .team-shell .ui-attention-list > li { grid-template-columns: minmax(0, 1fr); }
+  .team-shell .ui-attention-list > li > .btn { grid-column: auto; grid-row: auto; justify-self: start; }
 }

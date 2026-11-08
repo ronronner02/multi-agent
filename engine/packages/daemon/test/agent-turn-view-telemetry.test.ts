@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -92,6 +92,61 @@ describe("turn telemetry sidecars", () => {
     return spawnSync(process.execPath, [view, "--result-file", resultFile, process.execPath, join(root, "events.mjs")],
       { input: "", encoding: "utf8", timeout: 10_000 });
   };
+
+  it.each(["claude", "codex"])("publishes %s public output before exit, without reasoning content or duplicate final blocks", async client => {
+    const first = client === "claude"
+      ? [{ type: "stream_event", event: { type: "message_start", message: { id: "message-1" } } },
+        { type: "stream_event", event: { type: "content_block_start", index: 0,
+          content_block: { type: "thinking", thinking: "Private reasoning that must not be published" } } }]
+      : [{ type: "item.started", item: { id: "r", type: "reasoning", text: "Private reasoning that must not be published" } }];
+    const second = client === "claude"
+      ? [{ type: "stream_event", event: { type: "content_block_start", index: 1, content_block: { type: "text", text: "" } } },
+        { type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "Hello, " } } }]
+      : [{ type: "item.completed", item: { id: "public-1", type: "agent_message", text: "Hello, " } }];
+    const last = client === "claude"
+      ? [{ type: "stream_event", event: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "world!" } } },
+        { type: "stream_event", event: { type: "content_block_stop", index: 1 } },
+        { type: "assistant", message: { id: "message-1", content: [{ type: "thinking", thinking: "Private reasoning" }, { type: "text", text: "Hello, world!" }] } },
+        { type: "result", result: "Hello, world!\n" }]
+      : [{ type: "item.completed", item: { id: "public-1", type: "agent_message", text: "Hello, " } },
+        { type: "item.completed", item: { id: "public-2", type: "agent_message", text: "world!" } }, { type: "turn.completed" }];
+    const gate1 = join(root, "continue-1"), gate2 = join(root, "continue-2");
+    writeFileSync(join(root, "gated.mjs"), `import { existsSync } from 'node:fs';
+const emit = events => events.forEach(event => console.log(JSON.stringify(event)));
+const wait = async path => { while (!existsSync(path)) await new Promise(resolve => setTimeout(resolve, 10)); };
+setTimeout(() => process.exit(9), 7000).unref();
+emit(${JSON.stringify(first)}); await wait(${JSON.stringify(gate1)});
+emit(${JSON.stringify(second)}); await wait(${JSON.stringify(gate2)});
+emit(${JSON.stringify(last)});`);
+    const child = spawn(process.execPath, [view, "--result-file", join(root, "last-message.txt"), process.execPath, join(root, "gated.mjs")],
+      { stdio: ["ignore", "ignore", "pipe"] });
+    const closed = new Promise<number | null>(resolve => child.once("close", resolve));
+    const progress = () => JSON.parse(readFileSync(join(root, "progress.json"), "utf8")) as {
+      status: string; blocks: Array<{ id: string; text: string; complete: boolean }>;
+    };
+    try {
+      await vi.waitFor(() => expect(progress().status).toBe("thinking"));
+      expect(JSON.stringify(progress())).not.toContain("Private reasoning");
+      expect(child.exitCode).toBeNull(); writeFileSync(gate1, "continue");
+      await vi.waitFor(() => expect(progress().blocks[0]?.text).toBe("Hello, "));
+      expect(child.exitCode).toBeNull(); writeFileSync(gate2, "continue");
+      expect(await closed).toBe(0);
+      expect(progress().status).toBe("completed");
+      expect(progress().blocks.map(block => block.text)).toEqual(client === "claude" ? ["Hello, world!"] : ["Hello, ", "world!"]);
+      expect(JSON.stringify(progress())).not.toContain("Private reasoning");
+    } finally {
+      writeFileSync(gate1, "continue"); writeFileSync(gate2, "continue"); await closed;
+    }
+  });
+
+  it("redacts public output before its preview bound can split a credential", () => {
+    const secret = "sk-" + "a".repeat(64);
+    expect(synthetic([{ type: "item.completed", item: { id: "public", type: "agent_message", text: "x ".repeat(32_762) + secret } }]).status).toBe(0);
+    const progress = JSON.parse(readFileSync(join(root, "progress.json"), "utf8"));
+    expect(progress.truncated).toBe(true);
+    expect(progress.blocks[0].text.length).toBeLessThanOrEqual(65_536);
+    expect(JSON.stringify(progress)).not.toContain("sk-");
+  });
 
   it("redacts before truncating and settles duplicate call observations only once", () => {
     const secret = "sk-" + "a".repeat(64), bearer = "Bearer " + "b".repeat(64);

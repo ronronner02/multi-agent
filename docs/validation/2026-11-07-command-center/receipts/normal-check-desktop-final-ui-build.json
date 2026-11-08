@@ -1,0 +1,13 @@
+{
+  "check": "desktop-final-ui-build",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "build",
+    "-w",
+    "packages/ui"
+  ],
+  "exit": 0,
+  "seconds": 11.97
+}

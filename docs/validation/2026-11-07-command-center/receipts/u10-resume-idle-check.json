@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-11-07T15:22:29.118276+00:00",
+  "scope": "Aggregate idle-state counts only; no owner project names, paths, prompts or files read.",
+  "counts": {
+    "team_runs": {},
+    "team_attempts": {},
+    "queue_items": {}
+  },
+  "serviceMutation": false
+}

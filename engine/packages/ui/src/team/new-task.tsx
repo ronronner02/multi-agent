@@ -31,8 +31,8 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
   const chosen = team || presetTeamId || teams?.[0]?.id || "";
   const hasLead = (teams ?? []).some(entry => entry.id === chosen && entry.seats.some(seat => seat.role === "lead"));
 
-  return <section className="plate" aria-label={t("web.newTask")}>
-    <h2 className="plate-title">{t("web.newTask")}</h2>
+  return <section className="plate" aria-label={t(hasLead ? "planning.new" : "web.newTask")}>
+    <h2 className="plate-title">{t(hasLead ? "planning.new" : "web.newTask")}</h2>
     <form style={{ display: "grid", gap: 12 }} onSubmit={async event => {
       event.preventDefault();
       if (busy || !goal.trim()) return;
@@ -40,7 +40,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
       try {
         const receipt = await session.request<{ runId: string }>("/runs", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: goal.trim(), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true } : {}) }),
+          body: JSON.stringify({ goal: goal.trim(), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true, documentWorkflow: true } : {}) }),
         });
         if (!receipt?.runId) throw new Error("no run");
         await cache.invalidateQueries({ queryKey: runsKey });
@@ -66,7 +66,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
       </div>}
       {failure && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.startRefused")}</p>}
       <div className="plate-foot">
-        <button className="btn btn-primary" type="submit" disabled={busy || !goal.trim() || !session.paired}>{t("web.startTask")}</button>
+        <button className="btn btn-primary" type="submit" disabled={busy || !goal.trim() || !session.paired}>{t(hasLead ? "planning.start" : "web.startTask")}</button>
       </div>
     </form>
   </section>;

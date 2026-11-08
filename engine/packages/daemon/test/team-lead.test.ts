@@ -189,6 +189,15 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
       .toEqual(["a@rig", "b@rig"]);
   });
 
+  it("gives planning leads an actionable question protocol instead of headless interactive tools", () => {
+    const instructions = planningInstructions("Explore a new feature", "plan.md", true);
+    expect(instructions).toContain(LEAD_ESCALATION_PATH);
+    expect(instructions).toContain('"question"');
+    expect(instructions).toContain('"options"');
+    expect(instructions).toContain("End the turn and wait");
+    expect(instructions).toContain("Do not use terminal-only question tools");
+  });
+
   it("states the proposal path and shape in the run instructions", () => {
     const instructions = leadInstructions("Implement the approved modules.\nSecond line.");
     expect(instructions).toContain(LEAD_PROPOSAL_PATH);
@@ -196,6 +205,9 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     // U6 — after the plan is approved the list is admitted without a further owner decision,
     // and only the things the lead may not decide go back to the owner as a decision.
     expect(instructions).toContain("admitted without the owner");
+    expect(instructions).toContain("Each task must own nonempty write paths and target an implementer");
+    expect(instructions).toContain("The daemon creates reviews after implementation");
+    expect(instructions).toContain("do not propose read-only reviewer tasks from the plan");
     expect(instructions).toContain(LEAD_ESCALATION_PATH);
     expect(instructions).toContain('"options"');
     // The goal's control characters are flattened: the manifest carries prose, not bytes.
@@ -218,8 +230,8 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
       phase: "planning" as const, planRef: "plan.md" };
     const instructions = leadActivation(db, { ...input, buildRoster: true }).instructions;
     expect(instructions).toContain(JSON.stringify([
-      { role: "implementer", client: "claude-code", count: 1 },
-      { role: "implementer", client: "codex", count: 1 },
+      { role: "implementer", client: "claude-code", model: null, count: 1 },
+      { role: "implementer", client: "codex", model: null, count: 1 },
     ]));
     expect(instructions).not.toContain("reviewer@rig");
     expect(instructions).not.toContain("lead@rig");

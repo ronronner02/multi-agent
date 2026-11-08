@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-11-07T13:13:55.633Z",
+  "status": "passed",
+  "forwarded": {
+    "OPENRIG_HOME": "<desktop-profile>/home",
+    "OPENRIG_DB": "<desktop-profile>/home/openrig.sqlite",
+    "OPENRIG_PORT": "7433",
+    "OPENRIG_HOST": "127.0.0.1",
+    "OPENRIG_BIND_HOST": "127.0.0.1",
+    "OPENRIG_SHARED_DOCS_ROOT": "<desktop-profile>/legacy-shared-docs",
+    "XDG_CONFIG_HOME": "<desktop-profile>/config",
+    "GH_CONFIG_DIR": "<desktop-profile>/gh",
+    "TMUX_TMPDIR": "<desktop-profile>/tmux",
+    "TMPDIR": "<desktop-profile>/tmp"
+  },
+  "observed": {
+    "HOME": "<user-home>",
+    "OPENRIG_HOME": "<desktop-profile>/home",
+    "OPENRIG_DB": "<desktop-profile>/home/openrig.sqlite",
+    "OPENRIG_PORT": "7433",
+    "XDG_CONFIG_HOME": "<desktop-profile>/config",
+    "GH_CONFIG_DIR": "<desktop-profile>/gh",
+    "TMUX_TMPDIR": "<desktop-profile>/tmux",
+    "TMPDIR": "<desktop-profile>/tmp"
+  },
+  "userData": "<windows-task-scratch>\\desktop-clean-profile",
+  "settingsOnly": true
+}

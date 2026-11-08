@@ -1,0 +1,18 @@
+{
+  "check": "u10-plan-audit-cli-team",
+  "cwd": "engine/packages/cli",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/node",
+    "../../node_modules/vitest/vitest.mjs",
+    "run",
+    "test/team-setup.test.ts",
+    "test/team-start.test.ts",
+    "test/team-chat.test.ts",
+    "test/team-merge.test.ts",
+    "test/team-apply.test.ts",
+    "test/team-cancel.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 3.7
+}

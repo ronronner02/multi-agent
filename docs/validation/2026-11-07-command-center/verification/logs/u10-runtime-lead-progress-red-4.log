@@ -1,0 +1,68 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ❯ test/seat-pane-launch.test.ts (6 tests | 1 failed | 5 skipped) 880ms
+   ↓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+   × a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy 879ms
+     → expected 'Managed task lead-task for run lead-p…' to contain 'Team progress snapshot:'
+   ↓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+   ↓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+   ↓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+   ↓ workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+AssertionError: expected 'Managed task lead-task for run lead-p…' to contain 'Team progress snapshot:'
+
+- Expected
++ Received
+
+- Team progress snapshot:
++ Managed task lead-task for run lead-progress-run
++
++ Report the recorded task and review progress.
++
++ Assignment: {"taskId":"lead-task","role":"lead","paths":["src"],"dependencies":[]}
++
++ Outputs: []
++
++ Permissions: ["request-assignment"]
++
++ Read these files before you start work; they are this attempt's role instructions and run context, and they are read-only:
++
++ - /tmp/.openrig-test-fixture-home-lw0koV/state/workers/context/local/lead-progress-run/978d646f-99ee-4978-bc2c-187b10c294c7/core
++
++ - /tmp/.openrig-test-fixture-home-lw0koV/state/workers/context/local/lead-progress-run/978d646f-99ee-4978-bc2c-187b10c294c7/protocol
++
++ - /tmp/.openrig-test-fixture-home-lw0koV/state/workers/context/local/lead-progress-run/978d646f-99ee-4978-bc2c-187b10c294c7/roster
++
++ - /tmp/.openrig-test-fixture-home-lw0koV/state/workers/context/local/lead-progress-run/978d646f-99ee-4978-bc2c-187b10c294c7/run
++
++ Work only on this assigned task in the current worktree and within its declared paths. Report the result when finished.
++
++ The owner wrote to you in the run's chat:
++
++ Owner: Which work is done, and has review started?
++
++ Answer the owner in your final message. They read that message as your reply.
+
+ ❯ test/seat-pane-launch.test.ts:257:20
+    255|     const prompt = readFileSync(join(turnPromptDir(daemon.deps.workflo…
+    256|       launch.receipt.attemptId + ".prompt"), "utf8");
+    257|     expect(prompt).toContain("Team progress snapshot:");
+       |                    ^
+    258|     const progress = JSON.parse(prompt.match(/Team progress snapshot:\…
+    259|     expect(progress).toMatchObject({ runId, totalTasks: 2, truncated: …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  18:42:32
+   Duration  4.44s (transform 2.57s, setup 36ms, collect 3.35s, tests 880ms, environment 0ms, prepare 51ms)
+

@@ -1,0 +1,197 @@
+{
+  "checkedAt": "2026-11-07T15:23:04.330649+00:00",
+  "units": [
+    {
+      "unit": "U1",
+      "title": "GitHub sign-in",
+      "declaredPathCount": 11,
+      "declaredPathsPresent": 11,
+      "pathFindings": []
+    },
+    {
+      "unit": "U2",
+      "title": "Create a project from a folder and a name",
+      "declaredPathCount": 13,
+      "declaredPathsPresent": 13,
+      "pathFindings": []
+    },
+    {
+      "unit": "U3",
+      "title": "Lead-built roster",
+      "declaredPathCount": 18,
+      "declaredPathsPresent": 17,
+      "pathFindings": [
+        {
+          "path": "domain/scope-extension.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/daemon/src/domain/scope-extension.ts"
+        }
+      ]
+    },
+    {
+      "unit": "U4",
+      "title": "Turn telemetry",
+      "declaredPathCount": 12,
+      "declaredPathsPresent": 12,
+      "pathFindings": []
+    },
+    {
+      "unit": "U5",
+      "title": "Command-center shell, theme and chat panel",
+      "declaredPathCount": 16,
+      "declaredPathsPresent": 16,
+      "pathFindings": []
+    },
+    {
+      "unit": "U6",
+      "title": "Overview, Tasks and the task stage",
+      "declaredPathCount": 9,
+      "declaredPathsPresent": 8,
+      "pathFindings": [
+        {
+          "path": "engine/packages/daemon/src/domain/team-control-surface.ts",
+          "classification": "plan-location-correction",
+          "resolved": "engine/packages/daemon/src/team-control-surface.ts"
+        }
+      ]
+    },
+    {
+      "unit": "U7",
+      "title": "Workspace and Reviews",
+      "declaredPathCount": 10,
+      "declaredPathsPresent": 7,
+      "pathFindings": [
+        {
+          "path": "workspace-view.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/workspace/workspace-view.tsx"
+        },
+        {
+          "path": "workspace-focus.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/workspace/workspace-focus.tsx"
+        },
+        {
+          "path": "engine/packages/daemon/src/domain/team-control-surface.ts",
+          "classification": "plan-location-correction",
+          "resolved": "engine/packages/daemon/src/team-control-surface.ts"
+        }
+      ]
+    },
+    {
+      "unit": "U8",
+      "title": "Analytics, Settings and the first-open gates",
+      "declaredPathCount": 23,
+      "declaredPathsPresent": 10,
+      "pathFindings": [
+        {
+          "path": "analytics-charts.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/analytics-charts.tsx"
+        },
+        {
+          "path": "analytics-model.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/analytics-model.ts"
+        },
+        {
+          "path": "settings.test.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/__tests__/settings.test.tsx"
+        },
+        {
+          "path": "github-gate.test.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/__tests__/github-gate.test.tsx"
+        },
+        {
+          "path": "create-project.test.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/team/__tests__/create-project.test.tsx"
+        },
+        {
+          "path": "engine/packages/ui/src/team/run-home.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "teams-screen.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "task-screen.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "branch-screen.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "teams.test.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "run-home.test.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "task-detail.test.tsx",
+          "classification": "planned-legacy-removal",
+          "resolved": "Removed by U8 as planned."
+        },
+        {
+          "path": "routes.tsx",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/ui/src/routes.tsx"
+        }
+      ]
+    },
+    {
+      "unit": "U9",
+      "title": "Desktop window and folder picker",
+      "declaredPathCount": 6,
+      "declaredPathsPresent": 6,
+      "pathFindings": []
+    },
+    {
+      "unit": "U11",
+      "title": "Worker reports, failure classes and the owner slot",
+      "declaredPathCount": 17,
+      "declaredPathsPresent": 15,
+      "pathFindings": [
+        {
+          "path": "domain/attempt-completion.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/daemon/src/domain/attempt-completion.ts"
+        },
+        {
+          "path": "domain/pending-dispatch.ts",
+          "classification": "plan-shorthand",
+          "resolved": "engine/packages/daemon/src/domain/pending-dispatch.ts"
+        }
+      ]
+    },
+    {
+      "unit": "U10",
+      "title": "Acceptance run and wrap-up",
+      "declaredPathCount": 4,
+      "declaredPathsPresent": 3,
+      "pathFindings": [
+        {
+          "path": "docs/validation/2026-11-xx-command-center/",
+          "classification": "dated-evidence-placeholder",
+          "resolved": "docs/validation/2026-11-07-command-center/"
+        }
+      ]
+    }
+  ],
+  "scope": "Active command-center plan only; explicitly deferred follow-up features remain out of scope.",
+  "method": "Declared path presence and current Git history; not behavior proof.",
+  "unresolvedDeclaredPathFindings": 0,
+  "remainingLegacyRouteReferences": []
+}

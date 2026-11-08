@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-11-07T12:02:01.209980+00:00",
+  "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+  "beforeHead": "5b423f087892a6da19fc793e733d3865ccd428a4",
+  "afterHead": "59c47579bcda6f0576096cb5e9239c1df1337836",
+  "branch": "main",
+  "changedPaths": [
+    "plan.md",
+    "src/reorder-plan.mjs",
+    "src/reorder-plan.test.mjs",
+    "src/stock-label.mjs",
+    "src/stock-label.test.mjs"
+  ],
+  "expectedFourNewFilesAndApprovedPlanOnly": true,
+  "existingFilesExceptPlanUnchanged": true,
+  "untrackedContextCollectorUnchanged": true,
+  "afterStatus": "?? .openrig/context-collector.cjs",
+  "testReceipt": "u10-runtime-synthetic-final-test.json",
+  "sourceDeliveryMutation": false
+}

@@ -1,0 +1,15 @@
+{
+  "check": "desktop-final-range-full-daemon",
+  "root": "/home/leo/scratch/cc-u10-acceptance/daemon-suite",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "--maxWorkers=2",
+    "--testTimeout=60000"
+  ],
+  "exit": 1,
+  "seconds": 572.87,
+  "stdinDetached": true,
+  "noControllingTerminal": true
+}

@@ -4,18 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { routeTree } from "../../routes.js";
 import { queryClient } from "../../lib/query-client.js";
-import { read, RUN_ID, task } from "./fixtures.js";
+import { health, read, RUN_ID, task } from "./fixtures.js";
 
 vi.mock("@xterm/xterm", () => ({ Terminal: class {} }));
 
 let mobile = false;
 let signedIn = true;
+let accountFailure = false;
 const data = read({ tasks: [task({ queueState: "pending", stage: "queued" }), task({ taskId: "task-2", displayName: "Filter chips", queueState: "pending", stage: "queued" })] });
 const unexpected: string[] = [];
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
-  mobile = false; signedIn = true; unexpected.length = 0;
+  mobile = false; signedIn = true; accountFailure = false; unexpected.length = 0;
   vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   localStorage.clear(); sessionStorage.clear(); queryClient.clear();
   localStorage.setItem("openrig.interfaceLanguage", "en");
@@ -27,8 +28,12 @@ beforeEach(() => {
     const path = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, window.location.origin).pathname;
     const response = (body: object) => new Response(JSON.stringify({ protocolVersion: "1.0", ...body }), { headers: { "Content-Type": "application/json" } });
     if (path.endsWith("/owner-session/exchange")) return response({ antiForgeryToken: "a".repeat(43) });
-    if (path.endsWith("/github/status")) return response({ signedIn, login: signedIn ? "fixture-owner" : null, host: "github.com" });
+    if (path.endsWith("/github/status")) return accountFailure
+      ? new Response(JSON.stringify({ code: "github_login_failed" }), { status: 503 })
+      : response({ signedIn, login: signedIn ? "fixture-owner" : null, host: "github.com" });
     if (path.endsWith("/github/login")) return response({ state: "idle" });
+    if (/\/teams\/[^/]+\/settings$/.test(path)) return response({ settings: { teamId: "fresh-project", kind: "project", configured: false,
+      lead: { client: "codex", model: null }, allowedSubagents: null, launches: [] } });
     if (path.endsWith("/settings")) return response({ settings: { "team.leadClient": { value: "claude-code", source: "default" } } });
     if (path.endsWith("/analytics")) return response({ analytics: null });
     if (path === "/api/team-control/teams") return response({ teams: [
@@ -36,7 +41,7 @@ beforeEach(() => {
       { id: "fresh-project", name: "Fresh project", repository: "/fixture/fresh", seats: [{ role: "lead", client: "codex" }] },
     ] });
     if (path === "/api/team-control/runs") return response({ runs: [{ id: RUN_ID, rigId: data.run.rigId, rigName: "Status board", displayName: data.run.displayName, state: data.run.state }] });
-    if (path.endsWith("/health")) return response({ health: { runtime: { isolation: "none" } } });
+    if (path.endsWith("/health")) return response({ health: health() });
     if (path.endsWith("/read")) return response({ read: data });
     if (path.endsWith("/replay")) return response({ runId: RUN_ID, events: [], window: data.replay, gap: false });
     if (path.endsWith("/chat")) return response({ phase: "delivery", pendingDecision: null, messages: [{
@@ -83,6 +88,7 @@ describe("command-center router integration", () => {
   it("publishes the restored Overview summary through the real route", async () => {
     await openShell();
     expect(screen.getByRole("region", { name: "Run summary" })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "System status" })).getAllByText("Unknown")).toHaveLength(6);
   });
 
   it("keeps a project selected across destinations before its first run", async () => {
@@ -91,22 +97,41 @@ describe("command-center router integration", () => {
     expect(await screen.findByRole("heading", { name: "Fresh project" })).toBeTruthy();
     expect(router.state.location.search.team).toBe("fresh-project");
     expect(router.state.location.search.run).toBeUndefined();
-    expect(screen.getByRole("combobox", { name: "Projects" })).toHaveProperty("value", "fresh-project");
+    expect(screen.getByRole("button", { name: "Open lead chat" })).toHaveProperty("disabled", false);
     const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
     fireEvent.click(within(nav).getByRole("link", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeTruthy();
     fireEvent.click(within(nav).getByRole("link", { name: "Overview" }));
     expect(await screen.findByRole("heading", { name: "Fresh project" })).toBeTruthy();
     expect(router.state.location.search.team).toBe("fresh-project");
-    expect(screen.getByRole("textbox", { name: "What should the team do?" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "What should the team do?" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Planning records" })).toBeTruthy();
+    fireEvent.click(within(nav).getByRole("link", { name: "Tasks" }));
+    expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
+    expect(screen.getByText("No execution tasks yet. Approve a plan before implementation starts.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open lead chat" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Plan without execution" } });
+    fireEvent.click(within(nav).getByRole("link", { name: "Workspace" }));
+    expect(await screen.findByRole("heading", { name: "Workspace" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveProperty("value", "Plan without execution");
+    expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith("/runs") && init?.method === "POST")).toBe(false);
   });
 
-  it("publishes the restored task board through the real route", async () => {
+  it("opens the retained board from the default list and restores its card focus", async () => {
     await openShell();
     fireEvent.click(within(screen.getByRole("navigation", { name: "Multi-Agent" })).getByRole("link", { name: "Tasks" }));
-    expect(await screen.findByRole("region", { name: "Queued" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Task list" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    expect(screen.getByRole("region", { name: "Queued" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Waiting on lead" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Waiting on you" })).toBeTruthy();
+    const card = within(screen.getByRole("region", { name: "Queued" })).getByRole("button", { name: /Filter chips/ });
+    card.focus(); fireEvent.click(card);
+    const drawer = await screen.findByRole("dialog", { name: "Filter chips" });
+    await waitFor(() => expect(drawer.contains(document.activeElement)).toBe(true));
+    fireEvent.keyDown(drawer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(card));
   });
 
   it("opens Workspace layouts and the read-only Reviews gates through the real routes", async () => {
@@ -131,6 +156,7 @@ describe("command-center router integration", () => {
   });
 
   it("keeps the real chat draft mounted while every destination changes the URL", async () => {
+    const renderErrors = vi.spyOn(console, "error").mockImplementation(() => {});
     const router = await openShell();
     const opener = screen.getByRole("button", { name: "Coordinator" });
     fireEvent.click(opener);
@@ -138,7 +164,7 @@ describe("command-center router integration", () => {
     const field = within(panel).getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
     fireEvent.change(field, { target: { value: "Retain this question across sections" } });
     const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
-    for (const section of ["Workspace", "Tasks", "Reviews", "Analytics", "Settings", "Overview"]) {
+    for (const section of ["Documents", "Tasks", "Documents", "Workspace", "Reviews", "Documents", "Analytics", "Settings", "Overview"]) {
       const link = within(nav).getByRole("link", { name: section });
       fireEvent.pointerDown(link); fireEvent.click(link);
       await waitFor(() => expect(router.state.location.pathname).toBe(`/team/${section.toLowerCase()}`));
@@ -146,11 +172,37 @@ describe("command-center router integration", () => {
       expect(link.getAttribute("aria-current")).toBe("page");
       expect(within(panel).getByRole("textbox", { name: "Message" })).toBe(field);
       expect(field.value).toBe("Retain this question across sections");
+      expect(screen.queryAllByRole("heading", { name: "Documents" })).toHaveLength(section === "Documents" ? 1 : 0);
     }
+    expect(renderErrors).not.toHaveBeenCalled();
     const rows = within(panel).getByRole("region", { name: "Needs your attention" });
     expect(within(rows).getAllByRole("listitem")).toHaveLength(1);
     fireEvent.keyDown(panel, { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  it.each([false, true])("retains the open conversation and route through a failed background account check without exposing gated controls (mobile: %s)", async mobileMode => {
+    mobile = mobileMode;
+    const router = await openShell();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Multi-Agent" })).getByRole("link", { name: "Documents" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/team/documents"));
+    fireEvent.click(screen.getByRole("button", { name: "Open lead chat" }));
+    const panel = screen.getByRole("dialog", { name: "Lead chat" });
+    const field = within(panel).getByRole("textbox", { name: "Message" });
+    fireEvent.change(field, { target: { value: "Retain the current requirements discussion" } });
+    accountFailure = true;
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: ["team", "github", "status"] }); });
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Lead chat" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(field.isConnected).toBe(true);
+    accountFailure = false;
+    await act(async () => { await queryClient.invalidateQueries({ queryKey: ["team", "github", "status"] }); });
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Lead chat" })).toBe(panel));
+    expect(within(panel).getByRole("textbox", { name: "Message" })).toBe(field);
+    expect(field).toHaveProperty("value", "Retain the current requirements discussion");
+    expect(router.state.location.pathname).toBe("/team/documents");
+    expect(router.state.location.search.run).toBe(RUN_ID);
   });
 
   it("uses Ctrl K and Enter to navigate to the selected task", async () => {
@@ -163,11 +215,10 @@ describe("command-center router integration", () => {
     expect(router.state.location.pathname).toBe("/team/tasks");
     expect(router.state.location.search.run).toBe(RUN_ID);
     expect(screen.getByRole("heading", { name: "Filter chips" })).toBeTruthy();
-    const drawer = screen.getByRole("dialog", { name: "Filter chips" });
-    await waitFor(() => expect(drawer.contains(document.activeElement)).toBe(true));
-    fireEvent.keyDown(drawer, { key: "Escape" });
+    expect(within(screen.getByRole("region", { name: "Task detail" })).getByRole("heading", { name: "Filter chips" })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Task list" })).getByRole("button", { name: /Filter chips/ }).getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Tasks" })));
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it("closes mobile navigation before opening chat and returns focus to the menu trigger", async () => {

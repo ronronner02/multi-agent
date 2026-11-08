@@ -5,16 +5,18 @@ import { join } from "node:path";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
-  TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, prose, relativePath, text,
+  TEAM_CONTROL_VERSION, TeamContractError, bindingScopePath, object, parseProtocolVersion, prose, relativePath, text,
   type ControlActor, type PlanBinding, type TeamRun, type TeamRunSummary,
 } from "../contracts/team-control.js";
 import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import { runName } from "../domain/display-names.js";
 import { bootstrapPlan, commitPlan, ensurePlanWorktree } from "../domain/plan-branch.js";
 import { roleConfiguration } from "../domain/role-configuration.js";
-import { leadRoster } from "../domain/lead-proposal.js";
+import { LEAD_ESCALATION_PATH, leadRoster } from "../domain/lead-proposal.js";
 import { isRetiredTeamNode } from "../domain/team-setup.js";
 import { leadRosterPath } from "../domain/lead-roster.js";
+import { documentPaths } from "../domain/project-documents.js";
+import { appendChatMessage } from "../domain/lead-chat.js";
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { Rig } from "../domain/types.js";
@@ -84,9 +86,9 @@ export function refreshPlanBinding(binding: PlanBinding, policy: ProviderPolicyC
     policyRevision: current.policyRevision, policyFingerprint: current.policyFingerprint };
 }
 
-function writePaths(value: unknown): string[] {
+function writePaths(value: unknown, planning: boolean): string[] {
   if (!Array.isArray(value) || !value.length) throw new TeamContractError("writePaths");
-  return value.map(entry => relativePath(entry, "writePaths"));
+  return value.map(entry => (planning ? bindingScopePath : relativePath)(entry, "writePaths"));
 }
 
 /** The rig's first agent node, which is where a run with no named seat routes its task. */
@@ -109,8 +111,13 @@ function defaultSeat(rigRepo: RigRepository, node: { id: string; logicalId: stri
 }
 
 function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
+  const counts = rigRepo.db.prepare(`SELECT
+    (SELECT COUNT(*) FROM team_chat_messages WHERE run_id = @runId) AS messageCount,
+    (SELECT COUNT(*) FROM team_queue_authority WHERE run_id = @runId AND json_extract(assignment_json, '$.role') <> 'lead') AS executionTaskCount,
+    (SELECT COUNT(*) FROM team_integration_commits WHERE run_id = @runId) AS resultCount`).get({ runId: run.id }) as
+    Pick<TeamRunSummary, "messageCount" | "executionTaskCount" | "resultCount">;
   return { id: run.id, rigId: run.rigId, rigName: rigRepo.getRig(run.rigId)?.rig.name ?? run.rigId,
-    state: run.state, planRef: run.binding.planRef, displayName: run.displayName, createdAt: run.createdAt };
+    state: run.state, phase: run.phase, ...counts, planRef: run.binding.planRef, displayName: run.displayName, createdAt: run.createdAt };
 }
 
 /**
@@ -188,6 +195,8 @@ export function teamStartRoutes(
     // with the owner, so it needs one of those seats to exist.
     if (v.planning !== undefined && typeof v.planning !== "boolean") throw new TeamContractError("planning");
     const planning = v.planning === true;
+    if (v.documentWorkflow !== undefined && (typeof v.documentWorkflow !== "boolean" || !planning)) throw new TeamContractError("documentWorkflow");
+    const documentWorkflow = v.documentWorkflow === true;
     const maxSessions = Number(options.settingsStore?.resolveOne("team.maxConcurrentAgents").value ?? 3);
     const leadSeat = v.lead === undefined ? seatForRole(rigRepo, rig, "lead") : text(v.lead, "lead", 256);
     if (planning && leadSeat === null) {
@@ -220,8 +229,10 @@ export function teamStartRoutes(
     const root = repository.root === undefined ? node?.cwd ?? null : text(repository.root, "repository.root", 4096);
     if (!root) return c.json({ code: "repository_required", error: "The rig's agent seat has no working directory; name the repository." }, 400);
     const planRef = repository.planRef === undefined ? DEFAULT_PLAN_REF : relativePath(repository.planRef, "repository.planRef");
-    const scope = v.writePaths === undefined ? [...DEFAULT_WRITE_PATHS] : writePaths(v.writePaths);
-    const planningPaths = planning ? [planRef, leadRosterPath(planRef)] : [planRef];
+    const scope = v.writePaths === undefined
+      ? (planning ? ["."] : [...DEFAULT_WRITE_PATHS]) : writePaths(v.writePaths, planning);
+    const planningPaths = planning ? [...new Set([planRef, leadRosterPath(planRef), LEAD_ESCALATION_PATH,
+      ...(documentWorkflow ? Object.values(documentPaths(planRef)) : [])])] : [planRef];
     // U5 — the run id exists before the binding does, because a planning run's binding is
     // established in the daemon's own worktree for that run, not in the owner's checkout.
     const runId = randomUUID();
@@ -260,7 +271,7 @@ export function teamStartRoutes(
     // U9 — the run is named from the goal the owner started it with, so no client ever has to
     // show the run id. The goal is already required to be non-blank above.
     const run = governance.createRun({ id: runId, rigId: rig.id, binding, reviewerSeat, displayName,
-      phase: planning ? "planning" : "delivery" });
+      phase: planning ? "planning" : "delivery", documentWorkflow });
     const bindingDigest = hashBinding(binding);
     const request = (actionId: string, payload: unknown) => ({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id,
       actionId, expectedEntityVersion: governance.getRun(run.id).entityVersion, idempotencyKey: randomUUID(), payload });
@@ -288,6 +299,8 @@ export function teamStartRoutes(
     if (created.status !== "accepted") {
       return c.json({ code: "start_refused", runId: run.id, error: created.reason ?? "The task was refused." }, 409);
     }
+    if (planning) appendChatMessage(rigRepo.db, { id: run.id + ":initial", runId: run.id,
+      body: goal, createdAt: run.createdAt });
     // The task exists, so the agent that has to do it starts now. This runs after the response
     // is built rather than inside the request: opening a seat's terminal and waiting for its
     // client to become ready is a launch, and a launch is not what a start request waits on.

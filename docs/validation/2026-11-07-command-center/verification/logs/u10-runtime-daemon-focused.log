@@ -1,0 +1,227 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/team-workspace.test.ts (86 tests) 4798ms
+   ✓ T044 commit-lane manifest without a git in the candidate > T054 plain git over a control-owned copy > copies a realistic candidate in well under a few seconds  327ms
+ ✓ test/team-candidate-launch.test.ts (37 tests) 3822ms
+ ✓ test/lead-chat.test.ts (14 tests) 1322ms
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: VITEST=true — skipping kernel auto-boot
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: tracker-state=skipped
+
+error connecting to /tmp/seat-pane-tTFrdO/tmux/tmux-1000/default (No such file or directory)
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] gateway subsystem stopped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+team dispatch: recovered seat dev-impl@team-demo for one launch (pane %0 respawned)
+
+stderr | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+team dispatch: seat dev-impl@team-demo remains failed; Managed attempt attachment: Managed launch task is ambiguous
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/seat-pane-launch.test.ts (6 tests) 3577ms
+   ✓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt  970ms
+   ✓ a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy  370ms
+   ✓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt  356ms
+   ✓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client  1369ms
+   ✓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat  409ms
+stderr | test/agent-turn.test.ts > a freed slot dispatches the run's next task > leaves a task alone until its owner records the outcome, and resumes it after a reopen
+team dispatch: launch for run=run task=task-1 failed: UNIQUE constraint failed: team_attempts.id, team_attempts.run_id
+
+stderr | test/agent-turn.test.ts > a freed slot dispatches the run's next task > admits a receipt on a seat that holds two live tasks, by the pane's stamp
+team completion: no single live task on a@rig for run=run; attempt attempt-stamped is unrecorded
+
+ ❯ test/agent-turn.test.ts (18 tests | 1 failed) 1062ms
+   ✓ the managed turn's command line > runs one headless turn: -p, the readable view, and the prompt fed on stdin 4ms
+   ✓ the managed turn's command line > continues a conversation with --resume when the seat hands one over 1ms
+   ✓ the managed turn's command line > writes the turn's prompt where the launcher reads it 0ms
+   ✓ the managed turn's command line > states the task, its assignment and the instruction files it must read 0ms
+   × what a continuation is told > bounds lead progress, reports truncation and keeps another run and task bodies out 195ms
+     → {"status":"denied","runId":"run","entityVersion":104,"replayed":false,"effectMayStart":false,"value":null,"reason":"Managed task limit reached","reasonKey":"team.reason.generic"}: expected 'denied' to be 'accepted' // Object.is equality
+   ✓ what a continuation is told > carries only the latest recorded review verdict and its candidate, not raw findings 66ms
+   ✓ what a continuation is told > carries the reviewer's blocking findings into the implementer's rework 63ms
+   ✓ what a continuation is told > carries the owner's rejection reason into the lead's revision 69ms
+   ✓ what a continuation is told > stops telling the lead about an approval it has already answered 63ms
+   ✓ what a continuation is told > records a rejection with no reason and still reopens the lead 68ms
+   ✓ a freed slot dispatches the run's next task > starts the second task only after the first attempt stops, at the run's limit 63ms
+   ✓ a freed slot dispatches the run's next task > dispatches nothing for a run that is not approved 67ms
+   ✓ a freed slot dispatches the run's next task > leaves a task alone until its owner records the outcome, and resumes it after a reopen 64ms
+   ✓ a freed slot dispatches the run's next task > serves a reopen once, not once per freed slot 63ms
+   ✓ a freed slot dispatches the run's next task > names only pending tasks with no live attempt 60ms
+   ✓ a freed slot dispatches the run's next task > admits a receipt on a seat that holds two live tasks, by the pane's stamp 71ms
+   ✓ a freed slot dispatches the run's next task > asks the sweep to dispatch once it has recorded a stop 63ms
+   ✓ a freed slot dispatches the run's next task > asks the scheduler for a run's pending work when the daemon starts 82ms
+ ✓ test/managed-native-startup.test.ts (191 tests) 17286ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a null pane screen  395ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "" pane screen  372ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "Starting up..." pane screen  375ms
+   ✓ production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only  896ms
+   ✓ production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)  756ms
+   ✓ offline fixture-daemon restart > keeps durable messages, wake limits and unresolved intents, but not admission or handout rights  3506ms
+ ✓ test/team-result.test.ts (4 tests) 494ms
+ ✓ test/lead-manager.test.ts (19 tests) 1299ms
+ ❯ test/integration-branch.test.ts (27 tests | 5 failed) 9532ms
+   ✓ U7 integration branch and merge > lands two approved tasks as two commits in approval order, and never touches the owner's checkout  380ms
+   × U7 integration branch and merge > does not offer a merge while no task's work has landed 179ms
+     → expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+   × U7 integration branch and merge > does not offer a merge while any task has failed, the lead included 250ms
+     → expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: null  511ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-proposal.json  517ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-escalation.json  510ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: src/health.ts  508ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, false  324ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: codex, codex_id, worker1, false  316ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, true  352ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker2, false  307ms
+   × U7 integration branch and merge > does not offer a merge while the delivery lead is pending 235ms
+     → expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+   × U7 integration branch and merge > does not offer a merge while the delivery lead is in-progress 235ms
+     → expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+   × U7 integration branch and merge > does not offer a merge while the delivery lead is blocked 242ms
+     → expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: false)  401ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: true)  428ms
+   ✓ U7 integration branch and merge > fails the task with integration_conflict and leaves the branch unchanged when the patch will not apply  378ms
+   ✓ U7 integration branch and merge > still refuses an in-flight candidate when the owner's own source moved 141ms
+   ✓ U7 integration branch and merge > lands the commit when the daemon's own sweep records an approving review 296ms
+   ✓ U7 integration branch and merge > keeps a completed result readable after Merge without a restart  595ms
+   ✓ U7 integration branch and merge > does not forgive unrelated source changes during Merge (invalidated: false) 262ms
+   ✓ U7 integration branch and merge > does not forgive unrelated source changes during Merge (invalidated: true) 280ms
+   ✓ U7 integration branch and merge > refuses a merge while work is open, fast-forwards a clean checkout, and refuses a dirty one 286ms
+   ✓ U7 integration branch and merge > keeps Merge completion observable after refresh, restart and later owner commits  393ms
+   ✓ U7 integration branch and merge > makes one merge commit when the owner's branch diverged, and aborts a conflicting merge  433ms
+   ✓ U7 integration branch and merge > finds the branch and worktree again after a restart, and keeps landing on it  400ms
+   ✓ U7 integration branch and merge > serves the integration read and the merge to the owner only  371ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/agent-turn.test.ts > what a continuation is told > bounds lead progress, reports truncation and keeps another run and task bodies out
+AssertionError: {"status":"denied","runId":"run","entityVersion":104,"replayed":false,"effectMayStart":false,"value":null,"reason":"Managed task limit reached","reasonKey":"team.reason.generic"}: expected 'denied' to be 'accepted' // Object.is equality
+
+Expected: "accepted"
+Received: "denied"
+
+ ❯ test/agent-turn.test.ts:163:53
+    161|         outputs: [], permissions: ["write-assigned-tree"], sourceSessi…
+    162|         body: "Task body that must not enter a progress snapshot." }),…
+    163|       expect(result.status, JSON.stringify(result)).toBe("accepted");
+       |                                                     ^
+    164|     }
+    165|     const note = leadProgressNote(db, "run", "2026-11-04T00:00:00.000Z…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while no task's work has landed
+AssertionError: expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+
+- Expected
++ Received
+
+  {
++   "merged": false,
+    "possible": false,
+    "reason": "No task's work has landed on the integration branch yet.",
+  }
+
+ ❯ test/integration-branch.test.ts:263:26
+    261|     const status = integration.status(runId);
+    262|     expect(status.commits).toEqual([]);
+    263|     expect(status.merge).toEqual({ possible: false, reason: "No task's…
+       |                          ^
+    264|     expect(integration.merge(runId)).toMatchObject({ status: "refused"…
+    265|     // The refusal is what keeps the owner's checkout exactly where it…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while any task has failed, the lead included
+AssertionError: expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+
+- Expected
++ Received
+
+  {
++   "merged": false,
+    "possible": false,
+    "reason": "Task(s) failed: lead-task",
+  }
+
+ ❯ test/integration-branch.test.ts:294:45
+    292| 
+    293|     expect(governance.queueState(lead.qitemId)).toBe("failed");
+    294|     expect(integration.status(runId).merge).toEqual({ possible: false,…
+       |                                             ^
+    295|     expect(integration.merge(runId)).toMatchObject({ status: "refused"…
+    296|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while the delivery lead is pending
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while the delivery lead is in-progress
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > does not offer a merge while the delivery lead is blocked
+AssertionError: expected { possible: false, …(2) } to deeply equal { possible: false, …(1) }
+
+- Expected
++ Received
+
+  {
++   "merged": false,
+    "possible": false,
+    "reason": "Task(s) still open: lead-task",
+  }
+
+ ❯ test/integration-branch.test.ts:410:45
+    408|     }), currentBinding()).status).toBe("accepted");
+    409|     db.prepare("UPDATE queue_items SET state = ? WHERE qitem_id = ?").…
+    410|     expect(integration.status(runId).merge).toEqual({ possible: false,…
+       |                                             ^
+    411|     expect(integration.merge(runId)).toMatchObject({ status: "refused"…
+    412|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+
+ Test Files  2 failed | 7 passed (9)
+      Tests  6 failed | 396 passed (402)
+   Start at  18:46:23
+   Duration  29.15s (transform 3.12s, setup 120ms, collect 6.28s, tests 43.19s, environment 1ms, prepare 318ms)
+

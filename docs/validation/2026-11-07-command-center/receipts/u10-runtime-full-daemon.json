@@ -1,0 +1,15 @@
+{
+  "check": "u10-runtime-full-daemon",
+  "root": "<daemon-suite>",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "--maxWorkers=2",
+    "--testTimeout=60000"
+  ],
+  "exit": 1,
+  "seconds": 577.96,
+  "stdinDetached": true,
+  "noControllingTerminal": true
+}

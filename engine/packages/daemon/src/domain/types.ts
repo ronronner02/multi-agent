@@ -229,7 +229,7 @@ export type RigEvent =
   // on the event itself because a run's own replay is read by that field: a launch is that run's
   // evidence, not only its seat's.
   | { type: "managed.attempt.receipt"; rigId: string; nodeId: string; sessionId: string; runId: string;
-      sessionName: string; receipt: import("./runtime-adapter.js").ManagedSessionReceipt }
+      sessionName: string; requestedModel?: string | null; receipt: import("./runtime-adapter.js").ManagedSessionReceipt }
   // OPR.0.4.3.06 — startup proof (challenge-verified orientation). Append-only.
   // `node.startup_challenged` freezes this launch's challenge ground truth
   // (challengeId + contractHash; the expected answer is recomputed, never

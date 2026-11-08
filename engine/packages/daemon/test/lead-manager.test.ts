@@ -181,6 +181,24 @@ describe("U6 — the lead as manager", () => {
     expect(pendingTasks(db, "run")).not.toContain("task-review");
   });
 
+  it.each([false, true])("releases a dropped worker's paths for its replacement (separate proposal: %s)", async separate => {
+    endLeadTurn();
+    const previous = pauseWorker();
+    const resolution = { taskId: "task-2", action: "drop" as const };
+    if (separate) await leadTurnEnd({ tasks: [], resolutions: [resolution] }, "drop-old");
+    await leadTurnEnd({ tasks: [{ taskId: "replacement", seat: "a@rig", paths: ["src/a.ts"],
+      dependencies: [], body: "Complete the same approved work from the current base." }],
+      ...(separate ? {} : { resolutions: [resolution] }) }, "replace-old");
+
+    expect(governance.queueState(previous.qitemId)).toBe("done");
+    expect(governance.getTask(previous.qitemId)!.evidence).toMatchObject({
+      validated: false, reportedAttemptId: "attempt-task-2", resolution });
+    expect(governance.getAttempt("attempt-task-2")?.state).toBe("stopped");
+    expect(governance.findTask("run", "replacement")?.assignment.paths).toEqual(["src/a.ts"]);
+    await composePendingDispatch({ db, dispatch: () => dispatch as never, liveSessions: () => 0, maxSessions: () => 2 })("run");
+    expect(dispatch).toHaveBeenCalledWith("run", "replacement");
+  });
+
   it("validates every resolution before admitting tasks or applying seat changes", async () => {
     const task = pauseWorker();
     const nodes = db.prepare("SELECT count(*) AS n FROM nodes").get();

@@ -1,0 +1,12 @@
+{
+  "check": "u10-runtime-ui-all",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 67.42
+}

@@ -1,3 +1,4 @@
+import type { AttemptActivity, TeamAttemptView, TurnProgress, DocumentPins, ProjectDocumentStage, ProjectDocumentVersion, ProjectDocumentWorkflow } from "@openrig/daemon/team-control";
 import { OwnerReadError, type useOwnerSession } from "../hooks/useOwnerSession.js";
 
 /**
@@ -15,7 +16,7 @@ export type RunPhase = "planning" | "delivery";
 export interface ChatMessage {
   id: string;
   sender: "owner" | "lead";
-  kind: "text" | "decision";
+  kind: "text" | "decision" | "confirmation";
   body: string;
   /** A decision's 2–4 choices; null on a text turn. */
   options: string[] | null;
@@ -23,12 +24,27 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface PlanApproval {
+  documentVersions?: DocumentPins;
+  plan: { content: string; hash: string } | null;
+  roster: { seats: { role: "implementer" | "reviewer"; client: "claude-code" | "codex"; model?: string }[]; digest: string } | null;
+  error: string | null;
+}
+
+export interface LiveLeadTurn {
+  attemptId: string; state: TeamAttemptView["state"]; progress: TurnProgress | null; activity: AttemptActivity | null;
+}
+
 export interface ChatState {
+  liveTurn?: LiveLeadTurn | null;
+  documentWorkflow?: ProjectDocumentWorkflow | null;
   available: boolean;
   phase: RunPhase;
   messages: ChatMessage[];
   /** The newest unanswered decision: the "waiting on you" signal. */
   pendingDecision: { id: string; body: string; options: string[]; createdAt: string } | null;
+  /** Null identifies legacy planning without a roster; missing evidence is not approval-ready. */
+  planApproval?: PlanApproval | null;
 }
 
 function controlBody(runId: string, actionId: string, entityVersion: number, payload: unknown) {
@@ -41,10 +57,11 @@ function controlBody(runId: string, actionId: string, entityVersion: number, pay
 /** U5 — `GET /runs/:runId/chat`. */
 export async function readChat(request: Request, runId: string, signal?: AbortSignal): Promise<ChatState> {
   try {
-    const body = await request<{ messages?: ChatMessage[]; phase?: RunPhase; pendingDecision?: ChatState["pendingDecision"] }>(
+    const body = await request<{ liveTurn?: LiveLeadTurn | null; messages?: ChatMessage[]; phase?: RunPhase; pendingDecision?: ChatState["pendingDecision"]; planApproval?: PlanApproval | null; documentWorkflow?: ProjectDocumentWorkflow | null }>(
       `/runs/${encodeURIComponent(runId)}/chat`, { signal },
     );
-    return { available: true, messages: body.messages ?? [], phase: body.phase ?? "delivery", pendingDecision: body.pendingDecision ?? null };
+    return { available: true, messages: body.messages ?? [], phase: body.phase ?? "delivery",
+      pendingDecision: body.pendingDecision ?? null, liveTurn: body.liveTurn ?? null, planApproval: body.planApproval, documentWorkflow: body.documentWorkflow };
   } catch (error) {
     if (error instanceof OwnerReadError && error.status === 404) {
       return { available: false, messages: [], phase: "delivery", pendingDecision: null };
@@ -65,10 +82,23 @@ export async function sendChatMessage(request: Request, runId: string, body: str
 }
 
 /** U5 — `POST /runs/:runId/plan/approve`. */
-export async function approvePlan(request: Request, runId: string, entityVersion: number): Promise<void> {
+export async function approvePlan(request: Request, runId: string, entityVersion: number, rosterDigest?: string, documentVersions?: DocumentPins, conversation?: { ownerMessage: string; planHash?: string }): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/plan/approve`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: controlBody(runId, crypto.randomUUID(), entityVersion, {}),
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { ...(rosterDigest ? { rosterDigest } : {}), ...(documentVersions ? { documentVersions } : {}), ...conversation }),
+  });
+}
+
+export async function confirmDocument(request: Request, runId: string, entityVersion: number, version: ProjectDocumentVersion, ownerMessage?: string): Promise<void> {
+  await request(`/runs/${encodeURIComponent(runId)}/documents/confirm`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { kind: version.kind, versionId: version.id, hash: version.hash, ...(ownerMessage ? { ownerMessage } : {}) }),
+  });
+}
+export async function selectDocumentStage(request: Request, runId: string, entityVersion: number, stage: ProjectDocumentStage, ownerMessage?: string): Promise<void> {
+  await request(`/runs/${encodeURIComponent(runId)}/documents/stage`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { stage, ...(ownerMessage ? { ownerMessage } : {}) }),
   });
 }
 
@@ -79,11 +109,11 @@ export interface IntegrationState {
   commits: IntegrationCommit[];
   /** Every task the run admitted has finished. */
   tasksDone: boolean;
-  merge: { possible: boolean; reason: string | null };
+  merge: { possible: boolean; reason: string | null; merged?: boolean | null };
 }
 
 const ABSENT_INTEGRATION: IntegrationState = {
-  available: false, branch: "", commits: [], tasksDone: false, merge: { possible: false, reason: null },
+  available: false, branch: "", commits: [], tasksDone: false, merge: { possible: false, reason: null, merged: null },
 };
 
 /** U7 — `GET /runs/:runId/integration`. */
@@ -99,7 +129,8 @@ export async function readIntegration(request: Request, runId: string, signal?: 
       branch: integration.branch ?? "",
       commits: integration.commits ?? [],
       tasksDone: integration.tasksDone === true,
-      merge: { possible: integration.merge?.possible === true, reason: integration.merge?.reason ?? null },
+      merge: { possible: integration.merge?.possible === true, reason: integration.merge?.reason ?? null,
+        merged: typeof integration.merge?.merged === "boolean" ? integration.merge.merged : null },
     };
   } catch (error) {
     if (error instanceof OwnerReadError && error.status === 404) return { ...ABSENT_INTEGRATION };

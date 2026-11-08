@@ -1,0 +1,14 @@
+{
+  "check": "u10-desktop-install",
+  "cwd": "desktop",
+  "command": [
+    "env",
+    "ELECTRON_SKIP_BINARY_DOWNLOAD=1",
+    "npm",
+    "ci",
+    "--no-audit",
+    "--no-fund"
+  ],
+  "exit": 0,
+  "seconds": 73.54
+}

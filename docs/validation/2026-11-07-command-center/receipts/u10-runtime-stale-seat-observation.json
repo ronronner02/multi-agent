@@ -1,0 +1,36 @@
+{
+  "checkedAt": "2026-11-07T11:34:49.357193+00:00",
+  "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+  "priorCleanup": "u10-final-cleanup.json",
+  "error": "tmux list-panes cannot find the previously bound implementer sessions",
+  "bindingRows": [
+    {
+      "session_name": "lead-1@cc-u10-win-20261107-2c433e64",
+      "tmux_session": "lead-1@cc-u10-win-20261107-2c433e64",
+      "tmux_pane": "%0"
+    },
+    {
+      "session_name": "impl-1@cc-u10-win-20261107-2c433e64",
+      "tmux_session": "impl-1@cc-u10-win-20261107-2c433e64",
+      "tmux_pane": "%1"
+    },
+    {
+      "session_name": "impl-2@cc-u10-win-20261107-2c433e64",
+      "tmux_session": "impl-2@cc-u10-win-20261107-2c433e64",
+      "tmux_pane": "%2"
+    },
+    {
+      "session_name": "review-1@cc-u10-win-20261107-2c433e64",
+      "tmux_session": "review-1@cc-u10-win-20261107-2c433e64",
+      "tmux_pane": "%3"
+    }
+  ],
+  "privateSocket": "<acceptance-scratch>/live/tmux/tmux-1000/default",
+  "actualSessions": [
+    "lead-1@cc-u10-win-20261107-2c433e64"
+  ],
+  "sessionProbeExit": 0,
+  "causalSource": "engine/packages/daemon/src/domain/seat-pane.ts:62-65",
+  "sourceUnchangedFromHead": true,
+  "nativeAttemptsActive": 0
+}

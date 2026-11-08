@@ -1,0 +1,60 @@
+{
+  "check": "u10-runtime-installer-integrity",
+  "checkedAt": "2026-11-07T11:13:42.328413+00:00",
+  "status": "passed",
+  "sourceMatches": [
+    {
+      "file": "src/main.js",
+      "sourceSha256": "b80eb7f7029f9636e3cfc88858abe37988a33a298959cd6f29856891ea89c975",
+      "matchesVerifiedPayloadSource": true
+    },
+    {
+      "file": "src/wsl.js",
+      "sourceSha256": "d6938d39f32b8b5df5fba945f1039ea0ca6cb7172dbf2bbf22dc49910aa1a340",
+      "matchesVerifiedPayloadSource": true
+    },
+    {
+      "file": "src/preload.js",
+      "sourceSha256": "bcbc1b10fc6056ed8c6747c033cff713c684905a720f277e6951ac81ba9e4703",
+      "matchesVerifiedPayloadSource": true
+    },
+    {
+      "file": "src/first-run.html",
+      "sourceSha256": "eb6e5a4609d2ae64573b1bc53d8787be331746aad7c6ea9b4bedb41c443530ab",
+      "matchesVerifiedPayloadSource": true
+    }
+  ],
+  "packages": [
+    {
+      "file": "Multi-Agent Setup 0.1.0.exe",
+      "bytes": 121237022,
+      "sha256": "942baa2cbc1124ba246dd822fa2f13cfe58274b816eb23d801536e6d4ecf495a",
+      "matchesPriorVerifiedArtifact": true
+    },
+    {
+      "file": "Multi-Agent Setup 0.1.0.exe.blockmap",
+      "bytes": 127205,
+      "sha256": "4f4a38fc758d599826e5ab355f9818ecc909f342ed42e22364530fcd80471db8",
+      "matchesPriorVerifiedArtifact": true
+    },
+    {
+      "file": "win-unpacked/Multi-Agent.exe",
+      "bytes": 249788928,
+      "sha256": "afb06983bde93f7dfbf0e56d9df229e7f12e4b8d9922dc1cf51b9a44f147e1a0",
+      "matchesPriorVerifiedArtifact": true
+    },
+    {
+      "file": "win-unpacked/resources/app.asar",
+      "bytes": 39345,
+      "sha256": "c2d11b02854466dfb0c936021d2033281fd6cf774308c3221a31f481e11c49a9",
+      "matchesPriorVerifiedArtifact": true
+    }
+  ],
+  "priorIntegrityReceipt": "u10-final-installer-integrity-2.json",
+  "priorIntegrityReceiptSha256": "c818c4432b76af3011ad8d0b00beffbfdf3b2d5d683775bea0f2cf25f8503cdd",
+  "containsEngine": false,
+  "buildRerun": false,
+  "reason": "The runtime repairs change the separately served engine, not the installer payload. Current payload sources and packaged artifact hashes match the previous verified build.",
+  "installation": "not-run",
+  "cleanProfileFirstOpen": "not-run"
+}

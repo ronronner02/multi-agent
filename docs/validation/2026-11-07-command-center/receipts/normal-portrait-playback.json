@@ -1,0 +1,145 @@
+{
+  "initialTime": 15.6309,
+  "frames": 2690,
+  "min": 10,
+  "max": 23.041667,
+  "portraitRepetitions": 9,
+  "distinctFrameHashes": 86,
+  "events": [
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 40987.10000000894
+    },
+    {
+      "name": "seeked",
+      "time": 10.0002,
+      "at": 41100.60000000894
+    },
+    {
+      "name": "playing",
+      "time": 10.0002,
+      "at": 41100.60000000894
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 54108.79999999702
+    },
+    {
+      "name": "seeked",
+      "time": 10.0002,
+      "at": 54223
+    },
+    {
+      "name": "playing",
+      "time": 10.0003,
+      "at": 54223
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 67239
+    },
+    {
+      "name": "seeked",
+      "time": 10.0002,
+      "at": 67351.40000000596
+    },
+    {
+      "name": "playing",
+      "time": 10.0002,
+      "at": 67351.5
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 80387.29999999702
+    },
+    {
+      "name": "seeked",
+      "time": 10.0002,
+      "at": 80500
+    },
+    {
+      "name": "playing",
+      "time": 10.0002,
+      "at": 80500.10000000894
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 93540.60000000894
+    },
+    {
+      "name": "seeked",
+      "time": 10.0001,
+      "at": 93650
+    },
+    {
+      "name": "playing",
+      "time": 10.0002,
+      "at": 93650.10000000894
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 106660.60000000894
+    },
+    {
+      "name": "seeked",
+      "time": 10.0004,
+      "at": 106770.10000000894
+    },
+    {
+      "name": "playing",
+      "time": 10.0005,
+      "at": 106770.10000000894
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 119784.60000000894
+    },
+    {
+      "name": "seeked",
+      "time": 10.0003,
+      "at": 119894.79999999702
+    },
+    {
+      "name": "playing",
+      "time": 10.0004,
+      "at": 119894.79999999702
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 132913.79999999702
+    },
+    {
+      "name": "seeked",
+      "time": 10.0012,
+      "at": 133026.90000000596
+    },
+    {
+      "name": "playing",
+      "time": 10.0013,
+      "at": 133026.90000000596
+    },
+    {
+      "name": "seeking",
+      "time": 10,
+      "at": 146036.60000000894
+    },
+    {
+      "name": "seeked",
+      "time": 10.0002,
+      "at": 146146.90000000596
+    },
+    {
+      "name": "playing",
+      "time": 10.0002,
+      "at": 146146.90000000596
+    }
+  ]
+}

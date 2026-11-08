@@ -45,6 +45,11 @@ describe("GitHub first-open gate", () => {
     expect(screen.queryByText("ABCD-1234")).toBeNull();
   });
 
+  it("retains the viewport height owner when the verified subtree is wrapped", async () => {
+    signedIn = true; await show();
+    expect((await screen.findByText("Project content")).parentElement?.style.height).toBe("100%");
+  });
+
   it("offers a fresh flow after failure", async () => {
     state = "failed"; await show();
     fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
@@ -60,6 +65,14 @@ describe("GitHub first-open gate", () => {
     expect(screen.queryByText("Project content")).toBeNull();
     await act(async () => finish({ signedIn: false, login: null, host: "github.com" }));
     expect(await screen.findByRole("button", { name: "Sign in to GitHub" })).toBeTruthy();
+    expect(screen.queryByText("Project content")).toBeNull();
+  });
+
+  it("does not retain cached project content when the first fresh account check fails", async () => {
+    cache.setQueryData(githubStatusKey, { signedIn: true, login: "old-owner", host: "github.com" });
+    request.mockRejectedValueOnce(new OwnerReadError(503, "github_login_failed"));
+    await show();
+    expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByText("Project content")).toBeNull();
   });
 

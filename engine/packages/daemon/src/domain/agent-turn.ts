@@ -39,7 +39,7 @@ export function agentTurnPromptPath(manifest: ContextManifest): string {
 export function agentTurnOutputPaths(mutableStateRoot: string, attemptId: string) {
   const directory = join(mutableStateRoot, "turns", attemptId);
   return { directory, lastMessage: join(directory, "last-message.txt"), threadId: join(directory, "thread-id.txt"),
-    activity: join(directory, "activity.jsonl"), usage: join(directory, "usage.json"),
+    activity: join(directory, "activity.jsonl"), usage: join(directory, "usage.json"), progress: join(directory, "progress.json"),
     taskReport: join(directory, "report", "task-report.json") };
 }
 
@@ -131,6 +131,46 @@ export function managedTurnPrompt(input: ManagedTurnPromptInput): string {
       "Only this per-attempt report file is writable outside the candidate. It does not change your source permissions. " +
       "For blocked, needs-decision, or dropped, write the structured report there, not in the candidate or final prose."] : []),
     ...(input.continuation === null ? [] : [input.continuation])].filter(Boolean).join("\n\n");
+}
+
+/** A bounded run-scoped observation for a lead answering about work it cannot infer from files. */
+export function leadProgressNote(db: Database.Database, runId: string, observedAt = new Date().toISOString()): string {
+  const rows = db.prepare(`SELECT a.task_id AS taskId, json_extract(a.assignment_json, '$.role') AS role,
+      json_extract(a.assignment_json, '$.reviewOf') AS reviewOf, q.state AS queueState, q.destination_session AS seat,
+      (SELECT n.runtime FROM sessions s JOIN nodes n ON n.id = s.node_id
+        WHERE s.session_name = q.destination_session AND n.rig_id = r.rig_id ORDER BY s.rowid DESC LIMIT 1) AS client,
+      p.id AS attemptId, p.state AS attemptState, p.provider AS provider,
+      p.created_at AS startedAt, p.updated_at AS updatedAt,
+      (SELECT json_object('verdict', json_extract(e.payload, '$.payload.verdict'),
+        'candidateDigest', json_extract(e.payload, '$.payload.candidateDigest'),
+        'recordedAt', json_extract(e.payload, '$.payload.recordedAt')) FROM events e
+        WHERE e.type = 'team.control' AND json_extract(e.payload, '$.runId') = a.run_id
+          AND json_extract(e.payload, '$.action') = 'review.verdict'
+          AND json_extract(e.payload, '$.payload.reviewerTaskId') = a.task_id ORDER BY e.seq DESC LIMIT 1) AS reviewJson,
+      COUNT(*) OVER () AS totalTasks
+    FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+      JOIN team_runs r ON r.id = a.run_id
+      LEFT JOIN team_attempts p ON p.id = (SELECT id FROM team_attempts
+        WHERE run_id = a.run_id AND qitem_id = a.qitem_id ORDER BY rowid DESC LIMIT 1)
+    WHERE a.run_id = ? AND json_extract(a.assignment_json, '$.role') IN ('implementer', 'reviewer')
+    ORDER BY a.rowid LIMIT 100`).all(runId) as Array<{
+      taskId: string; role: string; reviewOf: string | null; queueState: string; seat: string; client: string | null;
+      attemptId: string | null; attemptState: string | null; provider: string | null;
+      startedAt: string | null; updatedAt: string | null; reviewJson: string | null; totalTasks: number;
+    }>;
+  const totalTasks = rows[0]?.totalTasks ?? 0;
+  const tasks = rows.map(row => ({ taskId: row.taskId, role: row.role, queueState: row.queueState,
+    reviewOf: row.reviewOf, seat: row.seat, client: row.client,
+    latestAttempt: row.attemptId === null ? null : { id: row.attemptId, state: row.attemptState,
+      provider: row.provider, startedAt: row.startedAt, updatedAt: row.updatedAt },
+    review: row.reviewJson === null ? null : JSON.parse(row.reviewJson),
+  }));
+  return "Team progress snapshot:\n" + JSON.stringify({ runId, observedAt, totalTasks, truncated: totalTasks > tasks.length, tasks }) +
+    "\n\nUse these recorded task, attempt and review facts instead of inferring progress from candidate files or earlier messages. " +
+    "This snapshot is not a live query; qualify status claims with its observation time when work may have advanced. " +
+    "Client is the assigned seat's configuration; provider is the latest attempt's record. Null fields are unobserved. " +
+    "A running or stopped review attempt is not approval; a verdict applies to its recorded candidate. " +
+    "If truncated, do not claim that omitted tasks or reviews do not exist.";
 }
 
 /** The instruction files an attempt is told to read, from its own manifest. */

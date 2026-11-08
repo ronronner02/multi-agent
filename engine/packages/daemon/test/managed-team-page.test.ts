@@ -58,6 +58,48 @@ describe("managed-mode team page", () => {
     expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from(bytes));
   });
 
+  it.each([
+    { range: "bytes=0-3", body: "fixt", contentRange: "bytes 0-3/13" },
+    { range: "bytes=8-", body: "video", contentRange: "bytes 8-12/13" },
+    { range: "bytes=-5", body: "video", contentRange: "bytes 8-12/13" },
+    { range: "bytes=8-100", body: "video", contentRange: "bytes 8-12/13" },
+  ])("serves the exact video range $range for seeking", async ({ range, body, contentRange }) => {
+    const response = await managedApp(true).request("/skins/shuimo-danqing/shuimo-danqing-loop.mp4", { headers: { Range: range } });
+    expect(response.status).toBe(206);
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+    expect(response.headers.get("content-range")).toBe(contentRange);
+    expect(response.headers.get("content-length")).toBe(String(body.length));
+    expect(await response.text()).toBe(body);
+  });
+
+  it.each(["bytes=13-", "bytes=5-2", "bytes=-0", "bytes=0-1,4-5", "bytes=99999999999999999999-", "bytes=-"]) (
+    "rejects unsatisfiable or unsupported video range %s", async range => {
+      const response = await managedApp(true).request("/skins/shuimo-danqing/shuimo-danqing-loop.mp4", { headers: { Range: range } });
+      expect(response.status).toBe(416);
+      expect(response.headers.get("content-range")).toBe("bytes */13");
+      expect(await response.text()).toBe("");
+    });
+
+  it("advertises video seeking on full reads and handles HEAD without a body", async () => {
+    const app = managedApp(true);
+    const full = await app.request("/skins/shuimo-danqing/shuimo-danqing-loop.mp4");
+    expect(full.headers.get("accept-ranges")).toBe("bytes");
+    expect(full.headers.get("content-length")).toBe("13");
+    const head = await app.request("/skins/shuimo-danqing/shuimo-danqing-loop.mp4", { method: "HEAD", headers: { Range: "bytes=0-3" } });
+    expect(head.status).toBe(206);
+    expect(head.headers.get("content-length")).toBe("4");
+    expect(await head.text()).toBe("");
+  });
+
+  it("keeps non-video assets and managed UI admission unchanged for range requests", async () => {
+    const response = await managedApp(true).request("/assets/app.js", { headers: { Range: "bytes=0-1" } });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("console.log('ui');");
+    expect((await managedApp(false).request("/skins/shuimo-danqing/shuimo-danqing-loop.mp4", { headers: { Range: "bytes=0-1" } })).status).toBe(404);
+    expect((await managedApp(true).request("/skins/shuimo-danqing/unrelated.mp4", { headers: { Range: "bytes=0-1" } })).status).toBe(404);
+  });
+
   it("serves the team view and its assets when the web UI is on", async () => {
     const app = managedApp(true);
     for (const path of ["/team", "/team/overview"]) {

@@ -1,0 +1,45 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+team dispatch: seat lead@team-demo remains failed; Managed attempt attachment: Source checkout changed while the candidate was staged
+
+ ❯ test/seat-pane-launch.test.ts (6 tests | 1 failed | 5 skipped) 60706ms
+   ↓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+   × a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy 60705ms
+     → expected [] to have a length of 1 but got +0
+   ↓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+   ↓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+   ↓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+   ↓ workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ vi.waitFor.timeout test/seat-pane-launch.test.ts:249:47
+    247| 
+    248|     await daemon.deps.teamControl!.dispatch!(runId, "lead-task");
+    249|     await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeo…
+       |                                               ^
+    250|     const launch = JSON.parse(receipts()[0]!.payload) as { receipt: { …
+    251|     const prompt = readFileSync(join(turnPromptDir(daemon.deps.workflo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  18:40:00
+   Duration  64.24s (transform 2.55s, setup 34ms, collect 3.33s, tests 60.71s, environment 0ms, prepare 46ms)
+

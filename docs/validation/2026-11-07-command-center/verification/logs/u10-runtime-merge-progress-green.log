@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+ ✓ src/team/__tests__/overview.test.tsx (18 tests) 292ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  18:31:03
+   Duration  1.35s (transform 111ms, setup 112ms, collect 272ms, tests 292ms, environment 321ms, prepare 35ms)
+

@@ -1,0 +1,44 @@
+
+> stock-helper-acceptance@1.0.0 test
+> node --test src/*.test.mjs
+
+✔ returns an already-canonical value unchanged (0.621765ms)
+✔ accepts digits only (0.10111ms)
+✔ accepts a single character (3.660471ms)
+✔ trims surrounding whitespace (0.101022ms)
+✔ uppercases ASCII letters (0.079161ms)
+✔ throws TypeError for non-string values (0.294834ms)
+✔ throws RangeError for empty and whitespace-only strings (0.110348ms)
+✔ throws RangeError for malformed hyphens (0.12189ms)
+✔ throws RangeError for punctuation and underscores (0.181188ms)
+✔ throws RangeError for internal spaces (0.312681ms)
+✔ throws RangeError for non-ASCII input (0.16135ms)
+✔ normalizes raw stock rows before aggregating and sorting without mutating them (1.178386ms)
+✔ returns an empty summary for an empty list (1.612835ms)
+✔ summarizes a single entry with a fresh result, array, and item (0.177552ms)
+✔ aggregates nonadjacent duplicate SKUs (0.109384ms)
+✔ sorts by code units with digits before letters and A-1 before A1 before AB (0.15852ms)
+✔ keeps zero-quantity SKUs including repeated zero entries (0.109549ms)
+✔ accepts negative zero as a nonnegative safe integer (0.124569ms)
+✔ does not mutate frozen input arrays or entries and returns independent items (0.153699ms)
+✔ accepts canonical single characters, digits, and hyphenated groups (0.125293ms)
+✔ throws TypeError when entries is not an array (0.355818ms)
+✔ throws TypeError for null, non-object, or array entries (0.287067ms)
+✔ throws TypeError for a hole in the entries array (0.12499ms)
+✔ throws TypeError for non-string or missing SKUs (0.210717ms)
+✔ throws TypeError for non-number or missing quantities (0.150318ms)
+✔ throws RangeError for empty, lowercase, padded, or otherwise noncanonical SKUs (1.223848ms)
+✔ throws RangeError for negative, fractional, NaN, infinite, or unsafe quantities (0.228937ms)
+✔ accepts a single quantity at Number.MAX_SAFE_INTEGER (0.092614ms)
+✔ accepts duplicate quantities whose sum is exactly Number.MAX_SAFE_INTEGER (0.088736ms)
+✔ accepts a total across different SKUs exactly at Number.MAX_SAFE_INTEGER (0.163294ms)
+✔ throws RangeError when individually safe quantities overflow one SKU (0.166236ms)
+✔ throws RangeError when individually safe quantities overflow the total across SKUs (0.177981ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 60.794336

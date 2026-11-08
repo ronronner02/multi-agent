@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-11-07T13:19:36.939Z",
+  "url": "http://127.0.0.1:7433/team",
+  "github": {
+    "http": 403,
+    "body": {
+      "code": "owner_anti_forgery_required",
+      "error": "A valid paired session and anti-forgery token are required."
+    }
+  },
+  "login": {
+    "http": 403,
+    "body": {
+      "code": "owner_anti_forgery_required",
+      "error": "A valid paired session and anti-forgery token are required."
+    }
+  },
+  "failures": [
+    {
+      "type": "console",
+      "message": "Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector"
+    },
+    {
+      "type": "console",
+      "message": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    },
+    {
+      "type": "console",
+      "message": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    }
+  ],
+  "blocked": [
+    {
+      "origin": "https://fonts.googleapis.com",
+      "path": "/css2"
+    }
+  ],
+  "assessmentCorrection": "The visible Loading state preceded the clipboard-prompt parser repair. The two diagnostic fetches omitted the anti-forgery header; their 403 responses do not show a pairing failure."
+}

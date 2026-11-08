@@ -78,6 +78,21 @@ describe("delivery roster changes", () => {
   });
   afterEach(() => { db.close(); rmSync(root, { recursive: true, force: true }); });
 
+  it("keeps explicit model IDs in worker proposals and rejects additions outside the owner allowlist", () => {
+    expect(parseLeadRoster({ seats: [{ ...implementer, model: "permitted" }] }))
+      .toEqual([{ ...implementer, model: "permitted" }]);
+    db.prepare("UPDATE rigs SET team_model_allowlist = ? WHERE id = ?").run(JSON.stringify([
+      { client: "codex", model: "permitted" }, { client: "claude-code", model: "review-model" },
+    ]), rigId);
+    db.prepare("UPDATE nodes SET model = CASE runtime WHEN 'codex' THEN 'permitted' ELSE 'review-model' END WHERE rig_id = ?").run(rigId);
+    const before = state();
+    const result = governance.admitLeadProposal(request("outside", {}), daemon, binding, [task("unapproved", "impl-2@demo")],
+      { add: [{ ...implementer, model: "outside" }], retire: [] });
+    expect(result.status).toBe("denied");
+    expect(result.reason).toContain("allowed subagent models");
+    expect(state()).toEqual(before);
+  });
+
   it("adds and assigns together, then allocates the next role index on another proposal", () => {
     for (const index of [2, 3]) {
       const receipt = governance.admitLeadProposal(request("add-" + index, {}), daemon, binding,
@@ -166,7 +181,7 @@ describe("delivery roster changes", () => {
     sessions.updateBinding(seat.nodeId, { attachmentType: "tmux", tmuxSession: "impl-1@demo", tmuxPane: "%1" });
     const started: unknown[] = [];
     await composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
       startupOrchestrator: { startNode: async (input: unknown) => { started.push(input); return { ok: true }; } } as never,
       runtimeAdapters: { codex: { runtime: "codex" } } as never,
       maxSessions: () => binding.limits.maxSessions, liveSessions: () => 0,
@@ -255,6 +270,28 @@ describe("delivery roster changes", () => {
       AND json_extract(payload, '$.action') = 'lead.proposal-refused'`).get()).toEqual({ n: 1 });
   });
 
+  it("releases integrated paths for follow-up work, but keeps review and active rework reserved", () => {
+    const qitemId = addTask("first", "impl-1@demo");
+    const followup = { ...task("followup", "impl-1@demo", ["src/first.ts"]), dependencies: ["first"] };
+    const propose = () => governance.admitLeadProposal(request("followup", {}), daemon, binding, [followup]);
+    expect(completeTask("first", { validated: true }).status).toBe("observed");
+    expect(propose().status).toBe("denied");
+    expect(completeTask("first-review-1", { findings: [] }).status).toBe("observed");
+    expect(propose().status).toBe("denied");
+    expect(governance.recordIntegrationCommit(request("first", { taskId: "first", commitSha: "a".repeat(40),
+      subject: "First task", branch: "team/fixture", worktree: root, repository: root }), daemon).status).toBe("observed");
+
+    const attempt = db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ?").get(qitemId) as { id: string };
+    db.prepare("UPDATE team_attempts SET state = 'running' WHERE id = ?").run(attempt.id);
+    expect(propose().status).toBe("denied");
+    db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = ?").run(attempt.id);
+    db.prepare("UPDATE queue_items SET state = 'pending' WHERE qitem_id = ?").run(qitemId);
+    expect(propose().status).toBe("denied");
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(qitemId);
+    expect(propose().status).toBe("accepted");
+    expect(governance.findTask("run", "followup")?.assignment.dependencies).toEqual(["first"]);
+  });
+
   it("preserves task-only proposal behavior", () => {
     const before = state(); addTask("ordinary", "impl-1@demo");
     expect(state().nodes).toEqual(before.nodes); expect(state().sessions).toEqual(before.sessions);
@@ -266,7 +303,7 @@ describe("planning roster parser", () => {
   it("accepts different clients and rejects unknown fields and roles", () => {
     expect(parseLeadRoster({ seats: [implementer, reviewer] })).toEqual([implementer, reviewer]);
     for (const value of [{ seats: [] }, { seats: [reviewer] }, { seats: [implementer, reviewer, reviewer] },
-      { seats: [implementer], extra: true }, { seats: [{ ...implementer, model: "extra" }] },
+      { seats: [implementer], extra: true }, { seats: [{ ...implementer, unexpected: "extra" }] },
       { seats: [{ role: "lead", client: "codex" }] }, { seats: [{ role: "implementer", client: "claude" }] }]) {
       expect(() => parseLeadRoster(value)).toThrow();
     }
@@ -292,7 +329,7 @@ describe("delivery proposal parser", () => {
     { tasks, seats: null },
     { tasks, seats: { add: null } },
     { tasks, seats: { add: [{ role: "lead", client: "codex" }] } },
-    { tasks, seats: { add: [{ ...implementer, model: "extra" }] } },
+    { tasks, seats: { add: [{ ...implementer, unexpected: "extra" }] } },
     { tasks, seats: { add: [{ role: "implementer", client: "other" }] } },
     { tasks, seats: { retire: "review-1@demo" } },
     { tasks, seats: { retire: ["review-1@demo", "review-1@demo"] } },

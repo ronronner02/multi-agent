@@ -1428,6 +1428,9 @@ describe("production managed launch composition", () => {
     policy = JSON.parse(readFileSync(new URL("../../../config/isolation/worker-policy.json", import.meta.url), "utf8"));
     // The seat's assigned tree must be a real canonical directory before any privileged call.
     policy.paths.assignment_root = join(scratch, "assignments");
+    // Candidate provenance belongs to this fixture, not the installed control state.
+    policy.paths.control_state_dir = join(scratch, "control");
+    policy.paths.mailbox_root = join(policy.paths.control_state_dir, "mailboxes");
     mkdirSync(join(policy.paths.assignment_root, "ma-worker1", "project"), { recursive: true });
     policyBytes = Buffer.from(JSON.stringify(policy));
     // T039: isolation stages the run's own repository rather than launching from the

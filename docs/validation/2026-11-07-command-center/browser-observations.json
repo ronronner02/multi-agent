@@ -1,0 +1,970 @@
+{
+  "capturedAt": "2026-11-07T09:41:57.085Z",
+  "origin": "http://127.0.0.1:17433",
+  "initial": {
+    "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+    "planApproval": {
+      "plan": {
+        "content": "# Plan\n\nGoal: Build a small dependency-free stock utility library (ES modules, Node built-ins only)\nwith two independent functions, `normalizeSku` and `summarizeStock`, each with its own\n`node:test` suite, validated by `npm test`.\n\n## Constraints (all tasks)\n\n- Write only under `src/`. Do not touch `package.json`, `README.md`, `.gitignore`, `plan.md`\n  or anything else outside `src/`.\n- No dependencies, no network calls, no remote pushes.\n- Tests use only `node:test` and `node:assert/strict`.\n- All data is synthetic.\n- `npm test` runs `node --test src/*.test.mjs`, so each test file must be named `src/*.test.mjs`.\n\n## Shared SKU format\n\nA canonical SKU matches `^[A-Z0-9]+(-[A-Z0-9]+)*$`: one or more groups of ASCII uppercase\nletters/digits, joined by single hyphens. No leading, trailing or doubled hyphens. No other\ncharacters, including non-ASCII letters and internal whitespace.\n\n## Tasks and order\n\nTasks A and B are independent: neither imports the other's module or reads the other's\nfiles, so both run concurrently. Task C (review) runs after both finish.\n\n### Task A: normalizeSku (implementer, Claude Code)\n\nFiles (exclusive to this task):\n- `src/normalize-sku.mjs`\n- `src/normalize-sku.test.mjs`\n\nBehaviour: named export `normalizeSku(value)`.\n- If `value` is not a primitive string (`typeof value !== \"string\"`), throw `TypeError`.\n- Trim surrounding whitespace with `String.prototype.trim`.\n- Uppercase ASCII letters `a-z` only. Leave other characters as they are; any non-ASCII\n  character then fails validation.\n- If the result is empty or does not match the canonical SKU format, throw `RangeError`.\n- Return the canonical string.\n\nTests must cover at least: trimming and uppercasing (`\"  ab-12 \"` -> `\"AB-12\"`); an\nalready-canonical value; digits only; a single character; non-strings (`undefined`, `null`,\na number, a `String` object, an array) throw `TypeError`; empty and whitespace-only strings\nthrow `RangeError`; leading, trailing and doubled hyphens, internal spaces, underscores and\nother punctuation, and non-ASCII letters (for example `\"é\"`, and `\"ß\"`, which must not be\nuppercased to `\"SS\"`) throw `RangeError`.\n\nCheck: `node --test src/normalize-sku.test.mjs` passes, then `npm test` passes.\n\n### Task B: summarizeStock (implementer, Codex)\n\nFiles (exclusive to this task):\n- `src/summarize-stock.mjs`\n- `src/summarize-stock.test.mjs`\n\nBehaviour: named export `summarizeStock(entries)`.\n- `entries` must be an array of `{ sku, quantity }` objects. `sku` must already be a\n  canonical SKU (validated against the shared format; no trimming or case folding).\n  `quantity` must be a nonnegative safe integer (`Number.isSafeInteger(q) && q >= 0`).\n- Error types:\n  - `TypeError`: `entries` is not an array; an entry is not a non-null, non-array object;\n    `sku` is not a string; `quantity` is not a number.\n  - `RangeError`: `sku` is a string that does not match the canonical format (including the\n    empty string); `quantity` is negative, non-integer, `NaN`, infinite or above\n    `Number.MAX_SAFE_INTEGER`; a per-SKU aggregate or `totalQuantity` would exceed\n    `Number.MAX_SAFE_INTEGER`.\n- Aggregate duplicate SKUs by summing quantities. Zero-quantity SKUs stay in `items`.\n- Sort `items` by ASCII (UTF-16 code unit) SKU order, i.e. plain `<` comparison, not\n  `localeCompare`.\n- Return `{ items, totalQuantity, distinctSkus }`, where `items` is a new array of new\n  `{ sku, quantity }` objects, `totalQuantity` is the sum of all quantities and\n  `distinctSkus` is `items.length`.\n- An empty array returns `{ items: [], totalQuantity: 0, distinctSkus: 0 }`.\n- Do not mutate the input array or its entries.\n- Do not import `src/normalize-sku.mjs`, so Task B does not depend on Task A.\n\nTests must cover at least: empty list; a single entry; duplicates aggregated; ASCII ordering\n(for example digits sort before letters, and `\"A-1\"` vs `\"A1\"` vs `\"AB\"`); zero quantity;\ninput not mutated; each `TypeError` and `RangeError` case above; overflow when two\nquantities that are each safe sum past `Number.MAX_SAFE_INTEGER`, both for one SKU and across\ndifferent SKUs.\n\nCheck: `node --test src/summarize-stock.test.mjs` passes, then `npm test` passes.\n\n### Task C: review (reviewer, Claude Code), after A and B\n\nFiles: read-only. The reviewer writes nothing under `src/`.\n\nCheck:\n- `npm test` passes on the combined result, with both test files discovered.\n- Each implementation matches the behaviour and error types above. The reviewer spot-checks\n  edge cases beyond the submitted tests and reports any gaps.\n- `git diff --name-only` against the planning commit lists only the four `src/` files above\n  (and optionally the removal of `src/.gitkeep`). `package.json` is unchanged and there are\n  no new dependencies, network calls or lockfiles.\n- Report findings as pass or rework per task, with evidence.\n\n## Roster\n\nThe lead stays as is. Seats in `lead-roster.json`:\n- implementer, claude-code: Task A\n- implementer, codex: Task B\n- reviewer, claude-code: Task C\n",
+        "hash": "sha256:3d7d705a16ff49cea5e3ad3d242899138f082e03ad45b7b864508620509d0391"
+      },
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "error": null
+    },
+    "approvalResult": {
+      "status": 200,
+      "request": {
+        "protocolVersion": "1.0",
+        "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+        "actionId": "b3412491-6be6-4d7a-b433-79899b1f2fa6",
+        "expectedEntityVersion": 9,
+        "idempotencyKey": "6ca47b49-484d-4004-bf14-64296fea8299",
+        "payload": {
+          "rosterDigest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+        }
+      },
+      "body": {
+        "status": "accepted",
+        "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+        "entityVersion": 10,
+        "replayed": false,
+        "effectMayStart": true,
+        "value": {
+          "bindingDigest": "sha256:f28486e68df01f028ae43fff4c37524dfd700ae3335ed5e7967610f28b23a829",
+          "phase": "delivery",
+          "planRef": "plan.md"
+        },
+        "revisionTaskId": "task-1",
+        "reason": null,
+        "reasonKey": null
+      }
+    },
+    "cancellation": {
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "http": {
+        "url": "http://127.0.0.1:17433/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/cancel",
+        "status": 200,
+        "method": "POST"
+      },
+      "run": {
+        "id": "e7986a44-af7a-470b-9c16-18934b99892b",
+        "rigId": "01M6TE60KE84SAARBZKCW7RYF5",
+        "bindingDigest": "sha256:2d06fcd323b99118a8f9333e9bce085073526a0ac18d29cdb10e33cc89e26fe0",
+        "reviewerSeat": "review-1@cc-u10-win-20261107-2c433e64",
+        "state": "canceled",
+        "stateReason": "Owner canceled the run",
+        "phase": "delivery",
+        "entityVersion": 47,
+        "activeMs": 479250,
+        "accountedAt": null,
+        "retriesUsed": 0,
+        "reviewRoundsUsed": 1,
+        "createdAt": "2026-11-07T07:23:15.593Z",
+        "updatedAt": "2026-11-07T08:20:13.819Z",
+        "displayName": "Build a small dependency-free stock utility",
+        "stateReasonKey": "team.reason.generic",
+        "binding": {
+          "artifactContract": "spec-unified-plan/v1",
+          "artifactReadiness": "implementation-ready",
+          "execution": "code",
+          "status": "active",
+          "planRef": "plan.md",
+          "planDigest": "sha256:3d7d705a16ff49cea5e3ad3d242899138f082e03ad45b7b864508620509d0391",
+          "repository": {
+            "root": "<acceptance-state>/state/workers/control/teams/e7986a44-af7a-470b-9c16-18934b99892b",
+            "identity": "git:3a215a613c96f0bc6f8c55977c0d9613dd5f1472"
+          },
+          "readPaths": [
+            "plan.md",
+            "lead-roster.json",
+            "src"
+          ],
+          "writePaths": [
+            "plan.md",
+            "lead-roster.json",
+            "src"
+          ],
+          "roles": [
+            "lead",
+            "implementer",
+            "reviewer"
+          ],
+          "policyRevision": 4,
+          "policyFingerprint": "sha256:9f2e2cdb4d81a8b8488f98e42d695631351645cc5c99d8bec9a444613b5e69ab",
+          "limits": {
+            "maxSessions": 2,
+            "maxActiveMs": 3600000,
+            "maxRetries": 1,
+            "maxReviewRounds": 2
+          }
+        },
+        "usage": {
+          "activeMs": 479250,
+          "inputTokens": {
+            "value": null,
+            "reason": "Complete inputTokens evidence is unavailable"
+          },
+          "outputTokens": {
+            "value": null,
+            "reason": "Complete outputTokens evidence is unavailable"
+          },
+          "costUsd": {
+            "value": null,
+            "reason": "Complete costUsd evidence is unavailable"
+          }
+        }
+      },
+      "attempts": [
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "implementer"
+        },
+        {
+          "state": "stopped",
+          "role": "implementer"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "reviewer"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        },
+        {
+          "state": "stopped",
+          "role": "lead"
+        }
+      ],
+      "observedAt": "2026-11-07T08:21:32.547Z",
+      "instrumentationNote": "Cancellation response-body capture missed the API prefix; terminal state was verified through the next normal UI read."
+    }
+  },
+  "repeat": {
+    "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+    "startStatus": 201,
+    "startedAt": "2026-11-07T08:22:10.897Z",
+    "planApproval": {
+      "plan": {
+        "content": "# Plan\n\nGoal: Acceptance repeat: dependency-free stock utilities. Build two independent ES modules,\n`normalizeSku` and `summarizeStock`, each with its own `node:test` suite, using only Node\nbuilt-ins and synthetic data. Leave the result ready for the owner's local Merge action.\n\n## Constraints (all tasks)\n\n- Implementation and test writes stay in the four assigned `src/` files below. Leave\n  `package.json`, `README.md`, `.gitignore`, `src/.gitkeep` and every other existing project\n  file unchanged. Planning files (`plan.md`, `lead-roster.json`) are lead-owned.\n- ES modules and Node built-ins only. No dependencies, lockfiles, network calls or remote\n  pushes.\n- Tests use only `node:test` and `node:assert/strict`, with synthetic data.\n- `npm test` runs `node --test src/*.test.mjs`, so both suites are discovered by that glob.\n\nCanonical SKU format: `/^[A-Z0-9]+(-[A-Z0-9]+)*$/`.\n\n## Tasks and order\n\nTasks A and B are independent and run at the same time. Neither imports or reads the other's\nmodule. After each one finishes, the daemon creates its review for the reviewer seat.\n\n### Task A: normalizeSku (implementer, Claude Code)\n\nFiles: `src/normalize-sku.mjs`, `src/normalize-sku.test.mjs`.\n\nBehaviour: named export `normalizeSku(value)`.\n- `typeof value !== \"string\"` (including boxed `String` objects) throws `TypeError`.\n- Trim surrounding whitespace with `String.prototype.trim`.\n- Uppercase only ASCII `a-z`; leave every other character unchanged, so non-ASCII letters\n  such as `ß` never normalize into ASCII (no `\"SS\"`) and then fail validation.\n- If the result is empty or fails the canonical format, throw `RangeError`; otherwise return it.\n\nTests cover: canonical, digits-only and single-character input; trimming; case conversion;\nnon-strings (`undefined`, `null`, number, boolean, object, array, `new String(\"A\")`) throw\n`TypeError`; empty and whitespace-only strings throw `RangeError`; leading, trailing and\ndoubled hyphens; punctuation and underscores; internal spaces; non-ASCII input (`ß`, `é`).\n\nCheck: `node --test src/normalize-sku.test.mjs` and `npm test` both pass; the implementer\nsubmits both commands with their unedited output as evidence.\n\n### Task B: summarizeStock (implementer, Codex)\n\nFiles: `src/summarize-stock.mjs`, `src/summarize-stock.test.mjs`.\n\nBehaviour: named export `summarizeStock(entries)`.\n- `TypeError`: `entries` is not an array; an entry is null, a non-object or an array; `sku`\n  is not a string; `quantity` is not a number.\n- `RangeError`: `sku` is a string that fails the canonical format (including `\"\"`);\n  `quantity` is negative, non-integer, `NaN`, infinite or unsafe; a per-SKU sum or the total\n  exceeds `Number.MAX_SAFE_INTEGER`.\n- Aggregate duplicate SKUs; keep zero-quantity SKUs; sort by ASCII code-unit order (plain\n  `<`, not `localeCompare`).\n- Return a fresh `{ items: [{ sku, quantity }], totalQuantity, distinctSkus }` with new\n  item objects; `distinctSkus` is `items.length`. Empty input gives\n  `{ items: [], totalQuantity: 0, distinctSkus: 0 }`.\n- Never mutate the input. Do not import `src/normalize-sku.mjs`.\n\nTests cover: every `TypeError` and `RangeError` case above; ordering (digits before letters,\n`\"A-1\"` < `\"A1\"` < `\"AB\"`); duplicates; zero quantity; empty input; immutability of the input\narray and entries; overflow within one SKU and across different SKUs, plus sums exactly at\n`Number.MAX_SAFE_INTEGER` accepted.\n\nCheck: `node --test src/summarize-stock.test.mjs` and `npm test` both pass; the implementer\nsubmits both commands with their unedited output as evidence.\n\n### Review (reviewer, Claude Code), per finished task\n\nThe reviewer writes nothing. For each task it checks:\n- The behaviour and error types match this plan, including edge cases beyond the tests.\n- The change touches only that task's two assigned files; `package.json`, `README.md`,\n  `.gitignore`, `src/.gitkeep` and other files are unchanged; no dependencies, lockfiles,\n  network calls or non-`node:` imports; Task B does not import Task A.\n- Once both tasks are in, the combined `npm test` discovers and passes both suites.\n\nThe verdict is pass or rework, with commands and output as evidence. Nothing is pushed; the\nresult waits for the owner's local Merge.\n\n## Roster\n\nThe lead stays as is. `lead-roster.json` keeps the existing seats:\n- implementer, claude-code: Task A\n- implementer, codex: Task B\n- reviewer, claude-code: reviews of both tasks\n",
+        "hash": "sha256:85daa334f6df4ca6e61feb1c48caf03d2171bcc818b484de4a08a840aa9735ae"
+      },
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "error": null
+    },
+    "approval": {
+      "planHash": "sha256:85daa334f6df4ca6e61feb1c48caf03d2171bcc818b484de4a08a840aa9735ae",
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "renderedPlanMatched": true,
+      "sent": {
+        "protocolVersion": "1.0",
+        "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "actionId": "98f0c81b-e2e6-4739-adc8-3aa23ab474e9",
+        "expectedEntityVersion": 9,
+        "idempotencyKey": "225174a9-ad9b-41b6-ad71-9d2cf58f2296",
+        "payload": {
+          "rosterDigest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+        }
+      },
+      "httpStatus": 200,
+      "receipt": {
+        "status": "accepted",
+        "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "entityVersion": 10,
+        "replayed": false,
+        "effectMayStart": true,
+        "value": {
+          "bindingDigest": "sha256:2d859aac188a8979f9a506f24cbd336eb5790f6cb9dd99b5de48969ae62078f9",
+          "phase": "delivery",
+          "planRef": "plan.md"
+        },
+        "revisionTaskId": "task-1",
+        "reason": null,
+        "reasonKey": null
+      },
+      "at": "2026-11-07T08:27:56.206Z"
+    },
+    "busyChat": {
+      "at": "2026-11-07T08:29:48.168Z",
+      "busyBeforeSend": [
+        {
+          "attemptId": "26a7e01f-28a1-4ccf-a3d6-b457eb676fed",
+          "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+          "taskId": "task-3",
+          "qitemId": "qitem-20261107082838-95ba3c4c",
+          "role": "implementer",
+          "provider": "codex",
+          "state": "running",
+          "unknownReason": null,
+          "session": "impl-2@cc-u10-win-20261107-2c433e64",
+          "createdAt": "2026-11-07T08:28:45.886Z",
+          "usage": {
+            "activeMs": 0,
+            "inputTokens": {
+              "value": null,
+              "reason": "Native usage has not been observed"
+            },
+            "outputTokens": {
+              "value": null,
+              "reason": "Native usage has not been observed"
+            },
+            "costUsd": {
+              "value": null,
+              "reason": "Native usage has not been observed"
+            }
+          },
+          "failure": null
+        },
+        {
+          "attemptId": "3a6a0d6a-ca09-440b-abe1-c26c96863ec6",
+          "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+          "taskId": "task-2-review-1",
+          "qitemId": "qitem-20261107082921-d008af0a",
+          "role": "reviewer",
+          "provider": "claude",
+          "state": "running",
+          "unknownReason": null,
+          "session": "review-1@cc-u10-win-20261107-2c433e64",
+          "createdAt": "2026-11-07T08:29:24.610Z",
+          "usage": {
+            "activeMs": 0,
+            "inputTokens": {
+              "value": null,
+              "reason": "Native usage has not been observed"
+            },
+            "outputTokens": {
+              "value": null,
+              "reason": "Native usage has not been observed"
+            },
+            "costUsd": {
+              "value": null,
+              "reason": "Native usage has not been observed"
+            }
+          },
+          "failure": null
+        }
+      ],
+      "httpStatus": 200,
+      "receipt": {
+        "status": "accepted",
+        "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+        "entityVersion": 20,
+        "replayed": false,
+        "effectMayStart": true,
+        "value": {
+          "messageId": "9c57bb72-1bd1-45a5-8635-f72b424e25f9",
+          "queued": false
+        },
+        "revisionTaskId": "task-1",
+        "reason": null,
+        "reasonKey": null
+      }
+    },
+    "merge": {
+      "confirmation": "Merge the integration branch into the current checkout. The checkout must be clean.",
+      "httpStatus": 200,
+      "receipt": {
+        "protocolVersion": "1.0",
+        "status": "merged",
+        "code": null,
+        "reason": null,
+        "branch": "team/acceptance-repeat-dependency-free-stock-91de0eb0",
+        "mode": "fast-forward",
+        "head": "212a2eb0a3f31eca6fec28be237ca44ac93db9fd"
+      },
+      "at": "2026-11-07T08:38:58.627Z"
+    },
+    "actionScopeVerification": {
+      "before": [
+        "Connected",
+        "Merged"
+      ],
+      "after": [
+        "Connected"
+      ],
+      "otherRun": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "otherRunState": "canceled",
+      "cancelDisabled": true,
+      "at": "2026-11-07T08:39:32.031Z"
+    }
+  },
+  "supplement": {
+    "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+    "startedAt": "2026-11-07T08:53:04.966Z",
+    "httpStatus": 201,
+    "planApproval": {
+      "plan": {
+        "content": "# Plan\n\nGoal: Synthetic integration check: compose the stock utilities. Add one test-only file that\nimports the existing `normalizeSku` (`src/normalize-sku.mjs`) and `summarizeStock`\n(`src/summarize-stock.mjs`) and tests them together on synthetic raw stock rows. Leave the\nresult for the owner's local Merge.\n\n## Constraints\n\n- The only delivery write is the new file `src/stock-integration.test.mjs`.\n- Do not modify `src/normalize-sku.mjs`, `src/summarize-stock.mjs`, their existing test files,\n  `src/.gitkeep`, `package.json`, `README.md`, `.gitignore` or any other existing file.\n  Planning files (`plan.md`, `lead-roster.json`) are lead-owned and separate.\n- Use only `node:test` and `node:assert/strict`, plus the two existing modules. No dependencies,\n  lockfiles, network calls, new remote repositories or pushes. All data is synthetic.\n- The file name matches `npm test`'s glob (`node --test src/*.test.mjs`), so it is discovered.\n\n## Tasks and order\n\nThere is one task. `impl-1` (Claude Code implementer) stays idle.\n\n### Task 1: integration test (implementer `impl-2`, Codex)\n\nFile: `src/stock-integration.test.mjs` (new).\n\nWork: build synthetic raw rows such as `{ sku: \"  ab-12 \", quantity: 3 }`, map each row to\n`{ sku: normalizeSku(row.sku), quantity: row.quantity }`, pass the result to\n`summarizeStock`, and assert:\n- lowercase SKUs with surrounding whitespace are normalized (trimmed and uppercased);\n- raw rows that normalize to the same SKU (for example `\" ab-12\"` and `\"AB-12 \"`) are\n  aggregated into one item with the summed quantity;\n- a zero-quantity row produces an item with quantity 0;\n- `items` is in ASCII code-unit order, checked with `deepEqual` against the exact expected\n  array;\n- `totalQuantity` and `distinctSkus` equal the expected values;\n- the original raw rows are unchanged, checked by `deepEqual` against a copy taken before the\n  call, and the rows are not the same objects as the returned items.\n\nCheck: `node --test src/stock-integration.test.mjs` and `npm test` both pass, and `npm test`\ndiscovers all three suites. The implementer submits both commands with their unedited output\nand pass/fail counts.\n\n### Review (reviewer `review-1`, Claude Code), after Task 1\n\nThe reviewer writes nothing. It checks:\n- The change against this plan's commit is exactly one added file,\n  `src/stock-integration.test.mjs`; both implementations, the existing tests, `src/.gitkeep`\n  and all other files are unchanged.\n- The test imports only `node:test`, `node:assert/strict`, `./normalize-sku.mjs` and\n  `./summarize-stock.mjs`, and it covers every point listed for Task 1.\n- `node --test src/stock-integration.test.mjs` and `npm test` pass on the result.\n\nThe verdict is pass or rework, with commands and output as evidence. Nothing is pushed.\n\n## Roster\n\nThe current roster is unchanged; `lead-roster.json` lists the existing seats:\n- implementer, claude-code (`impl-1`): idle\n- implementer, codex (`impl-2`): Task 1\n- reviewer, claude-code (`review-1`): review of Task 1\n",
+        "hash": "sha256:a44890a29a636109ea608e22a459fe39e473630ac40db94282ed5e366de8c30f"
+      },
+      "roster": {
+        "seats": [
+          {
+            "role": "implementer",
+            "client": "claude-code"
+          },
+          {
+            "role": "implementer",
+            "client": "codex"
+          },
+          {
+            "role": "reviewer",
+            "client": "claude-code"
+          }
+        ],
+        "digest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+      },
+      "error": null
+    },
+    "approval": {
+      "at": "2026-11-07T09:01:32.215Z",
+      "status": 200,
+      "payload": {
+        "protocolVersion": "1.0",
+        "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+        "actionId": "8ac0cf95-cf4c-4c16-9db2-8ac137bbd819",
+        "expectedEntityVersion": 6,
+        "idempotencyKey": "24daea0b-6243-4452-9de9-81c2f6b4bc75",
+        "payload": {
+          "rosterDigest": "sha256:0b9e99b1bda72c5936b241dbcbcdfa9cc417ceeeb150e5c02ccbdcaca00964af"
+        }
+      },
+      "body": {
+        "status": "accepted",
+        "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+        "entityVersion": 7,
+        "replayed": false,
+        "effectMayStart": true,
+        "value": {
+          "bindingDigest": "sha256:6360c81ce66c6672c99c63477fe53a209a16a975813f50def9be303504584adc",
+          "phase": "delivery",
+          "planRef": "plan.md"
+        },
+        "revisionTaskId": "task-1",
+        "reason": null,
+        "reasonKey": null
+      }
+    },
+    "mergeConfirmation": {
+      "type": "confirm",
+      "message": "Merge the integration branch into the current checkout. The checkout must be clean."
+    },
+    "merge": {
+      "at": "2026-11-07T09:10:12.453Z",
+      "status": 200,
+      "body": {
+        "protocolVersion": "1.0",
+        "status": "merged",
+        "code": null,
+        "reason": null,
+        "branch": "team/synthetic-integration-check-compose-the-1c5c5a86",
+        "mode": "fast-forward",
+        "head": "5b423f087892a6da19fc793e733d3865ccd428a4"
+      }
+    }
+  },
+  "wslCreate": {
+    "httpStatus": 201,
+    "receipt": {
+      "protocolVersion": "1.0",
+      "team": {
+        "id": "01M6TJA941XXY0XB5N4FF2BGXQ",
+        "name": "cc-u10-wsl-20261107-2c433e64",
+        "repository": "<wsl-project>",
+        "seats": [
+          {
+            "role": "lead",
+            "client": "claude-code"
+          }
+        ]
+      }
+    },
+    "at": "2026-11-07T08:34:36.368Z"
+  },
+  "wslPreview": {
+    "path": "<wsl-project>",
+    "name": "cc-u10-wsl-20261107-2c433e64",
+    "at": "2026-11-07T08:33:57.484Z",
+    "text": "Create project\nFolder\nBrowse…\nProject name\n4 included files\n<wsl-project>\nExcluded paths\n.env\n\nCreate a private GitHub repository named cc-u10-wsl-20261107-2c433e64 and upload the included files from this folder.\n\nCreate"
+  },
+  "resultPreview": {
+    "beforeIdleRestart": {
+      "at": "2026-11-07T09:24:44.398Z",
+      "status": 503,
+      "body": {
+        "code": "team_result_unavailable",
+        "error": "The task's candidate could not be read."
+      }
+    },
+    "afterIdleRestart": {
+      "at": "2026-11-07T09:33:26.152Z",
+      "status": 200,
+      "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+      "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50"
+    },
+    "recoveredReads": [
+      {
+        "task": "task-2",
+        "status": 200,
+        "at": "2026-11-07T09:37:05.885Z",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:55d9aad9a9d970bb862359d549b2d053c5f9291f5641519723cc12733ab0efb3",
+        "patchCharacters": 2889
+      },
+      {
+        "task": "task-3",
+        "status": 200,
+        "at": "2026-11-07T09:37:06.747Z",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50",
+        "patchCharacters": 10213
+      }
+    ],
+    "codeFix": false
+  },
+  "pairingRecovery": {
+    "at": "2026-11-07T09:32:42.988Z",
+    "httpStatus": 200
+  },
+  "captures": [
+    {
+      "name": "final-overview-1440-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:43.779Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-overview-390-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:43.828Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-overview-1440-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:43.911Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-overview-390-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:43.960Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-workspace-1440-dark.png",
+      "section": "Workspace",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:44.586Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-workspace-390-dark.png",
+      "section": "Workspace",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:44.638Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-workspace-1440-light.png",
+      "section": "Workspace",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:44.729Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-workspace-390-light.png",
+      "section": "Workspace",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:44.772Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-tasks-1440-dark.png",
+      "section": "Tasks",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:45.414Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-tasks-390-dark.png",
+      "section": "Tasks",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:45.459Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-tasks-1440-light.png",
+      "section": "Tasks",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:45.543Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-tasks-390-light.png",
+      "section": "Tasks",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:45.589Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-analytics-1440-dark.png",
+      "section": "Analytics",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:46.211Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-analytics-390-dark.png",
+      "section": "Analytics",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:46.260Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-analytics-1440-light.png",
+      "section": "Analytics",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:46.337Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-analytics-390-light.png",
+      "section": "Analytics",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:46.392Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-reviews-1440-dark.png",
+      "section": "Reviews",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:37:06.860Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-390-dark.png",
+      "section": "Reviews",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:37:06.948Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-1440-light.png",
+      "section": "Reviews",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:37:07.054Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-390-light.png",
+      "section": "Reviews",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:37:07.125Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-settings-1440-dark.png",
+      "section": "Settings",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:41:56.278Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-390-dark.png",
+      "section": "Settings",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:41:56.354Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-1440-light.png",
+      "section": "Settings",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:41:56.475Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-390-light.png",
+      "section": "Settings",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:41:56.550Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    }
+  ],
+  "postResponses": [
+    {
+      "path": "/api/team-control/owner-session/exchange",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/github/login",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/teams",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/teams",
+      "status": 201,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs",
+      "status": 201,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/plan/approve",
+      "status": 409,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/owner-session/exchange",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/plan/approve",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/chat",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/e7986a44-af7a-470b-9c16-18934b99892b/cancel",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs",
+      "status": 201,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/chat",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/plan/approve",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/chat",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/teams",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/teams",
+      "status": 201,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/91de0eb0-e552-4ef3-ac74-4a822d8cee3a/merge",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs",
+      "status": 201,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/1c5c5a86-2ff1-426e-ae2d-bf9bade7d152/plan/approve",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/runs/1c5c5a86-2ff1-426e-ae2d-bf9bade7d152/merge",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "path": "/api/team-control/owner-session/exchange",
+      "status": 200,
+      "method": "POST"
+    }
+  ],
+  "pageErrors": [],
+  "historicalWindow": "Earlier runs through the first evidence closeout; their failures and recovery-only observations remain unchanged.",
+  "runtimeRepeat": {
+    "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+    "evidence": "runtime-observations.json",
+    "status": "native-delivery-and-local-synthetic-merge-observed",
+    "sourcePatchSha256": "444b0aa5a97c7386f43b44143c5e212af9f448150a7965ab589324b96995f624"
+  }
+}

@@ -122,6 +122,10 @@ import { leadDecisionsSchema } from "./migrations/116_lead_decisions.js";
 import { teamBootstrapAndRetirementSchema } from "./migrations/117_team_bootstrap_and_retirement.js";
 import { attemptTelemetrySchema } from "./migrations/118_attempt_telemetry.js";
 
+import { teamModelPolicySchema } from "./migrations/119_team_model_policy.js";
+
+import { projectDocumentsSchema } from "./migrations/120_project_documents.js";
+
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
   bindingsSessionsSchema,
@@ -236,4 +240,6 @@ export const ALL_MIGRATIONS: Migration[] = [
   leadDecisionsSchema,
   teamBootstrapAndRetirementSchema,
   attemptTelemetrySchema,
+  teamModelPolicySchema,
+  projectDocumentsSchema,
 ];

@@ -1,0 +1,363 @@
+{
+  "liveFinalCaptures": [
+    {
+      "name": "final-overview-1440-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:43.779Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-overview-390-dark.png",
+      "section": "Overview",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:43.828Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-overview-1440-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:43.911Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-overview-390-light.png",
+      "section": "Overview",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:43.960Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-workspace-1440-dark.png",
+      "section": "Workspace",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:44.586Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-workspace-390-dark.png",
+      "section": "Workspace",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:44.638Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-workspace-1440-light.png",
+      "section": "Workspace",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:44.729Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-workspace-390-light.png",
+      "section": "Workspace",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:44.772Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-tasks-1440-dark.png",
+      "section": "Tasks",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:45.414Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-tasks-390-dark.png",
+      "section": "Tasks",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:45.459Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-tasks-1440-light.png",
+      "section": "Tasks",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:45.543Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-tasks-390-light.png",
+      "section": "Tasks",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:45.589Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-analytics-1440-dark.png",
+      "section": "Analytics",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:46.211Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-analytics-390-dark.png",
+      "section": "Analytics",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:46.260Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-analytics-1440-light.png",
+      "section": "Analytics",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:13:46.337Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      }
+    },
+    {
+      "name": "final-analytics-390-light.png",
+      "section": "Analytics",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:13:46.392Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      }
+    },
+    {
+      "name": "final-reviews-1440-dark.png",
+      "section": "Reviews",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:37:06.860Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-390-dark.png",
+      "section": "Reviews",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:37:06.948Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-1440-light.png",
+      "section": "Reviews",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:37:07.054Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-reviews-390-light.png",
+      "section": "Reviews",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:37:07.125Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "task": "task-3"
+    },
+    {
+      "name": "final-settings-1440-dark.png",
+      "section": "Settings",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:41:56.278Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-390-dark.png",
+      "section": "Settings",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:41:56.354Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-1440-light.png",
+      "section": "Settings",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "at": "2026-11-07T09:41:56.475Z",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    },
+    {
+      "name": "final-settings-390-light.png",
+      "section": "Settings",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "at": "2026-11-07T09:41:56.550Z",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "runtimeStage": "after-idle-restart",
+      "tab": "General"
+    }
+  ],
+  "liveFinalCaptureCount": 24,
+  "allCapturedWidthsMatchViewport": true,
+  "totalImages": 164,
+  "omitted": [
+    "Initial pairing image; no credential image is needed for the acceptance claim."
+  ],
+  "priorSlices": "../prior-slices/index.json"
+}

@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-08T00:23:06.679356+00:00",
+  "beforeDaemon": {
+    "pid": 3425731,
+    "origin": "http://127.0.0.1:28433",
+    "home": "/home/leo/scratch/cc-u10-acceptance/slot-final/runtime/home",
+    "status": "ok",
+    "counts": {
+      "team_runs": 2,
+      "team_attempts": 11
+    }
+  },
+  "activeAttemptsBeforeStop": 0,
+  "attemptsPreserved": 11,
+  "runStates": [
+    [
+      "canceled",
+      2
+    ]
+  ],
+  "daemonExited": true,
+  "tmux": {
+    "socket": "/home/leo/scratch/cc-u10-acceptance/slot-final/runtime/tmux/tmux-1000/default",
+    "pid": 3419173,
+    "sessions": [
+      "impl-1@owner-chat-capacity",
+      "impl-2@owner-chat-capacity",
+      "lead-1@owner-chat-capacity",
+      "review-1@owner-chat-capacity"
+    ]
+  },
+  "tmuxServerExited": true,
+  "remainingFixtureProcesses": [],
+  "port28433Listening": false,
+  "sharedTestSignInUnchanged": true,
+  "projectHead": "7c245e125e628b01237db7d4a423173fdea632c7",
+  "projectWorktreeStatus": "?? .claude/\n?? .openrig/\n",
+  "remoteNetworkMutations": false,
+  "ownerWorkingProfileChanged": false,
+  "benchmarkFilesChanged": false
+}

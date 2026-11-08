@@ -18,6 +18,13 @@ const plan = readFileSync(repo("docs/plans/2026-10-13-001-feat-multi-agent-team-
 const roles = Object.keys(roleConfiguration) as TeamRole[];
 
 describe("role charters", () => {
+  it("keeps the higher-priority lead protocol consistent with staged discussion", () => {
+    expect(leadProtocol).toContain("brainstorm");
+    expect(leadProtocol).toContain("requirements");
+    expect(leadProtocol).toContain("one focused question");
+    expect(leadProtocol).not.toContain("During planning, write only the plan and");
+  });
+
   it("gives every role a versioned charter under one versioned core", () => {
     expect(instructionVersion(coreInstructions)).toBe("2");
     for (const role of roles) {
@@ -27,9 +34,9 @@ describe("role charters", () => {
     expect(new Set(roles.map(role => roleCharters[role])).size).toBe(roles.length);
   });
 
-  it("projects protocol 3 and keeps each composed role prompt within 16 KiB", () => {
-    expect(LEAD_PROTOCOL_VERSION).toBe("3");
-    expect(instructionVersion(leadProtocol)).toBe("3");
+  it("projects protocol 5 and keeps each composed role prompt within 16 KiB", () => {
+    expect(LEAD_PROTOCOL_VERSION).toBe("5");
+    expect(instructionVersion(leadProtocol)).toBe("5");
     for (const role of roles) {
       const brief = role === "lead" ? Math.max(leadInstructions("A".repeat(300)).length,
         planningInstructions("A".repeat(300), "docs/plan.md", true).length) : 1_024;
@@ -61,9 +68,9 @@ describe("role charters", () => {
         role: "reviewer", mailbox: "impl-" + seatCount + "@" + teamName });
       expect(activation.instructions.length).toBeLessThanOrEqual(8_192);
       expect(activation.instructions).toContain(JSON.stringify([
-        { role: "implementer", client: "claude-code", count: seatCount / 2 },
-        { role: "implementer", client: "codex", count: seatCount / 2 - 1 },
-        { role: "reviewer", client: "codex", count: 1 },
+        { role: "implementer", client: "claude-code", model: null, count: seatCount / 2 },
+        { role: "implementer", client: "codex", model: null, count: seatCount / 2 - 1 },
+        { role: "reviewer", client: "codex", model: null, count: 1 },
       ]));
       const prompt = [coreInstructions, roleCharters.lead, leadProtocol, activation.instructions].join("\n");
       expect(Buffer.byteLength(prompt)).toBeLessThanOrEqual(16_384);

@@ -36,9 +36,9 @@ async function show(teams: TeamSummary[], presetTeamId?: string) {
   return { started };
 }
 
-async function start(goal: string) {
+async function start(goal: string, planning = false) {
   fireEvent.change(screen.getByLabelText("What should the team do?"), { target: { value: goal } });
-  fireEvent.click(screen.getByRole("button", { name: "Start task" }));
+  fireEvent.click(screen.getByRole("button", { name: planning ? "Start planning" : "Start task" }));
   await waitFor(() => expect(request).toHaveBeenCalled());
   const [path, init] = request.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe("/runs");
@@ -50,8 +50,8 @@ describe("new task", () => {
 
   it("starts a planning run when the team has a lead, so the lead drafts the plan", async () => {
     const { started } = await show(withLead);
-    const body = await start("Add the status filter");
-    expect(body).toEqual({ goal: "Add the status filter", rig: withLead[0]!.id, planning: true });
+    const body = await start("Add the status filter", true);
+    expect(body).toEqual({ goal: "Add the status filter", rig: withLead[0]!.id, planning: true, documentWorkflow: true });
     await waitFor(() => expect(started).toHaveBeenCalledWith("3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f"));
   });
 
@@ -72,6 +72,6 @@ describe("new task", () => {
 
   it("keeps the start button closed until there is a goal", async () => {
     await show(withLead);
-    expect((screen.getByRole("button", { name: "Start task" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Start planning" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

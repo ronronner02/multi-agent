@@ -7,7 +7,7 @@ let reduced = false;
 let hidden = false;
 let query: MediaQueryList;
 beforeEach(() => {
-  reduced = false; hidden = false; localStorage.clear();
+  reduced = false; hidden = false; localStorage.clear(); sessionStorage.clear();
   query = Object.assign(new EventTarget(), { media: "(prefers-reduced-motion: reduce)" }) as MediaQueryList;
   Object.defineProperty(query, "matches", { get: () => reduced });
   vi.spyOn(window, "matchMedia").mockReturnValue(query);
@@ -35,7 +35,8 @@ describe("command-center background", () => {
   it("plays the muted, inline background and pauses while hidden or blurred", () => {
     const view = render(<Background />);
     const video = view.container.querySelector("video")!;
-    expect(video.muted && video.loop && video.playsInline).toBe(true);
+    expect(video.muted && video.playsInline).toBe(true);
+    expect(video.loop).toBe(false);
     expect(video.getAttribute("src")).toContain("shuimo-danqing-loop.mp4");
     expect(video.play).toHaveBeenCalledTimes(1);
     hidden = true; fireEvent(document, new Event("visibilitychange"));
@@ -51,6 +52,73 @@ describe("command-center background", () => {
     fireEvent.focus(window); fireEvent.blur(window); fireEvent(document, new Event("visibilitychange"));
     expect(video.play).toHaveBeenCalledTimes(plays);
     expect(video.pause).toHaveBeenCalledTimes(pauses);
+  });
+
+  it("plays the entrance once, then repeats only the fully revealed character before the fade", () => {
+    const view = render(<Background />);
+    const video = view.container.querySelector("video")!;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(0);
+    fireEvent.playing(video);
+    video.currentTime = 23.1;
+    fireEvent.timeUpdate(video);
+    expect(video.currentTime).toBe(10);
+    video.currentTime = 23.1;
+    fireEvent.timeUpdate(video);
+    expect(video.currentTime).toBe(10);
+    video.currentTime = 25.333;
+    fireEvent.ended(video);
+    expect(video.currentTime).toBe(10);
+  });
+
+  it("skips the entrance after navigation or a reload in the same session", () => {
+    const first = render(<Background />);
+    fireEvent.playing(first.container.querySelector("video")!);
+    first.unmount();
+    const next = render(<Background />);
+    const video = next.container.querySelector("video")!;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(10);
+  });
+
+  it("keeps the portrait phase when motion is reenabled and storage is unavailable", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("storage disabled"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("storage disabled"); });
+    const view = render(<Background />);
+    fireEvent.playing(view.container.querySelector("video")!);
+    view.rerender(<Background motion={false} />);
+    view.rerender(<Background motion />);
+    const video = view.container.querySelector("video")!;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(10);
+  });
+
+  it("keeps playback position on focus changes and never resumes a hidden loop", () => {
+    const view = render(<Background />);
+    const video = view.container.querySelector("video")!;
+    fireEvent.playing(video);
+    video.currentTime = 14;
+    fireEvent.blur(window);
+    fireEvent.focus(window);
+    expect(video.currentTime).toBe(14);
+    hidden = true;
+    fireEvent(document, new Event("visibilitychange"));
+    const plays = vi.mocked(video.play).mock.calls.length;
+    video.currentTime = 23.1;
+    fireEvent.timeUpdate(video);
+    expect(video.currentTime).toBe(10);
+    expect(video.play).toHaveBeenCalledTimes(plays);
+  });
+
+  it("starts a fresh entrance in a new session", () => {
+    const first = render(<Background />);
+    fireEvent.playing(first.container.querySelector("video")!);
+    first.unmount();
+    sessionStorage.clear();
+    const next = render(<Background />);
+    const video = next.container.querySelector("video")!;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(0);
   });
 
   it("uses a still frame for reduced motion and responds to preference changes", () => {
@@ -71,5 +139,6 @@ describe("command-center background", () => {
     const view = render(<Background />);
     await act(async () => {});
     expect(view.container.querySelector("video")!.poster).toContain("shuimo-danqing-still.webp");
+    expect(sessionStorage.length).toBe(0);
   });
 });

@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-08T00:12:42.554623+00:00",
+  "mode": "orchestrator, read-only, delta-scoped",
+  "files": {
+    "engine/packages/ui/src/team/background.tsx": "dffefffb4b8aded77b21daec0964adef373d450d70a3a8993f7dc98054f33df2",
+    "engine/packages/daemon/src/server.ts": "f00aeadd70f47863ca22391f1d008eeb2e0b6b6138fe37454a880dc7acc6adaf",
+    "engine/packages/daemon/src/contracts/team-control.ts": "ee2b8f299ea3220add1429b03fdba898759aafcc1b189d11efee1e79cf6440b8",
+    "engine/packages/daemon/src/team-control-surface.ts": "43eebda4d51f5f5589fc8d94345cd7de42d162d172afa3bbae9403051cbe1790",
+    "engine/packages/daemon/src/startup.ts": "ec6cc61e8388d9fe1cca959f0f418316a701e1839eb5b31125cf53dae2f4eb66",
+    "engine/packages/ui/src/team/task-drawer.tsx": "dc25fc8a37b2662cb0ae3fc7897ec7a4fa6c1a7ba28ce377a49b0e4e53e5f788",
+    "engine/packages/ui/src/team/team.css": "7f3b659bcf9f4ebc72ddbf669001d9e96c48e7d05ea07bb4d7457d41738e3b43"
+  },
+  "findings": [],
+  "checks": [
+    "Video entry is marked on actual playback; later seeks use a complete portrait interval while existing pause and reduced-motion behavior remain.",
+    "MP4 range responses stay inside the existing UI path gate and file-response owner; invalid ranges return 416 without extending filesystem access.",
+    "Task text is bounded and redacted, rendered as inert text, and declared criteria remain separate from verified progress.",
+    "Workspace projection reads only an existing candidate, and the integration branch comes from its durable owner. Reads do not acquire a workspace or start Git."
+  ],
+  "independent": false,
+  "scopeLimitations": [
+    "Credential handling is covered by the separately closed independent confirmation, not this source scan.",
+    "The existing two documented daemon-suite failures remain unchanged."
+  ]
+}

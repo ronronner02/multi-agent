@@ -32,7 +32,7 @@ export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (C
 export interface InstructionVersions { core: string; charter: string }
 export interface ContextObservation { discoveryRoots: string[]; files: { path: string; hash: string }[] }
 export const leadProtocol = readFileSync(new URL("../../../../../config/team/lead-protocol.md", import.meta.url), "utf8");
-export const LEAD_PROTOCOL_VERSION = "3";
+export const LEAD_PROTOCOL_VERSION = "5";
 /** An instruction file without a `Version:` line cannot be projected. */
 export function instructionVersion(content: string): string {
   const version = /^Version: (\S+)$/m.exec(content)?.[1];

@@ -9,25 +9,24 @@ Node installation first on `PATH`; a Windows npm on the WSL path cannot build th
 From a fresh clone, run `./setup.sh`, add `engine/node_modules/.bin` to `PATH`, run
 `rig config set ui.enabled true`, then `./scripts/start.sh`. The
 [README quick start](../README.md#quick-start) gives the complete sequence. Setup creates
-the owner credential; the start script loads it and starts a managed daemon on loopback.
-The default `workers.isolation: none` needs no host provisioning.
+the owner credential and installs GitHub CLI; the start script loads the credential
+and starts a managed daemon on loopback. The default `workers.isolation: none` needs
+no host provisioning.
 
-Install and sign in to the clients your seats will use before starting work. The
-daemon uses your local Claude Code and Codex configurations. The repository needs at
-least one commit; it does not need `plan.md` or a seed script for planning.
+Install and sign in to the clients the team will use before starting work. The daemon
+uses your local Claude Code and Codex configurations. A new project folder does not
+need an initial commit, a plan file or a seed script.
 
-In the paired Web UI, open **Teams → New team**, choose the repository and seat clients,
-and create the team. The terminal equivalent is:
+Pair the browser, sign in to GitHub, then choose **Create project**. Select a folder,
+enter a project name, choose **Review files**, and inspect the canonical path, included
+file count, excluded paths and upload consequence. **Create** confirms that action.
+The desktop picker accepts Windows drive folders; the browser picker lists folders
+on the engine's machine, not the browser's machine.
 
-```bash
-rig team create /absolute/path/to/your-repository
-```
-
-The default seats are a Claude Code lead, a Claude Code implementer, a Codex
-implementer and a Claude Code reviewer. `--lead <client>`,
-`--implementers <comma-separated-clients>` and `--reviewer <client>` select the clients
-on create; supported values are `claude-code` and `codex` (`claude` is also accepted).
-Creation records the seats. Starting work launches them as needed.
+A named project starts with only its configured lead. The lead proposes the remaining
+seats during planning; plan approval approves that roster too. The older CLI path
+without `--name` still registers a local repository with manual seats, as described
+below; it is not the UI's project-creation flow.
 
 ## Pair a browser
 
@@ -54,11 +53,90 @@ JS
 Enter the printed code in the browser's pairing field. The command prints only the
 one-time code. If the daemon uses another loopback port, use that port in both URLs.
 
+The desktop reuses its saved engine repository and any configured non-secret runtime
+profile for both startup and pairing. It renews an expired owner session without
+reloading the current project or form. A connection failure offers **Retry**; it does
+not change the selected profile or require copying a token into the app.
+
+## GitHub sign-in
+
+After pairing, choose **Sign in to GitHub**, then **Open GitHub**. Enter the displayed
+one-time code on GitHub and approve the device flow. The app checks the account
+before mounting the project and run views. If the code expires or sign-in fails,
+choose **Try again** for a new flow. A missing GitHub CLI requires `./setup.sh`.
+
+```bash
+rig github status
+rig github status --json
+```
+
+These commands inspect the daemon's account; they do not start sign-in or print a token.
+The daemon uses GitHub CLI's Linux credential store, honoring `GH_CONFIG_DIR` when
+configured. It deliberately ignores inherited `GH_TOKEN` and `GITHUB_TOKEN` values
+so those variables do not override the account or defeat sign-out. It does not
+install a global git credential helper.
+
+**Settings → GitHub → Sign out** signs the active account out of that store and returns
+to the sign-in gate. Other processes using the same store see that change too.
+**Settings → Sessions → Revoke this browser** instead revokes only the current owner
+session. A standalone browser must pair again; the desktop stays disconnected until
+you choose **Retry**. It does not sign GitHub out or stop the team.
+
+## Create and retry behavior
+
+After sign-in, preview and create a named project from the terminal:
+
+```bash
+rig team create /absolute/path/to/project --name project-name --dry-run
+rig team create /absolute/path/to/project --name project-name
+```
+
+The second command asks for confirmation. For non-interactive use, review the dry run
+first and add `--yes` only when the displayed upload is intended. `--name` uses the
+configured lead; it does not combine with manual `--lead`, `--implementers` or
+`--reviewer` flags.
+
+- **New folder or no commit:** Create initializes git, adds a default `.gitignore` if
+  absent, snapshots the included files into an initial commit, creates a private
+  GitHub repository, sets `origin`, and pushes. The preview changes no project files.
+- **Commit with no origin:** Create uploads the selected existing commit and its
+  reachable history. Uncommitted changes stay local. Credential-policy paths in the
+  outgoing history cause rejection; the engine does not rewrite that history.
+- **Existing origin:** The project is registered without creating a remote or pushing.
+  Its remote and visibility are unchanged; registration does not make it private.
+- **Folder safety:** Home and drive roots, credential-policy locations and folders
+  nested inside another repository are rejected. Excluded credential paths are listed.
+  Inspect content before confirming: path exclusions do not detect every possible secret.
+- **Name collision:** Choose a different name and review again. The existing remote
+  is not reused just because its name matches.
+- **Interrupted push:** Check connectivity, account access and private visibility, then
+  choose **Retry** with the same folder and name. The daemon retains the bootstrap and
+  retries the pinned initial commit rather than creating a second remote or commit.
+  An origin or bootstrap change requires review again; do not delete its state to retry.
+
+A desktop drive path such as `D:\code\project` maps to `/mnt/d/code/project`. The browser
+accepts engine-visible absolute paths and provides a directory browser. Create's
+upload is the engine's only push; delivery and Merge remain local.
+
+### Existing local repositories with manual seats
+
+For CLI compatibility, an unnamed Create registers a repository that already has a commit:
+
+```bash
+rig team create /absolute/path/to/existing-repository
+```
+
+This path does not create or push a GitHub repository. Its defaults remain a Claude Code
+lead, Claude Code and Codex implementers, and a Claude Code reviewer. `--lead <client>`,
+`--implementers <comma-separated-clients>` and `--reviewer <client>` select those seats;
+values are `claude-code` and `codex` (`claude` is also accepted).
+
 ## Plan and deliver
 
-Choose **New work** for the team. A team with a lead starts in planning: the lead
-drafts `plan.md` in the run's worktree, asks questions in the chat, and waits for
-**Approve plan**. The chat answer and the plan approval are separate actions.
+Enter a goal in the new project's start form, or choose **New work** for another run.
+The lead drafts `plan.md`, asks questions in chat, and proposes the roster. Review the
+plan and team together before **Approve plan**. Sending a chat answer does not approve
+either artifact.
 
 The CLI requires `--planning` for this flow:
 
@@ -69,27 +147,57 @@ rig team chat <run-id> "Your answers and requested changes"
 rig team approve-plan <run-id>
 ```
 
-Use the team name printed by create and the run id printed by start. `--rig` may be
+Use the team name printed by Create and the run id printed by Start. `--rig` may be
 omitted when there is exactly one team. Start uses `plan.md` and a delivery write
 scope of `src` by default, including from the UI. For another scope, start through
 the CLI with `--write <path...>` (for example `--write src test`); `--plan <path>`
-selects another repository-relative plan artifact. The planning turn can write only
-the plan. Approval records its bytes and opens the approved delivery scope.
+selects another repository-relative plan artifact. Planning writes the plan and its
+proposal artifacts, not delivery code. Approval binds the current plan and roster.
 
-Once approved, the lead decomposes the plan and assigns implementer tasks. The daemon
-records outcomes, creates a review for each completed implementer candidate, routes
-rework when a review requires it, and commits approved work to `team/…`. Task
-admission and reviewer verdicts require no owner action. Answer escalations in the
-chat when the lead needs a decision about scope, budget or an unresolved conflict.
+Once approved, the lead assigns implementer tasks. The daemon records outcomes,
+creates reviews, routes rework and commits approved candidates to `team/…`. Workers
+report blockers to the lead first. Task admission, worker completion and reviewer
+verdicts require no owner action. Answer an escalation when the lead needs a decision
+about scope, budget or an unresolved conflict. Owner chat has reserved lead capacity
+even when worker slots are full; a provider-wide limit may still delay the reply.
 
-The run home is the lead chat with a task list. Open a task for attempts, review
-findings and the diff. **Commits** opens the integration branch. **New work** is also
-available for a team that already has a run. Settings are in the overflow menu.
+For a run with a reviewer, an implementer dependency is ready only after validated
+completion and its integration commit. Worker completion or review approval alone
+does not start a dependent candidate before the accepted files reach the run branch.
+Validated task drops and settled, integrated tasks release their write-path claims
+for later admitted work without deleting their records. Pending review, unintegrated
+work and active attempts keep their claims.
+
+The project selector changes the project; the run selector changes its run. The six
+sections keep their own view of that context:
+
+| Section | What to inspect |
+| --- | --- |
+| Overview | Progress, selected-task evidence, agent activity, owner attention and folded integration history. |
+| Workspace | Seats, live pane output, native token counters and recorded tool calls. |
+| Tasks | Searchable List and persistent inspector with attempts, reports and diffs; Board retains dependency stages. |
+| Reviews | Candidate findings and the action to ask the lead for follow-up. |
+| Analytics | Project-scoped captured stopped attempts over 7 or 30 days, grouped in UTC. |
+| Settings | General, GitHub, Appearance, Sessions and the read-only Agents roster. |
+
+Analytics uses native input, cache and output counters without monetary estimates.
+Missing counters remain unavailable, not zero. Outcome rates show their denominators;
+agent utilization is the share of captured active time, not wall-clock capacity.
+Workspace can show a running turn before that attempt is eligible for Analytics.
+
+General selects the default lead client for future projects. `team.maxSeats` and
+`team.maxConcurrentAgents` bound roster size and dispatch; configure them through
+`rig config set`. Environment overrides take precedence over saved values. Appearance
+controls theme and the Shuimo Danqing backdrop's motion. The entrance plays once per
+app/browser session, then only the complete portrait segment repeats. Navigation,
+reload and reconnect do not restart the entrance. Reduced motion uses the portrait
+still; animation pauses when the window loses focus or the page is hidden.
+Agents is a view of the roster, not a manual seat editor.
 
 ## Resume a blocked run
 
 Read the block reason and resolve any external problem, then choose **Resume** in
-the run's plate or use:
+the run's primary action or use:
 
 ```bash
 rig team resume <run-id>
@@ -106,7 +214,7 @@ rig team resume <run-id> --add-review-rounds 1
 ```
 
 Use the option that matches the displayed budget block. Review exhaustion can also
-be resumed without an increase so the lead can decide on follow-up work. The UI plate
+be resumed without an increase so the lead can decide on follow-up work. The UI
 shows the increase it will request before the click. Resume is for a blocked run;
 plan approval and escalation answers remain separate actions.
 
@@ -123,6 +231,7 @@ This updates the currently checked-out branch in the repository the team was cre
 for. The checkout must be clean and on a branch. The daemon fast-forwards when it can,
 otherwise makes a merge commit. A conflict is reported and the attempted merge is
 aborted, restoring the checkout. Resolve the conflict before trying the merge again.
+Merge does not push; publishing the resulting branch is a separate owner action.
 
 Readiness requires landed work, completed implementation/review tasks and no failed
 task. Merge is also refused while the lead task is pending, in progress or blocked.
@@ -139,7 +248,16 @@ lead-evidence and premature-merge defect recorded in the
 | `none` (default) | The native client runs as the daemon's own user, inside the task's candidate git worktree, in the seat's tmux pane. No host provisioning, sudo, extra accounts or sandbox. |
 | `hardened` | The existing restricted worker launcher. Requires the `ma-*` accounts, the installed policy and sudo, all from the provisioning step below. |
 
-Under `none`, the daemon keeps its state under `$OPENRIG_HOME/state/workers/`: `assignments/<worker>/<run>-<task>` for candidate worktrees, `context/<worker>/<run>/<attempt>` for attempt projections, and `$OPENRIG_HOME/sock/<worker>/<run>/<attempt>/mailbox.sock` for mailbox endpoints (kept shallow because an AF_UNIX path is limited to 108 bytes). Nothing in that path reads `/etc/multi-agent`, `/opt/multi-agent`, `/run/multi-agent` or `/usr/local/libexec/multi-agent`, and no launch calls sudo.
+Under `none`, the daemon keeps its state under `$OPENRIG_HOME/state/workers/`:
+`assignments/<worker>/<run>-<task>` for candidate worktrees and
+`context/<worker>/<run>/<attempt>` for attempt projections. Mailbox endpoints use
+`$OPENRIG_HOME/sock/<worker>/<attempt>/mailbox.sock` while that path fits Linux's
+107 usable AF_UNIX pathname bytes. For a longer profile, only the transient mailbox
+root moves to `/tmp/ma-<uid>-<profile-hash>`, a private `0700` directory checked for
+canonical path and current-user ownership. Databases, worktrees and credentials stay
+in their configured locations. No launch uses sudo or reads hardened provisioning
+from `/etc/multi-agent`, `/opt/multi-agent`, `/run/multi-agent` or
+`/usr/local/libexec/multi-agent`.
 
 The isolation is a boundary between tasks, not between the worker and the host: a worker under `none` has the daemon's full filesystem access, its network and its environment. The receipt records `network.mode: "unknown"` because no profile is enforced. Use `hardened` where that matters.
 
@@ -406,7 +524,7 @@ Moved from `AGENTS.md` on 2026-10-26; the roster and review sizing stay there.
 
 This runs at project wrap-up or when the owner asks; tasks do not run it.
 
-- Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of `packages/daemon` and `packages/cli`. Never use a linked worktree with symlinked `node_modules`, where daemon-spawn tests fail.
+- Run it in a standalone clone with its own `npm ci` and a fresh `npm run build` of [`engine/packages/daemon`](../engine/packages/daemon) and [`engine/packages/cli`](../engine/packages/cli). Never use a linked worktree with symlinked `node_modules`, where daemon-spawn tests fail.
 - Start it with no controlling terminal (`setsid -w … < /dev/null`, inside `tmux` when the session may be reaped). Unset `TMUX` and `TMUX_PANE` (`env -u TMUX -u TMUX_PANE`), or the hermetic scenario tests refuse to run. A test that opens an interactive shell can otherwise take the terminal, and the run then stops with SIGTTIN/SIGTTOU while looking hung.
 - Put the Linux Node installation first on a clean `PATH` that excludes Windows binaries. From `engine/packages/daemon`, run `npx vitest run --maxWorkers=2 --testTimeout=60000`, one Vitest process at a time, and write a `.done` marker with the exit code on completion. Preserve the counts and failure details before cleaning up only the fixtures that run created.
 
@@ -429,7 +547,7 @@ cannot call an owner completion endpoint or merge into the owner's branch.
   candidates can be read again after a daemon restart. Integration does not update
   the owner's checkout; the owner's Merge action does that.
 
-The task detail view shows the attempts, review findings and diff. The run chat carries
+The task drawer shows the attempts, worker reports, review findings and diff. Lead chat carries
 questions and escalation answers. Owners do not mark each task done, transcribe
 reviewer reports or approve each task list as part of this flow.
 

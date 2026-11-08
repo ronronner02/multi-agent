@@ -1,0 +1,17 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > preserves a bound seat when its presence probe fails
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/seat-pane-launch.test.ts (8 tests | 6 skipped) 769ms
+   ✓ a start request launches the seat it put work on > recreates a removed bound seat while another session keeps its server alive  610ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 6 skipped (8)
+   Start at  19:39:22
+   Duration  4.33s (transform 2.55s, setup 38ms, collect 3.36s, tests 769ms, environment 0ms, prepare 39ms)
+

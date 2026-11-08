@@ -1,0 +1,19 @@
+{
+  "check": "u10-runtime-final-suite-build",
+  "command": [
+    "npm",
+    "run",
+    "build",
+    "-w",
+    "packages/i18n",
+    "-w",
+    "packages/daemon",
+    "-w",
+    "packages/cli"
+  ],
+  "cwd": "<daemon-suite>/engine",
+  "exit": 0,
+  "seconds": 12.75,
+  "stdinDetached": true,
+  "noControllingTerminal": true
+}

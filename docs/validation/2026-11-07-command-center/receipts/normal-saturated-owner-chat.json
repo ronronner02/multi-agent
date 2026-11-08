@@ -1,0 +1,38 @@
+{
+  "at": "2026-11-08T00:08:21.091237+00:00",
+  "passed": true,
+  "runId": "9d6de881-e4bd-49fd-a9a4-da19d92a0399",
+  "ordinaryCap": 2,
+  "workerCountAtSend": 2,
+  "workerCountAtReply": 2,
+  "leadObservedWithinSeconds": 2.028,
+  "replyObservedWithinSeconds": 10.041,
+  "sameTwoWorkersStillRunning": true,
+  "foregroundWaitsVerifiedAtSendAndReply": true,
+  "workers": [
+    {
+      "attemptId": "0e6b8dd9-8ae7-4a6b-b176-9c4a1b9890bf",
+      "provider": "claude",
+      "nativeSessionId": "0fda7f87-45f3-47b5-9ff4-72ca4f91c75b",
+      "processId": 3422884,
+      "processStart": "13343251",
+      "worktree": "/home/leo/scratch/cc-u10-acceptance/slot-final/runtime/home/state/workers/assignments/local/9d6de881-e4bd-49fd-a9a4-da19d92a0399-task-2"
+    },
+    {
+      "attemptId": "9535b8fc-2c81-4595-83f9-ec962a296e2a",
+      "provider": "codex",
+      "nativeSessionId": "01a1b87b-77b5-7441-a70e-ae52d1a7a6bf",
+      "processId": 3422999,
+      "processStart": "13343269",
+      "worktree": "/home/leo/scratch/cc-u10-acceptance/slot-final/runtime/home/state/workers/assignments/local/9d6de881-e4bd-49fd-a9a4-da19d92a0399-task-3"
+    }
+  ],
+  "reply": "SLOT_CHECK_RECEIVED\n\nAs of the runtime snapshot at 2026-11-08T00:08:11Z, both ordinary worker slots are occupied:\n\n- **Task A (task-2)** is assigned to `impl-1@owner-chat-capacity`, the Claude Code seat. Its queue state is pending and its latest attempt `0e6b8dd9\u2026` is **running** on provider `claude`. It started at 00:07:42.003Z.\n- **Task B (task-3)** is assigned to `impl-2@owner-chat-capacity`, the Codex seat. Its queue state is pending and its latest attempt `9535b8fc\u2026` is **running** on provider `codex`. It started at 00:07:42.011Z.\n\nNeither task has a review recorded yet, and neither is finished. Both attempts started about 29 seconds before the snapshot, which is well inside their 180-second waits. The snapshot can't show which step each worker is on, so I can't confirm from it that they're still in the wait.\n\nI haven't waited on, stopped or changed either worker, and I haven't created any tasks. If you cancel now, I'll respect it and the recorded attempts will be kept.",
+  "ownerMessageTransport": "Authenticated owner API; the resulting message was then verified in the real UI.",
+  "uiCaptureTiming": "After cancellation and an idle fixture restart, not a live saturation screenshot.",
+  "limitations": [
+    "The first fixture omitted explicit writePaths. Admission correctly held the tasks; that canceled run and its attempts remain recorded.",
+    "The native run used a deliberate foreground wait to keep both ordinary slots occupied. This is bounded capacity evidence, not a timing guarantee for every provider or task.",
+    "Browser harness failures and corrections remain in private scratch. No failed run has been rewritten as passed."
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "evidenceRevalidatedAt": "2026-11-08T01:02:16.043026+00:00",
+  "sourcePatchSha256": "75c90e7289f18eef312f4792a58afb4ae2517079a34f55fbd44e95b6d0fe65f1",
+  "checks": [
+    {
+      "check": "u10-desktop-install",
+      "purpose": "desktop-dependency-preparation"
+    },
+    {
+      "check": "u10-desktop-tests",
+      "purpose": "desktop-preflight-tests"
+    },
+    {
+      "check": "u10-desktop-gh-prompt-red",
+      "purpose": "causal-reproducer-before-parser-fix"
+    },
+    {
+      "check": "u10-desktop-gh-prompt-green",
+      "purpose": "final-sign-in-and-bootstrap-focused"
+    },
+    {
+      "check": "u10-desktop-parser-lint",
+      "purpose": "final-typecheck"
+    },
+    {
+      "check": "u10-desktop-parser-build",
+      "purpose": "final-build"
+    },
+    {
+      "check": "u10-desktop-parser-smoke",
+      "purpose": "final-smoke"
+    },
+    {
+      "check": "u10-desktop-current-tests",
+      "purpose": "final-desktop-tests"
+    },
+    {
+      "check": "u10-desktop-final-suite-build",
+      "purpose": "standalone-suite-build"
+    },
+    {
+      "check": "u10-desktop-full-daemon",
+      "purpose": "final-full-daemon-suite"
+    }
+  ],
+  "carriedForwardChecks": [
+    {
+      "check": "u10-runtime-ui-all",
+      "scope": "Full UI suite before the parser-only delta; UI source hashes are unchanged."
+    },
+    {
+      "check": "u10-runtime-post-seat-focused-2",
+      "scope": "Earlier 533-test daemon runtime focused check, not repeated after the parser-only delta."
+    },
+    {
+      "check": "u10-runtime-synthetic-final-test",
+      "scope": "57 tests in the earlier merged synthetic project; no current desktop Create claim."
+    }
+  ],
+  "fullDaemonSuiteStatus": "failed-known",
+  "fullDaemonSuiteClassification": "Two exact documented failures; earlier failed variants remain historical.",
+  "suiteInvocationsDuringEvidenceRefresh": 0,
+  "candidateCountNote": "The current standalone suite source manifest has 34 paths. The prior 31-path source and two-failure result remain historical.",
+  "closeoutChecks": [
+    "u10-desktop-closeout-doc-references",
+    "u10-desktop-closeout-diff-check"
+  ],
+  "latestPlanAuditChecks": [
+    "u10-plan-audit-daemon",
+    "u10-plan-audit-ui",
+    "u10-plan-audit-cli",
+    "u10-plan-audit-cli-team",
+    "u10-plan-audit-desktop"
+  ],
+  "latestPlanAuditSourceUnchanged": true,
+  "latestInstalledChecks": [
+    "desktop-final-ui-suite",
+    "desktop-final-i18n",
+    "desktop-final-native-unit",
+    "inspector-read-final",
+    "skin-range-green",
+    "skin-once-green",
+    "skin-range-smoke",
+    "skin-range-lint",
+    "desktop-final-ui-build",
+    "normal-final-doc-references"
+  ],
+  "latestInstalledCheckpoint": "resume-final-checkpoint.json",
+  "latestSourceReceipt": "receipts/normal-source-and-suite-processes.json",
+  "latestNativeCreateEvidence": "receipts/native-create-flow.json",
+  "localAcceptanceStatus": "local-acceptance-complete-with-known-failures-unmerged",
+  "latestDiffCheck": "receipts/native-create-final-diff-check.json"
+}

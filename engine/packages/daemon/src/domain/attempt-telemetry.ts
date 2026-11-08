@@ -14,6 +14,10 @@ export interface ToolActivityRecord {
   id: string; seq: number; at: string; tool: string; summary: string;
   status: "running" | "completed" | "failed" | "aborted";
 }
+export interface TurnProgress {
+  sequence: number; at: string; status: "working" | "thinking" | "responding" | "completed" | "failed" | "stopped";
+  blocks: Array<{ id: string; text: string; complete: boolean }>; truncated: boolean;
+}
 interface NativeUsage {
   nativeSessionId: string | null; model: string | null; resumed: boolean; mode: "turn" | "cumulative";
   counts: Counts | null;
@@ -123,13 +127,44 @@ export class AttemptTelemetry {
       activity_status AS activityStatus, outcome FROM attempt_telemetry WHERE attempt_id = ?`).get(attemptId) as StoredRow | undefined;
   }
 
-  private files(attempt: TeamAttempt) {
+  private outputPaths(attempt: TeamAttempt) {
     const root = this.options.turnStateRoot;
     // An admitted id still is not a filesystem path.
-    if (!root || !attempt.id || /[/\\\\]/.test(attempt.id) || [".", ".."].includes(attempt.id)) {
-      return { native: null, activity: parseActivity(null) };
-    }
-    const paths = agentTurnOutputPaths(root, attempt.id);
+    return !root || !attempt.id || /[/\\]/.test(attempt.id) || [".", ".."].includes(attempt.id)
+      ? null : agentTurnOutputPaths(root, attempt.id);
+  }
+
+  /** Read only the current public snapshot; it grants no chat, document or execution authority. */
+  readProgress(attempt: TeamAttempt): TurnProgress | null {
+    const paths = this.outputPaths(attempt);
+    if (!paths) return null;
+    try {
+      const text = this.readFile(paths.progress, 512 * 1024);
+      if (text === null) return null;
+      const value = object(JSON.parse(text));
+      if (!value || value.version !== 1 || !Number.isSafeInteger(value.sequence) || Number(value.sequence) < 1
+        || typeof value.at !== "string" || !Number.isFinite(Date.parse(value.at)) || typeof value.truncated !== "boolean"
+        || !["working", "thinking", "responding", "completed", "failed", "stopped"].includes(String(value.status))
+        || !Array.isArray(value.blocks) || value.blocks.length > 32) return null;
+      const ids = new Set<string>(); let length = 0;
+      const blocks: TurnProgress["blocks"] = [];
+      for (const input of value.blocks) {
+        const block = object(input);
+        if (!block || typeof block.id !== "string" || !/^text-[1-9]\d*$/.test(block.id) || ids.has(block.id)
+          || typeof block.text !== "string" || typeof block.complete !== "boolean") return null;
+        ids.add(block.id); length += block.text.length;
+        if (length > 65_536) return null;
+        blocks.push({ id: block.id, text: clean(block.text, 65_536).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ""), complete: block.complete });
+      }
+      return { sequence: Number(value.sequence), at: new Date(value.at).toISOString(), status: value.status as TurnProgress["status"],
+        blocks, truncated: value.truncated };
+    } catch { return null; }
+  }
+
+  private files(attempt: TeamAttempt) {
+    const paths = this.outputPaths(attempt);
+    if (!paths) return { native: null, activity: parseActivity(null) };
+
     const read = (path: string, limit: number) => { try { return this.readFile(path, limit); } catch { return null; } };
     let native = parseUsage(read(paths.usage, 16_384), attempt.provider);
     if (attempt.provider === "codex" && !native?.nativeSessionId) {

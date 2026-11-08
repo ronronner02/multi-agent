@@ -1,0 +1,12 @@
+
+> @openrig/i18n@0.1.0 build
+> tsc
+
+
+> @openrig/daemon@0.1.0 build
+> tsc && node scripts/copy-workflow-specs.mjs
+
+
+> @openrig/cli@0.1.0 build
+> tsc && node ../../scripts/prepare-workspace-build.mjs cli
+

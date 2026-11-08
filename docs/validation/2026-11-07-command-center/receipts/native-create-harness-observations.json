@@ -1,0 +1,24 @@
+{
+  "at": "2026-11-08T00:58:34.2120656Z",
+  "observations": [
+    {
+      "event": "Initial minimized window",
+      "result": "The first invocation did not expose the dialog while minimized. Restoring the same window exposed the expected empty Create form; the duplicate-open guard preserved it.",
+      "evidence": [
+        "window-before-restore.json",
+        "restored-form-observation.json"
+      ]
+    },
+    {
+      "event": "Immediate field readback",
+      "result": "The first immediate name read occurred before the accessibility update. The later read exactly matched the intended synthetic name; no second value was written.",
+      "evidence": [
+        "name-settled.json"
+      ]
+    }
+  ],
+  "productSourceChanged": false,
+  "repositoryCreateClicks": 1,
+  "physicalPickerSelectionConfirmed": true,
+  "ownerViewAndWindowStateRestored": true
+}

@@ -1,0 +1,40 @@
+{
+  "checkedAt": "2026-11-07T09:56:09.288759+00:00",
+  "baselineFileMatches": [
+    {
+      "path": "docs/amendments/2026-11-02-mvp-multi-agent-scope.md",
+      "sha256": "1904ddefb0e7ae016f4c116ac91869ace41595f726ecc609fba218307e9fb2a0",
+      "currentSha256": "1904ddefb0e7ae016f4c116ac91869ace41595f726ecc609fba218307e9fb2a0",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/src/adapters/worker-launch.ts",
+      "sha256": "ecfcd2a129762879e5204516e4c137abe2799ddd1b76ea7dd5cea21a65e36cbe",
+      "currentSha256": "ecfcd2a129762879e5204516e4c137abe2799ddd1b76ea7dd5cea21a65e36cbe",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/test/fixtures/t038-live-daemon.mjs",
+      "sha256": "25106877d5109b424a054f6501a3c2e05de77b60488b354d7839e25cac81df7a",
+      "currentSha256": "25106877d5109b424a054f6501a3c2e05de77b60488b354d7839e25cac81df7a",
+      "unchanged": true
+    },
+    {
+      "path": "engine/packages/daemon/test/worker-live-acceptance.test.ts",
+      "sha256": "180340f5cfa14cb76b96c7de913010cbffba302e4d4ad6e551391113fa7baa31",
+      "currentSha256": "180340f5cfa14cb76b96c7de913010cbffba302e4d4ad6e551391113fa7baa31",
+      "unchanged": true
+    }
+  ],
+  "protectedGitStatusUnchanged": true,
+  "windowsReferenceEditsPerformed": false,
+  "originalDaemon": {
+    "pid": 1179,
+    "status": "ok",
+    "identityReceipt": "receipts/u10-final-cleanup.json"
+  },
+  "acceptancePortListening": false,
+  "installedAppReplaced": false,
+  "finalIdentityCheckAt": "2026-11-07T10:01:22.248455+00:00",
+  "acceptancePortCheck": "No listening socket on port 17433 in either kernel TCP table."
+}

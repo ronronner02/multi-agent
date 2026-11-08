@@ -1,3 +1,4 @@
+import { documentDispatchRefusal } from "./project-documents.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
@@ -5,7 +6,7 @@ import type Database from "better-sqlite3";
 import { TEAM_CONTROL_VERSION, type TeamRun } from "../contracts/team-control.js";
 import type { PlanGovernance } from "./plan-governance.js";
 import { ensurePlanWorktree, planWorktreePath, runSlug } from "./plan-branch.js";
-import { checkedOutBranch } from "./team-workspace.js";
+import { checkedOutBranch, type SourceRefMove } from "./team-workspace.js";
 
 /**
  * U7 / KTD7 — the branch the run's approved work lands on, and the owner's one merge.
@@ -43,7 +44,7 @@ export interface IntegrationStatus {
   commits: IntegrationCommit[];
   /** Every task the run admitted as work has finished; a merge is not refused for an open one. */
   tasksDone: boolean;
-  merge: { possible: boolean; reason: string | null };
+  merge: { possible: boolean; reason: string | null; merged: boolean | null };
 }
 
 export interface MergeOutcome {
@@ -76,6 +77,7 @@ export interface IntegrationDeps {
    * repository identity does not move when the daemon commits elsewhere.
    */
   currentBinding?: (runId: string) => unknown;
+  sourceRefMoved?: (repository: string, move: SourceRefMove) => void;
   log?: (message: string) => void;
 }
 
@@ -106,8 +108,9 @@ function headOf(root: string): string {
   return git(root, ["rev-parse", "--verify", "HEAD^{commit}"]).trim();
 }
 
-function isAncestor(root: string, ancestor: string, descendant: string): boolean {
-  try { git(root, ["merge-base", "--is-ancestor", ancestor, descendant]); return true; } catch { return false; }
+function isAncestor(root: string, ancestor: string, descendant: string): boolean | null {
+  try { git(root, ["merge-base", "--is-ancestor", ancestor, descendant]); return true; }
+  catch (error) { return (error as { status?: number }).status === 1 ? false : null; }
 }
 
 /** Anything uncommitted in a checkout. Untracked files are the owner's own drafts. */
@@ -201,6 +204,8 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
 
   /** The refusals both the readiness read and the merge itself must apply. */
   const blocked = (run: TeamRun): { reason: string } | null => {
+    const documentError = documentDispatchRefusal(deps.db, run, "implementer");
+    if (documentError) return { reason: documentError };
     const failed = failedTasks(run.id);
     if (failed.length) return { reason: `Task(s) failed: ${failed.map(task => task.taskId).join(", ")}` };
     const lead = governance.leadTask(run.id);
@@ -344,6 +349,8 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
     if (!task || task.assignment.role !== "implementer") {
       return { taskId, status: "skipped", commitSha: null, reason: "not this run's implementer task" };
     }
+    const documentError = documentDispatchRefusal(deps.db, run, "implementer", taskId);
+    if (documentError) return { taskId, status: "skipped", commitSha: null, reason: documentError };
     if (governance.integrationRecord(runId).commits.some(commit => commit.taskId === taskId)) {
       return { taskId, status: "already-integrated", commitSha: null, reason: null };
     }
@@ -376,12 +383,19 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
       let repository: string | null = null;
       try { repository = repositoryOf(run); } catch { /* reported by merge, not by a read */ }
       const derived = planWorktreePath(deps.worktreeRoot(), run.id);
+      const branch = branchOf(run);
+      const ownerBranch = repository === null ? null : checkedOutBranch(repository);
+      const ownerHead = repository === null ? null : gitOrNull(repository, ["rev-parse", "--verify", "HEAD^{commit}"])?.trim();
+      // Read Git each time: later owner commits preserve delivery, but another checkout may not.
+      const merged = recorded.commits.length === 0 ? false
+        : repository !== null && ownerBranch !== null && ownerBranch !== branch && ownerHead
+          ? isAncestor(repository, `refs/heads/${branch}`, ownerHead) : null;
       return {
-        runId, branch: branchOf(run), repository,
+        runId, branch, repository,
         worktree: recorded.worktree ?? (existsSync(derived) ? derived : null),
         commits: recorded.commits.map(commit => ({ hash: commit.commitSha.slice(0, 7), subject: commit.subject, task: commit.taskId })),
         tasksDone: openTasks(runId).length === 0,
-        merge: readiness(run),
+        merge: { ...readiness(run), merged },
       };
     },
 
@@ -405,6 +419,12 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
         return refuse("merge_no_branch", "The integration branch does not exist yet.");
       }
       const before = headOf(repository);
+      const merged = (mode: "fast-forward" | "merge-commit"): MergeOutcome => {
+        const head = headOf(repository);
+        try { deps.sourceRefMoved?.(repository, { ref: `refs/heads/${current}`, before, after: head }); }
+        catch (error) { log(`team integration: candidate source refresh failed: ${(error as Error).message}`); }
+        return { status: "merged", code: null, reason: null, branch, mode, head };
+      };
       if (isAncestor(repository, branch, before)) {
         return { status: "merged", code: null, reason: null, branch, mode: "up-to-date", head: before };
       }
@@ -412,11 +432,11 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
       // ordinary case; otherwise the work needs one merge commit to join the two histories.
       try {
         git(repository, ["merge", "--ff-only", "--quiet", branch]);
-        return { status: "merged", code: null, reason: null, branch, mode: "fast-forward", head: headOf(repository) };
+        return merged("fast-forward");
       } catch { /* Not a fast-forward. A refused one leaves the checkout untouched. */ }
       try {
         git(repository, ["merge", "--no-ff", "--quiet", "-m", `Merge ${branch}: ${run.displayName}`, branch]);
-        return { status: "merged", code: null, reason: null, branch, mode: "merge-commit", head: headOf(repository) };
+        return merged("merge-commit");
       } catch (error) {
         // The conflict is reported and everything is put back: the owner's working tree, index
         // and HEAD are where they were before the request, with no half-merged state behind.

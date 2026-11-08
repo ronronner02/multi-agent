@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-11-07T11:51:01.011222+00:00",
+  "independent": false,
+  "scope": [
+    "engine/packages/daemon/src/domain/seat-pane.ts",
+    "engine/packages/daemon/test/seat-pane-launch.test.ts",
+    "engine/packages/daemon/test/integration-branch.test.ts",
+    "engine/packages/daemon/test/attempt-failure.test.ts",
+    "engine/packages/daemon/test/lead-roster.test.ts",
+    "engine/packages/daemon/test/owner-slot.test.ts",
+    "docs/amendments/2026-11-07-command-center-acceptance.md"
+  ],
+  "deltaSha256": "ce9aeb05042d9a968681a085fda4638d2cdaae8e402685b0dc227346e768c084",
+  "sourceReceipt": "u10-runtime-post-seat-source-2.json",
+  "method": "Direct source and changed-line review of the lookup, both production callers, adapter presence classification, real-terminal regressions and bounded fixture alignment.",
+  "findings": [],
+  "boundaryChecks": [
+    "Exact session matching remains in the existing adapter.",
+    "Unexpected presence-probe errors propagate.",
+    "A missing session is created only through the existing lifecycle lease; an occupied name is not adopted.",
+    "The regression preserves the neighboring session and its pane.",
+    "Partial doubles supply their existing present-pane fixture fact; no assertion was removed or weakened.",
+    "No hardened-path, credential, native-command, public API or task-state write behavior was changed."
+  ],
+  "verification": {
+    "causalRed": "u10-runtime-stale-seat-red.json",
+    "targetedGreen": "u10-runtime-stale-seat-green.json",
+    "focused": "u10-runtime-post-seat-focused-2.json",
+    "focusedPassed": 533,
+    "fullSuite": "pending"
+  },
+  "independentCoverage": "The earlier independent review and one P0/P1 confirmation are unchanged. The later unisolated seat delta is root-reviewed, not independently reviewed."
+}

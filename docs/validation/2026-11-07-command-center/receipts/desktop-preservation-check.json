@@ -1,0 +1,29 @@
+{
+  "checkedAt": "2026-11-07T13:53:15.1264386Z",
+  "readOnly": true,
+  "ownerDecision": "Keep this instance; pause interactive checks",
+  "protectedFileCount": 115,
+  "originalWindowsFilesUnchanged": true,
+  "changedFiles": [],
+  "installedHashes": [
+    {
+      "path": "desktop-installed\\Multi-Agent.exe",
+      "sha256": "afb06983bde93f7dfbf0e56d9df229e7f12e4b8d9922dc1cf51b9a44f147e1a0"
+    },
+    {
+      "path": "desktop-installed\\resources\\app.asar",
+      "sha256": "c2d11b02854466dfb0c936021d2033281fd6cf774308c3221a31f481e11c49a9"
+    }
+  ],
+  "currentCandidate": {
+    "pid": 28996,
+    "exe": "<windows-task-scratch>\\desktop-installed\\Multi-Agent.exe",
+    "startTime": "2026-11-07T13:16:20.9215912Z",
+    "windowHandle": 9438762,
+    "responding": true,
+    "matchesInstalledCandidate": true
+  },
+  "uiAutomationPerformed": false,
+  "profileReadOrModified": false,
+  "processStoppedOrStarted": false
+}

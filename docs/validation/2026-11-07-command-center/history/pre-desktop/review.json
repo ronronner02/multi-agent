@@ -1,0 +1,111 @@
+{
+  "rootReview": {
+    "status": "complete-for-recorded-source-and-evidence",
+    "scope": [
+      "README.md",
+      "desktop/README.md",
+      "docs/known-failures.md",
+      "docs/operations.md",
+      "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "engine/packages/daemon/src/domain/agent-turn.ts",
+      "engine/packages/daemon/src/domain/integration-branch.ts",
+      "engine/packages/daemon/src/domain/seat-pane.ts",
+      "engine/packages/daemon/src/domain/startup-orchestrator.ts",
+      "engine/packages/daemon/src/domain/team-workspace.ts",
+      "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "engine/packages/daemon/src/startup.ts",
+      "engine/packages/daemon/src/team-control-surface.ts",
+      "engine/packages/daemon/test/agent-turn.test.ts",
+      "engine/packages/daemon/test/attempt-failure.test.ts",
+      "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "engine/packages/daemon/test/integration-branch.test.ts",
+      "engine/packages/daemon/test/lead-roster.test.ts",
+      "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "engine/packages/daemon/test/owner-slot.test.ts",
+      "engine/packages/daemon/test/run-recovery.test.ts",
+      "engine/packages/daemon/test/seat-pane-launch.test.ts",
+      "engine/packages/daemon/test/team-read-model.test.ts",
+      "engine/packages/daemon/test/team-workspace.test.ts",
+      "engine/packages/i18n/src/catalogs/en.json",
+      "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "engine/packages/ui/src/team/chat-panel.tsx",
+      "engine/packages/ui/src/team/clients.ts",
+      "engine/packages/ui/src/team/overview.tsx",
+      "docs/amendments/2026-11-07-command-center-acceptance.md",
+      "docs/validation/2026-11-07-command-center/"
+    ],
+    "method": "Preserved source and changed-line reviews, current source-hash checks, settled UI observation and evidence consistency review.",
+    "newCodeFindings": [],
+    "runtimeObservations": "live-limitations.json",
+    "earlierReview": "history/pre-runtime/review.json",
+    "laterSeatDeltaReceipt": "receipts/u10-runtime-stale-seat-review.json",
+    "claims": "No completed desktop acceptance, fully saturated final reply, or all-green daemon-suite claim.",
+    "evidenceReview": {
+      "checkedAt": "2026-11-07T12:30:57.599298+00:00",
+      "status": "complete",
+      "checks": [
+        "Historical structured originals preserved against their prior manifest",
+        "Current tracked source and standalone suite hashes match the 31-path candidate",
+        "Frozen review snapshot hashes match the independent receipts",
+        "Actual final counts and failure identities agree with bounded logs",
+        "Current browser result, progress and task-selection observations retained with their limits",
+        "Recorded references resolve; JSON and event records parse",
+        "Scoped credential and forbidden-file scans pass",
+        "Current browser revoked and isolated resources stopped; protected identities retained"
+      ],
+      "limitations": [
+        "Desktop installation and first open remain not-run",
+        "Full daemon suite remains failed with known cases",
+        "Final accurate busy reply is not a two-slot-saturation repeat",
+        "Later seat delta is root-reviewed, not independently reviewed"
+      ]
+    }
+  },
+  "initialIndependentReview": {
+    "receipt": "receipts/u10-independent-review.json",
+    "frozenManifestSha256": "4b049e818ac20ab34a3e59489bc657fd334319319965344813dd51c2d67776da",
+    "allFrozenFilesStillMatch": true,
+    "scope": "The original approval, candidate-base persistence and telemetry wiring fixes.",
+    "notCovered": [
+      "later run-action state fix",
+      "later native completion projection fix",
+      "later managed-launch fixture adjustment",
+      "final evidence bundle"
+    ]
+  },
+  "runtimeIndependentReview": {
+    "roundOne": "receipts/u10-runtime-independent-review.json",
+    "confirmation": "receipts/u10-runtime-independent-confirmation.json",
+    "initialVerdict": "CHANGES-REQUIRED",
+    "confirmationVerdict": "NO NEW P0/P1",
+    "closedFinding": "R1-1",
+    "scope": "The frozen 27-path runtime candidate and its amendment, followed by the R1-1 fix and direct delta regression confirmation.",
+    "integrity": "receipts/u10-runtime-review-integrity.json",
+    "independentlyExecutedTests": false,
+    "overallAcceptanceReassessed": false,
+    "notCovered": [
+      "later missing-seat production repair",
+      "later direct-dispatch fixture alignment",
+      "final acceptance run and evidence refresh"
+    ],
+    "additionalReviewDispatched": false
+  },
+  "laterSeatDelta": {
+    "review": "root-only",
+    "receipt": "receipts/u10-runtime-stale-seat-review.json",
+    "finalVerification": "verification/final-index.json",
+    "note": "The historical review receipt named the full suite pending; the later actual result is recorded separately and remains failed with the two known cases."
+  },
+  "simplification": {
+    "sourceChangesDuringCloseout": false,
+    "reason": "No additional refactor or unrelated cleanup was introduced."
+  },
+  "shipping": {
+    "committed": false,
+    "pushed": false,
+    "pullRequestOpened": false,
+    "merged": false
+  }
+}

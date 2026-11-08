@@ -1,0 +1,33 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ src/team/__tests__/github-gate.test.tsx (5 tests) 1645ms
+   ✓ GitHub first-open gate > shows the public device code, polls the flow, and opens the app only after account verification  1576ms
+ ✓ src/team/__tests__/create-project.test.tsx (10 tests) 486ms
+ ✓ src/team/__tests__/shell.test.tsx (8 tests) 393ms
+ ✓ src/team/__tests__/shell-router.test.tsx (9 tests) 2216ms
+   ✓ command-center router integration > opens Workspace layouts and the read-only Reviews gates through the real routes  365ms
+   ✓ command-center router integration > keeps the real chat draft mounted while every destination changes the URL  393ms
+ ✓ src/team/__tests__/chat-panel.test.tsx (18 tests) 429ms
+ ✓ src/team/__tests__/overview.test.tsx (18 tests) 323ms
+ ✓ src/team/__tests__/settings.test.tsx (7 tests) 237ms
+ ✓ src/team/__tests__/analytics.test.tsx (8 tests) 155ms
+ ✓ src/team/__tests__/command-palette.test.tsx (4 tests) 182ms
+ ✓ src/team/__tests__/tasks.test.tsx (3 tests) 147ms
+ ✓ src/team/__tests__/reviews.test.tsx (7 tests) 126ms
+ ✓ src/team/__tests__/workspace.test.tsx (3 tests) 132ms
+ ✓ src/team/__tests__/diff.test.tsx (9 tests) 92ms
+ ✓ src/team/__tests__/new-task.test.tsx (4 tests) 89ms
+ ✓ src/team/__tests__/attempt-activity.test.tsx (3 tests) 74ms
+ ✓ src/team/__tests__/background.test.tsx (4 tests) 29ms
+ ✓ src/team/__tests__/theme.test.tsx (6 tests) 12ms
+ ✓ src/team/__tests__/design-tokens.test.ts (3 tests) 5ms
+
+ Test Files  18 passed (18)
+      Tests  129 passed (129)
+   Start at  23:21:51
+   Duration  8.76s (transform 1.58s, setup 917ms, collect 4.00s, tests 6.77s, environment 3.41s, prepare 617ms)
+

@@ -1,0 +1,38 @@
+[
+  {
+    "unit": "U6",
+    "freshlyRerun": false,
+    "evidence": "Preserved unit-specific fixture observations, not live U10 acceptance.",
+    "screenshots": 20,
+    "receipts": [
+      "prior-slices/u6/browser-result.json",
+      "prior-slices/u6/browser-closed.json",
+      "prior-slices/u6/delivery.json"
+    ]
+  },
+  {
+    "unit": "U7",
+    "freshlyRerun": false,
+    "evidence": "Preserved unit-specific fixture observations, not live U10 acceptance.",
+    "screenshots": 27,
+    "receipts": [
+      "prior-slices/u7/browser-receipt.json",
+      "prior-slices/u7/browser-advanced.json",
+      "prior-slices/u7/browser-settled.json",
+      "prior-slices/u7/browser-closed.json",
+      "prior-slices/u7/delivery.json"
+    ]
+  },
+  {
+    "unit": "U8",
+    "freshlyRerun": false,
+    "evidence": "Preserved unit-specific fixture observations, not live U10 acceptance.",
+    "screenshots": 53,
+    "receipts": [
+      "prior-slices/u8/browser-receipt-final.json",
+      "prior-slices/u8/browser-final-source.json",
+      "prior-slices/u8/browser-closed.json",
+      "prior-slices/u8/merge-verification.json"
+    ]
+  }
+]

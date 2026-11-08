@@ -1,0 +1,52 @@
+{
+  "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+  "ownerHead": "5b423f087892a6da19fc793e733d3865ccd428a4",
+  "ownerBranch": "main",
+  "ownerStatus": "?? .openrig/context-collector.cjs",
+  "files": [
+    {
+      "path": ".gitignore",
+      "sha256": "b13e6188f5b4f29d0b3664e828b198feb960bb66d4185f027a788ead2659c408"
+    },
+    {
+      "path": "README.md",
+      "sha256": "5cb1f3fd1673ef9160a7e5f0d3a1aa076ab9ad679bb61a579dc0cae70c7baadf"
+    },
+    {
+      "path": "package.json",
+      "sha256": "e1507a502c4ed9782e8ddf08cc1341ce1e5aa6d8df00e14fcd72eeb17f076324"
+    },
+    {
+      "path": "plan.md",
+      "sha256": "a44890a29a636109ea608e22a459fe39e473630ac40db94282ed5e366de8c30f"
+    },
+    {
+      "path": "src/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/normalize-sku.mjs",
+      "sha256": "b68b3377a78ef6ceae5e672aa2ab509c4fea53c3580b7da9848e7e0c9168fd99"
+    },
+    {
+      "path": "src/normalize-sku.test.mjs",
+      "sha256": "2181f1a611675946cce0a30e9d4b9e5ad4658b1d86e91e2b6aa6c7ff833a8676"
+    },
+    {
+      "path": "src/stock-integration.test.mjs",
+      "sha256": "f4f2f866a5173e084e8b7faa6a0ee45ed55582132fd267428a539ad3b67603fd"
+    },
+    {
+      "path": "src/summarize-stock.mjs",
+      "sha256": "4e9d62e1cf22c53baef8f13ac233cc4f123dd45e289c16f5f551630c9bd6a2c6"
+    },
+    {
+      "path": "src/summarize-stock.test.mjs",
+      "sha256": "cf674a198adf3e65168a82ee70a07eb183bba28a364a2c86ec16bfd4e66fbc01"
+    }
+  ],
+  "preservedUntracked": {
+    "path": ".openrig/context-collector.cjs",
+    "sha256": "f4a809d0737baf60c4b314b3d7bc95d6a149090db3454aae66a9ef7beddc3bb8"
+  }
+}

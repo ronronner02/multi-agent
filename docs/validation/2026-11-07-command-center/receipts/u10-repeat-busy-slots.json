@@ -1,0 +1,88 @@
+{
+  "run": {
+    "state": "approved",
+    "phase": "delivery",
+    "entity_version": 16,
+    "active_ms": 105697,
+    "retries_used": 0,
+    "review_rounds_used": 0
+  },
+  "attempts": [
+    {
+      "id": "93e7abee-fa98-49c4-8de9-4d6782abda7c",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:22:16.303Z",
+      "updated_at": "2026-11-07T08:23:12.167Z"
+    },
+    {
+      "id": "b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:26:30.016Z",
+      "updated_at": "2026-11-07T08:26:46.597Z"
+    },
+    {
+      "id": "074b81aa-895d-4838-97ca-ffd8b7c15035",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:28:02.203Z",
+      "updated_at": "2026-11-07T08:28:35.270Z"
+    },
+    {
+      "id": "917f9f4a-f4c5-4423-94fc-f609ea516a21",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "running",
+      "qitem_id": "qitem-20261107082838-c07817d3",
+      "created_at": "2026-11-07T08:28:45.701Z",
+      "updated_at": "2026-11-07T08:28:45.701Z"
+    },
+    {
+      "id": "26a7e01f-28a1-4ccf-a3d6-b457eb676fed",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "running",
+      "qitem_id": "qitem-20261107082838-95ba3c4c",
+      "created_at": "2026-11-07T08:28:45.886Z",
+      "updated_at": "2026-11-07T08:28:45.886Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": "chat-93e7abee-fa98-49c4-8de9-4d6782abda7c",
+      "sender": "lead",
+      "attempt_id": "93e7abee-fa98-49c4-8de9-4d6782abda7c",
+      "delivered_attempt": null,
+      "created_at": "2026-11-07T08:23:12.613Z"
+    },
+    {
+      "id": "c104a6fa-9c6e-47c2-b811-ffaf67b728ab",
+      "sender": "owner",
+      "attempt_id": null,
+      "delivered_attempt": "b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "created_at": "2026-11-07T08:26:26.907Z"
+    },
+    {
+      "id": "chat-b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "sender": "lead",
+      "attempt_id": "b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "delivered_attempt": null,
+      "created_at": "2026-11-07T08:26:47.019Z"
+    },
+    {
+      "id": "chat-074b81aa-895d-4838-97ca-ffd8b7c15035",
+      "sender": "lead",
+      "attempt_id": "074b81aa-895d-4838-97ca-ffd8b7c15035",
+      "delivered_attempt": null,
+      "created_at": "2026-11-07T08:28:37.466Z"
+    }
+  ],
+  "observedAt": "2026-11-07T08:28:46Z"
+}

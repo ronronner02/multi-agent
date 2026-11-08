@@ -1,0 +1,15 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ src/team/__tests__/overview.test.tsx (14 tests) 295ms
+ ✓ src/team/__tests__/shell.test.tsx (8 tests) 436ms
+ ✓ src/team/__tests__/new-task.test.tsx (4 tests) 116ms
+
+ Test Files  3 passed (3)
+      Tests  26 passed (26)
+   Start at  16:24:32
+   Duration  1.54s (transform 443ms, setup 174ms, collect 942ms, tests 847ms, environment 555ms, prepare 113ms)
+

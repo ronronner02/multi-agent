@@ -1,0 +1,58 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+ ❯ src/team/__tests__/chat-panel.test.tsx (17 tests | 1 failed | 16 skipped) 89ms
+   ↓ persistent lead chat > opens from Coordinator and returns focus on Escape
+   ↓ persistent lead chat > opens from Top bar chat and returns focus on Escape
+   ↓ persistent lead chat > keeps the draft during desktop navigation and after closing and reopening
+   ↓ persistent lead chat > uses a modal panel at the mobile breakpoint
+   ↓ persistent lead chat > retains failed messages with an error and clears the draft only after a successful send
+   ↓ persistent lead chat > renders exactly the pending-decision list used by the notification badge
+   × persistent lead chat > submits the exact roster digest read from chat with plan approval 88ms
+     → expected { protocolVersion: '1.0', …(5) } to match object { …(3) }
+(3 matching properties omitted from actual)
+   ↓ persistent lead chat > shows the proposed plan and team rather than only the existing lead seat
+   ↓ persistent lead chat > does not submit approval with missing plan
+   ↓ persistent lead chat > does not submit approval with empty plan
+   ↓ persistent lead chat > does not submit approval with missing roster
+   ↓ persistent lead chat > does not submit approval with missing digest
+   ↓ persistent lead chat > does not submit approval with invalid roster
+   ↓ persistent lead chat > does not submit approval when the chat read is unavailable
+   ↓ persistent lead chat > approves legacy planning runs that have no roster proposal
+   ↓ persistent lead chat > uses the refreshed roster displayed by the next chat read
+   ↓ persistent lead chat > reports an approval failure without automatically retrying the proposal
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/team/__tests__/chat-panel.test.tsx > persistent lead chat > submits the exact roster digest read from chat with plan approval
+AssertionError: expected { protocolVersion: '1.0', …(5) } to match object { …(3) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "expectedEntityVersion": 3,
+-   "payload": {
+-     "rosterDigest": "reviewed-roster-digest",
+-   },
++   "payload": {},
+    "runId": "3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f",
+  }
+
+ ❯ src/team/__tests__/chat-panel.test.tsx:118:56
+    116|     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/chat`);
+    117|     expect(request.mock.calls[1]![0]).toBe(`/runs/${RUN_ID}/plan/appro…
+    118|     expect(JSON.parse(request.mock.calls[1]![1].body)).toMatchObject({
+       |                                                        ^
+    119|       runId: RUN_ID, expectedEntityVersion: 3, payload: { rosterDigest…
+    120|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  15:40:17
+   Duration  703ms (transform 79ms, setup 58ms, collect 194ms, tests 89ms, environment 185ms, prepare 72ms)
+

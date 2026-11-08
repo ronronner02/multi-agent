@@ -1,0 +1,16 @@
+{
+  "check": "u10-runtime-base-path-red",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/integration-branch.test.ts",
+    "--testNamePattern",
+    "keeps another task's saved base intact",
+    "--maxWorkers=2",
+    "--testTimeout=60000"
+  ],
+  "exit": 1,
+  "seconds": 3.99
+}

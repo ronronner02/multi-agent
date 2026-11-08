@@ -1,0 +1,15 @@
+{
+  "before": {
+    "pid": 2437462,
+    "origin": "http://127.0.0.1:17433",
+    "home": "<acceptance-state>",
+    "status": "ok"
+  },
+  "stopped": true,
+  "after": {
+    "pid": 2542536,
+    "origin": "http://127.0.0.1:17433",
+    "home": "<acceptance-state>",
+    "status": "ok"
+  }
+}

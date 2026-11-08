@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/integration-branch.test.ts (29 tests | 27 skipped) 449ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 27 skipped (29)
+   Start at  19:18:47
+   Duration  3.71s (transform 2.09s, setup 37ms, collect 3.06s, tests 449ms, environment 0ms, prepare 41ms)
+

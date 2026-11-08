@@ -1,3 +1,4 @@
+import { ModelSettings } from "./model-settings.js";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -92,14 +93,14 @@ function Sessions({ connection, isolation, address }: { connection: string; isol
 }
 
 /** Restored section navigation, limited to current owner preferences and read-only seats. */
-export function SettingsScreen({ language, onLanguage, appearance, background, connection, isolation, address, seats }: {
+export function SettingsScreen({ language, onLanguage, appearance, background, connection, isolation, address, seats, teamId }: {
   language: InterfaceI18n; onLanguage: (next: "en" | "zh-CN") => void;
   appearance: ReturnType<typeof useThemePreference>; background: ReturnType<typeof useBackgroundPreference>;
-  connection: string; isolation: "none" | "hardened" | null; address: string;
+  connection: string; isolation: "none" | "hardened" | null; address: string; teamId?: string;
   seats: readonly (TeamSeatSummary & { index?: number | null; retired?: boolean })[];
 }) {
   const { t } = useTranslation();
-  const [section, setSection] = useState<typeof SETTINGS_SECTIONS[number]>("general");
+  const [section, setSection] = useState<typeof SETTINGS_SECTIONS[number]>(teamId ? "agents" : "general");
   return <div className="page ui-settings">
     <div className="page-head"><h1 className="display">{t("settings.title")}</h1></div>
     <div className="ui-settings-body">
@@ -121,16 +122,16 @@ export function SettingsScreen({ language, onLanguage, appearance, background, c
             {t("settings.backgroundMotion")}</label>
         </section>}
         {section === "sessions" && <Sessions connection={connection} isolation={isolation} address={address} />}
-        {section === "agents" && <section className="plate ui-settings-panel" aria-label={t("settings.section.agents")}>
+        {section === "agents" && <>{teamId && <ModelSettings key={teamId} teamId={teamId} />}<section className="plate ui-settings-panel" aria-label={t("settings.section.agents")}>
           <h2>{t("settings.section.agents")}</h2>
-          <p className="muted">{t("settings.agentsReadOnly")}</p>
+          <p className="muted">{t(teamId ? "models.seats" : "settings.agentsReadOnly")}</p>
           {seats.length === 0 ? <p className="muted">{t("settings.noSeats")}</p>
             : <ul className="ui-seat-settings">{seats.map((seat, index) => <li key={index}>
               <strong>{t(`role.${seat.role}`)} · {clientLabel(seat.client, t)}{seat.index == null ? "" : " " + seat.index}</strong>
               {seat.model && <span className="mono muted">{seat.model}</span>}
               {seat.retired && <span className="muted">{t("workspace.retired")}</span>}
             </li>)}</ul>}
-        </section>}
+        </section></>}
       </div>
     </div>
   </div>;

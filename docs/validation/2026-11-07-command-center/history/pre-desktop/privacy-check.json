@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-07T12:30:57.599298+00:00",
+  "status": "passed-with-stated-scope",
+  "textFilesScanned": 208,
+  "jsonFilesParsed": 131,
+  "jsonlRowsParsed": 366,
+  "exactScopedCredentialMatches": 0,
+  "credentialPatternMatches": 0,
+  "rawCredentialFilesIncluded": false,
+  "rawDatabaseIncluded": false,
+  "nativeTranscriptsIncluded": false,
+  "method": "Allowlisted structured extraction, bounded command logs, exact private-profile credential comparison without exporting values, and credential-pattern scanning. The runtime browser export was separately checked against that context credential and cookies before closure.",
+  "limitations": [
+    "Pattern checks do not prove the absence of every possible secret.",
+    "Credential prefixes require a token boundary; the earlier broad sk- pattern also matched three space-grotesk font asset names.",
+    "Images are not covered by text scanning. Selected current screenshots were visually inspected; no full-image OCR scan was run.",
+    "Synthetic UI conversations and plans remain as acceptance evidence; native transcripts and activity summaries are excluded."
+  ]
+}

@@ -1,0 +1,321 @@
+{
+  "evidenceRevalidatedAt": "2026-11-08T00:32:50.313535+00:00",
+  "head": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+  "branch": "feat/cc-u10-acceptance",
+  "verifiedSuitePatchSha256": "75c90e7289f18eef312f4792a58afb4ae2517079a34f55fbd44e95b6d0fe65f1",
+  "currentTrackedPatchSha256": "522bf102047643029ed76a386b7ddc1c37d527c5809a2a7ff257a8d745d1cbaa",
+  "modifiedTrackedFiles": [
+    {
+      "path": "README.md",
+      "sha256": "72f3748f9e5c8e17366e812646f52368995144a8cc841f237016393796e170c0"
+    },
+    {
+      "path": "desktop/README.md",
+      "sha256": "bdf63a0745a21170cec6b23ad4c0be80b00372635fcaba72e3dbcc4c4679a553"
+    },
+    {
+      "path": "docs/known-failures.md",
+      "sha256": "1a4b613648050e350464c06150b30608cca71f033ca51e0e88b51d3cd5de9060"
+    },
+    {
+      "path": "docs/operations.md",
+      "sha256": "63d58e505cc76adc22509e795fca4e87f7fbd5631651f65161e3e25277d91421"
+    },
+    {
+      "path": "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "sha256": "20806d61a2c1c875737c9ffcd044c664d0c48751757ea56531db3cfbfe2ad10e"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/agent-turn.ts",
+      "sha256": "4b80aaf225f9fefe45f7092889bb85dcf464ae368d83efb7b6416731703c4dc5"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/github-cli.ts",
+      "sha256": "8615ecb3db5fe240008b0ada99a31427dfcb144933630bdeff01c4471208be40"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/integration-branch.ts",
+      "sha256": "5efb03a3b5bf65d56734c872d627410f031772200df01845ad27a88ed2cea1d1"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/seat-pane.ts",
+      "sha256": "a8ba162a4b6feb3b3932c2b31e4ec32cc1c9a8ed898a159a6c38e14e2fae669e"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/startup-orchestrator.ts",
+      "sha256": "8dbbd01c4914832cd72461bbc0bfa5b355c176bafcf103f2314b6f994594af67"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/team-workspace.ts",
+      "sha256": "74d7cace550eb85550fbc6de1c1b45a91a041b92d694eb185450b530d6f84512"
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "sha256": "def035389207662bee730cf17faf13f1d37fbdb4fe5c48ebb205405644b0fe07"
+    },
+    {
+      "path": "engine/packages/daemon/src/startup.ts",
+      "sha256": "6f7f6e083f78bfa187e0dc29180abf2f5ef55cedc3caf57b77a42d74896ab96b"
+    },
+    {
+      "path": "engine/packages/daemon/src/team-control-surface.ts",
+      "sha256": "e8cbe11dd378eb4ced332d33fbdcf7a95893c833ef140241fb4b4f62f44e370b"
+    },
+    {
+      "path": "engine/packages/daemon/test/agent-turn.test.ts",
+      "sha256": "f935bd78770aa5c722deb7761a82bdf2a8a8946b2f1388f65c60d86ebcdb54dd"
+    },
+    {
+      "path": "engine/packages/daemon/test/attempt-failure.test.ts",
+      "sha256": "9b36f7503febb23411672b74aae818b6a46357df8880e501c3e1caba788b7935"
+    },
+    {
+      "path": "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "sha256": "179f07736a4c0c72350fc9ed445bc82ba3e54c6b8ebc6cb631fe0350347013f4"
+    },
+    {
+      "path": "engine/packages/daemon/test/fixtures/stub-gh.mjs",
+      "sha256": "47e1c6374b934f197d1c20ef3671759533564fe25026e6d8b6ea50119d7492ff"
+    },
+    {
+      "path": "engine/packages/daemon/test/integration-branch.test.ts",
+      "sha256": "b0a427a50e500a3a518989e98f524c3e7f827b951bc1aa3a0eee8ee0cc404583"
+    },
+    {
+      "path": "engine/packages/daemon/test/lead-roster.test.ts",
+      "sha256": "8d601155fb92daa6a336df68b5c020d09da57426eb79130f897c275b29355d40"
+    },
+    {
+      "path": "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "sha256": "c90cef22df91f85093f9139d049a212de346eb223d60d848bedfaf1aa2281527"
+    },
+    {
+      "path": "engine/packages/daemon/test/owner-slot.test.ts",
+      "sha256": "065235a19963f0252b29c148d37f3b89480fec9a7c64a6e1153a6c2ace7a6bf0"
+    },
+    {
+      "path": "engine/packages/daemon/test/run-recovery.test.ts",
+      "sha256": "58500e81f0219346925545dc759bf000552519ef3ff3a005ac7f61b0aecff6a6"
+    },
+    {
+      "path": "engine/packages/daemon/test/seat-pane-launch.test.ts",
+      "sha256": "006a47bf2337702957e3732b5a579d1d278fea7524d7f21867ef5c6353e94e62"
+    },
+    {
+      "path": "engine/packages/daemon/test/team-github.test.ts",
+      "sha256": "f6d13c03218a8214a5cfe1aa4f3ff1f3f741ec825a86d4e873742dd97de78240"
+    },
+    {
+      "path": "engine/packages/daemon/test/team-read-model.test.ts",
+      "sha256": "14395af0d9262a92dbde9f63fc25f46392be96e482c39a3d6281a06025272116"
+    },
+    {
+      "path": "engine/packages/daemon/test/team-workspace.test.ts",
+      "sha256": "1d35e124e765b9953aac61dc116b8f6b0250858727e49a06bf291fca629bd7d4"
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/en.json",
+      "sha256": "5a2b9a0ae500192c7fae55831be2ddf8c131ba9cc7ee837267c741be784030ac"
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "sha256": "0d90c0e4c78cb1437c96c5747dad99addec48b2168f91e08310040717feb3ce1"
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "sha256": "0e98e5c7d54bd947f3622a54496829711add2a3a3d316690886ac8ea0bb8235d"
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "sha256": "344a63af17459b5b181e5b27453c957495eae01474d2c2a181c9dbf4f746fdeb"
+    },
+    {
+      "path": "engine/packages/ui/src/team/chat-panel.tsx",
+      "sha256": "186444bb92302c5c662ccf4c17d9ed3846f0abe21c6da5cb7c600d9be2360667"
+    },
+    {
+      "path": "engine/packages/ui/src/team/clients.ts",
+      "sha256": "49b840e30678d9282a3ad12d80f23fb8023ab72fc4fbf10a7add975d387f4cc5"
+    },
+    {
+      "path": "engine/packages/ui/src/team/overview.tsx",
+      "sha256": "ded03f5b30bca1c26fe0aae9274989b0c5837ff898ad5d04d618cafafe60c760"
+    }
+  ],
+  "modifiedTrackedFileCount": 34,
+  "productAndTestFilesUnchangedSinceSuite": [
+    {
+      "path": "engine/packages/daemon/src/adapters/direct-worker-launch.ts",
+      "sha256": "20806d61a2c1c875737c9ffcd044c664d0c48751757ea56531db3cfbfe2ad10e",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/agent-turn.ts",
+      "sha256": "4b80aaf225f9fefe45f7092889bb85dcf464ae368d83efb7b6416731703c4dc5",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/github-cli.ts",
+      "sha256": "8615ecb3db5fe240008b0ada99a31427dfcb144933630bdeff01c4471208be40",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/integration-branch.ts",
+      "sha256": "5efb03a3b5bf65d56734c872d627410f031772200df01845ad27a88ed2cea1d1",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/seat-pane.ts",
+      "sha256": "a8ba162a4b6feb3b3932c2b31e4ec32cc1c9a8ed898a159a6c38e14e2fae669e",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/startup-orchestrator.ts",
+      "sha256": "8dbbd01c4914832cd72461bbc0bfa5b355c176bafcf103f2314b6f994594af67",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/team-workspace.ts",
+      "sha256": "74d7cace550eb85550fbc6de1c1b45a91a041b92d694eb185450b530d6f84512",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/domain/workflow-runtime.ts",
+      "sha256": "def035389207662bee730cf17faf13f1d37fbdb4fe5c48ebb205405644b0fe07",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/startup.ts",
+      "sha256": "6f7f6e083f78bfa187e0dc29180abf2f5ef55cedc3caf57b77a42d74896ab96b",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/src/team-control-surface.ts",
+      "sha256": "e8cbe11dd378eb4ced332d33fbdcf7a95893c833ef140241fb4b4f62f44e370b",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/agent-turn.test.ts",
+      "sha256": "f935bd78770aa5c722deb7761a82bdf2a8a8946b2f1388f65c60d86ebcdb54dd",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/attempt-failure.test.ts",
+      "sha256": "9b36f7503febb23411672b74aae818b6a46357df8880e501c3e1caba788b7935",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/direct-worker-launch.test.ts",
+      "sha256": "179f07736a4c0c72350fc9ed445bc82ba3e54c6b8ebc6cb631fe0350347013f4",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/fixtures/stub-gh.mjs",
+      "sha256": "47e1c6374b934f197d1c20ef3671759533564fe25026e6d8b6ea50119d7492ff",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/integration-branch.test.ts",
+      "sha256": "b0a427a50e500a3a518989e98f524c3e7f827b951bc1aa3a0eee8ee0cc404583",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/lead-roster.test.ts",
+      "sha256": "8d601155fb92daa6a336df68b5c020d09da57426eb79130f897c275b29355d40",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/managed-native-startup.test.ts",
+      "sha256": "c90cef22df91f85093f9139d049a212de346eb223d60d848bedfaf1aa2281527",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/owner-slot.test.ts",
+      "sha256": "065235a19963f0252b29c148d37f3b89480fec9a7c64a6e1153a6c2ace7a6bf0",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/run-recovery.test.ts",
+      "sha256": "58500e81f0219346925545dc759bf000552519ef3ff3a005ac7f61b0aecff6a6",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/seat-pane-launch.test.ts",
+      "sha256": "006a47bf2337702957e3732b5a579d1d278fea7524d7f21867ef5c6353e94e62",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/team-github.test.ts",
+      "sha256": "f6d13c03218a8214a5cfe1aa4f3ff1f3f741ec825a86d4e873742dd97de78240",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/team-read-model.test.ts",
+      "sha256": "14395af0d9262a92dbde9f63fc25f46392be96e482c39a3d6281a06025272116",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/daemon/test/team-workspace.test.ts",
+      "sha256": "1d35e124e765b9953aac61dc116b8f6b0250858727e49a06bf291fca629bd7d4",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/en.json",
+      "sha256": "5a2b9a0ae500192c7fae55831be2ddf8c131ba9cc7ee837267c741be784030ac",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/i18n/src/catalogs/zh-CN.json",
+      "sha256": "0d90c0e4c78cb1437c96c5747dad99addec48b2168f91e08310040717feb3ce1",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/chat-panel.test.tsx",
+      "sha256": "0e98e5c7d54bd947f3622a54496829711add2a3a3d316690886ac8ea0bb8235d",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/ui/src/team/__tests__/overview.test.tsx",
+      "sha256": "344a63af17459b5b181e5b27453c957495eae01474d2c2a181c9dbf4f746fdeb",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/ui/src/team/chat-panel.tsx",
+      "sha256": "186444bb92302c5c662ccf4c17d9ed3846f0abe21c6da5cb7c600d9be2360667",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/ui/src/team/clients.ts",
+      "sha256": "49b840e30678d9282a3ad12d80f23fb8023ab72fc4fbf10a7add975d387f4cc5",
+      "matchesVerifiedSuiteCandidate": true
+    },
+    {
+      "path": "engine/packages/ui/src/team/overview.tsx",
+      "sha256": "ded03f5b30bca1c26fe0aae9274989b0c5837ff898ad5d04d618cafafe60c760",
+      "matchesVerifiedSuiteCandidate": true
+    }
+  ],
+  "sourceReceipt": "receipts/u10-desktop-suite-candidate.json",
+  "standaloneSuiteReceipt": "receipts/u10-desktop-suite-candidate.json",
+  "finalVerification": "verification/final-index.json",
+  "laterChanges": "Owner pause amendment and structured evidence only; no product or test change after the latest suite.",
+  "sourcePlan": {
+    "name": "2026-11-06-001-feat-command-center-plan.md",
+    "sha256": "7d3c3172c30978fb6a88530e5266b46783fc267bd82d370742045d121ae09b8d",
+    "unchanged": true
+  },
+  "acceptanceAmendment": {
+    "path": "docs/amendments/2026-11-07-command-center-acceptance.md",
+    "sha256": "958562e68b8889e414e553505091489976c151cc6e4e7388b03002e627090e1d",
+    "closeoutUpdatedAfterSourceChecks": true
+  },
+  "indexEmpty": true,
+  "committed": false,
+  "pushed": false,
+  "merged": false,
+  "priorSource": "history/pre-desktop/source-verification.json",
+  "latestPlanAudit": "plan-status.json",
+  "latestInstalledCheckpoint": "resume-final-checkpoint.json",
+  "latestSourceReceipt": "receipts/normal-source-and-suite-processes.json",
+  "latestStandaloneSuiteReceipt": "receipts/normal-full-daemon-command.json"
+}

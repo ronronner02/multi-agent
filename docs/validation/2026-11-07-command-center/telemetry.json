@@ -1,0 +1,2773 @@
+{
+  "attemptCount": 33,
+  "usageStatusCounts": {
+    "available": 31,
+    "unavailable": 2
+  },
+  "usageSemantics": "usage holds per-attempt deltas; nativeUsage retains the native cumulative/delta mode. Reasoning output is a subset of output, not an additional total. Null models and unavailable counters are retained.",
+  "omittedFields": [
+    "nativeSessionId",
+    "activity.summary"
+  ],
+  "rows": [
+    {
+      "attemptId": "70dce229-8f8c-4d5f-8d2c-faf220e17313",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:23:18.170Z",
+      "stoppedAt": "2026-11-07T07:24:06.655Z",
+      "activeMs": 48485,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 98700,
+        "cacheWriteInputTokens": 36876,
+        "outputTokens": 4151,
+        "reasoningOutputTokens": 469,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": false,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 98700,
+          "cacheWriteInputTokens": 36876,
+          "outputTokens": 4151,
+          "reasoningOutputTokens": 469
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:23:23.534Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:23:24.204Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:23:30.874Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:23:30.899Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T07:23:51.482Z",
+          "tool": "Write",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T07:23:51.511Z",
+          "tool": "Write",
+          "status": "completed"
+        },
+        {
+          "id": "call-4",
+          "seq": 7,
+          "at": "2026-11-07T07:23:52.259Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-4",
+          "seq": 8,
+          "at": "2026-11-07T07:23:52.678Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "unknown",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "7da0c1d5-7f73-473a-8beb-0c670ca4721f",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:28:48.692Z",
+      "stoppedAt": "2026-11-07T07:29:08.440Z",
+      "activeMs": 19748,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 117213,
+        "cacheWriteInputTokens": 4915,
+        "outputTokens": 1003,
+        "reasoningOutputTokens": 150,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 117213,
+          "cacheWriteInputTokens": 4915,
+          "outputTokens": 1003,
+          "reasoningOutputTokens": 150
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:28:54.440Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:28:55.179Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:29:00.378Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:29:00.517Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "unknown",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "7f4f535b-5227-4384-a6c6-f11083f3637f",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:46:11.686Z",
+      "stoppedAt": "2026-11-07T07:46:54.811Z",
+      "activeMs": 43125,
+      "usage": {
+        "inputTokens": 10,
+        "cacheReadInputTokens": 135770,
+        "cacheWriteInputTokens": 49038,
+        "outputTokens": 3477,
+        "reasoningOutputTokens": 336,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 10,
+          "cacheReadInputTokens": 135770,
+          "cacheWriteInputTokens": 49038,
+          "outputTokens": 3477,
+          "reasoningOutputTokens": 336
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:46:17.723Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:46:18.376Z",
+          "tool": "Bash",
+          "status": "failed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:46:22.853Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:46:23.141Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T07:46:44.510Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T07:46:45.044Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "cedfda88-03c6-4ec9-9b60-af05905cc145",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:47:02.528Z",
+      "stoppedAt": "2026-11-07T07:47:31.541Z",
+      "activeMs": 29013,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 152247,
+        "cacheWriteInputTokens": 3917,
+        "outputTokens": 1514,
+        "reasoningOutputTokens": 133,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 152247,
+          "cacheWriteInputTokens": 3917,
+          "outputTokens": 1514,
+          "reasoningOutputTokens": 133
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:47:10.745Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:47:11.365Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:47:17.668Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:47:18.338Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "18456725-ccf8-4816-9e2a-c629221348eb",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "impl-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:47:38.860Z",
+      "stoppedAt": "2026-11-07T07:48:09.484Z",
+      "activeMs": 30624,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 124742,
+        "cacheWriteInputTokens": 9697,
+        "outputTokens": 2642,
+        "reasoningOutputTokens": 104,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": false,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 124742,
+          "cacheWriteInputTokens": 9697,
+          "outputTokens": 2642,
+          "reasoningOutputTokens": 104
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:47:41.555Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:47:41.632Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:47:51.900Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:47:52.935Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T07:47:58.944Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T07:47:59.412Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "a1e844d3-be98-4655-a01e-5f0288e87d53",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "stopped",
+      "seatName": "impl-2@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:47:39.071Z",
+      "stoppedAt": "2026-11-07T07:51:30.849Z",
+      "activeMs": 231778,
+      "usage": {
+        "inputTokens": null,
+        "cacheReadInputTokens": null,
+        "cacheWriteInputTokens": null,
+        "outputTokens": null,
+        "reasoningOutputTokens": null,
+        "model": null,
+        "status": "unavailable",
+        "reason": "The native client did not report usable final usage."
+      },
+      "nativeUsage": {
+        "model": null,
+        "resumed": true,
+        "mode": "cumulative",
+        "counts": null
+      },
+      "activityStatus": "unavailable",
+      "activityRecords": [],
+      "outcome": "failed",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "a9f08c37-7e39-4ac8-b042-044a9be6f2b6",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:48:06.539Z",
+      "stoppedAt": "2026-11-07T07:48:19.542Z",
+      "activeMs": 13003,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 107673,
+        "cacheWriteInputTokens": 3000,
+        "outputTokens": 551,
+        "reasoningOutputTokens": 17,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 107673,
+          "cacheWriteInputTokens": 3000,
+          "outputTokens": 551,
+          "reasoningOutputTokens": 17
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:48:12.118Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:48:12.986Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "a9d105cf-f316-4950-b15d-341fcdaf9f36",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "review-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:48:24.108Z",
+      "stoppedAt": "2026-11-07T07:49:00.048Z",
+      "activeMs": 35940,
+      "usage": {
+        "inputTokens": 10,
+        "cacheReadInputTokens": 165943,
+        "cacheWriteInputTokens": 12426,
+        "outputTokens": 2150,
+        "reasoningOutputTokens": 498,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": false,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 10,
+          "cacheReadInputTokens": 165943,
+          "cacheWriteInputTokens": 12426,
+          "outputTokens": 2150,
+          "reasoningOutputTokens": 498
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:48:29.041Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:48:29.116Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:48:34.937Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:48:35.534Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T07:48:43.280Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T07:48:43.920Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-4",
+          "seq": 7,
+          "at": "2026-11-07T07:48:49.828Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-4",
+          "seq": 8,
+          "at": "2026-11-07T07:48:50.106Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "6e6c0ad6-e43f-40e1-bbf4-744ca63ca0b1",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:51:38.313Z",
+      "stoppedAt": "2026-11-07T07:52:33.268Z",
+      "activeMs": 54955,
+      "usage": {
+        "inputTokens": 18,
+        "cacheReadInputTokens": 480759,
+        "cacheWriteInputTokens": 8123,
+        "outputTokens": 3328,
+        "reasoningOutputTokens": 572,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 18,
+          "cacheReadInputTokens": 480759,
+          "cacheWriteInputTokens": 8123,
+          "outputTokens": 3328,
+          "reasoningOutputTokens": 572
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:51:44.685Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:51:45.579Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:51:49.588Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:51:49.805Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T07:51:54.291Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T07:51:54.810Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-4",
+          "seq": 7,
+          "at": "2026-11-07T07:51:55.030Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-4",
+          "seq": 8,
+          "at": "2026-11-07T07:51:55.244Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-5",
+          "seq": 9,
+          "at": "2026-11-07T07:52:02.447Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-5",
+          "seq": 10,
+          "at": "2026-11-07T07:52:02.670Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-6",
+          "seq": 11,
+          "at": "2026-11-07T07:52:06.660Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-6",
+          "seq": 12,
+          "at": "2026-11-07T07:52:07.091Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-7",
+          "seq": 13,
+          "at": "2026-11-07T07:52:18.303Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-7",
+          "seq": 14,
+          "at": "2026-11-07T07:52:18.931Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-8",
+          "seq": 15,
+          "at": "2026-11-07T07:52:23.334Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-8",
+          "seq": 16,
+          "at": "2026-11-07T07:52:23.676Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "2bfc11bf-2462-4e20-9c29-009d80432b0a",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:52:42.254Z",
+      "stoppedAt": "2026-11-07T07:53:09.191Z",
+      "activeMs": 26937,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 197286,
+        "cacheWriteInputTokens": 3857,
+        "outputTokens": 1491,
+        "reasoningOutputTokens": 301,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 197286,
+          "cacheWriteInputTokens": 3857,
+          "outputTokens": 1491,
+          "reasoningOutputTokens": 301
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:52:53.255Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:52:54.083Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:52:59.940Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:53:00.550Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "078e356d-e131-4ec2-95b6-5aaa7d7ba0f3",
+      "runId": "e7986a44-af7a-470b-9c16-18934b99892b",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T07:53:16.903Z",
+      "stoppedAt": "2026-11-07T07:53:41.852Z",
+      "activeMs": 24949,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 207579,
+        "cacheWriteInputTokens": 2944,
+        "outputTokens": 1390,
+        "reasoningOutputTokens": 48,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 207579,
+          "cacheWriteInputTokens": 2944,
+          "outputTokens": 1390,
+          "reasoningOutputTokens": 48
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T07:53:23.207Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T07:53:24.157Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T07:53:33.299Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T07:53:33.915Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "93e7abee-fa98-49c4-8de9-4d6782abda7c",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:22:16.303Z",
+      "stoppedAt": "2026-11-07T08:23:12.161Z",
+      "activeMs": 55858,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 147994,
+        "cacheWriteInputTokens": 77286,
+        "outputTokens": 3629,
+        "reasoningOutputTokens": 105,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 147994,
+          "cacheWriteInputTokens": 77286,
+          "outputTokens": 3629,
+          "reasoningOutputTokens": 105
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:22:32.734Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:22:33.529Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:22:59.358Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:22:59.913Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "unknown",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:26:30.016Z",
+      "stoppedAt": "2026-11-07T08:26:46.589Z",
+      "activeMs": 16573,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 157123,
+        "cacheWriteInputTokens": 3354,
+        "outputTokens": 782,
+        "reasoningOutputTokens": 113,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 157123,
+          "cacheWriteInputTokens": 3354,
+          "outputTokens": 782,
+          "reasoningOutputTokens": 113
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:26:38.143Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:26:38.963Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "unknown",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "074b81aa-895d-4838-97ca-ffd8b7c15035",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:28:02.203Z",
+      "stoppedAt": "2026-11-07T08:28:35.265Z",
+      "activeMs": 33062,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 246700,
+        "cacheWriteInputTokens": 4860,
+        "outputTokens": 2680,
+        "reasoningOutputTokens": 31,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 246700,
+          "cacheWriteInputTokens": 4860,
+          "outputTokens": 2680,
+          "reasoningOutputTokens": 31
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:28:09.364Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:28:10.257Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:28:25.454Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:28:26.050Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "917f9f4a-f4c5-4423-94fc-f609ea516a21",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "impl-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:28:45.701Z",
+      "stoppedAt": "2026-11-07T08:29:20.754Z",
+      "activeMs": 35053,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 145084,
+        "cacheWriteInputTokens": 16862,
+        "outputTokens": 3516,
+        "reasoningOutputTokens": 92,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 145084,
+          "cacheWriteInputTokens": 16862,
+          "outputTokens": 3516,
+          "reasoningOutputTokens": 92
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:28:49.049Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:28:49.902Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:28:59.994Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:29:00.488Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T08:29:06.336Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T08:29:07.091Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "26a7e01f-28a1-4ccf-a3d6-b457eb676fed",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "stopped",
+      "seatName": "impl-2@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:28:45.886Z",
+      "stoppedAt": "2026-11-07T08:33:19.183Z",
+      "activeMs": 273297,
+      "usage": {
+        "inputTokens": null,
+        "cacheReadInputTokens": null,
+        "cacheWriteInputTokens": null,
+        "outputTokens": null,
+        "reasoningOutputTokens": null,
+        "model": null,
+        "status": "unavailable",
+        "reason": "The preceding native thread total is unavailable."
+      },
+      "nativeUsage": {
+        "model": null,
+        "resumed": true,
+        "mode": "cumulative",
+        "counts": {
+          "inputTokens": 35474,
+          "cacheReadInputTokens": 575360,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 17857,
+          "reasoningOutputTokens": 4568
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:29:04.288Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:29:04.289Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:29:04.289Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:29:04.292Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T08:29:25.278Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T08:29:25.279Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-4",
+          "seq": 7,
+          "at": "2026-11-07T08:29:25.304Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-4",
+          "seq": 8,
+          "at": "2026-11-07T08:29:25.306Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-5",
+          "seq": 9,
+          "at": "2026-11-07T08:29:25.306Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-5",
+          "seq": 10,
+          "at": "2026-11-07T08:29:25.308Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-6",
+          "seq": 11,
+          "at": "2026-11-07T08:29:25.313Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-6",
+          "seq": 12,
+          "at": "2026-11-07T08:29:25.315Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-7",
+          "seq": 13,
+          "at": "2026-11-07T08:29:25.390Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-7",
+          "seq": 14,
+          "at": "2026-11-07T08:29:25.488Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-8",
+          "seq": 15,
+          "at": "2026-11-07T08:30:49.819Z",
+          "tool": "file_change",
+          "status": "running"
+        },
+        {
+          "id": "call-8",
+          "seq": 16,
+          "at": "2026-11-07T08:30:49.978Z",
+          "tool": "file_change",
+          "status": "completed"
+        },
+        {
+          "id": "call-9",
+          "seq": 17,
+          "at": "2026-11-07T08:30:57.655Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-9",
+          "seq": 18,
+          "at": "2026-11-07T08:30:57.658Z",
+          "tool": "command_execution",
+          "status": "failed"
+        },
+        {
+          "id": "call-10",
+          "seq": 19,
+          "at": "2026-11-07T08:31:17.855Z",
+          "tool": "file_change",
+          "status": "running"
+        },
+        {
+          "id": "call-10",
+          "seq": 20,
+          "at": "2026-11-07T08:31:17.979Z",
+          "tool": "file_change",
+          "status": "completed"
+        },
+        {
+          "id": "call-11",
+          "seq": 21,
+          "at": "2026-11-07T08:31:31.120Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-11",
+          "seq": 22,
+          "at": "2026-11-07T08:31:31.122Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-12",
+          "seq": 23,
+          "at": "2026-11-07T08:31:54.450Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-13",
+          "seq": 24,
+          "at": "2026-11-07T08:31:54.450Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-12",
+          "seq": 25,
+          "at": "2026-11-07T08:31:54.541Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-13",
+          "seq": 26,
+          "at": "2026-11-07T08:31:54.601Z",
+          "tool": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "3a6a0d6a-ca09-440b-abe1-c26c96863ec6",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "review-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:29:24.610Z",
+      "stoppedAt": "2026-11-07T08:29:54.073Z",
+      "activeMs": 29463,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 151888,
+        "cacheWriteInputTokens": 18869,
+        "outputTokens": 2047,
+        "reasoningOutputTokens": 169,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 151888,
+          "cacheWriteInputTokens": 18869,
+          "outputTokens": 2047,
+          "reasoningOutputTokens": 169
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:29:32.389Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:29:33.428Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:29:38.897Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:29:39.740Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T08:29:45.607Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T08:29:45.980Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "592305b5-74dc-446d-ad34-b780ba4dbe16",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:29:54.064Z",
+      "stoppedAt": "2026-11-07T08:30:09.656Z",
+      "activeMs": 15592,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 173049,
+        "cacheWriteInputTokens": 3435,
+        "outputTokens": 837,
+        "reasoningOutputTokens": 27,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 173049,
+          "cacheWriteInputTokens": 3435,
+          "outputTokens": 837,
+          "reasoningOutputTokens": 27
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:30:00.756Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:30:01.924Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "d72ee7c0-3175-4945-a622-4572507ad77d",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "review-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:33:23.597Z",
+      "stoppedAt": "2026-11-07T08:34:17.566Z",
+      "activeMs": 53969,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 195508,
+        "cacheWriteInputTokens": 9317,
+        "outputTokens": 4149,
+        "reasoningOutputTokens": 1231,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 195508,
+          "cacheWriteInputTokens": 9317,
+          "outputTokens": 4149,
+          "reasoningOutputTokens": 1231
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:33:31.964Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:33:33.068Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:33:44.518Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:33:45.142Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T08:33:59.021Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T08:33:59.409Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "5aed275f-e93f-4cd9-9957-272ebf96f352",
+      "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:34:26.006Z",
+      "stoppedAt": "2026-11-07T08:34:59.943Z",
+      "activeMs": 33937,
+      "usage": {
+        "inputTokens": 10,
+        "cacheReadInputTokens": 365096,
+        "cacheWriteInputTokens": 4963,
+        "outputTokens": 2093,
+        "reasoningOutputTokens": 269,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 10,
+          "cacheReadInputTokens": 365096,
+          "cacheWriteInputTokens": 4963,
+          "outputTokens": 2093,
+          "reasoningOutputTokens": 269
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:34:34.573Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:34:35.924Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:34:40.902Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:34:42.344Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T08:34:49.564Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T08:34:50.013Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "b92f2efe-dec1-4ca3-86a9-af4e5f6004a4",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T08:53:11.387Z",
+      "stoppedAt": "2026-11-07T08:53:45.027Z",
+      "activeMs": 33640,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 193293,
+        "cacheWriteInputTokens": 99080,
+        "outputTokens": 2592,
+        "reasoningOutputTokens": 44,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 193293,
+          "cacheWriteInputTokens": 99080,
+          "outputTokens": 2592,
+          "reasoningOutputTokens": 44
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T08:53:18.629Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T08:53:19.604Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T08:53:34.124Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T08:53:34.721Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "unknown",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "080dd8cb-ea35-4b9c-8821-b7edd6377589",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T09:01:40.860Z",
+      "stoppedAt": "2026-11-07T09:02:09.186Z",
+      "activeMs": 28326,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 202357,
+        "cacheWriteInputTokens": 102572,
+        "outputTokens": 1892,
+        "reasoningOutputTokens": 0,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 202357,
+          "cacheWriteInputTokens": 102572,
+          "outputTokens": 1892,
+          "reasoningOutputTokens": 0
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T09:01:48.902Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T09:01:50.128Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T09:01:59.856Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T09:02:00.735Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "4559079e-8897-40e3-9114-ee869096eb09",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "stopped",
+      "seatName": "impl-2@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T09:02:19.552Z",
+      "stoppedAt": "2026-11-07T09:05:29.233Z",
+      "activeMs": 189681,
+      "usage": {
+        "inputTokens": 8693,
+        "cacheReadInputTokens": 414208,
+        "cacheWriteInputTokens": 0,
+        "outputTokens": 5931,
+        "reasoningOutputTokens": 2011,
+        "model": null,
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": null,
+        "resumed": true,
+        "mode": "cumulative",
+        "counts": {
+          "inputTokens": 44167,
+          "cacheReadInputTokens": 989568,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 23788,
+          "reasoningOutputTokens": 6579
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T09:02:31.939Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 2,
+          "at": "2026-11-07T09:02:31.939Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 3,
+          "at": "2026-11-07T09:02:31.940Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T09:02:31.941Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T09:02:54.897Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T09:02:54.898Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-4",
+          "seq": 7,
+          "at": "2026-11-07T09:02:54.898Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-4",
+          "seq": 8,
+          "at": "2026-11-07T09:02:54.901Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-5",
+          "seq": 9,
+          "at": "2026-11-07T09:02:54.901Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-5",
+          "seq": 10,
+          "at": "2026-11-07T09:02:54.903Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-6",
+          "seq": 11,
+          "at": "2026-11-07T09:02:54.909Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-6",
+          "seq": 12,
+          "at": "2026-11-07T09:02:54.910Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-7",
+          "seq": 13,
+          "at": "2026-11-07T09:02:54.979Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-7",
+          "seq": 14,
+          "at": "2026-11-07T09:02:55.152Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-8",
+          "seq": 15,
+          "at": "2026-11-07T09:03:15.423Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-9",
+          "seq": 16,
+          "at": "2026-11-07T09:03:15.424Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-8",
+          "seq": 17,
+          "at": "2026-11-07T09:03:15.425Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-9",
+          "seq": 18,
+          "at": "2026-11-07T09:03:15.426Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-10",
+          "seq": 19,
+          "at": "2026-11-07T09:03:15.472Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-10",
+          "seq": 20,
+          "at": "2026-11-07T09:03:15.473Z",
+          "tool": "command_execution",
+          "status": "failed"
+        },
+        {
+          "id": "call-11",
+          "seq": 21,
+          "at": "2026-11-07T09:04:04.202Z",
+          "tool": "file_change",
+          "status": "running"
+        },
+        {
+          "id": "call-11",
+          "seq": 22,
+          "at": "2026-11-07T09:04:04.342Z",
+          "tool": "file_change",
+          "status": "completed"
+        },
+        {
+          "id": "call-12",
+          "seq": 23,
+          "at": "2026-11-07T09:04:14.716Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-12",
+          "seq": 24,
+          "at": "2026-11-07T09:04:14.738Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-13",
+          "seq": 25,
+          "at": "2026-11-07T09:04:27.345Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-14",
+          "seq": 26,
+          "at": "2026-11-07T09:04:27.346Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-13",
+          "seq": 27,
+          "at": "2026-11-07T09:04:27.440Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-14",
+          "seq": 28,
+          "at": "2026-11-07T09:04:27.554Z",
+          "tool": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "a6e1a737-4f00-48f1-a77a-3fba3fd5c56c",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "review-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T09:05:33.260Z",
+      "stoppedAt": "2026-11-07T09:05:59.415Z",
+      "activeMs": 26155,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 141378,
+        "cacheWriteInputTokens": 33698,
+        "outputTokens": 1650,
+        "reasoningOutputTokens": 277,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 141378,
+          "cacheWriteInputTokens": 33698,
+          "outputTokens": 1650,
+          "reasoningOutputTokens": 277
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T09:05:41.198Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T09:05:42.362Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T09:05:47.619Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T09:05:48.528Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "9a2ef0fc-87d1-4f05-a8f0-041d0a560fae",
+      "runId": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T09:06:08.897Z",
+      "stoppedAt": "2026-11-07T09:06:32.835Z",
+      "activeMs": 23938,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 311930,
+        "cacheWriteInputTokens": 3463,
+        "outputTokens": 1361,
+        "reasoningOutputTokens": 56,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 311930,
+          "cacheWriteInputTokens": 3463,
+          "outputTokens": 1361,
+          "reasoningOutputTokens": 56
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T09:06:17.181Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T09:06:19.317Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T09:06:23.168Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T09:06:23.187Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "18e6a624-90d1-474b-94c1-919fa44ddd57",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:23:01.496Z",
+      "stoppedAt": "2026-11-07T11:24:00.082Z",
+      "activeMs": 58586,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 218366,
+        "cacheWriteInputTokens": 113480,
+        "outputTokens": 4881,
+        "reasoningOutputTokens": 881,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 218366,
+          "cacheWriteInputTokens": 113480,
+          "outputTokens": 4881,
+          "reasoningOutputTokens": 881
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:23:09.433Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T11:23:09.908Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T11:23:46.704Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:23:47.133Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "unknown",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "b3eb2629-6eb7-445b-bb5d-ff8a2e0e360c",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:28:30.470Z",
+      "stoppedAt": "2026-11-07T11:29:06.927Z",
+      "activeMs": 36457,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 346378,
+        "cacheWriteInputTokens": 5571,
+        "outputTokens": 3097,
+        "reasoningOutputTokens": 22,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 346378,
+          "cacheWriteInputTokens": 5571,
+          "outputTokens": 3097,
+          "reasoningOutputTokens": 22
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:28:38.828Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T11:28:39.742Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T11:28:57.007Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:28:57.731Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "ba7da767-f236-4dac-8baf-620b300a918b",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "impl-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:45:29.263Z",
+      "stoppedAt": "2026-11-07T11:46:10.852Z",
+      "activeMs": 41589,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 144092,
+        "cacheWriteInputTokens": 52476,
+        "outputTokens": 4152,
+        "reasoningOutputTokens": 169,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 144092,
+          "cacheWriteInputTokens": 52476,
+          "outputTokens": 4152,
+          "reasoningOutputTokens": 169
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:45:32.827Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T11:45:33.970Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T11:45:46.510Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:45:46.984Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 5,
+          "at": "2026-11-07T11:45:53.711Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T11:45:54.588Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "c5574c31-63d1-4c7d-9f41-0c431d4471e4",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "stopped",
+      "seatName": "impl-2@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:45:29.437Z",
+      "stoppedAt": "2026-11-07T11:54:35.864Z",
+      "activeMs": 546427,
+      "usage": {
+        "inputTokens": 142612,
+        "cacheReadInputTokens": 427136,
+        "cacheWriteInputTokens": 0,
+        "outputTokens": 13851,
+        "reasoningOutputTokens": 5281,
+        "model": null,
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": null,
+        "resumed": true,
+        "mode": "cumulative",
+        "counts": {
+          "inputTokens": 186779,
+          "cacheReadInputTokens": 1416704,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 37639,
+          "reasoningOutputTokens": 11860
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:46:18.220Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 2,
+          "at": "2026-11-07T11:46:18.221Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-3",
+          "seq": 3,
+          "at": "2026-11-07T11:46:18.221Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:46:18.222Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-1",
+          "seq": 5,
+          "at": "2026-11-07T11:46:18.223Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-3",
+          "seq": 6,
+          "at": "2026-11-07T11:46:18.226Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-4",
+          "seq": 7,
+          "at": "2026-11-07T11:46:18.325Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-4",
+          "seq": 8,
+          "at": "2026-11-07T11:46:18.327Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-5",
+          "seq": 9,
+          "at": "2026-11-07T11:48:56.322Z",
+          "tool": "file_change",
+          "status": "running"
+        },
+        {
+          "id": "call-5",
+          "seq": 10,
+          "at": "2026-11-07T11:48:56.480Z",
+          "tool": "file_change",
+          "status": "completed"
+        },
+        {
+          "id": "call-6",
+          "seq": 11,
+          "at": "2026-11-07T11:49:13.730Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-6",
+          "seq": 12,
+          "at": "2026-11-07T11:49:13.805Z",
+          "tool": "command_execution",
+          "status": "failed"
+        },
+        {
+          "id": "call-7",
+          "seq": 13,
+          "at": "2026-11-07T11:50:08.936Z",
+          "tool": "file_change",
+          "status": "running"
+        },
+        {
+          "id": "call-7",
+          "seq": 14,
+          "at": "2026-11-07T11:50:09.078Z",
+          "tool": "file_change",
+          "status": "completed"
+        },
+        {
+          "id": "call-8",
+          "seq": 15,
+          "at": "2026-11-07T11:50:23.460Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-8",
+          "seq": 16,
+          "at": "2026-11-07T11:50:23.474Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-9",
+          "seq": 17,
+          "at": "2026-11-07T11:50:59.221Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-9",
+          "seq": 18,
+          "at": "2026-11-07T11:50:59.223Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-10",
+          "seq": 19,
+          "at": "2026-11-07T11:50:59.279Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-11",
+          "seq": 20,
+          "at": "2026-11-07T11:50:59.279Z",
+          "tool": "command_execution",
+          "status": "running"
+        },
+        {
+          "id": "call-10",
+          "seq": 21,
+          "at": "2026-11-07T11:50:59.327Z",
+          "tool": "command_execution",
+          "status": "completed"
+        },
+        {
+          "id": "call-11",
+          "seq": 22,
+          "at": "2026-11-07T11:50:59.394Z",
+          "tool": "command_execution",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "817d8459-a79c-4014-9b8d-556f7dcb5c9f",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "review-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:46:14.242Z",
+      "stoppedAt": "2026-11-07T11:46:40.564Z",
+      "activeMs": 26322,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 152836,
+        "cacheWriteInputTokens": 40633,
+        "outputTokens": 2002,
+        "reasoningOutputTokens": 164,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 152836,
+          "cacheWriteInputTokens": 40633,
+          "outputTokens": 2002,
+          "reasoningOutputTokens": 164
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:46:21.284Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T11:46:22.609Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T11:46:29.656Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:46:30.430Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "18aee13b-a05a-4fb9-be66-9963af60dc13",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "review-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:54:42.114Z",
+      "stoppedAt": "2026-11-07T11:55:14.056Z",
+      "activeMs": 31942,
+      "usage": {
+        "inputTokens": 6,
+        "cacheReadInputTokens": 141288,
+        "cacheWriteInputTokens": 74177,
+        "outputTokens": 2581,
+        "reasoningOutputTokens": 221,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 6,
+          "cacheReadInputTokens": 141288,
+          "cacheWriteInputTokens": 74177,
+          "outputTokens": 2581,
+          "reasoningOutputTokens": 221
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:54:50.243Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T11:54:51.256Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T11:55:00.373Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:55:01.068Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "46de1721-4e8d-4dbf-8b9b-f05f2f1cb708",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:54:50.613Z",
+      "stoppedAt": "2026-11-07T11:55:03.567Z",
+      "activeMs": 12954,
+      "usage": {
+        "inputTokens": 4,
+        "cacheReadInputTokens": 25915,
+        "cacheWriteInputTokens": 96103,
+        "outputTokens": 641,
+        "reasoningOutputTokens": 17,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 4,
+          "cacheReadInputTokens": 25915,
+          "cacheWriteInputTokens": 96103,
+          "outputTokens": 641,
+          "reasoningOutputTokens": 17
+        }
+      },
+      "activityStatus": "unavailable",
+      "activityRecords": [],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    },
+    {
+      "attemptId": "f452c03e-d20d-4d9c-badb-b8016215bd22",
+      "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "seatName": "lead-1@cc-u10-win-20261107-2c433e64",
+      "startedAt": "2026-11-07T11:55:25.710Z",
+      "stoppedAt": "2026-11-07T11:55:55.708Z",
+      "activeMs": 29998,
+      "usage": {
+        "inputTokens": 8,
+        "cacheReadInputTokens": 372944,
+        "cacheWriteInputTokens": 4581,
+        "outputTokens": 1889,
+        "reasoningOutputTokens": 38,
+        "model": "claude-opus-5-5",
+        "status": "available",
+        "reason": null
+      },
+      "nativeUsage": {
+        "model": "claude-opus-5-5",
+        "resumed": true,
+        "mode": "turn",
+        "counts": {
+          "inputTokens": 8,
+          "cacheReadInputTokens": 372944,
+          "cacheWriteInputTokens": 4581,
+          "outputTokens": 1889,
+          "reasoningOutputTokens": 38
+        }
+      },
+      "activityStatus": "available",
+      "activityRecords": [
+        {
+          "id": "call-1",
+          "seq": 1,
+          "at": "2026-11-07T11:55:34.079Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-1",
+          "seq": 2,
+          "at": "2026-11-07T11:55:36.923Z",
+          "tool": "Bash",
+          "status": "completed"
+        },
+        {
+          "id": "call-2",
+          "seq": 3,
+          "at": "2026-11-07T11:55:43.428Z",
+          "tool": "Bash",
+          "status": "running"
+        },
+        {
+          "id": "call-2",
+          "seq": 4,
+          "at": "2026-11-07T11:55:43.938Z",
+          "tool": "Bash",
+          "status": "completed"
+        }
+      ],
+      "outcome": "succeeded",
+      "retryScheduled": false
+    }
+  ],
+  "refreshedAt": "2026-11-07T12:30:57.239376+00:00"
+}

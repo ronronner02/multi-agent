@@ -1,0 +1,202 @@
+{
+  "checkedAt": "2026-11-07T15:20:56.611104+00:00",
+  "scope": "Read-only delivery check for command-center units already in main.",
+  "units": [
+    {
+      "unit": "U1",
+      "pullRequests": [
+        {
+          "number": 141,
+          "title": "feat(github): enable owner sign-in through the daemon",
+          "mergeCommit": "2fb4c7aad621c878b547026415103c930c15a33c",
+          "mergedAt": "2026-11-06T15:29:58Z",
+          "headRefName": "feat/cc-u1-github-signin",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ],
+          "commits": [
+            "dfd9efd09b9ebccc6bd189782b2e0e9987b4b682",
+            "4e11a2c6009ff1e7aa1cd5c2e58b3bee1a74f7cc"
+          ]
+        }
+      ],
+      "allSignInChangesLandedTogether": true
+    },
+    {
+      "unit": "U2",
+      "pullRequests": [
+        {
+          "number": 143,
+          "title": "feat(team): create private GitHub projects from local folders",
+          "mergeCommit": "66d537f39f4055e2090583628a24f2e974e71756",
+          "mergedAt": "2026-11-06T17:51:07Z",
+          "headRefName": "feat/cc-u2-project-create",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U3",
+      "pullRequests": [
+        {
+          "number": 146,
+          "title": "feat(team): let the lead build and manage its roster",
+          "mergeCommit": "aa31c1706afb32b59f96ee848adc29a6209550c5",
+          "mergedAt": "2026-11-07T01:12:29Z",
+          "headRefName": "feat/cc-u3-lead-roster",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U4",
+      "pullRequests": [
+        {
+          "number": 144,
+          "title": "feat(telemetry): expose live tools and per-attempt usage",
+          "mergeCommit": "1573e626b74184ccc245e5191d1e1711d593c4a3",
+          "mergedAt": "2026-11-06T19:47:59Z",
+          "headRefName": "feat/cc-u4-turn-telemetry",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U5",
+      "pullRequests": [
+        {
+          "number": 142,
+          "title": "feat(ui): restore command-center shell and persistent lead chat",
+          "mergeCommit": "aafd4b61a5f846b57a77128f56b2d83cd5d45e50",
+          "mergedAt": "2026-11-06T16:17:03Z",
+          "headRefName": "feat/cc-u5-command-shell",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U6",
+      "pullRequests": [
+        {
+          "number": 148,
+          "title": "feat(ui): show task stages and run actions in the command center",
+          "mergeCommit": "6d8f3a415e9af10b56d382bbb66215e1a8493da5",
+          "mergedAt": "2026-11-07T03:48:48Z",
+          "headRefName": "feat/cc-u6-overview-tasks",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U7",
+      "pullRequests": [
+        {
+          "number": 149,
+          "title": "Show live agent workspaces and task reviews",
+          "mergeCommit": "4fd9a562c2918438537c9f9500a7aae02bc42fff",
+          "mergedAt": "2026-11-07T04:42:40Z",
+          "headRefName": "feat/cc-u7-workspace-reviews",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U8",
+      "pullRequests": [
+        {
+          "number": 150,
+          "title": "feat(ui): complete first-open projects and usage settings",
+          "mergeCommit": "b028f7fdfbb4a75bbd4f5855c38048587c5c1748",
+          "mergedAt": "2026-11-07T06:23:32Z",
+          "headRefName": "feat/cc-u8-first-open",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U9",
+      "pullRequests": [
+        {
+          "number": 145,
+          "title": "feat(desktop): share command-center chrome and pick folders",
+          "mergeCommit": "6034f178f6504b3826849c0426f0d3f603d1d257",
+          "mergedAt": "2026-11-07T00:48:34Z",
+          "headRefName": "feat/cc-u9-desktop",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "unit": "U11",
+      "pullRequests": [
+        {
+          "number": 147,
+          "title": "feat(team): route worker blockers and preserve owner chat",
+          "mergeCommit": "9552609f2063e619e17f1cd0bb310d31cdc3aac2",
+          "mergedAt": "2026-11-07T02:45:01Z",
+          "headRefName": "feat/cc-u11-worker-reports",
+          "checks": [
+            {
+              "name": "smoke",
+              "conclusion": "SUCCESS",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "U10": "Uncommitted candidate; delivery decision pending."
+}

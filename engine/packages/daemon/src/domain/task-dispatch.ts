@@ -105,12 +105,13 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     // A short turn may exit before the next sweep registers its receipt. Its dead pane is
     // still occupied until that observation closes it; recovering it early launches the task twice.
     const receipts = dependencies.sessions.db.prepare(`SELECT json_extract(e.payload, '$.sessionName') AS seat,
-        a.id AS registeredId FROM events e
+        json_extract(e.payload, '$.runId') AS runId, a.id AS registeredId FROM events e
       LEFT JOIN team_attempts a ON a.id = json_extract(e.payload, '$.receipt.attemptId')
-      WHERE e.type = 'managed.attempt.receipt' AND json_extract(e.payload, '$.runId') = ?
-        AND (a.id IS NULL OR a.state <> 'stopped')`).all(runId) as Array<{ seat: string; registeredId: string | null }>;
+      WHERE e.type = 'managed.attempt.receipt'
+        AND (json_extract(e.payload, '$.runId') = ? OR json_extract(e.payload, '$.sessionName') = ?)
+        AND (a.id IS NULL OR a.state <> 'stopped')`).all(runId, seat) as Array<{ seat: string; runId: string; registeredId: string | null }>;
     if (receipts.some(receipt => receipt.seat === seat)) return;
-    const unregistered = new Set(receipts.filter(receipt => receipt.registeredId === null).map(receipt => receipt.seat));
+    const unregistered = new Set(receipts.filter(receipt => receipt.runId === runId && receipt.registeredId === null).map(receipt => receipt.seat));
     for (const [startingSeat, startingRun] of starting) if (startingRun === runId) unregistered.add(startingSeat);
     // MVP — the run's live-session limit is asked *before* the client starts. The governance
     // gate that already enforces it runs when the launch's receipt is registered, a second
@@ -149,9 +150,14 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       // after a review, the lead's revision after a rejection, or a retry the classifier called
       // resume-safe. Its next attempt continues that conversation, so the agent still holds the
       // tree, the brief and what it was told to fix. The token is the run's own record of it.
-      const resumeType = adapter.runtime === "codex" ? "codex_id" : "claude_id";
-      const continueSessionId = !unsafe && session.resumeToken && session.resumeType === resumeType
-        ? session.resumeToken : undefined;
+      const previous = dependencies.sessions.db.prepare(`
+        SELECT json_extract(e.payload, '$.receipt.identity.nativeSessionId') AS token
+        FROM events e JOIN team_attempts a ON a.id = json_extract(e.payload, '$.receipt.attemptId')
+        JOIN team_queue_authority q ON q.qitem_id = a.qitem_id
+        WHERE e.type = 'managed.attempt.receipt' AND q.run_id = ? AND q.task_id = ? AND a.state = 'stopped'
+          AND json_extract(e.payload, '$.sessionName') = ? AND json_extract(e.payload, '$.receipt.client') = ?
+        ORDER BY e.seq DESC LIMIT 1`).get(runId, taskId, seat, adapter.runtime) as { token: string | null } | undefined;
+      const continueSessionId = !unsafe && previous?.token ? previous.token : undefined;
       const started = await dependencies.startupOrchestrator.startNode({ rigId: context.rigId, nodeId: node.id, sessionId: session.id,
         binding, adapter,
         plan: { runtime: adapter.runtime, cwd: node.cwd, entries: [], startup: { files: [], actions: [] },
@@ -160,7 +166,7 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
         // The task this dispatch is starting. A seat can hold two live tasks — two completed
         // implementers are two pending reviews on the same reviewer seat — and the launch
         // composition must be told which one it is starting rather than refusing both.
-        taskId,
+        runId, taskId,
         ...(continueSessionId ? { continueSessionId } : {}),
         includeDurableObligations: true, allowFreshFallback: false });
       if (!started.ok) {

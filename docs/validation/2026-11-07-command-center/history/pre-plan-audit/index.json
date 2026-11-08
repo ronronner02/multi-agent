@@ -1,0 +1,44 @@
+{
+  "status": "historical",
+  "previousManifestSha256": "e3d99b46a6c5acd3888267e623f27b02c2e933ef82fe21850b917077d8d055ca",
+  "previousManifestEntryCount": 452,
+  "files": [
+    {
+      "path": "acceptance.json",
+      "sha256": "15274d8b2dadc65a2bad5b6bb8dd15cd9b219a2e1244b76368610020f7f7d388"
+    },
+    {
+      "path": "desktop-observations.json",
+      "sha256": "eb92ecd8071b2cca819e971f09f4cd2513312d5259c6eb4d6b04b00a7550b2f8"
+    },
+    {
+      "path": "protected-state.json",
+      "sha256": "35ad4dbdf4ccede2f217214ecc9b72610490ddfe0f4f228c05c5e5fd190642e2"
+    },
+    {
+      "path": "source-verification.json",
+      "sha256": "7e1297dd0c927ffd2dfa30653286c67eecd1d849ffa76fb8897063231dd89079"
+    },
+    {
+      "path": "review.json",
+      "sha256": "2dcd3fd4d267b4072474569ee083dc2d7dce6ce1da843ae0d313c94c18ca9453"
+    },
+    {
+      "path": "privacy-check.json",
+      "sha256": "2e97e47aa809c25cfbf76db095eb184d783fb69fc8dbcdb0f7db76442268289b"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "e3d99b46a6c5acd3888267e623f27b02c2e933ef82fe21850b917077d8d055ca"
+    },
+    {
+      "path": "verification/checks.json",
+      "sha256": "ce4be077cae2089de7600c75104eef882e4666df56b8ac28ca66cf7c598e34fc"
+    },
+    {
+      "path": "verification/final-index.json",
+      "sha256": "5b392d1d5befea35eaa6d32c55fbb2a7ce6dde4e6327b3b77b17dcc41f6893d3"
+    }
+  ],
+  "note": "This checkpoint preceded the renewed request to finish the active plan. Its desktop-process observation is historical."
+}

@@ -5,8 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const wsl = require('../src/wsl.js');
 
-function desktop(selected = { canceled: false, filePaths: [String.raw`D:\Client Work\fixture`] }) {
-  const dialogs = [];
+function desktop(selected = { canceled: false, filePaths: [String.raw`D:\Client Work\fixture`] }, cookieError = null) {
+  const dialogs = [], cookies = [], loaded = [];
   let options;
   const contents = { mainFrame: { url: wsl.TEAM_URL }, on() {}, send() {}, setWindowOpenHandler() {} };
   class Window {
@@ -14,11 +14,12 @@ function desktop(selected = { canceled: false, filePaths: [String.raw`D:\Client 
     once() {}
     on() {}
     isDestroyed() { return false; }
-    loadURL() { return Promise.resolve(); }
+    loadURL(url) { loaded.push(url); return Promise.resolve(); }
   }
   const electron = {
     app: { requestSingleInstanceLock: () => true, on() {}, whenReady: () => ({ then() {} }) },
     BrowserWindow: Window,
+    session: { defaultSession: { cookies: { set: async value => { if (cookieError) throw cookieError; cookies.push(value); } } } },
     screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 940 } }) },
     dialog: { showOpenDialog: async (parent, settings) => { dialogs.push({ parent, settings }); return selected; } },
   };
@@ -29,7 +30,7 @@ function desktop(selected = { canceled: false, filePaths: [String.raw`D:\Client 
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../src/main.js'), 'utf8'), context);
   vm.runInContext('createWindow(); resolved.distro = "Ubuntu";', context);
   const event = { sender: contents, senderFrame: contents.mainFrame };
-  return { context, contents, event, dialogs, options,
+  return { context, contents, event, dialogs, cookies, loaded, options,
     pick: (sender = event) => vm.runInContext('pickFolder', context)(sender),
   };
 }
@@ -113,4 +114,70 @@ test('preload preserves pairing and status but adds no title bar, footer or padd
   assert.equal(received.length, 1);
   assert.equal(page.events[0].type, 'desktop-status');
   assert.equal(page.writes.length, 0);
+});
+
+
+test('desktop startup connects before opening the app and keeps its session cookie HttpOnly', async () => {
+  const fixture = desktop();
+  fixture.context.pairResult = { ok: true, stdout: Buffer.from(`cookie=${'a'.repeat(43)}\ncsrf=${'b'.repeat(43)}\n`) };
+  vm.runInContext('runWsl = async () => pairResult;', fixture.context);
+  await vm.runInContext('openTeamView()', fixture.context);
+  assert.equal(fixture.loaded.at(-1), wsl.TEAM_URL);
+  assert.equal(fixture.cookies.length, 1);
+  assert.equal(fixture.cookies[0].httpOnly, true);
+  assert.equal(fixture.cookies[0].sameSite, 'strict');
+  assert.equal(fixture.cookies[0].path, '/api');
+  assert.equal(vm.runInContext('state.connected', fixture.context), true);
+});
+
+test('a failed desktop pairing stays on the connection screen instead of opening a code form', async () => {
+  const fixture = desktop();
+  fixture.context.pairResult = { ok: false, stdout: Buffer.alloc(0) };
+  vm.runInContext('runWsl = async () => pairResult;', fixture.context);
+  await vm.runInContext('openTeamView()', fixture.context);
+  assert.ok(!fixture.loaded.includes(wsl.TEAM_URL));
+  assert.equal(vm.runInContext('state.phase', fixture.context), 'connection-failed');
+  assert.equal(vm.runInContext('state.connected', fixture.context), false);
+});
+
+test('a rejected cookie write is a connection failure rather than a ready desktop', async () => {
+  const fixture = desktop(undefined, new Error('fixture cookie rejection'));
+  fixture.context.pairResult = { ok: true, stdout: Buffer.from(`cookie=${'a'.repeat(43)}\ncsrf=${'b'.repeat(43)}\n`) };
+  vm.runInContext('runWsl = async () => pairResult;', fixture.context);
+  await vm.runInContext('openTeamView()', fixture.context);
+  assert.ok(!fixture.loaded.includes(wsl.TEAM_URL));
+  assert.equal(vm.runInContext('state.phase', fixture.context), 'connection-failed');
+  assert.equal(vm.runInContext('state.connected', fixture.context), false);
+});
+
+test('native reconnection accepts only the active same-origin main frame and does not reload it', async () => {
+  const fixture = desktop();
+  fixture.context.pairResult = { ok: true, stdout: Buffer.from(`cookie=${'a'.repeat(43)}\ncsrf=${'b'.repeat(43)}\n`) };
+  vm.runInContext('runWsl = async () => pairResult;', fixture.context);
+  const reconnect = vm.runInContext('reconnectOwnerSession', fixture.context);
+  await assert.rejects(reconnect({ ...fixture.event, sender: {} }));
+  await assert.rejects(reconnect({ ...fixture.event, senderFrame: { url: wsl.TEAM_URL } }));
+  fixture.contents.mainFrame.url = 'http://localhost:7433/team';
+  await assert.rejects(reconnect(fixture.event));
+  assert.equal(fixture.cookies.length, 0);
+  fixture.contents.mainFrame.url = wsl.TEAM_URL;
+  assert.equal(await reconnect(fixture.event), 'b'.repeat(43));
+  assert.equal(fixture.cookies.length, 1);
+  assert.equal(fixture.loaded.length, 1);
+});
+
+test('native reconnection withholds its token if the requesting frame navigated during pairing', async () => {
+  const fixture = desktop();
+  fixture.context.pairResult = { ok: true, stdout: Buffer.from(`cookie=${'a'.repeat(43)}\ncsrf=${'b'.repeat(43)}\n`) };
+  fixture.context.navigateAway = () => { fixture.contents.mainFrame.url = 'https://example.com/'; };
+  vm.runInContext('runWsl = async () => { navigateAway(); return pairResult; };', fixture.context);
+  const reconnect = vm.runInContext('reconnectOwnerSession', fixture.context);
+  assert.equal(await reconnect(fixture.event), null);
+});
+
+test('preload exposes only the native reconnect action, never the cookie', async () => {
+  const page = preload();
+  assert.equal(typeof page.bridge.reconnect, 'function');
+  assert.equal(await page.bridge.reconnect(), page.status);
+  assert.equal(page.bridge.cookie, undefined);
 });

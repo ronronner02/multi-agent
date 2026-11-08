@@ -1,0 +1,14 @@
+{
+  "check": "u10-plan-audit-cli",
+  "cwd": "engine/packages/cli",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/node",
+    "../../node_modules/vitest/vitest.mjs",
+    "run",
+    "test/github-command.test.ts",
+    "test/team-command.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 2.78
+}

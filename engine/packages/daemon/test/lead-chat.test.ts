@@ -11,7 +11,8 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { bindingForGoal, unisolatedPolicyCapability, refreshPlanBinding } from "../src/routes/team-start.js";
-import { composeLeadTurnEnd, listChatMessages, pendingOwnerMessages } from "../src/domain/lead-chat.js";
+import { composeLeadTurnEnd, leadChatTurnNote, listChatMessages, pendingOwnerMessages, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
+import { AttemptTelemetry } from "../src/domain/attempt-telemetry.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
 import { commitPlan, ensurePlanWorktree, runSlug } from "../src/domain/plan-branch.js";
@@ -104,7 +105,7 @@ describe("U5 — lead chat and plan approval", () => {
       forgetCandidate,
     };
     app = createTestApp(db, { appDeps: { eventBus: bus, queueRepo: queue, teamGovernance: governance,
-      workflowRuntime: runtime as never,
+      workflowRuntime: runtime as never, attemptTelemetry: new AttemptTelemetry(db, { turnStateRoot: candidates }),
       teamControl: { credentials: { ownerToken, workers: [{ token: workerToken, sessionId: "impl@demo", runId: "other" }] },
         readPolicyCapability: () => policy, planWorktreeRoot: () => worktrees, dispatch } } }).app;
   });
@@ -130,17 +131,34 @@ describe("U5 — lead chat and plan approval", () => {
     // The binding names the daemon-owned worktree, and the owner's checkout still has no plan.md.
     expect(run.binding.repository.root).toBe(join(worktrees, receipt.runId!));
     expect(() => readFileSync(join(directory, "plan.md"))).toThrow();
-    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json", "lead-escalation.json"]);
     // The owner's scope travels with the run until the approval turns it into the delivery scope.
-    expect(run.binding.readPaths).toEqual(["plan.md", "lead-roster.json", "src"]);
+    expect(run.binding.readPaths).toEqual(["plan.md", "lead-roster.json", "lead-escalation.json", "src"]);
     // The plan worktree is a checkout of the daemon's own branch at the run's commit.
     expect(execFileSync("git", ["-C", run.binding.repository.root, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).trim())
       .toBe(runSlug({ runId: receipt.runId!, name: "Add a health endpoint" }));
     expect(readFileSync(join(run.binding.repository.root, "plan.md"), "utf8")).toContain("Goal: Add a health endpoint");
     // The lead's first task is the conversation and its planning files.
     const task = governance.findTask(receipt.runId!, "task-1")!;
-    expect(task.assignment).toEqual({ taskId: "task-1", role: "lead", paths: ["plan.md", "lead-roster.json"], dependencies: [] });
+    expect(task.assignment).toEqual({ taskId: "task-1", role: "lead", paths: ["plan.md", "lead-roster.json", "lead-escalation.json"], dependencies: [] });
     expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
+  });
+
+  it("retains the first project discussion without admitting execution tasks", async () => {
+    const receipt = await planningRun({ goal: "Discuss the scope before execution." });
+    const response = await call(`/runs/${receipt.runId}/chat`);
+    expect((await response.json()).messages).toMatchObject([
+      { sender: "owner", body: "Discuss the scope before execution." },
+    ]);
+    expect(db.prepare("SELECT assignment_json FROM team_queue_authority WHERE run_id = ?").all(receipt.runId!))
+      .toEqual([{ assignment_json: expect.stringContaining('"role":"lead"') }]);
+    const backup = join(worktrees, "reopened.sqlite");
+    await db.backup(backup);
+    const reopened = createDb(backup);
+    try {
+      expect(listChatMessages(reopened, receipt.runId!).map(message => message.body))
+        .toEqual(["Discuss the scope before execution."]);
+    } finally { reopened.close(); }
   });
 
   it("refuses a planning run with no lead seat on the rig", async () => {
@@ -158,7 +176,7 @@ describe("U5 — lead chat and plan approval", () => {
     const run = governance.getRun(receipt.runId!);
     expect(run.binding.repository.root).toBe(join(worktrees, receipt.runId!));
     expect(readFileSync(join(run.binding.repository.root, "plan.md"), "utf8")).toContain("Goal: Add a health endpoint");
-    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json", "lead-escalation.json"]);
     expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
     const delivery = await startPlanning({ planning: false });
     expect(delivery.status).toBe(400);
@@ -180,9 +198,11 @@ describe("U5 — lead chat and plan approval", () => {
     const read = await (await call(`/runs/${receipt.runId}/chat`)).json() as { phase: string;
       messages: Array<{ sender: string; body: string }> };
     expect(read.phase).toBe("planning");
-    expect(read.messages).toEqual([{ id: "chat-1", sender: "owner", kind: "text", body: "What would you build first?",
+    expect(read.messages).toEqual([{ id: receipt.runId + ":initial", sender: "owner", kind: "text", body: "Add a health endpoint",
+      options: null, answeredBy: null, createdAt: expect.any(String) }, { id: "chat-1", sender: "owner", kind: "text", body: "What would you build first?",
       options: null, answeredBy: null, createdAt: expect.any(String) }]);
-    expect(pendingOwnerMessages(db, receipt.runId!).map(message => message.body)).toEqual(["What would you build first?"]);
+    expect(pendingOwnerMessages(db, receipt.runId!).map(message => message.body)).toEqual(["Add a health endpoint", "What would you build first?"]);
+    expect(leadChatTurnNote(pendingOwnerMessages(db, receipt.runId!))).toContain("Brief public progress updates are shown live");
   });
 
   it("queues a second message while a lead turn is running, and never starts a second turn", async () => {
@@ -203,8 +223,25 @@ describe("U5 — lead chat and plan approval", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(dispatch).not.toHaveBeenCalled();
     // The message is kept, and the enough rows exist for the next turn to answer it.
-    expect(governance.chatMessages(receipt.runId!).map(message => message.body)).toEqual(["Also add tests."]);
-    expect(pendingOwnerMessages(db, receipt.runId!)).toHaveLength(1);
+    expect(governance.chatMessages(receipt.runId!).map(message => message.body)).toEqual(["Add a health endpoint", "Also add tests."]);
+    expect(pendingOwnerMessages(db, receipt.runId!)).toHaveLength(2);
+    const output = agentTurnOutputPaths(candidates, "attempt-live"); mkdirSync(output.directory, { recursive: true });
+    writeFileSync(join(output.directory, "progress.json"), JSON.stringify({ version: 1, sequence: 2, at: "2026-11-08T01:00:00Z",
+      status: "responding", blocks: [{ id: "text-1", text: "I am checking the current files.", complete: false }], truncated: false }));
+    writeFileSync(output.activity, JSON.stringify({ id: "call-1", seq: 1, at: "2026-11-08T01:00:00Z", tool: "Read", summary: "src/base.ts", status: "running" }) + "\n");
+    const response = await call(`/runs/${receipt.runId}/chat`);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const current = await response.json();
+    expect(current).toMatchObject({ liveTurn: { attemptId: "attempt-live", state: "running",
+      progress: { sequence: 2, status: "responding", blocks: [{ text: "I am checking the current files." }] },
+      activity: { records: [{ tool: "Read", status: "running" }] } } });
+    expect(current.messages).toHaveLength(2);
+    expect((await call(`/runs/${receipt.runId}/chat`, undefined, workerToken)).status).toBe(403);
+    const other = await planningRun();
+    expect(await (await call(`/runs/${other.runId}/chat`)).json()).toMatchObject({ liveTurn: null });
+    recordLeadReply(db, { id: "chat-attempt-live", runId: receipt.runId!, attemptId: "attempt-live", body: "The final reply.",
+      createdAt: "2026-11-08T01:01:00Z" });
+    expect(await (await call(`/runs/${receipt.runId}/chat`)).json()).toMatchObject({ liveTurn: null });
   });
 
   it("refuses a plan approval with no plan in the lead's tree", async () => {
@@ -214,6 +251,41 @@ describe("U5 — lead chat and plan approval", () => {
     expect(await response.json()).toMatchObject({ code: "plan_missing" });
     expect(governance.getRun(receipt.runId!).phase).toBe("planning");
     expect(forgetCandidate).not.toHaveBeenCalled();
+  });
+
+  it.each(["running", "admitted", "queued", "question"])("waits for a %s planning turn before recording plan approval", async state => {
+    const { runId } = await planningRun();
+    const task = governance.findTask(runId!, "task-1")!;
+    mkdirSync(join(candidates, "task-1"), { recursive: true });
+    writeFileSync(join(candidates, "task-1", "plan.md"), "# An earlier plan");
+    writeFileSync(join(candidates, "task-1", "lead-roster.json"), rosterBytes);
+    if (state !== "queued") takeOwnerMessages(db, runId!, "planning-turn");
+    if (state === "running") {
+      db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason, state,
+        usage_json, active_ms, created_at, updated_at) VALUES ('planning-turn', ?, ?, 'lead', 'claude', ?, NULL, 'running', ?, 0, '2026-11-08', '2026-11-08')`)
+        .run(runId, task.qitemId, JSON.stringify({ nativeSessionId: 's', tmuxServer: '/tmp/tmux', paneId: '%1', processId: process.pid,
+          processStart: '0', generation: 1, policyFingerprint: policy.policyFingerprint }),
+        JSON.stringify({ activeMs: 0, inputTokens: { value: null, reason: 'unobserved' }, outputTokens: { value: null, reason: 'unobserved' }, costUsd: { value: null, reason: 'unobserved' } }));
+    } else if (state === "admitted") {
+      db.prepare("INSERT INTO events (type, payload) VALUES ('team.control', ?)").run(JSON.stringify({
+        runId, attemptId: "planning-turn", action: "attempt.launch-intent", payload: { state: "admitted", qitemId: task.qitemId },
+      }));
+    }
+    if (state === "question") recordLeadReply(db, { id: "open-question", runId: runId!, attemptId: "question-turn",
+      body: "Which behavior?", decision: { options: ["A", "B"] }, createdAt: new Date().toISOString() });
+    const before = governance.getRun(runId!);
+    const head = () => execFileSync("git", ["-C", before.binding.repository.root, "rev-parse", "HEAD"], { encoding: "utf8" });
+    const originalHead = head();
+    dispatch.mockClear();
+    const response = await call(`/runs/${runId}/plan/approve`, command(runId!, "approve-active", { rosterDigest: hashBytes(rosterBytes) }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "plan_not_awaiting_approval" });
+    expect(head()).toBe(originalHead);
+    expect(governance.getRun(runId!).phase).toBe("planning");
+    expect(forgetCandidate).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(governance.approvePlan(command(runId!, "approve-direct", {}), { kind: "owner", sessionId: "owner" },
+      before.binding, before.binding, { seats: parseLeadRoster(JSON.parse(rosterBytes)), maxSeats: 6 }).status).toBe("denied");
   });
 
   it("approves the plan: records it on the run's branch, rebinds the run and starts the decomposition", async () => {
@@ -227,6 +299,7 @@ describe("U5 — lead chat and plan approval", () => {
     const currentBinding = refreshPlanBinding(before.binding, policy);
     expect(hashBinding(currentBinding)).toBe(before.bindingDigest);
     dispatch.mockClear();
+    takeOwnerMessages(db, runId!, "completed-planning-turn");
     const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-1", { rosterDigest: hashBytes(rosterBytes) }));
     expect(response.status, await response.clone().text()).toBe(200);
     const body = await response.json() as { status: string; value: { phase: string; planRef: string } };
@@ -240,7 +313,7 @@ describe("U5 — lead chat and plan approval", () => {
     expect(execFileSync("git", ["-C", run.binding.repository.root, "log", "-1", "--format=%s"], { encoding: "utf8" }).trim())
       .toBe("plan: Add a health endpoint");
     // A delivery binding covers the owner's scope and still covers the lead task it admitted.
-    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json", "src"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json", "lead-escalation.json", "src"]);
     expect(governance.listApprovals(runId).filter(approval => approval.action === "implementation"
       && approval.bindingDigest === run.bindingDigest).map(approval => approval.state)).toEqual(["approved"]);
     // The lead's tree is re-adopted at the new base, and its next turn is the decomposition.
@@ -252,7 +325,78 @@ describe("U5 — lead chat and plan approval", () => {
   });
 
 
-  it("approves a persisted pre-roster planning run without retrofitting its binding or requiring a roster", async () => {
+  it.each([undefined, ["src"]])("grants project-wide implementation only when the planning scope requests it (%j)", async writePaths => {
+    const { runId: id } = await planningRun({ writePaths });
+    const runId = id!;
+    const planning = governance.getRun(runId);
+    expect(planning.binding.readPaths).toContain(writePaths ? "src" : ".");
+    expect(planning.binding.writePaths).not.toContain(".");
+    expect(() => governance.stageCandidateScope(runId, "task-1", {
+      root: candidates, candidateDigest: hashBytes("premature implementation"), files: ["index.html"],
+      changes: [{ path: "index.html", before: null, after: Buffer.from("<main>App</main>") }],
+    })).toThrow(/outside-write-paths/);
+
+    mkdirSync(join(candidates, "task-1"), { recursive: true });
+    writeFileSync(join(candidates, "task-1", "plan.md"), "# Plan\nBuild the agreed web application.\n");
+    writeFileSync(join(candidates, "task-1", "lead-roster.json"), rosterBytes);
+    takeOwnerMessages(db, runId, "completed-project-planning");
+    const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-project", { rosterDigest: hashBytes(rosterBytes) }));
+    expect(response.status, await response.clone().text()).toBe(200);
+    const approved = governance.getRun(runId);
+    expect(approved.binding.limits).toEqual(planning.binding.limits);
+    expect(approved.binding.repository.root).toBe(planning.binding.repository.root);
+    const tasks = [
+      { taskId: "backend", seat: "impl@demo", paths: ["package.json", "server"], dependencies: [], body: "Build the server." },
+      { taskId: "frontend", seat: "impl@demo", paths: ["client", "index.html"], dependencies: [], body: "Build the client." },
+    ];
+    const admit = governance.admitLeadProposal(command(runId, "implementation-tasks", {}),
+      { kind: "daemon", sessionId: "lead-manager" }, approved.binding, tasks);
+    if (writePaths) {
+      expect(admit).toMatchObject({ status: "denied", reason: "Assignment path is outside the binding" });
+      expect(governance.findTask(runId, "backend")).toBeNull();
+      expect(governance.getRun(runId).binding.writePaths).not.toContain(".");
+      return;
+    }
+    expect(admit.status, admit.reason).toBe("accepted");
+    for (const task of tasks) expect(governance.findTask(runId, task.taskId)?.assignment.paths).toEqual(task.paths);
+    const stage = (path: string) => governance.stageCandidateScope(runId, "backend", {
+      root: candidates, candidateDigest: hashBytes(path), files: [path],
+      changes: [{ path, before: null, after: Buffer.from("fixture content") }],
+    });
+    expect(stage("package.json")).toBeTruthy();
+    expect(stage("server/main.ts")).toBeTruthy();
+    for (const path of ["server/.env.local", "server/.github/workflows/build.yml", "server/contracts/auth.ts"]) {
+      expect(() => stage(path)).toThrow(/protected-path/);
+    }
+    expect(() => stage("client/main.ts")).toThrow(/other-task-scope/);
+    const overlap = governance.admitLeadProposal(command(runId, "overlapping-task", {}),
+      { kind: "daemon", sessionId: "lead-manager" }, approved.binding,
+      [{ ...tasks[0]!, taskId: "overlap", paths: ["server/routes.ts"] }]);
+    expect(overlap.status).toBe("denied");
+    expect(governance.getRun(runId).bindingDigest).toBe(approved.bindingDigest);
+  });
+
+  it("applies the exact allowed models from the approved planning roster to existing idle seats", async () => {
+    db.prepare("UPDATE rigs SET team_model_allowlist = ? WHERE id = 'rig'").run(JSON.stringify([
+      { client: "claude-code", model: "approved-worker" },
+    ]));
+    const { runId } = await planningRun();
+    mkdirSync(join(candidates, "task-1"), { recursive: true });
+    writeFileSync(join(candidates, "task-1", "plan.md"), "# Plan\n\nAdd a health endpoint.\n");
+    const roster = JSON.stringify({ seats: [
+      { role: "implementer", client: "claude-code", model: "approved-worker" },
+      { role: "reviewer", client: "claude-code", model: "approved-worker" },
+    ] });
+    writeFileSync(join(candidates, "task-1", "lead-roster.json"), roster);
+    takeOwnerMessages(db, runId!, "completed-planning-turn");
+    const response = await call(`/runs/${runId}/plan/approve`, command(runId!, "approve-models", { rosterDigest: hashBytes(roster) }));
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(db.prepare("SELECT model FROM nodes WHERE role <> 'lead' ORDER BY id").all())
+      .toEqual([{ model: "approved-worker" }, { model: "approved-worker" }]);
+    expect(governance.getRun(runId!).phase).toBe("delivery");
+  });
+
+  it.each([null, {}, { ownerMessage: "Confirm plan" }])("approves a persisted pre-roster planning run without retrofitting its binding or requiring a roster (payload: %s)", async payload => {
     const runId = "legacy-pre-roster";
     const root = ensurePlanWorktree({ repositoryRoot: directory, worktreeRoot: worktrees, runId, name: "Legacy plan" }).path;
     commitPlan({ worktree: root, planRef: "plan.md", plan: "# Legacy bootstrap", message: "Legacy planning fixture" });
@@ -273,10 +417,13 @@ describe("U5 — lead chat and plan approval", () => {
     mkdirSync(join(candidates, "task-1"), { recursive: true });
     writeFileSync(join(candidates, "task-1", "plan.md"), "# The persisted run's agreed plan");
     expect(governance.getRun(runId).binding.writePaths).toEqual(["plan.md"]);
-    const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-legacy", {}));
+    const response = await call(`/runs/${runId}/plan/approve`, command(runId, "approve-legacy", payload));
     expect(response.status, await response.clone().text()).toBe(200);
     expect(governance.getRun(runId)).toMatchObject({ phase: "delivery", reviewerSeat: "review@demo",
       binding: { writePaths: ["plan.md", "src"] } });
+    if (payload && "ownerMessage" in payload) expect(governance.chatMessages(runId)).toEqual([
+      expect.objectContaining({ kind: "confirmation", body: payload.ownerMessage }),
+    ]);
   });
 
   it("refuses a lead write outside the plan during planning", async () => {
@@ -291,7 +438,7 @@ describe("U5 — lead chat and plan approval", () => {
     expect(governance.stageCandidateScope(receipt.runId!, "task-1", { root: candidates,
       candidateDigest: "sha256:" + "2".repeat(64), files: ["plan.md"],
       changes: [{ path: "plan.md", before: null, after: Buffer.from("# Plan\n") }] })).toBeTruthy();
-    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json"]);
+    expect(run.binding.writePaths).toEqual(["plan.md", "lead-roster.json", "lead-escalation.json"]);
   });
 
   it("keeps every message and resumes the same conversation after the daemon is recomposed", async () => {
@@ -307,7 +454,7 @@ describe("U5 — lead chat and plan approval", () => {
       headers: { Authorization: "Bearer " + ownerToken } }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
     expect(listed.status).toBe(200);
     expect((await listed.json() as { messages: Array<{ body: string }> }).messages.map(message => message.body))
-      .toEqual(["First question."]);
+      .toEqual(["Add a health endpoint", "First question."]);
     // The next owner message is a new turn on the same lead task, so the launch resumes the
     // seat's recorded conversation rather than starting a second one.
     dispatch.mockClear();
@@ -319,14 +466,14 @@ describe("U5 — lead chat and plan approval", () => {
     expect(sent.status).toBe(200);
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
-    expect(reopened.chatMessages(receipt.runId!).map(message => message.body)).toEqual(["First question.", "Second question."]);
+    expect(reopened.chatMessages(receipt.runId!).map(message => message.body)).toEqual(["Add a health endpoint", "First question.", "Second question."]);
   });
 
   it("refuses the chat to a caller that is not the owner", async () => {
     const receipt = await planningRun();
     const response = await call(`/runs/${receipt.runId}/chat`, command(receipt.runId!, "chat-1", { body: "hi" }), workerToken);
     expect(response.status).toBe(403);
-    expect(listChatMessages(db, receipt.runId!)).toEqual([]);
+    expect(listChatMessages(db, receipt.runId!).map(message => message.body)).toEqual(["Add a health endpoint"]);
   });
 
   it("counts the owner's message as progress, so a planning conversation is not a lead spin", async () => {

@@ -5,7 +5,9 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createDaemon } from "../src/startup.js";
-import { hashBytes } from "../src/domain/plan-governance.js";
+import { hashBinding, hashBytes } from "../src/domain/plan-governance.js";
+import { appendChatMessage } from "../src/domain/lead-chat.js";
+import { ensurePlanWorktree } from "../src/domain/plan-branch.js";
 import { StartupOrchestrator } from "../src/domain/startup-orchestrator.js";
 import type { PlanBinding } from "../src/contracts/team-control.js";
 
@@ -63,6 +65,7 @@ describe("a start request launches the seat it put work on", () => {
   let directory: string, repo: string, db: Database.Database, savedEnv: Record<string, string | undefined>;
   let daemon: Awaited<ReturnType<typeof createDaemon>>;
   let nodeId: string;
+  let binding: PlanBinding;
 
   /** A tmux server of this test's own, so nothing touches the operator's sessions. */
   const tmuxRun = (...args: string[]): string =>
@@ -83,7 +86,7 @@ describe("a start request launches the seat it put work on", () => {
     process.env.OPENRIG_HOME = join(directory, "home");
     process.env.TMUX_TMPDIR = join(directory, "tmux");
     repo = repository(directory);
-    const binding: PlanBinding = {
+    binding = {
       artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
       planRef: "plan.md", planDigest: hashBytes("approved plan\n"),
       repository: { root: repo, identity: "git:" + "a".repeat(40) },
@@ -174,6 +177,7 @@ describe("a start request launches the seat it put work on", () => {
     expect(prompt).not.toContain("rig whoami");
     expect(prompt).not.toContain("rig queue list");
     expect(prompt).not.toContain(ownerToken);
+    expect(prompt).not.toContain("Team progress snapshot:");
 
     // The daemon created the terminal itself, and recorded the pane the way every binding is.
     // The pane is read by id: a turn that has ended leaves no current path to report, and the
@@ -198,6 +202,111 @@ describe("a start request launches the seat it put work on", () => {
     const session = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
     expect(daemon.deps.sessionRegistry.getSessionsForRig(receipt.rigId)
       .find(row => row.id === session.sessionId)!.startupStatus).toBe("ready");
+  }, 90_000);
+
+  it("recreates a removed bound seat while another session keeps its server alive", async () => {
+    const { ensureSeatPane } = await import("../src/domain/seat-pane.js");
+    const dependencies = { rigRepo: daemon.deps.rigRepo, sessions: daemon.deps.sessionRegistry,
+      tmux: daemon.deps.tmuxAdapter, sessionEnv: {} };
+    const stalePane = await ensureSeatPane(dependencies, SEAT);
+    const neighbor = `${SEAT}-neighbor`;
+    tmuxRun("new-session", "-d", "-s", neighbor, "-c", repo);
+    const neighborPane = tmuxRun("list-panes", "-t", `=${neighbor}:`, "-F", "#{pane_id}").trim();
+    tmuxRun("kill-session", "-t", `=${SEAT}:`);
+    expect(sessions()).toEqual([neighbor]);
+    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)!.tmuxPane).toBe(stalePane);
+
+    const pane = await ensureSeatPane(dependencies, SEAT);
+
+    expect(pane).not.toBe(stalePane);
+    expect(pane).not.toBe(neighborPane);
+    expect(sessions().sort()).toEqual([SEAT, neighbor].sort());
+    expect(tmuxRun("list-panes", "-t", `=${neighbor}:`, "-F", "#{pane_id}").trim()).toBe(neighborPane);
+    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)).toMatchObject({
+      attachmentType: "tmux", tmuxSession: SEAT, tmuxPane: pane });
+  });
+
+  it("preserves a bound seat when its presence probe fails", async () => {
+    const { ensureSeatPane } = await import("../src/domain/seat-pane.js");
+    const dependencies = { rigRepo: daemon.deps.rigRepo, sessions: daemon.deps.sessionRegistry,
+      tmux: daemon.deps.tmuxAdapter, sessionEnv: {} };
+    const pane = await ensureSeatPane(dependencies, SEAT);
+    const failure = new Error("fixture permission denied");
+    const probe = vi.spyOn(daemon.deps.tmuxAdapter, "hasSession").mockRejectedValue(failure);
+    const create = vi.spyOn(daemon.deps.tmuxAdapter, "createSession");
+    try {
+      await expect(ensureSeatPane(dependencies, SEAT)).rejects.toBe(failure);
+      expect(create).not.toHaveBeenCalled();
+      expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)!.tmuxPane).toBe(pane);
+      expect(sessions()).toEqual([SEAT]);
+    } finally {
+      probe.mockRestore();
+      create.mockRestore();
+    }
+  });
+
+  it("writes durable review progress into the lead's actual launch prompt while a worker is busy", async () => {
+    const governance = daemon.deps.teamGovernance!;
+    const rigId = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!.rigId;
+    const leadSeat = "lead@team-demo", reviewSeat = "review@team-demo";
+    for (const [logicalId, role, runtime, seat] of [
+      ["lead", "lead", "claude-code", leadSeat], ["review", "reviewer", "codex", reviewSeat],
+    ] as const) {
+      const node = daemon.deps.rigRepo.addNode(rigId, logicalId, { role, runtime, cwd: repo });
+      daemon.deps.sessionRegistry.registerSession(node.id, seat);
+    }
+    const runId = "lead-progress-run";
+    const sourceRoot = ensurePlanWorktree({ repositoryRoot: repo, worktreeRoot: join(directory, "plan-worktrees"),
+      runId, name: "Progress" }).path;
+    binding = { ...binding, repository: { root: sourceRoot, identity: "git:" + git(sourceRoot, "rev-parse", "HEAD").trim() } };
+    governance.createRun({ id: runId, rigId, binding, reviewerSeat: reviewSeat });
+    let serial = 0;
+    const command = (actionId: string, payload: unknown) => ({ protocolVersion: "1.0", runId, actionId,
+      expectedEntityVersion: governance.getRun(runId).entityVersion, idempotencyKey: `${actionId}-${++serial}`, payload });
+    governance.requestApproval(command("approve", { kind: "orchestrator", action: "implementation",
+      payload: { bindingDigest: hashBinding(binding) }, targetDigest: hashBinding(binding),
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString() }), { kind: "owner", sessionId: "owner" });
+    expect(governance.decideApproval(command("approve", { approvalVersion: 1, decision: "approved" }),
+      { kind: "owner", sessionId: "owner" }, binding).status).toBe("accepted");
+    for (const [taskId, role, seat] of [
+      ["lead-task", "lead", leadSeat], ["impl-task", "implementer", SEAT], ["review-task", "reviewer", reviewSeat],
+    ] as const) {
+      const admitted = governance.createTask(command(taskId, {
+        assignment: { taskId, role, paths: ["src"], dependencies: [], ...(role === "reviewer" ? { reviewOf: "impl-task" } : {}) },
+        outputs: [], permissions: role === "lead" ? ["request-assignment"] : role === "reviewer" ? ["submit-review"] : ["write-assigned-tree"],
+        sourceSession: "owner", destinationSession: seat, body: "Report the recorded task and review progress.",
+      }), binding);
+      expect(admitted.status, JSON.stringify(admitted)).toBe("accepted");
+    }
+    const impl = governance.findTask(runId, "impl-task")!, review = governance.findTask(runId, "review-task")!;
+    db.prepare("UPDATE queue_items SET state = 'done' WHERE qitem_id = ?").run(impl.qitemId);
+    db.prepare("UPDATE queue_items SET state = 'in-progress' WHERE qitem_id = ?").run(review.qitemId);
+    expect(governance.recordAttempt(command("review-running", { qitemId: review.qitemId, role: "reviewer", provider: "codex",
+      identity: { nativeSessionId: "native-review", tmuxServer: "/tmp/fixture-review.sock", paneId: "%1",
+        processId: 4242, processStart: "fixture-review-start", generation: 1, policyFingerprint: binding.policyFingerprint },
+      unknownReason: null, state: "running", usage: { activeMs: 0, inputTokens: { value: null, reason: "unobserved" },
+        outputTokens: { value: null, reason: "unobserved" }, costUsd: { value: null, reason: "unobserved" } },
+    }), binding).status).toBe("observed");
+    appendChatMessage(db, { id: "progress-question", runId, sender: "owner", body: "Which work is done, and has review started?",
+      createdAt: new Date().toISOString() });
+
+    await daemon.deps.teamControl!.dispatch!(runId, "lead-task");
+    expect(receipts()).toHaveLength(1);
+    const launch = JSON.parse(receipts()[0]!.payload) as { receipt: { attemptId: string } };
+    const prompt = readFileSync(join(turnPromptDir(daemon.deps.workflowRuntime!.assignedTreeFor(runId, { taskId: "lead-task" })),
+      launch.receipt.attemptId + ".prompt"), "utf8");
+    expect(prompt).toContain("Team progress snapshot:");
+    const progress = JSON.parse(prompt.match(/Team progress snapshot:\n([^\n]+)/)![1]!);
+    expect(progress).toMatchObject({ runId, totalTasks: 2, truncated: false, tasks: [
+      { taskId: "impl-task", role: "implementer", queueState: "done", client: "claude-code", latestAttempt: null },
+      { taskId: "review-task", role: "reviewer", queueState: "in-progress", client: "codex", reviewOf: "impl-task",
+        latestAttempt: { id: "review-running", state: "running", provider: "codex" } },
+    ] });
+    expect(Number.isFinite(Date.parse(progress.observedAt))).toBe(true);
+    expect(prompt).toContain("This snapshot is not a live query");
+    expect(prompt).not.toContain(ownerToken);
+    expect(db.prepare("SELECT delivered_attempt AS attempt FROM team_chat_messages WHERE id = 'progress-question'").get())
+      .toEqual({ attempt: launch.receipt.attemptId });
   }, 90_000);
 
   const continueTask = (runId: string, taskId: string, version: number, token = ownerToken) =>

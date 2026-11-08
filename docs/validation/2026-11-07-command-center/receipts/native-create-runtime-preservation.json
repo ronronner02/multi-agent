@@ -1,0 +1,88 @@
+{
+  "at": "2026-11-08T00:58:34.573541+00:00",
+  "workingDaemon": {
+    "pid": 3401237,
+    "healthy": true,
+    "sameProcessThroughoutNativeCreate": true,
+    "counts": {
+      "rigs": 2,
+      "team_runs": 0,
+      "team_attempts": 0,
+      "queue_items": 0
+    }
+  },
+  "protectedTableDeltas": {
+    "rigs": {
+      "before": 1,
+      "after": 2,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 1
+    },
+    "nodes": {
+      "before": 1,
+      "after": 2,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 1
+    },
+    "queue_items": {
+      "before": 0,
+      "after": 0,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 0
+    },
+    "project_classifications": {
+      "before": 0,
+      "after": 0,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 0
+    },
+    "projection_manifest": {
+      "before": 0,
+      "after": 0,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 0
+    },
+    "team_attempts": {
+      "before": 0,
+      "after": 0,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 0
+    },
+    "team_runs": {
+      "before": 0,
+      "after": 0,
+      "oldRowsMissingOrChanged": 0,
+      "addedRows": 0
+    }
+  },
+  "preexistingRowsPreserved": true,
+  "authorizedAddedProjectRows": 1,
+  "authorizedAddedNodeRows": 1,
+  "signInFilesUnchanged": {
+    "config.yml": true,
+    "hosts.yml": true
+  },
+  "videoRange": {
+    "status": 206,
+    "contentRange": "bytes 0-15/21539098",
+    "acceptRanges": "bytes",
+    "bytes": 16
+  },
+  "testPortsListening": {
+    "4177": false,
+    "4188": false,
+    "4189": false,
+    "27433": false,
+    "28433": false
+  },
+  "activeVitestProcesses": [],
+  "changedSourceFilesMatchingStandaloneSuite": 57,
+  "sourcePlanSha256": "7d3c3172c30978fb6a88530e5266b46783fc267bd82d370742045d121ae09b8d",
+  "sourcePlanUnchanged": true,
+  "benchmarkSampleFilesMatchingArchive": 19,
+  "originalBenchmarkFilesUnchanged": 34,
+  "ownerProjectContentsReadOrChanged": false,
+  "productSourceChangedThisContinuation": false,
+  "directProjectApiCreationUsed": false,
+  "externalEffects": "Exactly one approved private synthetic repository created by the installed desktop; read-only verification afterwards."
+}

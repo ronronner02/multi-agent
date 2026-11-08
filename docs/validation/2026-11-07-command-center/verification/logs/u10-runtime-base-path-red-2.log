@@ -1,0 +1,73 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ❯ test/integration-branch.test.ts (29 tests | 2 failed | 27 skipped) 385ms
+   ↓ U7 integration branch and merge > lands two approved tasks as two commits in approval order, and never touches the owner's checkout
+   × U7 integration branch and merge > keeps the safe legacy base-record filename for existing UUID runs 132ms
+     → Run is not approved for this assignment
+   × U7 integration branch and merge > keeps another task's saved base intact when an admitted task id contains path separators 251ms
+     → expected '{"kind":"commit","commit":"a426bb1cb7…' to be '{"kind":"commit","commit":"80a541e8b5…' // Object.is equality
+   ↓ U7 integration branch and merge > does not offer a merge while no task's work has landed
+   ↓ U7 integration branch and merge > does not offer a merge while any task has failed, the lead included
+   ↓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: null
+   ↓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-proposal.json
+   ↓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-escalation.json
+   ↓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: src/health.ts
+   ↓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, false
+   ↓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: codex, codex_id, worker1, false
+   ↓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, true
+   ↓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker2, false
+   ↓ U7 integration branch and merge > does not offer a merge while the delivery lead is pending
+   ↓ U7 integration branch and merge > does not offer a merge while the delivery lead is in-progress
+   ↓ U7 integration branch and merge > does not offer a merge while the delivery lead is blocked
+   ↓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: false)
+   ↓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: true)
+   ↓ U7 integration branch and merge > fails the task with integration_conflict and leaves the branch unchanged when the patch will not apply
+   ↓ U7 integration branch and merge > still refuses an in-flight candidate when the owner's own source moved
+   ↓ U7 integration branch and merge > lands the commit when the daemon's own sweep records an approving review
+   ↓ U7 integration branch and merge > keeps a completed result readable after Merge without a restart
+   ↓ U7 integration branch and merge > does not forgive unrelated source changes during Merge (invalidated: false)
+   ↓ U7 integration branch and merge > does not forgive unrelated source changes during Merge (invalidated: true)
+   ↓ U7 integration branch and merge > refuses a merge while work is open, fast-forwards a clean checkout, and refuses a dirty one
+   ↓ U7 integration branch and merge > keeps Merge completion observable after refresh, restart and later owner commits
+   ↓ U7 integration branch and merge > makes one merge commit when the owner's branch diverged, and aborts a conflicting merge
+   ↓ U7 integration branch and merge > finds the branch and worktree again after a restart, and keeps landing on it
+   ↓ U7 integration branch and merge > serves the integration read and the merge to the owner only
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps the safe legacy base-record filename for existing UUID runs
+Error: Run is not approved for this assignment
+ ❯ WorkflowRuntime.candidateFor src/domain/workflow-runtime.ts:706:41
+    704|       return this.scopedCandidate(runId, taskId, workspace);
+    705|     }
+    706|     if (run.state !== "approved") throw new Error("Run is not approved…
+       |                                         ^
+    707|     let workspace: CandidateWorkspace;
+    708|     if (adopted) workspace = adopted;
+ ❯ test/integration-branch.test.ts:258:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/integration-branch.test.ts > U7 integration branch and merge > keeps another task's saved base intact when an admitted task id contains path separators
+AssertionError: expected '{"kind":"commit","commit":"a426bb1cb7…' to be '{"kind":"commit","commit":"80a541e8b5…' // Object.is equality
+
+Expected: "{"kind":"commit","commit":"80a541e8b5747eeab5cb7e47441e24eaab9c6ec4","files":[{"path":"plan.md","hash":"sha256:a0348af0599eb55c40de8c3d5e18cb02d6aa74df6e5bd09011f656528be9046f","tracked":true},{"path":"src/base.ts","hash":"sha256:234a49990ed0ca423d7e03f6831099806c117bfe29ed0add57df7415cd732271","tracked":true}]}"
+Received: "{"kind":"commit","commit":"a426bb1cb74dda1920abe9d8206ee64d5cdbab0f","files":[{"path":"plan.md","hash":"sha256:a0348af0599eb55c40de8c3d5e18cb02d6aa74df6e5bd09011f656528be9046f","tracked":true},{"path":"src/base.ts","hash":"sha256:234a49990ed0ca423d7e03f6831099806c117bfe29ed0add57df7415cd732271","tracked":true},{"path":"src/health.ts","hash":"sha256:dc021f57add72898886fca7e7dac6d7449921cca9e81ef9fac3dba6a9cfd58af","tracked":true}]}"
+
+ ❯ test/integration-branch.test.ts:280:45
+    278|     const added = runtime.candidateFor(runId, taskId, "worker1");
+    279|     expect(added.base).not.toEqual(JSON.parse(savedBase));
+    280|     expect(readFileSync(savedPath, "utf8")).toBe(savedBase);
+       |                                             ^
+    281| 
+    282|     db.close(); open(); compose();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 27 skipped (29)
+   Start at  19:17:25
+   Duration  3.66s (transform 2.11s, setup 34ms, collect 3.09s, tests 385ms, environment 0ms, prepare 40ms)
+

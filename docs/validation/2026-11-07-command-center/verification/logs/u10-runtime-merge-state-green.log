@@ -1,0 +1,11 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+ ✓ test/integration-branch.test.ts (27 tests | 26 skipped) 402ms
+   ✓ U7 integration branch and merge > keeps Merge completion observable after refresh, restart and later owner commits  401ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 26 skipped (27)
+   Start at  18:30:59
+   Duration  3.71s (transform 2.14s, setup 34ms, collect 3.10s, tests 402ms, environment 0ms, prepare 48ms)
+

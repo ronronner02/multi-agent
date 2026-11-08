@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('multiAgentDesktop', {
   /** The last status the window sent, or null before the first one. */
   status: async () => current ?? ipcRenderer.invoke('desktop:get-state'),
   pickFolder: () => ipcRenderer.invoke('desktop:pick-folder'),
+  reconnect: () => ipcRenderer.invoke('desktop:reconnect'),
   /** Subscribe to status changes; returns an unsubscribe function. */
   onStatus: callback => {
     const listener = (_event, status) => callback(status);

@@ -1,0 +1,40 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+error connecting to /tmp/seat-pane-TYpsyI/tmux/tmux-1000/default (No such file or directory)
+ ❯ test/seat-pane-launch.test.ts (6 tests | 1 failed | 5 skipped) 528ms
+   ↓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+   × a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy 527ms
+     → expected 'denied' to be 'accepted' // Object.is equality
+   ↓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+   ↓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+   ↓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+   ↓ workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+AssertionError: expected 'denied' to be 'accepted' // Object.is equality
+
+Expected: "accepted"
+Received: "denied"
+
+ ❯ test/seat-pane-launch.test.ts:233:28
+    231|         outputs: [], permissions: role === "lead" ? ["request-assignme…
+    232|         sourceSession: "owner", destinationSession: seat, body: "Repor…
+    233|       }), binding).status).toBe("accepted");
+       |                            ^
+    234|     }
+    235|     const impl = governance.findTask(runId, "impl-task")!, review = go…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  18:37:31
+   Duration  3.89s (transform 2.41s, setup 35ms, collect 3.17s, tests 528ms, environment 0ms, prepare 39ms)
+

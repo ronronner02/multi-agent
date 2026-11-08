@@ -1,0 +1,143 @@
+{
+  "runId": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+  "at": "2026-11-07T08:29:25Z",
+  "restart": {
+    "before": {
+      "pid": 2093019,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true,
+    "after": {
+      "pid": 2112602,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    }
+  },
+  "attemptsBefore": [
+    {
+      "id": "93e7abee-fa98-49c4-8de9-4d6782abda7c",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:22:16.303Z",
+      "updated_at": "2026-11-07T08:23:12.167Z"
+    },
+    {
+      "id": "b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:26:30.016Z",
+      "updated_at": "2026-11-07T08:26:46.597Z"
+    },
+    {
+      "id": "074b81aa-895d-4838-97ca-ffd8b7c15035",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:28:02.203Z",
+      "updated_at": "2026-11-07T08:28:35.270Z"
+    },
+    {
+      "id": "917f9f4a-f4c5-4423-94fc-f609ea516a21",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082838-c07817d3",
+      "created_at": "2026-11-07T08:28:45.701Z",
+      "updated_at": "2026-11-07T08:29:20.761Z"
+    },
+    {
+      "id": "26a7e01f-28a1-4ccf-a3d6-b457eb676fed",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "running",
+      "qitem_id": "qitem-20261107082838-95ba3c4c",
+      "created_at": "2026-11-07T08:28:45.886Z",
+      "updated_at": "2026-11-07T08:28:45.886Z"
+    },
+    {
+      "id": "3a6a0d6a-ca09-440b-abe1-c26c96863ec6",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "running",
+      "qitem_id": "qitem-20261107082921-d008af0a",
+      "created_at": "2026-11-07T08:29:24.610Z",
+      "updated_at": "2026-11-07T08:29:24.610Z"
+    }
+  ],
+  "attemptsAfter": [
+    {
+      "id": "93e7abee-fa98-49c4-8de9-4d6782abda7c",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:22:16.303Z",
+      "updated_at": "2026-11-07T08:23:12.167Z"
+    },
+    {
+      "id": "b40d0672-6872-4375-8d85-0445a5eae6b9",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:26:30.016Z",
+      "updated_at": "2026-11-07T08:26:46.597Z"
+    },
+    {
+      "id": "074b81aa-895d-4838-97ca-ffd8b7c15035",
+      "role": "lead",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082210-7367d14e",
+      "created_at": "2026-11-07T08:28:02.203Z",
+      "updated_at": "2026-11-07T08:28:35.270Z"
+    },
+    {
+      "id": "917f9f4a-f4c5-4423-94fc-f609ea516a21",
+      "role": "implementer",
+      "provider": "claude",
+      "state": "stopped",
+      "qitem_id": "qitem-20261107082838-c07817d3",
+      "created_at": "2026-11-07T08:28:45.701Z",
+      "updated_at": "2026-11-07T08:29:20.761Z"
+    },
+    {
+      "id": "26a7e01f-28a1-4ccf-a3d6-b457eb676fed",
+      "role": "implementer",
+      "provider": "codex",
+      "state": "running",
+      "qitem_id": "qitem-20261107082838-95ba3c4c",
+      "created_at": "2026-11-07T08:28:45.886Z",
+      "updated_at": "2026-11-07T08:28:45.886Z"
+    },
+    {
+      "id": "3a6a0d6a-ca09-440b-abe1-c26c96863ec6",
+      "role": "reviewer",
+      "provider": "claude",
+      "state": "running",
+      "qitem_id": "qitem-20261107082921-d008af0a",
+      "created_at": "2026-11-07T08:29:24.610Z",
+      "updated_at": "2026-11-07T08:29:24.610Z"
+    }
+  ],
+  "originalBefore": {
+    "pid": 1179,
+    "cwd": "<original-daemon-checkout>",
+    "argvSha256": "aaabfd80a0669eaaaffc9321ae8dc40f4407385bfdb1bcc8229910827e4bfff4",
+    "startedTicks": "68421"
+  },
+  "originalAfter": {
+    "pid": 1179,
+    "cwd": "<original-daemon-checkout>",
+    "argvSha256": "aaabfd80a0669eaaaffc9321ae8dc40f4407385bfdb1bcc8229910827e4bfff4",
+    "startedTicks": "68421"
+  }
+}

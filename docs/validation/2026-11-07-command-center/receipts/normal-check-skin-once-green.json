@@ -1,0 +1,13 @@
+{
+  "check": "skin-once-green",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "src/team/__tests__/background.test.tsx",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 0.79
+}

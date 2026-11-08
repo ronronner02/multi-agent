@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
 import { classificationFor } from "../src/domain/attempt-failure.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
@@ -19,6 +20,32 @@ describe("attempt telemetry persistence and per-turn usage", () => {
     store.capture(attempt);
     return fixture.stop(id);
   };
+
+  it("reads a bounded public progress snapshot, redacts at the boundary and leaves history unchanged", () => {
+    const attempt = fixture.addAttempt("live-progress"), paths = fixture.writeSidecars(attempt.id, undefined, []);
+    expect(store.readProgress(attempt)).toBeNull();
+    const secret = "sk-" + "a".repeat(64);
+    writeFileSync(join(paths.directory, "progress.json"), JSON.stringify({ version: 1, sequence: 3, at: "2026-11-08T01:00:00Z",
+      status: "responding", blocks: [{ id: "text-1", text: "Checking " + secret + "\u001b[0m", complete: false,
+        reasoning: "PRIVATE REASONING" }], truncated: false, hidden: "PRIVATE REASONING" }));
+    const progress = store.readProgress(attempt);
+    expect(progress).toMatchObject({ sequence: 3, status: "responding", blocks: [{ id: "text-1", complete: false }] });
+    expect(progress?.blocks[0]?.text).toContain("[REDACTED]");
+    expect(JSON.stringify(progress)).not.toContain(secret); expect(JSON.stringify(progress)).not.toContain("PRIVATE REASONING");
+    expect(progress?.blocks[0]?.text).not.toContain("\u001b");
+    expect(fixture.db.prepare("SELECT COUNT(*) AS n FROM team_chat_messages").get()).toEqual({ n: 0 });
+  });
+
+  it.each([
+    { status: "invented" }, { sequence: -1 }, { at: "not a date" }, { truncated: "yes" },
+    { blocks: [{ id: "text-1", text: "x".repeat(65_537), complete: true }] },
+    { blocks: [{ id: "text-1", text: "one", complete: true }, { id: "text-1", text: "duplicate", complete: true }] },
+  ])("keeps malformed public progress unavailable: %j", patch => {
+    const attempt = fixture.addAttempt("bad-progress"), paths = fixture.writeSidecars(attempt.id, undefined, []);
+    writeFileSync(join(paths.directory, "progress.json"), JSON.stringify({ version: 1, sequence: 1, at: "2026-11-08T01:00:00Z",
+      status: "working", blocks: [], truncated: false, ...patch }));
+    expect(store.readProgress(attempt)).toBeNull();
+  });
 
   it("persists invocation usage, duration and tool records once and reads them after reopening the database", () => {
     const attempt = fixture.addAttempt("first");

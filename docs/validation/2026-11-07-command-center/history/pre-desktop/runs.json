@@ -1,0 +1,62 @@
+[
+  {
+    "id": "e7986a44-af7a-470b-9c16-18934b99892b",
+    "rig_id": "01M6TE60KE84SAARBZKCW7RYF5",
+    "state": "canceled",
+    "state_reason": "Owner canceled the run",
+    "phase": "delivery",
+    "display_name": "Build a small dependency-free stock utility",
+    "active_ms": 479250,
+    "retries_used": 0,
+    "review_rounds_used": 1,
+    "integration_branch": "team/build-a-small-dependency-free-stock-util-e7986a44",
+    "integration_worktree": "<acceptance-state>/state/workers/control/teams/e7986a44-af7a-470b-9c16-18934b99892b",
+    "created_at": "2026-11-07T07:23:15.593Z",
+    "updated_at": "2026-11-07T08:20:13.819Z"
+  },
+  {
+    "id": "91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+    "rig_id": "01M6TE60KE84SAARBZKCW7RYF5",
+    "state": "approved",
+    "state_reason": null,
+    "phase": "delivery",
+    "display_name": "Acceptance repeat: dependency-free stock",
+    "active_ms": 466920,
+    "retries_used": 0,
+    "review_rounds_used": 2,
+    "integration_branch": "team/acceptance-repeat-dependency-free-stock-91de0eb0",
+    "integration_worktree": "<acceptance-state>/state/workers/control/teams/91de0eb0-e552-4ef3-ac74-4a822d8cee3a",
+    "created_at": "2026-11-07T08:22:10.878Z",
+    "updated_at": "2026-11-07T08:35:01.613Z"
+  },
+  {
+    "id": "1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+    "rig_id": "01M6TE60KE84SAARBZKCW7RYF5",
+    "state": "approved",
+    "state_reason": null,
+    "phase": "delivery",
+    "display_name": "Synthetic integration check: compose the stock",
+    "active_ms": 301774,
+    "retries_used": 0,
+    "review_rounds_used": 1,
+    "integration_branch": "team/synthetic-integration-check-compose-the-1c5c5a86",
+    "integration_worktree": "<acceptance-state>/state/workers/control/teams/1c5c5a86-2ff1-426e-ae2d-bf9bade7d152",
+    "created_at": "2026-11-07T08:53:04.947Z",
+    "updated_at": "2026-11-07T09:06:34.535Z"
+  },
+  {
+    "id": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+    "rig_id": "01M6TE60KE84SAARBZKCW7RYF5",
+    "state": "approved",
+    "state_reason": null,
+    "phase": "delivery",
+    "display_name": "Runtime acceptance: add two independent",
+    "active_ms": 703619,
+    "retries_used": 0,
+    "review_rounds_used": 2,
+    "integration_branch": "team/runtime-acceptance-add-two-independent-2d7b2d64",
+    "integration_worktree": "<acceptance-state>/state/workers/control/teams/2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+    "created_at": "2026-11-07T11:22:58.205Z",
+    "updated_at": "2026-11-07T11:55:58.068Z"
+  }
+]

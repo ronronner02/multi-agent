@@ -1,0 +1,71 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/ui
+
+ ❯ src/team/__tests__/overview.test.tsx (14 tests | 2 failed) 290ms
+   ✓ Overview > keeps the integration commit list and task links in folded details 78ms
+   ✓ Overview > keeps retired seats out of the active fleet 12ms
+   ✓ Overview > leaves healthy owner attention empty and keeps worker reports with the lead 11ms
+   ✓ Overview > opens the existing chat for plan approval and uses the same decision count 18ms
+   ✓ Overview > does not mark Review complete on an empty planning run 11ms
+   ✓ Overview > retains the existing Resume limit increase and reason 29ms
+   ✓ Overview > waits for integration readiness before Merge and handles a refused result 26ms
+   ✓ Overview > confirms Cancel and sends the existing run-level command only after confirmation 15ms
+   × Overview > shows observed cancellation only for the run that was canceled 17ms
+     → expected <p role="status"></p> to be null
+   × Overview > does not carry a pending action or its late result into another run 17ms
+     → expected true to be false // Object.is equality
+   ✓ Overview > keeps unknown progress distinct from verified criteria without inventing an estimate 8ms
+   ✓ Overview > uses run-scoped native tokens including cache without double-counting reasoning 22ms
+   ✓ Overview > suppresses stale decisions on a canceled planning run 15ms
+   ✓ Overview > localises the restored screens without exposing identifiers 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/team/__tests__/overview.test.tsx > Overview > shows observed cancellation only for the run that was canceled
+AssertionError: expected <p role="status"></p> to be null
+
+- Expected: 
+null
+
++ Received: 
+<p
+  role="status"
+>
+  Canceled
+</p>
+
+ ❯ src/team/__tests__/overview.test.tsx:128:42
+    126|     const next = read(); next.runId = "next-run"; next.run = { ...next…
+    127|     view.rerenderRead(next);
+    128|     expect(screen.queryByRole("status")).toBeNull();
+       |                                          ^
+    129|     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButt…
+    130|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/team/__tests__/overview.test.tsx > Overview > does not carry a pending action or its late result into another run
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/team/__tests__/overview.test.tsx:140:92
+    138|     const next = read(); next.runId = "next-run"; next.run = { ...next…
+    139|     view.rerenderRead(next);
+    140|     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButt…
+       |                                                                                            ^
+    141|     await act(async () => finish({ status: "observed", value: { state:…
+    142|     expect(screen.queryByRole("status")).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 12 passed (14)
+   Start at  16:24:08
+   Duration  1.49s (transform 118ms, setup 113ms, collect 305ms, tests 290ms, environment 354ms, prepare 53ms)
+

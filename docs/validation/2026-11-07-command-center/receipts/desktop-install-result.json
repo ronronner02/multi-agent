@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-07T13:14:45.3578797Z",
+  "installer": "<windows-task-scratch>\\Multi-Agent Setup 0.1.0.exe",
+  "destination": "<windows-task-scratch>\\desktop-installed",
+  "exitCode": 0,
+  "allUsersInstallationPreserved": true,
+  "protectedFiles": 115,
+  "currentUserRegistry": {
+    "DisplayName": "Multi-Agent 0.1.0",
+    "DisplayVersion": "0.1.0",
+    "UninstallString": "\"<windows-task-scratch>\\desktop-installed\\Uninstall Multi-Agent.exe\" /currentuser"
+  }
+}

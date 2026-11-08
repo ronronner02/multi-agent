@@ -1,0 +1,66 @@
+{
+  "at": "2026-11-08T00:52:30.7302961Z",
+  "action": "result",
+  "pid": 14236,
+  "installedExecutable": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+  "originalWindowHandle": 47778090,
+  "normalInstanceReused": true,
+  "debuggingEnabled": false,
+  "buttons": [
+    {
+      "name": "\u6700\u5c0f\u5316",
+      "class": "WinCaptionButton",
+      "enabled": true
+    },
+    {
+      "name": "\u6700\u5927\u5316",
+      "class": "WinCaptionButton",
+      "enabled": true
+    },
+    {
+      "name": "\u5173\u95ed",
+      "class": "WinCaptionButton",
+      "enabled": true
+    },
+    {
+      "name": "\u534f\u8c03\u8005",
+      "class": "ui-coordinator",
+      "enabled": false
+    },
+    {
+      "name": "\u521b\u5efa\u9879\u76ee",
+      "class": "btn btn-outline ui-new-project",
+      "enabled": true
+    },
+    {
+      "name": "\u4e2d",
+      "class": "",
+      "enabled": true
+    },
+    {
+      "name": "EN",
+      "class": "",
+      "enabled": true
+    },
+    {
+      "name": "\u641c\u7d22\u6216\u8df3\u8f6c\u5230\u2026",
+      "class": "ui-search",
+      "enabled": false
+    },
+    {
+      "name": "\u6253\u5f00\u4e3b\u667a\u80fd\u4f53\u5bf9\u8bdd",
+      "class": "ui-icon-button",
+      "enabled": false
+    },
+    {
+      "name": "\u901a\u77e5\uff1a0",
+      "class": "ui-bell ui-icon-button",
+      "enabled": false
+    },
+    {
+      "name": "\u5f00\u59cb\u4efb\u52a1",
+      "class": "btn btn-primary",
+      "enabled": false
+    }
+  ]
+}

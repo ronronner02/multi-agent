@@ -153,6 +153,29 @@ export function probeRepoArgv(distro, repoPath) {
  * `scripts/node-env.sh`, which finds Node 22/24 in the usual install locations. `./setup.sh`
  * still reports a missing Node itself.
  */
+const RUNTIME_PROFILE_KEYS = [
+  "OPENRIG_HOME", "OPENRIG_DB", "OPENRIG_PORT", "OPENRIG_HOST", "OPENRIG_BIND_HOST", "OPENRIG_SHARED_DOCS_ROOT",
+  "XDG_CONFIG_HOME", "GH_CONFIG_DIR", "TMUX_TMPDIR", "TMPDIR",
+];
+const PROFILE_CREDENTIAL_KEYS = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "MULTI_AGENT_OWNER_TOKEN"];
+
+/** A saved profile contains paths and bind settings only, never credentials or executable options. */
+export function runtimeEnvironment(inherited, profile) {
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return { ...inherited };
+  const env = { ...inherited };
+  const replaced = [...RUNTIME_PROFILE_KEYS, ...PROFILE_CREDENTIAL_KEYS];
+  for (const key of replaced) delete env[key];
+  const forwarded = (env.WSLENV ?? "").split(":").filter(item => item && !replaced.includes(item.split("/")[0]));
+  for (const key of RUNTIME_PROFILE_KEYS) {
+    const value = profile[key];
+    if (typeof value !== "string" || !value || /[\0\r\n]/.test(value)) continue;
+    env[key] = value;
+    forwarded.push(key + "/u");
+  }
+  env.WSLENV = forwarded.join(":");
+  return env;
+}
+
 const LOGIN_SHELL = "bash";
 const LOGIN_FLAG = "-lc";
 

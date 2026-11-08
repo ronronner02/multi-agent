@@ -41,6 +41,8 @@ export interface DirectWorkerLaunchDeps {
   launchPath?: string;
   /** The tmux server path the receipt records, as the daemon resolved it at startup. */
   tmuxServer: () => string;
+  modelRefusal?: (input: WorkerLaunchInput) => string | null;
+  documentRefusal?: (input: WorkerLaunchInput) => string | null;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -107,6 +109,8 @@ export class DirectWorkerLauncher implements WorkerLauncher {
       if (token !== undefined && !isNativeSessionToken(token)) return this.refuse("managed_resume_identity_mismatch");
     }
     try {
+      const modelError = this.deps.modelRefusal?.(input) ?? this.deps.documentRefusal?.(input);
+      if (modelError) return this.refuse(modelError);
       const pane = await this.deps.resolvePane(attempt.context.runId, attempt.context.assignment.taskId);
       const tree = this.deps.resolveAssignedTree(attempt.context.runId, attempt.context.assignment);
       // A fresh attempt opens a conversation; a continuation keeps the one it is given.
@@ -164,11 +168,13 @@ const promptPath = agentTurnPromptPath(attempt.context);
         ...(this.deps.launchPath !== undefined ? ["/usr/bin/env", "PATH=" + this.deps.launchPath] : []),
         ...this.turnCommand(argv, this.deps.command !== undefined,
           client === "codex" ? output.threadId : undefined,
-          client === "claude-code" ? output.lastMessage : undefined),
+          output.lastMessage),
       ];
       const line = "cd " + shellQuote(tree) + " && exec " + command.map(shellQuote).join(" ")
         // The turn's text is fed on stdin, so its length and quoting never reach this line.
         + " < " + shellQuote(promptPath);
+      const changedModelError = this.deps.modelRefusal?.(input) ?? this.deps.documentRefusal?.(input);
+      if (changedModelError) return this.refuse(changedModelError);
       const typed = await this.deps.tmux.sendText(pane, line);
       if (!typed.ok) return this.refuse(typed.code);
       const submitted = await this.deps.tmux.sendKeys(pane, ["Enter"]);
@@ -255,7 +261,7 @@ private turnCommand(argv: string[], injected: boolean, threadIdPath?: string, re
     // The output paths are the view's own arguments rather than environment assignments: the
     // pane's shell runs with a PATH this side does not choose, and a command line needs nothing
     // found on it. A Claude turn records its `result` here; a Codex turn writes the same file
-    // through its own `-o`, and only its thread id comes back through the view.
+    // through its own `-o`. Both clients need the result directory for telemetry sidecars.
     return [process.execPath, view,
       ...(threadIdPath ? ["--thread-id-file", threadIdPath] : []),
       ...(resultPath ? ["--result-file", resultPath] : []), ...argv];
@@ -276,7 +282,7 @@ private turnCommand(argv: string[], injected: boolean, threadIdPath?: string, re
    */
   private nativeArgs(client: WorkerClient, input: WorkerLaunchInput, sessionId: string, tree: string): string[] {
     if (client === "claude-code") {
-      return ["claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose",
+      return ["claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
         ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
         ...(input.continueSessionId || input.resumeToken ? ["--resume", sessionId] : ["--session-id", sessionId])];
     }

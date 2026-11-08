@@ -1,0 +1,35 @@
+{
+  "checkedAt": "2026-11-07T11:45:25.807431+00:00",
+  "activeAttemptsBefore": 0,
+  "buildReceipt": "u10-runtime-post-seat-build.json",
+  "sourceReceipt": "u10-runtime-post-seat-source.json",
+  "restart": {
+    "before": {
+      "pid": 2542536,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true,
+    "after": {
+      "pid": 2654804,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    }
+  },
+  "protected": [
+    {
+      "pid": 1179,
+      "startTicks": "68421",
+      "cwd": "<original-checkout>"
+    },
+    {
+      "pid": 1200,
+      "startTicks": "68459",
+      "cwd": "<original-checkout>"
+    }
+  ],
+  "manualSeatChanges": false,
+  "samePendingRun": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086"
+}

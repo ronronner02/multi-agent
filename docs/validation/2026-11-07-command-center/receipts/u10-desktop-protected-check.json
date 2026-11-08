@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-11-07T13:44:24.142458+00:00",
+  "originalDaemonStopped": true,
+  "originalRecordsUnchanged": true,
+  "originalTerminalPreserved": true,
+  "originalConfigUnchanged": true,
+  "candidatePid": 2806685,
+  "candidateHome": "<desktop-profile>/home",
+  "candidateHealthy": true,
+  "candidateStateCounts": {
+    "team_runs": [],
+    "team_attempts": [],
+    "queue_items": []
+  },
+  "newSuiteProcesses": []
+}

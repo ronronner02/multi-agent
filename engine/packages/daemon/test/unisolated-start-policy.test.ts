@@ -74,4 +74,7 @@ it("accepts an owner's start and launches the seat with no injected policy", asy
     .toEqual({ status: 201, body: null });
   const receipts = () => db.prepare("SELECT 1 FROM events WHERE type = 'managed.attempt.receipt'").all();
   await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
+  const row = db.prepare("SELECT payload FROM events WHERE type = 'managed.attempt.receipt'").get() as { payload: string };
+  const observed = JSON.parse(row.payload) as { receipt: { identity: { tmuxServer: string } } };
+  expect(observed.receipt.identity.tmuxServer).toBe(tmuxRun("display-message", "-p", "-t", SEAT, "#{socket_path}").trim());
 }, 90_000);

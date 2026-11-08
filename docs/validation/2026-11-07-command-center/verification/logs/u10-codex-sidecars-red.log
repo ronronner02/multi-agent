@@ -1,0 +1,45 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+ ❯ test/direct-worker-launch.test.ts (13 tests | 1 failed | 12 skipped) 3861ms
+   ↓ managed Codex turns > launches exec with stdin, a per-attempt final message, and the supported model and effort flags
+   ↓ managed Codex turns > continues the stored thread through resumeToken
+   ↓ managed Codex turns > continues the stored thread through continueSessionId
+   ↓ managed Codex turns > refuses hostile resumeToken values before submitting a command
+   ↓ managed Codex turns > refuses hostile continueSessionId values before submitting a command
+   ↓ managed Codex turns > treats a finished headless turn as ready without an interactive composer
+   ↓ managed Codex turns > renders Codex events, captures only the first thread, and preserves stdin and the exit status
+   ↓ managed Codex turns > keeps Claude output and a client's signal observable through the wrapper
+   × sweeps a native Codex stub to stopped ('valid thread and continuation') 3860ms
+     → ENOENT: no such file or directory, open '/tmp/codex-sweep-EvYA0V/home/state/workers/homes/local/scratch/turns/fd31aadd-907c-4a96-95bb-ec3476ad2cf2/usage.json'
+   ↓ sweeps a native Codex stub to stopped ('clients directory already present')
+   ↓ sweeps a native Codex stub to stopped ('duplicate clients directories')
+   ↓ sweeps a native Codex stub to stopped ('leading dash refused')
+   ↓ sweeps a native Codex stub to stopped ('whitespace refused')
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+Error: ENOENT: no such file or directory, open '/tmp/codex-sweep-EvYA0V/home/state/workers/homes/local/scratch/turns/fd31aadd-907c-4a96-95bb-ec3476ad2cf2/usage.json'
+ ❯ test/direct-worker-launch.test.ts:251:30
+    249|     expect(dirname(finalMessage)).not.toContain(initial.cwd);
+    250|     const telemetryRoot = join(stateRoot, "turns", second.id);
+    251|     const usage = JSON.parse(readFileSync(join(telemetryRoot, "usage.j…
+       |                              ^
+    252|     expect(usage).toMatchObject({ available: true, client: "codex", na…
+    253|       counts: { inputTokens: 14, cacheReadInputTokens: 3, outputTokens…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 skipped (13)
+   Start at  16:06:19
+   Duration  4.95s (transform 2.54s, setup 35ms, collect 896ms, tests 3.86s, environment 0ms, prepare 41ms)
+

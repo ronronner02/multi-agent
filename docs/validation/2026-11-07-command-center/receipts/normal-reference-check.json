@@ -1,0 +1,344 @@
+{
+  "files": 3,
+  "checked": [
+    {
+      "kind": "link",
+      "value": "desktop/README.md",
+      "line": 16,
+      "file": "README.md",
+      "against": "desktop/README.md"
+    },
+    {
+      "kind": "command",
+      "value": "rig config set ui.enabled true",
+      "line": 23,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "docs/operations.md",
+      "line": 34,
+      "file": "README.md",
+      "against": "docs/operations.md"
+    },
+    {
+      "kind": "link",
+      "value": "docs/operations.md",
+      "line": 52,
+      "file": "README.md",
+      "against": "docs/operations.md"
+    },
+    {
+      "kind": "command",
+      "value": "rig github status",
+      "line": 74,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team create /absolute/path/to/project --name project-name --dry-run",
+      "line": 75,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team create /absolute/path/to/project --name project-name",
+      "line": 76,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team start \"Describe the change you want\" --planning --rig <team-name>",
+      "line": 77,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team chat <run-id>",
+      "line": 78,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team chat <run-id> \"Your answers and requested changes\"",
+      "line": 79,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team approve-plan <run-id>",
+      "line": 80,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "docs/operations.md",
+      "line": 86,
+      "file": "README.md",
+      "against": "docs/operations.md"
+    },
+    {
+      "kind": "command",
+      "value": "rig team resume <run-id>",
+      "line": 97,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "docs/operations.md",
+      "line": 102,
+      "file": "README.md",
+      "against": "docs/operations.md"
+    },
+    {
+      "kind": "command",
+      "value": "rig team merge <run-id>",
+      "line": 108,
+      "printed": false,
+      "file": "README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "docs/operations.md",
+      "line": 116,
+      "file": "README.md",
+      "against": "docs/operations.md"
+    },
+    {
+      "kind": "link",
+      "value": "docs/validation/2026-11-06-autonomous-team/README.md",
+      "line": 117,
+      "file": "README.md",
+      "against": "docs/validation/2026-11-06-autonomous-team/README.md"
+    },
+    {
+      "kind": "link",
+      "value": "docs/validation/2026-11-07-command-center/acceptance.json",
+      "line": 119,
+      "file": "README.md",
+      "against": "docs/validation/2026-11-07-command-center/acceptance.json"
+    },
+    {
+      "kind": "path",
+      "value": "scripts/start.sh",
+      "line": 16,
+      "file": "desktop/README.md",
+      "against": "scripts/start.sh"
+    },
+    {
+      "kind": "command",
+      "value": "rig config set",
+      "line": 17,
+      "printed": false,
+      "file": "desktop/README.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "../README.md",
+      "line": 71,
+      "file": "desktop/README.md",
+      "against": "README.md"
+    },
+    {
+      "kind": "link",
+      "value": "../docs/operations.md",
+      "line": 72,
+      "file": "desktop/README.md",
+      "against": "docs/operations.md"
+    },
+    {
+      "kind": "command",
+      "value": "rig config set ui.enabled true",
+      "line": 10,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "../README.md",
+      "line": 11,
+      "file": "docs/operations.md",
+      "against": "README.md"
+    },
+    {
+      "kind": "command",
+      "value": "rig team",
+      "line": 35,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig github status",
+      "line": 69,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig github status --json",
+      "line": 70,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team create /absolute/path/to/project --name project-name --dry-run",
+      "line": 90,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team create /absolute/path/to/project --name project-name",
+      "line": 91,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team create /absolute/path/to/existing-repository",
+      "line": 126,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team start \"Describe the change you want\" --planning --rig <team-name>",
+      "line": 144,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team chat <run-id>",
+      "line": 145,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team chat <run-id> \"Your answers and requested changes\"",
+      "line": 146,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team approve-plan <run-id>",
+      "line": 147,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig config set",
+      "line": 190,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team resume <run-id>",
+      "line": 203,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team resume <run-id> --add-minutes 30",
+      "line": 211,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team resume <run-id> --add-retries 1",
+      "line": 212,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team resume <run-id> --add-review-rounds 1",
+      "line": 213,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "command",
+      "value": "rig team merge <run-id>",
+      "line": 227,
+      "printed": false,
+      "file": "docs/operations.md",
+      "against": "packages/cli/src/index.ts:createProgram() command tree"
+    },
+    {
+      "kind": "link",
+      "value": "validation/2026-11-06-autonomous-team/README.md",
+      "line": 240,
+      "file": "docs/operations.md",
+      "against": "docs/validation/2026-11-06-autonomous-team/README.md"
+    },
+    {
+      "kind": "path",
+      "value": "docs/development.md",
+      "line": 479,
+      "file": "docs/operations.md",
+      "against": "docs/development.md"
+    },
+    {
+      "kind": "link",
+      "value": "../engine/packages/daemon",
+      "line": 527,
+      "file": "docs/operations.md",
+      "against": "engine/packages/daemon"
+    },
+    {
+      "kind": "link",
+      "value": "../engine/packages/cli",
+      "line": 527,
+      "file": "docs/operations.md",
+      "against": "engine/packages/cli"
+    }
+  ],
+  "failures": [],
+  "unchecked": [],
+  "limitation": "Explicit three-document scope. Checks concrete command and path references, not prose correctness, flag semantics, runtime settings or desktop acceptance."
+}

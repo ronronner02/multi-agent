@@ -1,0 +1,59 @@
+{
+  "resultPreview": {
+    "status": "open",
+    "observedBefore": {
+      "at": "2026-11-07T09:24:44.398Z",
+      "status": 503,
+      "body": {
+        "code": "team_result_unavailable",
+        "error": "The task's candidate could not be read."
+      }
+    },
+    "recoveredReads": [
+      {
+        "task": "task-2",
+        "status": 200,
+        "at": "2026-11-07T09:37:05.885Z",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:55d9aad9a9d970bb862359d549b2d053c5f9291f5641519723cc12733ab0efb3",
+        "patchCharacters": 2889
+      },
+      {
+        "task": "task-3",
+        "status": 200,
+        "at": "2026-11-07T09:37:06.747Z",
+        "baseIdentifier": "bca54cf3dc673836677e11f9f99911d0d0453a54",
+        "manifestDigest": "sha256:af0d669e2d6abdaaa5805c15854889e5e876564a7de71774e0cb7863a1b59b50",
+        "patchCharacters": 10213
+      }
+    ],
+    "recoveryReceipt": "receipts/u10-result-preview-restart-2.json",
+    "rootCauseStatus": "Source-ref fingerprint invalidation is the leading explanation; the internal exception was not captured.",
+    "sourceReferences": [
+      "engine/packages/daemon/src/domain/workflow-runtime.ts:592-650",
+      "engine/packages/daemon/src/domain/team-workspace.ts:945-969",
+      "engine/packages/daemon/src/domain/team-workspace.ts:1219-1227"
+    ],
+    "sourceFix": false
+  },
+  "mergeProgress": {
+    "status": "open",
+    "observation": "The Merge receipt succeeded, but the progress band still said Awaiting delivery decision.",
+    "evidence": [
+      "browser-observations.json",
+      "screenshots/live/final-overview-390-dark.png"
+    ]
+  },
+  "busyReply": {
+    "status": "open",
+    "messageId": "chat-592305b5-74dc-446d-ad34-b780ba4dbe16",
+    "messageAt": "2026-11-07T08:30:12.464Z",
+    "excerpt": "Both implementation tasks are still in progress, and no review has started yet. This is from the two worktrees as they stood at 16:30:",
+    "reviewAttemptAlreadyStarted": {
+      "id": "3a6a0d6a-ca09-440b-abe1-c26c96863ec6",
+      "created_at": "2026-11-07T08:29:24.610Z",
+      "updated_at": "2026-11-07T08:29:54.079Z"
+    },
+    "note": "Reserved lead capacity delivered a reply, but its review-status statement contradicted the durable attempt record."
+  }
+}

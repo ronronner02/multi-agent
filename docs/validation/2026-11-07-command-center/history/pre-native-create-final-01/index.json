@@ -1,0 +1,52 @@
+{
+  "at": "2026-11-08T01:02:16.043026+00:00",
+  "status": "historical",
+  "oldManifestSha256": "8476590ed2d9b4dce22a3ef2f5701a86afc260048b28f1abb634b1f4c8aace1b",
+  "files": [
+    {
+      "path": "acceptance.json",
+      "sha256": "e27699b9af539682f7dda6f65c02193e79d3b2c0932e55fe2c8a1c5743126b7e"
+    },
+    {
+      "path": "resume-final-checkpoint.json",
+      "sha256": "f323c048a51c58d2bbe363d3225e5481c91b753b66dc5b076bc1a1cbae7bada7"
+    },
+    {
+      "path": "desktop-observations.json",
+      "sha256": "64256a52996a0289da1f7a6cbc5b7063370fc784129a375c5f1eac6f5e023077"
+    },
+    {
+      "path": "live-limitations.json",
+      "sha256": "9beb6b4e1627c8f3d201e02532588cb94c5684a58dbffd1803cf805576046359"
+    },
+    {
+      "path": "plan-status.json",
+      "sha256": "5519c9dc0026940393cae21789ecbbcdde092d790424fa515e4fb00f65efa8d8"
+    },
+    {
+      "path": "owner-actions.json",
+      "sha256": "56b3f0147d3709e4604073610c97f370a46dd1f82d4864021504f5b7c6ac61b3"
+    },
+    {
+      "path": "source-verification.json",
+      "sha256": "d86fb9c6921f85b006b66093c13e6bd884a5132cf9b2b09a9e05021c6d230cb0"
+    },
+    {
+      "path": "privacy-check.json",
+      "sha256": "0772a70c3dd70754a9d255964ea30e431aaa1106c61060a757574adcb83ab0d2"
+    },
+    {
+      "path": "verification/checks.json",
+      "sha256": "817dd76d04c546d164f172dc2659cdb54880d72a8609250dea88c44ed5a4fadb"
+    },
+    {
+      "path": "verification/final-index.json",
+      "sha256": "1b8ba8fdf4b8ff009bb0ea20016e895b551cd5cef20f4be449b4400372a058a3"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "8476590ed2d9b4dce22a3ef2f5701a86afc260048b28f1abb634b1f4c8aace1b"
+    }
+  ],
+  "correction": "The preceding checkpoint used a complete status before the combined native Create gate had passed. That gate was still explicitly partial. The later installed-desktop result now closes it; this history preserves the earlier evidence ceiling and does not backdate success."
+}

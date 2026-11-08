@@ -1,0 +1,609 @@
+{
+  "unit": "U7",
+  "origins": {
+    "before": "http://127.0.0.1:43171",
+    "after": "http://127.0.0.1:43172"
+  },
+  "runId": "70000000-0000-4000-8000-000000000001",
+  "source": "real application routes with synthetic fixture state",
+  "captures": [
+    {
+      "filename": "before-workspace-1440-dark.png",
+      "name": "before",
+      "screen": "workspace",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-reviews-1440-dark.png",
+      "name": "before",
+      "screen": "reviews",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-workspace-390-dark.png",
+      "name": "before",
+      "screen": "workspace",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-reviews-390-dark.png",
+      "name": "before",
+      "screen": "reviews",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-workspace-1440-light.png",
+      "name": "before",
+      "screen": "workspace",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-reviews-1440-light.png",
+      "name": "before",
+      "screen": "reviews",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-workspace-390-light.png",
+      "name": "before",
+      "screen": "workspace",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "before-reviews-390-light.png",
+      "name": "before",
+      "screen": "reviews",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-workspace-1440-dark.png",
+      "name": "after",
+      "screen": "workspace",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-agent-grid",
+            "width": 1204,
+            "scrollWidth": 1204
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-reviews-1440-dark.png",
+      "name": "after",
+      "screen": "reviews",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-reviews-body",
+            "width": 1204,
+            "scrollWidth": 1204
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-workspace-390-dark.png",
+      "name": "after",
+      "screen": "workspace",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-agent-grid",
+            "width": 358,
+            "scrollWidth": 358
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-reviews-390-dark.png",
+      "name": "after",
+      "screen": "reviews",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-reviews-body",
+            "width": 358,
+            "scrollWidth": 358
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-workspace-1440-light.png",
+      "name": "after",
+      "screen": "workspace",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-agent-grid",
+            "width": 1204,
+            "scrollWidth": 1204
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-reviews-1440-light.png",
+      "name": "after",
+      "screen": "reviews",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 1252,
+            "scrollWidth": 1252
+          },
+          {
+            "selector": ".ui-reviews-body",
+            "width": 1204,
+            "scrollWidth": 1204
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-workspace-390-light.png",
+      "name": "after",
+      "screen": "workspace",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-agent-grid",
+            "width": 358,
+            "scrollWidth": 358
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-reviews-390-light.png",
+      "name": "after",
+      "screen": "reviews",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "overflows": [
+          {
+            "selector": ".ui-main",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-screen",
+            "width": 390,
+            "scrollWidth": 390
+          },
+          {
+            "selector": ".ui-reviews-body",
+            "width": 358,
+            "scrollWidth": 358
+          }
+        ]
+      }
+    },
+    {
+      "filename": "after-split-1440-dark.png",
+      "name": "after",
+      "screen": "split",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "main": 1252,
+        "detail": 785,
+        "detailWidth": 785
+      }
+    },
+    {
+      "filename": "after-focus-1440-dark.png",
+      "name": "after",
+      "screen": "focus",
+      "theme": "dark",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "main": 1252,
+        "detail": 1202,
+        "detailWidth": 1202
+      }
+    },
+    {
+      "filename": "after-split-390-dark.png",
+      "name": "after",
+      "screen": "split",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "main": 390,
+        "detail": 356,
+        "detailWidth": 356
+      }
+    },
+    {
+      "filename": "after-focus-390-dark.png",
+      "name": "after",
+      "screen": "focus",
+      "theme": "dark",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "main": 390,
+        "detail": 356,
+        "detailWidth": 356
+      }
+    },
+    {
+      "filename": "after-split-1440-light.png",
+      "name": "after",
+      "screen": "split",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "main": 1252,
+        "detail": 785,
+        "detailWidth": 785
+      }
+    },
+    {
+      "filename": "after-focus-1440-light.png",
+      "name": "after",
+      "screen": "focus",
+      "theme": "light",
+      "width": 1440,
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "main": 1252,
+        "detail": 1202,
+        "detailWidth": 1202
+      }
+    },
+    {
+      "filename": "after-split-390-light.png",
+      "name": "after",
+      "screen": "split",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "main": 390,
+        "detail": 356,
+        "detailWidth": 356
+      }
+    },
+    {
+      "filename": "after-focus-390-light.png",
+      "name": "after",
+      "screen": "focus",
+      "theme": "light",
+      "width": 390,
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "main": 390,
+        "detail": 356,
+        "detailWidth": 356
+      }
+    },
+    {
+      "filename": "after-reviews-gates-390-light.png",
+      "name": "after",
+      "screen": "reviews-gates",
+      "theme": "light",
+      "width": 390
+    },
+    {
+      "filename": "after-live-update-1440-light.png",
+      "name": "after",
+      "screen": "live-update",
+      "theme": "light",
+      "width": 1440
+    },
+    {
+      "filename": "after-stopped-1440-light.png",
+      "name": "after",
+      "screen": "stopped",
+      "theme": "light",
+      "width": 1440
+    }
+  ],
+  "checks": [
+    {
+      "check": "selected agent persists across Grid, Split and Focus in both themes and widths",
+      "passed": true
+    },
+    {
+      "check": "Changes uses the candidate diff and Output remains folded",
+      "passed": true
+    },
+    {
+      "check": "Reviews has two findings and four read-only gates; Ask the lead appends without sending and returns focus",
+      "passed": true
+    },
+    {
+      "check": "Mobile chat and review gates remain reachable with focus restoration",
+      "passed": true
+    },
+    {
+      "check": "Workspace localization retains readable names and retirement labels",
+      "passed": true
+    },
+    {
+      "check": "Live tool settlement preserves row identity, text and order while appending calls and native tokens",
+      "passed": true,
+      "updateLatencyMs": 1221
+    },
+    {
+      "check": "Stopped attempt preserves existing rows and shows succeeded, aborted and failed without further polling",
+      "passed": true,
+      "stableRow": true,
+      "text": "Readsrc/status-filter.ts16:00",
+      "statuses": [
+        {
+          "id": "call-1",
+          "status": "succeeded"
+        },
+        {
+          "id": "call-2",
+          "status": "aborted"
+        },
+        {
+          "id": "call-3",
+          "status": "failed"
+        }
+      ],
+      "authoritativeAttemptState": "stopped",
+      "publishedTaskStage": "review",
+      "requestsBeforeWindow": 84,
+      "requestsAfterWindow": 84,
+      "observationMs": 6500
+    }
+  ],
+  "errors": [],
+  "liveUpdate": {
+    "stableRow": true,
+    "text": "Readsrc/status-filter.ts16:00",
+    "order": [
+      "call-1",
+      "call-2",
+      "call-3"
+    ],
+    "observedAt": 1794025478105,
+    "updateLatencyMs": 1221
+  },
+  "stopped": {
+    "stableRow": true,
+    "text": "Readsrc/status-filter.ts16:00",
+    "statuses": [
+      {
+        "id": "call-1",
+        "status": "succeeded"
+      },
+      {
+        "id": "call-2",
+        "status": "aborted"
+      },
+      {
+        "id": "call-3",
+        "status": "failed"
+      }
+    ],
+    "authoritativeAttemptState": "stopped",
+    "publishedTaskStage": "review",
+    "requestsBeforeWindow": 84,
+    "requestsAfterWindow": 84,
+    "observationMs": 6500
+  },
+  "fixtureCheckNotes": [
+    "The first stop check expected task stage Done and timed out. The daemon correctly published Review for a finished task awaiting review. The corrected check uses the authoritative attempt state and retains the published task stage; no source changed."
+  ],
+  "excludedOrigins": [
+    "https://fonts.googleapis.com/css2"
+  ],
+  "limitation": "Loopback-only fixture checks under the explicit browser approval; not exact-origin conformance or real-client acceptance.",
+  "cleanup": {
+    "contextsClosed": 2
+  }
+}

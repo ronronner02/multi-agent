@@ -5,7 +5,7 @@ import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, op
 import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { candidateManifest, candidatePath, createCandidateWorkspace, createReviewPacket, listFiles, removeCandidateWorkspace, removeReviewPacket, resolveWorkspaceBase, sourceFingerprint, verifyReviewPacket, verifySourceUnchanged } from "../src/domain/team-workspace.js";
+import { acceptSourceRefMove, candidateManifest, candidatePath, createCandidateWorkspace, createReviewPacket, listFiles, removeCandidateWorkspace, removeReviewPacket, resolveWorkspaceBase, sourceFingerprint, verifyReviewPacket, verifySourceUnchanged } from "../src/domain/team-workspace.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -38,6 +38,36 @@ function unborn(): string {
 }
 
 describe("isolated candidate ownership", () => {
+  it.each(["accepted", "other ref", "dirty source", "source reset", "wrong prior ref", "wrong target ref", "ordinary source"])(
+    "acknowledges only the exact owner Merge ref movement: %s", (scenario) => {
+      const root = repository();
+      const sourceRoot = join(candidateRoot(root), "integration");
+      git(root, "worktree", "add", "-b", "team/source", sourceRoot);
+      writeFileSync(join(sourceRoot, "plan.md"), "# Plan\n");
+      git(sourceRoot, "add", "plan.md");
+      git(sourceRoot, "commit", "--quiet", "-m", "plan");
+      const workspace = createCandidateWorkspace({ root: sourceRoot, base: resolveWorkspaceBase(sourceRoot),
+        workspaceRoot: candidateRoot(root), label: "merge-result" });
+      workspace.integrationSource = scenario !== "ordinary source";
+      const recorded = workspace.source;
+      const base = workspace.base;
+      const before = git(root, "rev-parse", "HEAD").trim();
+      writeFileSync(join(sourceRoot, "src", "delivered.ts"), "export const delivered = true;\n");
+      git(sourceRoot, "add", "src/delivered.ts");
+      git(sourceRoot, "commit", "--quiet", "-m", "delivery");
+      const after = git(sourceRoot, "rev-parse", "HEAD").trim();
+      git(root, "merge", "--ff-only", "--quiet", "team/source");
+      if (scenario === "other ref") git(root, "branch", "owner-other", before);
+      if (scenario === "dirty source") writeFileSync(join(sourceRoot, "src", "draft.ts"), "draft\n");
+      if (scenario === "source reset") git(sourceRoot, "reset", "--hard", "--quiet", before);
+      expect(acceptSourceRefMove(workspace, { ref: "refs/heads/main",
+        before: scenario === "wrong prior ref" ? after : before,
+        after: scenario === "wrong target ref" ? before : after })).toBe(scenario === "accepted");
+      expect(verifySourceUnchanged(workspace).unchanged).toBe(scenario === "accepted");
+      expect(workspace.base).toBe(base);
+      if (scenario !== "accepted") expect(workspace.source).toBe(recorded);
+    });
+
   it("bases a commit-backed candidate on a detached worktree at the approved commit", () => {
     const root = repository();
     const base = resolveWorkspaceBase(root);

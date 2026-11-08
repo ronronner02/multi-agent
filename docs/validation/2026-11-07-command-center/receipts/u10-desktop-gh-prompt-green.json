@@ -1,0 +1,14 @@
+{
+  "check": "u10-desktop-gh-prompt-green",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "/opt/multi-agent/toolchain/node/bin/node",
+    "../../node_modules/vitest/vitest.mjs",
+    "run",
+    "test/team-github.test.ts",
+    "test/project-bootstrap.test.ts",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 10.84
+}

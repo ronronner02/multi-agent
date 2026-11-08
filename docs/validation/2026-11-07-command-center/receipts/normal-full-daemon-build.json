@@ -1,0 +1,15 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "build",
+    "-w",
+    "packages/i18n",
+    "-w",
+    "packages/daemon",
+    "-w",
+    "packages/cli"
+  ],
+  "exit": 0,
+  "seconds": 13.10395097732544
+}

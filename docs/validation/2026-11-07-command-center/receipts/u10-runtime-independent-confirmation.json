@@ -1,0 +1,35 @@
+{
+  "verdict": "NO NEW P0/P1",
+  "round": 2,
+  "prior": [
+    {
+      "id": "R1-1",
+      "status": "CLOSED",
+      "evidence": "Identity-safe keyed base records preserve the victim bytes and distinct recovered bases; the legacy UUID filename remains compatible."
+    }
+  ],
+  "findings": [],
+  "done_signal": null,
+  "snapshot": {
+    "candidate": "review-candidate-u10-runtime-v2",
+    "manifest_sha256": "ef297585e854282d8eeba46b780229f52c6e86d883cada03aba862df7768eb71",
+    "confirmation_patch_sha256": "7e76380c9480228f4e3077a5fc8c3c2191a9047023b4c69da828f00151c5e6f8",
+    "source_reference_files_verified": 7,
+    "evidence_files_verified": 4,
+    "delta_hunks_verified": 4,
+    "delta_paths_verified": 3,
+    "closeout_hashes_unchanged": true
+  },
+  "coverage": {
+    "scope": "R1-1 fix confirmation and direct delta regressions only",
+    "independently_executed_tests": false,
+    "producer_evidence": {
+      "targeted_red_exit": 1,
+      "targeted_green_exit": 0,
+      "targeted_green_passed": 2,
+      "targeted_green_skipped": 27
+    },
+    "overall_acceptance_reassessed": false
+  },
+  "source": "Received completed independent confirmation in the current session; no additional review was dispatched."
+}

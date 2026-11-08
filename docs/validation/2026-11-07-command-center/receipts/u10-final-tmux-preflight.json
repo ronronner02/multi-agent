@@ -1,0 +1,11 @@
+{
+  "at": "2026-11-07T09:51:46.686263+00:00",
+  "socket": "<acceptance-scratch>/live/tmux/tmux-1000/default",
+  "exit": 0,
+  "panes": [
+    "$1|impl-1@cc-u10-win-20261107-2c433e64|%1|2111513|1|bash|",
+    "$2|impl-2@cc-u10-win-20261107-2c433e64|%2|2185571|1|bash|",
+    "$0|lead-1@cc-u10-win-20261107-2c433e64|%0|2201149|1|bash|",
+    "$3|review-1@cc-u10-win-20261107-2c433e64|%3|2200469|1|bash|"
+  ]
+}

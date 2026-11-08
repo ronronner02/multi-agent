@@ -1,0 +1,12 @@
+{
+  "check": "desktop-final-ui-suite",
+  "cwd": "engine/packages/ui",
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--maxWorkers=2"
+  ],
+  "exit": 0,
+  "seconds": 67.97
+}

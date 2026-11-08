@@ -277,7 +277,7 @@ describe("the owner retry reads the recorded classification", () => {
     sessions.updateBinding(nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
     const dispatch = composeTaskDispatch({
       rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes: async () => [{ id: "%1" }] } as never,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }] } as never,
       startupOrchestrator: { startNode: async (input: { resumeToken?: string; continueSessionId?: string }) => {
         started.push({ resumeToken: input.resumeToken, continueSessionId: input.continueSessionId });
         return { ok: true, startupStatus: "ready", continuityOutcome: "fresh" };
@@ -304,7 +304,7 @@ describe("the owner retry reads the recorded classification", () => {
     const listPanes = vi.fn(async () => [{ id: "%1" }]), getPaneExit = vi.fn(async () => ({ dead: true, code: 0 }));
     const respawnPane = vi.fn(async () => ({ ok: true })), startNode = vi.fn(async () => ({ ok: true }));
     await composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes, getPaneExit, respawnPane } as never, startupOrchestrator: { startNode } as never,
+      tmux: { hasSession: async () => true, listPanes, getPaneExit, respawnPane } as never, startupOrchestrator: { startNode } as never,
       runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
       maxSessions: () => 2, liveSessions: () => 0,
     })("run-1", "task-1");
@@ -325,7 +325,7 @@ describe("the owner retry reads the recorded classification", () => {
     const started: unknown[] = [], respawned: string[] = [];
     const dispatchWith = (exit: { dead: boolean; code: number | null } | null) => composeTaskDispatch({
       rigRepo: new RigRepository(db), sessions,
-      tmux: { listPanes: async () => [{ id: "%1" }], getPaneExit: async () => exit,
+      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => exit,
         respawnPane: async (pane: string) => { respawned.push(pane); return { ok: true }; } } as never,
       startupOrchestrator: { startNode: async (input: unknown) => {
         started.push(input);
@@ -376,7 +376,7 @@ describe("the owner retry reads the recorded classification", () => {
       const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
       const dispatch = composeTaskDispatch({
         rigRepo: new RigRepository(db), sessions,
-        tmux: { listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
+        tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
         startupOrchestrator: { startNode: async () => ({ ok: false, startupStatus: "attention_required", errors: ["trust_gate"] }) } as never,
         runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
         maxSessions: () => 2, liveSessions: () => 0,

@@ -1,11 +1,14 @@
+import type { AttemptTelemetry } from "../domain/attempt-telemetry.js";
+import { approvalDocumentPins, documentSourceRefusal, latestDocument, type DocumentEvidence } from "../domain/project-documents.js";
+import { canonicalJson, type DocumentPins } from "../contracts/team-control.js";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { TEAM_CONTROL_VERSION, TeamContractError, parseControlRequest, parseProtocolVersion } from "../contracts/team-control.js";
-import type { PlanGovernance, ProviderPolicyCapability } from "../domain/plan-governance.js";
+import { hashBinding, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import type { LeadTask } from "../domain/lead-proposal.js";
 import { planningRosterRequired, type LeadRosterEvidence } from "../domain/lead-roster.js";
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
-import { runLeadTask } from "../domain/lead-chat.js";
+import { chatBody, runLeadTask } from "../domain/lead-chat.js";
 import { commitPlan } from "../domain/plan-branch.js";
 import { bindingForGoal, refreshPlanBinding } from "./team-start.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
@@ -32,12 +35,14 @@ export interface LeadProposalRouteOptions {
   credentials: TeamControlCredentials;
   legacyTokens: readonly (string | null | undefined)[];
   settingsStore?: SettingsStore;
+  telemetry?: AttemptTelemetry;
   /** The runtime that owns the candidate trees and reads worker-written files. */
   runtime?: {
     leadProposalFor(runId: string, taskId: string): LeadTask[];
     rosterFor?(runId: string, taskId: string, planRef: string): LeadRosterEvidence;
     /** U5 — the plan a planning lead wrote in its own tree. */
     planFor?(runId: string, taskId: string, planRef: string): { content: string; hash: string };
+    documentsFor?(runId: string, taskId: string, planRef: string): DocumentEvidence;
     /** U5 — let the lead's tree be adopted again after the plan commit moved its source. */
     forgetCandidate?(runId: string, taskId: string): void;
   };
@@ -122,6 +127,59 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
   const ownerFor = (c: Context<TeamControlEnv>, runId: string) => c.get("controlActor").kind === "owner"
     && (c.get("controlRunId") === null || c.get("controlRunId") === runId);
 
+  const documentRoute = "/runs/:runId/documents";
+  for (const path of [documentRoute, documentRoute + "/confirm", documentRoute + "/stage"]) {
+    app.use(path, teamControlAuthentication(() => options.credentials, options.legacyTokens));
+    app.use(path, bodyLimit({ maxSize: 65_536, onError: c => c.json({ code: "invalid_team_contract" }, 413) }));
+  }
+  app.get(documentRoute, c => {
+    const runId = c.req.param("runId")!;
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required" }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, workflow: governance.documents(runId) });
+  });
+  app.post(documentRoute + "/confirm", async c => {
+    const runId = c.req.param("runId")!;
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required" }, 403);
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== runId) return c.json({ code: "control_scope_denied" }, 403);
+    const run = governance.getRun(runId), lead = governance.leadTask(runId);
+    if (!lead || !options.runtime?.documentsFor) return c.json({ code: "documents_unavailable", error: "The document reader is not available." }, 503);
+    let evidence: DocumentEvidence;
+    try { evidence = options.runtime.documentsFor(runId, lead.taskId, run.binding.planRef); }
+    catch { return c.json({ code: "documents_unreadable", error: "The lead's document files are not readable." }, 409); }
+    const receipt = governance.confirmDocument(request, c.get("controlActor"), evidence);
+    return c.json(receipt, receipt.status === "denied" ? 409 : 200);
+  });
+  app.post(documentRoute + "/stage", async c => {
+    const runId = c.req.param("runId")!;
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required" }, 403);
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== runId) return c.json({ code: "control_scope_denied" }, 403);
+    const run = governance.getRun(runId), policy = options.readPolicyCapability?.();
+    if (!policy) return c.json({ code: "current_policy_unavailable" }, 503);
+    let binding;
+    try { binding = refreshPlanBinding(run.binding, policy); }
+    catch { return c.json({ code: "current_binding_unavailable" }, 503); }
+    if ((request.payload as Record<string, unknown>)?.stage === "plan") {
+      const state = governance.documents(runId), lead = governance.leadTask(runId);
+      try {
+        if (state && lead) {
+          if (!options.runtime?.documentsFor) throw new Error("The document reader is not available.");
+          const error = documentSourceRefusal(state, options.runtime.documentsFor(runId, lead.taskId, run.binding.planRef), ["requirements"]);
+          if (error) throw new Error(error);
+        }
+      } catch (error) { return c.json({ code: "documents_changed", error: (error as Error).message }, 409); }
+    }
+    const receipt = governance.selectDocumentStage(request, c.get("controlActor"), binding);
+    if (receipt.effectMayStart && receipt.revisionTaskId && options.dispatch) {
+      void options.dispatch(runId, receipt.revisionTaskId).catch(error =>
+        console.warn(`team documents: stage launch failed: ${error instanceof Error ? error.message : String(error)}`));
+    }
+    return c.json(receipt, receipt.status === "denied" ? 409 : receipt.status === "pending-execution" ? 202 : 200);
+  });
+
   /**
    * U5 — the run's conversation, in order.
    *
@@ -131,7 +189,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
    * Nothing here starts work or records a decision.
    */
   app.get(chatRoute, (c) => {
-    const runId = c.req.param("runId");
+    const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     let run;
@@ -140,21 +198,29 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
       throw error;
     }
     const decision = governance.chatDecision(runId);
-    let planApproval: { plan: { content: string; hash: string } | null; roster: LeadRosterEvidence | null; error: string | null } | null = null;
-    if (run.phase === "planning" && planningRosterRequired(run.binding)) {
+    const messages = governance.chatMessages(runId), leadTask = governance.leadTask(runId);
+    const attempt = leadTask ? governance.getLatestTaskAttempt(leadTask.qitemId) : null;
+    const liveTurn = attempt?.role === "lead" && attempt.runId === runId && !messages.some(message => message.attemptId === attempt.id)
+      ? { attemptId: attempt.id, state: attempt.state, progress: options.telemetry?.readProgress(attempt) ?? null,
+        activity: options.telemetry?.read(attempt) ?? null } : null;
+    const documentWorkflow = governance.documents(runId);
+    let planApproval: { plan: { content: string; hash: string } | null; roster: LeadRosterEvidence | null; error: string | null; documentVersions?: DocumentPins } | null = null;
+    if (run.phase === "planning" && planningRosterRequired(run.binding) && (!documentWorkflow || documentWorkflow.stage === "plan")) {
       planApproval = { plan: null, roster: null, error: null };
       const lead = governance.leadTask(runId);
       try {
         if (!lead || !options.runtime?.planFor || !options.runtime.rosterFor) throw new Error("The planning files are not available yet.");
-        planApproval.plan = options.runtime.planFor(runId, lead.taskId, run.binding.planRef);
+        planApproval.plan = documentWorkflow ? latestDocument(documentWorkflow, "plan") ?? null
+          : options.runtime.planFor(runId, lead.taskId, run.binding.planRef);
+        if (documentWorkflow) planApproval.documentVersions = approvalDocumentPins(documentWorkflow);
         planApproval.roster = options.runtime.rosterFor(runId, lead.taskId, run.binding.planRef);
         planApproval.error = governance.planRosterRefusal(runId, planApproval.roster.seats,
           Number(options.settingsStore?.resolveOne("team.maxSeats").value ?? 6));
       } catch (error) { planApproval.error = (error as Error).message; }
     }
     c.header("Cache-Control", "no-store");
-    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, phase: run.phase, planApproval,
-      messages: governance.chatMessages(runId).map(message => ({ id: message.id, sender: message.sender,
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId, phase: run.phase, planApproval, documentWorkflow, liveTurn,
+      messages: messages.map(message => ({ id: message.id, sender: message.sender,
         kind: message.kind, body: message.body, options: message.options,
         answeredBy: message.answeredBy, createdAt: message.createdAt })),
       // The run waits on this until the owner answers it through this same endpoint, naming it
@@ -177,7 +243,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
    * next one, so the answer to the owner is "kept", not "answered".
    */
   app.post(chatRoute, async (c) => {
-    const runId = c.req.param("runId");
+    const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner message is required." }, 403);
     const request = parseControlRequest(await c.req.json());
     if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
@@ -208,11 +274,12 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
    * decision after this.
    */
   app.post(planRoute, async (c) => {
-    const runId = c.req.param("runId");
+    const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner approval is required." }, 403);
     const request = parseControlRequest(await c.req.json());
     if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
     const run = governance.getRun(runId);
+    if (request.expectedEntityVersion !== run.entityVersion) throw new Error("Run entity version conflict");
     if (run.phase !== "planning") {
       return c.json({ code: "plan_not_awaiting_approval", error: "This run's plan was already approved." }, 409);
     }
@@ -223,11 +290,38 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     try { plan = options.runtime.planFor(runId, lead.taskId, run.binding.planRef); }
     catch (error) { return c.json({ code: "plan_missing", error: (error as Error).message }, 409); }
     if (!plan.content.trim()) return c.json({ code: "plan_missing", error: `The lead wrote no plan at ${run.binding.planRef}.` }, 409);
+    const approvalPayload = request.payload as Record<string, unknown>;
+    if (approvalPayload?.ownerMessage !== undefined) chatBody(approvalPayload.ownerMessage, "ownerMessage");
+    const requiresDisplayedPlan = planningRosterRequired(run.binding) || !!governance.documents(runId);
+    if ((approvalPayload?.planHash !== undefined || approvalPayload?.ownerMessage !== undefined && requiresDisplayedPlan)
+      && approvalPayload.planHash !== plan.hash) {
+      return c.json({ code: "plan_changed", error: "The displayed plan changed. Read its current version before approving." }, 409);
+    }
+    if (governance.planningApprovalPending(runId)) {
+      return c.json({ code: "plan_not_awaiting_approval", error: "Wait for the lead to finish the planning discussion before approving." }, 409);
+    }
+    const documentWorkflow = governance.documents(runId);
+    let documentVersions: DocumentPins | undefined;
+    if (documentWorkflow) {
+      try {
+        documentVersions = approvalDocumentPins(documentWorkflow);
+        if (canonicalJson((request.payload as Record<string, unknown>)?.documentVersions ?? null) !== canonicalJson(documentVersions)) {
+          throw new Error("Read and approve the exact current document versions.");
+        }
+        if (!options.runtime.documentsFor) throw new Error("The document reader is not available.");
+        const sourceError = documentSourceRefusal(documentWorkflow, options.runtime.documentsFor(runId, lead.taskId, run.binding.planRef));
+        if (sourceError) throw new Error(sourceError);
+        if (plan.hash !== documentVersions.plan.hash) throw new Error("The plan changed after the displayed version.");
+      } catch (error) { return c.json({ code: "document_approval_required", error: (error as Error).message }, 409); }
+    }
     const policy = options.readPolicyCapability?.();
     if (!policy) return c.json({ code: "current_policy_unavailable", error: "The plan capability a run is bound under is unavailable." }, 503);
     let currentBinding: unknown;
     try { currentBinding = refreshPlanBinding(run.binding, policy); }
     catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
+    if (hashBinding(currentBinding) !== run.bindingDigest) {
+      return c.json({ code: "plan_binding_changed", error: "Plan, repository or policy binding changed. Nothing was published." }, 409);
+    }
     let roster: { seats: LeadRosterEvidence["seats"]; maxSeats: number } | undefined;
     if (planningRosterRequired(run.binding)) {
       if (request.expectedEntityVersion !== run.entityVersion) throw new Error("Run entity version conflict");
@@ -252,15 +346,19 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
         return c.json({ ...receipt, code: "lead_roster_refused", error: reason }, 409);
       }
     }
-    // The write scope is the one the owner named when they started planning; the plan path rides
-    // along so the lead task the run already admitted stays covered by the binding it runs under.
+    // Approval promotes the requested scope, including "." for a new project-wide run.
+    // Explicit narrow and legacy scopes stay unchanged, and the admitted lead task stays covered.
     const writePaths = [...new Set([run.binding.planRef, ...run.binding.readPaths])];
     let binding;
     try {
+      // Keep optional drafts across the delivery candidate refresh without treating them as approvals.
+      const documents = documentWorkflow ? (["brainstorm", "requirements", "plan"] as const)
+        .flatMap(kind => { const version = latestDocument(documentWorkflow, kind);
+          return version ? [{ path: version.path, content: version.content }] : []; }) : [];
       commitPlan({ worktree: run.binding.repository.root, planRef: run.binding.planRef, plan: plan.content,
-        message: `plan: ${run.displayName}` });
+        documents, message: `plan: ${run.displayName}` });
       binding = { ...bindingForGoal({ root: run.binding.repository.root, planRef: run.binding.planRef, writePaths, policy }),
-        limits: run.binding.limits };
+        limits: run.binding.limits, ...(documentVersions ? { documentVersions } : {}) };
     } catch (error) {
       return c.json({ code: "plan_record_failed", error: (error as Error).message }, 500);
     }

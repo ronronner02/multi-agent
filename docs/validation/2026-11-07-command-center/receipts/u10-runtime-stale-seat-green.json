@@ -1,0 +1,16 @@
+{
+  "check": "u10-runtime-stale-seat-green",
+  "cwd": "engine/packages/daemon",
+  "command": [
+    "npx",
+    "vitest",
+    "run",
+    "test/seat-pane-launch.test.ts",
+    "--maxWorkers=2",
+    "--testTimeout=60000",
+    "-t",
+    "recreates a removed bound seat|preserves a bound seat"
+  ],
+  "exit": 0,
+  "seconds": 4.76
+}

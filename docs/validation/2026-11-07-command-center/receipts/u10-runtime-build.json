@@ -1,0 +1,11 @@
+{
+  "check": "u10-runtime-build",
+  "cwd": "engine",
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "exit": 0,
+  "seconds": 23.45
+}

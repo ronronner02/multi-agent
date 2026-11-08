@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-11-07T13:16:21.205Z",
+  "identity": {
+    "pid": 28996,
+    "execPath": "<windows-task-scratch>\\desktop-installed\\Multi-Agent.exe",
+    "appPath": "<windows-task-scratch>\\desktop-installed\\resources\\app.asar",
+    "version": "0.1.0",
+    "userData": "<windows-task-scratch>\\desktop-clean-profile",
+    "appData": "<original-appdata>",
+    "windowCount": 1
+  },
+  "origin": "http://127.0.0.1:7433",
+  "isolated": true,
+  "initialUrl": "file:///<windows-task-scratch>/desktop-installed/resources/app.asar/src/first-run.html"
+}

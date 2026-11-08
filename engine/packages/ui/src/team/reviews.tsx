@@ -1,3 +1,4 @@
+import { TextPreview } from "./text-preview.js";
 import { useTranslation } from "react-i18next";
 import type { TeamOwnerRead, TeamReviewView } from "@openrig/daemon/team-control";
 import type { IntegrationState } from "./clients.js";
@@ -34,7 +35,7 @@ function Findings({ task }: { task?: TeamReviewView }) {
     {latest.findingRecords.length === 0 ? <p className="ui-muted">{t("reviews.emptyRound")}</p>
       : <ul className="ui-findings">{latest.findingRecords.map(finding => <li key={finding.id}>
         <span className="ui-finding-severity" data-severity={finding.severity}>{finding.severity}</span>
-        <div><code>{finding.file}</code><p>{finding.summary}</p></div>
+        <div><code>{finding.file}</code><TextPreview text={finding.summary} /></div>
       </li>)}</ul>}
     <details><summary>{t("reviews.recordDetails")}</summary><dl className="ui-technical-details">
       <dt>{t("reviews.candidateDigest")}</dt><dd>{latest.candidateDigest ?? "—"}</dd>
@@ -63,7 +64,7 @@ export function ReviewsScreen({ read, selectedTaskId, integration, onSelect, onA
     </label>}
     <div className="ui-reviews-body">
       <section className="ui-card ui-reviews-main" aria-label={t("reviews.candidate")}>
-        <h2>{task ? taskName(task, t) : t("reviews.candidate")}</h2>
+        <h2><TextPreview text={task ? taskName(task, t) : t("reviews.candidate")} /></h2>
         <TaskChanges runId={read?.runId ?? ""} task={task} />
       </section>
       <aside className="ui-reviews-inspector" aria-label={t("reviews.inspector")}>

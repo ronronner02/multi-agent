@@ -1,0 +1,96 @@
+{
+  "checkedAt": "2026-11-07T12:19:10.495191+00:00",
+  "serviceStop": {
+    "before": {
+      "pid": 2750871,
+      "origin": "http://127.0.0.1:17433",
+      "home": "<acceptance-state>",
+      "status": "ok"
+    },
+    "stopped": true
+  },
+  "activeAttemptsBefore": 0,
+  "activeAttemptsAfter": 0,
+  "nonterminalQueueItemsAfter": 0,
+  "browserSessionRevocation": {
+    "changedRecords": 1,
+    "otherRecordsUnchanged": true,
+    "currentBrowserRevoked": true
+  },
+  "tmux": {
+    "ownedSocket": "<acceptance-scratch>/live/tmux/tmux-1000/default",
+    "serverBefore": {
+      "pid": 2542779,
+      "cwd": "<acceptance-worktree>",
+      "startTicks": 8755065,
+      "state": "S"
+    },
+    "closedSessions": [
+      {
+        "sessionId": "$1",
+        "name": "impl-1@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      },
+      {
+        "sessionId": "$2",
+        "name": "impl-2@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      },
+      {
+        "sessionId": "$0",
+        "name": "lead-1@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      },
+      {
+        "sessionId": "$3",
+        "name": "review-1@cc-u10-win-20261107-2c433e64",
+        "exit": 0
+      }
+    ],
+    "serverExited": true,
+    "broadKillServerUsed": false,
+    "originalDefaultSocketPreserved": true
+  },
+  "remainingTaskCwdProcesses": [],
+  "acceptancePortListening": false,
+  "originalProcesses": {
+    "before": [
+      {
+        "pid": 1179,
+        "cwd": "<original-checkout>",
+        "startTicks": 68421,
+        "state": "S"
+      },
+      {
+        "pid": 1200,
+        "cwd": "<original-checkout>",
+        "startTicks": 68459,
+        "state": "S"
+      }
+    ],
+    "after": [
+      {
+        "pid": 1179,
+        "cwd": "<original-checkout>",
+        "startTicks": 68421,
+        "state": "S"
+      },
+      {
+        "pid": 1200,
+        "cwd": "<original-checkout>",
+        "startTicks": 68459,
+        "state": "S"
+      }
+    ],
+    "identitiesUnchanged": true
+  },
+  "originalDaemonHealth": {
+    "status": "ok",
+    "pid": 1179
+  },
+  "installedApp": {
+    "installationPerformed": false,
+    "replacementPerformed": false
+  },
+  "retained": "Uncommitted source, scoped evidence, two private synthetic repositories and the isolated acceptance profile are retained."
+}

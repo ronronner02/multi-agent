@@ -1,0 +1,91 @@
+{
+  "checkedAt": "2026-11-07T11:55:57.335468+00:00",
+  "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+  "ownerMessage": {
+    "id": "dced3caa-1d38-42bc-b10b-49feef391908",
+    "attempt_id": null,
+    "delivered_attempt": "46de1721-4e8d-4dbf-8b9b-f05f2f1cb708",
+    "created_at": "2026-11-07T11:54:43.505Z"
+  },
+  "prompt": {
+    "file": "<acceptance-state>/state/workers/homes/local/scratch/turns/46de1721-4e8d-4dbf-8b9b-f05f2f1cb708.prompt",
+    "sha256": "f6b03d97b6dfac957b509ce46fd98ea6420ad470660d6c6d4b65ded25ee8d25a",
+    "modifiedAt": "2026-11-07T11:54:49.550709+00:00"
+  },
+  "snapshot": {
+    "runId": "2d7b2d64-49c5-4e3f-abf8-777fe4bfe086",
+    "observedAt": "2026-11-07T11:54:49.551Z",
+    "totalTasks": 4,
+    "truncated": false,
+    "tasks": [
+      {
+        "taskId": "task-2",
+        "role": "implementer",
+        "queueState": "done",
+        "reviewOf": null,
+        "seat": "impl-1@cc-u10-win-20261107-2c433e64",
+        "client": "claude-code",
+        "latestAttempt": {
+          "id": "ba7da767-f236-4dac-8baf-620b300a918b",
+          "state": "stopped",
+          "provider": "claude",
+          "startedAt": "2026-11-07T11:45:29.263Z",
+          "updatedAt": "2026-11-07T11:46:10.862Z"
+        },
+        "review": null
+      },
+      {
+        "taskId": "task-3",
+        "role": "implementer",
+        "queueState": "done",
+        "reviewOf": null,
+        "seat": "impl-2@cc-u10-win-20261107-2c433e64",
+        "client": "codex",
+        "latestAttempt": {
+          "id": "c5574c31-63d1-4c7d-9f41-0c431d4471e4",
+          "state": "stopped",
+          "provider": "codex",
+          "startedAt": "2026-11-07T11:45:29.437Z",
+          "updatedAt": "2026-11-07T11:54:35.870Z"
+        },
+        "review": null
+      },
+      {
+        "taskId": "task-2-review-1",
+        "role": "reviewer",
+        "queueState": "done",
+        "reviewOf": "task-2",
+        "seat": "review-1@cc-u10-win-20261107-2c433e64",
+        "client": "claude-code",
+        "latestAttempt": {
+          "id": "817d8459-a79c-4014-9b8d-556f7dcb5c9f",
+          "state": "stopped",
+          "provider": "claude",
+          "startedAt": "2026-11-07T11:46:14.242Z",
+          "updatedAt": "2026-11-07T11:46:40.571Z"
+        },
+        "review": {
+          "verdict": "approved",
+          "candidateDigest": "sha256:ea25a2c189447f6d392bdde67aa7286cfec09b4cbc84c965024938909bef64bc",
+          "recordedAt": "2026-11-07T11:46:41.616Z"
+        }
+      },
+      {
+        "taskId": "task-3-review-1",
+        "role": "reviewer",
+        "queueState": "pending",
+        "reviewOf": "task-3",
+        "seat": "review-1@cc-u10-win-20261107-2c433e64",
+        "client": "claude-code",
+        "latestAttempt": {
+          "id": "18aee13b-a05a-4fb9-be66-9963af60dc13",
+          "state": "running",
+          "provider": "claude",
+          "startedAt": "2026-11-07T11:54:42.114Z",
+          "updatedAt": "2026-11-07T11:54:42.114Z"
+        },
+        "review": null
+      }
+    ]
+  }
+}

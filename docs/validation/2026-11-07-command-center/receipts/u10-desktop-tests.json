@@ -1,0 +1,10 @@
+{
+  "check": "u10-desktop-tests",
+  "cwd": "desktop",
+  "command": [
+    "npm",
+    "test"
+  ],
+  "exit": 0,
+  "seconds": 0.22
+}

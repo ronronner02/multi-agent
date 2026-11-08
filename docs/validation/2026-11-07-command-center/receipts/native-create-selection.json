@@ -1,0 +1,46 @@
+{
+  "at": "2026-11-08T00:51:05.9168001Z",
+  "action": "select",
+  "pid": 14236,
+  "installedExecutable": "%LOCALAPPDATA%/Programs/Multi-Agent/Multi-Agent.exe",
+  "originalWindowHandle": 47778090,
+  "normalInstanceReused": true,
+  "debuggingEnabled": false,
+  "nativeDialogClass": "#32770",
+  "nativeFolderReadback": "%LOCALAPPDATA%/Multi-Agent/TestProjects/desktop-create-20261108-aa15079f",
+  "method": "Verified native folder field and physical selection-button input",
+  "buttons": [
+    {
+      "name": "\u6700\u5c0f\u5316",
+      "class": "WinCaptionButton",
+      "enabled": true
+    },
+    {
+      "name": "\u6700\u5927\u5316",
+      "class": "WinCaptionButton",
+      "enabled": true
+    },
+    {
+      "name": "\u5173\u95ed",
+      "class": "WinCaptionButton",
+      "enabled": true
+    },
+    {
+      "name": "\u5173\u95ed",
+      "class": "ui-icon-button",
+      "enabled": true
+    },
+    {
+      "name": "\u6d4f\u89c8\u2026",
+      "class": "btn btn-outline",
+      "enabled": true
+    },
+    {
+      "name": "\u9884\u89c8\u6587\u4ef6",
+      "class": "btn btn-primary",
+      "enabled": true
+    }
+  ],
+  "folder": "<synthetic-windows-project>",
+  "name": "desktop-create-20261108-aa15079f"
+}

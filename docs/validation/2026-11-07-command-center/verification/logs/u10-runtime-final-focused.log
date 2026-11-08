@@ -1,0 +1,145 @@
+
+ RUN  v3.2.4 <acceptance-worktree>/engine/packages/daemon
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('valid thread and continuation')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('clients directory already present')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('clients directory already present')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('duplicate clients directories')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('duplicate clients directories')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('leading dash refused')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('leading dash refused')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+stdout | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('whitespace refused')
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/direct-worker-launch.test.ts > sweeps a native Codex stub to stopped ('whitespace refused')
+team dispatch: recovered seat builder@codex-fixture for one launch (pane %0 respawned)
+
+ ✓ test/direct-worker-launch.test.ts (13 tests) 8376ms
+   ✓ sweeps a native Codex stub to stopped ('valid thread and continuation')  3507ms
+   ✓ sweeps a native Codex stub to stopped ('clients directory already present')  1121ms
+   ✓ sweeps a native Codex stub to stopped ('duplicate clients directories')  1133ms
+   ✓ sweeps a native Codex stub to stopped ('leading dash refused')  1218ms
+   ✓ sweeps a native Codex stub to stopped ('whitespace refused')  1278ms
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[openrig] [plugin-vendor] fetch openrig-core failed: FETCH GUARD (P37): refused an outbound request to https://github.com (a NON-LOOPBACK / cross-machine target) — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51).; falling back to vendored
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: VITEST=true — skipping kernel auto-boot
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+kernel-boot: tracker-state=skipped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+workflow boot sweep: 0 in-flight instances (no-op)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] slack delivery not configured (connector disabled (rig slack enable)) — wire is inert; dispatches would be refused honestly
+[gateway] gateway subsystem active (in-process)
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+[gateway] gateway subsystem stopped
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/managed-native-startup.test.ts > production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/team-workspace.test.ts (86 tests) 5160ms
+   ✓ T044 commit-lane manifest without a git in the candidate > T054 plain git over a control-owned copy > copies a realistic candidate in well under a few seconds  346ms
+ ✓ test/managed-native-startup.test.ts (191 tests) 16583ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a null pane screen  377ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "" pane screen  387ms
+   ✓ control-owned managed launch lifecycle > never reports readiness from a "Starting up..." pane screen  417ms
+   ✓ production managed launch composition > injects one launch chain into both fresh and both resume adapters in a managed daemon only  837ms
+   ✓ production managed launch composition > refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)  723ms
+   ✓ offline fixture-daemon restart > keeps durable messages, wake limits and unresolved intents, but not admission or handout rights  2373ms
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+error connecting to /tmp/seat-pane-HHJ40B/tmux/tmux-1000/default (No such file or directory)
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/team-candidate-launch.test.ts (37 tests) 4106ms
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stderr | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+team dispatch: recovered seat dev-impl@team-demo for one launch (pane %0 respawned)
+
+stderr | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client
+team dispatch: seat dev-impl@team-demo remains failed; Managed attempt attachment: Managed launch task is ambiguous
+
+stdout | test/seat-pane-launch.test.ts > a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+stdout | test/seat-pane-launch.test.ts > workers.isolation: hardened > refuses an unbound seat instead of opening a terminal for it
+startup reconcile: rigs=0 checked=0 detached=0 errors=0
+
+ ✓ test/seat-pane-launch.test.ts (6 tests) 3168ms
+   ✓ a start request launches the seat it put work on > opens the seat's terminal, launches the runner into it and records the launch receipt  557ms
+   ✓ a start request launches the seat it put work on > writes durable review progress into the lead's actual launch prompt while a worker is busy  385ms
+   ✓ a start request launches the seat it put work on > refuses to continue a managed attempt, because a headless turn has no staged prompt  363ms
+   ✓ a start request launches the seat it put work on > launches once for a seat, so a second start does not open a second client  1359ms
+   ✓ a start request launches the seat it put work on > gives a reused pane id to the seat that just created it, so the next launch resolves one seat  410ms
+ ✓ test/team-read-model.test.ts (32 tests) 1792ms
+ ✓ test/lead-manager.test.ts (19 tests) 1292ms
+ ✓ test/lead-chat.test.ts (14 tests) 1332ms
+stderr | test/agent-turn.test.ts > a freed slot dispatches the run's next task > leaves a task alone until its owner records the outcome, and resumes it after a reopen
+team dispatch: launch for run=run task=task-1 failed: UNIQUE constraint failed: team_attempts.id, team_attempts.run_id
+
+stderr | test/agent-turn.test.ts > a freed slot dispatches the run's next task > admits a receipt on a seat that holds two live tasks, by the pane's stamp
+team completion: no single live task on a@rig for run=run; attempt attempt-stamped is unrecorded
+
+ ✓ test/agent-turn.test.ts (18 tests) 1078ms
+ ✓ test/run-recovery.test.ts (17 tests) 816ms
+ ✓ test/team-result.test.ts (4 tests) 511ms
+ ✓ test/integration-branch.test.ts (29 tests) 10319ms
+   ✓ U7 integration branch and merge > lands two approved tasks as two commits in approval order, and never touches the owner's checkout  403ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: null  515ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-proposal.json  517ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: lead-escalation.json  520ms
+   ✓ U7 integration branch and merge > judges only the delivery lead's turn after landing and restart: src/health.ts  550ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, false  329ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: codex, codex_id, worker1, false  339ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker1, true  364ms
+   ✓ U7 integration branch and merge > keeps the delivery lead conversation unless its path changes or resume is unsafe: claude-code, claude_id, worker2, false  322ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: false)  418ms
+   ✓ U7 integration branch and merge > keeps an in-flight candidate's recorded base and applies it on top of the moved head (restart: true)  432ms
+   ✓ U7 integration branch and merge > fails the task with integration_conflict and leaves the branch unchanged when the patch will not apply  382ms
+   ✓ U7 integration branch and merge > keeps a completed result readable after Merge without a restart  636ms
+   ✓ U7 integration branch and merge > refuses a merge while work is open, fast-forwards a clean checkout, and refuses a dirty one  302ms
+   ✓ U7 integration branch and merge > keeps Merge completion observable after refresh, restart and later owner commits  410ms
+   ✓ U7 integration branch and merge > makes one merge commit when the owner's branch diverged, and aborts a conflicting merge  445ms
+   ✓ U7 integration branch and merge > finds the branch and worktree again after a restart, and keeps landing on it  421ms
+   ✓ U7 integration branch and merge > serves the integration read and the merge to the owner only  408ms
+
+ Test Files  12 passed (12)
+      Tests  466 passed (466)
+   Start at  19:19:40
+   Duration  35.92s (transform 2.89s, setup 160ms, collect 5.59s, tests 54.53s, environment 1ms, prepare 414ms)
+
