@@ -312,9 +312,8 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
 }
 
 /**
- * U8 — a blocked run's one owner action. A budget block cannot be resumed without raising that
- * budget, so the same click raises it by the amount the run already had, and the plate states
- * the amount before it is taken.
+ * U8 — a blocked run's one owner action. An active-time block needs an explicit increase;
+ * each click adds one hour, including after earlier extensions, and states that amount first.
  */
 export function ResumePlate({ read }: { read: TeamOwnerRead }) {
   const { t } = useTranslation();
@@ -323,7 +322,7 @@ export function ResumePlate({ read }: { read: TeamOwnerRead }) {
   const [failed, setFailed] = useState(false);
   const run = read.run;
   const limits = run.binding.limits;
-  const minutes = Math.max(1, Math.round(limits.maxActiveMs / 60_000));
+  const minutes = 60;
   const retries = Math.max(1, limits.maxRetries);
   const rounds = Math.max(1, limits.maxReviewRounds);
   const increase =
@@ -343,7 +342,7 @@ export function ResumePlate({ read }: { read: TeamOwnerRead }) {
         try {
           await request(`/runs/${encodeURIComponent(run.id)}/resume`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ protocolVersion: "1.0", runId: run.id, actionId: crypto.randomUUID(),
+            body: JSON.stringify({ protocolVersion: "1.0", runId: run.id, actionId: run.id,
               expectedEntityVersion: run.entityVersion, idempotencyKey: crypto.randomUUID(), payload: increase }),
           });
         } catch { setFailed(true); } finally { setBusy(false); }

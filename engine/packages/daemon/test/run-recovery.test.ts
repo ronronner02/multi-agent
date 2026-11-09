@@ -236,14 +236,17 @@ describe("U8 automatic recovery and Resume", () => {
     expect(governance.listApprovals("run").some(row => row.action === "implementation" && row.state === "approved")).toBe(true);
   });
 
-  it("routes one Resume action to the pending task dispatcher", async () => {
+  it.each([
+    ["lead-wake:cycles", {}, 3_600_000],
+    ["Active wall-clock budget exhausted", { addMinutes: 60 }, 7_200_000],
+  ])("routes Resume for %s to the pending task dispatcher", async (reason, payload, maxActiveMs) => {
     approve();
     const created = governance.createTask(command("task-1", {
       assignment: { taskId: "task-1", role: "implementer", paths: ["src"], dependencies: [] },
       outputs: [], permissions: [], sourceSession: "lead@rig", destinationSession: "builder@rig", body: "Do the work",
     }), binding);
     expect(created.status).toBe("accepted");
-    block("lead-wake:cycles");
+    block(reason);
     const dispatched: string[] = [];
     const app = teamControlRoutes(governance, { credentials: { ownerToken: "owner-token" }, resolveBinding: () => binding,
       dispatch: async (_runId, taskId) => { dispatched.push(taskId); } }, []);
@@ -251,11 +254,12 @@ describe("U8 automatic recovery and Resume", () => {
     const response = await app.request("/runs/run/resume", {
       method: "POST", headers: { Authorization: "Bearer owner-token", "Content-Type": "application/json" },
       body: JSON.stringify({ protocolVersion: TEAM_CONTROL_VERSION, runId: "run", actionId: "run",
-        expectedEntityVersion: run.entityVersion, idempotencyKey: "route-resume", payload: {} }),
+        expectedEntityVersion: run.entityVersion, idempotencyKey: "route-resume", payload }),
     }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
     expect(response.status).toBe(200);
     expect((await response.json()) as { effectMayStart: boolean }).toMatchObject({ effectMayStart: true });
     expect(dispatched).toEqual(["task-1"]);
+    expect(governance.getRun("run")).toMatchObject({ state: "approved", stateReason: null, binding: { limits: { maxActiveMs } } });
   });
 
   it("publishes a stable label for an implementation dispatch denial", () => {
