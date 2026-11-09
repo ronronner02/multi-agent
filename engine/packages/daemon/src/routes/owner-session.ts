@@ -12,7 +12,8 @@ export function ownerSessionRoutes(sessions: OwnerSessions, readCredentials: () 
   app.use("*", bodyLimit({ maxSize: 4096, onError: c => c.json({ code: "invalid_owner_session_request" }, 413) }));
   const ownerOnly = teamControlAuthentication(readCredentials, legacyTokens);
   app.use("*", async (c, next) => {
-    if (c.req.path === "/api/team-control/owner-session/exchange") return next();
+    if (c.req.path === "/api/team-control/owner-session/exchange"
+      || c.req.path === "/api/team-control/owner-session/auto") return next();
     // Minting and administration stay owner-CLI operations; a paired browser can revoke only itself.
     if (["/api/team-control/owner-session", "/api/team-control/owner-session/"].includes(c.req.path) && c.req.method === "DELETE") return next();
     if (c.req.header("Origin") !== undefined || c.req.header("Cookie") !== undefined
@@ -23,6 +24,17 @@ export function ownerSessionRoutes(sessions: OwnerSessions, readCredentials: () 
     });
   });
   app.post("/pairing", c => c.json(sessions.mint(readCredentials().ownerToken!)));
+  app.post("/auto", c => {
+    const origin = c.get("ownerBrowserOrigin" as never) as string | undefined;
+    const credentials = readCredentials();
+    if (!origin || !credentials.ownerToken || c.req.header("Authorization") !== undefined
+      || !/^application\/json(?:\s*;|$)/i.test(c.req.header("Content-Type") ?? "")) {
+      return c.json({ code: "invalid_owner_session_request" }, 403);
+    }
+    const result = sessions.createLocal(origin, credentials.ownerToken);
+    c.header("Set-Cookie", `${OWNER_COOKIE}=${result.token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${OWNER_ABSOLUTE_MS / 1000}`);
+    return c.json({ antiForgeryToken: result.antiForgeryToken, session: result.session });
+  });
   app.post("/exchange", async c => {
     const origin = c.get("ownerBrowserOrigin" as never) as string | undefined;
     const credentials = readCredentials();

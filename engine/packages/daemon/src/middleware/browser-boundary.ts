@@ -328,7 +328,8 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
         if (header === null || protocols === null || offered.length > 1
           || (header !== undefined && offered.length === 1 && header !== offered[0])) return deny("owner_anti_forgery_required");
         c.set("ownerAntiForgery" as never, header ?? offered[0]);
-        if (c.req.path !== "/api/team-control/owner-session/exchange") {
+        if (c.req.path !== "/api/team-control/owner-session/exchange"
+          && c.req.path !== "/api/team-control/owner-session/auto") {
           if (c.req.header("Authorization") !== undefined) return deny("owner_browser_bearer_refused");
           const refusal = options.authenticateOwnerCookie?.(c);
           if (!options.authenticateOwnerCookie) return deny("owner_session_required");

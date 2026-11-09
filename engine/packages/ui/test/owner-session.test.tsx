@@ -21,9 +21,22 @@ beforeEach(() => {
   vi.stubGlobal("fetch", request);
   vi.stubGlobal("multiAgentDesktop", { reconnect });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); window.history.replaceState({}, "", "/"); });
 
 describe("desktop owner-session reconnect", () => {
+  it("auto-pairs a loopback browser without displaying a pairing-code prompt", async () => {
+    sessionStorage.clear();
+    vi.stubGlobal("multiAgentDesktop", undefined);
+    window.history.replaceState({}, "", "/team");
+    const directToken = "c".repeat(43);
+    request.mockResolvedValueOnce(response(200, { antiForgeryToken: directToken, session: { id: "local" } }));
+    const { result } = renderHook(useOwnerSession, { wrapper });
+    await vi.waitFor(() => expect(result.current.paired).toBe(true));
+    expect(request).toHaveBeenCalledWith("/api/team-control/owner-session/auto", expect.objectContaining({ method: "POST" }));
+    expect(sessionStorage.getItem(storageKey)).toBe(directToken);
+    expect(result.current.canReconnect).toBe(false);
+  });
+
   it("renews an expired desktop session without unmounting the paired view or asking for a code", async () => {
     request.mockResolvedValueOnce(denied()).mockResolvedValueOnce(ok());
     const states: boolean[] = [];
