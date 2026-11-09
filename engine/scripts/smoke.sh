@@ -17,6 +17,7 @@ npm run test -w packages/daemon -- \
   test/team-governance.test.ts \
   test/team-read-model.test.ts \
   test/display-names.test.ts \
+  test/generated-titles.test.ts \
   test/team-workspace.test.ts \
   test/team-candidate-launch.test.ts \
   test/managed-attempt-attachment.test.ts \
@@ -29,6 +30,7 @@ npm run test -w packages/daemon -- \
   test/team-start.test.ts \
   test/team-setup.test.ts \
   test/team-settings.test.ts \
+  test/native-model-choices.test.ts \
   test/team-model-policy.test.ts \
   test/team-souls.test.ts \
   test/team-dependencies.test.ts \
@@ -42,6 +44,7 @@ npm run test -w packages/daemon -- \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
   test/agent-turn.test.ts \
+  test/startup-orchestrator.test.ts \
   test/agent-turn-view-telemetry.test.ts \
   test/attempt-telemetry.test.ts \
   test/team-telemetry-routes.test.ts \
@@ -67,4 +70,5 @@ npm run test -w packages/ui -- \
   src/team/__tests__/project-home.test.tsx src/team/__tests__/chat-panel.test.tsx \
   src/team/__tests__/documents.test.tsx \
   src/team/__tests__/souls-workflows.test.tsx \
+  src/team/__tests__/background.test.tsx src/team/__tests__/model-settings.test.tsx \
   src/team/__tests__/new-task.test.tsx src/team/__tests__/diff.test.tsx --maxWorkers=2

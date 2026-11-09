@@ -25,7 +25,7 @@ import { SettingsStore } from "./user-settings/settings-store.js";
 import { shellQuote } from "../adapters/shell-quote.js";
 import { observeClaudeResumeLaunch, type ClaudeLaunchedProcess, type NativeProcessLister } from "./native-process-lineage.js";
 import { agentTurnOutputPaths, continuationNote, leadProgressNote, managedTurnPrompt, turnInstructions, writeAgentTurnPrompt } from "./agent-turn.js";
-import { leadChatTurnNote, listChatMessages, takeOwnerMessages } from "./lead-chat.js";
+import { leadChatTurnNote, listChatMessages, responseLanguageNote, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
 import { unassignedOwnerWorkflows } from "./team-workflows.js";
 
 /**
@@ -839,13 +839,16 @@ export class StartupOrchestrator {
       ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attempt.context.projection.attemptId), listChatMessages(this.db, runId),
         unassignedOwnerWorkflows(this.db, runId))
       : null;
+    const preference = this.db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId) as
+      { language: ResponseLanguage | null };
     return managedTurnPrompt({ identity: identityAction?.value ?? "", bundle, runId, assignment, taskBody: task.body,
       outputs, permissions, instructions: turnInstructions(attempt.context), workflow: attempt.context.workflow,
       ...(["implementer", "reviewer"].includes(assignment.role) ? {
         taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.context.projection.attemptId).taskReport,
       } : {}),
       continuation: [continuationNote(this.db, runId, assignment.taskId, assignment.role), chat,
-        assignment.role === "lead" ? leadProgressNote(this.db, runId) : null].filter(Boolean).join("\n\n") || null });
+        assignment.role === "lead" ? leadProgressNote(this.db, runId) : null,
+        responseLanguageNote(listChatMessages(this.db, runId), preference.language)].filter(Boolean).join("\n\n") || null });
   }
 
   private async deliverInitialSessionPrompt(

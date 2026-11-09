@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,8 @@ import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 import { OwnerSessions, OWNER_CSRF_HEADER } from "../src/domain/owner-session.js";
 import { createTestApp } from "./helpers/test-app.js";
+
+vi.mock("../src/domain/native-model-choices.js", () => ({ nativeModelChoices: () => [{ client: "codex", model: "discovered-model" }] }));
 
 describe("owner team settings", () => {
   let directory: string, db: Database.Database, store: SettingsStore;
@@ -50,6 +52,18 @@ describe("owner team settings", () => {
     expect(await reloaded.json()).toMatchObject({ settings: { ...body, configured: true } });
     expect(db.prepare("SELECT runtime, model FROM nodes WHERE id = 'lead-1'").get())
       .toEqual({ runtime: "codex", model: "chosen-lead" });
+  });
+
+  it("adds local model suggestions to the existing owner settings read", async () => {
+    db.prepare("INSERT INTO rigs (id, name) VALUES ('project-1', 'model-project')").run();
+    db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime) VALUES ('lead-1', 'project-1', 'lead', 'lead', 'claude-code')").run();
+    const result = await app.request("/api/team-control/teams/project-1/settings", {
+      headers: { Authorization: "Bearer " + ownerToken },
+    }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    expect(result.status).toBe(200);
+    expect(result.headers.get("Cache-Control")).toBe("no-store");
+    expect(await result.json()).toMatchObject({ settings: { teamId: "project-1" },
+      modelChoices: [{ client: "codex", model: "discovered-model" }] });
   });
 
   it("protects project model reads and writes with owner and browser anti-forgery boundaries", async () => {

@@ -2,6 +2,7 @@ import { ownerWorkflowCommand, type WorkflowSelection } from "./team-workflows.j
 import type Database from "better-sqlite3";
 import { TeamContractError } from "../contracts/team-control.js";
 import { readAgentTurnLastMessage } from "./agent-turn.js";
+import { generatedReplyTitle } from "./display-names.js";
 import type { PlanGovernance } from "./plan-governance.js";
 
 /**
@@ -35,6 +36,7 @@ export interface TeamChatMessage {
    */
   kind: "text" | "decision" | "confirmation";
   body: string;
+  responseLanguage?: "en" | "zh-CN";
   /** The choices a decision offers, in the lead's order; null on every other message. */
   options: string[] | null;
   /** The owner message that answered a decision; null while the run waits on it. */
@@ -44,6 +46,24 @@ export interface TeamChatMessage {
   /** The lead attempt whose prompt carried an owner message; null while it is still pending. */
   deliveredAttempt: string | null;
   createdAt: string;
+}
+
+export type ResponseLanguage = "en" | "zh-CN";
+
+export function parseResponseLanguage(value: unknown): ResponseLanguage | undefined {
+  if (value === undefined) return undefined;
+  if (value !== "en" && value !== "zh-CN") throw new TeamContractError("responseLanguage");
+  return value;
+}
+
+/** The latest stored owner choice also governs turns after that message was delivered. */
+export function responseLanguageNote(history: readonly TeamChatMessage[], currentLanguage?: ResponseLanguage | null): string | null {
+  const language = currentLanguage ?? [...history].reverse().find(message => message.sender === "owner" && message.responseLanguage)?.responseLanguage;
+  if (!language) return null;
+  const label = language === "zh-CN" ? "Simplified Chinese (zh-CN)" : "English (en)";
+  return `The owner's selected response language is ${label}. Use it for owner-facing replies, public progress, questions, and generated titles. ` +
+    "This current owner preference takes precedence over repository language defaults and previous turns. " +
+    "Preserve code, commands, paths, identifiers, and quoted source text. Honor an explicit translation or language request in the current owner message.";
 }
 
 /** The longest message either side may send. Bounded like a task body, not like a log line. */
@@ -63,8 +83,9 @@ export function chatBody(value: unknown, field: string): string {
 }
 
 function rowToMessage(row: { id: string; runId: string; sender: string; kind: string; body: string; optionsJson: string | null;
-  answeredBy: string | null; attemptId: string | null; deliveredAttempt: string | null; createdAt: string }): TeamChatMessage {
+  answeredBy: string | null; attemptId: string | null; deliveredAttempt: string | null; createdAt: string; responseLanguage?: ResponseLanguage | null }): TeamChatMessage {
   return { id: row.id, runId: row.runId, sender: row.sender === "lead" ? "lead" : "owner",
+    ...(row.responseLanguage ? { responseLanguage: row.responseLanguage } : {}),
     kind: row.kind === "decision" || row.kind === "confirmation" ? row.kind : "text", body: row.body,
     // The options are this row's own bytes, written by the daemon when it stored the decision.
     // A row whose JSON the daemon cannot read is still a message, so it renders as one.
@@ -81,14 +102,16 @@ function parseOptions(value: string): string[] | null {
 }
 
 const COLUMNS = `id, run_id AS runId, sender, kind, body, options_json AS optionsJson,
-  answered_by AS answeredBy, attempt_id AS attemptId, delivered_attempt AS deliveredAttempt, created_at AS createdAt`;
+  answered_by AS answeredBy, attempt_id AS attemptId, delivered_attempt AS deliveredAttempt, created_at AS createdAt, response_language AS responseLanguage`;
 
 /** Append one owner message. Called inside the caller's transaction; it never opens its own. */
 export function appendChatMessage(db: Database.Database, input: {
-  id: string; runId: string; body: string; createdAt: string; kind?: "confirmation";
+  id: string; runId: string; body: string; createdAt: string; kind?: "confirmation"; responseLanguage?: ResponseLanguage;
 }): TeamChatMessage {
-  db.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, kind, body, created_at)
-    VALUES (?, ?, 'owner', ?, ?, ?)`).run(input.id, input.runId, input.kind ?? "text", input.body, input.createdAt);
+  db.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, kind, body, created_at, response_language)
+    VALUES (?, ?, 'owner', ?, ?, ?, ?)`).run(input.id, input.runId, input.kind ?? "text", input.body, input.createdAt, input.responseLanguage ?? null);
+  if (input.responseLanguage) db.prepare("UPDATE team_runs SET response_language = ? WHERE id = ?")
+    .run(input.responseLanguage, input.runId);
   return getChatMessage(db, input.id)!;
 }
 
@@ -318,10 +341,18 @@ export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (atte
       const message = escalation
         ? escalation.context ? `${escalation.question}\n\n${escalation.context}` : escalation.question
         : body!;
-      const inserted = dependencies.db.transaction(() =>
-        recordLeadReply(dependencies.db, { id: `chat-${attempt.id}`, runId: attempt.runId, attemptId: attempt.id,
+      const inserted = dependencies.db.transaction(() => {
+        const recorded = recordLeadReply(dependencies.db, { id: `chat-${attempt.id}`, runId: attempt.runId, attemptId: attempt.id,
           body: message, createdAt: (dependencies.now?.() ?? new Date()).toISOString(),
-          ...(escalation ? { decision: { options: escalation.options } } : {}) }))();
+          ...(escalation ? { decision: { options: escalation.options } } : {}) });
+        const title = body ? generatedReplyTitle(body) : null;
+        if (recorded && title) {
+          dependencies.db.prepare("UPDATE team_runs SET display_name = ? WHERE id = ?").run(title, attempt.runId);
+          dependencies.db.prepare(`UPDATE team_queue_authority SET display_name = ?
+            WHERE run_id = ? AND json_extract(assignment_json, '$.role') = 'lead'`).run(title, attempt.runId);
+        }
+        return recorded;
+      })();
       if (!inserted) return;
     }
     if (!pendingOwnerMessages(dependencies.db, attempt.runId).length) return;

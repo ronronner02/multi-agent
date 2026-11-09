@@ -11,7 +11,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { bindingForGoal, unisolatedPolicyCapability, refreshPlanBinding } from "../src/routes/team-start.js";
-import { composeLeadTurnEnd, leadChatTurnNote, listChatMessages, pendingOwnerMessages, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
+import { composeLeadTurnEnd, responseLanguageNote, leadChatTurnNote, listChatMessages, pendingOwnerMessages, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
 import { AttemptTelemetry } from "../src/domain/attempt-telemetry.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
@@ -142,6 +142,35 @@ describe("U5 — lead chat and plan approval", () => {
     const task = governance.findTask(receipt.runId!, "task-1")!;
     expect(task.assignment).toEqual({ taskId: "task-1", role: "lead", paths: ["plan.md", "lead-roster.json", "lead-escalation.json"], dependencies: [] });
     expect(dispatch).toHaveBeenCalledWith(receipt.runId, "task-1");
+  });
+
+  it("retains the selected reply language across start, chat, and delivered turns", async () => {
+    const { runId } = await planningRun({ responseLanguage: "zh-CN" });
+    expect(listChatMessages(db, runId!)[0]).toMatchObject({ responseLanguage: "zh-CN" });
+    expect(responseLanguageNote(listChatMessages(db, runId!))).toContain("Simplified Chinese (zh-CN)");
+    takeOwnerMessages(db, runId!, "first-turn");
+    const reply = await call(`/runs/${runId}/chat`, command(runId!, "english", {
+      body: "Continue the discussion.", responseLanguage: "en",
+    }));
+    expect(reply.status).toBe(200);
+    const history = listChatMessages(db, runId!);
+    expect(db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId))
+      .toEqual({ language: "en" });
+    expect(history.at(-1)).toMatchObject({ body: "Continue the discussion.", responseLanguage: "en" });
+    expect(responseLanguageNote(history)).toContain("English (en)");
+    expect(responseLanguageNote(history)).not.toContain("Simplified Chinese");
+    expect(responseLanguageNote([])).toBeNull();
+  });
+
+  it("validates reply languages before a start or chat has effects", async () => {
+    expect((await startPlanning({ responseLanguage: "invalid-language" })).status).toBe(400);
+    const { runId } = await planningRun();
+    const count = listChatMessages(db, runId!).length;
+    expect((await call(`/runs/${runId}/chat`, command(runId!, "invalid-language", {
+      body: "Continue", responseLanguage: "invalid-language",
+    }))).status).toBe(400);
+    expect(listChatMessages(db, runId!)).toHaveLength(count);
+    expect(responseLanguageNote(listChatMessages(db, runId!))).toBeNull();
   });
 
   it("retains the first project discussion without admitting execution tasks", async () => {
@@ -396,7 +425,7 @@ describe("U5 — lead chat and plan approval", () => {
     expect(governance.getRun(runId!).phase).toBe("delivery");
   });
 
-  it.each([null, {}, { ownerMessage: "Confirm plan" }])("approves a persisted pre-roster planning run without retrofitting its binding or requiring a roster (payload: %s)", async payload => {
+  it.each([null, {}, { ownerMessage: "Confirm plan" }, { responseLanguage: "zh-CN" }])("approves a persisted pre-roster planning run without retrofitting its binding or requiring a roster (payload: %s)", async payload => {
     const runId = "legacy-pre-roster";
     const root = ensurePlanWorktree({ repositoryRoot: directory, worktreeRoot: worktrees, runId, name: "Legacy plan" }).path;
     commitPlan({ worktree: root, planRef: "plan.md", plan: "# Legacy bootstrap", message: "Legacy planning fixture" });
@@ -421,6 +450,11 @@ describe("U5 — lead chat and plan approval", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(governance.getRun(runId)).toMatchObject({ phase: "delivery", reviewerSeat: "review@demo",
       binding: { writePaths: ["plan.md", "src"] } });
+    if (payload && "responseLanguage" in payload) {
+      expect(db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId))
+        .toEqual({ language: "zh-CN" });
+      expect(governance.chatMessages(runId)).toEqual([]);
+    }
     if (payload && "ownerMessage" in payload) expect(governance.chatMessages(runId)).toEqual([
       expect.objectContaining({ kind: "confirmation", body: payload.ownerMessage }),
     ]);

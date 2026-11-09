@@ -5,19 +5,20 @@ import type { TeamModelChoice, TeamModelSettings } from "@openrig/daemon/team-co
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { teamsKey } from "./hooks.js";
 
+interface ModelSettingsReply { settings: TeamModelSettings; modelChoices?: TeamModelChoice[] }
 interface ModelDraft { lead: TeamModelChoice; allowedSubagents: TeamModelChoice[]; kind: "project" | "test" }
 const draftOf = (settings: TeamModelSettings): ModelDraft => ({ lead: { ...settings.lead, model: settings.lead.model ?? "" },
   allowedSubagents: settings.allowedSubagents ?? [], kind: settings.kind });
 
 export function ModelSettings({ teamId }: { teamId: string }) {
   const { t } = useTranslation(), { paired, request } = useOwnerSession();
-  const launchesId = useId();
+  const launchesId = useId(), choicesId = useId();
   const cache = useQueryClient(), key = ["team", "model-settings", teamId];
   const settings = useQuery({ queryKey: key, enabled: paired, retry: false, refetchInterval: 5_000,
-    queryFn: async ({ signal }) => (await request<{ settings: TeamModelSettings }>(`/teams/${encodeURIComponent(teamId)}/settings`, { signal })).settings });
+    queryFn: ({ signal }) => request<ModelSettingsReply>(`/teams/${encodeURIComponent(teamId)}/settings`, { signal }) });
   const [draft, setDraft] = useState<ModelDraft | null>(null);
   const [busy, setBusy] = useState(false), [failure, setFailure] = useState<string | null>(null);
-  const saved = settings.data;
+  const saved = settings.data?.settings;
   if (!saved) return <section className="plate ui-settings-panel">
     <p role={settings.isError ? "alert" : "status"}>{t(settings.isError ? "settings.saveFailed" : "web.loading")}</p>
     {settings.isError && <button className="btn btn-outline" onClick={() => void settings.refetch()}>{t("action.retry")}</button>}
@@ -27,7 +28,10 @@ export function ModelSettings({ teamId }: { teamId: string }) {
   const setWorker = (index: number, update: Partial<TeamModelChoice>) => setDraft({ ...form,
     allowedSubagents: form.allowedSubagents.map((item, i) => i === index ? { ...item, ...update } : item) });
   const clients = <><option value="claude-code">Claude Code</option><option value="codex">Codex</option></>;
-  const choices = [...new Set([saved.lead.model, ...(saved.allowedSubagents ?? []).map(item => item.model)].filter(Boolean))];
+  const choices = (client: TeamModelChoice["client"]) => [...new Set([
+    ...(settings.data?.modelChoices ?? []), ...(saved.lead.model ? [{ client: saved.lead.client, model: saved.lead.model }] : []),
+    ...(saved.allowedSubagents ?? []),
+  ].filter(choice => choice.client === client).map(choice => choice.model))].sort();
   return <section className="plate ui-settings-panel" aria-label={t("models.title")}>
     <h2>{t("models.title")}</h2>
     <form className="ui-model-form" onSubmit={async event => {
@@ -38,7 +42,7 @@ export function ModelSettings({ teamId }: { teamId: string }) {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
         });
         await cache.cancelQueries({ queryKey: key });
-        cache.setQueryData(key, result.settings); setDraft(null);
+        cache.setQueryData(key, { ...settings.data, ...result }); setDraft(null);
         void cache.invalidateQueries({ queryKey: teamsKey });
       } catch (error) { setFailure(error instanceof OwnerReadError ? error.code : "generic"); }
       finally { setBusy(false); }
@@ -51,15 +55,17 @@ export function ModelSettings({ teamId }: { teamId: string }) {
         <label className="field">{t("models.leadClient")}<select className="input" value={form.lead.client} disabled={busy}
           onChange={event => setLead({ client: event.target.value as TeamModelChoice["client"], model: "" })}>{clients}</select></label>
         <label className="field">{t("models.leadModel")}<input className="input mono" value={form.lead.model} required maxLength={128}
-          list="project-model-choices" disabled={busy} onChange={event => setLead({ model: event.target.value })} /></label>
+          list={choicesId + "-" + form.lead.client} disabled={busy} onChange={event => setLead({ model: event.target.value })} /></label>
       </div>
-      <datalist id="project-model-choices">{choices.map(model => <option key={model} value={model!} />)}</datalist>
+      {(["claude-code", "codex"] as const).map(client => <datalist id={choicesId + "-" + client} key={client}>
+        {choices(client).map(model => <option key={model} value={model} />)}
+      </datalist>)}
       <fieldset className="ui-model-allowlist"><legend>{t("models.allowed")}</legend>
         {form.allowedSubagents.map((item, index) => <div className="ui-model-row" key={index}>
           <label className="field">{t("models.workerClient", { index: index + 1 })}<select className="input" value={item.client} disabled={busy}
             onChange={event => setWorker(index, { client: event.target.value as TeamModelChoice["client"], model: "" })}>{clients}</select></label>
           <label className="field">{t("models.workerModel", { index: index + 1 })}<input className="input mono" value={item.model} required maxLength={128}
-            list="project-model-choices" disabled={busy} onChange={event => setWorker(index, { model: event.target.value })} /></label>
+            list={choicesId + "-" + item.client} disabled={busy} onChange={event => setWorker(index, { model: event.target.value })} /></label>
           <button className="btn btn-outline" type="button" disabled={busy} aria-label={t("models.remove", { index: index + 1 })}
             onClick={() => setDraft({ ...form, allowedSubagents: form.allowedSubagents.filter((_, i) => i !== index) })}>{t("models.removeShort")}</button>
         </div>)}

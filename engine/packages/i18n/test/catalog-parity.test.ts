@@ -45,6 +45,14 @@ describe("shared catalog contract", () => {
     expect(parityIssues(CATALOGS)).toEqual([]);
   });
 
+  it("translates specialist controls and workflow controls in the Chinese catalog", () => {
+    const keys = Object.keys(CATALOGS.en).filter(key => key.startsWith("souls.") || key.startsWith("workflows.")) as MessageKey[];
+    for (const key of keys) {
+      expect(CATALOGS["zh-CN"][key], key).not.toBe(CATALOGS.en[key]);
+      expect(CATALOGS["zh-CN"][key], key).toMatch(/[\u3400-\u9fff]/u);
+    }
+  });
+
   it("reports missing, empty, extra and mismatched translations", () => {
     const catalogs: CatalogFixture = { "zh-CN": { ...CATALOGS["zh-CN"] }, en: { ...CATALOGS.en } };
     delete catalogs["zh-CN"]["status.queue.done"];

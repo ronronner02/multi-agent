@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import { createInterfaceI18n } from "@openrig/i18n";
@@ -24,7 +24,7 @@ async function show(state: ProjectDocumentWorkflow | null = workflow(), phase: "
   render(<I18nextProvider i18n={i18n.instance}><DocumentsScreen read={{ ...read(), run: { ...read().run, phase, displayName } }}
     chat={{ available: true, phase, messages: [], pendingDecision: null, documentWorkflow: state }}
     onDiscuss={onDiscuss} onChanged={onChanged} /></I18nextProvider>);
-  return { onDiscuss, onChanged };
+  return { onDiscuss, onChanged, language: i18n };
 }
 
 describe("desktop document center", () => {
@@ -64,7 +64,7 @@ describe("desktop document center", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm v2" }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/documents/confirm`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ kind: "requirements", versionId: "requirements-2", hash: doc(2).hash });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ kind: "requirements", versionId: "requirements-2", hash: doc(2).hash, responseLanguage: "en" });
     expect(request).toHaveBeenCalledTimes(1);
   });
   it("starts the requested planning stage, not execution, after requirements are confirmed", async () => {
@@ -72,8 +72,24 @@ describe("desktop document center", () => {
     await show(state); fireEvent.click(screen.getByRole("button", { name: "Generate plan" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/documents/stage`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ stage: "plan" });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ stage: "plan", responseLanguage: "en" });
   });
+  it.each(["confirm", "stage", "revise", "discuss"] as const)("uses a changed interface language for the %s document action", async action => {
+    const state = workflow();
+    if (action === "stage") state.confirmed.requirements = "requirements-2";
+    const view = await show(state, action === "revise" || action === "discuss" ? "delivery" : "planning");
+    await act(async () => { await view.language.changeLanguage("zh-CN"); });
+    const key = action === "confirm" ? "documents.confirmVersion" : action === "stage" ? "documents.stage.plan"
+      : action === "revise" ? "documents.revise.requirements" : "documents.discuss";
+    fireEvent.click(screen.getByRole("button", { name: view.language.instance.t(key, { version: 2 }) }));
+    await waitFor(() => expect(action === "discuss" ? view.onDiscuss : view.onChanged).toHaveBeenCalledTimes(1));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/documents/${action === "confirm" ? "confirm" : "stage"}`);
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual(action === "confirm"
+      ? { kind: "requirements", versionId: "requirements-2", hash: doc(2).hash, responseLanguage: "zh-CN" }
+      : { stage: action === "stage" ? "plan" : "requirements", responseLanguage: "zh-CN" });
+  });
+
   it("keeps a plan based on older requirements unconfirmable", async () => {
     const state = workflow(); state.stage = "plan"; state.confirmed.requirements = "requirements-2";
     state.versions.unshift(doc(1, { id: "plan-1", kind: "plan", path: "plan.md", content: "# Old plan", requirementsVersionId: "requirements-1" }));
@@ -86,6 +102,7 @@ describe("desktop document center", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discuss this document" }));
     await waitFor(() => expect(onDiscuss).toHaveBeenCalled());
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/documents/stage`);
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ stage: "requirements", responseLanguage: "en" });
     expect(onDiscuss.mock.calls[0]![1]).toContain(doc(2).hash);
     expect(onDiscuss.mock.calls[0]![1]).toContain(doc(2).content);
   });

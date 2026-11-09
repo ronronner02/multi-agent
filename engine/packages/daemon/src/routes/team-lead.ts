@@ -8,7 +8,7 @@ import { hashBinding, type PlanGovernance, type ProviderPolicyCapability } from 
 import type { LeadTask } from "../domain/lead-proposal.js";
 import { planningRosterRequired, type LeadRosterEvidence } from "../domain/lead-roster.js";
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
-import { chatBody, runLeadTask } from "../domain/lead-chat.js";
+import { chatBody, parseResponseLanguage, runLeadTask } from "../domain/lead-chat.js";
 import { commitPlan } from "../domain/plan-branch.js";
 import { bindingForGoal, refreshPlanBinding } from "./team-start.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
@@ -98,6 +98,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
       return c.json({ code: "owner_control_required", error: "An authenticated owner decision is required." }, 403);
     }
     const request = parseControlRequest(await c.req.json());
+    parseResponseLanguage((request.payload as Record<string, unknown> | null)?.responseLanguage);
     if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
     if (!leadTaskOf(runId, taskId)) return c.json({ code: "control_not_found", error: "This run has no lead task with that id." }, 404);
     if (!options.runtime) return c.json({ code: "lead_proposal_unavailable", error: "Candidate trees are not composed in this daemon." }, 503);
@@ -143,6 +144,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required" }, 403);
     const request = parseControlRequest(await c.req.json());
+    parseResponseLanguage((request.payload as Record<string, unknown> | null)?.responseLanguage);
     if (request.runId !== runId) return c.json({ code: "control_scope_denied" }, 403);
     const run = governance.getRun(runId), lead = governance.leadTask(runId);
     if (!lead || !options.runtime?.documentsFor) return c.json({ code: "documents_unavailable", error: "The document reader is not available." }, 503);
@@ -156,6 +158,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required" }, 403);
     const request = parseControlRequest(await c.req.json());
+    parseResponseLanguage((request.payload as Record<string, unknown> | null)?.responseLanguage);
     if (request.runId !== runId) return c.json({ code: "control_scope_denied" }, 403);
     const run = governance.getRun(runId), policy = options.readPolicyCapability?.();
     if (!policy) return c.json({ code: "current_policy_unavailable" }, 503);
@@ -246,6 +249,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner message is required." }, 403);
     const request = parseControlRequest(await c.req.json());
+    parseResponseLanguage((request.payload as Record<string, unknown> | null)?.responseLanguage);
     if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
     const run = governance.getRun(runId), policy = options.readPolicyCapability?.();
     // A planning run's binding is refreshed from the worktree the plan is recorded in, which is
@@ -277,6 +281,7 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
     const runId = c.req.param("runId")!;
     if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner approval is required." }, 403);
     const request = parseControlRequest(await c.req.json());
+    parseResponseLanguage((request.payload as Record<string, unknown> | null)?.responseLanguage);
     if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
     const run = governance.getRun(runId);
     if (request.expectedEntityVersion !== run.entityVersion) throw new Error("Run entity version conflict");

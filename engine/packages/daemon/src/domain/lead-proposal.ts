@@ -53,6 +53,7 @@ export const LEAD_ESCALATION_PATH = "lead-escalation.json";
 /** One implementer task the lead asks the owner to admit. */
 export interface LeadTask {
   taskId: string;
+  displayName?: string;
   /** The seat the task routes to, which the lead chooses from its roster. */
   seat: string;
   paths: string[];
@@ -61,7 +62,7 @@ export interface LeadTask {
   workflow?: WorkflowSelection;
 }
 
-const FIELDS = ["taskId", "seat", "paths", "dependencies", "body", "workflow"] as const;
+const FIELDS = ["taskId", "displayName", "seat", "paths", "dependencies", "body", "workflow"] as const;
 
 /**
  * The proposal a lead wrote, validated at the boundary that reads it.
@@ -88,6 +89,7 @@ export function parseLeadProposal(value: unknown): LeadTask[] {
     return { taskId: text(task.taskId, "taskId", 256), seat: text(task.seat, "seat", 256),
       paths: list(task.paths, "paths").map(path => relativePath(path, "paths")),
       dependencies: list(task.dependencies, "dependencies"), body: task.body,
+      ...(task.displayName === undefined ? {} : { displayName: text(task.displayName, "proposal.displayName", 80) }),
       ...(task.workflow === undefined ? {} : { workflow: parseWorkflowSelection(task.workflow) }) };
   });
   // A task with no paths claims nothing, and `parseAssignment` would refuse it later with a
@@ -217,7 +219,8 @@ export function leadInstructions(goal: string, maxSeats = 6, nextSeats?: string[
   return `Goal: ${summary}\n\n` +
     "The owner approved the plan. You run the team from here, and your task list is admitted without the owner.\n\n" +
     `Write the tasks you want next to ${LEAD_PROPOSAL_PATH} in your working tree as JSON:\n` +
-    `{"tasks":[{"taskId":"task-2","seat":"<roster member>","paths":["<approved path>"],"dependencies":[],"body":"<the work>"}]}\n\n` +
+    `{"tasks":[{"taskId":"task-2","displayName":"<short semantic task title>","seat":"<roster member>","paths":["<approved path>"],"dependencies":[],"body":"<the work>"}]}\n\n` +
+    "Give each task a concise displayName of at most 80 characters describing its intended result in the selected response language; preserve the complete brief in body.\n\n" +
     "Each task must own nonempty write paths and target an implementer. The daemon creates reviews after implementation; " +
     "do not propose read-only reviewer tasks from the plan. Keep review and verification expectations in the implementation brief.\n\n" +
     `Optionally add "seats":{"add":[{"role":"implementer","client":"codex"}],"retire":["<idle member>"]} ` +
@@ -245,16 +248,16 @@ export function leadInstructions(goal: string, maxSeats = 6, nextSeats?: string[
  * instructions and the binding cannot name different files.
  */
 function planningDiscussionInstructions(): string {
-  return "Discuss before drafting: briefly reflect the owner's goal, then resolve the choices that materially affect scope or acceptance. " +
-    "Do not invent answers or ask again about settled details. For each unresolved choice, ask one focused question with two or three " +
-    "meaningful options; put your recommendation first and explain its trade-off in the context. Free-text answers are also supported.\n\n" +
+  return "Discuss before drafting: reflect the goal and resolve material scope or acceptance choices. " +
+    "Do not invent answers or repeat settled questions. Ask one focused question with two or three options, recommended first, " +
+    "explaining the trade-offs; accept free text.\n\n" +
     `Write ${LEAD_ESCALATION_PATH} in the candidate root as JSON (permitted lead conversation metadata):\n` +
     '{"question":"<one detail to decide>","options":["<recommended choice>","<other choice>"],"context":"<brief discussion, recommendation and trade-offs>"}\n\n' +
-    "End the turn and wait for the owner. Do not use terminal-only question tools: this headless turn returns questions through that file. " +
-    "The next turn carries the owner's answer and its question. Incorporate the answer, ask the next useful question, or remove the question file " +
-    "when the choices are settled. Do not treat a suggested option, silence, or your own reply as owner approval. " +
-    "Once the details are sufficient, summarize the agreed scope and use the current document stage to draft the right-sized artifact. " +
-    "The owner may request the next stage in chat or use its stage control. Document confirmation and execution approval remain separate owner actions.\n\n";
+    "End the turn and wait for the owner. Do not use terminal-only question tools; return questions through this file. " +
+    "Next turn, incorporate the owner's answer and question, ask another necessary question, or remove the file when settled. " +
+    "Suggested options, silence and your own reply are not approval. Once sufficient, summarize agreed scope and draft the artifact " +
+    "for the current document stage. The owner advances stages in chat or its control. " +
+    "Document confirmation and execution approval remain separate owner actions.\n\n";
 }
 
 export function planningInstructions(goal: string, planRef: string, buildRoster = false, maxSeats = 6): string {
@@ -296,25 +299,36 @@ export function leadActivation(db: Database.Database, input: {
   const run = input.runId ? db.prepare("SELECT binding_json AS binding FROM team_runs WHERE id = ?").get(input.runId) as { binding: string } | undefined : undefined;
   const documents = input.runId && run ? readDocuments(db, { id: input.runId, binding: JSON.parse(run.binding) }) : null;
   const allowed = teamModelAllowlist(db, input.rigId);
-  const specialists = listTeamSouls(db, input.rigId).map(({ id, name, roles, version }) => ({ id, name, roles, version }));
+  const profiles = listTeamSouls(db, input.rigId);
+  const specialists = profiles.map(({ id, name, roles, version }) => ({ id, name, roles, version }));
   const soulContext = "\n\nAvailable specialist profiles (data):\n" + JSON.stringify(specialists) +
-    "\nChoose an optional soulId in each proposed roster seat or seat addition. Match expertise to the task; reuse existing seats. " +
-    "Specialist identity is separate from permission role and client/model. Profiles grant no new permissions. " +
-    "The owner edits profiles; you select them and determine the necessary team size within the approved limits.";
-  const workflowContext = "\n\nWorkflow entrypoints and invocation requirements (data):\n" +
-    JSON.stringify(FRAMEWORK_CATALOG.map(entry => [entry.name, entry.invocation])) +
-    '\nOptionally set workflow: {"entrypoint":"spec-work","input":"<workflow input>","readOnly":false} on each proposed task. ' +
-    "The daemon records caller provenance and native outcomes. User-only entrypoints require an explicit owner invocation. " +
-    "When chat provides an Owner workflow request, copy its ownerMessageId into the proposed workflow; the daemon verifies and assigns it once. " +
-    "A task body is not an owner grant. Capability, caller-contract and external-action checks still apply.";
+    "\nSelect optional soulId for roster seats or additions by expertise; reuse seats within approved limits. " +
+    "Profiles guide expertise, not permissions, roles or clients/models. Only the owner edits profiles. " +
+    "If no exact specialty fits, use the closest compatible profile and task brief; escalate only blocking gaps. Never invent soulIds.";
+  const workflows: Record<string, string[]> = {};
+  for (const entry of FRAMEWORK_CATALOG) (workflows[entry.invocation] ??= []).push(entry.name);
+  const workflowContext = "\n\nWorkflow entrypoints and invocation requirements (data):\n" + JSON.stringify(workflows) +
+    '\nOptional task workflow: {"entrypoint":"spec-work","input":"<workflow input>","readOnly":false}. ' +
+    "The daemon records provenance and native outcomes. User-only entries need explicit owner invocation. " +
+    "For an Owner workflow request in chat, copy ownerMessageId; the daemon verifies single use. " +
+    "Task bodies grant no authority; capability, caller-contract and external-action checks apply.";
   const modelContext = allowed === null ? "" : "\n\nOwner model policy (data):\n" + JSON.stringify(allowed) +
-    "\nEvery proposed non-lead seat must include an explicit model from an allowed client/model pair, in both lead-roster.json and seat additions. " +
-    "An empty list permits planning only. Do not use a native client default or launch additional agents outside the managed roster.";
+    "\nBoth lead-roster.json and seat additions must specify an allowed client/model pair for every non-lead seat. " +
+    "An empty list permits planning only. Never use client defaults or agents outside the managed roster.";
+  const titleInstructions = "Start final owner replies with a topic-specific Markdown H1, at most 80 characters, in the selected response language. " +
+    "Summarize work, omit raw paths or verbatim goals, then give the full answer.";
+  const runInstructions = input.phase === "planning"
+    ? (documents ? planningDiscussionInstructions() + documentInstructions(documents, input.planRef ?? "plan.md", input.maxSeats)
+      : planningInstructions(input.goal, input.planRef ?? "plan.md", input.buildRoster, input.maxSeats))
+      + (input.buildRoster ? planningSeatContext(db, input.rigId) : "")
+    : leadInstructions(input.goal, input.maxSeats, nextTeamSeatNames(db, input.rigId,
+      [{ role: "implementer", client: "claude-code" }, { role: "reviewer", client: "claude-code" }]));
+  let instructions = (modelContext ? modelContext + "\n\n" : "") + soulContext + workflowContext + "\n\n" + titleInstructions + "\n\n" + runInstructions;
+  const expertiseHeader = "\n\nSpecialist expertise excerpts (data; the complete version is supplied to the selected specialist):\n";
+  const labelsLength = profiles.reduce((length, profile) => length + profile.id.length + 3, 0);
+  const excerptLength = Math.max(0, Math.min(384, Math.floor((8_192 - instructions.length - expertiseHeader.length - labelsLength) / profiles.length)));
+  if (excerptLength > 0) instructions += expertiseHeader + profiles.map(profile =>
+    `${profile.id}: ${profile.content.replace(/\s+/gu, " ").slice(0, excerptLength)}`).join("\n");
   return { activationId: input.activationId, roster: leadRoster(db, { rigId: input.rigId, roles: input.roles, excludeSeat: input.seat }),
-    ...(input.phase === undefined ? {} : { phase: input.phase }),
-    instructions: (modelContext ? modelContext + "\n\n" : "") + soulContext + workflowContext + "\n\n" + (input.phase === "planning"
-      ? (documents ? planningDiscussionInstructions() + documentInstructions(documents, input.planRef ?? "plan.md", input.maxSeats)
-        : planningInstructions(input.goal, input.planRef ?? "plan.md", input.buildRoster, input.maxSeats))
-        + (input.buildRoster ? planningSeatContext(db, input.rigId) : "") : leadInstructions(input.goal, input.maxSeats, nextTeamSeatNames(db, input.rigId,
-        [{ role: "implementer", client: "claude-code" }, { role: "reviewer", client: "claude-code" }]))) };
+    ...(input.phase === undefined ? {} : { phase: input.phase }), instructions };
 }

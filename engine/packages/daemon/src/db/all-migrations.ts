@@ -126,6 +126,7 @@ import { teamModelPolicySchema } from "./migrations/119_team_model_policy.js";
 
 import { projectDocumentsSchema } from "./migrations/120_project_documents.js";
 import { workflowSoulsSchema } from "./migrations/121_workflow_souls.js";
+import { replyLanguageSchema } from "./migrations/122_reply_language.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   coreSchema,
@@ -244,4 +245,5 @@ export const ALL_MIGRATIONS: Migration[] = [
   teamModelPolicySchema,
   projectDocumentsSchema,
   workflowSoulsSchema,
+  replyLanguageSchema,
 ];

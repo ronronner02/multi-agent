@@ -10,6 +10,10 @@ interface SoulSettingsReply {
 }
 type SoulDraft = Pick<SpecialistSoul, "id" | "name" | "roles" | "content" | "version">;
 const roles: TeamRole[] = ["lead", "implementer", "reviewer"];
+const builtinNames: Record<string, string> = {
+  coordinator: "Project coordinator", engineer: "Software engineer", architect: "Systems architect",
+  frontend: "Frontend specialist", backend: "Backend specialist", verification: "Verification specialist", reviewer: "Independent reviewer",
+};
 
 export function SoulSettings({ teamId }: { teamId: string }) {
   const { t } = useTranslation(), { paired, request } = useOwnerSession(), cache = useQueryClient();
@@ -29,6 +33,8 @@ export function SoulSettings({ teamId }: { teamId: string }) {
   </section>;
   const profile = saved.profiles.find(item => item.id === selected) ?? saved.profiles[0]!;
   const form = draft ?? profile;
+  const profileName = (item: SpecialistSoul) => item.version === 1 && builtinNames[item.id] === item.name
+    ? t(`souls.builtin.${item.id}` as "souls.builtin.engineer") : item.name;
   const update = (value: Partial<SoulDraft>) => setDraft({ ...form, ...value });
   const reportError = (error: unknown) => setFailure(error instanceof OwnerReadError ? error.code : "generic");
   return <section className="plate ui-settings-panel" aria-label={t("souls.title")}>
@@ -37,7 +43,7 @@ export function SoulSettings({ teamId }: { teamId: string }) {
     <label className="field">{t("souls.profile")}<select className="input" value={draft?.version === 0 ? "" : profile.id} disabled={busy}
       onChange={event => { setSelected(event.target.value); setDraft(null); setFailure(null); }}>
       {draft?.version === 0 && <option value="">{t("souls.new")}</option>}
-      {saved.profiles.map(item => <option key={item.id} value={item.id}>{item.name} · v{item.version}</option>)}
+      {saved.profiles.map(item => <option key={item.id} value={item.id}>{profileName(item)} · v{item.version}</option>)}
     </select></label>
     <button className="btn btn-outline" type="button" disabled={busy} onClick={() => {
       setDraft({ id: "", name: "", content: "", roles: ["implementer"], version: 0 }); setFailure(null);
@@ -79,7 +85,7 @@ export function SoulSettings({ teamId }: { teamId: string }) {
           });
           cache.setQueryData(key, updated);
         } catch (error) { reportError(error); } finally { setBusy(false); }
-      }}>{saved.profiles.filter(item => item.roles.includes(seat.role)).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+      }}>{saved.profiles.filter(item => item.roles.includes(seat.role)).map(item => <option key={item.id} value={item.id}>{profileName(item)}</option>)}</select>
     </label>)}
   </section>;
 }
