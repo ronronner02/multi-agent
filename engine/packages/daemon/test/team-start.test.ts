@@ -11,6 +11,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "../src/domain/plan-governance.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
+import { listChatMessages, responseLanguageNote } from "../src/domain/lead-chat.js";
 import { createTestApp } from "./helpers/test-app.js";
 
 /**
@@ -89,6 +90,34 @@ describe("MVP slice 2 — the owner starts team work", () => {
     const row = db.prepare("SELECT destination_session AS seat, body FROM queue_items WHERE qitem_id = ?").get(receipt.qitemId!) as
       { seat: string; body: string };
     expect(row).toEqual({ seat: "dev@demo", body: "Add a health endpoint" });
+  });
+
+  it("keeps a long direct task brief outside chat storage while retaining its reply language", async () => {
+    const goal = "Implement the supplied requirements.\n" + "x".repeat(70_000);
+    const response = await start({ goal, responseLanguage: "zh-CN" });
+    expect(response.status, await response.clone().text()).toBe(201);
+    const receipt = await response.json() as { runId: string; qitemId: string };
+    expect(db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(receipt.qitemId)).toEqual({ body: goal });
+    expect(listChatMessages(db, receipt.runId)).toEqual([]);
+    const row = db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(receipt.runId) as
+      { language: "zh-CN" };
+    expect(row.language).toBe("zh-CN");
+    expect(responseLanguageNote([], row.language)).toContain("Simplified Chinese (zh-CN)");
+  });
+
+  it("preserves derived Unicode names and accepts an explicit semantic title", async () => {
+    const goal = "😀".repeat(60);
+    const derived = await start({ goal });
+    expect(derived.status, await derived.clone().text()).toBe(201);
+    const first = await derived.json() as { runId: string };
+    expect(db.prepare("SELECT display_name AS name FROM team_queue_authority WHERE run_id = ?").get(first.runId))
+      .toEqual({ name: "😀".repeat(48) });
+    const named = await start({ goal, displayName: "Render the greeting animation" });
+    expect(named.status).toBe(201);
+    const second = await named.json() as { runId: string };
+    expect(governance.getRun(second.runId).displayName).toBe("Render the greeting animation");
+    expect(db.prepare("SELECT display_name AS name FROM team_queue_authority WHERE run_id = ?").get(second.runId))
+      .toEqual({ name: "Render the greeting animation" });
   });
 
   it("pins an owner-selected workflow and removes write permission for a read-only request", async () => {

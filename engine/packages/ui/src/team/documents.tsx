@@ -16,7 +16,8 @@ export function documentDiscussionPending(read: TeamOwnerRead | undefined, chat:
 }
 
 export function DocumentStages({ read, chat, onChanged }: { read?: TeamOwnerRead; chat?: ChatState; onChanged?: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const state = chat?.documentWorkflow;
@@ -32,7 +33,7 @@ export function DocumentStages({ read, chat, onChanged }: { read?: TeamOwnerRead
       disabled={busy || closed || waiting || (stage === "plan" && (!confirmedRequirements || !!state.error))}
       onClick={async () => {
         setBusy(true); setError(null);
-        try { await selectDocumentStage(request, read.run.id, read.run.entityVersion, stage); onChanged?.(); }
+        try { await selectDocumentStage(request, read.run.id, read.run.entityVersion, stage, undefined, responseLanguage); onChanged?.(); }
         catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); }
         finally { setBusy(false); }
       }}>{t(!planning ? `documents.revise.${stage}` : `documents.stage.${stage}`)}</button>)}</div>
@@ -46,7 +47,8 @@ export function DocumentStages({ read, chat, onChanged }: { read?: TeamOwnerRead
 export function DocumentsScreen({ read, chat, onDiscuss, onChanged, failed = false }: {
   read?: TeamOwnerRead; chat?: ChatState; failed?: boolean; onDiscuss: (opener: HTMLButtonElement, context: string) => void; onChanged?: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
   const state = chat?.documentWorkflow;
   const [chosenKind, setKind] = useState<ProjectDocumentKind | null>(null);
@@ -71,7 +73,7 @@ export function DocumentsScreen({ read, chat, onDiscuss, onChanged, failed = fal
         const opener = event.currentTarget;
         if (read && state && read.run.phase === "delivery") {
           setBusy(true); setError(null);
-          try { await selectDocumentStage(request, read.run.id, read.run.entityVersion, kind === "brainstorm" ? "exploration" : kind); onChanged?.(); }
+          try { await selectDocumentStage(request, read.run.id, read.run.entityVersion, kind === "brainstorm" ? "exploration" : kind, undefined, responseLanguage); onChanged?.(); }
           catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); return; }
           finally { setBusy(false); }
         }
@@ -136,7 +138,7 @@ export function DocumentsScreen({ read, chat, onDiscuss, onChanged, failed = fal
             <div className="plate-foot"><button className="btn btn-primary" disabled={busy || !canConfirm} onClick={async () => {
               if (!read) return;
               setBusy(true); setError(null);
-              try { await confirmDocument(request, read.run.id, read.run.entityVersion, selected); onChanged?.(); }
+              try { await confirmDocument(request, read.run.id, read.run.entityVersion, selected, undefined, responseLanguage); onChanged?.(); }
               catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); }
               finally { setBusy(false); }
             }}>{t("documents.confirmVersion", { version: selected.version })}</button></div>

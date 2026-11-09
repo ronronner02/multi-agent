@@ -145,7 +145,8 @@ function Turn({ message }: { message: ChatMessage }) {
  * which question was answered.
  */
 function DecisionPlate({ message, runId, entityVersion, onChanged }: { message: ChatMessage; runId: string; entityVersion: number; onChanged?: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -153,7 +154,7 @@ function DecisionPlate({ message, runId, entityVersion, onChanged }: { message: 
   const answer = async (option: string) => {
     if (busy) return;
     setBusy(true); setFailed(false);
-    try { await sendChatMessage(request, runId, option, entityVersion, message.id); onChanged?.(); }
+    try { await sendChatMessage(request, runId, option, entityVersion, message.id, responseLanguage); onChanged?.(); }
     catch { setFailed(true); setBusy(false); }
   };
   return <div className="plate plate-waiting" role="group" aria-label={t("team.chat.message")}>
@@ -195,7 +196,8 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
   runId: string; entityVersion: number; body: string; onBodyChange: (body: string) => void;
   projectId?: string; onStarted?: (runId: string) => void; read?: TeamOwnerRead; chat?: ChatState; onChanged?: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowSelection | undefined>();
   const [busy, setBusy] = useState(false);
@@ -221,20 +223,20 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
     try {
       if (!runId && projectId) {
         const started = await request<{ runId: string }>("/runs", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: body.trim(), rig: projectId, planning: true, documentWorkflow: true,
+          body: JSON.stringify({ goal: body.trim(), responseLanguage, rig: projectId, planning: true, documentWorkflow: true,
             ...(selectedWorkflow ? { workflow: selectedWorkflow } : {}) }) });
         if (!started.runId) throw new Error("Missing planning record");
         onStarted?.(started.runId);
       } else if (nextStage) {
-        await selectDocumentStage(request, runId, entityVersion, nextStage, body.trim());
+        await selectDocumentStage(request, runId, entityVersion, nextStage, body.trim(), responseLanguage);
       } else if (intent && execution && (legacyApproval || proposal?.plan)) {
         await approvePlan(request, runId, entityVersion, proposal?.roster?.digest, proposal?.documentVersions,
-          { ownerMessage: body.trim(), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) });
+          { ownerMessage: body.trim(), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) }, responseLanguage);
       } else if (intent && version) {
-        await confirmDocument(request, runId, entityVersion, version, body.trim());
+        await confirmDocument(request, runId, entityVersion, version, body.trim(), responseLanguage);
       } else await sendChatMessage(request, runId, selectedWorkflow
         ? `/${selectedWorkflow.entrypoint}${selectedWorkflow.readOnly ? " --read-only" : ""}\n${body.trim()}`
-        : body.trim(), entityVersion, question?.id);
+        : body.trim(), entityVersion, question?.id, responseLanguage);
       setSelectedWorkflow(undefined);
       onBodyChange(""); onChanged?.();
     }
@@ -259,7 +261,8 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
 function PlanPlate({ read, runId, entityVersion, chat }: {
   read?: TeamOwnerRead; runId: string; entityVersion: number; chat?: ChatState;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -294,13 +297,14 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
     <div className="plate-foot">
       {!approved && !updating && proposal?.error && <button className="btn btn-outline" disabled={busy} onClick={async () => {
         setBusy(true); setFailed(false);
-        try { await sendChatMessage(request, runId, t("chat.repairPlanMessage"), entityVersion); }
+        try { await sendChatMessage(request, runId, t("chat.repairPlanMessage"), entityVersion, undefined, responseLanguage); }
         catch { setFailed(true); } finally { setBusy(false); }
       }}>{t("chat.repairPlan")}</button>}
       {approved ? <span className="plate-done"><Check />{t("team.plan.approvedShort")}</span>
         : <button className="btn btn-primary" disabled={busy || !canApprove} onClick={async () => {
           setBusy(true); setFailed(false);
-          try { await approvePlan(request, runId, entityVersion, proposal?.roster?.digest, proposal?.documentVersions); }
+          try { await approvePlan(request, runId, entityVersion, proposal?.roster?.digest, proposal?.documentVersions,
+            { ownerMessage: t("team.plan.approve"), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) }, responseLanguage); }
           catch { setFailed(true); } finally { setBusy(false); }
         }}>{t("team.plan.approve")}</button>}
     </div>

@@ -27,7 +27,7 @@ import type { LeadTask, LeadResolution } from "./lead-proposal.js";
 import { parseTaskReport } from "./task-report.js";
 import { planningRosterRequired, rosterRefusal, type LeadRosterSeat, type LeadSeatChanges } from "./lead-roster.js";
 import { addTeamSeats, nextTeamSeatNames } from "./team-setup.js";
-import { appendChatMessage, answerDecision, chatBody, getChatMessage, listChatMessages, pendingDecision, pendingOwnerMessages, runLeadTask, ownerMessageSlot, type TeamChatMessage } from "./lead-chat.js";
+import { appendChatMessage, answerDecision, chatBody, parseResponseLanguage, getChatMessage, listChatMessages, pendingDecision, pendingOwnerMessages, runLeadTask, ownerMessageSlot, type TeamChatMessage, type ResponseLanguage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
@@ -227,7 +227,7 @@ function taskDefinition(binding: import("../contracts/team-control.js").PlanBind
     return "A permission is outside the assignment role's vocabulary";
   }
   if (typeof v.body !== "string" || !v.body.trim() || v.body.length > 262_144) throw new TeamContractError("task.body");
-  return { assignment, ...inputs, ...(workflow ? { workflow } : {}), body: v.body, sourceSession: text(v.sourceSession, "sourceSession"),
+  return { assignment, ...inputs, ...(v.displayName === undefined ? {} : { displayName: text(v.displayName, "task.displayName", 80) }), ...(workflow ? { workflow } : {}), body: v.body, sourceSession: text(v.sourceSession, "sourceSession"),
     destinationSession: text(v.destinationSession, "destinationSession") };
 }
 
@@ -263,7 +263,7 @@ export class PlanGovernance {
   }
 
   createRun(input: { id: string; rigId: string; binding: unknown; reviewerSeat?: string | null; displayName?: string | null;
-    phase?: TeamRunPhase; documentWorkflow?: boolean }): TeamRun {
+    phase?: TeamRunPhase; documentWorkflow?: boolean; responseLanguage?: ResponseLanguage }): TeamRun {
     this.assertStandalone();
     if (daemonModeOf(this.db) === "legacy") throw new Error("A legacy-mode daemon cannot register managed authority; restart in managed mode");
     const id = text(input.id, "runId", 256);
@@ -287,8 +287,8 @@ export class PlanGovernance {
       }
       this.rigs.assertNoPendingDeletion(rigId);
       const now = this.clock().toISOString();
-      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, display_name, phase, state, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, displayName, phase, now, now);
+      this.db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, reviewer_seat, display_name, phase, state, created_at, updated_at, response_language)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`).run(id, rigId, canonicalJson(binding), bindingDigest, reviewerSeat, displayName, phase, now, now, input.responseLanguage ?? null);
       if (input.documentWorkflow) initializeDocuments(this.db, id);
       const run = this.getRun(id);
       this.emit(run, register, "run.created", { bindingDigest, state: "pending" });
@@ -647,7 +647,7 @@ export class PlanGovernance {
       const batch = this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
         assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
-        destinationSession: task.seat, ...(task.workflow ? { workflow: task.workflow } : {}) })), owner.sessionId);
+        destinationSession: task.seat, ...(task.displayName === undefined ? {} : { displayName: task.displayName }), ...(task.workflow ? { workflow: task.workflow } : {}) })), owner.sessionId);
       if (typeof batch === "string") return deny(batch);
       // A lead chooses seats from its roster, and the roster lists roles too. The batch this
       // boundary builds is always implementer work, so a seat that declares another role would
@@ -836,7 +836,7 @@ export class PlanGovernance {
       const batch = leadTasks.length === 0 && resolved.length > 0 ? [] : this.growthTasks(ctx, ctx.run.binding, leadTasks.map(task => ({
         assignment: { taskId: task.taskId, role: "implementer", paths: task.paths, dependencies: task.dependencies },
         outputs: [], permissions: [...roleConfiguration.implementer.permissions], body: task.body,
-        destinationSession: task.seat, ...(task.workflow ? { workflow: task.workflow } : {}) })), "daemon",
+        destinationSession: task.seat, ...(task.displayName === undefined ? {} : { displayName: task.displayName }), ...(task.workflow ? { workflow: task.workflow } : {}) })), "daemon",
         resolved.filter(item => item.resolution.action === "drop").map(item => item.task.assignment.taskId));
       if (typeof batch === "string") return this.refuseLeadProposal(ctx, batch);
       const workflowError = batch.flatMap(task => {
@@ -1033,6 +1033,7 @@ export class PlanGovernance {
       if (ctx.run.state === "canceled" || ctx.run.state === "cancel_requested") return deny("Run is closed; the lead is not reading messages");
       const payload = object(ctx.request.payload, "chat");
       const body = chatBody(payload.body, "chat.body");
+      const responseLanguage = parseResponseLanguage(payload.responseLanguage);
       // The decision the owner is answering, when they name one. Checked before anything is
       // written, so a message that names a decision this run does not have is not stored as if
       // it had answered something.
@@ -1048,7 +1049,7 @@ export class PlanGovernance {
       const lead = runLeadTask(this.db, ctx.run.id);
       if (!lead) return deny("This run has no lead task to answer the owner");
       const message = appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
-        body, createdAt: ctx.now });
+        body, createdAt: ctx.now, responseLanguage });
       // The answer is recorded in the same transaction as the message, so a decision is never
       // answered by a message this run did not keep.
       if (answerTo !== null) answerDecision(this.db, answerTo, message.id);
@@ -1119,8 +1120,11 @@ export class PlanGovernance {
       if (kind === "plan" && (!currentConfirmed(state, "requirements") || version.requirementsVersionId !== state.confirmed.requirements)) {
         return deny("The plan must be regenerated from the confirmed requirements version");
       }
+      const responseLanguage = parseResponseLanguage(payload.responseLanguage);
+      if (responseLanguage) this.db.prepare("UPDATE team_runs SET response_language = ? WHERE id = ?")
+        .run(responseLanguage, ctx.run.id);
       if (payload.ownerMessage !== undefined) appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
-        body: chatBody(payload.ownerMessage, "ownerMessage"), kind: "confirmation", createdAt: ctx.now });
+        body: chatBody(payload.ownerMessage, "ownerMessage"), kind: "confirmation", createdAt: ctx.now, responseLanguage });
       this.db.prepare(`UPDATE team_document_workflows SET confirmed_${kind} = ? WHERE run_id = ?`).run(version.id, ctx.run.id);
       this.db.prepare("UPDATE team_document_versions SET confirmed_at = ?, confirmed_by = ? WHERE id = ?")
         .run(ctx.now, owner.sessionId, version.id);
@@ -1177,7 +1181,8 @@ export class PlanGovernance {
       const body = stage === "exploration" ? "Continue exploring the idea. Preserve decisions, trade-offs and open questions; do not execute."
         : stage === "requirements" ? "Prepare or revise the requirements document from our discussion. Keep unresolved questions explicit; do not execute."
           : "Generate or revise the plan from the exact confirmed requirements version. Include ordered tasks, dependencies, file scope and verification; do not execute.";
-      appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id, body: ownerMessage ?? body, createdAt: ctx.now });
+      appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id, body: ownerMessage ?? body, createdAt: ctx.now,
+        responseLanguage: parseResponseLanguage(payload.responseLanguage) });
       this.reopenLeadTask(ctx, "The owner selected the next document stage");
       this.reopenFailedLeadTask(ctx);
       const lead = runLeadTask(this.db, ctx.run.id);
@@ -1329,9 +1334,13 @@ export class PlanGovernance {
         // approved, and a second expiry a day later would close a run nobody had finished.
         new Date(this.clock().getTime() + ctx.run.binding.limits.maxActiveMs).toISOString(),
         owner.sessionId, ctx.now, ctx.now);
+      const responseLanguage = parseResponseLanguage((ctx.request.payload as Record<string, unknown> | null)?.responseLanguage);
+      if (responseLanguage) this.db.prepare("UPDATE team_runs SET response_language = ? WHERE id = ?")
+        .run(responseLanguage, ctx.run.id);
       const ownerMessage = (ctx.request.payload as Record<string, unknown> | null)?.ownerMessage;
       if (ownerMessage !== undefined) appendChatMessage(this.db, { id: ctx.request.actionId, runId: ctx.run.id,
-        body: chatBody(ownerMessage, "ownerMessage"), kind: "confirmation", createdAt: ctx.now });
+        body: chatBody(ownerMessage, "ownerMessage"), kind: "confirmation", createdAt: ctx.now,
+        responseLanguage });
       if (binding.documentVersions) this.emit(ctx.run, ctx.register, "documents.execution-approved", {
         bindingDigest: ctx.run.bindingDigest, documentVersions: jsonValue(binding.documentVersions),
       });
@@ -1733,7 +1742,7 @@ export class PlanGovernance {
     // reviewer task the task it reviews. A body with nothing to name it by records none, and
     // the read model falls back to the task's order.
     const displayName = assignment.role === "reviewer" && assignment.reviewOf
-      ? this.reviewDisplayName(ctx.run.id, assignment.reviewOf) : taskName(body);
+      ? this.reviewDisplayName(ctx.run.id, assignment.reviewOf) : task.displayName ?? taskName(body);
     this.db.prepare(`INSERT INTO team_queue_authority
       (qitem_id,run_id,task_id,assignment_json,outputs_json,permissions_json,display_name,document_versions_json,workflow_json) VALUES (?,?,?,?,?,?,?,?,?)`)
       .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions), displayName,

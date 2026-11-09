@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { cleanup, fireEvent, render as renderView, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as renderView, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInterfaceI18n } from "@openrig/i18n";
@@ -61,12 +61,25 @@ async function show(data = read(), conversation = chat, connectionError = false)
     </div>;
   }
   const view = render(<I18nextProvider i18n={language.instance}><Harness conversation={conversation} /></I18nextProvider>);
-  return { ...view, updateConversation: (next: ChatState) => view.rerender(
+  return { ...view, language, updateConversation: (next: ChatState) => view.rerender(
     <I18nextProvider i18n={language.instance}><Harness conversation={next} /></I18nextProvider>,
   ) };
 }
 
 describe("persistent lead chat", () => {
+  it("uses the current interface language for typed chat after switching languages", async () => {
+    const view = await show();
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    await act(async () => { await view.language.changeLanguage("zh-CN"); });
+    const field = screen.getByRole("textbox");
+    fireEvent.change(field, { target: { value: "Keep the original message text." } });
+    fireEvent.submit(field.closest("form")!);
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({
+      body: "Keep the original message text.", responseLanguage: "zh-CN",
+    });
+  });
+
   it.each([true, false])("shows project-wide approval consequences only for that grant (%s)", async projectWide => {
     const data = planningRead();
     data.run.binding.readPaths = projectWide ? ["plan.md", "."] : ["plan.md", "src"];
@@ -181,7 +194,7 @@ describe("persistent lead chat", () => {
     expect(field.value).toBe("My additional detail"); expect(document.activeElement).toBe(field);
     fireEvent.click(screen.getByRole("button", { name: "Return a default greeting" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ body: "Return a default greeting", answerTo: question.id });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", body: "Return a default greeting", answerTo: question.id });
     expect((screen.getByRole("button", { name: "Throw an error" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -208,7 +221,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith("planning-record"));
     expect(request).toHaveBeenCalledWith("/runs", expect.objectContaining({ method: "POST",
-      body: JSON.stringify({ goal: "Let's refine the scope first.", rig: "project-1", planning: true, documentWorkflow: true }),
+      body: JSON.stringify({ goal: "Let's refine the scope first.", responseLanguage: "en", rig: "project-1", planning: true, documentWorkflow: true }),
     }));
   });
 
@@ -241,7 +254,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith("planning-record"));
     expect(request).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(request.mock.calls[0]![1].body)).toEqual({ goal: "Plan the next milestone.", rig: "project-1",
+    expect(JSON.parse(request.mock.calls[0]![1].body)).toEqual({ goal: "Plan the next milestone.", responseLanguage: "en", rig: "project-1",
       planning: true, documentWorkflow: true, workflow: { entrypoint: "spec-plan", readOnly: false } });
   });
 
@@ -303,7 +316,7 @@ describe("persistent lead chat", () => {
     expect(within(decisions).getAllByRole("listitem")).toHaveLength(3);
     fireEvent.click(within(decisions).getByRole("button", { name: "Keep" }));
     await waitFor(() => expect(request).toHaveBeenCalled());
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ body: "Keep", answerTo: "question-1" });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", body: "Keep", answerTo: "question-1" });
   });
 
   it.each(["Use a custom response, not either option.", "Confirm plan"])("links a typed answer to its question without granting approval: %s", async answer => {
@@ -316,7 +329,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/chat`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ body: answer, answerTo: question.id });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", body: answer, answerTo: question.id });
   });
 
   it("requests requirements from conversation without approving execution", async () => {
@@ -329,7 +342,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/documents/stage`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ stage: "requirements", ownerMessage: "整理需求" });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", stage: "requirements", ownerMessage: "整理需求" });
   });
 
   it("does not request a plan from conversation before confirming requirements", async () => {
@@ -352,8 +365,24 @@ describe("persistent lead chat", () => {
     await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/chat`);
     expect(request.mock.calls[1]![0]).toBe(`/runs/${RUN_ID}/plan/approve`);
-    expect(JSON.parse(request.mock.calls[1]![1].body)).toMatchObject({
-      runId: RUN_ID, expectedEntityVersion: 3, payload: { rosterDigest: "reviewed-roster-digest" },
+    expect(JSON.parse(request.mock.calls[1]![1].body)).toMatchObject({ runId: RUN_ID, expectedEntityVersion: 3 });
+    expect(JSON.parse(request.mock.calls[1]![1].body).payload).toEqual({
+      responseLanguage: "en", rosterDigest: "reviewed-roster-digest", planHash: "plan-hash", ownerMessage: "Approve plan",
+    });
+  });
+
+  it("approves the displayed document plan and team in the current interface language", async () => {
+    const conversation = documentChat(true);
+    const view = await show(planningRead(), conversation);
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    await act(async () => { await view.language.changeLanguage("zh-CN"); });
+    const label = view.language.instance.t("team.plan.approve");
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/plan/approve`);
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({
+      responseLanguage: "zh-CN", ownerMessage: label, planHash: "plan-hash", rosterDigest: "reviewed-roster-digest",
+      documentVersions: conversation.planApproval!.documentVersions,
     });
   });
 
@@ -407,7 +436,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
     fireEvent.click(screen.getByRole("button", { name: "Approve plan" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({});
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", ownerMessage: "Approve plan" });
   });
 
   it.each(["Confirm plan", "批准执行"])("uses the original combined approval for a pre-roster conversation: %s", async body => {
@@ -419,7 +448,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/plan/approve`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ ownerMessage: body });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", ownerMessage: body });
   });
 
   it("does not use the pre-roster shortcut when plan evidence is still loading", async () => {
@@ -434,6 +463,7 @@ describe("persistent lead chat", () => {
     const view = await show(planningRead(), planningChat());
     fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
     view.updateConversation({ ...planningChat(), planApproval: { ...planApproval,
+      plan: { content: "# Revised stock utilities", hash: "updated-plan-hash" },
       roster: { seats: [{ role: "implementer", client: "codex" }], digest: "updated-roster-digest" },
     } });
     const roster = screen.getByRole("group", { name: "Proposed team" });
@@ -441,7 +471,7 @@ describe("persistent lead chat", () => {
     expect(within(roster).getByText("Implementer · Codex")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Approve plan" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ rosterDigest: "updated-roster-digest" });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", rosterDigest: "updated-roster-digest", planHash: "updated-plan-hash", ownerMessage: "Approve plan" });
   });
 
   it("confirms the displayed document through conversation without starting execution", async () => {
@@ -451,7 +481,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/documents/confirm`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ kind: "plan", versionId: "plan-2", hash: "plan-hash", ownerMessage: "确认计划" });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", kind: "plan", versionId: "plan-2", hash: "plan-hash", ownerMessage: "确认计划" });
   });
 
   it.each(["先别确认计划", "确认计划，但先修改测试", "Looks good"])("keeps ambiguous or revision text as discussion: %s", async body => {
@@ -470,7 +500,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/plan/approve`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ ownerMessage: "批准执行", planHash: "plan-hash",
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", ownerMessage: "批准执行", planHash: "plan-hash",
       rosterDigest: "reviewed-roster-digest", documentVersions: documentChat(true).planApproval?.documentVersions });
   });
 
@@ -481,7 +511,7 @@ describe("persistent lead chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/plan/approve`);
-    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ ownerMessage: "Confirm plan", planHash: "plan-hash", rosterDigest: "reviewed-roster-digest" });
+    expect(JSON.parse(request.mock.calls[0]![1].body).payload).toEqual({ responseLanguage: "en", ownerMessage: "Confirm plan", planHash: "plan-hash", rosterDigest: "reviewed-roster-digest" });
   });
 
   it("does not confirm through conversation while a planning turn is still active", async () => {

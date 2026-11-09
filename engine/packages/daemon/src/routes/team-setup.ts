@@ -4,6 +4,7 @@ import {
   TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, text, type ControlActor,
 } from "../contracts/team-control.js";
 import { readTeamModelSettings, saveTeamModelSettings, TeamModelError } from "../domain/team-model-policy.js";
+import { nativeModelChoices } from "../domain/native-model-choices.js";
 import { FRAMEWORK_CATALOG, FRAMEWORK_PIN } from "../integrations/framework/catalog.js";
 import { assignSeatSoul, saveTeamSoul, soulId, teamSoulSettings, TeamSoulError } from "../domain/team-souls.js";
 import type { RigRepository } from "../domain/rig-repository.js";
@@ -64,7 +65,10 @@ export function teamSetupRoutes(
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     c.header("Cache-Control", "no-store");
-    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, settings: readTeamModelSettings(rigRepo.db, c.req.param("teamId")) });
+    const settings = readTeamModelSettings(rigRepo.db, c.req.param("teamId"));
+    const saved = [...(settings.lead.model ? [{ client: settings.lead.client, model: settings.lead.model }] : []),
+      ...(settings.allowedSubagents ?? [])];
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, settings, modelChoices: nativeModelChoices({ saved }) });
   });
   app.get("/teams/:teamId/souls", c => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);

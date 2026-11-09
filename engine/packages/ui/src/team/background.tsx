@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 const MEDIA = "(prefers-reduced-motion: reduce)";
 const ASSET = "/skins/shuimo-danqing/shuimo-danqing";
-// The existing clip reveals the portrait before 10s and fades away after 24s.
-const PORTRAIT_START = 10;
+// Seek to the revealed portrait keyframe, avoiding a decode from the entrance on every loop.
+const PORTRAIT_START = 250 / 24;
 const PORTRAIT_END = 23;
 const ENTRANCE_KEY = "openrig.shuimoDanqingEntered";
 export const BACKGROUND_MOTION_KEY = "openrig.teamBackgroundMotion";
@@ -70,7 +70,7 @@ export function Background({ motion = true }: { motion?: boolean }) {
   }, [reduced, motion]);
   return <div className="team-backdrop" aria-hidden="true">
     {reduced || !motion ? <img src={`${ASSET}-still.webp`} alt="" />
-      : <video ref={video} muted playsInline preload="metadata" tabIndex={-1}
+      : <video ref={video} muted playsInline preload="auto" tabIndex={-1}
         poster={`${ASSET}-still.webp`} src={`${ASSET}-loop.mp4`} />}
   </div>;
 }

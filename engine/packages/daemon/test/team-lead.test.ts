@@ -12,6 +12,9 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { leadActivation, leadInstructions, planningInstructions, leadRoster, parseLeadProposal, LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "../src/domain/lead-proposal.js";
+import { saveTeamSoul } from "../src/domain/team-souls.js";
+import { saveTeamModelSettings } from "../src/domain/team-model-policy.js";
+import { FRAMEWORK_CATALOG } from "../src/integrations/framework/catalog.js";
 import { teamLeadRoutes, PROPOSAL_WINDOW_MS } from "../src/routes/team-lead.js";
 import { teamControlRoutes } from "../src/routes/team-control.js";
 import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-start.js";
@@ -180,6 +183,15 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     expect(() => parseLeadProposal({ tasks: [{ ...task("t", "a@rig", ["src"]), extra: true }] })).toThrow();
   });
 
+  it("accepts a concise generated task name while preserving its complete brief", () => {
+    const body = "Read the full project documentation and compare the requirements with existing behavior.\nKeep every relevant detail.";
+    expect(parseLeadProposal({ tasks: [{ ...task("t", "a@rig", ["src"]), displayName: "Map project requirements", body }] })[0])
+      .toMatchObject({ displayName: "Map project requirements", body });
+    for (const displayName of ["", "x".repeat(81), "two\nlines"]) {
+      expect(() => parseLeadProposal({ tasks: [{ ...task("t", "a@rig", ["src"]), displayName }] })).toThrow();
+    }
+  });
+
   it("builds the roster from the rig's seats whose role the approval covers", () => {
     expect(leadRoster(db, { rigId: "rig", roles: binding.roles, excludeSeat: "lead@rig" }))
       .toEqual([{ member: "a@rig", role: "implementer", mailbox: "a@rig" },
@@ -222,6 +234,37 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     expect(activation.instructions).toContain(phase === "planning" ? "You are planning with the owner" : "The owner approved the plan");
   });
 
+  it("shows the lead edited specialist expertise within its bounded run instructions", () => {
+    const content = "Inspect owner-specific diagrams and document every compatibility decision. "
+      + "Detailed specialist instruction. ".repeat(300) + " END_OF_LONG_PROFILE";
+    saveTeamSoul(db, "rig", "frontend", { expectedVersion: 1, name: "Diagram specialist", roles: ["implementer"], content });
+    const activation = leadActivation(db, { rigId: "rig", roles: binding.roles, seat: "lead@rig",
+      goal: "Plan the work", activationId: "planning", phase: "planning", planRef: "plan.md", buildRoster: true });
+    expect(activation.instructions).toContain("Inspect owner-specific diagrams and document every compatibility decision.");
+    expect(activation.instructions).not.toContain("END_OF_LONG_PROFILE");
+    expect(activation.instructions.length).toBeLessThanOrEqual(8_192);
+    expect(activation.instructions).toContain("complete version is supplied to the selected specialist");
+  });
+
+  it.each([17, 18])("keeps complete long model policies and specialist guidance inside the activation budget: %s models", count => {
+    const allowedSubagents = Array.from({ length: count }, (_, index) => ({
+      client: "codex" as const, model: `model-${index}${"a".repeat(100)}`,
+    }));
+    saveTeamModelSettings(db, "rig", { kind: "project", lead: { client: "codex", model: "fixture" }, allowedSubagents });
+    for (const phase of ["planning", "delivery"] as const) {
+      const { instructions } = leadActivation(db, { rigId: "rig", roles: binding.roles, seat: "lead@rig",
+        goal: "Plan the work", activationId: "activation", phase, planRef: "plan.md", buildRoster: true });
+      expect(instructions.length).toBeLessThanOrEqual(8_192);
+      expect(instructions).toContain(JSON.stringify(allowedSubagents));
+      expect(instructions).toContain("Markdown H1");
+      expect(instructions).toContain("selected response language");
+      expect(instructions).toContain("coordinator: Turn the owner's goal into a right-sized plan and a small team.");
+      expect(instructions).toContain("complete version is supplied to the selected specialist");
+      const workflows = JSON.parse(instructions.split("Workflow entrypoints and invocation requirements (data):\n")[1]!.split("\n")[0]!) as Record<string, string[]>;
+      for (const entry of FRAMEWORK_CATALOG) expect(workflows[entry.invocation]).toContain(entry.name);
+    }
+  });
+
   it("shows existing clients only to roster-enabled planning, including inactive but not retired seats", () => {
     db.prepare("UPDATE nodes SET runtime = 'codex' WHERE id = 'b-node'").run();
     db.prepare("UPDATE sessions SET status = 'exited' WHERE node_id = 'b-node'").run();
@@ -245,8 +288,11 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     expect(catalogContext).not.toContain("Existing seats to reuse");
     expect(catalogContext).not.toContain('"client":');
     for (const buildRoster of [false, undefined]) {
-      expect(leadActivation(db, { ...input, buildRoster }).instructions)
-        .toBe(catalogContext + planningInstructions("Plan the work", "plan.md"));
+      const withoutRoster = leadActivation(db, { ...input, buildRoster }).instructions;
+      const [runInstructions, expertise] = withoutRoster.split("\n\nSpecialist expertise excerpts");
+      expect(runInstructions).toBe(catalogContext + planningInstructions("Plan the work", "plan.md"));
+      expect(expertise).toContain("coordinator:");
+      expect(withoutRoster).not.toContain("Existing seats to reuse");
     }
     for (const phase of ["delivery", undefined] as const) {
       expect(leadActivation(db, { ...input, phase, buildRoster: true }).instructions)

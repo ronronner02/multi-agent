@@ -1,9 +1,9 @@
 /**
  * U9 / KTD8 — the readable names the owner read publishes beside the ids.
  *
- * A name is derived from a fact the run already holds, never from an id: a run's name is its
- * goal, a task's name is its title (the first line of its body), and a seat's name is its role
- * and client. The rules are here as functions over plain text so the creation path and the read
+ * Names come from recorded text, never from ids: a run starts with its goal and receives a
+ * concise title from the lead's reply; a task has an explicit title or its body's first line.
+ * A seat's name is its role and client. These plain-text rules let the creation path and read
  * model derive the same name from the same row — a row recorded before the names existed is
  * named on read by calling the same functions.
  *
@@ -45,6 +45,14 @@ export function shortenTitle(raw: string, limit = DISPLAY_NAME_LIMIT): string {
   const boundary = characters[limit] === " " ? limit : head.lastIndexOf(" ");
   const title = (boundary > 0 ? head.slice(0, boundary) : head).join("");
   return title.replace(TRAILING_PUNCTUATION, "").trim();
+}
+
+/** A concise title authored in the existing lead reply, never inferred from later headings. */
+export function generatedReplyTitle(body: string): string | null {
+  const heading = /^# ([^\r\n]+)(?:\r?\n|$)/u.exec(body.trimStart())?.[1];
+  if (!heading || /[\u0000-\u001f\u007f]/u.test(heading)) return null;
+  const title = heading.replace(/\s+/gu, " ").trim();
+  return title && [...title].length <= 80 ? title : null;
 }
 
 /** A run's name from its goal, or `null` when the goal carries no text to name it with. */

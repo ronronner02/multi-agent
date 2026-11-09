@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createFullTestDb } from "./helpers/test-app.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { EventBus } from "../src/domain/event-bus.js";
@@ -16,6 +19,9 @@ import { AppliedLaunchObservationStore } from "../src/domain/applied-launch-obse
 import { observeClaudePermission } from "../src/domain/permission-drift.js";
 import type { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 import { assessNativeResumeProbe } from "../src/domain/native-resume-probe.js";
+import { agentTurnPromptPath } from "../src/domain/agent-turn.js";
+import { appendChatMessage } from "../src/domain/lead-chat.js";
+import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 
 // -- Mocks --
 
@@ -179,6 +185,46 @@ describe("StartupOrchestrator", () => {
     expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining("rig whoami --json"));
     expect(tmux.sendText).toHaveBeenCalledWith("r01-impl", expect.stringContaining("rig queue list --destination r01-impl --state pending,in-progress,blocked"));
     expect(tmux.sendKeys).toHaveBeenCalledWith("r01-impl", ["Enter"]);
+  });
+
+  it.each(["claude-code", "codex"])("writes the current run language into implementer-first %s prompts", async runtime => {
+    const seed = seedSession();
+    const root = mkdtempSync(join(tmpdir(), "startup-response-language-"));
+    const assignment = { taskId: "language-task", role: "implementer" as const, paths: ["src"], dependencies: [] };
+    try {
+      db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, phase, created_at, updated_at, response_language)
+        VALUES ('language-run', ?, '{}', ?, 'approved', 'delivery', '2026-11-09', '2026-11-09', 'zh-CN')`)
+        .run(seed.rigId, "sha256:" + "a".repeat(64));
+      db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, body)
+        VALUES ('language-item', '2026-11-09', '2026-11-09', 'owner', 'r01-impl', 'pending', 'Implement the assigned module.')`).run();
+      db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json, outputs_json, permissions_json)
+        VALUES ('language-item', 'language-run', 'language-task', ?, '[]', '[]')`).run(JSON.stringify(assignment));
+      const prompts: string[] = [];
+      const adapter = mockAdapter({ runtime, launchHarness: vi.fn(async binding => {
+        prompts.push(readFileSync(agentTurnPromptPath(binding.managedAttempt!.context), "utf8"));
+        return { ok: true };
+      }) });
+      const launch = (attemptId: string) => createOrchestrator().startNode(makeInput(seed, {
+        adapter, binding: { ...makeBinding(), managedAttempt: { attemptId, deadline: Date.now() + 60_000,
+          context: { runId: "language-run", assignment, role: "implementer", client: runtime, outputs: [], permissions: [],
+            mutableStateRoot: root, files: [], projection: { attemptId } } as unknown as ContextManifest } },
+      }));
+
+      expect(db.prepare("SELECT id FROM team_chat_messages WHERE run_id = 'language-run'").all()).toEqual([]);
+      expect(await launch("language-first")).toMatchObject({ ok: true, startupStatus: "ready" });
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0]).toContain("The owner's selected response language is Simplified Chinese (zh-CN).");
+      expect(prompts[0]).not.toContain("The owner's selected response language is English (en).");
+
+      db.transaction(() => appendChatMessage(db, { id: "language-choice", runId: "language-run",
+        body: "Continue with the next module.", responseLanguage: "en", createdAt: "2026-11-09T10:00:00Z" }))();
+      expect(db.prepare("SELECT response_language AS language FROM team_runs WHERE id = 'language-run'").get())
+        .toEqual({ language: "en" });
+      expect(await launch("language-next")).toMatchObject({ ok: true, startupStatus: "ready" });
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain("The owner's selected response language is English (en).");
+      expect(prompts[1]).not.toContain("The owner's selected response language is Simplified Chinese (zh-CN).");
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   it("does not add a durable-work prompt when it was not requested or when resuming", async () => {

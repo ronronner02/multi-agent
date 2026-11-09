@@ -17,8 +17,8 @@ vi.mock("../../hooks/useOwnerSession.js", async importOriginal => ({
 let cache: QueryClient;
 beforeEach(() => { request.mockReset(); cache = new QueryClient({ defaultOptions: { queries: { retry: false } } }); });
 afterEach(() => { cleanup(); cache.clear(); });
-async function show(element: React.ReactNode) {
-  const language = await createInterfaceI18n({ language: "en" });
+async function show(element: React.ReactNode, selectedLanguage: "en" | "zh-CN" = "en") {
+  const language = await createInterfaceI18n({ language: selectedLanguage });
   render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}>{element}</I18nextProvider></QueryClientProvider>);
 }
 const profiles = [
@@ -47,6 +47,20 @@ describe("specialist and workflow owner controls", () => {
     fireEvent.change(seat, { target: { value: "frontend" } });
     await waitFor(() => expect((screen.getByLabelText("Seat 1 · Implementer") as HTMLSelectElement).value).toBe("frontend"));
     expect(request).toHaveBeenCalledWith("/teams/project/seats/seat/soul", expect.objectContaining({ method: "PUT" }));
+  });
+  it("localizes specialist controls and built-in choices while preserving edited identity data", async () => {
+    request.mockResolvedValue({ profiles: [profiles[0], { ...profiles[1], name: "My interface specialist", version: 2 },
+      { ...profiles[0], id: "research", name: "Owner research identity" }], seats: [] });
+    await show(<SoulSettings teamId="project" />, "zh-CN");
+    const picker = await screen.findByLabelText("专家身份");
+    expect(within(picker).getByRole("option", { name: "软件工程师 · v1" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "专家身份（SOUL）" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "添加专家" })).toBeTruthy();
+    expect((screen.getByLabelText("身份名称") as HTMLInputElement).value).toBe("Software engineer");
+    expect((screen.getByLabelText("SOUL 指令") as HTMLTextAreaElement).value).toBe("Verify the real behavior.");
+    fireEvent.change(picker, { target: { value: "frontend" } });
+    expect((screen.getByLabelText("身份名称") as HTMLInputElement).value).toBe("My interface specialist");
+    expect(within(picker).getByRole("option", { name: "Owner research identity · v1" })).toBeTruthy();
   });
   it("lists all 38 workflows while keeping caller helpers distinct and code review read-only", async () => {
     request.mockResolvedValue({ workflows: FRAMEWORK_CATALOG });

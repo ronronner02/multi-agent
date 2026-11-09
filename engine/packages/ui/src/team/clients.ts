@@ -9,6 +9,8 @@ import { OwnerReadError, type useOwnerSession } from "../hooks/useOwnerSession.j
  * error. Shapes here are the contract the components are built against.
  */
 
+export type ResponseLanguage = "en" | "zh-CN";
+
 type Request = ReturnType<typeof useOwnerSession>["request"];
 
 export type RunPhase = "planning" | "delivery";
@@ -74,31 +76,31 @@ export async function readChat(request: Request, runId: string, signal?: AbortSi
  * U6 — `POST /runs/:runId/chat`. Answering a decision sends the chosen option's text with
  * `answerTo`, which is how the lead knows which question it answers.
  */
-export async function sendChatMessage(request: Request, runId: string, body: string, entityVersion: number, answerTo?: string): Promise<void> {
+export async function sendChatMessage(request: Request, runId: string, body: string, entityVersion: number, answerTo?: string, responseLanguage?: ResponseLanguage): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/chat`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: controlBody(runId, crypto.randomUUID(), entityVersion, answerTo ? { body, answerTo } : { body }),
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { body, ...(answerTo ? { answerTo } : {}), ...(responseLanguage ? { responseLanguage } : {}) }),
   });
 }
 
 /** U5 — `POST /runs/:runId/plan/approve`. */
-export async function approvePlan(request: Request, runId: string, entityVersion: number, rosterDigest?: string, documentVersions?: DocumentPins, conversation?: { ownerMessage: string; planHash?: string }): Promise<void> {
+export async function approvePlan(request: Request, runId: string, entityVersion: number, rosterDigest?: string, documentVersions?: DocumentPins, conversation?: { ownerMessage: string; planHash?: string }, responseLanguage?: ResponseLanguage): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/plan/approve`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: controlBody(runId, crypto.randomUUID(), entityVersion, { ...(rosterDigest ? { rosterDigest } : {}), ...(documentVersions ? { documentVersions } : {}), ...conversation }),
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { ...(rosterDigest ? { rosterDigest } : {}), ...(documentVersions ? { documentVersions } : {}), ...conversation, ...(responseLanguage ? { responseLanguage } : {}) }),
   });
 }
 
-export async function confirmDocument(request: Request, runId: string, entityVersion: number, version: ProjectDocumentVersion, ownerMessage?: string): Promise<void> {
+export async function confirmDocument(request: Request, runId: string, entityVersion: number, version: ProjectDocumentVersion, ownerMessage?: string, responseLanguage?: ResponseLanguage): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/documents/confirm`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: controlBody(runId, crypto.randomUUID(), entityVersion, { kind: version.kind, versionId: version.id, hash: version.hash, ...(ownerMessage ? { ownerMessage } : {}) }),
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { kind: version.kind, versionId: version.id, hash: version.hash, ...(ownerMessage ? { ownerMessage } : {}), ...(responseLanguage ? { responseLanguage } : {}) }),
   });
 }
-export async function selectDocumentStage(request: Request, runId: string, entityVersion: number, stage: ProjectDocumentStage, ownerMessage?: string): Promise<void> {
+export async function selectDocumentStage(request: Request, runId: string, entityVersion: number, stage: ProjectDocumentStage, ownerMessage?: string, responseLanguage?: ResponseLanguage): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/documents/stage`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: controlBody(runId, crypto.randomUUID(), entityVersion, { stage, ...(ownerMessage ? { ownerMessage } : {}) }),
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { stage, ...(ownerMessage ? { ownerMessage } : {}), ...(responseLanguage ? { responseLanguage } : {}) }),
   });
 }
 

@@ -22,7 +22,7 @@ import { WorkflowPicker } from "./workflows.js";
 export function StartRunForm({ teams, presetTeamId, onStarted }: {
   teams: TeamSummary[] | undefined; presetTeamId?: string; onStarted: (runId: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const session = useOwnerSession();
   const cache = useQueryClient();
   const [goal, setGoal] = useState("");
@@ -43,7 +43,7 @@ export function StartRunForm({ teams, presetTeamId, onStarted }: {
       try {
         const receipt = await session.request<{ runId: string }>("/runs", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ goal: goal.trim(), ...(workflow ? { workflow } : {}), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true, documentWorkflow: true } : {}) }),
+          body: JSON.stringify({ goal: goal.trim(), responseLanguage: i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en", ...(workflow ? { workflow } : {}), ...(chosen ? { rig: chosen } : {}), ...(hasLead ? { planning: true, documentWorkflow: true } : {}) }),
         });
         if (!receipt?.runId) throw new Error("no run");
         await cache.invalidateQueries({ queryKey: runsKey });

@@ -197,11 +197,12 @@ describe("U3 — the owner creates a team", () => {
     const { runId } = await (await start({ rig: team.id, goal: "Preserve the conversation" })).json() as { runId: string };
     const legacy = createDb();
     try {
-      migrate(legacy, ALL_MIGRATIONS.filter(migration => migration.name !== "121_workflow_souls.sql"));
+      migrate(legacy, ALL_MIGRATIONS.slice(0, ALL_MIGRATIONS.findIndex(migration => migration.name === "121_workflow_souls.sql")));
       legacy.prepare("INSERT INTO rigs (id, name) VALUES (?, 'project')").run(team.id);
-      const bus = new EventBus(legacy), queue = new QueueRepository(legacy, bus);
-      new PlanGovernance(legacy, bus, queue, undefined, () => policy).createRun({ id: runId, rigId: team.id,
-        binding: governance.getRun(runId).binding });
+      const historicalColumns = (legacy.prepare("PRAGMA table_info(team_runs)").all() as Array<{ name: string }>).map(column => column.name);
+      const current = db.prepare("SELECT * FROM team_runs WHERE id = ?").get(runId) as Record<string, unknown>;
+      legacy.prepare(`INSERT INTO team_runs (${historicalColumns.join(", ")}) VALUES (${historicalColumns.map(() => "?").join(", ")})`)
+        .run(...historicalColumns.map(column => current[column]));
       const insert = legacy.prepare(`INSERT INTO team_chat_messages
         (rowid, id, run_id, sender, body, attempt_id, delivered_attempt, created_at, kind, options_json, answered_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -210,7 +211,10 @@ describe("U3 — the owner creates a team", () => {
       insert.run(23, "answer", runId, "owner", "Use A", null, null, "2026-01-01T00:00:02Z", "confirmation", null, null);
       const before = legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all();
       migrate(legacy, ALL_MIGRATIONS);
-      expect(legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all()).toEqual(before);
+      expect(legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all()).toEqual((before as Record<string, unknown>[]).map(row => ({ ...row, response_language: null })));
+      expect(legacy.prepare("SELECT response_language FROM team_runs WHERE id = ?").get(runId)).toEqual({ response_language: null });
+      expect(() => legacy.prepare("UPDATE team_runs SET response_language = 'invalid' WHERE id = ?").run(runId)).toThrow(/CHECK/);
+      expect(() => legacy.prepare("UPDATE team_chat_messages SET response_language = 'invalid'").run()).toThrow(/CHECK/);
       expect(legacy.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
       const append = legacy.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, attempt_id, created_at)
         VALUES (?, ?, ?, ?, ?, '2026-01-01T00:00:03Z')`);

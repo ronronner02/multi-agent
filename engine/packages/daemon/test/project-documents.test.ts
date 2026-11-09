@@ -17,7 +17,7 @@ import { saveTeamModelSettings } from "../src/domain/team-model-policy.js";
 import { roleConfiguration } from "../src/domain/role-configuration.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { documentPaths, documentDispatchRefusal, documentInstructions, approvalDocumentPins } from "../src/domain/project-documents.js";
-import { appendChatMessage, composeLeadTurnEnd, leadChatTurnNote, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
+import { appendChatMessage, composeLeadTurnEnd, leadChatTurnNote, responseLanguageNote, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
 import { leadActivation } from "../src/domain/lead-proposal.js";
@@ -422,6 +422,21 @@ describe("project document workflow", () => {
     const after = governance.getRun(runId);
     expect(state(runId).executionHistory.map(event => event.versions)).toEqual([after.binding.documentVersions, firstPins]);
     expect(documentDispatchRefusal(db, after, "implementer", "old-implementation", after.binding)).toMatch(/superseded/);
+  });
+
+  it("retains a document-control language choice without creating a chat message", async () => {
+    const runId = await ready(), version = latest(runId, "plan");
+    appendChatMessage(db, { id: "previous-language", runId, body: "Confirmed the previous version.", kind: "confirmation",
+      createdAt: new Date().toISOString(), responseLanguage: "en" });
+    const count = governance.chatMessages(runId).length;
+    const response = await call(`/runs/${runId}/documents/confirm`, command(runId, {
+      kind: "plan", versionId: version.id, hash: version.hash, responseLanguage: "zh-CN",
+    }));
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(governance.chatMessages(runId)).toHaveLength(count);
+    expect(db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId))
+      .toEqual({ language: "zh-CN" });
+    expect(responseLanguageNote(governance.chatMessages(runId), "zh-CN")).toContain("Simplified Chinese (zh-CN)");
   });
 
   it("records a conversation confirmation atomically without queuing another lead turn", async () => {

@@ -27,8 +27,8 @@ const withoutLead: TeamSummary[] = [
     seats: [{ role: "implementer", client: "claude-code" }, { role: "reviewer", client: "codex" }] },
 ];
 
-async function show(teams: TeamSummary[], presetTeamId?: string) {
-  const language = await createInterfaceI18n({ language: "en" });
+async function show(teams: TeamSummary[], presetTeamId?: string, locale: "en" | "zh-CN" = "en") {
+  const language = await createInterfaceI18n({ language: locale });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const started = vi.fn();
   render(<QueryClientProvider client={client}><I18nextProvider i18n={language.instance}>
@@ -52,15 +52,25 @@ describe("new task", () => {
   it("starts a planning run when the team has a lead, so the lead drafts the plan", async () => {
     const { started } = await show(withLead);
     const body = await start("Add the status filter", true);
-    expect(body).toEqual({ goal: "Add the status filter", rig: withLead[0]!.id, planning: true, documentWorkflow: true });
+    expect(body).toEqual({ goal: "Add the status filter", rig: withLead[0]!.id, planning: true, documentWorkflow: true, responseLanguage: "en" });
     await waitFor(() => expect(started).toHaveBeenCalledWith("3f2b0c9e-0d1a-4c5b-8f2e-1a2b3c4d5e6f"));
   });
 
   it("keeps the direct start for a team with no lead seat", async () => {
     await show(withoutLead);
     const body = await start("Ship the site");
-    expect(body).toEqual({ goal: "Ship the site", rig: withoutLead[0]!.id });
+    expect(body).toEqual({ goal: "Ship the site", rig: withoutLead[0]!.id, responseLanguage: "en" });
     expect(body).not.toHaveProperty("planning");
+  });
+
+  it("sends the selected Chinese reply language without altering the goal", async () => {
+    await show(withLead, undefined, "zh-CN");
+    const goal = "Read the product documents";
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: goal } });
+    fireEvent.submit(screen.getByRole("textbox").closest("form")!);
+    await waitFor(() => expect(request.mock.calls.some(([path]) => path === "/runs")).toBe(true));
+    const [, init] = request.mock.calls.find(([path]) => path === "/runs") as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ goal, responseLanguage: "zh-CN" });
   });
 
   it("presets the team the owner chose", async () => {

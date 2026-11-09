@@ -37,6 +37,7 @@ describe("command-center background", () => {
     const video = view.container.querySelector("video")!;
     expect(video.muted && video.playsInline).toBe(true);
     expect(video.loop).toBe(false);
+    expect(video.preload).toBe("auto");
     expect(video.getAttribute("src")).toContain("shuimo-danqing-loop.mp4");
     expect(video.play).toHaveBeenCalledTimes(1);
     hidden = true; fireEvent(document, new Event("visibilitychange"));
@@ -54,7 +55,7 @@ describe("command-center background", () => {
     expect(video.pause).toHaveBeenCalledTimes(pauses);
   });
 
-  it("plays the entrance once, then repeats only the fully revealed character before the fade", () => {
+  it("plays the entrance once, then repeats from the revealed portrait keyframe before the fade", () => {
     const view = render(<Background />);
     const video = view.container.querySelector("video")!;
     fireEvent.loadedMetadata(video);
@@ -62,13 +63,13 @@ describe("command-center background", () => {
     fireEvent.playing(video);
     video.currentTime = 23.1;
     fireEvent.timeUpdate(video);
-    expect(video.currentTime).toBe(10);
+    expect(video.currentTime).toBe(250 / 24);
     video.currentTime = 23.1;
     fireEvent.timeUpdate(video);
-    expect(video.currentTime).toBe(10);
+    expect(video.currentTime).toBe(250 / 24);
     video.currentTime = 25.333;
     fireEvent.ended(video);
-    expect(video.currentTime).toBe(10);
+    expect(video.currentTime).toBe(250 / 24);
   });
 
   it("skips the entrance after navigation or a reload in the same session", () => {
@@ -78,7 +79,7 @@ describe("command-center background", () => {
     const next = render(<Background />);
     const video = next.container.querySelector("video")!;
     fireEvent.loadedMetadata(video);
-    expect(video.currentTime).toBe(10);
+    expect(video.currentTime).toBe(250 / 24);
   });
 
   it("keeps the portrait phase when motion is reenabled and storage is unavailable", () => {
@@ -90,7 +91,7 @@ describe("command-center background", () => {
     view.rerender(<Background motion />);
     const video = view.container.querySelector("video")!;
     fireEvent.loadedMetadata(video);
-    expect(video.currentTime).toBe(10);
+    expect(video.currentTime).toBe(250 / 24);
   });
 
   it("keeps playback position on focus changes and never resumes a hidden loop", () => {
@@ -106,7 +107,7 @@ describe("command-center background", () => {
     const plays = vi.mocked(video.play).mock.calls.length;
     video.currentTime = 23.1;
     fireEvent.timeUpdate(video);
-    expect(video.currentTime).toBe(10);
+    expect(video.currentTime).toBe(250 / 24);
     expect(video.play).toHaveBeenCalledTimes(plays);
   });
 

@@ -16,7 +16,7 @@ import { LEAD_ESCALATION_PATH, leadRoster } from "../domain/lead-proposal.js";
 import { isRetiredTeamNode } from "../domain/team-setup.js";
 import { leadRosterPath } from "../domain/lead-roster.js";
 import { documentPaths } from "../domain/project-documents.js";
-import { appendChatMessage, chatBody } from "../domain/lead-chat.js";
+import { appendChatMessage, chatBody, parseResponseLanguage } from "../domain/lead-chat.js";
 import { parseWorkflowSelection, workflowAdmissionRefusal } from "../domain/team-workflows.js";
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import type { RigRepository } from "../domain/rig-repository.js";
@@ -243,8 +243,9 @@ export function teamStartRoutes(
       ...(documentWorkflow ? Object.values(documentPaths(planRef)) : [])])] : [planRef];
     // U5 — the run id exists before the binding does, because a planning run's binding is
     // established in the daemon's own worktree for that run, not in the owner's checkout.
+    const responseLanguage = parseResponseLanguage(v.responseLanguage);
     const runId = randomUUID();
-    const displayName = runName(goal);
+    const displayName = v.displayName === undefined ? runName(goal) : text(v.displayName, "displayName", 80);
     let binding: PlanBinding;
     if (planning) {
       const worktreeRoot = options.planWorktreeRoot?.();
@@ -279,7 +280,7 @@ export function teamStartRoutes(
     // U9 — the run is named from the goal the owner started it with, so no client ever has to
     // show the run id. The goal is already required to be non-blank above.
     const run = governance.createRun({ id: runId, rigId: rig.id, binding, reviewerSeat, displayName,
-      phase: planning ? "planning" : "delivery", documentWorkflow });
+      phase: planning ? "planning" : "delivery", documentWorkflow, responseLanguage });
     const bindingDigest = hashBinding(binding);
     const request = (actionId: string, payload: unknown) => ({ protocolVersion: TEAM_CONTROL_VERSION, runId: run.id,
       actionId, expectedEntityVersion: governance.getRun(run.id).entityVersion, idempotencyKey: randomUUID(), payload });
@@ -302,14 +303,14 @@ export function teamStartRoutes(
     const taskSeat = leadSeat ?? seat;
     const created = governance.createTask(request(taskId, {
       assignment, outputs: [], permissions: [...roleConfiguration[assignment.role].permissions],
-      sourceSession: actor.sessionId, destinationSession: taskSeat, body: goal,
+      sourceSession: actor.sessionId, destinationSession: taskSeat, body: goal, ...(v.displayName !== undefined ? { displayName } : {}),
       ...(workflow && leadSeat === null ? { workflow } : {}),
     }), binding);
     if (created.status !== "accepted") {
       return c.json({ code: "start_refused", runId: run.id, error: created.reason ?? "The task was refused." }, 409);
     }
     if (planning || initialWorkflowRequest) appendChatMessage(rigRepo.db, { id: run.id + ":initial", runId: run.id,
-      body: initialWorkflowRequest ?? goal, createdAt: run.createdAt });
+      body: initialWorkflowRequest ?? goal, createdAt: run.createdAt, responseLanguage });
     // The task exists, so the agent that has to do it starts now. This runs after the response
     // is built rather than inside the request: opening a seat's terminal and waiting for its
     // client to become ready is a launch, and a launch is not what a start request waits on.
