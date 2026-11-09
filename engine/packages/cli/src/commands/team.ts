@@ -44,6 +44,12 @@ interface TeamTaskResult {
   files: Array<{ path: string; hash: string; tracked: boolean }>; patch: string;
 }
 
+interface BrowserPairingReceipt {
+  code?: string;
+  expiresAt?: number;
+  error?: string;
+}
+
 /** The completion read the owner action forwards: what the daemon observed and could verify. */
 interface TaskCompletion {
   taskId: string; role: "lead" | "implementer" | "reviewer"; subjectTaskId: string;
@@ -180,6 +186,35 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log("");
       console.log("Watch it:");
       console.log(`  ${base}/team?run=${encodeURIComponent(receipt.runId)}   (after rig config set ui.enabled true)`);
+    });
+
+  cmd.command("pair-browser")
+    .description("print a one-time code for pairing the local Web UI")
+    .option("--json", "print the code and expiry as JSON")
+    .action(async (options: { json?: boolean }) => {
+      const token = ownerToken(deps());
+      if (!token) {
+        console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        process.exitCode = 1;
+        return;
+      }
+      const status = await getDaemonStatus(deps().lifecycleDeps, { cleanupStaleState: false });
+      if (!daemonStatusGuard(status, { json: options.json })) return;
+      const client = new DaemonClient(getDaemonUrl(status), { ...(deps().fetchImpl ? { fetchImpl: deps().fetchImpl } : {}) });
+      const response = await client.post<BrowserPairingReceipt>(BASE + "/owner-session/pairing", undefined,
+        { headers: { Authorization: "Bearer " + token } });
+      if (response.status !== 200 || !response.data?.code || typeof response.data.expiresAt !== "number") {
+        const detail = [response.data?.code, response.data?.error].filter(Boolean).join(": ") || ("HTTP " + response.status);
+        if (options.json) console.log(JSON.stringify({ error: detail }));
+        else console.error("error: the browser pairing request was refused: " + detail);
+        process.exitCode = 1;
+        return;
+      }
+      if (options.json) {
+        console.log(JSON.stringify({ code: response.data.code, expiresAt: response.data.expiresAt }));
+        return;
+      }
+      console.log(response.data.code);
     });
 
   cmd.command("resume <run-id>")

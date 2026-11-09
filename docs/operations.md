@@ -31,27 +31,17 @@ below; it is not the UI's project-creation flow.
 ## Pair a browser
 
 Open `http://127.0.0.1:7433/team`. A new browser needs a one-time pairing code; the
-Windows desktop app obtains and exchanges it automatically. There is currently no
-`rig team` command to mint a browser code. From the repository root, this uses the
-same owner credential reader as the CLI and the existing pairing endpoint:
+Windows desktop app obtains and exchanges it automatically. Use the owner CLI to mint a one-time code:
 
 ```bash
-node --input-type=module <<'JS'
-import { readOwnerTokenFile } from './engine/packages/cli/dist/commands/team.js';
-
-const token = readOwnerTokenFile();
-if (!token) throw new Error('Run ./setup.sh first.');
-const response = await fetch('http://127.0.0.1:7433/api/team-control/owner-session/pairing', {
-  method: 'POST',
-  headers: { Authorization: 'Bearer ' + token },
-});
-if (!response.ok) throw new Error('Pairing request failed: HTTP ' + response.status);
-console.log((await response.json()).code);
-JS
+rig team pair-browser
 ```
 
-Enter the printed code in the browser's pairing field. The command prints only the
-one-time code. If the daemon uses another loopback port, use that port in both URLs.
+The command prints only the code so it can be pasted directly into the browser. For
+scripts or diagnostics, use `rig team pair-browser --json` to receive the code and
+its expiry timestamp. The code expires after 60 seconds and is single-use.
+
+Enter the printed code in the browser's pairing field.
 
 The desktop reuses its saved engine repository and any configured non-secret runtime
 profile for both startup and pairing. It renews an expired owner session without

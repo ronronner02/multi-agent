@@ -143,6 +143,50 @@ describe("rig team start", () => {
   });
 });
 
+
+describe("rig team pair-browser", () => {
+  it("sends a bodyless owner-authenticated POST and prints only the pairing code", async () => {
+    const pairing = { code: "A".repeat(43), expiresAt: 1_800_000_000_000 };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(pairing), { status: 200 })) as unknown as typeof fetch;
+    const result = await run(["team", "pair-browser"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    expect(result.lines).toEqual([pairing.code]);
+    const [url, init] = (fetchImpl as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls[0]!;
+    expect(url).toBe("http://127.0.0.1:7433/api/team-control/owner-session/pairing");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer owner-token");
+    expect(new Headers(init.headers).get("content-type")).toBeNull();
+  });
+
+  it("prints the complete receipt in JSON mode", async () => {
+    const pairing = { code: "B".repeat(43), expiresAt: 1_800_000_000_000 };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(pairing), { status: 200 })) as unknown as typeof fetch;
+    const result = await run(["team", "pair-browser", "--json"], deps(fetchImpl));
+    expect(result.code).toBeUndefined();
+    expect(JSON.parse(result.lines[0]!)).toEqual(pairing);
+  });
+
+  it("fails before contacting the daemon when the owner credential is missing", async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const result = await run(["team", "pair-browser"], deps(fetchImpl, null));
+    expect(result.code).toBe(1);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result.lines.join("\n")).toMatch(/no owner credential.*Run \.\/setup\.sh/);
+  });
+
+  it("reports the daemon refusal and exits nonzero", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      code: "owner_control_required", error: "The owner bearer was refused",
+    }), { status: 403 })) as unknown as typeof fetch;
+    const result = await run(["team", "pair-browser"], deps(fetchImpl));
+    expect(result.code).toBe(1);
+    expect(result.lines.join("\n")).toContain("owner_control_required");
+    expect(result.lines.join("\n")).toContain("The owner bearer was refused");
+  });
+});
+
+
 describe("rig team continue", () => {
   it("reads the current version and continues the named task with the owner credential", async () => {
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => new Response(JSON.stringify(
@@ -262,6 +306,13 @@ describe("team command registration", () => {
     const start = command.commands.find(entry => entry.name() === "start")!;
     expect(start.description()).toMatch(/create a run and a task/);
     expect(start.registeredArguments.map(argument => argument.name())).toEqual(["goal"]);
+  });
+
+  it("registers `rig team pair-browser` for owner-side browser pairing", () => {
+    const command = teamCommand(deps(vi.fn() as unknown as typeof fetch));
+    const pairBrowser = command.commands.find(entry => entry.name() === "pair-browser")!;
+    expect(pairBrowser.description()).toMatch(/one-time code/);
+    expect(pairBrowser.options.map(option => option.long)).toContain("--json");
   });
 
   it("registers `rig team proposal` as the owner's read and decision of a lead's batch", () => {
