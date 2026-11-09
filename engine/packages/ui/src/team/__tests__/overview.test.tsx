@@ -123,8 +123,29 @@ describe("Overview", () => {
     await waitFor(() => expect(request).toHaveBeenCalled());
     const [path, init] = request.mock.calls[0]!;
     expect(path).toBe("/runs/" + RUN_ID + "/resume");
-    expect(JSON.parse(init.body)).toMatchObject({ expectedEntityVersion: snapshot.run.entityVersion, payload: { addRetries: 2 } });
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ actionId: RUN_ID, expectedEntityVersion: snapshot.run.entityVersion, payload: { addRetries: 2 } });
+    expect(body.idempotencyKey).toEqual(expect.any(String));
     expect(within(screen.getByRole("region", { name: "Needs attention" })).getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("resumes active-time blocks with a fixed one-hour increase", async () => {
+    const snapshot = read();
+    snapshot.run = { ...snapshot.run, state: "blocked", stateReasonKey: "team.reason.activeWallClockBudget",
+      binding: { ...snapshot.run.binding, limits: { ...snapshot.run.binding.limits, maxActiveMs: 4 * 24 * 60 * 60_000 } } };
+    await show(snapshot);
+    expect(screen.getByText("Resuming adds 60 minutes to the active-time budget.")).toBeTruthy();
+    const resume = screen.getByRole("button", { name: "Resume" });
+    fireEvent.click(resume);
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    const [path, init] = request.mock.calls[0]!;
+    const body = JSON.parse(init.body);
+    expect(path).toBe("/runs/" + RUN_ID + "/resume");
+    expect(body).toMatchObject({ actionId: RUN_ID, expectedEntityVersion: snapshot.run.entityVersion, payload: { addMinutes: 60 } });
+    expect(body.idempotencyKey).toEqual(expect.any(String));
+    fireEvent.click(resume);
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(request.mock.calls[1]![1].body).idempotencyKey).not.toBe(body.idempotencyKey);
   });
 
   it("waits for integration readiness before Merge and handles a refused result", async () => {
