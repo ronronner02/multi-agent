@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { TeamRole } from "../contracts/team-control.js";
 
 /**
@@ -13,6 +13,10 @@ export function immutable<T>(value: T): T {
   return value;
 }
 
-export const roleConfiguration = immutable(JSON.parse(readFileSync(
-  new URL("../../../../config/team/roles.json", import.meta.url), "utf8"))) as
+const roleConfigUrl = [
+  new URL("../../../../config/team/roles.json", import.meta.url),
+  new URL("../../config/team/roles.json", import.meta.url),
+].find(url => existsSync(url));
+if (!roleConfigUrl) throw new Error("team role configuration is missing");
+export const roleConfiguration = immutable(JSON.parse(readFileSync(roleConfigUrl, "utf8"))) as
   Record<TeamRole, { client: "claude-code" | "codex"; permissions: string[] }>;

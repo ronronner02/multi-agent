@@ -29,6 +29,19 @@ export class OwnerSessions {
     return { code, expiresAt };
   }
 
+  /** Create a normal owner session after the browser boundary has proved loopback origin and peer. */
+  createLocal(origin: string, ownerToken: string): { token: string; antiForgeryToken: string; session: OwnerSession } {
+    const at = this.now(), token = secret(), antiForgeryToken = secret();
+    const session: OwnerSession = { id: randomUUID(), origin, created_at: at, last_seen_at: at,
+      expires_at: at + OWNER_ABSOLUTE_MS, revoked_at: null };
+    this.db.prepare(`INSERT INTO owner_sessions
+      (id, token_hash, csrf_hash, owner_hash, origin, created_at, last_seen_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(session.id, digest("session", token), digest("csrf", antiForgeryToken), digest("owner", ownerToken),
+        origin, at, at, session.expires_at);
+    return { token, antiForgeryToken, session };
+  }
+
   exchange(code: unknown, origin: string, ownerToken: string):
     { token: string; antiForgeryToken: string; session: OwnerSession } | null {
     if (typeof code !== "string" || !SECRET.test(code)) return null;

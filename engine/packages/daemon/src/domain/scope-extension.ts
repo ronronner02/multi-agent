@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
 import { canonicalJson, type PlanBinding, type ScopeExtension, type ScopeProjection, type TeamApproval, type TeamRun, type TeamTaskAuthority } from "../contracts/team-control.js";
 import { LEAD_ESCALATION_PATH, LEAD_PROPOSAL_PATH } from "./lead-proposal.js";
@@ -29,7 +29,12 @@ export class ScopeExtensionError extends Error {
 interface ScopePolicy { packages: string[]; maxPathsPerRequest: number; maxApprovedExtensionsPerTask: number; }
 function scopePolicy(): ScopePolicy {
   try {
-    const policy = JSON.parse(readFileSync(new URL("../../../../config/governance/low-risk-dev-dependencies.json", import.meta.url), "utf8")) as ScopePolicy;
+    const policyUrl = [
+      new URL("../../../../config/governance/low-risk-dev-dependencies.json", import.meta.url),
+      new URL("../../config/governance/low-risk-dev-dependencies.json", import.meta.url),
+    ].find(url => existsSync(url));
+    if (!policyUrl) throw new Error();
+    const policy = JSON.parse(readFileSync(policyUrl, "utf8")) as ScopePolicy;
     if (!Array.isArray(policy.packages) || !policy.packages.every(value => typeof value === "string" && value.length > 0)
       || ![policy.maxPathsPerRequest, policy.maxApprovedExtensionsPerTask].every(value => Number.isSafeInteger(value) && value > 0)) throw new Error();
     return policy;

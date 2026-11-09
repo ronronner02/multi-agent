@@ -1,9 +1,13 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { relativePath } from "../contracts/team-control.js";
 
-const credentialPatterns: RegExp[] = JSON.parse(readFileSync(
-  new URL("../../../../config/governance/credential-exclusions.json", import.meta.url), "utf8",
-)).patterns.map((pattern: string) => new RegExp(pattern));
+const credentialConfigUrl = [
+  new URL("../../../../config/governance/credential-exclusions.json", import.meta.url),
+  new URL("../../config/governance/credential-exclusions.json", import.meta.url),
+].find(url => existsSync(url));
+if (!credentialConfigUrl) throw new Error("credential exclusion policy is missing");
+const credentialPatterns: RegExp[] = JSON.parse(readFileSync(credentialConfigUrl, "utf8")).patterns
+  .map((pattern: string) => new RegExp(pattern));
 export const credentialExcluded = (path: string): boolean => credentialPatterns.some(pattern => pattern.test(path));
 
 export const protectedPath = (path: string) =>

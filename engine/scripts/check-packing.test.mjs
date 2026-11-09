@@ -141,6 +141,19 @@ test("build-package stages the conventions doc as the daemon's stable-path input
   );
 });
 
+test("build-package stages the credential exclusion policy beside the vendored daemon", () => {
+  const buildScript = readFileSync("scripts/build-package.sh", "utf8");
+  assert.ok(
+    existsSync("config/governance/credential-exclusions.json"),
+    "the credential exclusion policy must exist in the repository source",
+  );
+  assert.match(
+    buildScript,
+    /mkdir -p "\$CLI_DIR\/daemon\/config\/team" "\$CLI_DIR\/daemon\/config\/governance"[\s\S]*cp -r "\$REPO_ROOT\/config\/team\/"\* "\$CLI_DIR\/daemon\/config\/team\/"[\s\S]*cp "\$REPO_ROOT\/config\/governance\/credential-exclusions\.json" "\$CLI_DIR\/daemon\/config\/governance\/"[\s\S]*cp "\$REPO_ROOT\/config\/governance\/low-risk-dev-dependencies\.json" "\$CLI_DIR\/daemon\/config\/governance\/"/,
+    "the packaged daemon must carry the referenced config surfaces next to its relocated dist tree",
+  );
+});
+
 // OPPORTUNISTIC, never required: when an assembled package happens to be present, verify the
 // staged copy really is byte-identical. Skipped (not failed) in a clean checkout, so this
 // cannot make `npm run test:repo` depend on build state — the contracts above are the

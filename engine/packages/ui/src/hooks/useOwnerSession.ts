@@ -26,9 +26,11 @@ function usePairedBrowser() {
   const desktop = (window as Window & { multiAgentDesktop?: { reconnect?: () => Promise<string | null> } }).multiAgentDesktop;
   const nativeReconnect = desktop?.reconnect;
   const renewal = useRef<Promise<boolean> | null>(null);
+  const autoPairing = useRef<Promise<boolean> | null>(null);
   const generation = useRef(0);
   const automaticReconnect = useRef(true);
   const loopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(window.location.hostname);
+  const directOpen = loopback && (window.location.pathname === "/team" || window.location.pathname.startsWith("/team/"));
   const closeTerminals = useCallback(() => {
     for (const socket of sockets.current) socket.close();
     sockets.current.clear();
@@ -39,6 +41,27 @@ function usePairedBrowser() {
     credential.current = null; closeTerminals(); setPaired(false);
     try { window.sessionStorage.removeItem(DESKTOP_CSRF_KEY); } catch { /* Memory is already cleared. */ }
   }, [closeTerminals]);
+  const autoPair = useCallback((): Promise<boolean> => {
+    if (!directOpen || credential.current) return Promise.resolve(credential.current !== null);
+    if (!autoPairing.current) {
+      const pending = fetch("/api/team-control/owner-session/auto", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      }).then(async response => {
+        const body = await response.json().catch(() => null) as { antiForgeryToken?: unknown } | null;
+        const token = body?.antiForgeryToken;
+        if (!response.ok || typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
+        credential.current = token;
+        try { window.sessionStorage.setItem(DESKTOP_CSRF_KEY, token); } catch { /* The in-memory credential remains usable. */ }
+        closeTerminals(); setPaired(true);
+        return true;
+      }).catch(() => false).finally(() => { if (autoPairing.current === pending) autoPairing.current = null; });
+      autoPairing.current = pending;
+    }
+    return autoPairing.current;
+  }, [closeTerminals, directOpen]);
+  useEffect(() => {
+    if (!credential.current && directOpen) void autoPair();
+  }, [autoPair, directOpen]);
   const reconnect = useCallback((): Promise<boolean> => {
     if (!nativeReconnect) return Promise.resolve(false);
     automaticReconnect.current = true;

@@ -1,4 +1,4 @@
-import { chmodSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { canonicalJson, parseAssignment, parsePlanBinding, text, type PlanBinding, type ScopedAssignment, type TeamRole } from "../../contracts/team-control.js";
 // T053: the role configuration and the freeze helper live in a dependency-free module, so
@@ -35,7 +35,15 @@ export interface ContextInput {
 export type ContextManifest = Readonly<Omit<ContextInput, "files"> & { files: (ContextFile & { workerPath: string })[]; workerDiscoveryRoots: string[]; generatedHash: string; protocolVersion: string | null; instructionVersions: InstructionVersions }>;
 export interface InstructionVersions { core: string; charter: string }
 export interface ContextObservation { discoveryRoots: string[]; files: { path: string; hash: string }[] }
-export const leadProtocol = readFileSync(new URL("../../../../../config/team/lead-protocol.md", import.meta.url), "utf8");
+const readTeamConfig = (path: string): string => {
+  const url = [
+    new URL(`../../../../../config/team/${path}`, import.meta.url),
+    new URL(`../../../config/team/${path}`, import.meta.url),
+  ].find(candidate => existsSync(candidate));
+  if (!url) throw new Error(`team configuration is missing: ${path}`);
+  return readFileSync(url, "utf8");
+};
+export const leadProtocol = readTeamConfig("lead-protocol.md");
 export const LEAD_PROTOCOL_VERSION = "5";
 /** An instruction file without a `Version:` line cannot be projected. */
 export function instructionVersion(content: string): string {
@@ -49,7 +57,7 @@ export function instructionVersion(content: string): string {
  * existing attempt keeps the bytes its projection recorded.
  */
 export function loadRoleInstructions(role: TeamRole): { core: string; charter: string } {
-  const read = (path: string) => readFileSync(new URL(`../../../../../config/team/${path}`, import.meta.url), "utf8");
+  const read = (path: string) => readTeamConfig(path);
   return { core: read("core.md"), charter: role === "lead" ? leadProtocol : read(`roles/${role}.md`) };
 }
 /** Load-time snapshots, for callers and tests that need the bytes without a projection. */

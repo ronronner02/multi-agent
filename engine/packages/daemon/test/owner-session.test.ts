@@ -32,6 +32,19 @@ describe("KTD14 paired owner authentication", () => {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) },
     { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
 
+  it("opens a loopback browser without a one-time code while preserving the normal session boundary", async () => {
+    const opened = await request("/api/team-control/owner-session/auto", "POST", { Origin: "http://localhost" });
+    expect(opened.status).toBe(200);
+    const result = await opened.json();
+    expect(result.antiForgeryToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(opened.headers.get("Set-Cookie")).toContain("HttpOnly");
+    expect(db.prepare("SELECT count(*) AS count FROM owner_pairing_codes").get()).toEqual({ count: 0 });
+    const cookie = opened.headers.get("Set-Cookie")!.split(";")[0]!;
+    expect((await request("/api/team-control/health", "GET", {
+      Origin: "http://localhost", Cookie: cookie, [OWNER_CSRF_HEADER]: result.antiForgeryToken,
+    })).status).toBe(200);
+  });
+
   it("pairs once and permits owner controls only with the paired anti-forgery token", async () => {
     const minted = await request("/api/team-control/owner-session/pairing", "POST", { Authorization: "Bearer owner-pairing-fixture" });
     expect(minted.status).toBe(200);

@@ -80,6 +80,13 @@ echo "Generating shipped context-packs..."
 mkdir -p "$CLI_DIR/daemon/dist"
 cp -r "$DAEMON_DIR/dist/"* "$CLI_DIR/daemon/dist/"
 
+# Binding-scope policy: the vendored daemon resolves this file relative to its
+# packaged dist directory, so keep the policy beside that shipped daemon.
+mkdir -p "$CLI_DIR/daemon/config/team" "$CLI_DIR/daemon/config/governance"
+cp -r "$REPO_ROOT/config/team/"* "$CLI_DIR/daemon/config/team/"
+cp "$REPO_ROOT/config/governance/credential-exclusions.json" "$CLI_DIR/daemon/config/governance/"
+cp "$REPO_ROOT/config/governance/low-risk-dev-dependencies.json" "$CLI_DIR/daemon/config/governance/"
+
 if [ -d "$DAEMON_DIR/assets" ]; then
   cp -r "$DAEMON_DIR/assets" "$CLI_DIR/daemon/assets"
   SUBSTANCE_SURFACE_ROOTS+=("daemon/assets")
