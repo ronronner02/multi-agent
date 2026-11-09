@@ -9,7 +9,7 @@ import { FolderBrowser } from "./folder-browser.js";
 import { latestRunFor, teamsKey, type TeamSummary, type RunSummary } from "./hooks.js";
 import { clientLabel } from "./display.js";
 
-interface Preview { repository: string; name: string; action: "create" | "push" | "register"; fileCount: number; excludedPaths: string[] }
+interface Preview { repository: string; name: string; action: "create" | "push" | "register" | "open"; fileCount: number; excludedPaths: string[] }
 const ERRORS: Record<string, MessageKey> = {
   github_repo_exists: "projects.nameTaken", github_push_failed: "projects.pushFailed",
   github_repo_create_failed: "projects.createFailed", github_not_signed_in: "github.title",
@@ -18,8 +18,8 @@ const ERRORS: Record<string, MessageKey> = {
   folder_pick_failed: "projects.pickFailed",
 };
 
-export function CreateProject({ open, onOpenChange, onCreated, opener }: {
-  open: boolean; onOpenChange: (open: boolean) => void; onCreated: (team: TeamSummary) => void; opener: RefObject<HTMLElement | null>;
+export function CreateProject({ open, mode = "create", onOpenChange, onCreated, opener }: {
+  open: boolean; mode?: "create" | "open"; onOpenChange: (open: boolean) => void; onCreated: (team: TeamSummary) => void; opener: RefObject<HTMLElement | null>;
 }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
@@ -40,16 +40,16 @@ export function CreateProject({ open, onOpenChange, onCreated, opener }: {
     catch { setFailure("folder_pick_failed"); } finally { setBusy(false); }
   };
   const submit = async () => {
-    if (busy || !repository.trim() || !name.trim()) return;
+    if (busy || !repository.trim() || (mode === "create" && !name.trim())) return;
     setBusy(true); setFailure(null);
     try {
       if (!preview) {
         const result = await request<{ preview: Preview }>("/teams", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repository: repository.trim(), name: name.trim(), dryRun: true }) });
+          body: JSON.stringify({ repository: repository.trim(), ...(name.trim() ? { name: name.trim() } : {}), ...(mode === "open" ? { openExisting: true } : {}), dryRun: true }) });
         setPreview(result.preview);
       } else {
         const result = await request<{ team: TeamSummary }>("/teams", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repository: preview.repository, name: preview.name }) });
+          body: JSON.stringify({ repository: preview.repository, name: preview.name, ...(mode === "open" ? { openExisting: true } : {}) }) });
         await cache.invalidateQueries({ queryKey: teamsKey });
         setRepository(""); setName(""); setPreview(null); onOpenChange(false); onCreated(result.team);
       }
@@ -66,7 +66,7 @@ export function CreateProject({ open, onOpenChange, onCreated, opener }: {
     <Dialog.Content className="ui-create-project" aria-describedby={undefined} onCloseAutoFocus={event => {
       event.preventDefault(); opener.current?.focus();
     }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onInteractOutside={event => { if (busy) event.preventDefault(); }}>
-      <header className="ui-panel-heading"><Dialog.Title>{t("projects.create")}</Dialog.Title>
+      <header className="ui-panel-heading"><Dialog.Title>{t(mode === "open" ? "projects.open" : "projects.create")}</Dialog.Title>
         <Dialog.Close className="ui-icon-button" disabled={busy} aria-label={t("web.close")}><X aria-hidden="true" /></Dialog.Close></header>
       <div className="ui-create-body">{browsing ? <FolderBrowser onSelect={path => { changeFolder(path); setBrowsing(false); }} onCancel={() => setBrowsing(false)} />
         : <form onSubmit={event => { event.preventDefault(); void submit(); }}>
@@ -75,20 +75,20 @@ export function CreateProject({ open, onOpenChange, onCreated, opener }: {
               required maxLength={4096} onChange={event => changeFolder(event.target.value)} />
               <button className="btn btn-outline" type="button" disabled={busy} onClick={() => void browse()}>{t("team.create.browse")}</button></div>
           </div>
-          <div className="field"><label htmlFor="project-name">{t("projects.name")}</label>
+          {mode === "create" && <div className="field"><label htmlFor="project-name">{t("projects.name")}</label>
             <input ref={nameInput} id="project-name" className="input" value={name} disabled={busy} required maxLength={100}
-              onChange={event => { setName(event.target.value); setPreview(null); setFailure(null); }} /></div>
+              onChange={event => { setName(event.target.value); setPreview(null); setFailure(null); }} /></div>}
           {preview && <section className="ui-create-preview" aria-label={t("projects.preview")}>
-            <strong>{t("projects.fileCount", { count: preview.fileCount })}</strong>
+            {preview.action !== "open" && <strong>{t("projects.fileCount", { count: preview.fileCount })}</strong>}
             <code>{preview.repository}</code>
             {preview.excludedPaths.length > 0 && <div><h3>{t("projects.excluded")}</h3>
               <ul>{preview.excludedPaths.map(path => <li key={path}><code>{path}</code></li>)}</ul></div>}
-            <p className="consequence">{t(preview.action === "register" ? "projects.registerConsequence"
+            <p className="consequence">{t(preview.action === "open" ? "projects.openConsequence" : preview.action === "register" ? "projects.registerConsequence"
               : preview.action === "push" ? "projects.pushConsequence" : "projects.createConsequence", { name: preview.name })}</p>
           </section>}
-          {failure && <p role="alert">{t(ERRORS[failure] ?? "projects.createFailed")}</p>}
-          <div className="plate-foot"><button className="btn btn-primary" type="submit" disabled={busy || !repository.trim() || !name.trim()}>
-            {t(busy ? "web.loading" : !preview ? "projects.reviewFiles" : failure === "github_push_failed" ? "projects.retry" : "projects.submit")}
+          {failure && <p role="alert">{t(ERRORS[failure] ?? (mode === "open" ? "projects.openFailed" : "projects.createFailed"))}</p>}
+          <div className="plate-foot"><button className="btn btn-primary" type="submit" disabled={busy || !repository.trim() || (mode === "create" && !name.trim())}>
+            {t(busy ? "web.loading" : !preview ? "projects.reviewFiles" : failure === "github_push_failed" ? "projects.retry" : mode === "open" ? "projects.open" : "projects.submit")}
           </button></div>
         </form>}</div>
     </Dialog.Content>
@@ -96,14 +96,15 @@ export function CreateProject({ open, onOpenChange, onCreated, opener }: {
 }
 
 /** Project and run selection keep their home on Overview after the old project screen is removed. */
-export function ProjectsScreen({ teams, runs, loading, onOpenProject, onOpenRun, onNewWork, onCreate }: {
+export function ProjectsScreen({ teams, runs, loading, onOpenProject, onOpenRun, onNewWork, onCreate, onOpenExisting }: {
   teams: TeamSummary[] | undefined; runs: RunSummary[] | undefined; loading: boolean;
   onOpenProject: (id: string) => void; onOpenRun: (id: string) => void; onNewWork: (id: string) => void;
-  onCreate: (opener: HTMLButtonElement) => void;
+  onCreate: (opener: HTMLButtonElement) => void; onOpenExisting?: (opener: HTMLButtonElement) => void;
 }) {
   const { t } = useTranslation();
   return <div className="page"><div className="page-head"><h1 className="display">{t("projects.title")}</h1>
-    <button className="btn btn-primary" onClick={event => onCreate(event.currentTarget)}>{t("projects.create")}</button></div>
+    <div className="ui-project-actions"><button className="btn btn-outline" onClick={event => onOpenExisting?.(event.currentTarget)}>{t("projects.open")}</button>
+      <button className="btn btn-primary" onClick={event => onCreate(event.currentTarget)}>{t("projects.create")}</button></div></div>
     {loading ? <p role="status">{t("web.loading")}</p> : !teams?.length ? <p className="muted">{t("projects.empty")}</p>
       : <div className="ui-project-list">{teams.map(team => {
         const run = latestRunFor(runs, team.id);

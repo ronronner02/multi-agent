@@ -18,7 +18,9 @@ beforeEach(() => {
   request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === "/teams") {
       const input = JSON.parse(String(init?.body));
-      if (input.dryRun) return { preview: { ...input, action, fileCount: 2, excludedPaths: [".env", ".ssh/key"] } };
+      if (input.dryRun) return input.openExisting
+        ? { preview: { repository: input.repository, name: "sample", action: "open", fileCount: 0, excludedPaths: [] } }
+        : { preview: { ...input, action, fileCount: 2, excludedPaths: [".env", ".ssh/key"] } };
       if (failure) throw new OwnerReadError(409, failure);
       return { team: created };
     }
@@ -31,12 +33,12 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); cache.clear(); vi.unstubAllGlobals(); });
 
-async function show() {
+async function show(mode: "create" | "open" = "create") {
   const language = await createInterfaceI18n({ language: "en" });
   function Fixture() {
     const [open, setOpen] = useState(true), opener = useRef<HTMLButtonElement>(null);
     return <div className="team-shell"><button ref={opener} onClick={() => setOpen(true)}>Open</button>
-      <CreateProject open={open} onOpenChange={setOpen} onCreated={onCreated} opener={opener} /></div>;
+      <CreateProject open={open} mode={mode} onOpenChange={setOpen} onCreated={onCreated} opener={opener} /></div>;
   }
   return render(<QueryClientProvider client={cache}><I18nextProvider i18n={language.instance}><Fixture /></I18nextProvider></QueryClientProvider>);
 }
@@ -62,6 +64,17 @@ describe("project creation", () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
     expect(JSON.parse(String(request.mock.calls[1]![1].body))).toEqual({ repository: "/home/fixture/sample", name: "sample" });
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens an existing local repository without asking for a GitHub upload", async () => {
+    await show("open");
+    fireEvent.change(screen.getByRole("textbox", { name: "Folder" }), { target: { value: "/home/fixture/sample" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review files" }));
+    expect(await screen.findByText("Open the existing local project sample without creating a GitHub repository or uploading files.")).toBeTruthy();
+    expect(JSON.parse(String(request.mock.calls[0]![1].body))).toEqual({ repository: "/home/fixture/sample", openExisting: true, dryRun: true });
+    fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
+    expect(JSON.parse(String(request.mock.calls[1]![1].body))).toEqual({ repository: "/home/fixture/sample", name: "sample", openExisting: true });
   });
 
   it("uses the desktop picker when present instead of reading browser directories", async () => {
@@ -152,6 +165,16 @@ describe("project creation", () => {
   });
 });
 
+
+describe("project selection", () => {
+  it("offers a separate existing-project action", async () => {
+    const language = await createInterfaceI18n({ language: "en" }), onOpenExisting = vi.fn();
+    render(<I18nextProvider i18n={language.instance}><ProjectsScreen teams={[]} runs={[]} loading={false}
+      onOpenProject={() => {}} onOpenRun={() => {}} onNewWork={() => {}} onCreate={() => {}} onOpenExisting={onOpenExisting} /></I18nextProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+    expect(onOpenExisting).toHaveBeenCalledOnce();
+  });
+});
 
 describe("project record status", () => {
   it.each([

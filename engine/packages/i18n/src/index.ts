@@ -57,6 +57,7 @@ export const MESSAGE_PARAMETERS = {
   "projects.createConsequence": ["name"],
   "projects.pushConsequence": ["name"],
   "projects.registerConsequence": ["name"],
+  "projects.openConsequence": ["name"],
   "overview.integrationHistory": ["count"],
   // MVP — the completion panel names the review task a completion created and the task a
   // review reopened, so both carry the task id they name.

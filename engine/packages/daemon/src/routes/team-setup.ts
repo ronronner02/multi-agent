@@ -12,7 +12,7 @@ import { bootstrapProject, listProjectDirectories, previewProject, ProjectBootst
 import { GithubCliError, type GithubCli } from "../domain/github-cli.js";
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import {
-  TEAM_ROLES, TeamSetupError, createTeam, listTeams, parseTeamClient, type TeamSeatInput,
+  TEAM_ROLES, TeamSetupError, availableTeamName, canonicalTeamRepository, createTeam, listTeams, parseTeamClient, type TeamSeatInput,
 } from "../domain/team-setup.js";
 import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
@@ -106,7 +106,20 @@ export function teamSetupRoutes(
     // relative path would resolve against the daemon's own working directory instead.
     if (!repository.startsWith("/")) throw new TeamContractError("repository");
     if (v.dryRun !== undefined && typeof v.dryRun !== "boolean") throw new TeamContractError("dryRun");
+    if (v.openExisting !== undefined && typeof v.openExisting !== "boolean") throw new TeamContractError("openExisting");
     c.header("Cache-Control", "no-store");
+    if (v.openExisting === true) {
+      if (v.seats !== undefined) throw new TeamContractError("openExisting");
+      const root = canonicalTeamRepository(repository);
+      const name = availableTeamName(rigRepo.db, root, v.name === undefined ? undefined : text(v.name, "name", 100));
+      if (v.dryRun === true) return c.json({ protocolVersion: TEAM_CONTROL_VERSION,
+        preview: { repository: root, name, action: "open", fileCount: 0, excludedPaths: [] } });
+      const configured = options.settingsStore?.resolveOne("team.leadClient").value ?? "claude-code";
+      const leadClient = typeof configured === "string" ? parseTeamClient(configured) : null;
+      if (!leadClient) throw new TeamSetupError("team_seats_invalid", "Set the lead client to claude-code or codex before opening a project.");
+      const team = createTeam(rigRepo.db, { repository: root, name, seats: [{ role: "lead", client: leadClient }] });
+      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, team }, 201);
+    }
     if (v.seats === undefined) {
       const input = { repository, name: text(v.name, "name", 100) };
       if (v.dryRun === true) return c.json({ protocolVersion: TEAM_CONTROL_VERSION,
