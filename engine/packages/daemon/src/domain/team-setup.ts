@@ -85,7 +85,7 @@ export function createTeam(db: Database.Database, input: {
   name?: string;
 }): Team {
   const seats = validatedSeats(input.seats ?? [{ role: "lead", client: input.leadClient ?? "claude-code" }]);
-  const root = repositoryRoot(input.repository);
+  const root = canonicalTeamRepository(input.repository);
   const rigs = new RigRepository(db);
   const name = availableTeamName(db, root, input.name);
   const rig = db.transaction(() => {
@@ -190,7 +190,7 @@ function validatedSeats(seats: readonly TeamSeatInput[]): TeamSeat[] {
 }
 
 /** The canonical root of the repository the path belongs to, if it is one with a commit. */
-function repositoryRoot(repository: string): string {
+export function canonicalTeamRepository(repository: string): string {
   let path: string;
   try {
     path = realpathSync(repository);

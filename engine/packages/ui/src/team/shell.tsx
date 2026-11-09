@@ -219,8 +219,8 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
   const [draftContext, setDraftContext] = useState<{ runId: string; body: string }>();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [newWorkFor, setNewWorkFor] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const createOpener = useRef<HTMLElement>(null);
+  const [creating, setCreating] = useState(false), [opening, setOpening] = useState(false);
+  const createOpener = useRef<HTMLElement>(null), openOpener = useRef<HTMLElement>(null);
   const chatOpener = useRef<HTMLButtonElement>(null);
   const paletteOpener = useRef<HTMLElement>(null);
   const read = data.read.data;
@@ -252,6 +252,7 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
     setChatOpen(true);
   };
   const openCreate = (opener: HTMLButtonElement) => { createOpener.current = opener; setCreating(true); };
+  const openExisting = (opener: HTMLButtonElement) => { openOpener.current = opener; setOpening(true); };
   let content: ReactNode;
   if (!paired) content = <Pairing />;
   else if (section === "settings") content = <SettingsScreen language={language} connection={connection}
@@ -263,7 +264,7 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
   else if (!runId) content = team ? <ProjectHome team={team} runs={currentRuns} section={section}
     onOpenRun={(id, destination) => go(destination, { run: id, task: undefined })} onDiscuss={openChat} onModels={() => go("settings")} />
     : <ProjectsScreen teams={teams.data} runs={runs.data} loading={teams.isPending} onOpenProject={openProject}
-      onOpenRun={nextRun => go("overview", { run: nextRun, task: undefined })} onNewWork={setNewWorkFor} onCreate={openCreate} />;
+      onOpenRun={nextRun => go("overview", { run: nextRun, task: undefined })} onNewWork={setNewWorkFor} onCreate={openCreate} onOpenExisting={openExisting} />;
   else if (section === "documents") content = <DocumentsScreen key={`documents:${runId}`} read={read} chat={chat.data} failed={chat.isError}
     onChanged={() => { void chat.refetch(); void data.read.refetch(); }} onDiscuss={(opener, body) => {
       chatOpener.current = opener; if (body) setDraftContext({ runId, body }); setChatOpen(true);
@@ -308,6 +309,8 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
     <CommandPalette open={paired && paletteOpen} onOpenChange={setPaletteOpen} tasks={paired ? read?.tasks ?? [] : []}
       onChoose={task => go("tasks", { task })} opener={paletteOpener} />
     <CreateProject open={creating} onOpenChange={setCreating} opener={createOpener}
+      onCreated={created => go("overview", { team: created.id, run: undefined, task: undefined })} />
+    <CreateProject open={opening} mode="open" onOpenChange={setOpening} opener={openOpener}
       onCreated={created => go("overview", { team: created.id, run: undefined, task: undefined })} />
     {newWorkFor && <NewWorkSheet teams={teams.data} teamId={newWorkFor} open
       onOpenChange={open => { if (!open) setNewWorkFor(null); }} onStarted={nextRun => { setNewWorkFor(null); go("overview", { run: nextRun }); }} />}

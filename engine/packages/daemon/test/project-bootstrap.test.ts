@@ -236,6 +236,20 @@ describe("project creation through the owner route", () => {
     expect(git(remote, "for-each-ref", "--format=%(refname)")).toBe("");
   });
 
+  it("opens an existing local repository without creating an origin or uploading files", async () => {
+    committedRepository();
+    const head = git(repository, "rev-parse", "HEAD");
+    const preview = await (await create({ openExisting: true, dryRun: true })).json();
+    expect(preview).toMatchObject({ preview: { repository, name: "project", action: "open", fileCount: 0, excludedPaths: [] } });
+    expect(calls()).toEqual([]);
+    const response = await create({ openExisting: true });
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect((await response.json()).team).toMatchObject({ repository, name: "project", seats: [{ role: "lead", client: "claude-code" }] });
+    expect(git(repository, "rev-parse", "HEAD")).toBe(head);
+    expect(readFileSync(join(repository, ".git", "config"), "utf8")).not.toContain("[remote \"origin\"]");
+    expect(calls()).toEqual([]);
+  });
+
   it("leaves no team on a name conflict, and allows a new name without another initial commit", async () => {
     writeFileSync(join(directory, "repo-exists"), "");
     const response = await create();
