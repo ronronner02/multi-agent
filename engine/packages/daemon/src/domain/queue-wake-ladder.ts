@@ -1,7 +1,7 @@
 import type { ArbitratedSeatState } from "./activity-taxonomy.js";
 import { latestHookMovedOn, latestHookWaitsOnPerson } from "./agent-activity-store.js";
 import type { AgentActivity } from "./types.js";
-import type { OperatorDeliveryEngine } from "./gateway/operator-delivery-engine.js";
+import type { OperatorDeliveryEngine } from "./queue-routing/operator-delivery.js";
 import { openPromptRefusals, CLOSE_PREFIX, REFUSED_PREFIX } from "./policies/parked-owner-consumer.js";
 import { findQueueRecovery, recoveryTag } from "./queue-recovery.js";
 import { lastMeaningfulTransition, type WaitingView } from "./queue-waiting.js";
@@ -55,7 +55,7 @@ import {
   USAGE_LIMIT_POOL_TAG_PREFIX,
 } from "./queue-wake-repository.js";
 import { SettingsStore } from "./user-settings/settings-store.js";
-import { loadHumanRegistry, resolveRegisteredHumanAddress, type LoadResult } from "./gateway/human-registry.js";
+import { loadHumanRegistry, resolveRegisteredHumanAddress, type LoadResult } from "./queue-routing/human-registry.js";
 import { parseSessionName } from "./session-name.js";
 import {
   LADDER_ATTEMPT_PREFIX,

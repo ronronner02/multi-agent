@@ -1,4 +1,3 @@
-import type { CmuxAdapter } from "../adapters/cmux.js";
 import type { TmuxAdapter } from "../adapters/tmux.js";
 import type { ScannedPane } from "./tmux-discovery-scanner.js";
 import type { RuntimeHint, Confidence } from "./discovery-types.js";
@@ -6,7 +5,6 @@ import type { RuntimeHint, Confidence } from "./discovery-types.js";
 /** Evidence collected during fingerprinting */
 export interface FingerprintEvidence {
   layerUsed: number;
-  cmuxSignal?: { runtime: string; pid: number };
   processSignal?: { command: string; matched: string };
   paneContentSignal?: { pattern: string; matchedLine: string };
   configSignal?: { claudeDir: boolean; agentsDir: boolean };
@@ -45,51 +43,23 @@ const CODEX_PANE_PATTERNS = [
 ];
 
 /**
- * Four-layer runtime detection pipeline.
- * Layer 0: cmux agent PID (highest confidence)
+ * Three-layer runtime detection pipeline.
  * Layer 1: Process tree / active command (high)
  * Layer 2: Pane content heuristics (medium)
  * Layer 3: CWD/config context (low-medium, boost only)
  */
 export class SessionFingerprinter {
-  private cmux: CmuxAdapter;
   private tmux: TmuxAdapter;
   private fsExists: (path: string) => boolean;
-  private cachedAgentPIDs: Map<number, { runtime: string; pid: number }> | null = null;
 
-  constructor(deps: { cmuxAdapter: CmuxAdapter; tmuxAdapter: TmuxAdapter; fsExists: (path: string) => boolean }) {
-    this.cmux = deps.cmuxAdapter;
+  constructor(deps: { tmuxAdapter: TmuxAdapter; fsExists: (path: string) => boolean }) {
     this.tmux = deps.tmuxAdapter;
     this.fsExists = deps.fsExists;
-  }
-
-  /** Pre-fetch cmux agent PIDs for batch use. Call before fingerprinting multiple panes. */
-  async refreshCmuxSignals(): Promise<void> {
-    const result = await this.cmux.queryAgentPIDs();
-    this.cachedAgentPIDs = result.ok ? result.data : null;
   }
 
   /** Fingerprint a single scanned pane. */
   async fingerprint(pane: ScannedPane): Promise<FingerprintResult> {
     const evidence: FingerprintEvidence = { layerUsed: -1 };
-
-    // --- Layer 0: cmux agent PID ---
-    if (this.cachedAgentPIDs === null) {
-      await this.refreshCmuxSignals();
-    }
-
-    if (this.cachedAgentPIDs && pane.pid) {
-      const cmuxMatch = this.cachedAgentPIDs.get(pane.pid);
-      if (cmuxMatch) {
-        evidence.layerUsed = 0;
-        evidence.cmuxSignal = cmuxMatch;
-        const hint = cmuxMatch.runtime.includes("claude") ? "claude-code" as RuntimeHint
-          : cmuxMatch.runtime.includes("codex") ? "codex" as RuntimeHint
-          : cmuxMatch.runtime.toLowerCase() === "omp" || cmuxMatch.runtime.toLowerCase() === "oh-my-pi" ? "omp" as RuntimeHint
-          : "unknown" as RuntimeHint;
-        return { runtimeHint: hint, confidence: "highest", evidence };
-      }
-    }
 
     // --- Layer 1: Process tree / active command ---
     if (pane.activeCommand) {

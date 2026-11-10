@@ -33,7 +33,7 @@ import { QueueRepository } from "../src/domain/queue-repository.js";
 import { isHumanSeatSessionRef, parseSessionName } from "../src/domain/session-name.js";
 import { addHostEntry as daemonAddHostEntry } from "../src/domain/hosts/hosts-registry-writer.js";
 import { addHostEntry as cliAddHostEntry } from "../../cli/src/host-registry.js";
-import type { HumanFragment, LoadResult } from "../src/domain/gateway/human-registry.js";
+import type { HumanFragment, LoadResult } from "../src/domain/queue-routing/human-registry.js";
 import { hostsRoutes } from "../src/routes/hosts.js";
 
 const BEARER = "test-bearer-token-fixture";

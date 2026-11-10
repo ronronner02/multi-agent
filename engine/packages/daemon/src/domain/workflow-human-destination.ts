@@ -1,4 +1,4 @@
-import { loadHumanRegistry, resolveRegisteredHumanAddress, type LoadResult } from "./gateway/human-registry.js";
+import { loadHumanRegistry, resolveRegisteredHumanAddress, type LoadResult } from "./queue-routing/human-registry.js";
 import { SettingsStore } from "./user-settings/settings-store.js";
 
 export class WorkflowHumanDestinationError extends Error {

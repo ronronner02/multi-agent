@@ -39,10 +39,7 @@ export function configRoutes(opts: { home?: string } = {}): Hono {
     const store = c.get("settingsStore" as never) as SettingsStore | undefined;
     if (!store) return c.json({ error: "settings_unavailable" }, 503);
     if (c.req.query("view") === "browser") {
-      const gateway = c.get("gatewaySubsystem" as never) as { status(): Record<string, unknown> } | undefined;
-      let observed: Record<string, unknown> | null = null;
-      try { observed = gateway?.status() ?? null; } catch { /* configuration still browsable */ }
-      return c.json(settingsBrowser(store, observed, opts.home));
+      return c.json(settingsBrowser(store, opts.home));
     }
     // OPR.0.4.4.15: dynamic-class enumeration rides ADDITIVELY beside the
     // static settings map (existing consumers of `settings` unaffected).

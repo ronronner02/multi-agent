@@ -1,11 +1,10 @@
+import { registryProjection } from "../queue-routing/registry-projection.js";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, isAbsolute } from "node:path";
 import { getOpenRigHome } from "../../openrig-compat.js";
 import { SETTINGS_VALID_KEYS, type SettingsStore, type ResolvedSetting } from "./settings-store.js";
-import { connectionsProjection, readConnectionConfiguration } from "../gateway/connections-projection.js";
-import { DEFAULT_CONFIG } from "../gateway/slack/config.js";
-import { projectionPath } from "../gateway/human-registry.js";
+import { projectionPath } from "../queue-routing/human-registry.js";
 import { loadHostRegistry } from "../hosts/hosts-registry-reader.js";
 import { DEFAULT_HEALTH_POLICY, validateHealthPolicy } from "../health-policy.js";
 
@@ -14,7 +13,7 @@ type State = "available" | "missing" | "malformed" | "unavailable";
 type Kind = "scalar" | "text" | "path" | "identity" | "url" | "names" | "paths" | "withheld";
 export interface BrowserEntry {
   key: string;
-  group: "general" | "slack" | "people" | "hosts" | "health";
+  group: "general" | "people" | "hosts" | "health";
   value: Value;
   defaultValue: Value;
   defaultKnown: boolean;
@@ -103,9 +102,8 @@ function application(key: string): string {
 }
 
 /** Additive safe view of existing owners. No mutation, host probe, provider call or repair. */
-export function settingsBrowser(store: SettingsStore, gateway: Record<string, unknown> | null = null, home = getOpenRigHome()) {
-  const read = readConnectionConfiguration(home);
-  const redact = read.text;
+export function settingsBrowser(store: SettingsStore, home = getOpenRigHome()) {
+  const redact = (value: unknown) => typeof value === "string" ? value.replace(/[\x00-\x1f\x7f]/g, " ") : null;
   const entries: BrowserEntry[] = [];
   const sources: BrowserSource[] = [];
   const safePath = (path: string) => safeValue(path, "path", redact).value as string | null;
@@ -146,32 +144,7 @@ export function settingsBrowser(store: SettingsStore, gateway: Record<string, un
     }
   }
 
-  const c = connectionsProjection(home, gateway, store, read);
-  sources.push({ id: "slack", state: read.sourceState, path: safePath(read.configPath),
-    detail: c.configuration ? (c.configuration.enabled ? "Enabled" : "Disabled") + "; applied " + c.running.applied + "; external reach unverified."
-      : "Configuration unavailable; no disabled/default success inferred." });
-  const slackKinds: Record<string, Kind> = { enabled: "scalar", inboundDestination: "identity",
-    outboundDestinations: "names", sourceLabel: "text", channel: "identity", requiredScopes: "names",
-    minimumLevelThatPosts: "identity", minimumLevelThatInterrupts: "identity" };
-  for (const [key, kind] of Object.entries(slackKinds)) {
-    const cfg = read.cfg as unknown as Record<string, unknown> | null;
-    const defs = DEFAULT_CONFIG as unknown as Record<string, unknown>;
-    const flatten = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === "string") ? v.join(", ") : v;
-    add("slack." + key, "slack", cfg ? flatten(cfg[key]) : null, flatten(defs[key]),
-      cfg ? read.fields.includes(key) ? "file" : "default" : "unavailable", kind);
-  }
-  // #192: the channel map as one read-only line, "match: channel" per entry.
-  add("slack.channelMap", "slack", read.cfg ? c.configuration!.channelMap.map((e) => `${e.match ?? "withheld"}: ${e.channel ?? "withheld"}`).join(", ") : null, "",
-    read.cfg ? read.cfg.channelMap !== undefined ? "file" : "default" : "unavailable", "names");
-  add("slack.credentialFile", "slack", read.cfg ? Boolean(read.cfg.secretsEnvFile) : null, false,
-    read.cfg ? read.fields.includes("secretsEnvFile") ? "file" : "default" : "unavailable");
-  entries.at(-1)!.reason = "Credential file reference presence only; reference and contents withheld.";
-  for (const name of ["botToken", "appToken"] as const) {
-    add("slack." + name, "slack", c.configuration?.[name], null, c.configuration ? "unreported" : "unavailable", "identity");
-    entries.at(-1)!.defaultKnown = false;
-    entries.at(-1)!.reason = "Credential resolution presence only; values and provenance withheld.";
-  }
-
+  const c = registryProjection(home, redact);
   const humanPath = projectionPath(home);
   const humanFile = sourceFile(humanPath);
   sources.push({ id: "people", state: c.registry.state === "available" ? "available"
@@ -183,7 +156,7 @@ export function settingsBrowser(store: SettingsStore, gateway: Record<string, un
     const prefix = "people." + h.browserKey + ".";
     const subject = safeValue(h.displayName, "text", redact).value as string | null;
     for (const [key, value] of Object.entries({ entityId: h.entityId, address: h.address, displayName: h.displayName,
-      class: h.class, deliveryClass: h.deliveryClass, availability: h.availability, away: h.away, excluded: h.excluded })) {
+      class: h.class, deliveryClass: h.deliveryClass, availability: h.availability, away: h.away })) {
       add(prefix + key, "people", value, null, "file", key === "away" || key === "excluded" ? "scalar" : key === "displayName" ? "text" : "identity");
       entries.at(-1)!.subject = subject ?? "Person";
     }

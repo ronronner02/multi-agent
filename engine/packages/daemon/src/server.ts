@@ -14,7 +14,6 @@ import type { EventBus } from "./domain/event-bus.js";
 import type { NodeLauncher } from "./domain/node-launcher.js";
 import type { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
 import type { TmuxAdapter } from "./adapters/tmux.js";
-import type { CmuxAdapter } from "./adapters/cmux.js";
 import type { SnapshotCapture } from "./domain/snapshot-capture.js";
 import type { SnapshotRepository } from "./domain/snapshot-repository.js";
 import type { RestoreOrchestrator } from "./domain/restore-orchestrator.js";
@@ -106,9 +105,7 @@ import { slicesRoutes } from "./routes/slices.js";
 import { reviewRoutes } from "./routes/review.js";
 import { rigModeRoutes } from "./routes/rig-mode.js";
 import { missionsRoutes } from "./routes/missions.js";
-import { rigCmuxRoutes } from "./routes/rig-cmux.js";
 import { terminalRoutes, rigTerminalRoutes } from "./routes/terminal.js";
-import { CmuxLayoutService } from "./domain/cmux-layout-service.js";
 import { getNodeInventory } from "./domain/node-inventory.js";
 import { filesRoutes } from "./routes/files.js";
 import { progressRoutes } from "./routes/progress.js";
@@ -123,7 +120,6 @@ import { steeringRoutes } from "./routes/steering.js";
 import { healthSummaryRoutes } from "./routes/health-summary.js";
 import { attentionRoutes } from "./routes/attention.js";
 import { healthRoutes } from "./routes/health.js";
-import { gatewayRoutes } from "./routes/gateway.js";
 import type { StreamStore } from "./domain/stream-store.js";
 import { createSlowOpRequestMiddleware, type SlowOperationInstrumentation } from "./domain/slow-op-recorder.js";
 import { QueueRepository } from "./domain/queue-repository.js";
@@ -214,7 +210,6 @@ export interface AppDeps {
   /** OPR.0.4.6.02 S1 — the shared tmux option-defaults applier, exposed to
    *  the seat-handover route so a fresh successor gets launch-only defaults. */
   tmuxOptionDefaults?: TmuxOptionDefaultsApplier;
-  cmuxAdapter: CmuxAdapter;
   snapshotCapture: SnapshotCapture;
   snapshotRepo: SnapshotRepository;
   /** Slice-04 OPR.0.5.0.4: the provider read-model/precheck/switch service. Routes 503 honestly if absent. */
@@ -284,10 +279,6 @@ export interface AppDeps {
   watchdogScheduler?: WatchdogScheduler;
   /** B8 / slice-07 A3 — the model-divergence monitor (effective-vs-pinned, four-channel proclaim). */
   modelDivergenceMonitor?: import("./domain/model-divergence/model-divergence-monitor.js").ModelDivergenceMonitor;
-  /** S10 — the in-daemon gateway subsystem (amended M1 §3: in-process, no second deployable).
-   *  Optional so test harnesses constructing AppDeps directly need not provide one; the health
-   *  route reports honestly when absent. */
-  gatewaySubsystem?: import("./domain/gateway/gateway-subsystem.js").GatewaySubsystem;
   periodicSnapshotScheduler?: import("./domain/periodic-snapshot-scheduler.js").PeriodicSnapshotScheduler;
   workflowRuntime?: WorkflowRuntime;
   /**
@@ -331,7 +322,7 @@ export interface AppDeps {
   // "slices_root_not_configured" 503 so the UI can surface a setup hint.
   sliceIndexer?: import("./domain/slices/slice-indexer.js").SliceIndexer;
   reviewGatherer?: import("./domain/review/gather.js").ReviewGatherer;
-  // OPR.0.4.6.02 C3 — the terminal-provider-ride composer (herdr/cmux views).
+  // OPR.0.4.6.02 C3 — the terminal-provider-ride composer (terminal views).
   terminalService?: import("./domain/terminal/terminal-service.js").TerminalService;
   sliceDetailProjector?: import("./domain/slices/slice-detail-projector.js").SliceDetailProjector;
   /** User Settings v0 — daemon-side settings store (env > file > default). */
@@ -417,7 +408,6 @@ export interface AppDeps {
    * the optional call but no concrete impl was wired — the invalidation was dead until this).
    */
   occupantInvalidator?: import("./domain/occupant-invalidator.js").OccupantInvalidator;
-  nodeCmuxService?: import("./domain/node-cmux-service.js").NodeCmuxService;
   agentActivityStore?: AgentActivityStore;
   seatAttentionReconciler?: import("./domain/seat-attention-reconciler.js").SeatAttentionReconciler;
   activityHookToken?: string;
@@ -652,14 +642,6 @@ export function createApp(deps: AppDeps): Hono {
     c.set("tmuxOptionDefaults" as never, deps.tmuxOptionDefaults);
     c.set("sessionEnv" as never, deps.sessionEnv);
     c.set("runtimeSessionEnv" as never, deps.runtimeSessionEnv);
-    c.set("cmuxAdapter" as never, deps.cmuxAdapter);
-    // S10 — the in-daemon gateway subsystem handle (health surface + dispatch seam).
-    c.set("gatewaySubsystem" as never, deps.gatewaySubsystem);
-    // Slice 24 — per-rig CMUX workspace launcher wiring.
-    c.set(
-      "cmuxLayoutService" as never,
-      new CmuxLayoutService(deps.cmuxAdapter),
-    );
     c.set(
       "nodeInventoryFn" as never,
       (rigId: string) => getNodeInventory(deps.rigRepo.db, rigId),
@@ -749,7 +731,6 @@ export function createApp(deps: AppDeps): Hono {
     c.set("contextMonitor" as never, deps.contextMonitor);
     c.set("compactionEnforcer" as never, deps.compactionEnforcer);
     c.set("occupantInvalidator" as never, deps.occupantInvalidator);
-    c.set("nodeCmuxService" as never, deps.nodeCmuxService);
     c.set("agentActivityStore" as never, deps.agentActivityStore);
     c.set("seatAttentionReconciler" as never, deps.seatAttentionReconciler);
     // Slice 15 — wire seatActivityService into request context so the
@@ -1027,8 +1008,6 @@ export function createApp(deps: AppDeps): Hono {
 
   app.route("/api/rigs", rigsRoutes);
   app.route("/api/rigs/:rigId/sessions", sessionsRoutes);
-  // Slice 24 — per-rig CMUX workspace launcher.
-  app.route("/api/rigs/:rigId/cmux", rigCmuxRoutes);
   app.route("/api/rigs/:rigId/nodes", nodesRoutes);
   app.route("/api/sessions", sessionAdminRoutes);
   app.route("/api/adapters", adaptersRoutes);
@@ -1142,8 +1121,6 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/health", healthRoutes());
   app.route("/api/attention", attentionRoutes());
   app.route("/api/health-diagnosis", healthDiagnosisRoutes());
-  // S10 — gateway subsystem admin (slack enable/disable with the seeding rule preserved).
-  app.route("/api/gateway", gatewayRoutes());
   app.route("/api/rigs/:rigId/env", envRoutes());
   app.route("/api/restore-check", restoreCheckRoutes);
   // Slice 09 (OPR.0.3.2.9) — rig-policy bindings (operator context mode).

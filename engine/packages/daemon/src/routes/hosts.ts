@@ -46,7 +46,7 @@ import { defaultHostRegistryPath, loadHostRegistry, validateHostRegistry, type H
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import type { QueueRepository } from "../domain/queue-repository.js";
 import { existsSync } from "node:fs";
-import { loadHumanRegistry, type LoadResult } from "../domain/gateway/human-registry.js";
+import { loadHumanRegistry, type LoadResult } from "../domain/queue-routing/human-registry.js";
 
 const PAIR_TTL_MS = 10 * 60 * 1000;
 const PAIR_PRUNE_GRACE_MS = 60 * 60 * 1000;

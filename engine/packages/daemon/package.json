@@ -23,14 +23,6 @@
       "types": "./dist/crash-cart-surface.d.ts",
       "import": "./dist/crash-cart-surface.js"
     },
-    "./gateway-human-registry": {
-      "types": "./dist/gateway-human-registry-surface.d.ts",
-      "import": "./dist/gateway-human-registry-surface.js"
-    },
-    "./gateway-protocol": {
-      "types": "./dist/gateway-protocol-surface.d.ts",
-      "import": "./dist/gateway-protocol-surface.js"
-    },
     "./spec-conformance": {
       "types": "./dist/spec-conformance-surface.d.ts",
       "import": "./dist/spec-conformance-surface.js"
@@ -38,10 +30,6 @@
     "./seat-recap-store": {
       "types": "./dist/seat-recap-store-surface.d.ts",
       "import": "./dist/seat-recap-store-surface.js"
-    },
-    "./gateway-slack": {
-      "types": "./dist/gateway-slack-surface.d.ts",
-      "import": "./dist/gateway-slack-surface.js"
     },
     "./context-pack-taxonomy": {
       "types": "./dist/context-pack-taxonomy-surface.d.ts",

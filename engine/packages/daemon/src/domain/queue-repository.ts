@@ -5,8 +5,8 @@ import { TEAM_QUEUE_STATES as QUEUE_STATES } from "../contracts/team-control.js"
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import type { EventBus } from "./event-bus.js";
-import { loadHumanRegistry, resolveRegisteredHumanAddress, type LoadResult } from "./gateway/human-registry.js";
-import { resolveExternal } from "./gateway/external-admission.js";
+import { loadHumanRegistry, resolveRegisteredHumanAddress, type LoadResult } from "./queue-routing/human-registry.js";
+import { resolveExternal } from "./queue-routing/external-admission.js";
 import type { PersistedEvent } from "./types.js";
 import { QueueTransitionLog, type OwnerNotificationLevel, type QueueTransition, type RecentQueueTransitionScope } from "./queue-transition-log.js";
 import { WAKE_INTENT_PREFIX, type OutboxHandler } from "./outbox-handler.js";
@@ -17,7 +17,7 @@ import { renderQueueHandoffNudge } from "./queue-nudge-text.js";
 import { getSelfHostId } from "./hosts/fanout-contract.js";
 import { parseSessionName, isHumanSeatSessionRef } from "./session-name.js";
 import { parseReplyToChoice, formatReplyToChoice, describeReplyToFallback, REPLY_TO_CHOICE_ACTOR, type ReplyToChoice } from "./reply-to-choice.js";
-import { classifyDestination, type DestinationClass } from "./gateway/destination-resolver.js";
+import { classifyDestination, type DestinationClass } from "./queue-routing/destination-resolver.js";
 import {
   computeClosureRequiredAt,
   validateClosure,
@@ -1358,7 +1358,7 @@ export class QueueRepository {
     // "failed: … tmux reports no session" while the founder verifiably received the
     // message, and that failed: literal poisoned the undelivered surface.
     // OPR.0.5.6.14 — the inline @external branch became THE ONE RESOLVER SEAM
-    // (gateway/destination-resolver.ts): pane-bound keeps terminal transport;
+    // (queue-routing/destination-resolver.ts): pane-bound keeps terminal transport;
     // gateway-routable (@external AND registry-resolved aliases like the
     // paneless human-*@kernel virtual identities — the live 4-row specimen
     // class) is GATEWAY-OWNED (tmux never consulted; the connector's row-poll

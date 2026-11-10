@@ -30,7 +30,6 @@ import type { NodeInventoryEntry } from "../../hooks/useNodeInventory.js";
 import { VellumInput } from "../ui/vellum-input.js";
 import { StatusPip } from "../ui/status-pip.js";
 import { inferPodName } from "../../lib/display-name.js";
-import { useCmuxLaunch } from "../../hooks/useCmuxLaunch.js";
 import { useTopologyActivity } from "../../hooks/useTopologyActivity.js";
 import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion.js";
 import { useSelectedHostId } from "../../hooks/useHosts.js";
@@ -43,7 +42,7 @@ import {
 import { ActivityRing } from "./ActivityRing.js";
 import { TerminalPreviewPopover } from "./TerminalPreviewPopover.js";
 import "./topology-table-shimmer.css";
-import { RuntimeBadge, ToolMark } from "../graphics/RuntimeMark.js";
+import { RuntimeBadge } from "../graphics/RuntimeMark.js";
 import { formatCompactTokenCount, formatTokenTotalTitle, sumTokenCounts } from "../../lib/token-format.js";
 import { contextUsageTextClass } from "../ContextUsageRing.js";
 
@@ -79,73 +78,6 @@ function statusToSemanticPip(s: string): "active" | "running" | "stopped" | "war
   if (s === "attention_required" || s === "warning") return "warning";
   if (s === "failed" || s === "error") return "error";
   return "info";
-}
-
-function CmuxButton({ row }: { row: AgentRow }) {
-  // V0.3.1 slice 14 walk-item 16: action column buttons stay visible
-  // unconditionally (no hover/focus gate). Prior implementation used
-  // `opacity-0` + `group-hover:!opacity-100` which hid the affordance
-  // off-mouse — operators kept missing the cmux launcher.
-  const cmuxLaunch = useCmuxLaunch();
-  // OPR.0.4.1.31 part B — surface the mutation error. Previously the button
-  // tracked only isPending, so a failed open-cmux (no current cmux workspace,
-  // missing terminal bearer, etc.) failed SILENTLY = "the button never works."
-  // Now a failure shows a visible, actionable message (TanStack isError/error)
-  // and a click while errored resets + retries.
-  const failed = cmuxLaunch.isError;
-  const errorMessage = failed
-    ? (cmuxLaunch.error instanceof Error ? cmuxLaunch.error.message : String(cmuxLaunch.error))
-    : null;
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <button
-        type="button"
-        data-testid={`topology-table-cmux-${row.logicalId}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          // OPR.0.4.1.31 part D — never POST open-cmux for a malformed row
-          // (a null/empty logicalId would build /nodes/"null"/open-cmux).
-          if (!row.logicalId) return;
-          if (cmuxLaunch.isError) cmuxLaunch.reset();
-          cmuxLaunch.mutate({ rigId: row.rigId, logicalId: row.logicalId });
-        }}
-        aria-busy={cmuxLaunch.isPending || undefined}
-        aria-label={
-          cmuxLaunch.isPending
-            ? `Opening ${row.logicalId} in cmux`
-            : failed
-              ? `Open ${row.logicalId} in cmux failed: ${errorMessage}. Click to retry.`
-              : `Open ${row.logicalId} in cmux`
-        }
-        title={
-          cmuxLaunch.isPending
-            ? "Opening in cmux"
-            : failed
-              ? `Failed: ${errorMessage} — click to retry`
-              : "Open in cmux"
-        }
-        disabled={cmuxLaunch.isPending}
-        data-error={failed || undefined}
-        className={`inline-flex h-7 w-7 items-center justify-center border bg-surface-lowest/65 shadow-[1px_1px_0_rgba(46,52,46,0.12)] transition-colors focus:outline-none focus:ring-2 focus:ring-on-surface/20 disabled:cursor-wait disabled:opacity-60 ${
-          failed
-            ? "border-rose-400 text-rose-700 hover:bg-rose-50"
-            : "border-outline-variant text-on-surface hover:bg-surface-low hover:text-on-surface"
-        }`}
-      >
-        <ToolMark tool="cmux" size="sm" />
-        <span className="sr-only">CMUX</span>
-      </button>
-      {failed ? (
-        <span
-          data-testid={`topology-table-cmux-error-${row.logicalId}`}
-          role="alert"
-          className="font-mono text-[9px] text-rose-700 max-w-[220px] leading-tight whitespace-normal break-words"
-        >
-          {errorMessage}
-        </span>
-      ) : null}
-    </span>
-  );
 }
 
 /** V0.3.1 slice 14 walk-item 15 — status label split. When the row's
@@ -325,7 +257,6 @@ function TopologyActionsCell({ row }: { row: AgentRow }) {
   }
   return (
     <span className="inline-flex items-center gap-1.5" data-testid={`topology-table-actions-${row.logicalId}`}>
-      <CmuxButton row={row} />
       {row.rigId ? (
         <TerminalPreviewPopover
           rigId={row.rigId}

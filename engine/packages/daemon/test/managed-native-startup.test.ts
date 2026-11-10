@@ -1463,7 +1463,7 @@ describe("production managed launch composition", () => {
     try {
       expect(legacy.deps.managedLaunch).toBeUndefined();
       expect((legacy.deps.runtimeAdapters!["claude-code"] as any).workerLauncher).toBeUndefined();
-    } finally { legacy.deps.proofSourceWatch?.close(); legacy.deps.modelDivergenceMonitor?.stop(); legacy.deps.gatewaySubsystem?.stop(); legacy.db.close(); }
+    } finally { legacy.deps.proofSourceWatch?.close(); legacy.deps.modelDivergenceMonitor?.stop(); legacy.db.close(); }
     const managed = await boot("managed");
     try {
       const launcher = managed.deps.managedLaunch!.launcher, restore = managed.deps.restoreOrchestrator as any;

@@ -63,11 +63,9 @@ const savedView: SavedView = {
 function makeDeps(overrides: Partial<TerminalServiceDeps> = {}): {
   deps: TerminalServiceDeps;
   herdr: RecordingProvider;
-  cmux: RecordingProvider;
 } {
   const herdr = new RecordingProvider("herdr");
-  const cmux = new RecordingProvider("cmux");
-  const providerMap: Record<string, TerminalProvider> = { herdr, cmux };
+  const providerMap: Record<string, TerminalProvider> = { herdr };
   const deps: TerminalServiceDeps = {
     resolveProvider: (name) => providerMap[name] ?? null,
     viewsStore: {
@@ -85,7 +83,7 @@ function makeDeps(overrides: Partial<TerminalServiceDeps> = {}): {
     hasSession: () => true,
     ...overrides,
   };
-  return { deps, herdr, cmux };
+  return { deps, herdr };
 }
 
 describe("TerminalService — view resolution + one-shape result", () => {
@@ -189,13 +187,6 @@ describe("TerminalService — view resolution + one-shape result", () => {
     expect(byReadOnly["builder@acme-ops"]).toBe(false);
   });
 
-  it("routes to the named provider (cmux best-effort)", async () => {
-    const { deps, cmux } = makeDeps();
-    const svc = new TerminalService(deps);
-    const res = await svc.openView({ view: "acme-build", provider: "cmux" });
-    expect(res.provider).toBe("cmux");
-    expect(cmux.lastView).not.toBeNull();
-  });
 
   it("names a dead local seat in absent[] (honest-partial via has-session refine)", async () => {
     const { deps } = makeDeps({ hasSession: (s) => s !== "rev-r1@acme-build" });
@@ -251,7 +242,7 @@ describe("TerminalService — view resolution + one-shape result", () => {
     const { deps } = makeDeps();
     const svc = new TerminalService(deps);
     const all = await svc.status();
-    expect(all.providers.map((p) => p.name).sort()).toEqual(["cmux", "herdr"]);
+    expect(all.providers.map((p) => p.name).sort()).toEqual(["herdr"]);
     const one = await svc.status("tmate");
     expect(one.providers[0]?.status.available).toBe(false);
   });
@@ -356,17 +347,16 @@ describe("default saved kernel conversations", () => {
     if (unavailable) expect(result.notes).toContain("operator: env -u TMUX tmux attach -t 'operator-bound'");
   });
 
-  it.each(["herdr", "cmux"])("offers existing conversation attachments when %s is unavailable", async providerName => {
-    const { deps, herdr, cmux } = makeKernel(kernel());
+  it("offers existing conversation attachments when Herdr is unavailable", async () => {
+    const { deps, herdr } = makeKernel(kernel());
     deps.hasSession = session => session !== "advisor-bound";
-    const provider = providerName === "herdr" ? herdr : cmux;
-    provider.openView = async view => ({
-      provider: providerName, ok: false, opened: [], pages: 0,
+    herdr.openView = async view => ({
+      provider: "herdr", ok: false, opened: [], pages: 0,
       absent: view.absent, degraded: view.degraded,
-      code: `${providerName}_unavailable`, error: "not running", notes: ["Original provider detail"],
+      code: "herdr_unavailable", error: "not running", notes: ["Original provider detail"],
     });
-    const result = await new TerminalService(deps).openView({ view: "saved:kernel", provider: providerName });
-    expect(result).toMatchObject({ ok: false, opened: [], code: `${providerName}_unavailable` });
+    const result = await new TerminalService(deps).openView({ view: "saved:kernel", provider: "herdr" });
+    expect(result).toMatchObject({ ok: false, opened: [], code: "herdr_unavailable" });
     expect(result.absent.map(member => member.seat)).toContain("advisor-bound");
     expect(result.notes).toContain("operator: env -u TMUX tmux attach -t 'operator-bound'");
     expect(result.notes).toContain("dashboard: env -u TMUX tmux attach -t 'actual-tui'");
@@ -600,62 +590,5 @@ describe("default saved kernel conversations", () => {
     const service = new TerminalService(deps);
     expect((await service.listViews()).saved).toEqual([savedView]);
     expect((await service.openView({ view: "saved:kernel" })).code).toBe("view_not_found");
-  });
-});
-
-describe("TerminalService — an omitted provider falls back from herdr to cmux (#1069)", () => {
-  const down = (provider: RecordingProvider, how: "unavailable" | "not-alive") => {
-    if (how === "unavailable") provider.status = async () => ({ provider: provider.name, available: false, capabilities: {} });
-    else provider.liveness = async () => ({ alive: false, detail: "herdr control socket is not answering ping" });
-  };
-
-  it.each(["unavailable", "not-alive"] as const)("opens in a live cmux when herdr is %s, and says so", async (how) => {
-    const { deps, herdr, cmux } = makeDeps();
-    down(herdr, how);
-    const r = await new TerminalService(deps).openView({ view: "acme-build" });
-    expect(r).toMatchObject({ provider: "cmux", ok: true });
-    expect(cmux.lastView).not.toBeNull();
-    expect(herdr.lastView).toBeNull();
-    expect(r.notes?.join("\n")).toContain("Herdr isn't available here (not installed or not answering), so this view uses cmux.");
-  });
-
-  it("previews with the same fallback, so the preview's plan matches the open", async () => {
-    const { deps, herdr } = makeDeps();
-    down(herdr, "unavailable");
-    const service = new TerminalService(deps);
-    const preview = await service.previewView({ view: "acme-build" });
-    expect(preview).toMatchObject({ provider: "cmux" });
-    const r = await service.openView({ view: "acme-build", expectedPlan: (preview as { planId: string }).planId });
-    expect(r).toMatchObject({ provider: "cmux", ok: true });
-  });
-
-  it("with neither available, keeps herdr's honest failure and the direct attach commands", async () => {
-    const { deps, herdr, cmux } = makeDeps();
-    down(herdr, "unavailable");
-    down(cmux, "not-alive");
-    herdr.openView = async (view) => ({ provider: "herdr", ok: false, opened: [], absent: view.absent, degraded: view.degraded, pages: 0, error: "herdr control socket is not answering ping; is herdr running?", code: "herdr_unavailable" });
-    const r = await new TerminalService(deps).openView({ view: "acme-build" });
-    expect(r).toMatchObject({ provider: "herdr", ok: false, code: "herdr_unavailable" });
-    expect(r.notes?.join("\n")).toContain("attach directly using one of these commands");
-    expect(r.notes?.join("\n")).toContain("env -u TMUX");
-    expect(cmux.lastView).toBeNull();
-  });
-
-  it("keeps an explicitly named provider exactly as named, with no fallback", async () => {
-    const { deps, herdr, cmux } = makeDeps();
-    down(herdr, "unavailable");
-    const r = await new TerminalService(deps).openView({ provider: "herdr", view: "acme-build" });
-    expect(r.provider).toBe("herdr");
-    expect(herdr.lastView).not.toBeNull();
-    expect(cmux.lastView).toBeNull();
-    expect(r.notes?.join("\n") ?? "").not.toContain("Herdr isn't available here");
-  });
-
-  it("prefers a live herdr when both are there", async () => {
-    const { deps, herdr, cmux } = makeDeps();
-    const r = await new TerminalService(deps).openView({ view: "acme-build" });
-    expect(r.provider).toBe("herdr");
-    expect(herdr.lastView).not.toBeNull();
-    expect(cmux.lastView).toBeNull();
   });
 });

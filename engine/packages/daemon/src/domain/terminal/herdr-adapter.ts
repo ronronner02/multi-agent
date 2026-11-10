@@ -70,7 +70,7 @@ import type {
   HerdrTransport,
   HerdrTransportFactory,
 } from "./herdr-transport.js";
-import { autoGridCols } from "../cmux-layout-service.js";
+import { autoGridCols } from "./grid-layout.js";
 
 /** Sentinel host for herdr-surface degrades (a pane herdr itself failed to render). */
 const HERDR_SURFACE_HOST = "herdr";

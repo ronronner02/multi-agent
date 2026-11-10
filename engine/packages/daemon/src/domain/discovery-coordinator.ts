@@ -53,9 +53,6 @@ export class DiscoveryCoordinator {
     const claimedSessions = this.deps.discoveryRepo.listDiscovered("claimed");
     const claimedPanes = new Set(claimedSessions.map((s) => `${s.tmuxSession}:${s.tmuxPane}`));
 
-    // 3. Refresh cmux signals for batch fingerprinting
-    await this.deps.fingerprinter.refreshCmuxSignals();
-
     // 4. Process each scanned pane
     const seenIds = new Set<string>();
     const newDiscoveries: DiscoveredSession[] = [];

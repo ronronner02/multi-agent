@@ -3,7 +3,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { closeHttpServer, createDaemonShutdown, DAEMON_SHUTDOWN_RECEIPT, trackHttpServerResponses } from "./daemon-shutdown.js";
 import { readOpenRigEnv, OPENRIG_HOME } from "./openrig-compat.js";
-import { makeOperatorDeliveryEngine } from "./domain/gateway/operator-delivery-engine.js";
 import { resolveDaemonDbPath } from "./daemon-db-path.js";
 import { createDaemon } from "./startup.js";
 import { removeParentSessionEnv } from "./domain/parent-session-env.js";
@@ -192,30 +191,17 @@ export function startWakeLadderScheduler(deps: {
   usageLimitJitterSeconds?: number;
   seatActivityService?: Pick<import("./domain/seat-activity-service.js").SeatActivityService, "getSeatState">;
   agentActivityStore?: Pick<import("./domain/agent-activity-store.js").AgentActivityStore, "getLatestForNode">;
-  gatewaySubsystem?: { dispatch: (op: string, entityBindingRef: string, payload: unknown, opts?: { decisionId?: string }) => import("./domain/gateway/dispatcher.js").DispatchResult };
 }): WakeLadderScheduler | null {
   const queueRepo = deps.queueRepo;
   if (!queueRepo) return null;
   const status = createWakeLadderStatus();
   deps.wakeLadderStatus = status; // healthz reads this snapshot
   const db = deps.rigRepo.db;
-  // OPR.0.5.6.1 (R2/R1 B-2): the PRODUCTION operator rung dispatches through the
-  // engine — the port is built from the live gateway subsystem, which exists by
-  // the time the scheduler starts (post-bind). Absence (a gateway-less daemon
-  // variant) keeps the honest unwired floor, never a silent green.
-  const deliveryEngine = deps.gatewaySubsystem
-    ? makeOperatorDeliveryEngine({
-        home: OPENRIG_HOME,
-        queueRepo,
-        dispatch: (op, ref, payload, opts) => deps.gatewaySubsystem!.dispatch(op, ref, payload, opts),
-      })
-    : undefined;
   const scheduler = new WakeLadderScheduler({
     runTick: () => runWakeLadderTick({
       db,
       queueRepo,
       status,
-      ...(deliveryEngine ? { deliveryEngine } : {}),
       readPromptState: makePromptStateReader({
         db,
         getSeatState: (nodeId) => deps.seatActivityService?.getSeatState(nodeId),
@@ -361,10 +347,6 @@ export async function startServer(port?: number) {
         // tree post-bind so the HTTP surface is ready before the first
         // tick (matches contextMonitor pattern).
         deps.watchdogScheduler?.start();
-        // S10 — start the gateway subsystem's NETWORK services (replay, outbound poll,
-        // Socket Mode inbound) post-bind, contextMonitor pattern: the composed wire is
-        // already active; only its dial-out half waits for the supervision tree.
-        deps.gatewaySubsystem?.startServices();
         // Slice 15 — start the seat-activity scheduler (1Hz default).
         // Polls every running tmux-bound seat's window_activity timestamp so
         // PsProjectionService + node-inventory enrichment serve
@@ -429,7 +411,6 @@ export async function startServer(port?: number) {
       ["seat-structural-activity", () => deps.seatStructuralActivityService?.stop()],
       ["seat-identity", () => deps.seatIdentityReconciler?.stop()],
       ["periodic-snapshot", () => deps.periodicSnapshotScheduler?.stop()],
-      ["gateway", () => deps.gatewaySubsystem?.stop()],
       ["wake-ladder", () => wakeLadderScheduler?.stop()],
       ["attempt-completion", () => deps.attemptCompletion?.stop()],
       ["github-login", () => deps.github?.stop()],

@@ -25,7 +25,7 @@ import { QueueRepository, deriveCrossHostSuccessorId, type QueueItem } from "../
 import { EventBus } from "../src/domain/event-bus.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 import { archiveAgedTerminalTransitions } from "../src/domain/queue-retention.js";
-import type { HumanFragment } from "../src/domain/gateway/human-registry.js";
+import type { HumanFragment } from "../src/domain/queue-routing/human-registry.js";
 
 const sweepMod = () => import("../src/domain/queue-stuck-sweep.js");
 

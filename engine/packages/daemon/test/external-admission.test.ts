@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveExternal, OPERATOR_HUMAN_DEFAULT_SLOT, type RegisteredEntity } from "../src/domain/gateway/external-admission.js";
+import { resolveExternal, OPERATOR_HUMAN_DEFAULT_SLOT, type RegisteredEntity } from "../src/domain/queue-routing/external-admission.js";
 import { isHumanSeatSessionRef } from "../src/domain/session-name.js";
 
 // M1 A4b — @external entity-admission resolver. Contract 2a57d099. The four ruled

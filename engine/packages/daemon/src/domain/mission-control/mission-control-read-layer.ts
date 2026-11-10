@@ -21,7 +21,7 @@
 // are the primary read path. Filesystem/CLI fallbacks are for graceful
 // degradation only.
 
-import { loadHumanRegistry } from "../gateway/human-registry.js";
+import { loadHumanRegistry } from "../queue-routing/human-registry.js";
 import type Database from "better-sqlite3";
 import type { QueueRepository, QueueItem, QueueState } from "../queue-repository.js";
 import type { ViewProjector } from "../view-projector.js";
