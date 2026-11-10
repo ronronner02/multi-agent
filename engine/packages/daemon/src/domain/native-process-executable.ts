@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { readlink } from "node:fs/promises";
 import { promisify } from "node:util";
+import { queryWindowsProcesses } from "./platform.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,14 +34,25 @@ export async function readNativeExecutablePaths(requested: number[]): Promise<Ma
         encoding: "utf-8", timeout: 2000, maxBuffer: 1024 * 1024,
       });
       entries = JSON.parse(stdout);
+    } else if (process.platform === "win32") {
+      // Windows has no `/proc/<pid>/exe`; CIM reports the executable path with the same query that
+      // answers the process identity, so one invocation covers the whole sample.
+      const rows = await queryWindowsProcesses(pids);
+      entries = pids.map(pid => {
+        const row = rows.get(pid);
+        return [pid, row?.state === "present" ? row.executablePath : null];
+      });
     } else return result;
     if (!Array.isArray(entries)) return result;
     const requestedPids = new Set(pids);
     for (const entry of entries) {
       if (!Array.isArray(entry) || !requestedPids.has(entry[0])) continue;
       const path = entry[1];
-      if (typeof path === "string" && path.startsWith("/") && !path.includes("\0")
-        && !path.split("/").some(part => part === "." || part === "..")) result.set(entry[0], path);
+      // A Windows witness is a drive-letter or UNC path; a POSIX one is absolute from `/`. Neither
+      // may carry a NUL or a traversal segment.
+      const absolute = typeof path === "string" && (path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\"));
+      if (typeof path === "string" && absolute && !path.includes("\0")
+        && !path.split(/[/\\]/).some(part => part === "." || part === "..")) result.set(entry[0], path);
     }
   } catch { /* A missing OS witness is unknown, not positive identity. */ }
   return result;

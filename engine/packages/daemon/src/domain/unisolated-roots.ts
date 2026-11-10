@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { localFrameworkRoot } from "../integrations/framework/source.js";
+import { assertPrivateDirectory, isWindows, processOwnerIds } from "./platform.js";
 
 /**
  * MVP — the roots a managed worker uses when `workers.isolation: none`.
@@ -42,17 +43,27 @@ const UNISOLATED_POLICY_REVISION = 4;
 
 function localMailboxRoot(home: string): string {
   const preferred = join(home, "sock");
+  // Windows has no AF_UNIX path limit to work around, no `/tmp`, and no uid: the mailbox stays in
+  // the daemon's own state tree, and the only ownership fact this host can prove is that the
+  // directory is a real one rather than a junction.
+  if (isWindows()) {
+    mkdirSync(preferred, { recursive: true });
+    assertPrivateDirectory(preferred, processOwnerIds());
+    return preferred;
+  }
   const endpoint = join(preferred, UNISOLATED_WORKER, "0".repeat(36), "mailbox.sock");
   if (Buffer.byteLength(endpoint) < 108) return preferred;
 
   // Linux counts bytes, including the terminating NUL. TMPDIR can itself be the
   // deep profile, so use a short private root keyed to this user and profile.
+  const ids = processOwnerIds();
+  if (ids === null) throw new Error("Local mailbox root requires a process owner on this host");
   const key = createHash("sha256").update(home).digest("hex").slice(0, 24);
-  const root = `/tmp/ma-${process.getuid!()}-${key}`;
+  const root = `/tmp/ma-${ids.uid}-${key}`;
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const stat = lstatSync(root);
-  if (!stat.isDirectory() || realpathSync(root) !== root || stat.uid !== process.getuid!()
-    || stat.gid !== process.getgid!() || (stat.mode & 0o7777) !== 0o700) {
+  if (!stat.isDirectory() || realpathSync(root) !== root || stat.uid !== ids.uid
+    || stat.gid !== ids.gid || (stat.mode & 0o7777) !== 0o700) {
     throw new Error("Local mailbox root must be private and canonical");
   }
   return root;

@@ -32,3 +32,28 @@ jobs:
       - name: Smoke tests
         run: npm run smoke
         working-directory: engine
+
+  # U1 — native Windows coverage. This job proves the daemon typechecks and the platform-boundary
+  # tests pass on the shipped target: the executable resolver, the process identity and tree kill,
+  # the mailbox roots, and the worker-written-file boundary. Later units add their Windows-relevant
+  # test files to the list below; U23 replaces this job with the full two-OS smoke.
+  windows-native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: engine/package-lock.json
+      # better-sqlite3 ships a win32-x64 N-API prebuild in its tarball, so the node-gyp rebuild its
+      # install script would run is unnecessary and would fail on a runner without a compiler.
+      - name: Install
+        run: npm ci --no-audit --no-fund --ignore-scripts
+        working-directory: engine
+      - name: Typecheck daemon
+        run: npx tsc --noEmit --project packages/daemon/tsconfig.json
+        working-directory: engine
+      - name: Native platform tests
+        run: npx vitest run --maxWorkers=2 packages/daemon/test/platform.test.ts packages/daemon/test/executable-resolver.test.ts packages/daemon/test/process-identity.test.ts packages/daemon/test/unisolated-roots.test.ts packages/daemon/test/team-workspace-windows.test.ts packages/daemon/test/attempt-completion-windows.test.ts
+        working-directory: engine
