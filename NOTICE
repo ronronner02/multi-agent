@@ -1,0 +1,9 @@
+Multi-Agent Flow renderer
+
+The Flow renderer adapts the charge, travel, linger, pulse, and ripple choreography from
+scion's `extras/agent-viz/web/src` by Google LLC. The adapted portions retain the Apache License
+2.0 header and are distributed under Apache License 2.0.
+
+The renderer also follows density and heat-map formula patterns described by openspawn PR #155
+(MIT, BikiniBottom Contributors). No openspawn source code is copied into this repository.
+
