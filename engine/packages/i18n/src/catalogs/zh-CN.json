@@ -846,6 +846,8 @@
   "projects.createFailed": "项目创建未完成。请检查文件夹和名称，然后重试。",
   "projects.openFailed": "无法打开现有项目。请确认文件夹是已有提交的 Git 仓库，然后重试。",
   "projects.folderRefused": "请选择项目文件夹，而非主目录、驱动器根目录或父仓库根目录。",
+  "projects.fileTooLarge": "超过 100 MiB 的文件无法上传到 GitHub。请删除这些文件或将它们加入项目的忽略文件，然后重新预览文件。",
+  "projects.oversized": "过大的文件",
   "projects.alreadyExists": "此文件夹已注册为项目。",
   "projects.folderChanged": "文件夹或 origin 已变化。创建前请重新预览文件。",
   "projects.pickFailed": "文件夹选择器未返回支持的文件夹，请重试。",
