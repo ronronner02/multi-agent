@@ -18,6 +18,20 @@ const { app, BrowserWindow, Menu, ipcMain, screen, session, shell, dialog } = re
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+
+// U5 — the native engine switch. Native is the default on Windows when the
+// built daemon entry exists; `MULTI_AGENT_DESKTOP_ENGINE=wsl` keeps the old
+// WSL path reachable until U12 deletes it.
+const NATIVE_DAEMON_ENTRY = path.resolve(__dirname, '../../engine/packages/daemon/dist/index.js');
+const hasNativeDaemon = process.env.MULTI_AGENT_DESKTOP_ENGINE === 'wsl'
+  ? false
+  : fs.existsSync(NATIVE_DAEMON_ENTRY);
+
+let engineBridge = null;
+if (hasNativeDaemon) {
+  engineBridge = require('./engine-bridge.js');
+}
+
 const {
   DAEMON_ORIGIN, HEALTH_URL, TEAM_URL,
   cloneAndSetupArgv, decideWsl, enableUiArgv, installArgv, isAllowedNavigation, isDaemonHealth,
@@ -28,10 +42,23 @@ const {
 const BACKGROUND = '#151619';
 const FIRST_RUN_URL = new URL(`file://${path.join(__dirname, 'first-run.html').replace(/\\/g, '/')}`).href;
 
+// U5 — configurable data directory (KTD7). Production defaults to
+// %LOCALAPPDATA%\Multi-Agent. Override via MULTI_AGENT_DESKTOP_DATA_DIR
+// for tests and manual runs.
+const DATA_DIR_ROOT = process.env.MULTI_AGENT_DESKTOP_DATA_DIR
+  || path.join(process.env.LOCALAPPDATA || app.getPath('appData'), 'Multi-Agent');
+
 let window = null;
 let state = { phase: 'checking', message: 'Checking Windows Subsystem for Linux…', log: [], project: null, connected: false };
 let resolved = { distro: null, repoPath: null };
 let csrfToken = null;
+
+// U5 — native engine state
+let nativeEngine = null;
+let nativeDaemonPid = null;
+// The one origin the window may show. The WSL path uses the fixed daemon origin;
+// the native path replaces it with the OS-assigned loopback origin after readiness.
+let allowedOrigin = DAEMON_ORIGIN;
 
 // ---------------------------------------------------------------- settings
 
@@ -103,9 +130,31 @@ function createWindow() {
   window.once('ready-to-show', () => window.show());
   window.on('closed', () => { window = null; });
 
+  // U5 — closing the last window while attempts are running asks for confirmation.
+  // The one-line consequence: agents stop, and Resume continues next time.
+  // Running attempt state is polled from the daemon's /healthz endpoint.
+  window.on('close', async (event) => {
+    if (!nativeEngine) return;
+    // Poll the daemon one more time fresh for the confirmation decision.
+    const count = await pollRunningAttempts(allowedOrigin || undefined);
+    if (count === undefined || count === 0) return;
+    event.preventDefault();
+    const currentWindow = window;
+    const result = await dialog.showMessageBox(currentWindow, {
+      type: 'warning',
+      buttons: ['Stop agents and quit', 'Keep running'],
+      defaultId: 1,
+      cancelId: 1,
+      title: `Agents are running (${count})`,
+      message: 'Closing stops the running agents. Resume continues the work next time you open the app.',
+    });
+    if (result.response !== 0) return; // Keep running
+    currentWindow.close();
+  });
+
   const contents = window.webContents;
   contents.on('will-navigate', (event, url) => {
-    if (isAllowedNavigation(url) || url === FIRST_RUN_URL) return;
+    if (isAllowedNavigation(url, allowedOrigin) || url === FIRST_RUN_URL) return;
     event.preventDefault();
     openExternal(url);
   });
@@ -205,6 +254,97 @@ async function healthAnswers() {
 }
 
 // ---------------------------------------------------------------- startup flow
+
+/**
+ * U5 — native daemon startup: fork the utility process and wait for ready.
+ * Uses a stable OPENRIG_HOME under the data directory (KTD7). The child
+ * inherits the parent environment (HOME, USERPROFILE, auth config, etc.
+ * pass through) so real Claude/Codex agents find the user's sign-in and
+ * config. OPENRIG_HOME is <data root>\engine, stable across launches.
+ * The team view is enabled via OPENRIG_UI_ENABLED=true (settings-store
+ * ENV_MAP), so no config.json is written or overwritten.
+ */
+async function startNativeEngine() {
+  if (!engineBridge) return false;
+
+  // Stable engine data directory under the configured data root.
+  const dataDir = path.join(DATA_DIR_ROOT, 'engine');
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  // Inherit the parent environment unchanged, then apply overrides.
+  const env = {
+    ...process.env,
+    OPENRIG_HOME: dataDir,
+    MULTI_AGENT_MODE: 'managed',
+    // Loopback only: no LAN or Tailscale fallback (KTD7 / R8).
+    OPENRIG_BIND_HOST: '127.0.0.1',
+    // Enable the team UI via env var (settings-store ENV_MAP) rather than
+    // writing config.json, which would overwrite user settings.
+    OPENRIG_UI_ENABLED: 'true',
+  };
+  // Clear the owner token so no real auth is used.
+  delete env.MULTI_AGENT_OWNER_TOKEN;
+
+  try {
+    nativeEngine = engineBridge.startEngine({ dataDir, env });
+    const readyInfo = await nativeEngine.ready;
+    nativeDaemonPid = readyInfo.pid;
+    publish({ phase: 'starting', message: `Native daemon ready on port ${readyInfo.port}`, connected: false });
+    await openNativeTeamView(readyInfo.port);
+  } catch (error) {
+    publish({ phase: 'start-failed', message: `Native daemon failed: ${error.message}` });
+    nativeEngine = null;
+    nativeDaemonPid = null;
+  }
+}
+
+async function openNativeTeamView(port) {
+  const origin = `http://127.0.0.1:${port}`;
+  const teamUrl = `${origin}/team`;
+  allowedOrigin = origin;
+
+  // Check health before loading
+  try {
+    const response = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(2_500) });
+    if (!response.ok) throw new Error(`health check failed: ${response.status}`);
+    const body = await response.text();
+    if (!isDaemonHealth(body)) throw new Error('not the expected daemon');
+  } catch (error) {
+    publish({ phase: 'connection-failed', message: `Health check failed: ${error.message}`, connected: false });
+    return;
+  }
+
+  publish({ phase: 'pairing', message: 'Connecting to the local runtime…' });
+  // For now (U5), show the connection screen since pairing (U6) is not in scope.
+  // The UI loads from the dynamic origin but without a session shows the connection screen.
+  csrfToken = null;
+  try {
+    await window.loadURL(teamUrl);
+  } catch {
+    publish({ phase: 'connection-failed', message: 'Failed to load the UI.', connected: false });
+    return;
+  }
+  publish({
+    phase: 'ready',
+    message: 'Local runtime connected.',
+    connected: true,
+  });
+}
+
+/**
+ * Poll the daemon's /healthz endpoint for running attempt count.
+ * Returns the count, or undefined when the daemon is not answering.
+ */
+async function pollRunningAttempts(origin) {
+  try {
+    const response = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(2_500) });
+    if (!response.ok) return undefined;
+    const body = JSON.parse(await response.text());
+    return typeof body.runningAttempts === 'number' ? body.runningAttempts : 0;
+  } catch {
+    return undefined;
+  }
+}
 
 async function checkWsl() {
   publish({ phase: 'checking', message: 'Checking Windows Subsystem for Linux…' });
@@ -320,7 +460,7 @@ async function pairOwnerSession() {
 
 function isTeamSender(event, target = window) {
   return !!target && !target.isDestroyed() && event.sender === target.webContents
-    && event.senderFrame === target.webContents.mainFrame && isAllowedNavigation(event.senderFrame.url);
+    && event.senderFrame === target.webContents.mainFrame && isAllowedNavigation(event.senderFrame.url, allowedOrigin);
 }
 
 /** Renew through WSL without navigating away from the owner's current form or project. */
@@ -386,6 +526,15 @@ async function runClone() {
 }
 
 async function runStopEngine() {
+  // U5 — native engine: stop via the bridge.
+  if (nativeEngine) {
+    publish({ message: 'Stopping the local runtime…' });
+    await nativeEngine.shutdown();
+    nativeEngine = null;
+    nativeDaemonPid = null;
+    publish({ connected: false, message: 'Local runtime stopped.' });
+    return;
+  }
   const { distro, repoPath } = resolved;
   if (!distro || !repoPath) return;
   publish({ message: 'Stopping the local runtime…' });
@@ -429,7 +578,10 @@ if (!app.requestSingleInstanceLock()) {
       // Any sender other than our own window gets nothing.
       event.returnValue = isTeamSender(event) ? csrfToken : null;
     });
-    ipcMain.handle('desktop:retry', async () => { await checkWsl(); return publicState(); });
+    ipcMain.handle('desktop:retry', async () => {
+      if (hasNativeDaemon) { await startNativeEngine(); return publicState(); }
+      await checkWsl(); return publicState();
+    });
     ipcMain.handle('desktop:install-wsl', () => { runInstall(); return publicState(); });
     ipcMain.handle('desktop:clone-repo', async () => { await runClone(); return publicState(); });
 
@@ -437,10 +589,31 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 
     createWindow();
-    void checkWsl();
+    // U5 — native is the default on Windows when the bundled daemon entry exists.
+    // The WSL path stays reachable until U12.
+    if (hasNativeDaemon) {
+      void startNativeEngine();
+    } else {
+      void checkWsl();
+    }
   });
 
-  // Closing the window leaves the daemon running: agents may still be working, and the
-  // engine is the user's. "Engine → Stop engine" is the explicit way to stop it.
+  // U5 — the native engine is owned by this process: quit runs the daemon's own
+  // bounded shutdown first (receipt included), then lets the app exit.
+  // The close confirmation above already asked when attempts were running.
+  let quitting = false;
+  app.on('before-quit', (event) => {
+    if (quitting || !nativeEngine) return;
+    event.preventDefault();
+    quitting = true;
+    void (async () => {
+      try { await nativeEngine.shutdown(); } catch { /* already gone */ }
+      nativeEngine = null;
+      nativeDaemonPid = null;
+      app.quit();
+    })();
+  });
+
+  // Closing the last window quits the app, which triggers before-quit above.
   app.on('window-all-closed', () => app.quit());
 }
