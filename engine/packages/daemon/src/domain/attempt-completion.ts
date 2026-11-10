@@ -11,6 +11,7 @@ import { recordedFindings } from "./review-loop.js";
 import type { AttemptOutcome, AttemptTelemetry } from "./attempt-telemetry.js";
 import { unreadableTaskReport, type TaskReport } from "./task-report.js";
 import { recordWorkflowTurn } from "./team-workflows.js";
+import { observeIdentity } from "./process-termination.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -57,8 +58,8 @@ export interface AttemptCompletionDependencies {
    * for, and one that writes either must have written a shape the boundary accepts.
    */
   readLeadEscalation?: (runId: string, taskId: string) => { optionCount: number } | null;
-  /** Injectable for the tests; production leaves the default. */
-  alive?: (identity: { processId: number; processStart: string }) => boolean;
+  /** Injectable for the tests; production reads the recorded identity on any host. */
+  alive?: (identity: { processId: number; processStart: string }) => boolean | Promise<boolean>;
   /**
    * T033 — the exit evidence the seat's terminal recorded for a pane, read once when the sweep
    * observes the process gone. Absent means this daemon cannot read it (a hardened launch, or
@@ -147,11 +148,14 @@ export function extractReviewerReport(message: string | null): Record<string, un
 const unavailable = { value: null, reason: "Native usage has not been observed" };
 
 /**
- * Whether the process a receipt named is still the one running.
+ * Whether the process a receipt named is still the one running, on POSIX.
  *
  * The start time is the identity: a recycled pid starts at a different clock tick, so it is a
  * different process. A zombie has already exited even though `/proc` still lists it. A `/proc`
  * that cannot be read at all is not evidence of an end — only a missing process is.
+ *
+ * Windows has no `/proc`; there the same question is answered from the process's creation time
+ * through the platform boundary, by `identityAlive` below.
  */
 export function processIdentityAlive(identity: { processId: number; processStart: string }): boolean {
   try {
@@ -163,13 +167,26 @@ export function processIdentityAlive(identity: { processId: number; processStart
   }
 }
 
+/**
+ * The sweep's liveness question on any host, in the one form its caller can act on.
+ *
+ * The sweep closes an attempt when this answers false, so only a proved end may answer false: a
+ * missing process, or a zombie. On Windows a denied or timed-out query is `unknown` and a moved
+ * creation time is `not-ours`; neither is evidence that the recorded process ended, so both answer
+ * true and the attempt stays open. Recovery's own `unknown`/`unresolved` handling belongs to the
+ * unit that reconciles identities at boot, not to this observation.
+ */
+export async function identityAlive(identity: { processId: number; processStart: string }): Promise<boolean> {
+  return await observeIdentity(identity) !== "dead";
+}
+
 interface ReceiptRow { seq: number; payload: string }
 
 export function composeAttemptCompletion(dependencies: AttemptCompletionDependencies): AttemptCompletion {
   const { db, governance, currentBinding, sessions } = dependencies;
   const log = dependencies.log ?? ((message: string) => console.warn(message));
   const intervalMs = dependencies.intervalMs ?? ATTEMPT_SWEEP_INTERVAL_MS;
-  const alive = dependencies.alive ?? processIdentityAlive;
+  const alive = dependencies.alive ?? identityAlive;
   let timer: ReturnType<typeof setInterval> | null = null;
   let sweeping = false;
   /**
@@ -263,7 +280,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     for (const row of rows) {
       try {
         const attempt = governance.getAttempt(row.id);
-        if (!attempt?.identity || alive(attempt.identity)) continue;
+        if (!attempt?.identity || await alive(attempt.identity)) continue;
         // A pane the launcher held is still the seat's, but its dead foreground process makes the
         // seat unusable: measured on tmux 3.6, input into a dead pane is accepted and does
         // nothing. The evidence is read first, then the pane is released, so the next dispatch

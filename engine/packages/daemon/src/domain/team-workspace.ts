@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 import { closeSync, chmodSync, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, opendirSync, readFileSync, readdirSync, readSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { constants as fsConstants } from "node:fs";
 
-/** `O_NOFOLLOW` refuses a symlink at the leaf instead of reading through it. */
+/**
+ * `O_NOFOLLOW` refuses a symlink at the leaf instead of reading through it. It is POSIX-only, and
+ * Node reports it as `undefined` on Windows, so a zero here would silently drop the guarantee; the
+ * Windows path checks the entry with `isRedirectingEntry` instead of relying on the flag.
+ */
 const O_NOFOLLOW = fsConstants.O_NOFOLLOW ?? 0;
 /** `O_DIRECTORY` refuses anything that is not a directory, which is how a swap is caught. */
 const O_DIRECTORY = fsConstants.O_DIRECTORY ?? 0;
@@ -13,6 +17,7 @@ const OPEN_READ = fsConstants.O_RDONLY;
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import type { CandidateIdentity } from "./review-evidence.js";
+import { isRedirectingEntry, isWindows } from "./platform.js";
 import type { ScopeProjection } from "../contracts/team-control.js";
 import type { CandidateScopeEvidence } from "./scope-extension.js";
 
@@ -427,6 +432,25 @@ interface SnapshotEntryLink { kind: "link"; text: Buffer }
  * runs under Linux (the isolation policy is Linux accounts and mounts), and the tests run in WSL.
  */
 
+/**
+ * Refuse a leaf that the host would follow as a link, on hosts without `O_NOFOLLOW`.
+ *
+ * `O_NOFOLLOW` and `O_DIRECTORY` are POSIX open flags and Node reports them as `undefined` on
+ * Windows, so opening the same path there would follow a swapped-in junction or symlink without
+ * any error — the guarantee would vanish silently. Windows therefore checks the entry itself:
+ * `lstat` reports a junction and a symbolic link as links, and the read is refused by name.
+ * POSIX keeps using the flags, which also close the race this check cannot.
+ */
+function refuseRedirectedLeaf(target: string, path: string): void {
+  if (!isWindows()) return;
+  try {
+    if (isRedirectingEntry(target)) throw new Error(`Candidate path became a symlink while it was read: ${path}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Candidate path became a symlink")) throw error;
+    throw new Error(`Candidate path is unreadable: ${path} (${(error as NodeJS.ErrnoException).code ?? (error as Error).message})`);
+  }
+}
+
 /** Open a directory for traversal, refusing anything that is not a real directory. */
 function openDirectory(parentDescriptor: number, name: string, path: string): number {
   const target = parentDescriptor < 0 ? path : `/proc/self/fd/${parentDescriptor}/${name}`;
@@ -485,6 +509,11 @@ export function readWorkspacePath(root: string, path: string, excluded: (path: s
     || parts.some(part => !part || part === "." || part === ".." || /[\\\x00-\x1f]/.test(part)) || excluded(path)) {
     throw new Error("Workspace path not available");
   }
+  // Windows has no `/proc/self/fd` and no `O_NOFOLLOW`, so the same read is made by path with an
+  // explicit reparse-point check on every component: a junction or symlink anywhere below the root
+  // refuses the read instead of redirecting it. POSIX keeps the descriptor walk below, which also
+  // closes the swap race the check cannot.
+  if (isWindows()) return readWorkspacePathByPath(root, parts, path, excluded);
   // Pin the root's ancestors too: replacing an assignment directory must not redirect a read.
   let descriptor = openDirectory(-1, "", sep);
   try {
@@ -526,6 +555,44 @@ export function readWorkspacePath(root: string, path: string, excluded: (path: s
 }
 
 /**
+ * The same bounded read, by path, for hosts without `/proc/self/fd`.
+ *
+ * Every component below the root is checked with `lstat` before it is read, so a junction or
+ * symbolic link is refused by name rather than followed. A file's own reparse point is refused too,
+ * and the byte cap is applied to the opened descriptor, so a file that grew after the check is still
+ * bounded.
+ */
+function readWorkspacePathByPath(root: string, parts: string[], path: string, excluded: (path: string) => boolean): WorkspaceRead {
+  let current = resolve(root);
+  refuseRedirectedLeaf(current, path);
+  for (const part of parts) {
+    current = join(current, part);
+    refuseRedirectedLeaf(current, path);
+  }
+  let stat: ReturnType<typeof statSync>;
+  try { stat = statSync(current); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+    throw new Error(`Workspace path is unreadable: ${path} (${(error as NodeJS.ErrnoException).code ?? (error as Error).message})`);
+  }
+  if (stat.isDirectory()) {
+    const entries: Array<{ name: string; kind: "directory" | "file" }> = [];
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (entries.length > 1000) throw new Error("Workspace directory exceeds browse limit");
+      if (/[\\\x00-\x1f]/.test(entry.name) || excluded(path ? `${path}/${entry.name}` : entry.name)) continue;
+      // A link is neither a directory nor a file for this purpose: it would redirect a later read.
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory() || entry.isFile()) entries.push({ name: entry.name, kind: entry.isDirectory() ? "directory" : "file" });
+    }
+    return { kind: "directory", entries: entries.sort((a, b) => a.name.localeCompare(b.name)) };
+  }
+  if (!stat.isFile() || stat.size > 262144) throw new Error("Workspace file exceeds browse limit");
+  const bytes = readFileSync(current);
+  if (bytes.length > 262144 || bytes.includes(0)) throw new Error("Workspace file not available as text");
+  return { kind: "file", content: new TextDecoder("utf-8", { fatal: true }).decode(bytes), hash: sha256(bytes) };
+}
+
+/**
  * Copy the candidate into a control-owned directory, returning what it holds.
  *
  * Three properties decide what the copy may contain:
@@ -543,6 +610,12 @@ export function readWorkspacePath(root: string, path: string, excluded: (path: s
  */
 function snapshotCandidate(root: string, destination: string): Map<string, SnapshotEntry> {
   const entries = new Map<string, SnapshotEntry>();
+  // Windows has no `/proc/self/fd` and no `O_NOFOLLOW`: the same walk is made by path, and each
+  // entry is checked for a reparse point before it is read or descended.
+  if (isWindows()) {
+    snapshotCandidateByPath(root, destination, "", entries);
+    return entries;
+  }
   const rootDescriptor = openDirectory(-1, "", root);
   try {
     const visit = (directoryDescriptor: number, relativeDir: string): void => {
@@ -579,6 +652,38 @@ function snapshotCandidate(root: string, destination: string): Map<string, Snaps
     closeSync(rootDescriptor);
   }
   return entries;
+}
+
+/**
+ * The same candidate walk, by path, for hosts without `/proc/self/fd`.
+ *
+ * The properties are unchanged: `.git` is metadata at every depth, a link is never followed, and
+ * anything that is not a regular file refuses the manifest. A link itself is refused here rather
+ * than copied: on Windows a junction cannot be recreated as a symbolic link without elevation, and
+ * Git would stage the directory it names by descending it — so copying one would hand the worker a
+ * way to put outside bytes in the manifest. Refusing by name is the boundary saying what it cannot
+ * carry, which is the same answer a FIFO gets.
+ */
+function snapshotCandidateByPath(directory: string, destination: string, relativeDir: string, entries: Map<string, SnapshotEntry>): void {
+  const prefix = relativeDir ? `${relativeDir}/` : "";
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const name = strictUtf8(Buffer.from(entry.name, "utf8"), "A candidate file name");
+    const path = `${prefix}${name}`;
+    if (name === ".git") continue;
+    const source = join(directory, name);
+    const target = join(destination, path);
+    if (entry.isSymbolicLink()) throw new Error(`Candidate path is a link this host cannot stage without following it: ${path}`);
+    if (entry.isDirectory()) {
+      mkdirSync(target, { recursive: true });
+      snapshotCandidateByPath(source, destination, path, entries);
+      continue;
+    }
+    if (!entry.isFile()) throw new Error(`Candidate path is not a regular file: ${path}`);
+    const stats = statSync(source);
+    if (!stats.isFile()) throw new Error(`Candidate path is not a regular file: ${path}`);
+    writeFileSync(target, readFileSync(source));
+    entries.set(path, { kind: "file", mode: stats.mode, bytes: readFileSync(target) });
+  }
 }
 
 /**

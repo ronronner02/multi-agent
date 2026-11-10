@@ -1,4 +1,9 @@
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { promisify } from "node:util";
+import {
+  WINDOWS_PROCESS_QUERY, isWindows, normalizeCreationTime, queryWindowsProcesses, treeKillArgv,
+} from "./platform.js";
 
 /**
  * T017 (cancellation half) — what a recorded attempt identity is, and how to end it.
@@ -13,6 +18,11 @@ import { readFileSync } from "node:fs";
  * the tmux server, the daemon and every other seat alone. The group is only signalled after
  * `/proc` says its leader is still the recorded process: a group id is a pid, so a recycled one
  * would otherwise name whatever now leads it.
+ *
+ * Windows has neither `/proc` nor process groups. There the pair is the pid plus the CIM creation
+ * time, and the tree is ended with `taskkill /T /F`. A query that is denied, times out, or returns
+ * a different creation time is `unknown`/`not-ours`: nothing is signalled and nothing is called
+ * dead, because an unproved identity is not evidence of an end.
  */
 
 export interface ProcessIdentity {
@@ -36,6 +46,8 @@ export const TERMINATION_LIMIT_MS = 15_000;
 
 /** The interval between liveness reads while a termination is in progress. */
 const POLL_MS = 100;
+
+const execFileAsync = promisify(execFile);
 
 /** `/proc/<pid>/stat`, read past the parenthesised command name (which may contain spaces). */
 export function readProcessState(processId: number): ProcessState | null {
@@ -61,6 +73,86 @@ export function liveProcess(identity: ProcessIdentity): ProcessState | null {
   return state && state.processStart === identity.processStart && isRunning(state) ? state : null;
 }
 
+/**
+ * How the recorded identity reads on this host, in the terms every recovery decision uses.
+ *
+ * `alive` is the only answer that permits action against the process; `dead` is the only answer
+ * that permits recording an end. `unknown` is neither, and `not-ours` means the pid now belongs to
+ * another process — never signalled, never called dead.
+ */
+export type IdentityState = "alive" | "dead" | "not-ours" | "unknown";
+
+/**
+ * Whether a recorded identity is alive, on this host.
+ *
+ * POSIX reads `/proc`, where a missing pid is dead and an unreadable `/proc` is not. Windows asks
+ * the OS for the pid's creation time: a parsed time that matches the record is `alive`, a parsed
+ * time that differs is `not-ours`, an answered-but-missing pid is `dead`, and a denied or timed-out
+ * query is `unknown`. The timeout is `WINDOWS_PROCESS_QUERY.timeoutMs`, and an unknown is never
+ * retried into a decision.
+ */
+export async function observeIdentity(identity: ProcessIdentity): Promise<IdentityState> {
+  if (!isWindows()) {
+    let state: ProcessState | null;
+    try { state = liveProcess(identity); }
+    catch { return "unknown"; }
+    if (state !== null) return "alive";
+    // A missing process is dead; a `/proc` that cannot be read at all is not evidence of an end.
+    try { readProcessState(identity.processId); return "dead"; }
+    catch { return "unknown"; }
+  }
+  try {
+    const row = (await queryWindowsProcesses([identity.processId])).get(identity.processId);
+    if (!row) return "unknown";
+    if (row.state === "absent") return "dead";
+    if (row.state === "unknown") return "unknown";
+    return normalizeCreationTime(row.creationTime) === normalizeCreationTime(identity.processStart) ? "alive" : "not-ours";
+  } catch { return "unknown"; }
+}
+
+/** Whether a recorded identity is alive, in the terms a termination decision uses. Unknown is not. */
+export async function processIdentityAlive(identity: ProcessIdentity): Promise<boolean> {
+  return await observeIdentity(identity) === "alive";
+}
+
+/**
+ * End the recorded process and everything it started on Windows.
+ *
+ * `taskkill /T /F` walks the process tree, which is what `child.kill()` cannot do there (measured:
+ * the direct child exits and its grandchild keeps running). The identity is checked first, because
+ * a taskkill aimed at a recycled pid would end a stranger; afterwards the identity is checked
+ * again, and only its absence is a `stopped` outcome. A survivor, or a query that cannot answer,
+ * is `unresolved` — the caller records that rather than claiming a stop it did not see.
+ */
+async function terminateWindowsTree(identity: ProcessIdentity, dependencies: TerminateDependencies,
+  started: number, now: () => number, limit: number): Promise<TerminationResult> {
+  const observe = dependencies.observeWindows ?? observeIdentity;
+  const before = await observe(identity);
+  if (before !== "alive") {
+    return { outcome: before === "dead" ? "not-running" : "unresolved", escalated: false, waitedMs: now() - started };
+  }
+  const argv = treeKillArgv(identity.processId);
+  const kill = dependencies.killTree ?? ((command: string, args: string[]) => execFileAsync(command, args, {
+    encoding: "utf8", timeout: limit, windowsHide: true, maxBuffer: 64 * 1024,
+  }));
+  let escalated = false;
+  try {
+    await kill(argv.command, argv.args);
+    escalated = true;
+  } catch {
+    // taskkill reports "not found" as a non-zero exit; the identity check below decides, not this.
+  }
+  const sleep = dependencies.sleep ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)));
+  const deadline = started + limit;
+  for (;;) {
+    const state = await observe(identity);
+    if (state === "dead") return { outcome: "stopped", escalated, waitedMs: now() - started };
+    if (state !== "alive") return { outcome: "unresolved", escalated, waitedMs: now() - started };
+    if (now() >= deadline) return { outcome: "unresolved", escalated, waitedMs: now() - started };
+    await sleep(Math.min(POLL_MS, Math.max(1, deadline - now())));
+  }
+}
+
 export interface TerminateDependencies {
   /** Injectable for the tests; production leaves the defaults. */
   read?: (identity: ProcessIdentity) => ProcessState | null;
@@ -69,6 +161,9 @@ export interface TerminateDependencies {
   now?: () => number;
   termGraceMs?: number;
   limitMs?: number;
+  /** Windows: how the recorded identity is read, and how its tree is ended. */
+  observeWindows?: (identity: ProcessIdentity) => Promise<IdentityState>;
+  killTree?: (command: string, args: string[]) => Promise<unknown>;
 }
 
 export interface TerminationResult {
@@ -80,20 +175,25 @@ export interface TerminationResult {
 }
 
 /**
- * End the process group the recorded client leads: SIGTERM, then SIGKILL after the grace.
+ * End the process the recorded identity names, by the means this host has.
  *
- * The group is signalled only while its leader is still the recorded process, which is what
- * keeps a recycled pid from reaching a stranger. A client that already exited is
- * `not-running` and nothing is signalled at all. A group still alive at the limit is
- * `unresolved`: the caller records that rather than claiming a stop it did not see.
+ * POSIX signals the process group the client leads: SIGTERM, then SIGKILL after the grace. The
+ * group is signalled only while its leader is still the recorded process, which is what keeps a
+ * recycled pid from reaching a stranger. A client that already exited is `not-running` and
+ * nothing is signalled at all. A group still alive at the limit is `unresolved`: the caller
+ * records that rather than claiming a stop it did not see.
+ *
+ * Windows has no groups, so `terminateWindowsTree` ends the tree with `taskkill /T /F` and proves
+ * the end from the recorded identity afterwards.
  */
 export async function terminateProcessGroup(identity: ProcessIdentity, dependencies: TerminateDependencies = {}): Promise<TerminationResult> {
-  const read = dependencies.read ?? liveProcess;
-  const signal = dependencies.signal ?? ((target, kind) => process.kill(target, kind));
-  const sleep = dependencies.sleep ?? ((ms) => new Promise<void>(resolve => setTimeout(resolve, ms)));
   const now = dependencies.now ?? Date.now;
   const grace = dependencies.termGraceMs ?? TERM_GRACE_MS, limit = dependencies.limitMs ?? TERMINATION_LIMIT_MS;
   const started = now();
+  if (isWindows()) return terminateWindowsTree(identity, dependencies, started, now, limit);
+  const read = dependencies.read ?? liveProcess;
+  const signal = dependencies.signal ?? ((target, kind) => process.kill(target, kind));
+  const sleep = dependencies.sleep ?? ((ms) => new Promise<void>(resolve => setTimeout(resolve, ms)));
   const waitUntil = async (deadline: number): Promise<boolean> => {
     for (;;) {
       if (read(identity) === null) return true;

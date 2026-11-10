@@ -1,7 +1,6 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { accessSync, constants } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
+import { resolveExecutable } from "./executable-resolver.js";
 
 const execute = promisify(execFile);
 const HOST = "github.com";
@@ -55,11 +54,12 @@ export class GithubCli {
   }
 
   private executable(): string {
-    const candidates = isAbsolute(this.command) ? [this.command]
-      : (this.env.PATH ?? "").split(delimiter).map(path => join(path, this.command));
-    for (const candidate of candidates) {
-      try { accessSync(candidate, constants.X_OK); return candidate; } catch { /* Try the next PATH entry. */ }
-    }
+    // The shared resolver owns the lookup: it appends `PATHEXT` on Windows (a bare `gh` never
+    // matches `gh.exe`), follows npm shims, and accepts an explicit configured path. A `gh` that
+    // the resolver cannot find is the same missing-CLI refusal as before.
+    const resolution = resolveExecutable("gh", { configuredPath: this.command === "gh" ? undefined : this.command,
+      env: this.env });
+    if (resolution.ok) return resolution.path;
     throw new GithubCliError("github_cli_missing");
   }
 
