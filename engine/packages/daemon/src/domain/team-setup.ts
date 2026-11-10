@@ -1,12 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { realpathSync } from "node:fs";
 import { basename } from "node:path";
 import type Database from "better-sqlite3";
 import type { TeamRole } from "../contracts/team-control.js";
 import { RigRepository } from "./rig-repository.js";
 import { SessionRegistry } from "./session-registry.js";
 import { rosterSoulRefusal, soulId } from "./team-souls.js";
-import { samePath as canonicalSamePath } from "./platform.js";
+import { canonicalPath, samePath as canonicalSamePath } from "./platform.js";
 
 /**
  * U3 — one team for one repository.
@@ -194,7 +193,7 @@ function validatedSeats(seats: readonly TeamSeatInput[]): TeamSeat[] {
 export function canonicalTeamRepository(repository: string): string {
   let path: string;
   try {
-    path = realpathSync(repository);
+    path = canonicalPath(repository);
   } catch {
     throw new TeamSetupError("team_repository_unreadable", `The repository path "${repository}" could not be read.`);
   }
@@ -204,7 +203,9 @@ export function canonicalTeamRepository(repository: string): string {
   } catch {
     throw new TeamSetupError("team_repository_not_git", `${path} is not a git repository.`);
   }
-  const root = realpathSync(toplevel);
+  // Git names the long form of a Windows path; the short form `%TEMP%` may be given in must
+  // become the same spelling here, because every later comparison is a string comparison.
+  const root = canonicalPath(toplevel);
   try {
     git(root, "rev-parse", "--verify", "--quiet", "HEAD^{commit}");
   } catch {
@@ -238,7 +239,7 @@ function samePath(left: string, right: string): boolean {
   // filesystem folds, so `C:\Users\leo\Repo` and `c:\users\leo\repo` are one team on Windows and
   // two distinct roots on a case-sensitive filesystem.
   try {
-    return canonicalSamePath(realpathSync(left), right);
+    return canonicalSamePath(canonicalPath(left), right);
   } catch {
     return false;
   }

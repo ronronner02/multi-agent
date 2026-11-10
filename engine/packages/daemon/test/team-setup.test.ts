@@ -15,6 +15,7 @@ import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
 import { createTestApp } from "./helpers/test-app.js";
 import { listChatMessages, leadChatTurnNote, takeOwnerMessages } from "../src/domain/lead-chat.js";
 import { ownerWorkflowCommand, unassignedOwnerWorkflows } from "../src/domain/team-workflows.js";
+import { shortPath } from "./helpers/short-path.js";
 
 /**
  * U3 — the owner creates a team for any local git repository.
@@ -33,6 +34,7 @@ function git(root: string, ...args: string[]): string {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
+
 /** A repository on disk with one commit; `commit: false` leaves it with none. */
 function repository(parent: string, name = "project", commit = true): string {
   const root = join(parent, name);
@@ -46,7 +48,9 @@ function repository(parent: string, name = "project", commit = true): string {
     git(root, "add", ".");
     git(root, "commit", "--quiet", "-m", "base");
   }
-  return realpathSync(root);
+  // The long form: a Windows `%TEMP%` may be an 8.3 short name, and the route records the long
+  // spelling Git reports, so both sides of every comparison start from this one.
+  return realpathSync.native(root);
 }
 
 const defaultSeats = [
@@ -75,7 +79,7 @@ describe("U3 — the owner creates a team", () => {
     Array<{ role: string; client: string; seat: string }>;
 
   beforeEach(() => {
-    directory = realpathSync(mkdtempSync(join(tmpdir(), "u3-team-")));
+    directory = realpathSync.native(mkdtempSync(join(tmpdir(), "u3-team-")));
     db = createDb();
     migrate(db, ALL_MIGRATIONS);
     fixDaemonMode(db, true);
@@ -253,7 +257,26 @@ describe("U3 — the owner creates a team", () => {
     const response = await create({ repository: root, seats: defaultSeats });
     expect(response.status).toBe(201);
     expect((await response.json() as Created).team.repository).toBe(root);
-    expect(root).toBe(realpathSync(root));
+    expect(root).toBe(realpathSync.native(root));
+  });
+
+  it("records the long spelling of a repository named through its 8.3 short form", async () => {
+    // GitHub's Windows runner hands `%TEMP%` as `C:\Users\RUNNER~1\…`, so an owner's root can
+    // arrive in the short spelling while Git answers in the long one. The team must record one
+    // spelling, and a second create through either must find that same team rather than a second.
+    if (process.platform !== "win32") return;
+    const long = repository(directory, "project-with-a-long-name");
+    const short = shortPath(long);
+    if (short === null) return; // This volume does not generate 8.3 names; the CI runner's does.
+    expect(short).not.toBe(long);
+
+    const created = await create({ repository: short, seats: defaultSeats });
+    expect(created.status).toBe(201);
+    expect((await created.json() as Created).team.repository).toBe(long);
+
+    const again = await create({ repository: long, seats: defaultSeats });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ code: "team_exists" });
   });
 
   it("refuses a relative repository and a path that is not absolute on this host", async () => {

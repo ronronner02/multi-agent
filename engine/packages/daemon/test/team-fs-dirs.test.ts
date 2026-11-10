@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { listProjectDirectories } from "../src/domain/project-bootstrap.js";
@@ -9,7 +9,9 @@ import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
 describe("owner project folder browser", () => {
   let directory: string, home: string, outside: string;
   beforeEach(() => {
-    directory = mkdtempSync(join(tmpdir(), "team-fs-"));
+    // The long form: a Windows `%TEMP%` may be an 8.3 short name and the browser reports the
+    // long spelling the daemon canonicalised to.
+    directory = realpathSync.native(mkdtempSync(join(tmpdir(), "team-fs-")));
     home = join(directory, "home");
     outside = join(directory, "outside");
     mkdirSync(join(home, "project"), { recursive: true });

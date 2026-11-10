@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
-import { isWindows, samePath } from "./platform.js";
+import { canonicalPath, isWindows, samePath } from "./platform.js";
 
 /**
  * KTD10 — one policy for every worktree the daemon creates.
@@ -125,7 +125,9 @@ export function isWorktreeOf(repository: string, path: string): boolean {
   try {
     const top = execFileSync("git", ["-C", path, "rev-parse", "--show-toplevel"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-    return samePath(realpathSync(top), realpathSync(path));
+    // Git answers with the long form of the path; a Windows root reached through an 8.3 name
+    // compares unequal to it unless both sides are canonicalised.
+    return samePath(canonicalPath(top), canonicalPath(path));
   } catch {
     return false;
   }
