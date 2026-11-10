@@ -73,21 +73,6 @@ export function sliceScopePath(missionId: string | null | undefined, slice: stri
   return missionId ? `${missionId}/slices/${slice}` : slice;
 }
 
-/**
- * RESOLVE (leg-1 park): the Packet-1 FR-7 mission-control verb — ONE write
- * path, decision text lands in queue_transitions.transition_note, unpark +
- * nudge in the same transaction. `resolve` is additive to the shipped verb
- * enum; pre-P1 the route rejects it with a structured error (honest).
- */
-export function resolveQitem(qitemId: string, decision: string, actorSession: string): Promise<ActionOutcome> {
-  return post("/api/mission-control/action", {
-    verb: "resolve",
-    qitemId,
-    decision,
-    actorSession,
-  });
-}
-
 /** The freeze re-invoke (idempotent; FR-6) — exposed for the LOCKED receipt. */
 export function refreeze(slice: string, actor: string): Promise<ActionOutcome> {
   return post("/api/review/freeze", { scope: "slice", name: slice, actor });

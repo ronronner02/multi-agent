@@ -1,26 +1,12 @@
-// V1 attempt-3 Phase 5 P5-9 — Mobile responsive polish.
-//
-// Coverage:
-//   - MobileBottomNav renders 3 slots at <lg viewport (For You / Project /
-//     Topology). Talk slots are V2-deferred per universal-shell.md L144;
-//     negative-assertion that "talk" / advisor / operator do NOT appear
-//     in the mobile bottom nav.
-//   - Topology graph view-mode degrades to table at <lg viewport per
-//     universal-shell.md L143; tab nav still shows graph as the user's
-//     selected mode (so resize-to-wide reactivates the graph).
-//   - useShellViewport hook reflects window.innerWidth changes.
-//   - Bottom nav is hidden at >= lg viewport (lg:hidden class).
+// Coverage for the retained mobile navigation and responsive visibility.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { render, cleanup, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { useShellViewport } from "../src/hooks/useShellViewport.js";
-import { renderHook, act } from "@testing-library/react";
 import { createMockEventSourceClass } from "./helpers/mock-event-source.js";
 import { createAppTestRouter } from "./helpers/test-router.js";
 import { AppShell } from "../src/components/AppShell.js";
-import { HostScopePage } from "../src/components/topology/ScopePages.js";
 
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
@@ -64,7 +50,6 @@ async function renderAt(initialPath: string, viewportWidth: number) {
   const result = render(
     createAppTestRouter({
       routes: [
-        { path: "/topology", component: HostScopePage },
         { path: "$", component: () => null },
       ],
       rootComponent: ({ children }) => <AppShell>{children}</AppShell>,
@@ -77,40 +62,14 @@ async function renderAt(initialPath: string, viewportWidth: number) {
   return result;
 }
 
-describe("useShellViewport (P5-9 hook)", () => {
-  it("reports isWideLayout=true when innerWidth >= 1024", () => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440, writable: true });
-    const { result } = renderHook(() => useShellViewport());
-    expect(result.current.isWideLayout).toBe(true);
-    expect(result.current.innerWidth).toBeGreaterThanOrEqual(1024);
-  });
-
-  it("reports isWideLayout=false when innerWidth < 1024", () => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375, writable: true });
-    const { result } = renderHook(() => useShellViewport());
-    expect(result.current.isWideLayout).toBe(false);
-  });
-
-  it("reacts to window resize events", () => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440, writable: true });
-    const { result } = renderHook(() => useShellViewport());
-    expect(result.current.isWideLayout).toBe(true);
-    act(() => {
-      Object.defineProperty(window, "innerWidth", { configurable: true, value: 375, writable: true });
-      window.dispatchEvent(new Event("resize"));
-    });
-    expect(result.current.isWideLayout).toBe(false);
-  });
-});
-
 describe("MobileBottomNav P5-9 — universal-shell.md L135 + L144", () => {
-  it("renders 3 slots (For You / Project / Topology) at mobile viewport", async () => {
+  it("renders the retained Project slot at mobile viewport", async () => {
     const { container } = await renderAt("/", 375);
     const nav = container.querySelector("[data-testid='mobile-bottom-nav']");
     expect(nav).toBeTruthy();
-    expect(container.querySelector("[data-testid='mobile-nav-for-you']")).toBeTruthy();
+    expect(container.querySelector("[data-testid='mobile-nav-for-you']")).toBeNull();
     expect(container.querySelector("[data-testid='mobile-nav-project']")).toBeTruthy();
-    expect(container.querySelector("[data-testid='mobile-nav-topology']")).toBeTruthy();
+    expect(container.querySelector("[data-testid='mobile-nav-topology']")).toBeNull();
   });
 
   it("does NOT render Talk / advisor / operator slots (V2 deferred per L144)", async () => {
@@ -129,48 +88,14 @@ describe("MobileBottomNav P5-9 — universal-shell.md L135 + L144", () => {
   });
 
   it("active route highlights the matching mobile nav slot", async () => {
-    const { container } = await renderAt("/topology", 375);
-    const topology = container.querySelector("[data-testid='mobile-nav-topology']");
-    expect(topology?.getAttribute("data-active")).toBe("true");
+    const { container } = await renderAt("/project", 375);
     const project = container.querySelector("[data-testid='mobile-nav-project']");
-    expect(project?.getAttribute("data-active")).toBe("false");
+    expect(project?.getAttribute("data-active")).toBe("true");
   });
 
   it("nav element carries lg:hidden so desktop never shows it (CSS-source contract)", async () => {
     const { container } = await renderAt("/", 375);
     const nav = container.querySelector("[data-testid='mobile-bottom-nav']");
     expect(nav?.className).toMatch(/lg:hidden/);
-  });
-});
-
-describe("Topology graph degradation P5-9 (universal-shell.md L143)", () => {
-  it("at <lg viewport, /topology graph view-mode renders the table view + degraded hint", async () => {
-    const { container, findByTestId } = await renderAt("/topology", 375);
-    // The table view-mode is what actually mounts (graph degraded).
-    expect(await findByTestId("topology-mobile-graph-degraded")).toBeTruthy();
-    // graph placeholder is NOT rendered at mobile.
-    // V1 polish slice Phase 5.2: host graph placeholder REPLACED with
-    // HostMultiRigGraph; the placeholder testid no longer exists at any
-    // viewport, so this negative assertion remains structurally correct
-    // (mobile path renders table view, not the multi-rig canvas).
-    expect(container.querySelector("[data-testid='topology-host-graph-placeholder']")).toBeNull();
-    expect(container.querySelector("[data-testid='host-multi-rig-graph']")).toBeNull();
-  });
-
-  it("at >= lg viewport, /topology graph view-mode renders the graph (no degradation hint)", async () => {
-    const { findByTestId, container } = await renderAt("/topology", 1440);
-    // Default tab is graph; placeholder visible.
-    // V1 polish slice Phase 5.2: HostMultiRigGraph replaces the prior
-    // placeholder card at host scope graph view-mode. At >= lg viewport
-    // either the canvas mounts (with rigs) or the empty-state mounts
-    // (mock returns []). Either is acceptable proof that the desktop
-    // path is NOT degraded to the table; <lg path would have rendered
-    // the table degradation hint.
-    const desktopMount = await waitFor(() =>
-      container.querySelector("[data-testid='host-multi-rig-graph']") ??
-      container.querySelector("[data-testid='host-multi-rig-graph-empty']"),
-    );
-    expect(desktopMount).toBeTruthy();
-    expect(container.querySelector("[data-testid='topology-mobile-graph-degraded']")).toBeNull();
   });
 });

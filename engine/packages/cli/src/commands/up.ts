@@ -4,7 +4,6 @@ import { getCliVersion, bundleRoutingSummary, bundleInstallError, startupAttenti
 import { showBundleBehaviourBeforeAction } from "../bundle-behaviour.js";
 import { resolveEffectiveHost } from "../host-selection.js";
 import { existsSync, readFileSync } from "node:fs";
-import { parse as parseYamlDoc } from "yaml";
 import { Command } from "commander";
 import { DaemonClient, DaemonConnectionError } from "../client.js";
 import { getDaemonStatus, getDaemonUrl, startDaemon, type LifecycleDeps, daemonStatusGuard } from "../daemon-lifecycle.js";
@@ -42,29 +41,6 @@ function isFilesystemRoot(cwd: string): boolean {
   const resolved = nodePath.resolve(cwd);
   return resolved === nodePath.parse(resolved).root;
 }
-
-// OPR.0.4.4.11 (arch return R11-2) — pre-dispatch detection of a topology
-// source for the --host rejection. Mirrors the daemon's FR-1 detection
-// contract without importing the daemon package: `.rigtopology` extension,
-// or a readable path-form YAML document with a top-level `rigs:` LIST.
-export function sourceLooksLikeTopology(source: string): boolean {
-  if (/\.rigtopology$/i.test(source)) return true;
-  // Name-form sources (no slash, no known extension) keep rig-name
-  // semantics — never sniffed (same precedence as the daemon router).
-  if (!source.includes("/") && !source.match(/\.(ya?ml)$/i)) return false;
-  try {
-    const p = nodePath.resolve(source);
-    if (!existsSync(p)) return false;
-    const parsed: unknown = parseYamlDoc(readFileSync(p, "utf-8"));
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
-    return Array.isArray((parsed as Record<string, unknown>)["rigs"]);
-  } catch {
-    return false; // unreadable/unparseable — existing flows own the error
-  }
-}
-
-export const HOST_TOPOLOGY_REJECTION =
-  "rig up --host cannot take a topology source: per-entry 'host:' in the manifest is the ONLY placement mechanism for topologies (two placement mechanisms must not coexist). Put 'host: <id>' on the entries you want placed remotely and run 'rig up <topology>' without --host.";
 
 export function upCommand(
   depsOverride?: StatusDeps & {
@@ -106,13 +82,7 @@ team back with its conversations, run rig up <rig-name> --existing, not the spec
     .option("--json", "JSON output for agents")
     .option("--host <id>", "Run on a remote host declared in ~/.openrig/hosts.yaml")
     .action(async (source: string, opts: { nonInterruptive?: boolean; plan?: boolean; yes?: boolean; cwd?: string; target?: string; existing?: boolean; fresh?: string[]; json?: boolean; host?: string; preset?: string; seat?: string[] }) => {
-      // OPR.0.4.6.MH1 FR-2: selected-host routing — explicit --host wins;
-      // else the persisted selection feeds the SHIPPED --host path; no
-      // selection = today exactly. Topology
-      // sources are EXEMPT: per-entry host: is the only topology placement
-      // (shipped R11-2); implicit selection must not turn a flagless
-      // topology up into the rejected --host form.
-      if (!sourceLooksLikeTopology(source)) opts.host = resolveEffectiveHost(opts.host);
+      opts.host = resolveEffectiveHost(opts.host);
       const deps = getDepsF();
 
       // Link preparation verifies the effective endpoint before fetch or local auto-start.
@@ -156,19 +126,6 @@ team back with its conversations, run rig up <rig-name> --existing, not the spec
       }
 
       if (opts.host) {
-        // OPR.0.4.4.11 R11-2: --host + topology source is REJECTED before
-        // any dispatch — per-entry 'host:' is the only topology placement
-        // mechanism. The daemon route carries the same rejection on its
-        // public write path (double-sided enforcement, arch ruling 4).
-        if (sourceLooksLikeTopology(source)) {
-          if (opts.json) {
-            console.log(JSON.stringify({ ok: false, error: HOST_TOPOLOGY_REJECTION, code: "host_flag_topology" }));
-          } else {
-            console.error(HOST_TOPOLOGY_REJECTION);
-          }
-          process.exitCode = 1;
-          return;
-        }
         const { runRemoteHttpOp } = await import("../remote-host-ops.js");
         const body = {
           sourceRef: source,
@@ -235,13 +192,8 @@ team back with its conversations, run rig up <rig-name> --existing, not the spec
 
       const client = deps.clientFactory(getDaemonUrl(status));
 
-      // Detect rig name vs file path: names don't contain / and don't end in
-      // .yaml/.yml/.rigbundle/.rigtopology. OPR.0.4.4.11 (guard G-1): the
-      // topology extension resolves as a PATH (same as yaml/rigbundle) so a
-      // bare `factory.rigtopology` reaches the daemon's topology routing
-      // instead of library/existing-rig name resolution. Extensionless
-      // no-slash sources keep rig_name precedence byte-for-byte.
-      const isRigName = !source.includes("/") && !source.match(/\.(ya?ml|rigbundle|rigtopology)$/i);
+      // File sources resolve against the current directory; bare names use the library.
+      const isRigName = !source.includes("/") && !source.match(/\.(ya?ml|rigbundle)$/i);
       let sourceRef = isRigName ? source : nodePath.resolve(source);
 
       // If it looks like a name, check for library spec match
@@ -462,25 +414,6 @@ team back with its conversations, run rig up <rig-name> --existing, not the spec
         return;
       }
 
-      // OPR.0.4.4.11 — topology aggregate rendering (full success OR honest
-      // partial; the daemon returns the same closed {rigRef, host, status,
-      // error?} entries either way, skipped entries explicitly present).
-      const topoEntries = res.data["entries"] as Array<{ rigRef: string; host: string; status: string; error?: string }> | undefined;
-      if (typeof res.data["topology"] === "string" && Array.isArray(topoEntries)) {
-        const topoOk = res.data["ok"] === true;
-        console.log(
-          topoOk
-            ? `Topology up: all ${topoEntries.length} rigs launched.`
-            : "Topology up FAILED — honest partial state (started rigs stay up; no rollback):",
-        );
-        for (const e of topoEntries) {
-          const tag = e.status === "ok" ? " ok " : e.status === "failed" ? "FAIL" : "skip";
-          console.log(`  [${tag}] ${e.rigRef} @ ${e.host}${e.error ? ` — ${e.error}` : ""}`);
-        }
-        if (!topoOk) process.exitCode = 1;
-        return;
-      }
-
       if (res.status >= 400) {
         const code = res.data["code"] as string | undefined;
         const error = res.data["error"] as Partial<ThreePartRejection> | null | undefined;
@@ -501,9 +434,6 @@ team back with its conversations, run rig up <rig-name> --existing, not the spec
           console.error(`Preflight check failed:\n${errors.map((e) => `  ${e}`).join("\n")}\nFix: resolve the issues above and retry.`);
         } else if (code === "pre_restore_validation_failed") {
           printRestoreNotAttempted(res.data as RestoreNotAttemptedData);
-        } else if (code === "invalid_topology_manifest") {
-          const errors = (res.data["errors"] as string[]) ?? [];
-          console.error(`Topology manifest invalid:\n${errors.map((e) => `  ${e}`).join("\n")}\nFix: the manifest key set is CLOSED — rigs[]{source, host?} plus optional concurrency.`);
         } else if (code === "rig_name_running" || code === "generation_unconfirmed" || code === "compose_project_conflict") {
           // S5b final-fix F1 (OPR.0.5.4.11): the guard's teaching refusal is
           // self-describing (running rig identity, what was checked,

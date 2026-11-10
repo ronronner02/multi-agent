@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
-import { setSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 afterEach(() => setSelfHostId(null));
 

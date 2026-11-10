@@ -12,8 +12,8 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { reviewRoutes } from "../src/routes/review.js";
-import { LOCAL_HOST_ID } from "../src/domain/hosts/fanout-contract.js";
-import type { PerHostStatusKind } from "../src/domain/hosts/fanout-contract.js";
+import { LOCAL_HOST_ID } from "../src/domain/host-identity/fanout-contract.js";
+import type { PerHostStatusKind } from "../src/domain/host-identity/fanout-contract.js";
 import type { HostRegistry } from "../src/domain/hosts/hosts-registry-reader.js";
 import type { ComposedFleet, ComposedRigAgents, NeedsYouItem } from "../src/domain/review/types.js";
 

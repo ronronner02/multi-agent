@@ -12,7 +12,7 @@ import {
   type MissionControlActionEntry,
   type MissionControlVerb,
   MISSION_CONTROL_VERBS,
-} from "./mission-control-action-log.js";
+} from "./action-log.js";
 
 export interface AuditQueryInput {
   qitemId?: string;

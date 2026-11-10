@@ -9,7 +9,7 @@ import {
   MissionControlActionLog,
   MissionControlActionLogError,
   MISSION_CONTROL_VERBS,
-} from "../src/domain/mission-control/mission-control-action-log.js";
+} from "../src/domain/scope/action-log.js";
 
 describe("MissionControlActionLog (PL-005 Phase A; append-only)", () => {
   let db: Database.Database;

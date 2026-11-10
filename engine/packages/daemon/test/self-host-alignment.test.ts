@@ -12,43 +12,12 @@
 // marking to compare against (routed to arch, no registry migration per fence).
 
 import { describe, it, expect, afterEach } from "vitest";
-import { Hono } from "hono";
 import {
   LOCAL_HOST_ID,
   getSelfHostId,
   setSelfHostId,
   resolvesToLocalHost,
-} from "../src/domain/hosts/fanout-contract.js";
-import { hostReadThrough } from "../src/domain/hosts/read-through.js";
-import type { HostRegistry } from "../src/domain/hosts/hosts-registry-reader.js";
-
-// vps-a is TOKENLESS (bearer optional) so the remote leg dials without needing
-// an env-provided bearer — we only need to prove a non-self host forwards.
-const REGISTRY: HostRegistry = {
-  hosts: [{ id: "vps-a", transport: "http", url: "http://vps-a:7433" }],
-};
-
-function makeApp() {
-  const fetchCalls: string[] = [];
-  const localHits: string[] = [];
-  const fakeFetch = (async (input: RequestInfo | URL) => {
-    fetchCalls.push(String(input));
-    return new Response(JSON.stringify({ rigs: ["remote-rig"] }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }) as typeof fetch;
-  const app = new Hono();
-  app.use("*", async (c, next) => {
-    const set = c.set.bind(c) as (key: string, value: unknown) => void;
-    set("hostRegistryLoader", () => ({ ok: true, registry: REGISTRY }));
-    set("remoteFetchImpl", fakeFetch);
-    await next();
-  });
-  app.use("/api/*", hostReadThrough());
-  app.get("/api/rigs/summary", (c) => { localHits.push(c.req.path); return c.json({ rigs: ["local-rig"] }); });
-  return { app, fetchCalls, localHits };
-}
+} from "../src/domain/host-identity/fanout-contract.js";
 
 afterEach(() => setSelfHostId(null)); // reset the boot-populated module accessor between tests
 
@@ -83,25 +52,5 @@ describe("51-09 increment 2 — self-host local resolution", () => {
     expect(getSelfHostId()).toBeNull();
     setSelfHostId("mars-01");
     expect(getSelfHostId()).toBe("mars-01");
-  });
-
-  it("E1: read-through routes a ?host==selfId read HOME (no remote dial), like ?host=local", async () => {
-    setSelfHostId("mars-01");
-    const { app, fetchCalls, localHits } = makeApp();
-
-    // self-id qualified read → LOCAL handler, NO dial (the E1 unknown_destination_rig killer at the read seam)
-    const selfRes = await app.request("/api/rigs/summary?host=mars-01");
-    expect(selfRes.status).toBe(200);
-    expect(await selfRes.json()).toEqual({ rigs: ["local-rig"] });
-
-    // 'local' sentinel → also local
-    await app.request("/api/rigs/summary?host=local");
-
-    expect(localHits).toEqual(["/api/rigs/summary", "/api/rigs/summary"]);
-    expect(fetchCalls).toEqual([]); // neither self-id nor 'local' dialed out
-
-    // a genuinely remote host still forwards (unchanged)
-    await app.request("/api/rigs/summary?host=vps-a");
-    expect(fetchCalls.length).toBe(1);
   });
 });

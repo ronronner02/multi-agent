@@ -110,18 +110,4 @@ describe("P5.1-D2 retirement regression: drawer-as-seat-detail removed", () => {
     expect(src).toMatch(/import\s*\{[^}]*FileReferenceTrigger[^}]*\}\s*from/);
     expect(src).toMatch(/<FileReferenceTrigger/);
   });
-
-  it("SeatScopePage drops outer tabs and mounts LiveNodeDetails directly (DRIFT P5.1-D1)", () => {
-    const src = readFileSync(path.join(SRC, "components/topology/ScopePages.tsx"), "utf8");
-    // Locate the SeatScopePage function body specifically (not the
-    // file-wide imports which still reference the SEAT_SCOPE_TABS
-    // constant for other surfaces).
-    const seatFn = src.match(/export function SeatScopePage\(\)\s*\{[\s\S]*?^}/m);
-    expect(seatFn).not.toBeNull();
-    const body = seatFn![0];
-    // No outer ScopeShell tabsNav for seat scope; LiveNodeDetails mounts
-    // as the page body.
-    expect(body).not.toMatch(/SEAT_SCOPE_TABS/);
-    expect(body).toMatch(/<LiveNodeDetails\s+rigId=/);
-  });
 });

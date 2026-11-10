@@ -10,7 +10,6 @@
 
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { missionControlAuthHeaders } from "../components/mission-control/missionControlAuth.js";
 import { LOCAL_HOST_ID } from "../lib/host-param.js";
 
 export interface HostRow {
@@ -138,56 +137,6 @@ export function useSelectHost() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["hosts"] });
       void qc.invalidateQueries({ queryKey: ["settings"] });
-    },
-  });
-}
-
-export interface PairStart {
-  pairId: string;
-  code: string;
-  target: string;
-}
-
-export function usePairHost() {
-  return useMutation<PairStart, Error, { url: string; id?: string }>({
-    mutationFn: async (input) => {
-      const res = await fetch("/api/hosts/pair", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...missionControlAuthHeaders() },
-        body: JSON.stringify(input),
-      });
-      const body = (await res.json().catch(() => ({}))) as PairStart & { error?: string; message?: string };
-      if (!res.ok) throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
-      return body;
-    },
-  });
-}
-
-export interface PairPollResult {
-  status: "pending" | "approved" | "denied" | "expired";
-  code?: string;
-  entry?: HostRow;
-}
-
-/** Poll the local daemon's pull-through pair leg while a pairing is live.
- *  Pass null to idle the hook (no request). */
-export function usePairPoll(pairId: string | null) {
-  const qc = useQueryClient();
-  return useQuery<PairPollResult>({
-    queryKey: ["hosts-pair", pairId],
-    enabled: pairId !== null,
-    queryFn: async () => {
-      const res = await fetch(`/api/hosts/pair/${pairId}`, {
-        headers: { ...missionControlAuthHeaders() },
-      });
-      const body = (await res.json().catch(() => ({}))) as PairPollResult & { error?: string; message?: string };
-      if (!res.ok) throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
-      if (body.status === "approved") void qc.invalidateQueries({ queryKey: ["hosts"] });
-      return body;
-    },
-    refetchInterval: (query) => {
-      const s = query.state.data?.status;
-      return s === undefined || s === "pending" ? 2_000 : false;
     },
   });
 }

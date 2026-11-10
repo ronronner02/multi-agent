@@ -9,7 +9,7 @@
 // module must import NO hosts TRANSPORT/REGISTRY module and no node
 // network primitive.
 //
-// ALLOWLISTED for everyone: domain/hosts/fanout-contract.js — a ZERO-I/O
+// ALLOWLISTED for everyone: domain/host-identity/fanout-contract.js — a ZERO-I/O
 // shared CONTRACT module whose own header pins "defined ONCE, imported
 // everywhere, never retyped" (types.ts imports PerHostStatus from it; the
 // boundary this audit defends is network I/O + registry reads, not a
@@ -79,7 +79,7 @@ describe("MH-5 P1 — the review-domain import boundary (static audit)", () => {
       const specs = importSpecifiers(readFileSync(path.join(REVIEW_DIR, file), "utf-8"));
       const hostsImports = specs.filter((s) => s.includes("/hosts/") || s.startsWith("hosts/"));
       for (const spec of hostsImports) {
-        expect(spec).toContain("hosts/fanout-contract");
+        expect(spec).toContain("host-identity/fanout-contract");
       }
     }
   });

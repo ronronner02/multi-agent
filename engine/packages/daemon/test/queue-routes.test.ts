@@ -19,7 +19,7 @@ import { InboxHandler } from "../src/domain/inbox-handler.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { CLOSURE_REASONS } from "../src/domain/hot-potato-enforcer.js";
 import { queueRoutes } from "../src/routes/queue.js";
-import { setSelfHostId, getSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 import { expectLimitParsing } from "./helpers/limit-query-cases.js";
 
 function buildApp(opts: {

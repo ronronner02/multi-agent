@@ -45,13 +45,13 @@ describe("terminal-token carry on protected UI fetches", () => {
   });
 
   it("terminalAuthHeaders reads token from localStorage", async () => {
-    const { terminalAuthHeaders } = await import("../src/components/mission-control/missionControlAuth.js");
+    const { terminalAuthHeaders } = await import("../src/lib/legacy-auth.js");
     expect(terminalAuthHeaders().Authorization).toBe(`Bearer ${TOKEN}`);
   });
 
   it("terminalAuthHeaders returns empty when no token", async () => {
     window.localStorage.removeItem("openrig.terminalBearerToken");
-    const { terminalAuthHeaders } = await import("../src/components/mission-control/missionControlAuth.js");
+    const { terminalAuthHeaders } = await import("../src/lib/legacy-auth.js");
     expect(terminalAuthHeaders().Authorization).toBeUndefined();
   });
 

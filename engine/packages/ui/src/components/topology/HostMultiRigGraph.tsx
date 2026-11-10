@@ -10,10 +10,10 @@
 // canvas. Explicit collapse state is still persisted in TopologyOverlayProvider,
 // and the operator can collapse / expand every rig from the canvas controls.
 // Auto-expand rule (parity with Phase 5.1 TopologyTreeView):
-// when route is /topology/rig/$rigId or /topology/seat/$rigId/* or
+// when route is /rigs/$rigId or /topology/seat/$rigId/* or
 // /topology/pod/$rigId/*, the matching rig is auto-expanded on mount /
 // route change. Click rig card body -> toggle collapse. Click arrow Link
-// on rig card name -> navigate to /topology/rig/$rigId (drill-in).
+// on rig card name -> navigate to /rigs/$rigId (drill-in).
 //
 // Performance: per-rig graph data is lazy-fetched (useQueries enabled
 // only when rig is expanded). The V1 operator default now intentionally
@@ -322,14 +322,14 @@ export function HostMultiRigGraph() {
       const podName = data?.podNamespace ?? data?.podId;
       if (!podName) return;
       navigate({
-        to: "/topology/pod/$rigId/$podName",
-        params: { rigId, podName },
+        to: "/rigs/$rigId",
+        params: { rigId },
       });
       return;
     }
     if (data?.logicalId) {
       navigate({
-        to: "/topology/seat/$rigId/$logicalId",
+        to: "/rigs/$rigId/nodes/$logicalId",
         params: { rigId, logicalId: encodeURIComponent(data.logicalId) },
       });
     }

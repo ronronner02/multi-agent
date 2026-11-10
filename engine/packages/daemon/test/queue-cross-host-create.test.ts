@@ -28,7 +28,7 @@ import {
 } from "../src/domain/queue-repository.js";
 import { queueRoutes, crossHostProvenanceTags, CROSS_HOST_TAG } from "../src/routes/queue.js";
 import type { HostRegistry } from "../src/domain/hosts/hosts-registry-reader.js";
-import { setSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 const REGISTRY: HostRegistry = {
   hosts: [

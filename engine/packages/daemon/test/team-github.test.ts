@@ -54,7 +54,7 @@ describe("owner GitHub sign-in", () => {
     db = createDb();
     migrate(db, ALL_MIGRATIONS);
     fixDaemonMode(db, true);
-    app = createTestApp(db, { appDeps: { github, missionControlBearerToken: legacyToken,
+    app = createTestApp(db, { appDeps: { github, legacyBearerToken: legacyToken,
       teamControl: { credentials: { ownerToken, workers: [
         { token: workerToken, sessionId: "dev@fixture", runId: "other" },
       ] } },

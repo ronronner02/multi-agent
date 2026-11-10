@@ -15,7 +15,7 @@ import { migrate } from "../src/db/migrate.js";
 import { coreSchema } from "../src/db/migrations/001_core_schema.js";
 import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
 import { missionControlActionsSchema } from "../src/db/migrations/037_mission_control_actions.js";
-import { MissionControlActionLog } from "../src/domain/mission-control/mission-control-action-log.js";
+import { MissionControlActionLog } from "../src/domain/scope/action-log.js";
 import { ScopeApproveService } from "../src/domain/scope/scope-approve.js";
 
 // The 51-08 drift-instance shape: folded scalar, quoted strings, tab-free

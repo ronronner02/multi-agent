@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { Hono } from "hono";
 import { canonicalSenderSession, requireSenderIdentity, resolveActorWithDeferral } from "../src/routes/require-sender-identity.js";
-import { setSelfHostId, getSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 describe("canonicalSenderSession", () => {
   const SELF = "host-7fe0ae96";

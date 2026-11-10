@@ -14,8 +14,8 @@ import { migrate } from "../src/db/migrate.js";
 import { coreSchema } from "../src/db/migrations/001_core_schema.js";
 import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
 import { missionControlActionsSchema } from "../src/db/migrations/037_mission_control_actions.js";
-import { MissionControlActionLog } from "../src/domain/mission-control/mission-control-action-log.js";
-import { MissionControlAuditBrowse } from "../src/domain/mission-control/audit-browse.js";
+import { MissionControlActionLog } from "../src/domain/scope/action-log.js";
+import { MissionControlAuditBrowse } from "../src/domain/scope/audit-browse.js";
 import { ScopeApproveError, ScopeApproveService } from "../src/domain/scope/scope-approve.js";
 // Stage-3 Lever A (REV4 348f84f3 §4/§6) — gather+compose render-parity RED drives
 // the shipped ReviewGatherer/composer over a fixture slice; mirror the proven

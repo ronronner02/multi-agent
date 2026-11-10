@@ -1,13 +1,4 @@
-// OPR.0.4.1.14 — Dashboard route visual refresh (founder-LOCKED fidelity twin).
-//
-// A pure visual refresh of the welcome/home LAUNCHER surface. No behaviour
-// change: the same six destinations route to the same paths, and the global
-// AppShell header + left rail are untouched (the twin's "header + sidebar =
-// keep as-is" is that shell chrome). The big-numeral vellum card wall is
-// replaced by the disciplined paper-draft launcher grid + Field Environment
-// readout + drafting footer of the locked twin
-// (digital-twin/opr-0.4.1.14/dashboard-fidelity.intent.html), built with the
-// founder-ratified existing-code glyph set.
+// Retained legacy launcher destinations and live environment summary.
 //
 // Real-data wiring — every Field Environment row reads live runtime state
 // (OPR.0.4.1.14 functional refinement; no placeholder rows):
@@ -32,14 +23,10 @@ import { useSettings } from "../../hooks/useSettings.js";
 import { useDaemonVersion } from "../../hooks/useDaemonVersion.js";
 import { parseSessionName } from "../../lib/session-name.js";
 import { KernelStatusCard } from "../KernelStatusCard.js";
-import { HostConfigCard } from "./HostConfigCard.js";
 import { ErrorBoundary } from "../ui/ErrorBoundary.js";
 import {
-  TopologyGlyph,
   ProjectGlyph,
-  ForYouGlyph,
   LibraryGlyph,
-  SearchGlyph,
   SettingsGlyph,
   FieldGlobeGlyph,
   CaptionGlyph,
@@ -57,13 +44,10 @@ interface Destination {
   amber?: boolean;
 }
 
-// Routes + order are UNCHANGED from the prior dashboard (no behaviour change).
+// Preserve the order of retained destinations.
 const DESTINATIONS: Destination[] = [
-  { num: "01", to: "/topology", label: "TOPOLOGY", caption: "VIEW RIG GRAPH", glyph: <TopologyGlyph />, captionGlyph: "cross" },
   { num: "02", to: "/project", label: "PROJECT", caption: "BROWSE PROJECTS", glyph: <ProjectGlyph />, captionGlyph: "square" },
-  { num: "03", to: "/for-you", label: "FOR YOU", caption: "PRIORITIZED FOR YOU", glyph: <ForYouGlyph />, captionGlyph: "square", amber: true },
   { num: "04", to: "/specs", label: "LIBRARY", caption: "SPECS & ARTIFACTS", glyph: <LibraryGlyph />, captionGlyph: "cross" },
-  { num: "05", to: "/search", label: "SEARCH & AUDIT", caption: "FIND & VERIFY", glyph: <SearchGlyph />, captionGlyph: "circle" },
   { num: "06", to: "/settings", label: "SETTINGS", caption: "CONFIGURE · STATUS", glyph: <SettingsGlyph />, captionGlyph: "circle" },
 ];
 
@@ -147,11 +131,6 @@ export function Dashboard() {
           </ErrorBoundary>
         </section>
 
-        {/* OPR.0.4.6.MH1 FR-5 — the host-config component (own host +
-            added hosts + add affordance + switcher). */}
-        <ErrorBoundary label="Hosts">
-          <HostConfigCard />
-        </ErrorBoundary>
 
         <div className="df-grid" data-testid="dashboard-launcher-grid">
           {DESTINATIONS.map((d) => (

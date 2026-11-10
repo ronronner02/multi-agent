@@ -47,7 +47,7 @@ describe("managed control authority on the shared application", () => {
     options = { credentials: { ownerToken, workers: [{ token: workerToken, sessionId: "worker-session", runId: "run" }] },
       resolveBinding: () => binding, readPolicyCapability: () => capability };
     app = createTestApp(db, { appDeps: {
-      queueRepo: queue, eventBus: bus, missionControlBearerToken: "legacy-control-fixture",
+      queueRepo: queue, eventBus: bus, legacyBearerToken: "legacy-control-fixture",
       terminalBearerToken: "terminal-control-fixture", teamControl: options,
     } }).app;
     key = 0;

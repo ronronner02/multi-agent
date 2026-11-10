@@ -470,6 +470,6 @@ describe("source-assertion guards", () => {
     expect(src).toMatch(/hard-shadow/);
     expect(src).toMatch(/RegistrationMarks/);
     // Drill-in Link present (separate from body click).
-    expect(src).toMatch(/to=["']\/topology\/rig\/\$rigId["']/);
+    expect(src).toMatch(/to=["']\/rigs\/\$rigId["']/);
   });
 });

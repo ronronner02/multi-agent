@@ -38,7 +38,7 @@ import {
 import { queueRoutes, CROSS_HOST_TAG, crossHostProvenanceTags } from "../src/routes/queue.js";
 import { ORIGIN_UNKNOWN_HEADER } from "../src/routes/require-sender-identity.js";
 import type { HostRegistry } from "../src/domain/hosts/hosts-registry-reader.js";
-import { setSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 

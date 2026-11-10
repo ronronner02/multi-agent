@@ -257,7 +257,7 @@ export interface ComposedRigAgents {
 // each host's own composed set (arch Q1 — each host is authoritative for
 // its own time-derived ▲; the fleet never recomputes exception truth). ---
 
-import type { PerHostStatus } from "../hosts/fanout-contract.js";
+import type { PerHostStatus } from "../host-identity/fanout-contract.js";
 
 /** One fleet NEEDS-YOU row: the per-host row carried VERBATIM (kind-agnostic
  *  — whatever DerivedException the host composed flows through; the WF-4 Q6

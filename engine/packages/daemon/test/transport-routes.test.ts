@@ -18,7 +18,7 @@ import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { SessionTransport } from "../src/domain/session-transport.js";
 import { EventBus } from "../src/domain/event-bus.js";
-import { setSelfHostId, getSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 import { AgentActivityStore } from "../src/domain/agent-activity-store.js";
 import type { TmuxAdapter, TmuxResult } from "../src/adapters/tmux.js";
 import { transportRoutes } from "../src/routes/transport.js";

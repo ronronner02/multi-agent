@@ -275,37 +275,6 @@ edges: []
 
   const TOPOLOGY_YAML = "rigs:\n  - source: ./orch.yaml\n  - source: ./workers/rig.yaml\n    host: vps-b\nconcurrency: 2\n";
 
-  it("G1-1: bare no-slash factory.rigtopology → topology (extension beats name-detection)", () => {
-    // Stub fs: the bare ref resolves relative to daemon cwd; existence is the
-    // only fs fact the ext branch needs.
-    const router = new UpCommandRouter({
-      fsOps: { exists: () => true, readFile: () => TOPOLOGY_YAML, readHead: () => Buffer.alloc(0) },
-    });
-    const result = router.route("factory.rigtopology");
-    expect(result).toEqual({ sourceKind: "topology", sourceRef: "factory.rigtopology" });
-  });
-
-  it("G1-2: ./factory.rigtopology path form → topology", () => {
-    const p = path.join(tmpDir, "factory.rigtopology");
-    fs.writeFileSync(p, TOPOLOGY_YAML);
-    const router = new UpCommandRouter({ fsOps: realFsOps() });
-    expect(router.route(p).sourceKind).toBe("topology");
-  });
-
-  it("G1-3: .rigtopology with INVALID manifest content still classifies topology (declared kind binds — no rig-spec fall-through)", () => {
-    const p = path.join(tmpDir, "broken.rigtopology");
-    fs.writeFileSync(p, VALID_SPEC); // rig-spec content under the topology extension
-    const router = new UpCommandRouter({ fsOps: realFsOps() });
-    expect(router.route(p).sourceKind).toBe("topology");
-  });
-
-  it("G1-4: extensionless top-level-rigs file WITH slash → topology (autoDetect sniff)", () => {
-    const p = path.join(tmpDir, "mytopo");
-    fs.writeFileSync(p, TOPOLOGY_YAML);
-    const router = new UpCommandRouter({ fsOps: realFsOps() });
-    expect(router.route(p).sourceKind).toBe("topology");
-  });
-
   it("G1-5: no-slash EXTENSIONLESS source keeps rig_name precedence — fs is never consulted, even if a matching file exists", () => {
     const boom = () => {
       throw new Error("fs must not be touched for a no-slash extensionless source");
@@ -313,20 +282,6 @@ edges: []
     const router = new UpCommandRouter({ fsOps: { exists: boom, readFile: boom, readHead: boom } });
     const result = router.route("factory"); // ./factory is the explicit path escape hatch
     expect(result.sourceKind).toBe("rig_name");
-  });
-
-  it("G1-6: factory.yaml carrying a top-level rigs: list → topology (sniff BEFORE rig-spec validation)", () => {
-    const p = path.join(tmpDir, "factory.yaml");
-    fs.writeFileSync(p, TOPOLOGY_YAML);
-    const router = new UpCommandRouter({ fsOps: realFsOps() });
-    expect(router.route(p).sourceKind).toBe("topology");
-  });
-
-  it("G1-7: yaml with rigs: list PLUS edge/routing keys still classifies topology (rejection is TOPOLOGY validation downstream, never a rig-spec error)", () => {
-    const p = path.join(tmpDir, "edgy.yaml");
-    fs.writeFileSync(p, TOPOLOGY_YAML + "edges:\n  - from: a\n    to: b\n");
-    const router = new UpCommandRouter({ fsOps: realFsOps() });
-    expect(router.route(p).sourceKind).toBe("topology");
   });
 
   it("G1-8: invalid yaml WITHOUT rigs: keeps the existing rig-spec error surface byte-unchanged", () => {

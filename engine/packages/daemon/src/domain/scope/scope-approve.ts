@@ -19,7 +19,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import YAML from "yaml";
-import type { MissionControlActionLog } from "../mission-control/mission-control-action-log.js";
+import type { MissionControlActionLog } from "./action-log.js";
 import { derivePlanLockArtifacts, isContentlessPlanLockSet } from "./plan-lock-artifacts.js";
 import { sliceRelativeMediaPath } from "../review/compose.js";
 import { NODE_FILE_PRECEDENCE, resolveNodeFile } from "./node-file.js";

@@ -15,7 +15,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 describe("fanout-contract CLI/daemon parity (CI-FAILING)", () => {
   it("fanout-contract.ts is byte-equivalent across CLI and daemon", () => {
     const cliContent = fs.readFileSync(path.join(REPO_ROOT, "packages/cli/src/lib/hosts/fanout-contract.ts"), "utf-8");
-    const daemonContent = fs.readFileSync(path.join(REPO_ROOT, "packages/daemon/src/domain/hosts/fanout-contract.ts"), "utf-8");
+    const daemonContent = fs.readFileSync(path.join(REPO_ROOT, "packages/daemon/src/domain/host-identity/fanout-contract.ts"), "utf-8");
     expect(cliContent).toBe(daemonContent);
   });
 

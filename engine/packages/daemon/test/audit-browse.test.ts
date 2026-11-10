@@ -5,11 +5,11 @@ import { migrate } from "../src/db/migrate.js";
 import { coreSchema } from "../src/db/migrations/001_core_schema.js";
 import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
 import { missionControlActionsSchema } from "../src/db/migrations/037_mission_control_actions.js";
-import { MissionControlActionLog } from "../src/domain/mission-control/mission-control-action-log.js";
+import { MissionControlActionLog } from "../src/domain/scope/action-log.js";
 import {
   MissionControlAuditBrowse,
   MissionControlAuditQueryError,
-} from "../src/domain/mission-control/audit-browse.js";
+} from "../src/domain/scope/audit-browse.js";
 
 describe("MissionControlAuditBrowse (PL-005 Phase B; read-only)", () => {
   let db: Database.Database;

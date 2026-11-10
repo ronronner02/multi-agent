@@ -9,7 +9,7 @@ import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
-import { setSelfHostId, getSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 describe("queue sender identity — bare at local write, triple only from the forward boundary", () => {
   let db: Database.Database;

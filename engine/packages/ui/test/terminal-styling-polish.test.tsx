@@ -91,14 +91,6 @@ describe("OPR.0.4.0.1 terminal styling polish", () => {
     expect(s).toContain("backdrop-blur-sm");
   });
 
-  it("OPR.0.4.0.39 (founder spec, REVERSES slice-01 FR-5): the topology grid card mounts the in-place ProgressiveTerminal, NOT the TerminalPreviewPopover trigger", () => {
-    // Founder live-review reversed the popover-expand-out for the grid (and all
-    // surfaces): the static IS the in-place click-to-live target.
-    const s = src("../src/components/topology/TopologyTerminalView.tsx");
-    expect(s).toContain("import { ProgressiveTerminal }");
-    expect(s).not.toContain("TerminalPreviewPopover");
-  });
-
   it("OPR.0.4.0.39 (node-detail fit): ScaleToFitTerminal has a 'contain' mode (fill both axes, capped upscale, centered) that the node-detail panel opts into; the grid keeps fit-width", () => {
     const scaler = src("../src/components/terminal/ScaleToFitTerminal.tsx");
     // contain fits BOTH axes (min of width/height ratios), allows a CAPPED upscale,
@@ -114,7 +106,6 @@ describe("OPR.0.4.0.1 terminal styling polish", () => {
     // The node-detail panel (big 500px area) opts into contain; the grid does NOT
     // (it keeps the default fit-width so cells never upscale).
     expect(src("../src/components/LiveNodeDetails.tsx")).toContain('fit="contain"');
-    expect(src("../src/components/topology/TopologyTerminalView.tsx")).not.toContain('fit="contain"');
   });
 
   it("OPR.0.4.0.39 (selection fix #6023): the LIVE xterm scales via fontSize, NOT a CSS transform, so xterm selection/click hit-testing stays native-correct", () => {

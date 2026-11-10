@@ -15,7 +15,6 @@ import {
   loadHostRegistry,
   validateHostRegistry as daemonValidate,
   resolveHost,
-  resolvePlacementHost,
 } from "../src/domain/hosts/hosts-registry-reader.js";
 import { validateHostRegistry as cliValidate } from "../../cli/src/host-registry.js";
 
@@ -111,18 +110,5 @@ describe("hosts-registry reader — daemon behaviors", () => {
       expect(res.error).toContain("unknown host id 'nope'");
       expect(res.error).toContain("Known host ids: a");
     }
-  });
-
-  it("placement resolution rejects ssh-transport hosts with the remote-up fix message (mirrors runRemoteHttpOp's shipped rejection, surfaced at validation time)", () => {
-    const reg = {
-      hosts: [
-        { id: "ssh-host", transport: "ssh" as const, target: "x.local" },
-        { id: "http-host", transport: "http" as const, url: "http://y:7433", bearer_env: "T" },
-      ],
-    };
-    const sshRes = resolvePlacementHost(reg, "ssh-host");
-    expect(sshRes.ok).toBe(false);
-    if (!sshRes.ok) expect(sshRes.error).toContain("cannot carry remote rig-up");
-    expect(resolvePlacementHost(reg, "http-host").ok).toBe(true);
   });
 });

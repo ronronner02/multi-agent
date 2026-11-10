@@ -1,7 +1,7 @@
 import { inventoryCaptureOptions, type ShadowCapture } from "../domain/shadow-capture.js";
 import { Hono } from "hono";
 import { observeInventoryHandler } from "../domain/request-phase-observer.js";
-import { getSelfHostId } from "../domain/hosts/fanout-contract.js";
+import { getSelfHostId } from "../domain/host-identity/fanout-contract.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import type { SessionRegistry } from "../domain/session-registry.js";
 import type { NodeLauncher } from "../domain/node-launcher.js";

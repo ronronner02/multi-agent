@@ -7,11 +7,7 @@ import {
   getActivityStateWithSource,
   type AgentActivitySummary,
 } from "../src/lib/activity-visuals.js";
-import {
-  isSyntheticFeedCard,
-  eventDerivedSeqsForPrune,
-  needsInputSeatToFeedCard,
-} from "../src/lib/attention-feed.js";
+
 
 afterEach(() => { vi.useRealTimers(); });
 
@@ -132,36 +128,6 @@ describe("AC-4 honesty regression", () => {
     );
     expect(result.source).toBe("hook");
     expect(isHookGradeNeedsInput(result)).toBe(true);
-  });
-
-  it("activity-needs-input cards are classified as synthetic (no seq collision)", () => {
-    const card = needsInputSeatToFeedCard({
-      logicalId: "dev.impl",
-      sessionName: "dev-impl@rig",
-      source: "hook",
-      eventAt: "2026-06-19T00:00:00Z",
-    });
-    expect(isSyntheticFeedCard(card)).toBe(true);
-    expect(card.source.seq).toBe(-1);
-  });
-
-  it("cross-rig logicalId collision produces distinct card ids", () => {
-    const card1 = needsInputSeatToFeedCard({ logicalId: "dev.impl", source: "hook", rigId: "rig-a" });
-    const card2 = needsInputSeatToFeedCard({ logicalId: "dev.impl", source: "hook", rigId: "rig-b" });
-    expect(card1.id).not.toBe(card2.id);
-    expect(card1.id).toContain("rig-a");
-    expect(card2.id).toContain("rig-b");
-  });
-
-  it("eventDerivedSeqsForPrune excludes activity-needs-input cards", () => {
-    const eventCard = { id: "evt-1", source: { seq: 42 } } as any;
-    const needsInputCard = needsInputSeatToFeedCard({
-      logicalId: "dev.impl",
-      source: "hook",
-    });
-    const seqs = eventDerivedSeqsForPrune([eventCard, needsInputCard]);
-    expect(seqs).toEqual([42]);
-    expect(seqs).not.toContain(-1);
   });
 
   it("pane_heuristic needs_input is visible but activity-grade labeled", () => {
