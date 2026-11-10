@@ -1,4 +1,5 @@
 import { serve, type ServerType } from "@hono/node-server";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { closeHttpServer, createDaemonShutdown, DAEMON_SHUTDOWN_RECEIPT, trackHttpServerResponses } from "./daemon-shutdown.js";
@@ -239,6 +240,15 @@ export async function startServer(port?: number) {
   if (requestedMode !== "legacy" && requestedMode !== "managed") {
     throw new Error(`MULTI_AGENT_MODE must be "legacy" or "managed", got "${requestedMode}"`);
   }
+  // U6 — a managed daemon hosted by the desktop (Electron's utility process, which has a
+  // parent port) starts with no configured owner token. Pairing still needs a stable owner
+  // identity inside this process, so mint one in memory. It never leaves the daemon: the
+  // desktop mints a one-time code over the private parent channel instead, and nothing here
+  // persists, logs, or hands this value to Electron. A daemon with no parent port has no
+  // channel to mint a code on, so it gets no invented token.
+  const hostedByDesktop = (process as { parentPort?: unknown }).parentPort !== undefined;
+  const resolvedOwnerToken = ownerToken
+    ?? (requestedMode === "managed" && hostedByDesktop ? randomBytes(32).toString("base64url") : null);
   const p = port ?? parseInt(readOpenRigEnv("OPENRIG_PORT", "RIGGED_PORT") ?? "7433", 10);
   // D15 — anchor the default db under OPENRIG_HOME, never a bare CWD-relative
   // filename (which could open the shared fleet db). Explicit OPENRIG_DB wins.
@@ -304,7 +314,7 @@ export async function startServer(port?: number) {
   // writes its `workers` list in place as attempts are admitted, so every holder — control
   // routes, the managed launch chain and the mailbox endpoint — reads the same tokens, and
   // the owner credential it started with is never replaced by a second copy.
-  const teamControlCredentials: TeamControlCredentials = { ownerToken };
+  const teamControlCredentials: TeamControlCredentials = { ownerToken: resolvedOwnerToken };
   const { app, contextMonitor, deps, eventLoopMonitor, injectWebSocket } = await createDaemon({
     dbPath,
     managedMode: requestedMode === "managed",
@@ -433,18 +443,45 @@ export async function startServer(port?: number) {
   // parentPort is injected by Electron's utilityProcess runtime; it is not
   // a standard Node.js Process property, so we access it via cast. Electron's
   // MessagePortMain delivers `{ data }`; worker_threads delivers the value.
-  const parentPort = (process as { parentPort?: { on: (event: string, listener: (message: unknown) => void) => void } }).parentPort;
+  const parentPort = (process as {
+    parentPort?: {
+      on: (event: string, listener: (message: unknown) => void) => void;
+      postMessage: (message: unknown) => void;
+    };
+  }).parentPort;
   if (parentPort) {
     parentPort.on("message", (message: unknown) => {
       const envelope = message as { data?: unknown };
       const msg = (envelope && typeof envelope === "object" && "data" in envelope ? envelope.data : message) as Record<string, unknown> | null;
       if (msg?.type === "shutdown") shutdown("parent");
+      // U6 — native pairing. The desktop mints a one-time code over this private port
+      // instead of holding an owner token, then exchanges it over HTTP like a browser
+      // would. Only the parent process can reach this listener, so no HTTP route changes.
+      // The code goes back over the port and is never logged or written anywhere.
+      if (msg?.type === "mint-pairing") replyToMintPairing(deps.ownerSessions, resolvedOwnerToken, parentPort);
     });
   }
 
   // Backward-compatible single-server return (callers that just need a
   // handle reference; multi-bind shutdown is wired via signal handlers).
   return servers[0]!;
+}
+
+/** U6 — answer one `mint-pairing` request over the parent port. */
+export function replyToMintPairing(
+  sessions: import("./domain/owner-session.js").OwnerSessions | undefined,
+  ownerToken: string | null,
+  port: { postMessage: (message: unknown) => void },
+): void {
+  const reply = (message: unknown): void => { try { port.postMessage(message); } catch { /* parentPort may be closed */ } };
+  if (!sessions || !ownerToken) return reply({ type: "pairing-error", error: "owner_session_unavailable" });
+  try {
+    const { code } = sessions.mint(ownerToken);
+    reply({ type: "pairing-code", code });
+  } catch {
+    // Never echo the code or the underlying error: a failed mint is a failed mint.
+    reply({ type: "pairing-error", error: "pairing_mint_failed" });
+  }
 }
 
 // Only start the server when this file is executed directly (not imported).

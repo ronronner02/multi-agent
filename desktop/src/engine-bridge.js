@@ -25,6 +25,18 @@ let boundPort = null;
 /** Resolver for the readiness promise. */
 let resolveReady = null;
 let rejectReady = null;
+/** U6 — the one in-flight `mint-pairing` request, if any. */
+let pendingMint = null;
+
+/** U6 — settle a pending mint request once and clear it. */
+function settleMint(error, code) {
+  const pending = pendingMint;
+  pendingMint = null;
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  if (error) pending.reject(error);
+  else pending.resolve(code);
+}
 
 function readinessFuture() {
   return new Promise((resolve, reject) => {
@@ -84,6 +96,10 @@ function startEngine(opts) {
     if (message.type === 'crash') {
       settleReady(new Error(`Daemon crash: ${message.error}`));
     }
+    // U6 — the daemon's answer to a `mint-pairing` request. The code is handed straight
+    // back to the caller and never logged; on failure only the error name is reported.
+    if (message.type === 'pairing-code') settleMint(null, message.code);
+    if (message.type === 'pairing-error') settleMint(new Error(message.error || 'pairing_mint_failed'));
   });
 
   child.on('exit', (code) => {
@@ -91,6 +107,7 @@ function startEngine(opts) {
     child = null;
     boundPort = null;
     settleReady(new Error(`Daemon exited with code ${code} before ready`));
+    settleMint(new Error('Daemon exited during pairing mint'));
   });
 
   const shutdown = async () => {
@@ -109,9 +126,28 @@ function startEngine(opts) {
     childGone = true;
     child = null;
     boundPort = null;
+    settleMint(new Error('Daemon stopped during pairing mint'));
   };
 
-  return { ready, shutdown };
+  /**
+   * U6 — mint one one-time pairing code over the private parent channel.
+   *
+   * Only the daemon's own parent process can reach this port, so the code never has to
+   * travel over HTTP or sit in an environment variable. The returned value is the raw
+   * code; the caller exchanges it and must never log it or put it in a URL.
+   */
+  const mintPairing = () => {
+    if (childGone || !child) return Promise.reject(new Error('Daemon is not running'));
+    if (pendingMint) return Promise.reject(new Error('A pairing mint is already in flight'));
+    const current = child;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => settleMint(new Error('Pairing mint timed out')), 10_000);
+      pendingMint = { resolve, reject, timer };
+      try { current.postMessage({ type: 'mint-pairing' }); } catch (error) { settleMint(error); }
+    });
+  };
+
+  return { ready, shutdown, mintPairing };
 }
 
 /**
@@ -138,6 +174,7 @@ function killEngine() {
   childGone = true;
   child = null;
   boundPort = null;
+  settleMint(new Error('Daemon killed during pairing mint'));
 }
 
 module.exports = { startEngine, isRunning, port, killEngine };
