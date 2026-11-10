@@ -50,7 +50,6 @@ import {
 import { getRestoreStatusColorClass } from "../lib/restore-status-colors.js";
 import type { AgentSpecReview } from "../hooks/useSpecReview.js";
 import { RuntimeBadge, ToolMark } from "./graphics/RuntimeMark.js";
-import { postOpenCmux } from "../hooks/useCmuxLaunch.js";
 
 type Tab = "overview" | "details";
 
@@ -193,13 +192,6 @@ function ActionButtonsRow({ rigId, logicalId, data }: { rigId: string; logicalId
   const handleCopyAttach = async () => {
     if (data.tmuxAttachCommand) await copyText(data.tmuxAttachCommand);
   };
-  const handleOpenCmux = async () => {
-    try {
-      await postOpenCmux({ rigId, logicalId });
-    } catch {
-      // best effort
-    }
-  };
   const handleCopyResume = async () => {
     if (data.resumeCommand) await copyText(data.resumeCommand);
   };
@@ -216,14 +208,6 @@ function ActionButtonsRow({ rigId, logicalId, data }: { rigId: string; logicalId
   }
   return (
     <div data-testid="live-node-actions" className="flex flex-wrap gap-2">
-      <button
-        onClick={handleOpenCmux}
-        data-testid="detail-cmux-open"
-        className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 border border-outline-variant bg-surface-lowest/30 font-mono text-[10px] uppercase tracking-wide text-on-surface hover:bg-surface-low/60"
-      >
-        <ToolMark tool="cmux" size="sm" />
-        Open CMUX
-      </button>
       {data.tmuxAttachCommand && (
         <button
           onClick={handleCopyAttach}

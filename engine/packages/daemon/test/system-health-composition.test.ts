@@ -58,7 +58,6 @@ async function boot(teamControl?: never) {
   parked.push(() => {
     result.deps.proofSourceWatch?.close();
     result.deps.modelDivergenceMonitor?.stop();
-    result.deps.gatewaySubsystem?.stop();
     result.deps.eventLoopMonitor?.stop();
     result.db.close();
     if (previous === undefined) delete process.env.OPENRIG_HOME; else process.env.OPENRIG_HOME = previous;

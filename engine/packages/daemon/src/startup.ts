@@ -9,11 +9,10 @@ import { HealthPolicyStore } from "./domain/health-policy.js";
 import { HealthCheckpointSource } from "./domain/health-checkpoints.js";
 import { PassiveCeremonySource } from "./domain/health-passive-ceremony.js";
 import { HealthDiagnosisService } from "./domain/health-diagnosis.js";
-import { readHealthArtifact, healthAuthority, healthHumanReadiness } from "./domain/health-context.js";
+import { readHealthArtifact, healthAuthority } from "./domain/health-context.js";
 import type { Hono } from "hono";
 import type Database from "better-sqlite3";
 import type { ArgvExecFn, ExecFn } from "./adapters/tmux.js";
-import type { CmuxTransportFactory } from "./adapters/cmux.js";
 import { createDb } from "./db/connection.js";
 import { migrate } from "./db/migrate.js";
 // P8: apply the CANONICAL migration list — the single source of truth (db/all-migrations.ts),
@@ -22,17 +21,15 @@ import { ALL_MIGRATIONS } from "./db/all-migrations.js";
 import { RigRepository } from "./domain/rig-repository.js";
 import { SessionRegistry } from "./domain/session-registry.js";
 import { deriveCanonicalSessionName, isHumanSeatSessionRef, parseSessionName } from "./domain/session-name.js";
-import { resolveExternal } from "./domain/gateway/external-admission.js";
-import { loadHumanRegistry } from "./domain/gateway/human-registry.js";
+import { resolveExternal } from "./domain/queue-routing/external-admission.js";
+import { loadHumanRegistry } from "./domain/queue-routing/human-registry.js";
 import { EventBus } from "./domain/event-bus.js";
 import { NodeLauncher } from "./domain/node-launcher.js";
 import { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
 import { TmuxAdapter } from "./adapters/tmux.js";
 import { daemonTmuxServerArgs, setDaemonTmuxServer, tmuxServerArgs } from "./adapters/tmux-server.js";
-import { CmuxAdapter } from "./adapters/cmux.js";
 import { execArgvCommand, execCommand } from "./adapters/tmux-exec.js";
 import { execPreflightCommand } from "./adapters/preflight-exec.js";
-import { createCmuxCliTransport } from "./adapters/cmux-transport.js";
 import { SnapshotRepository } from "./domain/snapshot-repository.js";
 import { CheckpointStore } from "./domain/checkpoint-store.js";
 import { SnapshotCapture } from "./domain/snapshot-capture.js";
@@ -147,7 +144,6 @@ import { SnapshotCapturer } from "./domain/agent-images/snapshot-capturer.js";
 import { SettingsStore as ContextPackSettingsStore } from "./domain/user-settings/settings-store.js";
 import { SettingsStore } from "./domain/user-settings/settings-store.js";
 import { WhoamiService } from "./domain/whoami-service.js";
-import { NodeCmuxService } from "./domain/node-cmux-service.js";
 import { createAppWithWebSocket, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
 import { refreshPlanBinding, unisolatedPolicyCapability } from "./routes/team-start.js";
@@ -222,9 +218,6 @@ interface DaemonOptions {
   tmuxExec?: ExecFn;
   /** Optional shell-free tmux executor; selected by default on Windows. */
   argvExec?: ArgvExecFn;
-  cmuxExec?: ExecFn;
-  cmuxFactory?: CmuxTransportFactory;
-  cmuxTimeoutMs?: number;
   tmuxOptionPlatform?: NodeJS.Platform;
   slowOpRecorder?: SlowOperationInstrumentation;
   /**
@@ -1112,13 +1105,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     db,
     tmux: tmuxAdapter,
   });
-  // cmuxFactory takes precedence (for tests), then cmuxExec-based CLI transport, then default
-  const cmuxFactory = opts?.cmuxFactory
-    ?? createCmuxCliTransport(opts?.cmuxExec ?? execCommand);
-  const cmuxAdapter = new CmuxAdapter(
-    cmuxFactory,
-    { timeoutMs: opts?.cmuxTimeoutMs ?? 5000 }
-  );
 
   // Read transcript config from env (passed by CLI via PNS-T02 config surface)
   const transcriptsEnabled = readOpenRigEnv("OPENRIG_TRANSCRIPTS_ENABLED", "RIGGED_TRANSCRIPTS_ENABLED") !== "false";
@@ -1343,8 +1329,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     managedAttempt: input => managedAttempt?.(input) ?? Promise.resolve(undefined),
   });
 
-  // Connect to cmux at startup — degrades gracefully if absent
-  if (!managed) await cmuxAdapter.connect();
 
   // Reconcile all managed rigs — marks stale sessions as detached.
   // Capture aggregate counts and log a compact summary so cold-start truth
@@ -1394,7 +1378,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const podRepo = new PodRepository(db);
   const rigSpecExporter = new RigSpecExporter({ rigRepo, sessionRegistry, podRepo });
   const rigSpecPreflight = new RigSpecPreflight({
-    rigRepo, tmuxAdapter, exec: opts?.tmuxExec ?? execPreflightCommand, cmuxExec: opts?.cmuxExec ?? execCommand,
+    rigRepo, tmuxAdapter, exec: opts?.tmuxExec ?? execPreflightCommand,
   });
   const rigInstantiator = new RigInstantiator({
     db, rigRepo, sessionRegistry, eventBus, nodeLauncher, preflight: rigSpecPreflight, tmuxAdapter,
@@ -1770,7 +1754,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // Discovery services
   const tmuxScanner = new TmuxDiscoveryScanner({ tmuxAdapter });
   const sessionFingerprinter = new SessionFingerprinter({
-    cmuxAdapter, tmuxAdapter, fsExists: (p: string) => fs.existsSync(p),
+    tmuxAdapter, fsExists: (p: string) => fs.existsSync(p),
   });
   const sessionEnricher = new SessionEnricher({
     fsExists: (p: string) => fs.existsSync(p),
@@ -1813,7 +1797,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const healthDiagnosis = new HealthDiagnosisService({ queue: queueRepoInstance, projection: healthProjection, policy: healthPolicy,
     authority: (record) => healthAuthority(healthSettingsStore.resolveOne("workspace.root").value as string, healthCheckpoints, record),
     resolveEvidence: (path, finding) => readHealthArtifact(finding.operatingPosture?.context?.paths?.project ?? healthSettingsStore.resolveOne("workspace.root").value as string, path),
-    humanReadiness: (address) => healthHumanReadiness(OPENRIG_HOME, address, deps.gatewaySubsystem?.status().state === "active"),
   });
   // OPR.0.4.3.20 FR-4 — inject contextUsageStore so refresh() can null-fill a
   // Claude token from the sidecar during periodic/manual snapshot refresh.
@@ -1849,7 +1832,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
 
   // (ContextUsageStore is constructed above, ahead of ClaimService, for FR-3.)
   const whoamiService = new WhoamiService({ db, rigRepo, sessionRegistry, transcriptStore, contextUsageStore });
-  const nodeCmuxService = new NodeCmuxService(rigRepo, sessionRegistry, cmuxAdapter, tmuxAdapter);
   // W2a-1 — producer wiring: the live occupant generation resolves synchronously from the shipped
   // occupant-tenure ledger. generation_uuid CHANGES for a new occupant and persists only within one
   // tenure (a same-session relaunch is a continuation with no new generation); node_id is the stable-
@@ -1914,7 +1896,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     tmuxOptionDefaults,
     sessionEnv: launchSessionEnv,
     runtimeSessionEnv,
-    cmuxAdapter,
     snapshotCapture,
     snapshotRepo,
     // Slice-04 OPR.0.5.0.4: production provider service — getReadModel over the codex-auth reader
@@ -2075,7 +2056,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       });
     })(),
     whoamiService,
-    nodeCmuxService,
     agentActivityStore,
     seatAttentionReconciler,
     activityHookToken: resolvedActivityHookToken,
@@ -2596,8 +2576,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const { createHerdrSocketRpc, createHerdrSocketTransport, resolveHerdrSocketPath } = await import(
       "./domain/terminal/herdr-transport.js"
     );
-    const { CmuxProviderAdapter } = await import("./domain/terminal/cmux-provider-adapter.js");
-    const { CmuxLayoutService } = await import("./domain/cmux-layout-service.js");
     const { TerminalViewsStore } = await import("./domain/terminal/terminal-views-store.js");
     const { getNodeInventory, getNodeInventoryForRigs } = await import("./domain/node-inventory.js");
     const { loadHostRegistry, resolveHost: resolveHostInRegistry } = await import(
@@ -2627,19 +2605,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       transportFactory: createHerdrSocketTransport(createHerdrSocketRpc(herdrSocketPath)),
       launch: { socketPath: herdrSocketPath, ...(process.env["HERDR_SESSION"] ? { session: process.env["HERDR_SESSION"] } : {}) },
     });
-    const cmuxProvider = new CmuxProviderAdapter({
-      cmuxAdapter,
-      // One gridded workspace per composed page — the same grid machinery as
-      // the rig-scope /cmux/launch endpoint, never one window per seat.
-      layoutService: new CmuxLayoutService(cmuxAdapter),
-    });
-    const providerMap: Record<string, typeof herdrProvider | typeof cmuxProvider> = {
-      herdr: herdrProvider,
-      cmux: cmuxProvider,
-    };
-
     deps.terminalService = new TerminalService({
-      resolveProvider: (name) => providerMap[name] ?? null,
+      resolveProvider: (name) => name === "herdr" ? herdrProvider : null,
       viewsStore: new TerminalViewsStore(),
       listRigSeatsBatch: (names) => {
         const rigs = rigRepo.listRigs();
@@ -2773,14 +2740,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     });
   }
 
-  // OPR.0.5.6.1 — late-bound gateway dispatch for the delivery policies (the
-  // gateway subsystem is constructed after the watchdog engine; the ref fills
-  // at activation below, which is OUTSIDE the sessionTransport block — hence
-  // function scope). Registry loads through the shipped loader.
-  const lateGatewayDispatch: { fn?: (op: string, ref: string, payload: unknown, opts?: { decisionId?: string }) => { ok: boolean; error?: string } } = {};
-  const { loadHumanRegistry: loadHumanRegistryForDelivery } = await import("./domain/gateway/human-registry.js");
-  void loadHumanRegistryForDelivery; // consumed inside the sessionTransport block below
-
   const sessionTransport = deps.sessionTransport;
   if (sessionTransport) {
     queueRepoInstance.attachActivityReader((session) => {
@@ -2913,38 +2872,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
                 .map((r) => r.qitemId),
           },
           occupantGeneration: (sessionName) => sessionRegistry.currentOccupantGenerationForSession(sessionName),
-        }),
-        // OPR.0.5.6.1 AM-F1 — the delivery engine's two timing legs on THIS
-        // substrate. The gateway dispatch binds late (the subsystem is built
-        // after this engine): the ref below is populated at gateway activation.
-        (await import("./domain/policies/delivery-deferral.js")).makeDeliveryDeferralPolicy({
-          jobsRepo: watchdogJobsRepoInstance,
-          queueRepo: queueRepoInstance,
-          deliverInterrupt: async (qitemId: string, notificationKey: string) => {
-            const dispatch = lateGatewayDispatch.fn;
-            const row = queueRepoInstance.getById(qitemId);
-            if (!dispatch || !row) return { ok: false };
-            // R2/R1 B-1+B-3: the ADVERTISED op, the shared payload builder, and
-            // the EPISODE key riding through to the Slice 14 receipt.
-            const { buildDeferralFirePayload } = await import("./domain/gateway/operator-delivery-engine.js");
-            const { OUTBOUND_OP } = await import("./domain/gateway/slack/outbound-driver.js");
-            const payload = buildDeferralFirePayload(row, notificationKey);
-            // v3: durable episode-stable identity — replay and re-dispatch converge.
-            const res = dispatch(OUTBOUND_OP, String(payload["destinationSession"] ?? ""), payload, { decisionId: `deferral:${notificationKey}` });
-            return { ok: res.ok };
-          },
-        }),
-        (await import("./domain/policies/delivery-digest-flush.js")).makeDeliveryDigestFlushPolicy({
-          queueRepo: queueRepoInstance,
-          registry: { loadHumanRegistry: (home: string) => loadHumanRegistryForDelivery(home) },
-          home: OPENRIG_HOME,
-          // v3: the digest posts THROUGH THE GATEWAY on its stable decision id —
-          // one transport, one redrive/reconcile machinery, receipts after truth.
-          dispatch: (op: string, ref: string, payload: unknown, opts?: { decisionId?: string }) => {
-            const fn = lateGatewayDispatch.fn;
-            if (!fn) return { ok: false, error: "gateway not yet active" };
-            return fn(op, ref, payload, opts);
-          },
         }),
       ],
     });
@@ -3413,29 +3340,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const permissionModes = new ClaudePermissionModeCache();
   if (!managed) permissionModes.warm();
   deps.permissionDriftObserver = new PermissionDriftObserver({ db, permissionModes });
-
-  // S10 (OPR.0.5.5.10) — activate the gateway as an IN-DAEMON SUBSYSTEM at boot (M1 §3 as
-  // amended: no child process, no connector wire — the shipped dispatcher + durable buffer
-  // composed in-process, the Slack delivery/inbound services wired from config + secrets).
-  // start() never throws: a wiring failure surfaces as state=failed on the health surface and
-  // boot proceeds. An unconfigured connector is an INERT wire (honest refusal class, no ops,
-  // no drivers) — `rig slack status` names what is missing.
-  const { GatewaySubsystem } = await import("./domain/gateway/gateway-subsystem.js");
-  const { buildSlackGatewayWire, makeHumanReplyResolver } = await import("./domain/gateway/slack/slack-subsystem.js");
-  const gatewaySubsystem = new GatewaySubsystem({
-    home: OPENRIG_HOME,
-    wire: () => buildSlackGatewayWire({
-      home: OPENRIG_HOME,
-      queueRepo: queueRepoInstance,
-      resolveHumanReply: makeHumanReplyResolver(queueRepoInstance, deps.missionControlWriteContract),
-      log: (m) => console.log(`[gateway] ${m}`),
-    }),
-    log: (m) => console.log(`[gateway] ${m}`),
-  });
-  if (!managed) gatewaySubsystem.start();
-  deps.gatewaySubsystem = gatewaySubsystem;
-  // OPR.0.5.6.1 — bind the delivery policies' late gateway ref.
-  lateGatewayDispatch.fn = (op, ref, payload, opts) => gatewaySubsystem.dispatch(op, ref, payload, opts);
 
   // `ui.enabled` (default off): the web UI pages and its terminal WebSocket. Read once at start.
   deps.webUiEnabled = opts?.webUiEnabled ?? new ContextPackSettingsStore().resolveOne("ui.enabled").value === true;

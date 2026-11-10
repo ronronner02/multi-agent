@@ -13,7 +13,7 @@ import { RigRepository } from "../src/domain/rig-repository.js";
 import { PodRepository } from "../src/domain/pod-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { resolveWorkflowHumanDestination } from "../src/domain/workflow-human-destination.js";
-import { addHumanFragment, writeProjection, projectionPath, type HumanFragment } from "../src/domain/gateway/human-registry.js";
+import { addHumanFragment, writeProjection, projectionPath, type HumanFragment } from "../src/domain/queue-routing/human-registry.js";
 import { makeEnsureStuckExceptionItem } from "../src/domain/workflow-exception-escalation.js";
 import { workflowRoutes } from "../src/routes/workflow.js";
 

@@ -1,8 +1,8 @@
 // OPR.0.4.6.2 (FR-5) — TerminalLauncher (the REAL build of the spec-mockup twin).
 //
-// The web-UI launcher for the terminal wall/views ride (herdr primary, cmux
-// best-effort). Generalizes the shipped rig-scope "Launch in CMUX" button into
-// a provider + view picker: choose a PROVIDER (herdr | cmux), choose a VIEW
+// The web-UI launcher for the terminal wall/views ride. It generalizes the
+// shipped rig-scope terminal action into a provider + view picker: choose a
+// PROVIDER, choose a VIEW
 // (this rig · a pod · a mission-or-slice's agents · a saved view), see the
 // suggested LAYOUT for N panes, then Open. Same tab-bar trailing slot so it
 // extends the shipped surface rather than inventing a new one.
@@ -31,7 +31,7 @@ import { useTerminalViews } from "../../hooks/useTerminalViews.js";
 import { useReviewAgents } from "../../hooks/useReviewAgents.js";
 import { terminalAuthHeaders } from "../mission-control/missionControlAuth.js";
 
-type ProviderId = "herdr" | "cmux";
+type ProviderId = "herdr";
 
 export interface Seat {
   session: string;
@@ -95,7 +95,6 @@ export function suggestLayout(n: number) {
 
 const PROVIDERS: { id: ProviderId; label: string; note: string; badge: string }[] = [
   { id: "herdr", label: "herdr", note: "Single cross-platform binary · atomic layout apply", badge: "PRIMARY" },
-  { id: "cmux", label: "cmux", note: "Best-effort · adds a browser pane + ssh + remote-tmux", badge: "BEST-EFFORT" },
 ];
 
 const KIND_ICON: Record<ViewKind, typeof Server> = {
@@ -129,12 +128,12 @@ export function resolveLauncherRigName(input: {
 }
 
 // Boot open/provider/view from the URL — the ratified deep-link capture method
-// (a capture is an honest deep link ?launcher=open&provider=cmux&view=…,
+// (a capture is an honest deep link ?launcher=open&provider=herdr&view=…,
 // deterministic, no click scripts; also exactly what addressable UI state wants).
 function readParams() {
   if (typeof window === "undefined") return { open: false, provider: "herdr" as ProviderId, view: "" };
   const p = new URLSearchParams(window.location.search);
-  const provider = p.get("provider") === "cmux" ? "cmux" : "herdr";
+  const provider = "herdr" as ProviderId;
   return { open: p.get("launcher") === "open", provider: provider as ProviderId, view: p.get("view") ?? "" };
 }
 

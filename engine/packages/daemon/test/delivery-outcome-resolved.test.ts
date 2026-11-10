@@ -18,7 +18,7 @@ import { humanNotificationIntentSchema } from "../src/db/migrations/081_human_no
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
-import type { HumanFragment } from "../src/domain/gateway/human-registry.js";
+import type { HumanFragment } from "../src/domain/queue-routing/human-registry.js";
 
 const FOUNDER = { entityId: "human-founder", class: "human", displayName: "F", address: "human-founder@external",
   connectorBindings: [{ connector: "slack", ref: "U0F", primary: true }], prefs: {} } as unknown as HumanFragment;

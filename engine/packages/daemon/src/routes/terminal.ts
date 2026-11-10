@@ -13,9 +13,8 @@
 // view → 404; a provider-unavailable or honest-partial is a 200 whose BODY
 // tells the truth (ok / opened / degraded), never an error status.
 //
-// No new auth/trust surface (PRD "no new auth surface v1"): these routes mirror
-// the shipped cmux launch route's posture (which does not gate on the terminal
-// bearer token) — composing a view reads inventory and returns attach commands
+// No new auth/trust surface (PRD "no new auth surface v1"): these routes keep
+// the terminal viewer's existing posture — composing a view reads inventory and returns attach commands
 // the provider runs client-side; it mutates no daemon state.
 
 import { Hono } from "hono";
