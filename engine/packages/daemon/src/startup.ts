@@ -444,6 +444,8 @@ function composeDirectLaunch(dependencies: {
   executablePath?: (client: WorkerClient) => string | undefined;
   /** Publish a normalized worker event, where this daemon records attempt facts. */
   onEvent?: (facts: DirectLaunchFacts, event: WorkerEvent) => void;
+  /** U4 — the durable lifecycle recorder the launch writes its facts through. */
+  lifecycle?: import("./adapters/direct-worker-launch.js").DirectWorkerLaunchDeps["lifecycle"];
   /** A stand-in for the supervised child, so a test can drive the launch without spawning. */
   supervise?: (launch: import("./adapters/child-process-supervisor.js").SupervisorLaunch,
     deps: { onEvent: (event: WorkerEvent) => void }) => import("./adapters/child-process-supervisor.js").SupervisedTurn;
@@ -473,6 +475,7 @@ function composeDirectLaunch(dependencies: {
     ...(dependencies.command ? { command: dependencies.command } : {}),
     ...(dependencies.executablePath ? { executablePath: dependencies.executablePath } : {}),
     ...(dependencies.onEvent ? { onEvent: dependencies.onEvent } : {}),
+    ...(dependencies.lifecycle ? { lifecycle: dependencies.lifecycle } : {}),
     ...(dependencies.supervise ? { supervise: dependencies.supervise } : {}),
   });
   // The channel reader is the same owner the hardened chain uses, so a seat's mailbox view is
@@ -1235,6 +1238,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const managedLaunch = managed ? (unisolated
     ? composeDirectLaunch({ governance: teamGovernance, rigRepo,
         workflowRuntime: () => workflowRuntime,
+        // U4 — every supervised turn records its durable lifecycle facts through governance.
+        lifecycle: fact => teamGovernance.recordAttemptLifecycle(fact),
         ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}),
         ...(opts?.directLaunchExecutable ? { executablePath: opts.directLaunchExecutable } : {}),
         ...(opts?.directLaunchSupervise ? { supervise: opts.directLaunchSupervise } : {}) })
@@ -3308,8 +3313,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const turnStateRoot = nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch");
     const telemetry = new AttemptTelemetry(db, { turnStateRoot });
     deps.attemptTelemetry = telemetry;
+    // U4 — a restart reconciles the attempts its predecessor left running before the first sweep.
+    const { bootReconcileAttempts } = await import("./domain/boot-recovery.js");
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
       turnStateRoot, telemetry,
+      reconcileOnBoot: () => bootReconcileAttempts({ db, governance: teamGovernance }),
       // U3 — a native turn's own end: the supervisor writes what it observed to the attempt's
       // output, and that is the classifier's evidence now that no pane holds an exit status.
       turnExit: attemptId => readSupervisorExit(turnStateRoot, attemptId),

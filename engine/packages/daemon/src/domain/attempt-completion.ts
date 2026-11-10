@@ -126,6 +126,16 @@ export interface AttemptCompletionDependencies {
    * second timer that could disagree about the cadence.
    */
   onSweep?: () => Promise<void>;
+  /**
+   * U4 — reconcile every running or unknown attempt once, before the first sweep.
+   *
+   * A daemon that stopped while a turn was running left `team_attempts` rows whose processes
+   * it can no longer observe. This runs once at `start()`, ahead of the ordinary sweep, so the
+   * first observation of the queue sees reconciled facts rather than stale running rows. Its
+   * own owner is `domain/boot-recovery.ts`; absent means this daemon reconciles nothing, which
+   * is what a unit fixture wants.
+   */
+  reconcileOnBoot?: () => Promise<unknown>;
   now?: () => Date;
   intervalMs?: number;
   log?: (message: string) => void;
@@ -409,6 +419,13 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       try { taskReport = dependencies.readTaskReport(stoppedAttempt.runId, stoppedAttempt.id); }
       catch (error) { taskReport = unreadableTaskReport(error); }
     }
+    // U4 — a report that names another attempt is stale evidence for this one. The supervisor
+    // clears the per-attempt directory before spawn, and the reader is keyed by attempt id, so
+    // this is the second witness: a report whose own `attemptId` disagrees is not completion.
+    if (taskReport?.attemptId !== undefined && taskReport.attemptId !== stoppedAttempt.id) {
+      log(`team completion: attempt ${stoppedAttempt.id} read a report written by ${taskReport.attemptId}; ignoring it`);
+      taskReport = null;
+    }
     if (!taskReport && workflowOutcome && task.assignment.role !== "lead"
       && (workflowOutcome.status === "blocked" || workflowOutcome.status === "incomplete")) {
       taskReport = { status: "blocked", evidence: workflowOutcome.reason };
@@ -610,11 +627,17 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
       // The daemon's lifetime decides how long this runs; a tick must never be the reason a
       // process stays alive after its database closed.
       timer.unref?.();
-      // A restart is a freed slot too: the run's pending tasks were waiting for one when the
-      // daemon stopped, and nothing else asks the scheduler again. Without this a run resumed
-      // after a restart sits with work nobody starts — measured on the C4 acceptance run, where
-      // the rework the review had just reopened was never dispatched.
-      void sweep().catch(error => log("team completion: startup sweep failed: " + String(error)));
+      // U4 — a restart first reconciles the attempts its predecessor left running, so the first
+      // sweep reads durable interrupted/recovery_blocked facts instead of stale running rows.
+      void (async () => {
+        try { await dependencies.reconcileOnBoot?.(); }
+        catch (error) { log(`team completion: boot reconciliation failed: ${error instanceof Error ? error.message : String(error)}`); }
+        // A restart is a freed slot too: the run's pending tasks were waiting for one when the
+        // daemon stopped, and nothing else asks the scheduler again. Without this a run resumed
+        // after a restart sits with work nobody starts — measured on the C4 acceptance run, where
+        // the rework the review had just reopened was never dispatched.
+        await sweep().catch(error => log("team completion: startup sweep failed: " + String(error)));
+      })();
     },
     stop() {
       if (timer) clearInterval(timer);
