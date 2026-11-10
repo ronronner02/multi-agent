@@ -47,6 +47,16 @@ export interface DirectWorkerLaunchDeps {
   supervise?: (launch: SupervisorLaunch, deps: { onEvent: (event: WorkerEvent) => void }) => SupervisedTurn;
   /** Publish a normalized event. Absent means the launch records only its receipt. */
   onEvent?: (facts: DirectLaunchFacts, event: WorkerEvent) => void;
+  /**
+   * U4 — the durable lifecycle recorder. Absent means this launcher records no lifecycle facts,
+   * which is what a fixture without a governance store wants. Production supplies it so the
+   * attempt's `submitted`, `started`, and `acknowledged` facts land in the existing event log.
+   */
+  lifecycle?: (fact: {
+    runId: string; attemptId: string; taskId: string;
+    fact: "attempt.submitted" | "attempt.started" | "attempt.acknowledged";
+    evidence?: Record<string, string | number | null>;
+  }) => void;
   now?: () => number;
 }
 
@@ -139,16 +149,32 @@ export class DirectWorkerLauncher implements WorkerLauncher {
         mutableStateRoot: attempt.context.mutableStateRoot, attemptId: attempt.attemptId,
         provider: client === "codex" ? "codex" : "claude",
         ...(client === "codex" ? { threadIdPath: output.threadId } : {}) };
+      // U4 — the durable intent is recorded before the child exists. A daemon that stops between
+      // this fact and the spawn leaves a `submitted` attempt with no process, which boot recovery
+      // records as interrupted rather than as an unobserved success.
+      this.deps.lifecycle?.({ runId: facts.runId, attemptId: facts.attemptId, taskId: facts.taskId,
+        fact: "attempt.submitted", evidence: { client, tree } });
       const events: WorkerEvent[] = [];
+      let acknowledged = false;
+      const recordEvent = (event: WorkerEvent): void => {
+        events.push(event);
+        this.deps.onEvent?.(facts, event);
+        // U4 — acknowledgment is the first provider session or turn event, recorded once.
+        if (!acknowledged && (event.type === "session.started" || event.type === "turn.started")) {
+          acknowledged = true;
+          this.deps.lifecycle?.({ runId: facts.runId, attemptId: facts.attemptId, taskId: facts.taskId,
+            fact: "attempt.acknowledged", evidence: { firstProviderEvent: event.type } });
+        }
+      };
       const turn = this.deps.supervise
-        ? this.deps.supervise(launch, { onEvent: event => events.push(event) })
-        : new ChildProcessSupervisor(launch, { onEvent: event => {
-          events.push(event);
-          this.deps.onEvent?.(facts, event);
-        } });
+        ? this.deps.supervise(launch, { onEvent: recordEvent })
+        : new ChildProcessSupervisor(launch, { onEvent: recordEvent });
       const identity = await turn.start();
       facts.processId = identity.processId;
       facts.processStart = identity.processStart;
+      // U4 — `started` is recorded only once the child identity is known.
+      this.deps.lifecycle?.({ runId: facts.runId, attemptId: facts.attemptId, taskId: facts.taskId,
+        fact: "attempt.started", evidence: { processId: identity.processId, processStart: identity.processStart } });
       // A turn that takes minutes must not block the launch that started it: `wait()` is what a
       // cancellation or a shutdown awaits, and readiness polls `settled()`.
       // A turn that never said anything is a no-response, not a launch failure: the attempt was

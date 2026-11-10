@@ -44,9 +44,13 @@ function fakeTurn(launch: SupervisorLaunch, onEvent: (event: WorkerEvent) => voi
     async start() {
       identity = { processId: 4242, processStart: "2026-11-10T00:00:00.000Z" };
       if (launch.provider === "codex" && launch.threadIdPath) writeFileSync(launch.threadIdPath, threadId, { mode: 0o600 });
-      emit({ type: "session.started", provider: launch.provider, attemptId: launch.attemptId, sequence: 1,
+      // A real supervisor streams provider events from stdout after `start()` returns, so the
+      // first session event never precedes the `started` fact. Deferring with setTimeout (not
+      // queueMicrotask) keeps that order: the `started` lifecycle fact is recorded by the launcher
+      // in the same microtask/tick as `start()` resolving, and this fires in the next task.
+      setTimeout(() => emit({ type: "session.started", provider: launch.provider, attemptId: launch.attemptId, sequence: 1,
         timestamp: new Date().toISOString(), rawSummary: "{}", schema: "multi-agent-worker-events/v1", protocolVersion: "1.0",
-        sessionId: threadId, resumeToken: threadId } as WorkerEvent);
+        sessionId: threadId, resumeToken: threadId } as WorkerEvent));
       return identity;
     },
     async wait() {
@@ -84,6 +88,7 @@ describe("U3 the launcher hands one turn to the supervisor", () => {
     const manifest = context({ readOnly, role, client: launchOptions.client });
     writeAgentTurnPrompt(manifest, "Read the assigned plan.\n");
     const launches: SupervisorLaunch[] = [];
+    const lifecycle: Array<{ fact: string; attemptId: string; runId: string; taskId: string }> = [];
     const launcher = new DirectWorkerLauncher({
       modelRefusal, documentRefusal,
       resolveAssignedTree: () => join(root, "candidate tree"),
@@ -91,11 +96,13 @@ describe("U3 the launcher hands one turn to the supervisor", () => {
       // resolver still requires it to be a launchable file, so the fixtures are real ones.
       executablePath: client => (client === "codex" ? join(root, "codex.exe") : join(root, "claude.exe")),
       supervise: (launch, deps) => { launches.push(launch); return fakeTurn(launch, deps.onEvent); },
+      // U4 — the launcher records its durable lifecycle facts through this recorder.
+      lifecycle: fact => { lifecycle.push(fact); },
     });
     const input: WorkerLaunchInput = { client: "codex", attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context: manifest },
       ...launchOptions };
     const result = await launcher.launch(input);
-    return { result, input, launcher, observed: launches[0] };
+    return { result, input, launcher, observed: launches[0], lifecycle };
   };
 
   it("starts the resolved executable with the Codex implementer argv and the prompt as stdin", async () => {
@@ -155,6 +162,15 @@ describe("U3 the launcher hands one turn to the supervisor", () => {
     // The supervisor clears these itself; this proves the launcher did not recreate them.
     expect(readFileSync(output.lastMessage, "utf8")).toBe("stale");
     rmSync(output.lastMessage, { force: true });
+  });
+
+  it("records submitted before spawn, started after identity, and acknowledged once", async () => {
+    const { lifecycle } = await launch();
+    // The facts are in lifecycle order: intent before the child exists, identity after start,
+    // and acknowledgment at the first provider event (the fake turn emits one session.started).
+    expect(lifecycle.map(fact => fact.fact)).toEqual(["attempt.submitted", "attempt.started", "attempt.acknowledged"]);
+    expect(lifecycle.every(fact => fact.attemptId === "attempt-1")).toBe(true);
+    expect(lifecycle.every(fact => fact.runId === "run" && fact.taskId === "task")).toBe(true);
   });
 
   it.each(["--last", "with whitespace", "trailing\n", "", "x".repeat(129)])("refuses a hostile session token (%j)", async token => {

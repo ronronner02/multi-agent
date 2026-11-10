@@ -2420,6 +2420,52 @@ export class PlanGovernance {
     });
   }
 
+  /**
+   * U4 — record one durable lifecycle fact for an attempt.
+   *
+   * The turn lifecycle is a sequence of facts in the existing `team.control` log: `submitted`
+   * before the spawn, `started` once the child identity is known, `acknowledged` at the first
+   * provider session/turn event, and `observed` when the supervisor records its exit facts.
+   * Each is idempotent per attempt and fact, so a repeated observation replays rather than
+   * appending a second row. Recovery reads these rows; display status is derived from them.
+   *
+   * This is the one writer for lifecycle facts. It appends to the event log through the same
+   * transaction the rest of governance uses, so a restart never loses a fact that was already
+   * recorded and never invents one it did not observe.
+   */
+  recordAttemptLifecycle(input: {
+    runId: string;
+    attemptId: string;
+    taskId: string | null;
+    fact: "attempt.submitted" | "attempt.started" | "attempt.acknowledged" | "attempt.observed";
+    evidence?: JsonObject;
+  }): void {
+    const run = this.getRun(input.runId);
+    const payload: JsonObject = {
+      attemptId: input.attemptId,
+      fact: input.fact,
+      observedAt: this.clock().toISOString(),
+      ...(input.evidence ?? {}),
+    };
+    this.events.emit(parseTeamEvent({
+      type: "team.control", protocolVersion: TEAM_CONTROL_VERSION, eventId: randomUUID(), rigId: run.rigId,
+      runId: run.id, taskId: input.taskId, attemptId: input.attemptId, entityId: run.id,
+      entityVersion: run.entityVersion, action: input.fact, payload,
+    }));
+  }
+
+  /**
+   * U4 — whether an attempt already recorded one lifecycle fact.
+   *
+   * The launch path asks before it appends, so a repeated observation of the same fact does
+   * not grow the log. The query reads the same rows `recordAttemptLifecycle` writes.
+   */
+  attemptLifecycleRecorded(runId: string, attemptId: string, fact: string): boolean {
+    return this.db.prepare(`SELECT 1 FROM events WHERE type = 'team.control'
+      AND json_extract(payload, '$.runId') = ? AND json_extract(payload, '$.attemptId') = ?
+      AND json_extract(payload, '$.action') = ? LIMIT 1`).get(runId, attemptId, fact) !== undefined;
+  }
+
   private emit(run: TeamRun, register: NotifyRegister, action: string, payload: JsonObject, taskId?: string, attemptId?: string): void {
     register(this.events.persistWithinTransaction(parseTeamEvent({ type: "team.control", protocolVersion: TEAM_CONTROL_VERSION,
       eventId: randomUUID(), rigId: run.rigId, runId: run.id, taskId: taskId ?? null, attemptId: attemptId ?? null,
