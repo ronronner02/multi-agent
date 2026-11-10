@@ -58,6 +58,10 @@ export const MESSAGE_PARAMETERS = {
   "projects.pushConsequence": ["name"],
   "projects.registerConsequence": ["name"],
   "projects.openConsequence": ["name"],
+  // U17a — the Flow view names a seat, its role and its state.
+  "flow.selected": ["name", "state"],
+  "flow.selectedName": ["name"],
+  "flow.nodeLabel": ["name", "role", "state"],
   "overview.integrationHistory": ["count"],
   // MVP — the completion panel names the review task a completion created and the task a
   // review reopened, so both carry the task id they name.
