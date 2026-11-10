@@ -268,6 +268,7 @@ describe("ConfigStore — extended namespaces (User Settings v0)", () => {
       "team.leadClient",
       "team.maxSeats",
       "team.maxConcurrentAgents",
+      "github.proxy",
     ];
     expect([...VALID_KEYS]).toEqual(expected);
   });
