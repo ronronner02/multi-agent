@@ -36,6 +36,10 @@ function ghSetup(directory: string): { executable: string; execArgv: string[] } 
   return fixture;
 }
 
+// The stub gh inherits this process's environment; a developer proxy would turn every
+// simulated network failure into github_proxy_unreachable. Tests set proxies explicitly.
+for (const key of ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"]) delete process.env[key];
+
 describe("owner GitHub sign-in", () => {
   let directory: string, db: Database.Database, github: GithubCli;
   let app: ReturnType<typeof createTestApp>["app"];
