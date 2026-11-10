@@ -35,7 +35,8 @@ These rules apply to every agent working in this repository. The owner reset the
 - Each task works in its own worktree, created from current `origin/main`, and never in another task's checkout. Scratch files and extra clones go under one folder per task, and are removed when the task lands.
 - Tests run with stdin detached (`</dev/null`), one vitest process at a time, `--maxWorkers=2`. Leave no vitest process, tmux server or daemon fixture running when you finish.
 - **On the owner's machine:**
-  - OS-neutral units work in worktrees of WSL `/home/leo/src/multi-agent` under `/home/leo/scratch/<unit>/`. Units that need Windows verification work in worktrees of the Windows clone `C:\ma\repo` under `C:\ma\<unit>`; keep the path short because of Git's worktree length limit. Never edit `D:\Multi-Agent`, which is a read-only mirror.
+  - OS-neutral units work in worktrees of WSL `/home/leo/src/multi-agent` under `/home/leo/scratch/<unit>/`. Units that need Windows verification work in worktrees of the Windows clone `D:\ma\repo` under `D:\ma\<unit>`; keep the path short because of Git's worktree length limit. Never edit `D:\Multi-Agent`, which is a read-only mirror.
+  - The C: drive is nearly full: create nothing on it. Point `TEMP`, `TMP` and `npm_config_cache` at `D:\ma\tmp` and `D:\ma\npm-cache` in every Windows command, and put temp homes, Electron user data and fixtures under `D:\ma\tmp`.
   - Node is at `/opt/multi-agent/toolchain/node/bin`.
   - Scratch goes under `/home/leo/scratch/<task-id>/`.
   - From Windows, run scripts with `wsl.exe -e bash <file>`, never `wsl.exe -- bash -c '…'`: its outer shell expands `$VAR` to an empty string.
