@@ -4,7 +4,7 @@ import { TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, 
 import type { SettingsStore } from "../domain/user-settings/settings-store.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
 
-const KEYS = ["team.leadClient", "team.maxSeats", "team.maxConcurrentAgents"] as const;
+const KEYS = ["team.leadClient", "team.maxSeats", "team.maxConcurrentAgents", "github.proxy"] as const;
 const snapshot = (store: SettingsStore) => ({ protocolVersion: TEAM_CONTROL_VERSION,
   settings: Object.fromEntries(KEYS.map(key => [key, store.resolveOne(key)])) });
 

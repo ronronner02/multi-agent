@@ -160,14 +160,19 @@ describe("project bootstrap size, mode, and responsiveness", () => {
     github.push = async () => { attempts += 1; if (attempts === 1) throw new GithubCliError("github_push_failed"); };
     expect(await (await create()).json()).toMatchObject({ code: "github_push_failed" });
     const receipt = db.prepare("SELECT step, commit_oid, team_id, last_error_code FROM team_bootstraps").get() as
-      { step: string; commit_oid: string; team_id: string; last_error_code: string };
+      { step: string; commit_oid: string; team_id: string | null; last_error_code: string };
     expect(receipt).toMatchObject({ step: "repo", last_error_code: "github_push_failed" });
+    // U9 (R18/KTD12): team row is created only after push succeeds.
+    // After a failed push, team_id must be null so no half-created project shows.
+    expect(receipt.team_id).toBeNull();
     // A file written after the first attempt is not part of the recorded snapshot: the retry
     // resumes from the checkpoint instead of rebuilding one.
     writeFileSync(join(repository, "later.txt"), "later\n");
     const response = await create();
     expect(response.status, await response.clone().text()).toBe(201);
-    expect((await response.json() as { team: { id: string } }).team.id).toBe(receipt.team_id);
+    const team = (await response.json() as { team: { id: string } }).team;
+    // The retry creates the team row since push succeeds this time.
+    expect(team.id).toBeTruthy();
     expect(git(repository, "rev-parse", "HEAD")).toBe(receipt.commit_oid);
     expect(git(repository, "ls-tree", "-r", "--name-only", "HEAD").split("\n")).toEqual([".gitignore", "source.txt"]);
     expect(db.prepare("SELECT step, last_error_code FROM team_bootstraps").get()).toEqual({ step: "push", last_error_code: null });

@@ -14,6 +14,19 @@ import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 import { createTestApp } from "./helpers/test-app.js";
 import { previewProject, projectFolder } from "../src/domain/project-bootstrap.js";
 import { shortPath } from "./helpers/short-path.js";
+import { ghFixturePath } from "./helpers/gh-fixture.js";
+
+/**
+ * U9: On Windows, the gh stub runs as `node.exe gh.mjs <args>`. The git stub
+ * intercepts pushes by writing a redirect into the repo-level git config so that
+ * `git push` goes to the test bare remote instead of github.com. The URL validation
+ * in GithubCli.push() is skipped on Windows in these tests because real git.exe
+ * always matches first on PATH/PATHEXT, making a per-command git wrapper impossible
+ * without adding a Windows-only production code path.
+ *
+ * The full GitHub error-classification tests live in team-github.test.ts. The
+ * bootstrap creation tests below rely on a mocked-out GithubCli on Windows.
+ */
 
 function git(root: string, ...args: string[]): string {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -126,56 +139,100 @@ describe("project file preview", () => {
   });
 });
 
-describe("project creation through the owner route", () => {
-  let directory: string, repository: string, remote: string, db: Database.Database, github: GithubCli, settings: SettingsStore;
-  let app: ReturnType<typeof createTestApp>["app"];
-  const calls = (): string[][] => existsSync(join(directory, "calls.jsonl"))
-    ? readFileSync(join(directory, "calls.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line)) : [];
-  const create = (body: Record<string, unknown> = {}) => app.request("/api/team-control/teams", {
-    method: "POST", headers: { Authorization: "Bearer owner-bootstrap-fixture", "Content-Type": "application/json" },
-    body: JSON.stringify({ repository, name: "project", ...body }),
-  }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+/** Shared setup for project creation tests. */
+function createSetup() {
+  const state: {
+    directory: string; repository: string; remote: string; db: Database.Database;
+    github: GithubCli; settings: SettingsStore; app: ReturnType<typeof createTestApp>["app"];
+  } = {} as never;
+
+  const calls = () => existsSync(join(state.directory, "calls.jsonl"))
+    ? readFileSync(join(state.directory, "calls.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line)) : [];
+  const create = (body: Record<string, unknown> = {}) =>
+    state.app.request("/api/team-control/teams", {
+      method: "POST", headers: { Authorization: "Bearer owner-bootstrap-fixture", "Content-Type": "application/json" },
+      body: JSON.stringify({ repository: state.repository, name: "project", ...body }),
+    }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+
   const openApp = () => {
-    db = createDb(join(directory, "bootstrap.db"));
-    migrate(db, ALL_MIGRATIONS);
-    fixDaemonMode(db, true);
-    app = createTestApp(db, { appDeps: { github, settingsStore: settings,
+    state.db = createDb(join(state.directory, "bootstrap.db"));
+    migrate(state.db, ALL_MIGRATIONS);
+    fixDaemonMode(state.db, true);
+    state.app = createTestApp(state.db, { appDeps: { github: state.github, settingsStore: state.settings,
       teamControl: { credentials: { ownerToken: "owner-bootstrap-fixture" } } } }).app;
   };
+
   const committedRepository = () => {
-    mkdirSync(repository);
-    git(repository, "init", "--quiet", "--initial-branch=main");
-    git(repository, "config", "user.name", "Repository Owner");
-    git(repository, "config", "user.email", "owner@example.invalid");
-    writeFileSync(join(repository, "source.txt"), "committed\n");
-    git(repository, "add", "--", "source.txt");
-    git(repository, "commit", "--quiet", "-m", "Existing project");
-    return git(repository, "rev-parse", "HEAD");
+    mkdirSync(state.repository);
+    git(state.repository, "init", "--quiet", "--initial-branch=main");
+    git(state.repository, "config", "user.name", "Repository Owner");
+    git(state.repository, "config", "user.email", "owner@example.invalid");
+    writeFileSync(join(state.repository, "source.txt"), "committed\n");
+    git(state.repository, "add", "--", "source.txt");
+    git(state.repository, "commit", "--quiet", "-m", "Existing project");
+    return git(state.repository, "rev-parse", "HEAD");
   };
 
+  /** Set up the gh stub and GithubCli for the current platform. */
+  const setupGithub = () => {
+    const src = fileURLToPath(new URL("./fixtures/stub-gh.mjs", import.meta.url));
+    const fixture = ghFixturePath(state.directory);
+    if (process.platform === "win32") {
+      copyFileSync(src, join(state.directory, "gh.mjs"));
+    } else {
+      copyFileSync(src, join(state.directory, "gh"));
+      chmodSync(join(state.directory, "gh"), 0o755);
+      copyFileSync(fileURLToPath(new URL("./fixtures/stub-project-git.mjs", import.meta.url)), join(state.directory, "git"));
+      chmodSync(join(state.directory, "git"), 0o755);
+    }
+    state.github = new GithubCli({ executable: fixture.executable, execArgv: fixture.extraArgs,
+      env: { ...process.env, PATH: state.directory + delimiter + process.env.PATH, GH_STUB_DIR: state.directory,
+        GH_STUB_REMOTE: state.remote,
+        GH_STUB_REAL_GIT: execFileSync(process.platform === "win32" ? "where" : "sh",
+          process.platform === "win32" ? ["git"] : ["-c", "command -v git"],
+          { encoding: "utf8" }).trim().split("\n")[0]!.trim(),
+        GH_TOKEN: "ghp_fixture_INHERITED" } });
+  };
+
+  return { state, calls, create, openApp, committedRepository, setupGithub };
+}
+
+const describeOnPosix = process.platform !== "win32" ? describe : describe.skip;
+const describeOnWindows = process.platform === "win32" ? describe : describe.skip;
+
+describeOnPosix("project creation through the owner route — GitHub push flow", () => {
+
+  let s: ReturnType<typeof createSetup>;
+  let directory: string, repository: string, remote: string, db: Database.Database, github: GithubCli, settings: SettingsStore;
+  let app: ReturnType<typeof createTestApp>["app"];
+  let calls: () => string[][];
+  let create: (body?: Record<string, unknown>) => ReturnType<ReturnType<typeof createSetup>["create"]>;
+  let openApp: () => void;
+  let committedRepository: () => string;
+
   beforeEach(() => {
+    s = createSetup();
     directory = realpathSync.native(mkdtempSync(join(tmpdir(), "project-create-")));
-    repository = join(directory, "project");
-    remote = join(directory, "remote.git");
+    repository = s.state.repository = join(directory, "project");
+    remote = s.state.remote = join(directory, "remote.git");
     vi.stubEnv("GIT_CONFIG_GLOBAL", join(directory, "gitconfig"));
     vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
     vi.stubEnv("OPENRIG_TEAM_LEAD_CLIENT", "");
+    writeFileSync(join(directory, "gitconfig"), "");
     git(directory, "init", "--bare", "--quiet", "--initial-branch=main", remote);
-    copyFileSync(fileURLToPath(new URL("./fixtures/stub-gh.mjs", import.meta.url)), join(directory, "gh"));
-    chmodSync(join(directory, "gh"), 0o755);
-    copyFileSync(fileURLToPath(new URL("./fixtures/stub-project-git.mjs", import.meta.url)), join(directory, "git"));
-    chmodSync(join(directory, "git"), 0o755);
+    s.setupGithub();
+    github = s.state.github;
+    settings = s.state.settings = new SettingsStore(join(directory, "settings.json"));
+    openApp = s.openApp;
+    committedRepository = s.committedRepository;
+    create = s.create;
+    calls = s.calls;
     writeFileSync(join(directory, "account"), "octocat");
-    github = new GithubCli({ executable: join(directory, "gh"),
-      env: { ...process.env, PATH: directory + delimiter + process.env.PATH, GH_STUB_DIR: directory,
-        GH_STUB_REMOTE: remote, GH_STUB_REAL_GIT: execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(),
-        GH_TOKEN: "ghp_fixture_INHERITED" } });
-    settings = new SettingsStore(join(directory, "settings.json"));
     openApp();
   });
   afterEach(async () => {
     await github.stop();
-    if (db.open) db.close();
+    if (db?.open) db.close();
     vi.unstubAllEnvs();
     rmSync(directory, { recursive: true, force: true });
   });
@@ -427,6 +484,96 @@ describe("project creation through the owner route", () => {
     expect(git(remote, "for-each-ref", "--format=%(refname)")).toBe("refs/heads/main");
     expect(readFileSync(join(repository, ".git", "index"))).toEqual(index);
     expect(readFileSync(join(repository, "source.txt"), "utf8")).toBe("unstaged owner edit\n");
+    expect(existsSync(join(repository, ".gitignore"))).toBe(false);
+  });
+});
+
+describeOnWindows("project creation through the owner route — Windows paths and bootstrap", () => {
+
+  let directory: string, repository: string, remote: string, db: Database.Database, github: GithubCli, settings: SettingsStore;
+  let app: ReturnType<typeof createTestApp>["app"];
+  let create: (body?: Record<string, unknown>) => ReturnType<ReturnType<typeof createSetup>["create"]>;
+  const calls = (): string[][] => !!(directory && existsSync(join(directory, "calls.jsonl")))
+    ? readFileSync(join(directory, "calls.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line)) : [];
+
+  beforeEach(() => {
+    directory = realpathSync.native(mkdtempSync(join(tmpdir(), "project-create-win-")));
+    repository = join(directory, "project");
+    remote = join(directory, "remote.git");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", join(directory, "gitconfig"));
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+    vi.stubEnv("OPENRIG_TEAM_LEAD_CLIENT", "");
+    writeFileSync(join(directory, "gitconfig"), "");
+    git(directory, "init", "--bare", "--quiet", "--initial-branch=main", remote);
+    const src = fileURLToPath(new URL("./fixtures/stub-gh.mjs", import.meta.url));
+    const fixture = ghFixturePath(directory);
+    copyFileSync(src, join(directory, "gh.mjs"));
+    github = new GithubCli({ executable: fixture.executable, execArgv: fixture.extraArgs,
+      env: { ...process.env, PATH: directory + delimiter + process.env.PATH, GH_STUB_DIR: directory,
+        GH_STUB_REMOTE: remote,
+        GH_STUB_REAL_GIT: execFileSync("where", ["git"], { encoding: "utf8" }).trim().split("\n")[0]!.trim(),
+        GH_TOKEN: "ghp_fixture_INHERITED" } });
+    settings = new SettingsStore(join(directory, "settings.json"));
+    db = createDb(join(directory, "bootstrap.db"));
+    migrate(db, ALL_MIGRATIONS);
+    fixDaemonMode(db, true);
+    app = createTestApp(db, { appDeps: { github, settingsStore: settings,
+      teamControl: { credentials: { ownerToken: "owner-bootstrap-fixture" } } } }).app;
+    create = (body: Record<string, unknown> = {}) =>
+      app.request("/api/team-control/teams", {
+        method: "POST", headers: { Authorization: "Bearer owner-bootstrap-fixture", "Content-Type": "application/json" },
+        body: JSON.stringify({ repository, name: "project", ...body }),
+      }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    writeFileSync(join(directory, "account"), "octocat");
+  });
+  afterEach(async () => {
+    await github.stop();
+    if (db?.open) db.close();
+    vi.unstubAllEnvs();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("returns a dry run without creating a folder, bootstrap row, or GitHub process", async () => {
+    const response = await create({ dryRun: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ protocolVersion: "1.0", preview: { repository, name: "project", fileCount: 1, action: "create" } });
+    expect(existsSync(repository)).toBe(false);
+    expect(db.prepare("SELECT count(*) AS n FROM team_bootstraps").get()).toEqual({ n: 0 });
+    expect(calls()).toEqual([]);
+  });
+
+  it("opens an existing local repository without creating an origin or uploading files", async () => {
+    mkdirSync(repository);
+    git(repository, "init", "--quiet", "--initial-branch=main");
+    git(repository, "config", "user.name", "Repository Owner");
+    git(repository, "config", "user.email", "owner@example.invalid");
+    writeFileSync(join(repository, "source.txt"), "committed\n");
+    git(repository, "add", "--", "source.txt");
+    git(repository, "commit", "--quiet", "-m", "Existing project");
+    const head = git(repository, "rev-parse", "HEAD");
+    const preview = await (await create({ openExisting: true, dryRun: true })).json();
+    expect(preview).toMatchObject({ preview: { repository, name: "project", action: "open", fileCount: 0, excludedPaths: [] } });
+    const response = await create({ openExisting: true });
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect((await response.json()).team).toMatchObject({ repository, name: "project" });
+    expect(git(repository, "rev-parse", "HEAD")).toBe(head);
+    expect(calls()).toEqual([]);
+  });
+
+  it("registers an existing origin without any GitHub call or local history change", async () => {
+    mkdirSync(repository);
+    git(repository, "init", "--quiet", "--initial-branch=main");
+    git(repository, "config", "user.name", "Repository Owner");
+    git(repository, "config", "user.email", "owner@example.invalid");
+    writeFileSync(join(repository, "source.txt"), "committed\n");
+    git(repository, "add", "--", "source.txt");
+    git(repository, "commit", "--quiet", "-m", "Existing project");
+    git(repository, "remote", "add", "origin", remote);
+    unlinkSync(join(directory, "account"));
+    const response = await create();
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect((await response.json()).team.seats).toEqual([{ role: "lead", client: "claude-code" }]);
+    expect(calls()).toEqual([]);
     expect(existsSync(join(repository, ".gitignore"))).toBe(false);
   });
 });

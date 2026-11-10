@@ -223,6 +223,10 @@ export const SETTINGS_VALID_KEYS = [
   "team.leadClient",
   "team.maxSeats",
   "team.maxConcurrentAgents",
+  // U9 (R18) — proxy URL for gh and git push operations. An http(s) proxy URL.
+  // The daemon environment HTTPS_PROXY/HTTP_PROXY is the fallback. Lockstep with
+  // cli/src/config-store.ts VALID_KEYS.
+  "github.proxy",
 ] as const;
 
 export type SettingsValidKey = typeof SETTINGS_VALID_KEYS[number];
@@ -318,6 +322,7 @@ const ENV_MAP: Record<SettingsValidKey, { primary: string; legacy?: string }> = 
   "team.leadClient": { primary: "OPENRIG_TEAM_LEAD_CLIENT" },
   "team.maxSeats": { primary: "OPENRIG_TEAM_MAX_SEATS" },
   "team.maxConcurrentAgents": { primary: "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS" },
+  "github.proxy": { primary: "OPENRIG_GITHUB_PROXY" },
 };
 
 const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
@@ -400,6 +405,7 @@ const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
   "team.leadClient": ["team", "leadClient"],
   "team.maxSeats": ["team", "maxSeats"],
   "team.maxConcurrentAgents": ["team", "maxConcurrentAgents"],
+  "github.proxy": ["github", "proxy"],
 };
 
 export type SettingSource = "env" | "file" | "default";
@@ -682,6 +688,7 @@ function getDefaultValue(key: SettingsValidKey, workspaceRoot: string): string |
     case "team.leadClient": return "claude-code";
     case "team.maxSeats": return 6;
     case "team.maxConcurrentAgents": return 3;
+    case "github.proxy": return "";
     default: return "";
   }
 }

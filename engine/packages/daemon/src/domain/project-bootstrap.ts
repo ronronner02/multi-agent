@@ -369,12 +369,15 @@ async function performBootstrap(db: Database.Database, input: ProjectInput, opti
       state.remote_url = expectedOrigin;
       checkpoint("repo");
     }
-    if (!state.team_id) db.transaction(() => {
+    await options.github.push(repository, state.remote_url, `${state.commit_oid}:${state.branch_ref}`, state.github_login);
+
+    // KTD12: create the team row only after a successful push. Leave no normal
+    // team row when the remote or upload fails.
+    if (!state.team_id) {
       const team = createTeam(db, { repository, name: state!.name, leadClient: state!.lead_client });
       state!.team_id = team.id;
       save();
-    })();
-    await options.github.push(repository, state.remote_url, `${state.commit_oid}:${state.branch_ref}`, state.github_login);
+    }
     checkpoint("push");
     return listTeams(db).find(team => team.id === state!.team_id)!;
   } catch (error) {
