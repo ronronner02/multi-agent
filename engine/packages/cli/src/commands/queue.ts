@@ -364,7 +364,7 @@ async function printQueueItemResult(
     body = {
       ...body,
       hint: `Queue item ${JSON.stringify(qitemId)} was not found on ${daemon}.\n`
-        + `If it came from another host, run rig host list; replace <daemon-url> with its registered daemon URL and run: OPENRIG_URL='<daemon-url>' rig queue show ${shellQuote(qitemId)} --full --json`,
+        + `If it came from another host, replace <daemon-url> with that daemon's URL and run: OPENRIG_URL='<daemon-url>' rig queue show ${shellQuote(qitemId)} --full --json`,
     };
   }
   await printWriteResult(client, json, body, status, receipt);
@@ -613,7 +613,7 @@ function emitHostResolutionError(res: { error: string; message: string }, json: 
 }
 
 const QUEUE_HOST_OPTION_HELP =
-  "OPR.0.4.6.MH3: route this queue write to a REGISTERED remote host (see rig host ls). EXPLICIT-ONLY — queue verbs never follow the persisted 'rig host select' selection. Equivalent to the host-qualified destination form member@rig@<host>.";
+  "OPR.0.4.6.MH3: route this queue write to a REGISTERED remote host (see ~/.openrig/hosts.yaml). EXPLICIT-ONLY — queue verbs never follow the persisted host.selected setting. Equivalent to the host-qualified destination form member@rig@<host>.";
 
 export function queueCommand(depsOverride?: QueueDeps): Command {
   const cmd = new Command("queue").description("Coordination L3 — owned-work queue + inbox/outbox");
@@ -1000,49 +1000,6 @@ workspace home that is deferred/not-imminent belongs in its mission/slice.`)
           transitionNote: opts.continuation ? `continuation: ${opts.continuation}` : (opts.note ?? `parked on ${opts.on}`),
         });
         await printQueueItemResult(client, qitemId, opts.json ?? false, res.data, res.status, writeReceipt(opts.full, { verb: "block" }));
-      });
-    });
-
-  // OPR.0.4.4.19 FR-7 — the resolve verb's CLI wrapper: a THIN client of the
-  // ONE write path (POST /api/mission-control/action, verb=resolve). Exists
-  // so proof walks and the relay session are scriptable before the Packet-2
-  // surface ships; the founder's path is the surface/feed card invoking the
-  // same endpoint. Resolution returns to the PARKED OWNER (blocked →
-  // in-progress on the SAME item) — never a closure, never a new owner.
-  cmd
-    .command("resolve <qitemId>")
-    .description("Resolve a leg-1 parked qitem (state=blocked on a human seat): records the decision text durably in queue_transitions, unparks blocked -> in-progress, and nudges the owner. Non-closure.")
-    .requiredOption("--decision <text>", "The human's decision text (non-empty; lands in transition_note + the audit row)")
-    .option("--actor <session>", "(deprecated, ignored) resolver is derived from the seat env (X-OpenRig-Session)")
-    .option("--bearer <token>", "Operator bearer token for the mission-control write gate (or set OPENRIG_AUTH_BEARER_TOKEN; loopback daemons without a configured bearer need none)")
-    .option("--no-notify", "Skip the best-effort owner nudge (the unpark still commits)")
-    .option("--json", "JSON output for agents")
-    .action(async (qitemId: string, opts: {
-      decision: string;
-      actor?: string;
-      bearer?: string;
-      notify?: boolean;
-      json?: boolean;
-    }) => {
-      // P21: the resolver is DERIVED from the seat env (X-OpenRig-Session, stamped by DaemonClient) —
-      // --actor is deprecated + ignored. The pre-check verifies the env (the header source); else the
-      // daemon returns 400 actor_required (no seat identity to record; P18 retired the 401 refusal).
-      if (!resolveCurrentSession(undefined, "actor")) return;
-      const deps = getDeps();
-      const bearer = opts.bearer ?? process.env.OPENRIG_AUTH_BEARER_TOKEN;
-      await withClient(deps, async (client) => {
-        const res = await client.post<unknown>(
-          "/api/mission-control/action",
-          {
-            verb: "resolve",
-            qitemId,
-            // P21: no body actorSession — the daemon derives the resolver from the transport header.
-            decision: opts.decision,
-            notify: opts.notify,
-          },
-          bearer ? { headers: { Authorization: `Bearer ${bearer}` } } : undefined,
-        );
-        await printQueueItemResult(client, qitemId, opts.json ?? false, res.data, res.status);
       });
     });
 

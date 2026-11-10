@@ -37,11 +37,9 @@ import { BundleInstallFlow } from "./components/BundleInstallFlow.js";
 import { LibraryReview } from "./components/LibraryReview.js";
 import { LiveNodeDetails } from "./components/LiveNodeDetails.js";
 import { DiscoveryOverlay } from "./components/DiscoveryOverlay.js";
-import { AuditHistoryView } from "./components/mission-control/views/AuditHistoryView.js";
 import { useRigSummary } from "./hooks/useRigSummary.js";
 import { EmptyState } from "./components/ui/empty-state.js";
 // Phase 3 destination components.
-import { Feed } from "./components/for-you/Feed.js";
 import { SpecsLibraryPage } from "./components/specs/SpecsLibraryPage.js";
 import { SkillDetailPage } from "./components/specs/SkillDetailPage.js";
 import { SkillsIndexPage } from "./components/specs/SkillsIndexPage.js";
@@ -53,12 +51,6 @@ import { SettingsCenter } from "./components/system/SettingsCenter.js";
 import { PoliciesPage } from "./components/system/PoliciesPage.js";
 import { LogPage } from "./components/system/LogPage.js";
 import { StatusPage } from "./components/system/StatusPage.js";
-import {
-  HostScopePage,
-  RigScopePage,
-  PodScopePage,
-  SeatScopePage,
-} from "./components/topology/ScopePages.js";
 import {
   WorkspaceScopePage,
   MissionScopePage,
@@ -109,40 +101,6 @@ const teamRoute = createRoute({
   component: TeamShell,
 });
 const teamPageRoute = createRoute({ getParentRoute: () => teamRoute, path: "$section", component: () => null });
-
-// Topology destination: SC-5 / SC-10 — single URL with view-mode tabs IN-PLACE
-// (graph / table / terminal). Tab state is React useState INSIDE each scope
-// page; URL stays at the scope path across tab switches.
-
-const topologyRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/topology",
-  component: HostScopePage,
-});
-
-const topologyRigRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/topology/rig/$rigId",
-  component: RigScopePage,
-});
-
-const topologyPodRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/topology/pod/$rigId/$podName",
-  component: PodScopePage,
-});
-
-const topologySeatRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/topology/seat/$rigId/$logicalId",
-  component: SeatScopePage,
-});
-
-const forYouRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/for-you",
-  component: Feed,
-});
 
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -312,12 +270,6 @@ const settingsStatusRoute = createRoute({
   component: StatusPage,
 });
 
-const searchRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/search",
-  component: AuditHistoryView,
-});
-
 const projectGraphicsPreviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/lab/project-graphics-preview",
@@ -367,8 +319,7 @@ const vellumBgAlloverRoute = createRoute({
 // Existing routes preserved per code-map AFTER tree (not in delete list)
 // =====================================================================
 
-// Rig graph (legacy detail; topology destination supersedes — keep until
-// Phase 3 wires /topology/rig/$rigId).
+// Legacy rig detail retained for terminal and discovery navigation.
 function RigDetail() {
   const { rigId } = useParams({ from: "/rigs/$rigId" });
   const { data: rigs } = useRigSummary();
@@ -496,19 +447,6 @@ const bundleInstallRoute = createRoute({
 // Redirects from deleted routes
 // =====================================================================
 
-// /context redirects to /topology (SC-25 — relocates to topology table view; Phase 3 wires the actual view).
-const contextRedirectRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/context",
-  component: () => <Navigate to="/topology" />,
-});
-
-// /mission-control DELETED per SC-18 — redirect to /for-you (which replaces it).
-const missionControlRedirectRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/mission-control",
-  component: () => <Navigate to="/for-you" />,
-});
 
 // /slices DELETED per project-tree.md — redirect to /project.
 const slicesRedirectRoute = createRoute({
@@ -551,11 +489,6 @@ export const routeTree = rootRoute.addChildren([
   // Canon destinations
   indexRoute,
   teamRoute.addChildren([teamPageRoute]),
-  topologyRoute,
-  topologyRigRoute,
-  topologyPodRoute,
-  topologySeatRoute,
-  forYouRoute,
   projectRoute,
   projectMissionRoute,
   projectSliceRoute,
@@ -576,7 +509,6 @@ export const routeTree = rootRoute.addChildren([
   settingsPoliciesRoute,
   settingsLogRoute,
   settingsStatusRoute,
-  searchRoute,
   projectGraphicsPreviewRoute,
   cardPreviewsLabRoute,
   vellumLabRoute,
@@ -600,8 +532,6 @@ export const routeTree = rootRoute.addChildren([
   bundleInspectRoute,
   bundleInstallRoute,
   // Redirects from deleted routes
-  contextRedirectRoute,
-  missionControlRedirectRoute,
   slicesRedirectRoute,
   sliceDetailRedirectRoute,
   progressRedirectRoute,

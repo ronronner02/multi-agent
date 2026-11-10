@@ -1,25 +1,4 @@
-// V1 polish slice Phase 5.2 bounce-fix — rig-expanded state persistence.
-//
-// Closes the dead-code auto-expand bug surfaced in design-reviewer's
-// 5-point evidence chain on abb154e:
-//   1. routes.tsx topology routes are SIBLING (not nested) → direct
-//      entry to /topology/rig/$id mounts RigScopePage, NOT
-//      HostMultiRigGraph. The prior in-component auto-expand useEffect
-//      could not run for direct-URL navigation.
-//   2. expanded Map was local useState in HostMultiRigGraph → reset on
-//      every mount when operator returned to /topology.
-//   3. topology-overlay-context only carried ExplorerMode previously.
-//
-// Fix: lifted expandedRigs Map into TopologyOverlayProvider with a
-// pathname-driven useEffect that fires regardless of which scope page
-// is mounted. HostMultiRigGraph consumes via useTopologyOverlay().
-//
-// Tests below cover:
-//  - parseActiveRigId pure-fn (matches all 3 rig-scoped URL shapes)
-//  - Provider auto-expand useEffect fires on rig-scoped pathname
-//  - HostMultiRigGraph renders rig as expanded when context's
-//    expandedRigs has rigId=true (the cross-mount-cycle persistence)
-//  - Direct unmount-remount preserves state (provider scope holds)
+// Shared graph expansion persists across retained rig detail navigation.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, waitFor } from "@testing-library/react";
@@ -95,14 +74,11 @@ afterEach(() => {
 // ---------------------------------------------------------------------
 
 describe("parseActiveRigId (P5.2 bounce-fix pure-fn)", () => {
-  it("matches /topology/seat/$rigId/$logicalId", () => {
-    expect(parseActiveRigId("/topology/seat/rig-1/orch.lead")).toBe("rig-1");
+  it("matches /rigs/$rigId/nodes/$logicalId", () => {
+    expect(parseActiveRigId("/rigs/rig-1/nodes/orch.lead")).toBe("rig-1");
   });
-  it("matches /topology/pod/$rigId/$podName", () => {
-    expect(parseActiveRigId("/topology/pod/rig-1/orch")).toBe("rig-1");
-  });
-  it("matches /topology/rig/$rigId", () => {
-    expect(parseActiveRigId("/topology/rig/rig-1")).toBe("rig-1");
+  it("matches /rigs/$rigId", () => {
+    expect(parseActiveRigId("/rigs/rig-1")).toBe("rig-1");
   });
   it("returns null for /topology root", () => {
     expect(parseActiveRigId("/topology")).toBe(null);
@@ -113,7 +89,7 @@ describe("parseActiveRigId (P5.2 bounce-fix pure-fn)", () => {
     expect(parseActiveRigId("/")).toBe(null);
   });
   it("decodes URL-encoded rigIds", () => {
-    expect(parseActiveRigId("/topology/seat/rig%2D1/seat%2Da")).toBe("rig-1");
+    expect(parseActiveRigId("/rigs/rig%2D1/nodes/seat%2Da")).toBe("rig-1");
   });
 });
 
@@ -137,17 +113,12 @@ function renderAt(initialPath: string, ui: React.ReactNode) {
   });
   const seatRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/topology/seat/$rigId/$logicalId",
+    path: "/rigs/$rigId/nodes/$logicalId",
     component: () => <>{ui}</>,
   });
   const rigRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/topology/rig/$rigId",
-    component: () => <>{ui}</>,
-  });
-  const podRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/topology/pod/$rigId/$podName",
+    path: "/rigs/$rigId",
     component: () => <>{ui}</>,
   });
   const fallback = createRoute({
@@ -156,7 +127,7 @@ function renderAt(initialPath: string, ui: React.ReactNode) {
     component: () => null,
   });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, seatRoute, rigRoute, podRoute, fallback]),
+    routeTree: rootRoute.addChildren([indexRoute, seatRoute, rigRoute, fallback]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
   return {
@@ -190,36 +161,25 @@ function ContextProbe() {
 }
 
 describe("TopologyOverlayProvider auto-expand on URL (P5.2 bounce-fix)", () => {
-  it("/topology/rig/$rigId direct-URL entry sets expandedRigs in provider state (HostMultiRigGraph NOT mounted)", async () => {
+  it("/rigs/$rigId direct-URL entry sets expandedRigs in provider state (HostMultiRigGraph NOT mounted)", async () => {
     // Probe-only render — HostMultiRigGraph is NOT mounted on this path,
     // proving the provider effect fires regardless of which scope page
     // is currently the center component.
-    const { findByTestId } = renderAt("/topology/rig/rig-1", <ContextProbe />);
+    const { findByTestId } = renderAt("/rigs/rig-1", <ContextProbe />);
     const probe = await findByTestId("topology-context-probe");
     await waitFor(() => {
       expect(probe.getAttribute("data-expanded-rigs")).toBe("rig-1");
     });
   });
 
-  it("/topology/seat/$rigId/$logicalId sets the matching rig expanded", async () => {
+  it("/rigs/$rigId/nodes/$logicalId sets the matching rig expanded", async () => {
     const { findByTestId } = renderAt(
-      "/topology/seat/rig-2/orch.lead",
+      "/rigs/rig-2/nodes/orch.lead",
       <ContextProbe />,
     );
     const probe = await findByTestId("topology-context-probe");
     await waitFor(() => {
       expect(probe.getAttribute("data-expanded-rigs")).toBe("rig-2");
-    });
-  });
-
-  it("/topology/pod/$rigId/$podName sets the matching rig expanded", async () => {
-    const { findByTestId } = renderAt(
-      "/topology/pod/rig-1/orch",
-      <ContextProbe />,
-    );
-    const probe = await findByTestId("topology-context-probe");
-    await waitFor(() => {
-      expect(probe.getAttribute("data-expanded-rigs")).toBe("rig-1");
     });
   });
 

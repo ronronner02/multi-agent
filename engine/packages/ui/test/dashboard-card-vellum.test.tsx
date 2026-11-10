@@ -46,11 +46,11 @@ describe("Dashboard (OPR.0.4.1.14 fidelity refresh)", () => {
     expect(DASHBOARD_SRC).not.toContain("TopLayerContent");
   });
 
-  it("Dashboard.tsx declares all 6 destinations with their routes (no behaviour change)", () => {
-    for (const route of ["/topology", "/project", "/for-you", "/specs", "/search", "/settings"]) {
+  it("Dashboard.tsx declares the retained destinations", () => {
+    for (const route of ["/project", "/specs", "/settings"]) {
       expect(DASHBOARD_SRC).toContain(`to: "${route}"`);
     }
-    for (const num of ["01", "02", "03", "04", "05", "06"]) {
+    for (const num of ["02", "04", "06"]) {
       expect(DASHBOARD_SRC).toContain(`num: "${num}"`);
     }
   });
@@ -70,11 +70,11 @@ describe("Dashboard (OPR.0.4.1.14 fidelity refresh)", () => {
   });
 
   // ── Legacy vellum primitives — retained ONLY for /lab/vellum-lab ──────────
-  it("legacy DestinationsLayer still declares all 6 routes (lab primitive intact)", () => {
-    for (const route of ["/topology", "/project", "/for-you", "/specs", "/search", "/settings"]) {
+  it("legacy DestinationsLayer declares the retained destinations", () => {
+    for (const route of ["/project", "/specs", "/settings"]) {
       expect(DESTINATIONS_LAYER_SRC).toContain(`to="${route}"`);
     }
-    for (const num of ["01", "02", "03", "04", "05", "06"]) {
+    for (const num of ["02", "04", "06"]) {
       expect(DESTINATIONS_LAYER_SRC).toContain(`num="${num}"`);
     }
   });

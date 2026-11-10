@@ -18,8 +18,8 @@
 // all-or-nothing, never a silently thinner feed. The registry is read ONLY
 // when ≥1 remote subscription is enabled (zero-config never touches it).
 
-import type { AggregatedPayload, PerHostStatus } from "../hosts/fanout-contract.js";
-import { LOCAL_HOST_ID } from "../hosts/fanout-contract.js";
+import type { AggregatedPayload, PerHostStatus } from "../host-identity/fanout-contract.js";
+import { LOCAL_HOST_ID } from "../host-identity/fanout-contract.js";
 import type { HostRegistryLoadResult } from "../hosts/hosts-registry-reader.js";
 import { resolveHost } from "../hosts/hosts-registry-reader.js";
 import { remoteJsonRequest } from "../hosts/remote-daemon-http.js";

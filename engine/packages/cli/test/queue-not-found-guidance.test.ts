@@ -14,7 +14,6 @@ const verbs = [
   ["show"], ["transitions"], ["claim"], ["unclaim"],
   ["update", "--note", "a note"],
   ["block", "--on", "external:dependency"],
-  ["resolve", "--decision", "continue"],
   ["handoff", "--to", "peer@rig", "--summary", "Continue"],
   ["handoff-and-complete", "--to", "peer@rig", "--summary", "Continue"],
   ["fallback", "--destination", "peer@rig"],
@@ -66,7 +65,7 @@ for (const json of [false, true]) {
       expect(body.error).toBe("qitem_not_found");
       expect(body.message).toBe("original detail");
       expect(body.hint).toBe(`Queue item "${id}" was not found on daemon "selected-host".\n`
-        + `If it came from another host, run rig host list; replace <daemon-url> with its registered daemon URL and run: OPENRIG_URL='<daemon-url>' rig queue show ${shellQuote(id)} --full --json`);
+        + `If it came from another host, replace <daemon-url> with that daemon's URL and run: OPENRIG_URL='<daemon-url>' rig queue show ${shellQuote(id)} --full --json`);
       expect(calls).toHaveLength(2);
       expect(calls[1]).toEqual({ path: "/healthz", options: { timeoutMs: 1_000 } });
       expect(calls.some(c => c.path.includes("/hosts"))).toBe(false);
@@ -84,7 +83,7 @@ it.each([
   const body = JSON.parse(output.join("\n"));
   expect(body.error).toBe("qitem_not_found");
   expect(body.hint).toContain("selected daemon (host ID unavailable)");
-  expect(body.hint).toContain("rig host list");
+  expect(body.hint).toContain("that daemon's URL");
   expect(body.hint).not.toContain("not-confirmed");
   expect(process.exitCode).toBe(1);
 });

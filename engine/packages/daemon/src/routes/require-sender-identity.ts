@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { getSelfHostId } from "../domain/hosts/fanout-contract.js";
+import { getSelfHostId } from "../domain/host-identity/fanout-contract.js";
 
 /**
  * P21 sender-provenance chokepoint — the ONE shared route helper that generalizes P18's inline

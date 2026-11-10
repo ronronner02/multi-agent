@@ -83,7 +83,7 @@ import { SeatIdentityStore, SelfHostIdentityStore } from "./domain/seat-identity
 import { ensureSeatPane, seatForTask } from "./domain/seat-pane.js";
 import { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
 import { randomUUID } from "node:crypto";
-import { setSelfHostId, setSelfHostIdSource } from "./domain/hosts/fanout-contract.js";
+import { setSelfHostId, setSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
 import { UpCommandRouter } from "./domain/up-command-router.js";
 import { RigTeardownOrchestrator } from "./domain/rig-teardown.js";
 import { ResumeMetadataRefresher } from "./domain/resume-metadata-refresher.js";
@@ -185,18 +185,7 @@ import nodePath from "node:path";
 // can record diagnostic rows. SC-29 #10 declared verbatim in commit body.
 import { RigModeStore } from "./domain/rig-mode/rig-mode-store.js";
 import { OperatingPostureService, configuredCatalogPath } from "./domain/rig-mode/operating-posture.js";
-import { MissionControlActionLog } from "./domain/mission-control/mission-control-action-log.js";
-import { MissionControlWriteContract } from "./domain/mission-control/mission-control-write-contract.js";
-import { MissionControlReadLayer } from "./domain/mission-control/mission-control-read-layer.js";
-import {
-  MissionControlFleetCliCapability,
-  makeLocalCliCapabilityProbe,
-} from "./domain/mission-control/mission-control-fleet-cli-capability.js";
-import { MissionControlAuditBrowse } from "./domain/mission-control/audit-browse.js";
-import { MissionControlNotificationDispatcher } from "./domain/mission-control/notification-dispatcher.js";
-import { NtfyNotificationAdapter } from "./domain/mission-control/notification-adapter-ntfy.js";
-import { WebhookNotificationAdapter } from "./domain/mission-control/notification-adapter-webhook.js";
-import type { NotificationAdapter } from "./domain/mission-control/notification-adapter-types.js";
+import { MissionControlActionLog } from "./domain/scope/action-log.js";
 import { OPENRIG_HOME } from "./openrig-compat.js";
 import { materializeBuiltinPolicyReference } from "./domain/builtin-policy-reference.js";
 import { ensureActivityHookToken, writeActivityEndpointFile, deriveActivityUrl, readActivityEndpointFile } from "./domain/activity-endpoint.js";
@@ -2364,103 +2353,14 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     }
   }
 
-  // PL-005 Phase A: Mission Control / Queue Observability services.
-  // Wired AFTER WorkflowRuntime so all PL-004 daemon-backed coordination
-  // surfaces are available. Mission Control reads from queue/view/stream
-  // surfaces and writes through the atomic 7-verb contract.
-  if (deps.queueRepo && deps.viewProjector) {
-    const mcActionLog = new MissionControlActionLog(db);
-    const mcWriteContract = new MissionControlWriteContract({
-      db,
-      eventBus,
-      queueRepo: deps.queueRepo,
-      actionLog: mcActionLog,
-    });
-    const mcFleetCliCapability = new MissionControlFleetCliCapability({
-      db,
-      eventBus,
-      rigRepo,
-      // This projection observes the daemon registry and queue, not a CLI.
-      // Leave CLI version/capabilities unknown until actually observed.
-      probeRig: makeLocalCliCapabilityProbe(),
-    });
-    // V0.3.1 slice 05 kernel-rig-as-default — cascade the resolved
-    // workspace.operator_seat_name setting into the mission-control
-    // read layer so my-queue routes to the operator's configured seat
-    // (default `operator-${USER}@kernel`) instead of the legacy
-    // hardcoded constant. The setting reads OPENRIG_WORKSPACE_OPERATOR_SEAT_NAME
-    // env var first, then ~/.openrig/config.json, then the derived
-    // default — same cascade as every other typed setting.
-    const mcReadLayer = new MissionControlReadLayer({
-      db,
-      queueRepo: deps.queueRepo,
-      viewProjector: deps.viewProjector,
-      streamStore: deps.streamStore,
-      fleetCliCapability: mcFleetCliCapability,
-      defaultOperatorSession: runtimeSettings.workspaceOperatorSeatName,
-    });
-    deps.missionControlActionLog = mcActionLog;
-    deps.missionControlWriteContract = mcWriteContract;
-    deps.missionControlFleetCliCapability = mcFleetCliCapability;
-    deps.missionControlReadLayer = mcReadLayer;
-
-    // PL-005 Phase B: audit-history browse layer (read-only) +
-    // notification dispatcher + bearer-token plumbing.
-    const mcAuditBrowse = new MissionControlAuditBrowse(db);
-    deps.missionControlAuditBrowse = mcAuditBrowse;
-
-    // Bearer token from createDaemon options is propagated to the
-    // routes constructor via deps so the auth middleware is mounted
-    // at route mount time (not per-request).
-    deps.missionControlBearerToken = opts?.bearerToken ?? null;
-
-    const terminalTokenEnv = process.env.OPENRIG_TERMINAL_BEARER_TOKEN?.trim();
-    deps.terminalBearerToken =
-      opts && Object.prototype.hasOwnProperty.call(opts, "terminalBearerToken")
-        ? opts.terminalBearerToken ?? null
-        : terminalTokenEnv || null;
-
-    // Notification dispatcher: chosen mechanism via env config.
-    // OPENRIG_NOTIFICATIONS_MECHANISM=ntfy|webhook|none (default none).
-    // OPENRIG_NOTIFICATIONS_TARGET=<topic url | webhook url>.
-    // OPENRIG_NOTIFICATIONS_INCLUDE_VERB_COMPLETION=1 to opt into the
-    // verb-completion trigger (default off; only human-gate arrivals
-    // trigger by default per planner brief).
-    // No legacy alias for these env vars (new in Phase B).
-    const mechanism = process.env.OPENRIG_NOTIFICATIONS_MECHANISM ?? "none";
-    const target = process.env.OPENRIG_NOTIFICATIONS_TARGET ?? "";
-    const missionControlBaseUrl =
-      process.env.OPENRIG_MISSION_CONTROL_BASE_URL ??
-      process.env.OPENRIG_URL ??
-      process.env.RIGGED_URL;
-    const includeVerbCompletion =
-      process.env.OPENRIG_NOTIFICATIONS_INCLUDE_VERB_COMPLETION === "1";
-    if (mechanism !== "none" && target.length > 0) {
-      let adapter: NotificationAdapter;
-      if (mechanism === "ntfy") {
-        adapter = new NtfyNotificationAdapter({ topicUrl: target });
-      } else if (mechanism === "webhook") {
-        adapter = new WebhookNotificationAdapter({ endpointUrl: target });
-      } else {
-        throw new Error(
-          `OPENRIG_NOTIFICATIONS_MECHANISM='${mechanism}' is not recognized; supported: ntfy | webhook | none`,
-        );
-      }
-      if (adapter.disabled) {
-        // Target URL failed validation; warning was logged and daemon starts with notifications disabled.
-      } else {
-        const dispatcher = new MissionControlNotificationDispatcher({
-          db,
-          eventBus,
-          adapter,
-          includeVerbCompletion,
-          missionControlBaseUrl,
-        });
-        if (!managed) dispatcher.start();
-        deps.missionControlNotificationDispatcher = dispatcher;
-      }
-    }
-  }
+  // Scope approval still records its audit in the existing table until its deletion unit.
+  if (deps.queueRepo && deps.viewProjector) deps.scopeActionLog = new MissionControlActionLog(db);
+  deps.legacyBearerToken = opts?.bearerToken ?? null;
+  const terminalTokenEnv = process.env.OPENRIG_TERMINAL_BEARER_TOKEN?.trim();
+  deps.terminalBearerToken =
+    opts && Object.prototype.hasOwnProperty.call(opts, "terminalBearerToken")
+      ? opts.terminalBearerToken ?? null
+      : terminalTokenEnv || null;
 
   // Slice Story View v0 — slice indexer + per-tab projector.
   //

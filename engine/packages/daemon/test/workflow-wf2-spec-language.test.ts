@@ -28,8 +28,6 @@ import { workflowSpecJsonSchema } from "../src/db/migrations/050_workflow_spec_j
 import { missionControlActionsSchema } from "../src/db/migrations/037_mission_control_actions.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
-import { MissionControlActionLog } from "../src/domain/mission-control/mission-control-action-log.js";
-import { MissionControlWriteContract } from "../src/domain/mission-control/mission-control-write-contract.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { parseWorkflowSpec, WorkflowSpecError } from "../src/domain/workflow-spec-cache.js";
@@ -665,62 +663,6 @@ describe("OPR.0.4.6.WF2 — spec language", () => {
   // ── FR-5: gate compile, both target kinds ──────────────────────────
 
   describe("FR-5 gate compile", () => {
-    it("HUMAN target: routing into the gated step creates the packet for the STEP OWNER parked blocked_on the human seat (summary + evidence_ref), instance waits, and the SHIPPED resolve verb continues the flow", async () => {
-      const specPath = writeSpec(tmp, "gated-human.yaml", GATED_HUMAN_SPEC);
-      const { instance, entryQitemId } = await runtime.instantiate({
-        specPath,
-        rootObjective: "human gate",
-        createdBySession: "ops@rig",
-      });
-      const result = await runtime.project({
-        instanceId: instance.instanceId,
-        currentPacketId: entryQitemId,
-        exit: "handoff",
-        actorSession: "builder@rig",
-      });
-      // Guard blocker 1: the leg-1 park shape — the packet belongs to the
-      // gated step's ROLE OWNER and parks blocked_on the HUMAN seat (the
-      // exact shape `rig queue resolve` acts on) — never an unresolvable
-      // pending human-destined item.
-      expect(result.nextOwnerSession).toBe("prover@rig");
-      const gateItem = queueRepo.getById(result.nextQitemId!)!;
-      expect(gateItem.destinationSession).toBe("prover@rig");
-      expect(gateItem.state).toBe("blocked");
-      expect(gateItem.blockedOn).toBe("human@kernel");
-      expect(gateItem.summary).toBe("Sign off the release");
-      expect(gateItem.evidenceRef).toBe("proof/PROOF.md");
-      const after = runtime.instanceStore.getByIdOrThrow(instance.instanceId);
-      expect(after.status).toBe("waiting");
-      expect(after.currentStepId).toBe("signoff");
-      expect(after.currentFrontier).toEqual([result.nextQitemId]);
-
-      // THE CONTINUATION PROOF: the shipped resolve verb unparks the gate
-      // item; the step owner then projects onward and the flow completes —
-      // no restart, no new machinery.
-      const writeContract = new MissionControlWriteContract({
-        db,
-        eventBus: bus,
-        queueRepo,
-        actionLog: new MissionControlActionLog(db),
-      });
-      await writeContract.act({
-        verb: "resolve",
-        qitemId: result.nextQitemId!,
-        actorSession: "human@kernel",
-        decision: "signed off — ship it",
-      });
-      const resolved = queueRepo.getById(result.nextQitemId!)!;
-      expect(resolved.state).toBe("in-progress");
-      const done = await runtime.project({
-        instanceId: instance.instanceId,
-        currentPacketId: result.nextQitemId!,
-        exit: "done",
-        actorSession: "prover@rig",
-      });
-      expect(done.nextQitemId).toBeNull();
-      const finished = runtime.instanceStore.getByIdOrThrow(instance.instanceId);
-      expect(finished.status).toBe("completed");
-    });
 
     it("HANDLER-ROLE target: routing into the gated step routes an ordinary agent item to the handler's seat and parks waiting with trail evidence", async () => {
       const specPath = writeSpec(tmp, "gated-handler.yaml", GATED_HANDLER_SPEC);

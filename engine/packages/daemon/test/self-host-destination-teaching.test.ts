@@ -21,7 +21,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { parseSessionName, isHumanSeatSessionRef } from "../src/domain/session-name.js";
-import { setSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 function setup(): { repo: QueueRepository; db: Database.Database } {
   const db = createDb();

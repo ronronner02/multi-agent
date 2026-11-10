@@ -5,7 +5,7 @@
 
 import { Hono } from "hono";
 import type { SliceIndexer } from "../domain/slices/slice-indexer.js";
-import type { MissionControlActionLog } from "../domain/mission-control/mission-control-action-log.js";
+import type { MissionControlActionLog } from "../domain/scope/action-log.js";
 import { ScopeApproveError, ScopeApproveService, type ApprovalScope, type ScopeTier } from "../domain/scope/scope-approve.js";
 import { requireSenderIdentity, resolveRecordedProvenance } from "./require-sender-identity.js";
 
@@ -44,7 +44,7 @@ export function scopeApproveRoutes(): Hono {
     }
 
     const indexer = c.get("sliceIndexer" as never) as SliceIndexer | undefined;
-    const actionLog = c.get("missionControlActionLog" as never) as MissionControlActionLog | undefined;
+    const actionLog = c.get("scopeActionLog" as never) as MissionControlActionLog | undefined;
     if (!actionLog) return c.json({ error: "action_log_unavailable" }, 503);
 
     const service = new ScopeApproveService({

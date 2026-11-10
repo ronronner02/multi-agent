@@ -41,15 +41,12 @@ import {
   Sparkles,
   Wrench,
 } from "lucide-react";
-import { Explorer, shouldSuppressExplorerMount, type ExplorerSurface } from "./Explorer.js";
+import { Explorer, type ExplorerSurface } from "./Explorer.js";
 import { SharedDetailDrawer, type DrawerSelection } from "./SharedDetailDrawer.js";
 import { PreviewStack } from "./preview/PreviewStack.js";
 import type { DiscoveryPlacementTarget } from "./DiscoveryPanel.js";
 import { SpecsWorkspaceProvider } from "./SpecsWorkspace.js";
-import {
-  TopologyOverlayProvider,
-  useTopologyOverlay,
-} from "./topology/topology-overlay-context.js";
+import { TopologyOverlayProvider } from "./topology/topology-overlay-context.js";
 import { ThemeSelector } from "./ThemeSelector.js";
 import { useSettings } from "../hooks/useSettings.js";
 import { useActivityFeed } from "../hooks/useActivityFeed.js";
@@ -57,7 +54,6 @@ import { useClearPlacementOnHostSwitch } from "../hooks/useHosts.js";
 import { useGlobalEvents } from "../hooks/useGlobalEvents.js";
 import { cn } from "../lib/utils.js";
 import { parseSessionName } from "../lib/session-name.js";
-import { HostIndicator } from "./HostIndicator.js";
 
 // =====================================================================
 // Contexts (preserved per DRIFT P2-B + active consumers in Dashboard, RigGraph)
@@ -140,24 +136,6 @@ const RAIL_ICONS: RailIconSpec[] = [
     group: "destination",
   },
   {
-    id: "topology",
-    label: "Topology",
-    to: "/topology",
-    icon: Network,
-    activeWhen: (p) => p.startsWith("/topology") || p.startsWith("/rigs/"),
-    testId: "rail-topology",
-    group: "destination",
-  },
-  {
-    id: "for-you",
-    label: "For You",
-    to: "/for-you",
-    icon: Sparkles,
-    activeWhen: (p) => p.startsWith("/for-you"),
-    testId: "rail-for-you",
-    group: "destination",
-  },
-  {
     id: "project",
     label: "Project",
     to: "/project",
@@ -225,7 +203,7 @@ function resolveChatTo(session: string, role: "advisor" | "operator"): string {
   // (malformed/legacy) falls back to /settings.
   const parsed = parseSessionName(session);
   if (parsed.kind !== "canonical") return `/settings#agents-${role}-session`;
-  return `/topology/seat/${encodeURIComponent(parsed.rig)}/${encodeURIComponent(parsed.member)}`;
+  return `/rigs/${encodeURIComponent(parsed.rig)}/nodes/${encodeURIComponent(parsed.member)}`;
 }
 
 // =====================================================================
@@ -233,10 +211,8 @@ function resolveChatTo(session: string, role: "advisor" | "operator"): string {
 // =====================================================================
 
 function surfaceForPath(pathname: string): ExplorerSurface {
-  if (pathname.startsWith("/topology") || pathname.startsWith("/rigs/")) return "topology";
   if (pathname.startsWith("/project")) return "project";
   if (pathname.startsWith("/specs") || pathname.startsWith("/plugins")) return "specs";
-  if (pathname.startsWith("/for-you")) return "for-you";
   if (pathname.startsWith("/settings")) return "settings";
   return "none";
 }
@@ -373,7 +349,6 @@ function AppShellInner({ children }: AppShellProps) {
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
   const surface = surfaceForPath(pathname);
-  const { mode: explorerMode } = useTopologyOverlay();
 
   const [explorerOpen, setExplorerOpen] = useState(false); // mobile slide-over state
   const [desktopExplorerOpen, setDesktopExplorerOpen] = useState(true);
@@ -442,26 +417,8 @@ function AppShellInner({ children }: AppShellProps) {
   const proofConnection = useGlobalEvents();
 
   const explorerVisible = surface !== "none";
-  // Slice 26.D OPT-D3 Topology mobile mount-suppression: rule lives
-  // in shouldSuppressExplorerMount() (Explorer.tsx). Pre-existing
-  // renderer-spin in Topology mobile render path pegs the browser
-  // when Explorer mounts at 375px; only mount-suppression sidesteps
-  // the peg trigger. Other 4 destinations mount normally regardless
-  // of viewport. 0.3.2 fixes Topology mobile render path; this
-  // suppression reverts at that time.
-  const explorerMounted = explorerVisible && !shouldSuppressExplorerMount(surface, isWideLayout);
   const drawerOpen = Boolean(selectionState);
 
-  // V1 attempt-3 Phase 3 bounce-fix — Class B fixed-anchor + selective overlay.
-  // Topology graph mode signals overlay; only meaningful while on /topology
-  // (surface === "topology"). Other surfaces ALWAYS use opaque layout.
-  const isTopologyOverlay = explorerMode === "overlay" && surface === "topology";
-
-  // Anchor stays the same in BOTH modes — tab bar position never moves.
-  // Main padding-left differs:
-  //   - opaque: padding = anchor (content starts AFTER explorer)
-  //   - overlay: padding = 0 (content extends behind translucent explorer);
-  //              tab bar is sticky/positioned at left=anchor independently.
   // 21rem = rail (3rem) + explorer (18rem).
   // 21rem (rail 3 + explorer 18) when explorer fully open. When
   // collapsed: 3rem (rail only) — the floating chevron toggle floats
@@ -470,16 +427,7 @@ function AppShellInner({ children }: AppShellProps) {
   const explorerAnchorLeft = isWideLayout && explorerVisible && desktopExplorerOpen
     ? "21rem"
     : "3rem";
-  const workspaceLeftOffset = isWideLayout
-    ? isTopologyOverlay
-      ? "0rem"
-      : explorerAnchorLeft
-    : "0rem";
-  // Class B fixed-anchor: header (eyebrow + title + view-mode tabs) ALWAYS
-  // sits at the explorer-anchor offset, even in overlay mode where the
-  // canvas extends behind the Explorer. This keeps the tab bar at a
-  // stable left position across view-mode switches.
-  const headerAnchorOffset = isWideLayout && isTopologyOverlay ? explorerAnchorLeft : "0rem";
+  const workspaceLeftOffset = isWideLayout ? explorerAnchorLeft : "0rem";
   // Coupled to VellumSheet wide preset (lg:w-[38rem]) — bounce-fix #3
   // caught the gap that emerged when bounce-fix #2 calibrated the drawer
   // 45rem → 38rem without updating this offset. Keep these two literals
@@ -489,7 +437,7 @@ function AppShellInner({ children }: AppShellProps) {
     "--workspace-left-offset": workspaceLeftOffset,
     "--workspace-right-offset": workspaceRightOffset,
     "--explorer-anchor-left": explorerAnchorLeft,
-    "--header-anchor-offset": headerAnchorOffset,
+    "--header-anchor-offset": "0rem",
   } as CSSProperties;
 
   return (
@@ -514,35 +462,17 @@ function AppShellInner({ children }: AppShellProps) {
               className="h-14 flex items-center justify-between px-4 bg-background border-b border-outline-variant shrink-0 relative z-30"
             >
               <div className="flex items-center gap-3">
-                {/* Slice 26.E OPT-E Topology mobile toggle carve-out: at
-                    narrow viewports on /topology the menu toggle does
-                    not render. Clicking it flips explorerOpen state
-                    which re-renders AppShellInner's children; the
-                    Topology mobile render path (TopologyTableView +
-                    TopologyTreeView) has a pre-existing render-cost
-                    that pegs the browser on that cascade — independent
-                    of whether the Explorer drawer itself mounts (OPT-D3
-                    already suppresses that). Hiding the entry point
-                    prevents the state-flip trigger. Pre-existing
-                    renderer-spin scheduled for 0.3.2 dedicated render-
-                    path slice; 0.3.1 carve-out preserves Topology
-                    mobile usability (degraded table still loads +
-                    navigable; brand-home-link reachable in topbar).
-                    Reuses shouldSuppressExplorerMount predicate — same
-                    underlying carve-out scenario. */}
-                {!shouldSuppressExplorerMount(surface, isWideLayout) && (
-                  <button
-                    type="button"
-                    data-testid="mobile-menu-toggle"
-                    onClick={() => setExplorerOpen((open) => !open)}
-                    aria-label="Toggle navigation"
-                    className="flex flex-col gap-[3px] p-2 lg:hidden"
-                  >
-                    <span className="block w-4 h-[1.5px] bg-inverse-surface" />
-                    <span className="block w-4 h-[1.5px] bg-inverse-surface" />
-                    <span className="block w-3 h-[1.5px] bg-inverse-surface" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  data-testid="mobile-menu-toggle"
+                  onClick={() => setExplorerOpen((open) => !open)}
+                  aria-label="Toggle navigation"
+                  className="flex flex-col gap-[3px] p-2 lg:hidden"
+                >
+                  <span className="block w-4 h-[1.5px] bg-inverse-surface" />
+                  <span className="block w-4 h-[1.5px] bg-inverse-surface" />
+                  <span className="block w-3 h-[1.5px] bg-inverse-surface" />
+                </button>
                 <Link
                   to="/"
                   data-testid="brand-home-link"
@@ -551,15 +481,10 @@ function AppShellInner({ children }: AppShellProps) {
                   OPENRIG
                 </Link>
               </div>
-              {/* Right-slot — the V2 global affordance this slot was
-                  reserved for: the MH-2 which-host indicator (FR-3),
-                  truthful to the selected data source. Hidden on narrow
-                  viewports to preserve mobile space. */}
               <div
                 data-testid="topbar-right-slot"
                 className="hidden sm:flex items-center gap-3"
               >
-                <HostIndicator />
                 {/* OPR.0.4.3.29 — theme selector (placement founder-taste-gated). */}
                 <ThemeSelector />
               </div>
@@ -600,13 +525,8 @@ function AppShellInner({ children }: AppShellProps) {
                 </>
               )}
 
-              {/* Explorer — desktop column or mobile slide-over.
-                  In overlay mode (topology graph): vellum-translucent + z-30
-                  so it floats over the canvas. In opaque mode: z-40
-                  per slice 26.B OPT-B (above rail-tray on mobile).
-                  Slice 26.D OPT-D3: Topology Explorer doesn't mount
-                  on mobile (suppressTopologyMobileExplorer above). */}
-              {explorerMounted && (
+              {/* Explorer stays above the mobile rail tray. */}
+              {explorerVisible && (
                 <Explorer
                   open={explorerOpen}
                   onClose={() => setExplorerOpen(false)}
@@ -615,14 +535,13 @@ function AppShellInner({ children }: AppShellProps) {
                   desktopMode={desktopExplorerOpen ? "full" : "hidden"}
                   surface={surface}
                   onDesktopToggle={() => setDesktopExplorerOpen((open) => !open)}
-                  overlayMode={isTopologyOverlay ? "overlay" : "opaque"}
                 />
               )}
 
               {/* Center workspace */}
               <main
                 data-testid="content-area"
-                data-explorer-mode={isTopologyOverlay ? "overlay" : "opaque"}
+                data-explorer-mode="opaque"
                 className="flex-1 flex flex-col overflow-auto relative"
                 style={{
                   ...workspaceStyle,
@@ -680,15 +599,13 @@ function AppShellInner({ children }: AppShellProps) {
  *  terminal ships). Rendered at lg:hidden so desktop never shows it. */
 function MobileBottomNav({ pathname }: { pathname: string }) {
   const slots: Array<{
-    id: "for-you" | "project" | "topology";
+    id: "project";
     label: string;
     to: string;
     activeWhen: (p: string) => boolean;
     icon: ComponentType<{ className?: string; strokeWidth?: number | string }>;
   }> = [
-    { id: "for-you", label: "For You", to: "/for-you", activeWhen: (p) => p.startsWith("/for-you"), icon: Sparkles },
     { id: "project", label: "Project", to: "/project", activeWhen: (p) => p.startsWith("/project"), icon: Folder },
-    { id: "topology", label: "Topology", to: "/topology", activeWhen: (p) => p.startsWith("/topology") || p.startsWith("/rigs/"), icon: Network },
   ];
   return (
     <nav

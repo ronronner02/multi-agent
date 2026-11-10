@@ -18,8 +18,8 @@ import { coreSchema } from "../src/db/migrations/001_core_schema.js";
 import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
 import { missionControlActionsSchema } from "../src/db/migrations/037_mission_control_actions.js";
 import { identityProvenanceSchema } from "../src/db/migrations/065_identity_provenance.js";
-import { MissionControlActionLog } from "../src/domain/mission-control/mission-control-action-log.js";
-import { MissionControlAuditBrowse } from "../src/domain/mission-control/audit-browse.js";
+import { MissionControlActionLog } from "../src/domain/scope/action-log.js";
+import { MissionControlAuditBrowse } from "../src/domain/scope/audit-browse.js";
 import { ScopeApproveError, ScopeApproveService } from "../src/domain/scope/scope-approve.js";
 
 function frontmatterOf(p: string): Record<string, unknown> {
@@ -225,7 +225,7 @@ describe("ScopeApproveService — re-approve/re-stamp (OPR.0.5.0.18)", () => {
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("sliceIndexer" as never, indexerStub as never);
-      c.set("missionControlActionLog" as never, actionLog as never);
+      c.set("scopeActionLog" as never, actionLog as never);
       await next();
     });
     app.route("/api/scope/approve", scopeApproveRoutes());
@@ -266,7 +266,7 @@ describe("ScopeApproveService — re-approve/re-stamp (OPR.0.5.0.18)", () => {
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("sliceIndexer" as never, indexerStub as never);
-      c.set("missionControlActionLog" as never, actionLog as never);
+      c.set("scopeActionLog" as never, actionLog as never);
       await next();
     });
     app.route("/api/scope/approve", scopeApproveRoutes());

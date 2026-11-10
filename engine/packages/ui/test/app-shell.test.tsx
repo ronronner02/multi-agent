@@ -84,8 +84,8 @@ async function renderAt(initialPath: string, opts: { innerWidth?: number } = {})
 
 describe("AppShell — Phase 2 chrome", () => {
   describe("SC-1: exactly 2 left chromes on desktop (rail + explore)", () => {
-    it("renders exactly 2 left chromes at /topology desktop (rail + explore) — SC-1 strict count", async () => {
-      const { container } = await renderAt("/topology");
+    it("renders exactly 2 left chromes at /project desktop (rail + explore) — SC-1 strict count", async () => {
+      const { container } = await renderAt("/project");
       // SC-1: count desktop-visible nav/aside elements only. The Phase 5 P5-9
       // MobileBottomNav uses <nav lg:hidden> — it's in the DOM but display:none
       // at desktop (lg breakpoint). SC-1's "exactly 2 left chromes on desktop"
@@ -117,12 +117,10 @@ describe("AppShell — Phase 2 chrome", () => {
   });
 
   describe("SC-2: rail roster — 6 destinations + 2 chat icons", () => {
-    it("rail renders 6 destination icons in canonical order: Dashboard, Topology, For You, Project, Specs, Settings", async () => {
+    it("rail renders the retained destinations in canonical order: Dashboard, Project, Specs, Settings", async () => {
       const { container } = await renderAt("/");
       const expectedDestinations = [
         "rail-dashboard",
-        "rail-topology",
-        "rail-for-you",
         "rail-project",
         "rail-specs",
         "rail-settings",
@@ -153,27 +151,10 @@ describe("AppShell — Phase 2 chrome", () => {
   });
 
   describe("Active rail state", () => {
-    it("Topology rail icon active at /topology", async () => {
-      const { container } = await renderAt("/topology");
-      const icon = container.querySelector("[data-testid='rail-topology']") as HTMLElement;
-      expect(icon.getAttribute("data-active")).toBe("true");
-    });
-
-    it("Topology rail icon active at /rigs/$rigId (legacy graph route)", async () => {
-      const { container } = await renderAt("/rigs/abc");
-      const icon = container.querySelector("[data-testid='rail-topology']") as HTMLElement;
-      expect(icon.getAttribute("data-active")).toBe("true");
-    });
 
     it("Project rail icon active at /project", async () => {
       const { container } = await renderAt("/project");
       const icon = container.querySelector("[data-testid='rail-project']") as HTMLElement;
-      expect(icon.getAttribute("data-active")).toBe("true");
-    });
-
-    it("For You rail icon active at /for-you", async () => {
-      const { container } = await renderAt("/for-you");
-      const icon = container.querySelector("[data-testid='rail-for-you']") as HTMLElement;
       expect(icon.getAttribute("data-active")).toBe("true");
     });
   });
@@ -181,8 +162,6 @@ describe("AppShell — Phase 2 chrome", () => {
   describe("SC-6: drawer default-closed", () => {
     it.each([
       ["/", "Dashboard"],
-      ["/topology", "Topology host"],
-      ["/for-you", "For You"],
       ["/project", "Project workspace"],
       ["/specs", "Specs library"],
       ["/settings", "Settings"],
@@ -193,11 +172,6 @@ describe("AppShell — Phase 2 chrome", () => {
   });
 
   describe("Surface routing — Explorer surface union", () => {
-    it("Topology routes set surface=topology", async () => {
-      const { container } = await renderAt("/topology");
-      const explorer = container.querySelector("[data-testid='explorer']") as HTMLElement;
-      expect(explorer?.getAttribute("data-surface")).toBe("topology");
-    });
 
     it("Project routes set surface=project", async () => {
       const { container } = await renderAt("/project");
@@ -218,12 +192,6 @@ describe("AppShell — Phase 2 chrome", () => {
       expect(explorer?.getAttribute("data-surface")).toBe("specs");
       expect(railSpecs?.getAttribute("data-active")).toBe("true");
     });
-
-    it("For You route sets surface=for-you", async () => {
-      const { container } = await renderAt("/for-you");
-      const explorer = container.querySelector("[data-testid='explorer']") as HTMLElement;
-      expect(explorer?.getAttribute("data-surface")).toBe("for-you");
-    });
   });
 
   describe("Top bar — universal-shell.md L40–L53 (Phase 2 bounce-fix)", () => {
@@ -237,23 +205,11 @@ describe("AppShell — Phase 2 chrome", () => {
     });
 
     it("brand link visible at desktop and links to / (Dashboard)", async () => {
-      const { container } = await renderAt("/topology");
+      const { container } = await renderAt("/project");
       const brand = container.querySelector("[data-testid='brand-home-link']") as HTMLAnchorElement;
       expect(brand).toBeTruthy();
       expect(brand.getAttribute("href")).toBe("/");
       expect(brand.textContent).toContain("OPENRIG");
-    });
-
-    it("right-slot carries the MH-2 host indicator (quiet local register, defaults to 'localhost')", async () => {
-      // OPR.0.4.6.MH2 FR-3 — the reserved V2 slot now renders HostIndicator;
-      // with no hosts payload the truthful default is the local state.
-      const { container } = await renderAt("/");
-      const indicator = container.querySelector(
-        "[data-testid='host-indicator']",
-      ) as HTMLElement;
-      expect(indicator).toBeTruthy();
-      expect(indicator.getAttribute("data-state")).toBe("local");
-      expect(indicator.textContent?.toLowerCase()).toContain("localhost");
     });
 
     it("hamburger button is mobile-only (lg:hidden) — preserved Phase 2 behavior", async () => {

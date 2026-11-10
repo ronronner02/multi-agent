@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
-import { readTerminalBearerToken } from "../mission-control/missionControlAuth.js";
+import { readTerminalBearerToken } from "../../lib/legacy-auth.js";
 import { useDaemonHealthSignal } from "../../hooks/useDaemonHealth.js";
 import {
   LIVE_TERMINAL_RENDER_BACKGROUND,

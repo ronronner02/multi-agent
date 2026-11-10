@@ -28,7 +28,6 @@ import { archiveCommand } from "./commands/archive.js";
 import { unarchiveCommand } from "./commands/unarchive.js";
 import { rosterCommand } from "./commands/roster.js";
 import { psCommand } from "./commands/ps.js";
-import { hostCommand } from "./commands/host.js";
 import { parkedCommand } from "./commands/parked.js";
 import { mcpCommand } from "./commands/mcp.js";
 import { agentCommand, type AgentDeps } from "./commands/agent.js";
@@ -201,7 +200,6 @@ export function createProgram(depsOverride?: ProgramDeps): Command {
   // OPR.0.3.3.19 - rig archive affordance (soft, reversible; NOT a delete).
   program.addCommand(archiveCommand(depsOverride?.archiveDeps));
   program.addCommand(unarchiveCommand(depsOverride?.unarchiveDeps));
-  program.addCommand(hostCommand());
   program.addCommand(psCommand(depsOverride?.psDeps));
   program.addCommand(rosterCommand());
   program.addCommand(mcpCommand(depsOverride?.mcpDeps));

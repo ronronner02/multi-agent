@@ -676,7 +676,6 @@ export function buildStorytellingFeedItems(
         title: card.title,
         oneLiner: `Needs approval${author}`,
         bodyPreview,
-        drillInHref: "/for-you",
       },
     });
   }

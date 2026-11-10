@@ -76,7 +76,7 @@ describe("T052 managed owner read projections", () => {
     });
 
     app = createTestApp(db, { appDeps: {
-      queueRepo: queue, eventBus: bus, missionControlBearerToken: "legacy-control-fixture",
+      queueRepo: queue, eventBus: bus, legacyBearerToken: "legacy-control-fixture",
       terminalBearerToken: "terminal-control-fixture",
       teamControl: {
         credentials: { ownerToken, workers: [{ token: workerToken, sessionId: "worker-session", runId: "run" }] },

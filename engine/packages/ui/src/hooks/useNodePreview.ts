@@ -8,7 +8,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useSettings } from "./useSettings.js";
-import { terminalAuthHeaders } from "../components/mission-control/missionControlAuth.js";
+import { terminalAuthHeaders } from "../lib/legacy-auth.js";
 
 export interface NodePreviewResponse {
   content: string;

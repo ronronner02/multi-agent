@@ -18,7 +18,7 @@ import { OutboxHandler, WAKE_INTENT_PREFIX } from "../src/domain/outbox-handler.
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { wrapPaneEnvelope } from "../src/lib/pane-envelope.js";
-import { setSelfHostId, getSelfHostId } from "../src/domain/hosts/fanout-contract.js";
+import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 const TEST_HOST = "host-red-invariant";
 

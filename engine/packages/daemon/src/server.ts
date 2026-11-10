@@ -1,3 +1,4 @@
+import { requireLocalTarget } from "./middleware/local-target.js";
 import { healthDiagnosisRoutes } from "./routes/health-diagnosis.js";
 import type { HealthDiagnosisService } from "./domain/health-diagnosis.js";
 import type { HealthPolicyStore } from "./domain/health-policy.js";
@@ -77,10 +78,8 @@ import type { PluginDiscoveryService } from "./domain/plugin-discovery-service.j
 import { skillsRoutes } from "./routes/skills.js";
 import type { SkillLibraryDiscoveryService } from "./domain/skill-library-discovery.js";
 import { configRoutes } from "./routes/config.js";
-import { hostsRoutes } from "./routes/hosts.js";
-import { hostReadThrough } from "./domain/hosts/read-through.js";
 import { jsonBodyErrorHandler, trackJsonBodyParseErrors } from "./middleware/json-body-error.js";
-import { getSelfHostId, getSelfHostIdSource } from "./domain/hosts/fanout-contract.js";
+import { getSelfHostId, getSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
 import { contextPacksRoutes } from "./routes/context-packs.js";
 import { agentImagesRoutes } from "./routes/agent-images.js";
 import type { SpecReviewService } from "./domain/spec-review-service.js";
@@ -100,7 +99,6 @@ import { projectsRoutes } from "./routes/projects.js";
 import { viewsRoutes } from "./routes/views.js";
 import { watchdogRoutes } from "./routes/watchdog.js";
 import { workflowRoutes } from "./routes/workflow.js";
-import { missionControlRoutes } from "./routes/mission-control.js";
 import { slicesRoutes } from "./routes/slices.js";
 import { reviewRoutes } from "./routes/review.js";
 import { rigModeRoutes } from "./routes/rig-mode.js";
@@ -313,10 +311,7 @@ export interface AppDeps {
    *  read-through valid YAML and writeDiagnostic for invalid YAML.
    *  Same singleton as workflowRuntime.specCache. */
   workflowSpecCache?: import("./domain/workflow-spec-cache.js").WorkflowSpecCache;
-  missionControlReadLayer?: import("./domain/mission-control/mission-control-read-layer.js").MissionControlReadLayer;
-  missionControlWriteContract?: import("./domain/mission-control/mission-control-write-contract.js").MissionControlWriteContract;
-  missionControlActionLog?: import("./domain/mission-control/mission-control-action-log.js").MissionControlActionLog;
-  missionControlFleetCliCapability?: import("./domain/mission-control/mission-control-fleet-cli-capability.js").MissionControlFleetCliCapability;
+  scopeActionLog?: import("./domain/scope/action-log.js").MissionControlActionLog;
   // Slice Story View v0 — slice indexer + per-tab projector. Both
   // optional: when slicesRoot is unset, the routes return a clear
   // "slices_root_not_configured" 503 so the UI can surface a setup hint.
@@ -342,14 +337,11 @@ export interface AppDeps {
   progressIndexer?: import("./domain/progress/progress-indexer.js").ProgressIndexer;
   /** Operator Surface Reconciliation v0 — steering composer (item 1). */
   steeringComposer?: import("./domain/steering/steering-composer.js").SteeringComposer;
-  missionControlAuditBrowse?: import("./domain/mission-control/audit-browse.js").MissionControlAuditBrowse;
-  missionControlNotificationDispatcher?: import("./domain/mission-control/notification-dispatcher.js").MissionControlNotificationDispatcher;
   /**
    * PL-005 Phase B: bearer token (or null for loopback-only mode).
-   * The mission-control routes use this to wire the
-   * authBearerTokenMiddleware on write verbs.
+   * Retained routes accept the daemon bearer token alongside their scoped credentials.
    */
-  missionControlBearerToken?: string | null;
+  legacyBearerToken?: string | null;
   terminalBearerToken?: string | null;
   enableNodeWebSocket?: boolean;
   /** `ui.enabled`: serve the web UI pages and its terminal WebSocket. Off unless true; /api routes are unaffected. */
@@ -696,10 +688,7 @@ export function createApp(deps: AppDeps): Hono {
     c.set("workflowBuiltinSpecsDir" as never, deps.workflowBuiltinSpecsDir);
     c.set("workflowsFolderDir" as never, deps.workflowsFolderDir);
     c.set("workflowSpecCache" as never, deps.workflowSpecCache);
-    c.set("missionControlReadLayer" as never, deps.missionControlReadLayer);
-    c.set("missionControlWriteContract" as never, deps.missionControlWriteContract);
-    c.set("missionControlActionLog" as never, deps.missionControlActionLog);
-    c.set("missionControlFleetCliCapability" as never, deps.missionControlFleetCliCapability);
+    c.set("scopeActionLog" as never, deps.scopeActionLog);
     c.set("sliceIndexer" as never, deps.sliceIndexer);
     c.set("proofSourceWatch" as never, deps.proofSourceWatch);
     c.set("sliceDetailProjector" as never, deps.sliceDetailProjector);
@@ -711,8 +700,6 @@ export function createApp(deps: AppDeps): Hono {
     c.set("fileWriteService" as never, deps.fileWriteService);
     c.set("progressIndexer" as never, deps.progressIndexer);
     c.set("steeringComposer" as never, deps.steeringComposer);
-    c.set("missionControlAuditBrowse" as never, deps.missionControlAuditBrowse);
-    c.set("missionControlNotificationDispatcher" as never, deps.missionControlNotificationDispatcher);
     c.set("specReviewService" as never, deps.specReviewService);
     c.set("specLibraryService" as never, deps.specLibraryService);
     c.set("pluginDiscoveryService" as never, deps.pluginDiscoveryService);
@@ -770,10 +757,10 @@ export function createApp(deps: AppDeps): Hono {
     webUiEnabled: deps.webUiEnabled === true,
     pairedOwnerBoundary: pairedOwners,
     authenticateOwnerCookie: c => {
-      const resolved = resolvePairedOwnerCookie(c, teamOptions.credentials, [deps.missionControlBearerToken, deps.terminalBearerToken]);
+      const resolved = resolvePairedOwnerCookie(c, teamOptions.credentials, [deps.legacyBearerToken, deps.terminalBearerToken]);
       return resolved.ok ? null : c.json({ code: resolved.code, error: resolved.error }, resolved.status);
     },
-    bearerTokens: [deps.terminalBearerToken, deps.missionControlBearerToken],
+    bearerTokens: [deps.terminalBearerToken, deps.legacyBearerToken],
     allowedOrigins: process.env.OPENRIG_ALLOWED_ORIGINS,
     allowedHosts: process.env.OPENRIG_ALLOWED_HOSTS,
     discoverSelfNames: deps.selfNameDiscovery,
@@ -782,7 +769,7 @@ export function createApp(deps: AppDeps): Hono {
 
   const managedMailboxAuthentication = teamControlAuthentication(
     () => teamOptions.credentials,
-    [deps.missionControlBearerToken, deps.terminalBearerToken],
+    [deps.legacyBearerToken, deps.terminalBearerToken],
   );
 
   // KTD22: in managed mode this is the only route gate. Each managed route a later unit adds
@@ -856,36 +843,30 @@ export function createApp(deps: AppDeps): Hono {
     }) as TeamControlOptions;
   }
 
-  // OPR.0.4.6.MH2 FR-2/FR-7 — the single-host READ-THROUGH edge (the read
-  // twin of the mission-control remote-forward). Consumes a `?host=<id>`
-  // envelope on allowlisted GET reads; refuses non-GET / non-allowlisted
-  // requests carrying a remote envelope with a structured MH-3-boundary
-  // error, never forwarding them. Absent/local host param falls through to
-  // the existing handlers untouched (the FR-2 zero-regression negative).
-  app.use("/api/*", hostReadThrough());
+  app.use("/api/team-control/*", requireLocalTarget);
   if (ownerSessions) app.route("/api/team-control/owner-session", ownerSessionRoutes(ownerSessions, () => teamOptions.credentials,
-    [deps.missionControlBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken, deps.terminalBearerToken]));
   app.route("/api/team-control", teamControlRoutes(teamGovernance, teamOptionsWithRead,
-    [deps.missionControlBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken, deps.terminalBearerToken]));
   // T052 — the managed replay transport. Mounted separately from the legacy
   // `/api/events` stream so legacy admission and behaviour stay exactly as they
   // were while managed reads get owner authentication and run scoping.
   app.route("/api/team-control", workspaceBrowseRoutes(teamGovernance, {
-    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
     orchestratorRoot: fileURLToPath(new URL("../../../../", import.meta.url)),
   }));
   // MVP slice 3 — the finished task's patch, served to the owner so `rig team apply` and the
   // Web UI can hand the result back. Absent a runtime there are no candidate trees to read.
   app.route("/api/team-control", teamResultRoutes(teamGovernance, {
-    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
   }));
   // MVP — the owner's completion read: the attempt the daemon observed stop, and the evidence it
   // could verify about the candidate. The owner action forwards both to `tasks/outcome`, so the
   // write contract is the one C2 already owns.
   app.route("/api/team-control", teamCompletionRoutes(teamGovernance, {
-    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime,
       readLeadProposal: (runId: string, taskId: string) => deps.workflowRuntime!.leadProposalFor(runId, taskId),
       // U6 — a delivery lead's turn may ask the owner for a decision instead of proposing work.
@@ -896,22 +877,22 @@ export function createApp(deps: AppDeps): Hono {
   }));
   app.route("/api/team-control", teamTelemetryRoutes(teamGovernance,
     deps.attemptTelemetry ?? new AttemptTelemetry(deps.rigRepo.db), {
-      credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+      credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,
-    legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     ...(teamOptionsWithRead.readModel ? { readModel: teamOptionsWithRead.readModel } : {}),
   }));
   // U3 — the owner's teams: the rig and seats a repository's team runs on. Same surface and the
   // same owner credential as the start below, because a team is what a start routes work to.
   app.route("/api/team-control", teamGithubRoutes(github, teamOptions.credentials,
-    [deps.missionControlBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken, deps.terminalBearerToken]));
   app.route("/api/team-control", teamSettingsRoutes(deps.settingsStore, teamOptions.credentials,
-    [deps.missionControlBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken, deps.terminalBearerToken]));
   app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials, github,
     ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}) },
-    [deps.missionControlBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken, deps.terminalBearerToken]));
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {
     credentials: teamOptions.credentials,
@@ -919,14 +900,14 @@ export function createApp(deps: AppDeps): Hono {
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
     ...(teamOptions.planWorktreeRoot ? { planWorktreeRoot: teamOptions.planWorktreeRoot } : {}),
-  }, [deps.missionControlBearerToken, deps.terminalBearerToken]));
+  }, [deps.legacyBearerToken, deps.terminalBearerToken]));
   // MVP slice C3 — the owner's read of a lead's decomposition and the decision it becomes. The
   // read is the daemon's own reading of the file the lead wrote; the write records an owner
   // decision, never an admission.
   app.route("/api/team-control", teamLeadRoutes(teamGovernance, {
     ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}),
     ...(deps.attemptTelemetry ? { telemetry: deps.attemptTelemetry } : {}),
-    credentials: teamOptions.credentials, legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     // U5 — the chat and plan routes start the lead's next turn through the same dispatch a
     // start and a growth use, so a chat message and a plan approval launch exactly as they do.
@@ -936,7 +917,7 @@ export function createApp(deps: AppDeps): Hono {
   // U7 — the run's integration branch: what landed on it, and the owner's one merge.
   app.route("/api/team-control", teamMergeRoutes({
     credentials: teamOptions.credentials,
-    legacyTokens: [deps.missionControlBearerToken, deps.terminalBearerToken],
+    legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
     ...(deps.integration ? { integration: deps.integration } : {}),
   }));
 
@@ -1078,18 +1059,6 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/views", viewsRoutes());
   app.route("/api/watchdog", watchdogRoutes());
   app.route("/api/workflow", workflowRoutes());
-  app.route(
-    "/api/mission-control",
-    missionControlRoutes({ bearerToken: deps.missionControlBearerToken ?? null }),
-  );
-  // OPR.0.4.6.MH1 FR-5/FR-6 — THE narrow named host add/pair route family
-  // (arch P1: add + pair handshake only). Same operator-bearer posture as
-  // mission-control for the write seams; the pair-request issuance legs
-  // are deliberately open (pre-token bootstrap).
-  app.route(
-    "/api/hosts",
-    hostsRoutes({ bearerToken: deps.missionControlBearerToken ?? null }),
-  );
   // Slice Story View v0 — slice indexer + per-tab payload routes.
   app.route("/api/slices", slicesRoutes());
   // Living Notes Packet 2 (OPR.0.4.4.20) — composed-review read contract.
@@ -1127,7 +1096,7 @@ export function createApp(deps: AppDeps): Hono {
   // Same operator-bearer posture as mission-control; HG-SAFE preserved.
   app.route(
     "/api/rig-mode",
-    rigModeRoutes({ bearerToken: deps.missionControlBearerToken ?? null }),
+    rigModeRoutes({ bearerToken: deps.legacyBearerToken ?? null }),
   );
 
   app.all("/api/*", async (c, next) => {

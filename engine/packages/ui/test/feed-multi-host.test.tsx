@@ -6,16 +6,13 @@
 //
 // Load-bearing pins here: (1) NO-BEARER negative — every URL the attention
 // hook touches is local-daemon-relative, no Authorization header, in BOTH
-// modes; (2) zero-config wire parity — aggregation off keeps today's
-// endpoint; (3) the SAME classifier path stamps hostId (no parallel remote
-// card model).
+// modes; (2) zero-config wire parity — aggregation off keeps today's endpoint.
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAttentionItems } from "../src/hooks/useAttentionItems.js";
-import { attentionItemToFeedCard } from "../src/lib/attention-feed.js";
 import type { AttentionQueueItem } from "../src/hooks/useAttentionItems.js";
 
 afterEach(() => {
@@ -85,18 +82,5 @@ describe("useAttentionItems — endpoint selection + the no-bearer negative (FR-
     expect(result.current.data!.items.map((i) => i.hostId)).toEqual(["local", "vps-b"]);
     expect(result.current.data!.hosts).toHaveLength(3);
     expect(result.current.data!.hosts[2]).toMatchObject({ hostId: "vps-c", status: "unreachable" });
-  });
-});
-
-describe("attentionItemToFeedCard — origin rides the SAME classifier path (FR-3)", () => {
-  it("stamps hostId on remote items; local/absent stays absent-or-local (zero-config card model unchanged)", () => {
-    const remote = attentionItemToFeedCard(item("r-1", "vps-b"));
-    expect(remote.hostId).toBe("vps-b");
-    expect(remote.kind).toMatch(/action-required|approval/); // classified through the SAME path
-    expect(remote.id).toBe("queue-attention-r-1"); // same id scheme — no parallel remote model
-    const local = attentionItemToFeedCard(item("q-1"));
-    expect(local.hostId).toBeUndefined();
-    const explicit = attentionItemToFeedCard(item("q-2", "local"));
-    expect(explicit.hostId).toBe("local");
   });
 });

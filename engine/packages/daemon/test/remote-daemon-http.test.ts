@@ -8,12 +8,9 @@
 import { describe, it, expect } from "vitest";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { Hono } from "hono";
-import { remoteUpLeaf } from "../src/domain/topology/remote-up-leaf.js";
-import { hostReadThrough } from "../src/domain/hosts/read-through.js";
 import { remoteJsonRequest, remoteRawRequest } from "../src/domain/hosts/remote-daemon-http.js";
-import { LOCAL_HOST_ID, hostsCovered } from "../src/domain/hosts/fanout-contract.js";
-import type { AggregatedPayload } from "../src/domain/hosts/fanout-contract.js";
+import { LOCAL_HOST_ID, hostsCovered } from "../src/domain/host-identity/fanout-contract.js";
+import type { AggregatedPayload } from "../src/domain/host-identity/fanout-contract.js";
 import type { HttpHostEntry } from "../src/domain/hosts/hosts-registry-reader.js";
 
 const HOST: HttpHostEntry = { id: "vps-b", transport: "http", url: "http://vps-b:7433/", bearer_env: "T" };
@@ -203,45 +200,21 @@ describe("remote response body transport — native HTTP consumers", () => {
       const address = server.address();
       if (!address || typeof address === "string") throw new Error("missing fixture port");
       const host: HttpHostEntry = { id: "fixture-edge", transport: "http", url: `http://127.0.0.1:${address.port}` };
-      const app = new Hono();
-      app.use("*", async (c, next) => {
-        const set = c.set.bind(c) as (key: string, value: unknown) => void;
-        set("hostRegistryLoader", () => ({ ok: true, registry: { hosts: [host] } }));
-        await next();
-      });
-      app.use("/api/*", hostReadThrough());
-      let localHits = 0;
-      app.get("/api/rigs/summary", c => { localHits++; return c.json({ local: true }); });
       try {
-        const up = await remoteUpLeaf({ sourceRef: "fixture" }, host, { timeoutMs: 2000, env: {} });
         const json = await remoteJsonRequest(host, "/api/rigs/summary", { method: "GET", timeoutMs: 2000, env: {} });
         const raw = await remoteRawRequest(host, "/api/rigs/summary", { timeoutMs: 2000, env: {} });
-        const edge = await app.request("/api/rigs/summary?host=fixture-edge");
-        const edgeBody = await edge.text();
-        expect(requests).toEqual(["POST /api/up", "GET /api/rigs/summary", "GET /api/rigs/summary", "GET /api/rigs/summary"]);
-        expect(localHits).toBe(0);
+        expect(requests).toEqual(["GET /api/rigs/summary", "GET /api/rigs/summary"]);
         if (mode === "truncated") {
-          expect(up.ok).toBe(false);
-          expect(up.error).toContain("operation outcome is unknown");
           for (const result of [json, raw]) {
             expect(result).toMatchObject({ ok: false, kind: "network", status: 200 });
             if (!result.ok) expect(result.detail).toContain("operation outcome is unknown");
           }
-          expect(edge.status).toBe(502);
-          expect(JSON.parse(edgeBody)).toMatchObject({ failureClass: "unreachable" });
-          expect(edgeBody).toContain("operation outcome is unknown");
         } else if (mode === "plain-error") {
-          expect(up.ok).toBe(false);
           expect(json).toEqual({ ok: false, kind: "http", status: 503, detail: "" });
           expect(raw).toEqual({ ok: true, status: 503, contentType: "text/plain", bodyText: "fixture unavailable" });
-          expect(edge.status).toBe(503);
-          expect(edgeBody).toBe("fixture unavailable");
         } else {
-          expect(up).toEqual({ ok: true });
           expect(json).toEqual({ ok: true, status: 200, payload: mode === "non-json" ? undefined : { ok: true } });
           expect(raw.ok).toBe(true);
-          expect(edge.status).toBe(200);
-          expect(edgeBody).toBe(mode === "non-json" ? "not-json" : '{"ok":true}');
         }
       } finally {
         server.close();

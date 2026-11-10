@@ -54,8 +54,6 @@ import { QueueRepository } from "../src/domain/queue-repository.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import type { QueueNudgeTransport } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
-import { MissionControlActionLog } from "../src/domain/mission-control/mission-control-action-log.js";
-import { MissionControlWriteContract } from "../src/domain/mission-control/mission-control-write-contract.js";
 
 /** A two-step spec: the entry step hands off, so project(handoff) exercises the
  *  projector's ROUTES branch (:466). */
@@ -96,7 +94,6 @@ interface Harness {
   repo: QueueRepository;
   outbox: OutboxHandler;
   runtime: WorkflowRuntime;
-  mc: MissionControlWriteContract;
   specPath: string;
   tmp: string;
 }
@@ -140,16 +137,10 @@ function makeHarness(): Harness {
     db, eventBus: bus, queueRepo: repo,
     exceptionDial: { hostDefault: () => null, humanFallbackSeat: "human@host" },
   });
-  const mc = new MissionControlWriteContract({
-    db,
-    eventBus: bus,
-    queueRepo: repo,
-    actionLog: new MissionControlActionLog(db),
-  });
   const tmp = mkdtempSync(join(tmpdir(), "p34-"));
   const specPath = join(tmp, "spec.yaml");
   writeFileSync(specPath, SPEC);
-  return { db, bus, repo, outbox, runtime, mc, specPath, tmp };
+  return { db, bus, repo, outbox, runtime, specPath, tmp };
 }
 
 describe("P34 RED 1 — the CURRENT MISS: terminal close + successor create stages NO wake intent", () => {
@@ -162,27 +153,6 @@ describe("P34 RED 1 — the CURRENT MISS: terminal close + successor create stag
   afterEach(() => {
     h.db.close();
     rmSync(h.tmp, { recursive: true, force: true });
-  });
-
-  it("mission-control-write-contract.ts:174 — handoff closes the source and creates the successor with a DURABLE wake intent", async () => {
-    const source = await h.repo.create({
-      sourceSession: "src@rig",
-      destinationSession: "dst@rig",
-      body: "work",
-    });
-    const result = await h.mc.act({
-      verb: "handoff",
-      qitemId: source.qitemId,
-      actorSession: "human-operator@kernel",
-      destinationSession: "next@rig",
-    });
-
-    // The terminal close actually happened — otherwise this test would pass
-    // vacuously by asserting an intent for a close that never occurred.
-    expect(h.repo.getById(source.qitemId)?.state).toBe("handed-off");
-    expect(result.createdQitemId).toBeTruthy();
-
-    expect(intentFor(h, result.createdQitemId!)).not.toBeNull();
   });
 
   it("workflow-projector.ts:466 — project(handoff) ROUTES branch stages the next-step packet's wake intent", async () => {
@@ -291,28 +261,6 @@ describe("P34 RED 4 — NO-FALSE-POSITIVE: a PARK is not a closure and requires 
   beforeEach(() => { h = makeHarness(); });
   afterEach(() => { h.db.close(); rmSync(h.tmp, { recursive: true, force: true }); });
 
-  it("mission-control `hold` parks the item and stages NO intent — the park path is untouched", async () => {
-    const source = await h.repo.create({
-      sourceSession: "src@rig",
-      destinationSession: "dst@rig",
-      body: "work",
-      nudge: false, // Isolate the hold action from the setup create's wake intent.
-    });
-    await h.mc.act({
-      verb: "hold",
-      qitemId: source.qitemId,
-      actorSession: "human@rig",
-      reason: "external-gate",
-    });
-
-    const parked = h.repo.getById(source.qitemId);
-    expect(parked?.state).toBe("blocked");
-    // Non-terminal ⇒ nothing to wake. This falls out of the PRIMITIVE (it returns
-    // early on a non-terminal txn-visible source), not out of a condition written
-    // at the call site — which is why no park site needed an edit.
-    expect(intentFor(h, source.qitemId)).toBeNull();
-  });
-
   it("a human-gated workflow entry PARKS in-txn without tripping the seam", async () => {
     // The gate park is an in-transaction update on a freshly created packet — the
     // shape most likely to be mistaken for a closure by an update-keyed guard.
@@ -330,29 +278,6 @@ describe("P34 RED 4b — NO-FALSE-POSITIVE: a TERMINAL CLOSE with NO SUCCESSOR r
   let h: Harness;
   beforeEach(() => { h = makeHarness(); });
   afterEach(() => { h.db.close(); rmSync(h.tmp, { recursive: true, force: true }); });
-
-  it("mission-control `approve` closes done/no-follow-on with no successor — no intent, no throw", async () => {
-    const source = await h.repo.create({
-      sourceSession: "src@rig",
-      destinationSession: "dst@rig",
-      body: "work",
-      nudge: false, // Isolate the closure from the setup create's wake intent.
-    });
-    // This is THE THIRD STATE. Not a park (it IS terminal) and not a paired
-    // closure (there is no successor). A guard keyed on "terminal close" alone —
-    // rather than on "terminal close + a create in the same txn" — would fire here
-    // and condemn correct code, one state over from the park case.
-    const result = await h.mc.act({
-      verb: "approve",
-      qitemId: source.qitemId,
-      actorSession: "human@rig",
-    });
-
-    expect(h.repo.getById(source.qitemId)?.state).toBe("done");
-    expect(h.repo.getById(source.qitemId)?.closureReason).toBe("no-follow-on");
-    expect(result.createdQitemId).toBeNull();
-    expect(intentFor(h, source.qitemId)).toBeNull();
-  });
 
   it("the resume path's exception closes carry no intents of their own", async () => {
     const inst = await h.runtime.instantiate({
@@ -400,38 +325,6 @@ describe("P34 RED 4b — NO-FALSE-POSITIVE: a TERMINAL CLOSE with NO SUCCESSOR r
     // "their" successor, this count would still be one and the test would pass
     // vacuously, which is why it also names WHICH id was added.
     expect(added).toEqual([`wake-intent-${resumed.newPacketId}`]);
-  });
-});
-
-describe("P34 — NO DOUBLE SEND: the staged intent is finalized, so recovery cannot re-send it", () => {
-  let h: Harness;
-  beforeEach(() => { h = makeHarness(); });
-  afterEach(() => { h.db.close(); rmSync(h.tmp, { recursive: true, force: true }); });
-
-  it("after a wired close+create, the intent row is FINALIZED and a recovery drain delivers nothing", async () => {
-    const source = await h.repo.create({
-      sourceSession: "src@rig",
-      destinationSession: "dst@rig",
-      body: "work",
-    });
-    const result = await h.mc.act({
-      verb: "handoff",
-      qitemId: source.qitemId,
-      actorSession: "human@rig",
-      destinationSession: "next@rig",
-    });
-
-    // The defect this pins: maybeNudge SENDS without claiming or finalizing, so the
-    // row would still read `pending` and the startup sweep would deliver the same
-    // wake a SECOND time. Delivering through the shared path finalizes it.
-    const intent = intentFor(h, result.createdQitemId!);
-    expect(intent).not.toBeNull();
-    expect(intent!.deliveryState).not.toBe("pending");
-
-    const drained = await h.repo.drainPendingWakeIntents();
-    expect(drained.delivered).toBe(0);
-    expect(drained.indeterminate).toBe(0);
-    expect(drained.failed).toBe(0);
   });
 });
 

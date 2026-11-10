@@ -112,7 +112,7 @@ export function RigGraph({
    *  graph renders only nodes/edges/podGroups whose pod matches this
    *  name (matched via inferPodName + node.podId/podNamespace). Other
    *  rig nodes are filtered out so the graph reads as a single-pod
-   *  subset. Used by /topology/pod/$rigId/$podName graph view-mode. */
+   *  subset. Used by /rigs/$rigId graph view-mode. */
   podScope?: string;
 }) {
   const { data, isPending: loading, error: queryError } = useRigGraph(rigId ?? "");
@@ -347,7 +347,7 @@ export function RigGraph({
   );
 
   // V1 polish slice Phase 5.1 P5.1-2 + DRIFT P5.1-D2: graph node click
-  // navigates to /topology/seat/$rigId/$logicalId center page (matches
+  // navigates to /rigs/$rigId/nodes/$logicalId center page (matches
   // Explorer tree click + table row click contract). Replaces legacy
   // setSelection({type:'seat-detail'}) drawer-open behavior. The
   // useNodeSelection alias is fully retired post-Phase 5.1.
@@ -375,7 +375,7 @@ export function RigGraph({
       }
       if (node.type === "podGroup" || node.type === "group") return;
       const nodeData = node.data as { logicalId: string };
-      navigate({ to: "/topology/seat/$rigId/$logicalId", params: { rigId, logicalId: encodeURIComponent(nodeData.logicalId) } });
+      navigate({ to: "/rigs/$rigId/nodes/$logicalId", params: { rigId, logicalId: encodeURIComponent(nodeData.logicalId) } });
     },
     [placementMode, podMetaById, rigId, setPlacementTarget, navigate, graphIsRemote]
   );

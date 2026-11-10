@@ -15,8 +15,8 @@ import {
   FLEET_READ_TIMEOUT_MS,
 } from "../src/domain/review/fleet-compose.js";
 import type { FleetComposeDeps, FleetHostInput } from "../src/domain/review/fleet-compose.js";
-import { LOCAL_HOST_ID } from "../src/domain/hosts/fanout-contract.js";
-import type { PerHostStatus } from "../src/domain/hosts/fanout-contract.js";
+import { LOCAL_HOST_ID } from "../src/domain/host-identity/fanout-contract.js";
+import type { PerHostStatus } from "../src/domain/host-identity/fanout-contract.js";
 import type { HostRegistry } from "../src/domain/hosts/hosts-registry-reader.js";
 import type { ComposedRigAgents, NeedsYouItem } from "../src/domain/review/types.js";
 

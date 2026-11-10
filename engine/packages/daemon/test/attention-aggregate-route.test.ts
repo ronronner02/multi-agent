@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { Hono } from "hono";
 import { queueRoutes } from "../src/routes/queue.js";
-import { LOCAL_HOST_ID } from "../src/domain/hosts/fanout-contract.js";
+import { LOCAL_HOST_ID } from "../src/domain/host-identity/fanout-contract.js";
 import type { HostRegistry } from "../src/domain/hosts/hosts-registry-reader.js";
 
 const REGISTRY: HostRegistry = {

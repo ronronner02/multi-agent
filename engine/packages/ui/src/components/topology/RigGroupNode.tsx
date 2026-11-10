@@ -3,7 +3,7 @@
 // Outermost container in the multi-rig single-canvas /topology graph.
 // Each rig appears as a soft vellum frame on the canvas; click body to
 // toggle collapse; use the arrow affordance on the rig tab to drill into
-// /topology/rig/$rigId. When collapsed, the summary card shows counts.
+// /rigs/$rigId. When collapsed, the summary card shows counts.
 // When expanded, the card acts as a bounding-box container; pod groups +
 // agent nodes render inside via react-flow parent/child relationship.
 //
@@ -95,7 +95,7 @@ function RigGroupNodeInner({ data }: { data: RigGroupNodeData }) {
           testId={`rig-group-status-${rigId}`}
         />
         <Link
-          to="/topology/rig/$rigId"
+          to="/rigs/$rigId"
           params={{ rigId }}
           onClick={(e) => e.stopPropagation()}
           data-testid={`rig-group-drill-${rigId}`}

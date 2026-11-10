@@ -14,7 +14,6 @@ import { usePlugins, type PluginEntry } from "../../hooks/usePlugins.js";
 const TOOLBAR_ACTIONS = [
   { label: "+ Add spec", to: "/specs/rig", testId: "specs-toolbar-add" },
   { label: "Import", to: "/import", testId: "specs-toolbar-import" },
-  { label: "Discover", to: "/search", testId: "specs-toolbar-discover" },
   { label: "Create rig", to: "/specs/rig", testId: "specs-toolbar-create-rig" },
   { label: "Generate workflow", to: "/specs/agent", testId: "specs-toolbar-gen-workflow" },
 ] as const;

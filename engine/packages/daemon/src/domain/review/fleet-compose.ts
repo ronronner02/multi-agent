@@ -36,8 +36,8 @@ import type {
   NeedsYouItem,
   SettledRow,
 } from "./types.js";
-import type { PerHostStatus } from "../hosts/fanout-contract.js";
-import { LOCAL_HOST_ID } from "../hosts/fanout-contract.js";
+import type { PerHostStatus } from "../host-identity/fanout-contract.js";
+import { LOCAL_HOST_ID } from "../host-identity/fanout-contract.js";
 import type { HostRegistryLoadResult } from "../hosts/hosts-registry-reader.js";
 import { resolveHost } from "../hosts/hosts-registry-reader.js";
 import { remoteJsonRequest } from "../hosts/remote-daemon-http.js";

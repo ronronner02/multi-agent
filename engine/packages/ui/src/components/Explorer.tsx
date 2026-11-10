@@ -18,45 +18,12 @@ import { EmptyState } from "./ui/empty-state.js";
 import { ProjectTreeView } from "./project/ProjectTreeView.js";
 import { SpecsTreeView } from "./specs/SpecsTreeView.js";
 import { SettingsExplorer } from "./system/SettingsExplorer.js";
-import { TopologyTreeView } from "./topology/TopologyTreeView.js";
-import { SubscriptionToggleList } from "./for-you/SubscriptionToggleList.js";
 
 import type { DrawerSelection } from "./SharedDetailDrawer.js";
 
 export type ExplorerDesktopMode = "full" | "hidden";
 
-// V1 attempt-3 Phase 2 — canon surface union per universal-shell.md L62:
-// "Renders the destination's tree (or a feed lens filter chip rail for
-// For You; or a flat nav for Settings; or nothing for Dashboard)."
-//
-// Phase 2 lays the union; Phase 3 fills tree contents + lens chips.
-export type ExplorerSurface =
-  | "topology"
-  | "project"
-  | "specs"
-  | "for-you"
-  | "settings"
-  | "none";
-
-/**
- * Slice 26.D OPT-D3 Topology mobile Explorer mount-suppression rule.
- *
- * Returns true when the Explorer for a given surface should NOT MOUNT
- * at the current viewport. The single carve-out: Topology surface at
- * narrow viewports (isWideLayout=false). Pre-existing renderer-spin
- * in the Topology mobile render path (TopologyTableView +
- * TopologyTreeView combined) pegs the browser when Explorer mounts
- * at 375px; mount-suppression sidesteps the peg trigger.
- *
- * 0.3.2 fixes the Topology mobile render path; this carve-out
- * returns false for all surfaces at that time.
- */
-export function shouldSuppressExplorerMount(
-  surface: ExplorerSurface,
-  isWideLayout: boolean,
-): boolean {
-  return surface === "topology" && !isWideLayout;
-}
+export type ExplorerSurface = "project" | "specs" | "settings" | "none";
 
 interface ExplorerProps {
   open: boolean;
@@ -66,11 +33,6 @@ interface ExplorerProps {
   desktopMode?: ExplorerDesktopMode;
   surface?: ExplorerSurface;
   onDesktopToggle?: () => void;
-  /** V1 attempt-3 Phase 3 bounce-fix — Class B selective vellum overlay.
-   *  "overlay" = vellum-translucent + position absolute z-30 (topology
-   *  graph view-mode signature). "opaque" = default solid background
-   *  (every other destination + view-mode). */
-  overlayMode?: "overlay" | "opaque";
 }
 
 function statusColor(startupStatus: string | null): string {
@@ -231,9 +193,6 @@ function SurfaceBody({
   onClose: () => void;
   currentRigId: string | null;
 }) {
-  if (surface === "topology") {
-    return <TopologyTreeView />;
-  }
   if (surface === "project") {
     return <ProjectTreeView />;
   }
@@ -242,25 +201,6 @@ function SurfaceBody({
   }
   if (surface === "settings") {
     return <SettingsExplorer />;
-  }
-  if (surface === "for-you") {
-    // Subscription affordance — settings-shaped surface per for-you-feed.md L134-L140.
-    // The PRIMARY UX of /for-you is the FEED in the center; subscriptions live
-    // here as a small on-demand list. NOT dominating.
-    //
-    // OPR.0.4.1.27: the PRIMARY subscription control is the plain-language
-    // LevelControl at the TOP OF THE FEED (Feed.tsx) — phone-reachable per the
-    // v5 mockup. This Explorer sidebar holds the 5 individual toggles as the
-    // ADVANCED view (desktop). action_required is forced ON. Settings
-    // unreachable → canonical defaults + CLI hint.
-    return (
-      <div data-testid="explorer-for-you-subscriptions" className="flex-1 overflow-y-auto py-3 px-3">
-        <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-on-surface-variant mb-2">
-          Advanced · individual toggles
-        </div>
-        <SubscriptionToggleList />
-      </div>
-    );
   }
   return null;
 }
@@ -271,9 +211,8 @@ export function Explorer({
   selection,
   onSelect,
   desktopMode = "full",
-  surface = "topology",
+  surface = "none",
   onDesktopToggle = () => {},
-  overlayMode = "opaque",
 }: ExplorerProps) {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
@@ -287,17 +226,6 @@ export function Explorer({
   // surface as of slice 26) — Explorer is not rendered.
   if (surface === "none") return null;
 
-  // Class B: overlay vs opaque background grammar.
-  // OPAQUE (default; every destination except topology-graph): solid
-  //   paper-cream tone (Phase 2 baseline) so the explore tree reads
-  //   crisply against the center workspace.
-  // OVERLAY (topology graph only): light vellum translucent surface
-  //   (.vellum class from globals.css L113-117 — rgba(255,255,255,0.4)
-  //   + backdrop-blur(8px)) with elevated z-index so the graph canvas
-  //   underneath shows through. Sheets-of-vellum-layered aesthetic per
-  //   universal-shell.md L48. Vellum (40%) reads coherent with the
-  //   baseline 3.5% opacity Phase 2 had; vellum-heavy (70%) was too dense.
-  const isOverlay = overlayMode === "overlay";
   const isCollapsed = desktopMode === "hidden";
 
   // When collapsed at desktop: render ONLY a floating toggle button
@@ -328,39 +256,14 @@ export function Explorer({
     <aside
       data-testid="explorer"
       data-surface={surface}
-      data-explorer-mode={overlayMode}
+      data-explorer-mode="opaque"
       data-explorer-collapsed="false"
       className={cn(
         // V1 border weight doctrine (universal-shell.md L39–L48):
         // 1px outline-variant ghost line for inter-region edges.
         "border-r border-outline-variant flex overflow-hidden",
-        // Background grammar by mode:
-        //
-        // Slice 26.B HG-8 mobile-drawer-layering repair (OPT-B per
-        // orch routing): opaque-mode Explorer mobile drawer must
-        // layer ABOVE the mobile-rail-tray (AppShell.tsx z-30) so
-        // click hits register on Explorer items. Pre-repair value
-        // was z-20 (below rail-tray) — pre-existing bug exposed by
-        // slice 26 because Settings was the 5th Explorer-bearing
-        // destination on mobile. Opaque-mode bumped to z-40 for all
-        // surfaces; overlay-mode stays z-30 (Topology graph behavior
-        // preserved; rail-tray and overlay-mode Explorer paint at
-        // same z, DOM order resolves Explorer above since it renders
-        // later in AppShell). Rail-tray remains reachable via backdrop
-        // dismissal on mobile.
-        //
-        // Slice 26.D OPT-D3 carve-out (separate gate in AppShell.tsx,
-        // NOT here): Topology mobile Explorer doesn't MOUNT on
-        // viewport < lg (avoids pre-existing TopologyTableView
-        // renderer-spin that pegs the browser when Explorer mounts
-        // at 375px). The mount-gate is in AppShell.tsx ~line 577;
-        // this z-index block is reached only when Explorer is
-        // actually mounted, so no conditional is needed here. 0.3.2
-        // will fix the Topology mobile render path; the AppShell
-        // mount-gate reverts at that time.
-        isOverlay
-          ? "vellum z-30 shadow-[6px_0_14px_rgba(46,52,46,0.06)]"
-          : "z-40 bg-[hsl(var(--background)/0.035)] supports-[backdrop-filter]:bg-[hsl(var(--background)/0.018)] backdrop-blur-[14px] backdrop-saturate-75 shadow-[6px_0_14px_rgba(46,52,46,0.04)]",
+        // Keep the mobile drawer above the rail tray.
+        "z-40 bg-[hsl(var(--background)/0.035)] supports-[backdrop-filter]:bg-[hsl(var(--background)/0.018)] backdrop-blur-[14px] backdrop-saturate-75 shadow-[6px_0_14px_rgba(46,52,46,0.04)]",
         // Mobile: slide-over from left below the top-bar header (h-14).
         "fixed top-14 bottom-0 left-0 transition-transform duration-200 ease-tactical w-72 max-w-[80vw]",
         open ? "translate-x-0" : "-translate-x-full",
