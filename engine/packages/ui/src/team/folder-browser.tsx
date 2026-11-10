@@ -6,6 +6,22 @@ import { useOwnerSession } from "../hooks/useOwnerSession.js";
 
 interface Directories { roots: string[]; path: string | null; directories: Array<{ name: string; path: string }> }
 
+/**
+ * The parent folder of a path the daemon reported, or null when it has none.
+ *
+ * R15 — the browser is shared with a Windows daemon, so the separator is whichever one the
+ * reported path actually uses. Splitting on `/` alone would make every `C:\Users\…` path look
+ * like a single segment with no parent, and the Up button would disappear.
+ */
+export function parentFolder(path: string): string | null {
+  const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  if (separator < 0) return null;
+  const parent = path.slice(0, separator);
+  // A drive root keeps its separator (`C:\`), and so does a POSIX root (`/`).
+  if (parent === "" || /^[A-Za-z]:$/.test(parent)) return parent + path[separator];
+  return parent;
+}
+
 export function FolderBrowser({ onSelect, onCancel }: { onSelect: (path: string) => void; onCancel: () => void }) {
   const { t } = useTranslation();
   const { paired, request } = useOwnerSession();
@@ -14,7 +30,7 @@ export function FolderBrowser({ onSelect, onCancel }: { onSelect: (path: string)
     queryFn: ({ signal }) => request<Directories>("/fs/dirs" + (path ? "?path=" + encodeURIComponent(path) : ""), { signal }) });
   const current = query.data?.path;
   const atRoot = !!current && query.data?.roots.includes(current);
-  const up = current ? (atRoot ? null : current.slice(0, current.lastIndexOf("/")) || "/") : null;
+  const up = current ? (atRoot ? null : parentFolder(current)) : null;
   return <section className="ui-folder-browser" aria-label={t("projects.browseFolders")}>
     <div className="ui-folder-navigation">
       <button className="btn btn-quiet" type="button" onClick={() => setPath(null)}>{t("projects.locations")}</button>

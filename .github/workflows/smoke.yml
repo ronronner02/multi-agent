@@ -55,5 +55,5 @@ jobs:
         run: npx tsc --noEmit --project packages/daemon/tsconfig.json
         working-directory: engine
       - name: Native platform tests
-        run: npx vitest run --maxWorkers=2 packages/daemon/test/platform.test.ts packages/daemon/test/executable-resolver.test.ts packages/daemon/test/process-identity.test.ts packages/daemon/test/unisolated-roots.test.ts packages/daemon/test/team-workspace-windows.test.ts packages/daemon/test/attempt-completion-windows.test.ts
+        run: npx vitest run --maxWorkers=2 packages/daemon/test/platform.test.ts packages/daemon/test/executable-resolver.test.ts packages/daemon/test/process-identity.test.ts packages/daemon/test/unisolated-roots.test.ts packages/daemon/test/team-workspace-windows.test.ts packages/daemon/test/attempt-completion-windows.test.ts packages/daemon/test/worktree-policy.test.ts packages/daemon/test/team-control-paths.test.ts packages/daemon/test/team-setup.test.ts
         working-directory: engine
