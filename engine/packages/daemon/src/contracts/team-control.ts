@@ -1,5 +1,3 @@
-import { posix, win32 } from "node:path";
-
 export const TEAM_CONTROL_VERSION = "1.0";
 export const TEAM_QUEUE_STATES = ["pending", "in-progress", "done", "blocked", "failed", "denied", "canceled", "handed-off"] as const;
 export type TeamQueueState = (typeof TEAM_QUEUE_STATES)[number];
@@ -751,23 +749,30 @@ export function bindingScopePath(value: unknown, field: string): string {
  * never names, and a UNC path must use its canonical `\\server\share` form. The value is
  * returned as received: canonicalising is the caller's job, and a stored root keeps the
  * spelling the owner's own filesystem produced.
+ *
+ * The shape rules are plain string work rather than `node:path`, because this module is also
+ * bundled into the browser UI and `path.win32` does not survive a browser build.
  */
 export function absolutePath(value: unknown, field: string): string {
   const result = text(value, field, 4096);
-  const unc = /^[\\/]{2}[^\\/]/.test(result);
+  // A drive root (`C:\`, `C:/`) keeps three characters; a UNC share root (`\\server\share`, or
+  // the same with forward slashes) keeps everything through the share name.
   const drive = /^[A-Za-z]:[\\/]/.test(result);
-  if (unc || drive) {
-    // Windows root, including a UNC share, which must be written as `\\server\share` (or the
-    // same with forward slashes) and not as a bare server or a bare share.
-    const root = win32.parse(result).root;
-    const rest = result.slice(root.length);
-    if ((unc && !/^[\\/]{2}/.test(root)) || !rest
-      || rest.split(/[\\/]/).some((part) => part === "" || part === "." || part === "..")) throw new TeamContractError(field);
-    return result;
+  const unc = /^[\\/]{2}[^\\/]/.test(result);
+  let root: string;
+  if (drive) root = result.slice(0, 3);
+  else if (unc) {
+    const share = /^[\\/]{2}[^\\/]+[\\/][^\\/]+/.exec(result)?.[0];
+    // A bare server (`\\server`) has no share to name, so it is not an absolute root here.
+    if (share === undefined) throw new TeamContractError(field);
+    root = share;
+  } else if (result.startsWith("/")) root = "/";
+  else throw new TeamContractError(field);
+  const rest = result.slice(root.length).replace(/^[\\/]/, "");
+  const separators = drive || unc ? /[\\/]/ : /\//;
+  if (!rest || rest.split(separators).some((part) => part === "" || part === "." || part === "..")) {
+    throw new TeamContractError(field);
   }
-  const rest = result.slice(posix.parse(result).root.length);
-  if (!result.startsWith("/") || !rest
-    || rest.split("/").some((part) => part === "" || part === "." || part === "..")) throw new TeamContractError(field);
   return result;
 }
 

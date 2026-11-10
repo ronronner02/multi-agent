@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { lstatSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
 import { promisify } from "node:util";
 import { resolve, sep } from "node:path";
 
@@ -196,6 +196,21 @@ export function pathWithin(root: string, path: string): boolean {
   if (samePath(normalizedRoot, normalizedPath)) return true;
   const prefix = normalizedRoot.endsWith(sep) ? normalizedRoot : normalizedRoot + sep;
   return isWindows() ? normalizedPath.toLowerCase().startsWith(prefix.toLowerCase()) : normalizedPath.startsWith(prefix);
+}
+
+/**
+ * The canonical spelling of an existing path, for comparing two names for one entry.
+ *
+ * Windows keeps a second, 8.3 form of every directory name (`C:\Users\RUNNER~1\…` for
+ * `C:\Users\runneradmin\…`), and the two compare unequal as strings. `realpathSync` resolves
+ * links but leaves whichever spelling it was given; `realpathSync.native` asks the OS for the
+ * long form. GitHub's Windows runner hands `%TEMP%` in the short form, so a tree created there
+ * and the same tree named by Git (`C:/Users/runneradmin/…`) only compare equal through this.
+ *
+ * POSIX has no second spelling, so both branches are the same call there.
+ */
+export function canonicalPath(path: string): string {
+  return isWindows() ? realpathSync.native(path) : realpathSync(path);
 }
 
 /** Two path spellings that name the same entry on this host. Windows compares case-insensitively. */

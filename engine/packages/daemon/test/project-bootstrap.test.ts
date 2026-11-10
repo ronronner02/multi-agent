@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,7 @@ import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 import { createTestApp } from "./helpers/test-app.js";
 import { previewProject, projectFolder } from "../src/domain/project-bootstrap.js";
+import { shortPath } from "./helpers/short-path.js";
 
 function git(root: string, ...args: string[]): string {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -21,7 +22,9 @@ function git(root: string, ...args: string[]): string {
 describe("project file preview", () => {
   let directory: string, home: string;
   beforeEach(() => {
-    directory = mkdtempSync(join(tmpdir(), "project-preview-"));
+    // The long form: a Windows `%TEMP%` may be an 8.3 short name while the code under test
+    // canonicalises to the long one, and every assertion here compares the two.
+    directory = realpathSync.native(mkdtempSync(join(tmpdir(), "project-preview-")));
     home = join(directory, "home");
     mkdirSync(home);
   });
@@ -33,6 +36,19 @@ describe("project file preview", () => {
       repository, name: "new-project", action: "create", fileCount: 1, excludedPaths: [],
     });
     expect(existsSync(repository)).toBe(false);
+  });
+
+  it("resolves a folder named through its 8.3 short form to the long spelling", () => {
+    // GitHub's Windows runner hands `%TEMP%` as `C:\Users\RUNNER~1\…`, and Git answers in the
+    // long form. A project folder must be recorded once, in the spelling every later comparison
+    // and every seat's cwd use.
+    if (process.platform !== "win32") return;
+    const long = join(home, "project-with-a-long-name");
+    mkdirSync(long);
+    const short = shortPath(long);
+    if (short === null) return; // This volume does not generate 8.3 names; the CI runner's does.
+    expect(short).not.toBe(long);
+    expect(projectFolder(short, home)).toBe(long);
   });
 
   it("uses the same credential and default-ignore policy before an initial commit", () => {
@@ -133,7 +149,7 @@ describe("project creation through the owner route", () => {
   };
 
   beforeEach(() => {
-    directory = mkdtempSync(join(tmpdir(), "project-create-"));
+    directory = realpathSync.native(mkdtempSync(join(tmpdir(), "project-create-")));
     repository = join(directory, "project");
     remote = join(directory, "remote.git");
     vi.stubEnv("GIT_CONFIG_GLOBAL", join(directory, "gitconfig"));

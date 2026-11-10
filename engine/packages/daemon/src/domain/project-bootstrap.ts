@@ -1,12 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type Database from "better-sqlite3";
 import { credentialExcluded } from "./scope-extension.js";
 import { GithubCliError, type GithubAccount, type GithubCli } from "./github-cli.js";
 import { availableTeamName, createTeam, listTeams, TeamSetupError, type Team, type TeamClient } from "./team-setup.js";
-import { pathWithin } from "./platform.js";
+import { canonicalPath, pathWithin } from "./platform.js";
 
 const DEFAULT_IGNORES = ["node_modules/", "dist/", "build/", "coverage/", ".env*", "*.pem", "*.key",
   ".config/", ".ssh/", ".aws/", ".codex/", ".claude/", ".npmrc", ".netrc", "credentials*"];
@@ -55,7 +55,9 @@ function canonical(path: string): string {
     parent = dirname(parent);
   }
   if (!statSync(parent).isDirectory()) throw refusedFolder();
-  return join(realpathSync(parent), ...suffix);
+  // The long form, so a Windows root given in its 8.3 spelling resolves to the spelling Git and
+  // every later comparison use.
+  return join(canonicalPath(parent), ...suffix);
 }
 
 export function projectFolder(repository: string, home = homedir()): string {
@@ -120,7 +122,7 @@ function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Boots
   let parent = repository;
   while (!existsSync(parent)) parent = dirname(parent);
   const top = gitValue(parent, ["rev-parse", "--show-toplevel"]);
-  if (top && realpathSync(top) !== repository) throw refusedFolder();
+  if (top && canonicalPath(top) !== repository) throw refusedFolder();
   if (!top && existsSync(join(repository, ".git"))) {
     throw new ProjectBootstrapError("team_repository_not_git", "The selected folder has unreadable Git metadata.");
   }
@@ -159,7 +161,7 @@ function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Boots
           const absolute = join(repository, path), stat = lstatSync(absolute);
           if (stat.isSymbolicLink()) {
             let target: string;
-            try { target = realpathSync(absolute); } catch { excludedPaths.add(path); continue; }
+            try { target = canonicalPath(absolute); } catch { excludedPaths.add(path); continue; }
             if (!pathWithin(repository, target) || excluded(relative(repository, target))) { excludedPaths.add(path); continue; }
             files.push({ path, mode: "120000", data: Buffer.from(readlinkSync(absolute)) });
           } else if (stat.isFile()) {
@@ -301,7 +303,7 @@ function initialCommit(repository: string, branch: string, files: ProjectFile[],
 }
 
 function directoryRoots(): string[] {
-  const roots = [realpathSync(homedir())];
+  const roots = [canonicalPath(homedir())];
   if (process.platform === "win32") {
     // R15 — the Windows counterpart of `/mnt/<drive>`: the drive the owner's home is on, then
     // every other fixed drive that exists. Removable and network drives are not browsed by
@@ -314,7 +316,7 @@ function directoryRoots(): string[] {
       if (existsSync(drive)) roots.push(drive);
     }
   } else if (existsSync("/mnt")) for (const entry of readdirSync("/mnt", { withFileTypes: true })) {
-    if (/^[a-z]$/i.test(entry.name) && entry.isDirectory()) roots.push(realpathSync(join("/mnt", entry.name)));
+    if (/^[a-z]$/i.test(entry.name) && entry.isDirectory()) roots.push(canonicalPath(join("/mnt", entry.name)));
   }
   return roots;
 }
@@ -324,18 +326,20 @@ export function listProjectDirectories(path?: string, roots = directoryRoots()):
 } {
   if (!path) return { roots, path: null, directories: roots.map(root => ({ name: basename(root) || root, path: root })) };
   if (!isAbsolute(path)) throw refusedFolder();
+  // Canonicalise before matching a root: a Windows path may arrive in its 8.3 spelling while the
+  // root is the long one, and the containment test is a string comparison.
+  let folder: string;
+  try { folder = canonical(path); } catch { throw refusedFolder(); }
   // A root the owner may browse is the home or a drive/share; the comparison folds case only
   // where the filesystem does, so `c:\users\leo` and `C:\Users\leo` are one place on Windows.
-  const root = roots.find(root => pathWithin(root, path));
-  let canonicalPath: string;
-  try { canonicalPath = realpathSync(path); } catch { throw refusedFolder(); }
-  if (!root || !pathWithin(root, canonicalPath) || !statSync(canonicalPath).isDirectory()) throw refusedFolder();
-  const directories = readdirSync(canonicalPath, { withFileTypes: true }).flatMap(entry => {
+  const root = roots.find(root => pathWithin(root, folder));
+  if (!root || !pathWithin(root, folder) || !statSync(folder).isDirectory()) throw refusedFolder();
+  const directories = readdirSync(folder, { withFileTypes: true }).flatMap(entry => {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) return [];
     try {
-      const child = realpathSync(join(canonicalPath, entry.name));
+      const child = canonical(join(folder, entry.name));
       return pathWithin(root, child) && statSync(child).isDirectory() ? [{ name: entry.name, path: child }] : [];
     } catch { return []; }
   }).sort((a, b) => a.name.localeCompare(b.name));
-  return { roots, path: canonicalPath, directories };
+  return { roots, path: folder, directories };
 }

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type Database from "better-sqlite3";
 import {
   WORKTREE_ADMIN_CEILING, WORKTREE_PATH_CEILING, WorktreePathError, addWorktree, assertWorktreePathFits,
-  defaultWorktreeRoot,
+  defaultWorktreeRoot, isWorktreeOf,
 } from "../src/domain/worktree-policy.js";
 import { pathWithin, samePath } from "../src/domain/platform.js";
 import { commitPlan, ensurePlanWorktree, planWorktreePath, runSlug } from "../src/domain/plan-branch.js";
@@ -20,6 +20,7 @@ import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode } from "../src/domain/plan-governance.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
 import { createTestApp } from "./helpers/test-app.js";
+import { shortPath } from "./helpers/short-path.js";
 
 /**
  * U7 / KTD10 — one policy for every worktree the daemon creates.
@@ -37,6 +38,9 @@ function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+/** A run id shaped like the daemon's own, long enough that NTFS gives its directory a short name. */
+const RUN_ID = "3f2a9c1e-7b4d-4e2a-9f6c-1d8b5a0e4c37";
+
 function repository(parent: string, name = "project"): string {
   const root = join(parent, name);
   mkdirSync(join(root, "src"), { recursive: true });
@@ -47,12 +51,14 @@ function repository(parent: string, name = "project"): string {
   writeFileSync(join(root, "plan.md"), "# Plan\n");
   git(root, "add", ".");
   git(root, "commit", "--quiet", "-m", "base");
-  return realpathSync(root);
+  // The long form: a Windows `%TEMP%` may be an 8.3 short name, and the code under test records
+  // the long spelling Git reports. Both sides of every comparison start from this one.
+  return realpathSync.native(root);
 }
 
 const created: string[] = [];
 function scratch(): string {
-  const directory = realpathSync(mkdtempSync(join(tmpdir(), "u7-wt-")));
+  const directory = realpathSync.native(mkdtempSync(join(tmpdir(), "u7-wt-")));
   created.push(directory);
   return directory;
 }
@@ -133,7 +139,25 @@ describe("worktree path preflight", () => {
     expect(existsSync(join(worktree, "plan.md"))).toBe(true);
     // Git reports its own spelling (`C:/…` on Windows); canonicalising both sides is what makes
     // the comparison the same one `isWorktreeOf` makes when a replay reuses the directory.
-    expect(samePath(realpathSync(git(worktree, "rev-parse", "--show-toplevel")), realpathSync(worktree))).toBe(true);
+    expect(samePath(realpathSync.native(git(worktree, "rev-parse", "--show-toplevel")), realpathSync.native(worktree))).toBe(true);
+  });
+
+  it("recognises a worktree named through its 8.3 short form", () => {
+    // GitHub's Windows runner hands `%TEMP%` as `C:\Users\RUNNER~1\…`. The same directory then
+    // has two spellings, and a replay asking "is this already my worktree?" must not answer
+    // "occupied by something else" because the strings differ.
+    if (!windows) return;
+    const directory = scratch();
+    const repo = repository(directory);
+    const worktrees = join(directory, "wt");
+    const worktree = planWorktreePath(worktrees, RUN_ID);
+    addWorktree({ repository: repo, worktree, args: ["--detach", worktree, "HEAD"] });
+    const short = shortPath(worktree);
+    if (short === null) return; // This volume does not generate 8.3 names; the CI runner's does.
+    expect(short).not.toBe(worktree);
+    // A replay through either spelling finds the same tree rather than reporting it occupied.
+    expect(isWorktreeOf(repo, short)).toBe(true);
+    expect(ensurePlanWorktree({ repositoryRoot: repo, worktreeRoot: worktrees, runId: RUN_ID })).toEqual({ path: worktree, branch: runSlug({ runId: RUN_ID }) });
   });
 });
 
