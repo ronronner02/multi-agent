@@ -261,3 +261,50 @@ test('no LAN bind: engine bridge does not expose non-loopback port', () => {
   const bridge = bridgeContext();
   assert.ok(bridge, 'engine bridge loads without error');
 });
+
+// ---------------------------------------------------------------------------
+// U6 — minting a one-time pairing code over the private parent channel
+// ---------------------------------------------------------------------------
+
+test('mintPairing posts mint-pairing and resolves the daemon code', async () => {
+  const bridge = bridgeContext();
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+
+  const posted = [];
+  bridge.child.postMessage = (msg) => {
+    posted.push(msg);
+    if (msg && msg.type === 'mint-pairing') {
+      setImmediate(() => { for (const fn of bridge.childListeners.get('message') || []) fn({ type: 'pairing-code', code: 'one-time-code' }); });
+    }
+  };
+
+  const code = await engine.mintPairing();
+  assert.equal(code, 'one-time-code');
+  assert.ok(posted.some(msg => msg.type === 'mint-pairing'), 'the mint request goes over the port');
+});
+
+test('mintPairing rejects when the daemon reports a mint error', async () => {
+  const bridge = bridgeContext();
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+
+  bridge.child.postMessage = (msg) => {
+    if (msg && msg.type === 'mint-pairing') {
+      setImmediate(() => { for (const fn of bridge.childListeners.get('message') || []) fn({ type: 'pairing-error', error: 'owner_session_unavailable' }); });
+    }
+  };
+
+  await assert.rejects(engine.mintPairing(), /owner_session_unavailable/);
+});
+
+test('mintPairing rejects when the daemon is not running', async () => {
+  const bridge = bridgeContext();
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+  bridge.killEngine();
+  await assert.rejects(engine.mintPairing(), /not running/);
+});

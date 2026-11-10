@@ -14,7 +14,7 @@
  *  - No credential is logged, written outside the daemon's own cookie jar, or placed in a
  *    URL. The owner session comes from the daemon's own pairing flow.
  */
-const { app, BrowserWindow, Menu, ipcMain, screen, session, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, session, shell, dialog, clipboard } = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -315,20 +315,104 @@ async function openNativeTeamView(port) {
   }
 
   publish({ phase: 'pairing', message: 'Connecting to the local runtime…' });
-  // For now (U5), show the connection screen since pairing (U6) is not in scope.
-  // The UI loads from the dynamic origin but without a session shows the connection screen.
-  csrfToken = null;
+  // U6 — pair this window the same way a browser would: the daemon mints a one-time code
+  // over its private parent channel, main exchanges it, and Chromium's jar keeps the
+  // HttpOnly cookie. The renderer only ever sees the anti-forgery token.
+  const token = await pairNativeOwnerSession(origin);
+  if (!token) {
+    publish({ phase: 'connection-failed', message: 'The desktop could not connect to the local runtime.', connected: false });
+    return;
+  }
+  csrfToken = token;
   try {
     await window.loadURL(teamUrl);
   } catch {
     publish({ phase: 'connection-failed', message: 'Failed to load the UI.', connected: false });
     return;
   }
+  // The preload consumed the token at document start; forget our copy.
+  csrfToken = null;
   publish({
     phase: 'ready',
     message: 'Local runtime connected.',
     connected: true,
   });
+}
+
+/**
+ * U6 — mint a one-time code over the daemon's private parent channel and exchange it.
+ *
+ * Returns the anti-forgery token, or null when pairing failed. The code and the session
+ * cookie never cross into a URL, a log line, or the settings file: the code is used once
+ * in the POST body and the cookie goes straight into Chromium's jar.
+ */
+async function pairNativeOwnerSession(origin) {
+  if (!nativeEngine || typeof nativeEngine.mintPairing !== 'function') return null;
+  let code;
+  try { code = await nativeEngine.mintPairing(); } catch { return null; }
+  if (typeof code !== 'string' || code.length === 0) return null;
+  let response;
+  try {
+    response = await fetch(`${origin}/api/team-control/owner-session/exchange`, {
+      method: 'POST',
+      headers: { Origin: origin, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const setCookie = response.headers.get('set-cookie') || '';
+  const match = /(?:^|,\s*)multi_agent_owner=([A-Za-z0-9_-]+)/.exec(setCookie);
+  let body;
+  try { body = await response.json(); } catch { return null; }
+  const antiForgeryToken = body && typeof body.antiForgeryToken === 'string' ? body.antiForgeryToken : null;
+  if (!match || !antiForgeryToken) return null;
+  try {
+    await session.defaultSession.cookies.set({
+      url: origin, name: 'multi_agent_owner', value: match[1], httpOnly: true, sameSite: 'strict', path: '/api',
+    });
+  } catch {
+    return null;
+  }
+  return antiForgeryToken;
+}
+
+/**
+ * U6 — "Open in browser". Mint a fresh one-time code, show and copy it, then open the
+ * daemon's own pairing page in the default browser. The code is never put in the URL: the
+ * owner pastes it into the page, which POSTs it to the existing exchange route.
+ */
+async function openInBrowser() {
+  if (!nativeEngine || !allowedOrigin || !nativeEngine.mintPairing) {
+    await dialog.showMessageBox({
+      type: 'info', buttons: ['OK'], title: 'Open in browser',
+      message: 'Connect the desktop to the local runtime before opening it in a browser.',
+    });
+    return;
+  }
+  let code;
+  try { code = await nativeEngine.mintPairing(); } catch { code = null; }
+  if (!code) {
+    await dialog.showMessageBox({
+      type: 'error', buttons: ['OK'], title: 'Open in browser',
+      message: 'The local runtime did not issue a pairing code. Try again.',
+    });
+    return;
+  }
+  try { clipboard.writeText(code); } catch { /* clipboard unavailable; the dialog still shows the code */ }
+  const box = {
+    type: 'info', buttons: ['Open browser'], defaultId: 0, cancelId: 0,
+    title: 'Open in browser',
+    message: 'Paste this one-time code into the pairing page.',
+    detail: `Code: ${code}\n\nIt is copied to your clipboard and expires in one minute.`,
+  };
+  if (window && !window.isDestroyed()) await dialog.showMessageBox(window, box);
+  else await dialog.showMessageBox(box);
+  // The pairing page is the team view's own unpaired form. Only the origin is opened —
+  // the code stays in the clipboard and the dialog, never in the URL.
+  void shell.openExternal(`${allowedOrigin}/team`);
 }
 
 /**
@@ -463,11 +547,11 @@ function isTeamSender(event, target = window) {
     && event.senderFrame === target.webContents.mainFrame && isAllowedNavigation(event.senderFrame.url, allowedOrigin);
 }
 
-/** Renew through WSL without navigating away from the owner's current form or project. */
+/** Renew without navigating away from the owner's current form or project. */
 async function reconnectOwnerSession(event) {
   const currentWindow = window;
   if (!isTeamSender(event, currentWindow)) throw new Error('Reconnection is available only in the active app window.');
-  const token = await pairOwnerSession();
+  const token = nativeEngine ? await pairNativeOwnerSession(allowedOrigin) : await pairOwnerSession();
   return window === currentWindow && isTeamSender(event, currentWindow) ? token : null;
 }
 
@@ -547,6 +631,7 @@ async function runStopEngine() {
 function buildMenu() {
   return Menu.buildFromTemplate([
     { label: 'Engine', submenu: [
+      { label: 'Open in browser', click: () => void openInBrowser() },
       { label: 'Stop engine', click: () => void runStopEngine() },
       { label: 'Reload window', accelerator: 'CmdOrCtrl+R', click: () => window?.webContents.reload() },
       { type: 'separator' },
