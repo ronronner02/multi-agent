@@ -100,7 +100,17 @@ export class WorkerIdentities {
  */
 function currentUserIdentity(policy: WorkerIdentityPolicy, name: string): WorkerIdentity {
   if (!policy.identities.includes(name)) throw new Error("Worker identity is not in the installed policy");
-  const uid = process.getuid!(), gid = process.getgid!();
+  const uid = typeof process.getuid === "function" ? process.getuid() : null;
+  const gid = typeof process.getgid === "function" ? process.getgid() : null;
+  if (uid === null || gid === null) {
+    // Windows has no POSIX user ids. The unisolated worker is still the daemon's own user,
+    // so what matters is that the folder the daemon owns and the candidate is in is the one
+    // that controls the assignment root, not what number Node.js returns for the process.
+    return { name, uid: -1, gid: -1, groups: [], groupIds: [],
+      home: join(policy.workerRoot, name, "home"),
+      scratch: join(policy.workerRoot, name, "scratch"),
+      tree: join(policy.assignmentRoot, name) };
+  }
   if (!Number.isSafeInteger(uid) || uid <= 0) throw new Error("Worker account is privileged");
   return { name, uid, gid, groups: [], groupIds: [gid],
     home: join(policy.workerRoot, name, "home"),

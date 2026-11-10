@@ -1,49 +1,52 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
 import { parseAttemptIdentity } from "../contracts/team-control.js";
-import { agentTurnOutputPaths, agentTurnPromptPath, isNativeSessionToken, readAgentTurnThreadId } from "../domain/agent-turn.js";
-import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
+import type { WorkerEvent } from "../contracts/worker-events.js";
+import { agentTurnPromptPath, agentTurnOutputPaths, isNativeSessionToken, readAgentTurnThreadId } from "../domain/agent-turn.js";
 import { hashBytes } from "../domain/plan-governance.js";
+import { resolveExecutable } from "../domain/executable-resolver.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, ReadinessResult } from "../domain/runtime-adapter.js";
-import type { TmuxAdapter } from "./tmux.js";
-import { shellQuote } from "./shell-quote.js";
+import { ChildProcessSupervisor, type SupervisedTurn, type SupervisorLaunch, type SupervisorResult } from "./child-process-supervisor.js";
+import { workerArgv } from "./worker-launch-argv.js";
 import type { WorkerClient, WorkerLauncher, WorkerLaunchInput } from "./worker-launch.js";
 
 /**
- * MVP — the unisolated managed launch.
+ * U3 — the unisolated managed launch, as a direct child process.
  *
- * With `workers.isolation: none` an attempt runs as the daemon's own user, inside the
- * candidate worktree the runtime admitted for it, in the seat's tmux pane. Nothing here
- * reads `/etc/multi-agent`, spawns sudo or needs the `ma-*` accounts, so the managed path
- * works on an ordinary Linux or WSL host after `./setup.sh`.
+ * What a person relies on has not changed: the client starts only in the tree the runtime
+ * admitted, and the receipt names the process the kernel actually runs rather than repeating the
+ * daemon's own. What changed is the transport. The old path typed a command line into the seat's
+ * tmux pane, read the screen for readiness and recovered the exit status from the pane's dead
+ * flag; KTD1 replaces all three with a piped child the daemon starts itself, because both clients
+ * already expose a headless JSONL mode and a PTY adds only lifecycle to scrape.
  *
- * What still holds is the part a person relies on: the client starts only in the tree the
- * runtime admitted, and the receipt names the kernel identity the pane actually runs under
- * rather than repeating the daemon's own. Network isolation is genuinely absent, so the
- * receipt says `unknown` instead of claiming a profile nothing enforces.
+ * The receipt is still the run's evidence, so it still names a pid *and* a start marker. On
+ * Windows that pair is the CIM creation time, on POSIX the `/proc` start tick, and both come from
+ * U1. `paneId`/`tmuxServer` are recorded as null: there is no pane, and a reader that needs one
+ * asks the identity, not the launch.
  */
 
 export interface DirectWorkerLaunchDeps {
-  tmux: Pick<TmuxAdapter, "sendText" | "sendKeys" | "getPanePid" | "getPaneCommand" | "capturePaneScreen">
-    & Partial<Pick<TmuxAdapter, "holdPaneOnExit" | "respawnPane" | "getPaneExit" | "setPaneTask">>;
-  /** The pane this attempt's seat owns, resolved from the task's recorded destination. */
-  resolvePane: (runId: string, taskId: string) => Promise<string>;
   /** The tree the runtime admitted for this assignment. */
   resolveAssignedTree: (runId: string, assignment: ManagedAttempt["context"]["assignment"]) => string;
   /**
-   * The client command to run in the pane. Production leaves this out and runs the native
-   * client by name; tests inject the stub runner, which needs the attempt's own facts.
+   * The client command to run. Production leaves this out and resolves the real executable
+   * through U1; tests inject a stub, which needs the attempt's own facts.
    */
   command?: (facts: DirectLaunchFacts) => string[];
-  /** The daemon's executable search path, reapplied after the pane's shell startup. */
-  launchPath?: string;
-  /** The tmux server path the receipt records, as the daemon resolved it at startup. */
-  tmuxServer: () => string;
+  /**
+   * The client executable an operator configured explicitly. It is used as given when it is a
+   * launchable file, which is how a fixture names a stub `.exe`.
+   */
+  executablePath?: (client: WorkerClient) => string | undefined;
+  /** Installer-bundled resources, for the resolver's bundled branch. */
+  bundledRoots?: string[];
   modelRefusal?: (input: WorkerLaunchInput) => string | null;
   documentRefusal?: (input: WorkerLaunchInput) => string | null;
-  sleep?: (ms: number) => Promise<void>;
+  /** Start one supervised turn. Injectable so a test can drive the launcher without spawning. */
+  supervise?: (launch: SupervisorLaunch, deps: { onEvent: (event: WorkerEvent) => void }) => SupervisedTurn;
+  /** Publish a normalized event. Absent means the launch records only its receipt. */
+  onEvent?: (facts: DirectLaunchFacts, event: WorkerEvent) => void;
   now?: () => number;
 }
 
@@ -51,7 +54,6 @@ export interface DirectLaunchFacts {
   client: WorkerClient;
   /** The admitted candidate tree; the client starts here. */
   tree: string;
-  pane: string;
   /** The native session id this launch runs under. */
   sessionId: string;
   attemptId: string;
@@ -61,42 +63,36 @@ export interface DirectLaunchFacts {
   promptPath?: string;
   /**
    * Where this turn's final message is recorded: the attempt's `last-message.txt`, the same file
-   * `readAgentTurnLastMessage` reads for either client. A native Claude turn's view writes it, a
-   * native Codex turn writes it through `-o`, and an injected command (a stub, a fixture) may
-   * write it itself — either way the daemon reads the turn's answer from this one path.
+   * `readAgentTurnLastMessage` reads for either client. Codex writes it through its own `-o`; a
+   * Claude turn's `result` record is written there by the supervisor. An injected command (a
+   * stub, a fixture) may write it itself — either way the daemon reads one path.
    */
   resultPath?: string;
   reportPath?: string;
+  /** The process this turn runs as, once it started. */
+  processId?: number;
+  processStart?: string;
 }
 
-/** The shells a pane falls back to; anything else is the client the launch started. */
-const SHELL_COMMANDS = new Set(["bash", "fish", "nu", "sh", "tmux", "zsh"]);
-/**
- * How long a headless turn may take to show it started before readiness gives up on it.
- *
- * A turn that ends before readiness is checked is a valid, fast turn, not a launch failure: the
- * pane's dead flag and its exit status are that turn's own evidence, and the sweep records the
- * stop from them. Only a pane whose command is still the shell is "not yet ready".
- */
+/** How long a launch waits for its turn to reach the first provider event before it is ready. */
 const TURN_START_WINDOW_MS = 30_000;
+/** How often readiness re-reads the turn's observed events. */
+const READINESS_POLL_MS = 50;
 
-/** `/proc/<pid>/stat`, read past the parenthesised command name. */
-function processFacts(pid: number): { groupId: number; start: string } {
-  const raw = readFileSync("/proc/" + pid + "/stat", "utf8");
-  const fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
-  const groupId = Number(fields[2]);
-  const start = fields[19];
-  if (!Number.isSafeInteger(groupId) || groupId <= 0 || !start) throw new Error("direct_launch_process_unreadable");
-  return { groupId, start };
+/** What one launch keeps, so a later readiness check and a cancel read the same facts. */
+interface LiveTurn {
+  turn: SupervisedTurn;
+  facts: DirectLaunchFacts;
+  receipt: ManagedSessionReceipt;
+  events: WorkerEvent[];
 }
 
 export class DirectWorkerLauncher implements WorkerLauncher {
   private readonly receipts = new Map<string, ManagedSessionReceipt>();
-  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly turns = new Map<string, LiveTurn>();
   private readonly now: () => number;
 
   constructor(private readonly deps: DirectWorkerLaunchDeps) {
-    this.sleep = deps.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
     this.now = deps.now ?? Date.now;
   }
 
@@ -111,211 +107,180 @@ export class DirectWorkerLauncher implements WorkerLauncher {
     try {
       const modelError = this.deps.modelRefusal?.(input) ?? this.deps.documentRefusal?.(input);
       if (modelError) return this.refuse(modelError);
-      const pane = await this.deps.resolvePane(attempt.context.runId, attempt.context.assignment.taskId);
       const tree = this.deps.resolveAssignedTree(attempt.context.runId, attempt.context.assignment);
       // A fresh attempt opens a conversation; a continuation keeps the one it is given.
+      const continuing = input.continueSessionId !== undefined || input.resumeToken !== undefined;
       const sessionId = input.continueSessionId ?? input.resumeToken ?? randomUUID();
-const promptPath = agentTurnPromptPath(attempt.context);
-      // U5 — one final-message file per attempt, for either client: a Claude turn's readable
-      // view records its stream-json `result` there, and a Codex turn writes the same file
-      // through its own `-o`. An injected command (a stub, a fixture) gets the path in its
-      // facts and writes it itself, so every turn's answer is read from one place.
+      const promptPath = agentTurnPromptPath(attempt.context);
       const output = agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId);
+      // The per-attempt output is cleared by the supervisor before it spawns, so a stale report
+      // can never describe this turn.
       mkdirSync(output.directory, { recursive: true, mode: 0o700 });
-      // An exact resume can reuse an attempt id; its previous output cannot describe this turn.
-      rmSync(output.threadId, { force: true });
-      rmSync(output.lastMessage, { force: true });
-      mkdirSync(dirname(output.taskReport), { recursive: true, mode: 0o700 });
-      rmSync(output.taskReport, { force: true });
-      const facts: DirectLaunchFacts = { client, tree, pane, sessionId, attemptId: attempt.attemptId,
+      const facts: DirectLaunchFacts = { client, tree, sessionId, attemptId: attempt.attemptId,
         runId: attempt.context.runId, taskId: attempt.context.assignment.taskId, promptPath,
         resultPath: output.lastMessage, reportPath: output.taskReport };
-      const argv = this.deps.command ? this.deps.command(facts)
-        : this.nativeArgs(client, input, sessionId, tree);
-      // T033 — hold the pane before the client starts. Measured on tmux 3.6: without this, the
-      // client exiting destroys the pane (and a seat's only pane destroys its session), leaving
-      // no exit status and no output for the completion sweep to classify. With it, the pane
-      // stays dead and carries `pane_dead_status` and its last lines. A host whose tmux refuses
-      // the option still launches: the sweep then has no exit evidence and records no code,
-      // which is the conservative answer, not a retry.
-      await this.deps.tmux.holdPaneOnExit?.(pane);
-      // A pane held from an earlier attempt is still the seat's, but its shell is gone: measured
-      // on tmux 3.6, typing into a dead pane is accepted and does nothing. So the held pane is
-      // put back to a live shell first, in the seat's own pane, and the launch proceeds as it
-      // does for a pane that never ran a client.
-      if ((await this.deps.tmux.getPaneExit?.(pane))?.dead) {
-        const revived = await this.deps.tmux.respawnPane?.(pane);
-        if (revived && !revived.ok) return this.refuse(revived.code);
-      }
-      // The pane already belongs to this seat, so the launch changes only what runs in it:
-      // the admitted tree as the working directory, then the client as the foreground process.
-      //
-      // A turn's identity is read before the line is submitted, because `exec` keeps the
-      // process: the pid tmux started the pane with is the pid the client runs under, and its
-      // start tick is unchanged by the exec. Reading it afterwards loses the identity of a turn
-      // that ends immediately, before the launch observes it.
-      const identity = await this.paneIdentity(pane);
-      if (identity === null) return this.refuse("managed_identity_unobserved");
-      // A seat is a terminal, and one seat can hold two live tasks: the review loop creates a
-      // review task per completed implementer, so two completed tasks are two pending reviews
-      // on the same reviewer seat. The receipt names the seat, so a reader that resolves "the
-      // seat's one live task" finds two and records nothing. The pane says which one this
-      // launch is starting, so it is stamped before the client starts.
-      await this.deps.tmux.setPaneTask?.(pane, attempt.context.assignment.taskId);
-// tmux 3.6 replaces session PATH with its client's PATH when spawning a pane, even
-      // with new-session/respawn-pane -e. Reapply it here, after shell startup, for every turn.
-      const command = [
-        ...(this.deps.launchPath !== undefined ? ["/usr/bin/env", "PATH=" + this.deps.launchPath] : []),
-        ...this.turnCommand(argv, this.deps.command !== undefined,
-          client === "codex" ? output.threadId : undefined,
-          output.lastMessage),
-      ];
-      const line = "cd " + shellQuote(tree) + " && exec " + command.map(shellQuote).join(" ")
-        // The turn's text is fed on stdin, so its length and quoting never reach this line.
-        + " < " + shellQuote(promptPath);
+      const readOnly = attempt.context.workflow?.readOnly === true;
+      const argv = this.deps.command ? this.deps.command(facts) : this.nativeArgv(client, input, sessionId, tree, output, continuing, readOnly);
+      // The client command is either an injected program or the resolved real executable. A bare
+      // name is never a spawn target: `shell: false` cannot find it, and on Windows it would be a
+      // `.cmd` shim Node refuses to start (KTD2).
+      const [executable, ...args] = argv;
+      if (!executable) return this.refuse("managed_executable_unresolved");
+      const resolved = this.deps.command ? executable : this.resolveExecutable(client);
+      if (resolved === null) return this.refuse("managed_executable_unresolved");
+      // The prompt is the file the orchestrator already wrote for this attempt. A turn whose
+      // prompt file is missing has nothing to work on, and is a refusal rather than an empty turn.
+      const prompt = this.readPrompt(promptPath);
+      if (prompt === null) return this.refuse("managed_prompt_unavailable");
       const changedModelError = this.deps.modelRefusal?.(input) ?? this.deps.documentRefusal?.(input);
       if (changedModelError) return this.refuse(changedModelError);
-      const typed = await this.deps.tmux.sendText(pane, line);
-      if (!typed.ok) return this.refuse(typed.code);
-      const submitted = await this.deps.tmux.sendKeys(pane, ["Enter"]);
-      if (!submitted.ok) return this.refuse(submitted.code);
-      const ready = await this.waitForTurn(pane, attempt.deadline,
-        client === "codex" && !this.deps.command ? output.threadId : undefined);
-      if (!ready) return this.refuse("managed_readiness_unknown");
-      const observedThreadId = client === "codex" && !this.deps.command ? readAgentTurnThreadId(output.threadId) : null;
-      const receipt: ManagedSessionReceipt = {
-        identity: parseAttemptIdentity({ nativeSessionId: observedThreadId ?? sessionId, tmuxServer: this.deps.tmuxServer(), paneId: pane,
-          processId: identity.processId, processStart: identity.start, generation: (attempt.previous?.identity.generation ?? 0) + 1,
-          policyFingerprint: attempt.context.binding.policyFingerprint }),
-        attemptId: attempt.attemptId, runId: attempt.context.runId, client,
-        contextHash: attempt.context.generatedHash, observedContextHash: attempt.context.generatedHash,
-        workerUid: process.getuid!(), processGroupId: identity.groupId, executableVersion: "unknown",
-        // Nothing filters this worker's network, so no profile is claimed.
-        network: { namespace: "host", mode: "unknown", profileFingerprint: hashBytes("unisolated"),
-          preflightRef: "direct-launch:" + attempt.attemptId },
-        deadline: attempt.deadline,
-      };
+
+      const launch: SupervisorLaunch = { executable: resolved, args, cwd: tree, prompt,
+        mutableStateRoot: attempt.context.mutableStateRoot, attemptId: attempt.attemptId,
+        provider: client === "codex" ? "codex" : "claude",
+        ...(client === "codex" ? { threadIdPath: output.threadId } : {}) };
+      const events: WorkerEvent[] = [];
+      const turn = this.deps.supervise
+        ? this.deps.supervise(launch, { onEvent: event => events.push(event) })
+        : new ChildProcessSupervisor(launch, { onEvent: event => {
+          events.push(event);
+          this.deps.onEvent?.(facts, event);
+        } });
+      const identity = await turn.start();
+      facts.processId = identity.processId;
+      facts.processStart = identity.processStart;
+      // A turn that takes minutes must not block the launch that started it: `wait()` is what a
+      // cancellation or a shutdown awaits, and readiness polls `settled()`.
+      // A turn that never said anything is a no-response, not a launch failure: the attempt was
+      // started and its process exists, so the receipt is recorded and the sweep decides from
+      // the exit facts. The launch therefore waits only long enough to give the client its
+      // chance to report its own identity — a Codex thread id, which the receipt must not invent.
+      await this.waitForTurn(turn, attempt.deadline, client === "codex" ? output.threadId : undefined);
+      // Codex allocates its own thread id and reports it in its first event; the receipt names
+      // the id the client gave, never one this side invented. A turn that ended before reporting
+      // one keeps the id it launched under, and the sweep saves the captured thread separately.
+      const nativeSessionId = client === "codex" ? readAgentTurnThreadId(output.threadId) ?? sessionId : sessionId;
+      const receipt = this.receipt(facts, attempt, client, nativeSessionId, identity);
       this.receipts.set(attempt.attemptId, receipt);
-      // Codex allocates its own thread id. The sweep saves the captured id before freeing the seat.
+      this.turns.set(attempt.attemptId, { turn, facts, receipt, events });
+      // The turn's end is recorded as soon as it happens, not when someone asks: `wait()` writes
+      // the exit facts beside the attempt's output, and that file is what the completion sweep
+      // classifies after the process is gone. Nothing awaits this promise, so a client that runs
+      // for minutes never holds the launch open.
+      void turn.wait().catch(() => { /* A turn that cannot report its end is the sweep's problem. */ });
       return { ok: true, managedSession: receipt,
         ...(client === "claude-code" ? { resumeToken: sessionId, resumeType: "claude_id" } : {}) };
     } catch (error) {
-      return this.refuse(error instanceof Error && /^direct_launch_/.test(error.message) ? error.message : "managed_launch_unverified");
+      return this.refuse(error instanceof Error && /^direct_launch_|^managed_/.test(error.message) ? error.message : "managed_launch_unverified");
     }
   }
 
+  /**
+   * The receipt for a turn that started.
+   *
+   * The identity is the process pair U1 captured at spawn, which is what recovery reconciles and
+   * cancellation aims at. `paneId`/`tmuxServer` are null: a direct child has no pane, and the
+   * fields stay in the contract for the hardened launcher that does.
+   */
+  private receipt(facts: DirectLaunchFacts, attempt: ManagedAttempt, client: WorkerClient, sessionId: string,
+    identity: { processId: number; processStart: string }): ManagedSessionReceipt {
+    return {
+      identity: parseAttemptIdentity({ nativeSessionId: sessionId, tmuxServer: null, paneId: null,
+        processId: identity.processId, processStart: identity.processStart,
+        generation: (attempt.previous?.identity.generation ?? 0) + 1,
+        policyFingerprint: attempt.context.binding.policyFingerprint }),
+      attemptId: attempt.attemptId, runId: attempt.context.runId, client,
+      contextHash: attempt.context.generatedHash, observedContextHash: attempt.context.generatedHash,
+      // An unisolated worker is the daemon's own user, which Windows has no numeric id for.
+      workerUid: typeof process.getuid === "function" ? process.getuid() : 0,
+      processGroupId: identity.processId, executableVersion: "unknown",
+      // Nothing filters this worker's network, so no profile is claimed.
+      network: { namespace: "host", mode: "unknown", profileFingerprint: hashBytes("unisolated"),
+        preflightRef: "direct-launch:" + attempt.attemptId },
+      deadline: attempt.deadline,
+    };
+  }
+
+  /**
+   * Whether the turn this attempt started is running.
+   *
+   * A direct child has no composer and no gate screen, so there is nothing to wait for beyond
+   * the child existing: the launch itself waited for the client's first provider event, and a
+   * turn that ended before readiness is checked is a valid, fast turn whose exit facts are the
+   * completion sweep's evidence. Only a turn this launcher does not know is unobserved.
+   */
   async checkReady(attempt: ManagedAttempt): Promise<ReadinessResult> {
-    const receipt = this.receipts.get(attempt?.attemptId);
-    if (!receipt) return { ready: false, code: "managed_identity_unobserved" };
-    try {
-      if (await this.deps.tmux.getPanePid(receipt.identity.paneId) !== receipt.identity.processId) {
-        return { ready: false, code: "managed_identity_changed" };
-      }
-      // The injected stub runner has no native composer. Production always uses the screen probe.
-      if (this.deps.command) return { ready: true };
-      const paneContent = await this.deps.tmux.capturePaneScreen(receipt.identity.paneId);
-      const paneCommand = await this.deps.tmux.getPaneCommand(receipt.identity.paneId);
-      const probe = assessNativeResumeProbe({ runtime: receipt.client, paneContent, paneCommand,
-        claudeResumeIdentityVerified: false });
-      // A headless turn has no composer to probe, and a turn that already ended is a valid, fast
-      // turn: its exit status is the sweep's evidence, not a launch failure. What the probe is
-      // still read for is the one thing a turn can also hit — a positive gate that needs the
-      // owner (a bypass-consent prompt, a refused login, a resume it cannot honour). Anything
-      // else is the turn doing its work.
-      const gated = probe.status === "attention_required" || probe.code === "login_required"
-        || probe.code === "no_conversation_found" || probe.code === "trust_gate" || probe.code === "mcp_gate";
-      return gated ? { ready: false, code: probe.code, reason: probe.detail } : { ready: true };
-    } catch {
-      return { ready: false, code: "managed_observation_unavailable" };
-    }
+    return this.turns.has(attempt?.attemptId) ? { ready: true } : { ready: false, code: "managed_identity_unobserved" };
   }
 
-  /** The pane's own process and its start tick, or null when tmux cannot name one. */
-  private async paneIdentity(pane: string): Promise<{ processId: number; groupId: number; start: string } | null> {
-    const pid = await this.deps.tmux.getPanePid(pane);
-    if (pid === null) return null;
-    const facts = processFacts(pid);
-    return { processId: pid, groupId: facts.groupId, start: facts.start };
+  /**
+   * Stop a turn this launcher started.
+   *
+   * Cancellation is the owner's, and the run's own cancel route ends recorded identities through
+   * U1; this is the launch's own handle on the same child, used by a shutdown that is ending work
+   * it started. Closing stdin first lets a headless client leave on its own.
+   */
+  async cancel(attemptId: string): Promise<SupervisorResult | null> {
+    const live = this.turns.get(attemptId);
+    if (!live) return null;
+    await live.turn.cancel();
+    return live.turn.wait();
   }
 
   private refuse(code: string): HarnessLaunchResult {
     return { ok: false, error: "Direct launch blocked: " + code, recovery: "attention_required" };
   }
 
-  /**
-   * The process the pane `exec`s for one turn.
-   *
-   * A headless turn's stream is JSON, so the readable view sits in front of it: the pane runs
-   * the shipped formatter, which starts the client, forwards stdin from the attempt's prompt
-   * file and exits with the client's own status. An injected command is started directly.
-   *
-   * `exec` stays on the process the pane ends up in, so the pane's exit status is the client's
-   * own — T033's classifier reads that status, and a wrapper that swallowed it would turn every
-   * failed turn into a successful one.
-   */
-private turnCommand(argv: string[], injected: boolean, threadIdPath?: string, resultPath?: string): string[] {
-    // An injected command is already the caller's own program (a stub, a fixture), so it is
-    // started as given: wrapping it would make the pane's exit status the wrapper's.
-    if (injected) return argv;
-    const view = fileURLToPath(new URL("../../assets/agent-turn-view.mjs", import.meta.url));
-    // The output paths are the view's own arguments rather than environment assignments: the
-    // pane's shell runs with a PATH this side does not choose, and a command line needs nothing
-    // found on it. A Claude turn records its `result` here; a Codex turn writes the same file
-    // through its own `-o`. Both clients need the result directory for telemetry sidecars.
-    return [process.execPath, view,
-      ...(threadIdPath ? ["--thread-id-file", threadIdPath] : []),
-      ...(resultPath ? ["--result-file", resultPath] : []), ...argv];
+  /** The prompt the orchestrator wrote for this attempt, or null when it is not readable. */
+  private readPrompt(path: string): string | null {
+    try { return readFileSync(path, "utf8"); } catch { return null; }
   }
 
   /**
-   * The native argv for one managed turn.
+   * The real executable for one client, through U1's resolver.
    *
-   * Claude Code runs one headless turn (`-p`): the process exits when the turn ends, which is
-   * what lets the completion sweep, the session slot and T033's exit classification work at
-   * all. The prompt is fed on stdin from the file the daemon wrote, so its length and its
-   * quoting never reach the shell line. `stream-json --verbose` is the only mode the installed
-   * build streams in — measured 2.1.296: `text` prints nothing until the turn ends — and a
-   * small formatter turns each event into a readable line in the pane.
-   *
-   * Codex 0.160.0 accepts -C/-s on exec, but not exec resume. A continuation already starts
-   * in the candidate via the shell's cd, and sets its sandbox through the supported config flag.
+   * An explicit configured path wins (a fixture, or an operator override); otherwise the resolver
+   * follows PATH and `PATHEXT` to a real `.exe`, following an npm shim when that is what is
+   * installed. A bare name that resolves to nothing is a refusal: `shell: false` would fail
+   * anyway, and a `.cmd` target is exactly what the resolver refuses to return.
    */
-  private nativeArgs(client: WorkerClient, input: WorkerLaunchInput, sessionId: string, tree: string): string[] {
-    const readOnly = input.attempt.context.workflow?.readOnly === true;
-    if (client === "claude-code") {
-      return ["claude", "-p", "--permission-mode", readOnly ? "plan" : "bypassPermissions", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-        ...(readOnly ? ["--tools", "Read,Glob,Grep", "--strict-mcp-config"] : []),
-        ...(input.model ? ["--model", input.model] : []), ...(input.effort ? ["--effort", input.effort] : []),
-        ...(input.continueSessionId || input.resumeToken ? ["--resume", sessionId] : ["--session-id", sessionId])];
-    }
-    const continuing = input.continueSessionId !== undefined || input.resumeToken !== undefined;
-    const output = agentTurnOutputPaths(input.attempt.context.mutableStateRoot, input.attempt.attemptId);
-    const sandbox = readOnly ? "read-only" : "workspace-write";
-    return ["codex", "exec", ...(continuing ? ["resume"] : []), "--json", "-o", output.lastMessage,
-      ...(continuing ? ["-c", "sandbox_mode=" + sandbox] : ["-C", tree, "-s", sandbox]),
-      ...(readOnly ? ["-c", "approval_policy=never"] : ["-c", "sandbox_workspace_write.network_access=true"]),
-      "-c", "check_for_update_on_startup=false",
-      ...(!readOnly && ["implementer", "reviewer"].includes(input.attempt.context.assignment.role)
-        ? ["-c", "sandbox_workspace_write.writable_roots=" + JSON.stringify([dirname(output.taskReport)])] : []),
-      ...(input.model ? ["-m", input.model] : []), ...(input.effort ? ["-c", "model_reasoning_effort=" + input.effort] : []),
-      ...(continuing ? [sessionId] : []), "-"];
+  private resolveExecutable(client: WorkerClient): string | null {
+    const configuredPath = this.deps.executablePath?.(client);
+    // The resolver's names are the clients' own names: a Claude turn is `claude`, not the
+    // adapter's `claude-code`.
+    const resolution = resolveExecutable(client === "codex" ? "codex" : "claude", {
+      ...(configuredPath ? { configuredPath } : {}),
+      ...(this.deps.bundledRoots ? { bundledRoots: this.deps.bundledRoots } : {}),
+    });
+    return resolution.ok ? resolution.path : null;
+  }
+
+  /** The native argv for one managed turn, from the frozen launch contract. */
+  private nativeArgv(client: WorkerClient, input: WorkerLaunchInput, sessionId: string, tree: string,
+    output: ReturnType<typeof agentTurnOutputPaths>, continuing: boolean, readOnly: boolean): string[] {
+    return [client === "codex" ? "codex" : "claude",
+      ...workerArgv({ client, tree, output, readOnly, role: input.attempt.context.assignment.role, sessionId,
+        continuing, ...(input.model ? { model: input.model } : {}), ...(input.effort ? { effort: input.effort } : {}) })];
   }
 
   /**
-   * Observe Codex's first thread event before issuing its receipt. A turn that already
-   * ended is also ready: even a client that failed before opening a thread must have its
-   * exit classified by the sweep. Other commands are ready once the pane runs the client.
+   * Wait for a turn to show it started.
+   *
+   * A turn that already ended is also ready: even a client that failed before opening a session
+   * must have its exit classified by the completion sweep. A Codex turn supplies its own thread
+   * id in its first event, so the receipt must not invent that id — the wait is for the client's
+   * own answer, or for the turn to end.
    */
-  private async waitForTurn(pane: string, deadline: number, threadIdPath?: string): Promise<boolean> {
+  private async waitForTurn(turn: SupervisedTurn, deadline: number, threadIdPath?: string): Promise<boolean> {
     const limit = Math.min(deadline, this.now() + TURN_START_WINDOW_MS);
     for (;;) {
-      if ((await this.deps.tmux.getPaneExit?.(pane))?.dead) return true;
-      const command = await this.deps.tmux.getPaneCommand(pane);
-      // Codex supplies its identity in its first event; the receipt must not invent that id.
-      if (threadIdPath ? readAgentTurnThreadId(threadIdPath) !== null
-        : command !== null && !SHELL_COMMANDS.has(command)) return true;
+      if (turn.observedEvents.length > 0) {
+        if (!threadIdPath || turn.observedEvents.some(event => event.type === "session.started")) return true;
+      }
+      // An ended turn is ready whatever it produced: its exit facts are the sweep's evidence.
+      if (turn.settled()) return true;
       if (this.now() >= limit) return false;
-      await this.sleep(50);
+      await new Promise<void>(resolve => setTimeout(resolve, READINESS_POLL_MS));
     }
   }
 }

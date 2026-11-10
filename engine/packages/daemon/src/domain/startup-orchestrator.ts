@@ -38,6 +38,22 @@ function isHeadlessTurn(input: Pick<StartupInput, "binding" | "adapter">): boole
     && (input.adapter.runtime === "claude-code" || input.adapter.runtime === "codex");
 }
 
+/**
+ * U3 — whether this launch is the native direct-child path rather than the legacy pane path.
+ *
+ * The supervisor reads the turn's activity from the JSONL stream, so a native turn needs no
+ * client-side projection to be observable. Everything that projection used to write — Codex's
+ * `[hooks]`/`[hooks.state]` records in `config.toml`, Claude's onboarding/trust in `.claude.json`
+ * and its status-line collector — is a write into the user's own client configuration, and on
+ * 2026-11-10 a duplicate `[hooks.state]` key it produced stopped Codex from starting at all.
+ *
+ * The test is the transport, not the runtime: a managed attempt whose launch is not the direct
+ * launcher (a pane-era fixture, a hardened launch) keeps the projection it always had.
+ */
+function writesClientConfig(input: Pick<StartupInput, "binding" | "adapter">): boolean {
+  return !(input.binding.managedAttempt !== undefined && input.adapter.managedTransport === "direct");
+}
+
 // Expanded startup text can put the current input marker above 50 scrollback lines.
 const STARTUP_SUBMIT_CAPTURE_LINES = 200;
 // Claude Code 2.1.289 has taken Enter on a large startup paste after the first look, while the composer
@@ -290,8 +306,14 @@ export class StartupOrchestrator {
     // replay plan, not a newly selected profile with activity hooks removed.
     // RestoreOrchestrator already reconciled the saved activity selection before
     // native resume. Fresh launches still project empty plans to support removal.
+    // U3 — a native direct-child turn projects nothing: every projection the managed launch used
+    // to make was a write into the user's own client configuration (`config.toml` hook records,
+    // `.claude.json` trust, a status-line collector), and the supervisor observes the turn from
+    // its JSONL stream instead. The candidate tree still carries the task's own files.
     let projectionResult: ProjectionResult;
-    if (!(input.preserveStartupContext && input.adapter.runtime === "claude-code" && input.plan.entries.length === 0)) try {
+    if (!writesClientConfig(input)) {
+      projectionResult = { projected: [], skipped: input.plan.entries.map(entry => entry.effectiveId), failed: [] };
+    } else if (!(input.preserveStartupContext && input.adapter.runtime === "claude-code" && input.plan.entries.length === 0)) try {
       projectionResult = await input.adapter.project(input.plan, input.binding);
       warnings.push(...(projectionResult.warnings ?? []));
       if (projectionResult.failed.length > 0) {
@@ -332,8 +354,12 @@ export class StartupOrchestrator {
 
     // 4. Deliver pre-launch files (filesystem: guidance_merge, skill_install)
     // Always call even with empty list so adapters can provision runtime-specific config (e.g. context collectors)
+    // U3 — except on the native direct-child path, where the adapter writes the user's own client
+    // configuration and the turn needs none of it: its activity comes from the JSONL stream.
     try {
-      const deliveryResult = await input.adapter.deliverStartup(preLaunchFiles, input.binding);
+      const deliveryResult = writesClientConfig(input)
+        ? await input.adapter.deliverStartup(preLaunchFiles, input.binding)
+        : { delivered: 0, failed: [], warnings: [] };
       warnings.push(...(deliveryResult.warnings ?? []));
       if (deliveryResult.failed.length > 0) {
         for (const f of deliveryResult.failed) {
@@ -591,7 +617,9 @@ export class StartupOrchestrator {
     }
 
     // 7. Deliver post-launch files (send_text → TUI, now that harness is ready)
-    if (postLaunchFiles.length > 0) {
+    // U3 — a native direct-child turn has no composer to type into: its one prompt was written
+    // before the child started and fed on stdin, so there is no second delivery to make.
+    if (postLaunchFiles.length > 0 && writesClientConfig(input)) {
       try {
         // Keep reads/provisioning and required/optional errors in the adapter. Only Claude's
         // already-partitioned interactive files use the same bounded check as startup actions.

@@ -12,6 +12,7 @@ import type { AttemptOutcome, AttemptTelemetry } from "./attempt-telemetry.js";
 import { unreadableTaskReport, type TaskReport } from "./task-report.js";
 import { recordWorkflowTurn } from "./team-workflows.js";
 import { observeIdentity } from "./process-termination.js";
+import type { SupervisorExitFacts } from "../adapters/child-process-supervisor.js";
 
 /**
  * MVP — the completion path's observation half.
@@ -68,6 +69,14 @@ export interface AttemptCompletionDependencies {
   paneExit?: (paneId: string) => Promise<{ dead: boolean; code: number | null } | null>;
   /** T033 — the pane's last lines, for the classifier's text fingerprints. Absent means none. */
   paneTail?: (paneId: string, lines: number) => Promise<string | null>;
+  /**
+   * U3 — the exit facts a supervised native turn recorded, read by attempt id.
+   *
+   * A direct child has no pane, so the supervisor writes what it observed (exit code, signal,
+   * bounded stderr and output) to the attempt's own output. Absent means this daemon classifies
+   * only pane-era attempts, which is what a fixture without a supervisor wants.
+   */
+  turnExit?: (attemptId: string) => SupervisorExitFacts | null;
   /**
    * The task a launch stamped into a pane before it started the client.
    *
@@ -234,7 +243,10 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     // A resume re-enters the attempt it recorded, so its row already exists and keeps its own
     // history. Only the first observation of a native generation admits a new row.
     if (governance.getAttempt(receipt.attemptId)) return;
-    const paneTaskId = (await dependencies.paneTask?.(receipt.identity.paneId)) ?? null;
+    // U3 — a native turn records no pane, so there is no stamp to read and the seat's own task
+    // rows are the only evidence. A seat with two live tasks then stays ambiguous, as before.
+    const paneId = receipt.identity.paneId;
+    const paneTaskId = (paneId !== null && dependencies.paneTask ? await dependencies.paneTask(paneId) : null) ?? null;
     const task = taskForSeat(receipt.runId, sessionName, paneTaskId);
     if (!task) {
       log(`team completion: no single live task on ${sessionName} for run=${receipt.runId}` +
@@ -280,7 +292,11 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     for (const row of rows) {
       try {
         const attempt = governance.getAttempt(row.id);
-        if (!attempt?.identity || await alive(attempt.identity)) continue;
+        if (!attempt?.identity) continue;
+        // U3 — a native turn's exit facts are written by the supervisor as soon as the child
+        // ends, so they are the direct proof of an end. Without them the recorded identity
+        // decides, exactly as before: a live process keeps the attempt open.
+        if (dependencies.turnExit?.(attempt.id) == null && await alive(attempt.identity)) continue;
         // A pane the launcher held is still the seat's, but its dead foreground process makes the
         // seat unusable: measured on tmux 3.6, input into a dead pane is accepted and does
         // nothing. The evidence is read first, then the pane is released, so the next dispatch
@@ -290,7 +306,7 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
         // A persisted stop is excluded from later sweeps. Save its exact documents first so a
         // restart never needs to attribute the candidate's later mutable bytes to this turn.
         dependencies.captureTurnDocuments?.(attempt);
-        await releaseHeldPane(attempt.identity.paneId);
+        if (attempt.identity.paneId !== null) await releaseHeldPane(attempt.identity.paneId);
         const request: ControlRequest<unknown> = {
           protocolVersion: TEAM_CONTROL_VERSION, runId: attempt.runId, actionId: attempt.id,
           expectedEntityVersion: governance.getRun(attempt.runId).entityVersion,
@@ -345,10 +361,14 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
    * no failure rather than as a clean exit, so a transient tmux error cannot manufacture a
    * retryable code.
    *
-   * The exit status decides first, because it is structured: a launched client holds its pane
-   * (measured on tmux 3.6, without that the pane is destroyed on exit), and a client that exits
-   * with 0 finished its turn, so nothing it printed is the failure of this attempt. Only a
-   * non-zero exit, a signal, or no exit record at all sends the tail to the fingerprints.
+   * The exit status decides first, because it is structured: a client that exits with 0 finished
+   * its turn, so nothing it printed is the failure of this attempt. Only a non-zero exit, a
+   * signal, or no exit record at all sends the tail to the fingerprints.
+   *
+   * U3 — a native turn has no pane. Its supervisor writes the exit code and signal it observed,
+   * with the turn's stderr and rendered tail, to `exit.json` beside the attempt's other output;
+   * that file is the same evidence a held pane used to carry, and a pane-era attempt keeps
+   * reading its pane because its identity still names one.
    */
   const classify = async (attempt: NonNullable<ReturnType<PlanGovernance["getAttempt"]>>): Promise<AttemptClassification | null> => {
     const run = governance.getRun(attempt.runId);
@@ -357,6 +377,12 @@ export function composeAttemptCompletion(dependencies: AttemptCompletionDependen
     const exit = pane !== null && dependencies.paneExit ? await dependencies.paneExit(pane) : null;
     const terminalTail = pane !== null && dependencies.paneTail && exit?.code !== 0
       ? await dependencies.paneTail(pane, TERMINAL_TAIL_LINES) : null;
+    if (pane === null && dependencies.turnExit) {
+      const facts = dependencies.turnExit(attempt.id);
+      if (facts !== null) return classifyAttemptFailure({ canceled,
+        exit: facts.exitCode === null && facts.signal === null ? null : { code: facts.exitCode },
+        terminalTail: [facts.stderrTail, facts.outputTail].filter(Boolean).join("\n") || null, now: dependencies.now?.() });
+    }
     return classifyAttemptFailure({ canceled, exit: exit === null ? null : { code: exit.code }, terminalTail, now: dependencies.now?.() });
   };
 

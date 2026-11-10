@@ -89,6 +89,8 @@ export interface CodexAdapterFsOps {
  */
 export class CodexRuntimeAdapter implements RuntimeAdapter {
   readonly runtime = "codex";
+  /** U3 — a managed Codex attempt runs as a supervised child, not as a pane-hosted session. */
+  readonly managedTransport = "direct" as const;
   private tmux: TmuxAdapter;
   private workerLauncher?: WorkerLauncher;
   private seatLaunchEnvironment?: SeatLaunchEnvironment;
