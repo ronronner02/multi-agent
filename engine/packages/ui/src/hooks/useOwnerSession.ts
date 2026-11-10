@@ -2,7 +2,9 @@ import { createContext, createElement, useCallback, useContext, useEffect, useRe
 import { parseProtocolVersion } from "../../../daemon/dist/contracts/team-control.js";
 
 export class OwnerReadError extends Error {
-  constructor(readonly status: number, readonly code: string) { super(code); }
+  constructor(readonly status: number, readonly code: string, readonly details: { oversizedPaths?: string[] } = {}) {
+    super(code);
+  }
 }
 
 /**
@@ -88,7 +90,8 @@ function usePairedBrowser() {
       }
       // Other requests must not clear a credential while revocation uses it.
       if (rejectedSession && (automaticReconnect.current || path === "/owner-session") && credential.current === token) clearSession();
-      throw new OwnerReadError(response.status, body.code ?? "read_failed");
+      throw new OwnerReadError(response.status, body.code ?? "read_failed",
+        Array.isArray(body.oversizedPaths) ? { oversizedPaths: body.oversizedPaths.filter((path: unknown): path is string => typeof path === "string") } : {});
     }
   }, [clearSession, reconnect]);
   const pair = useCallback(async (code: string) => {

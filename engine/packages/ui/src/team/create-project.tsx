@@ -15,7 +15,7 @@ const ERRORS: Record<string, MessageKey> = {
   github_repo_create_failed: "projects.createFailed", github_not_signed_in: "github.title",
   team_folder_refused: "projects.folderRefused", team_exists: "projects.alreadyExists",
   team_origin_changed: "projects.folderChanged", team_bootstrap_changed: "projects.folderChanged",
-  folder_pick_failed: "projects.pickFailed",
+  folder_pick_failed: "projects.pickFailed", team_file_too_large: "projects.fileTooLarge",
 };
 
 export function CreateProject({ open, mode = "create", onOpenChange, onCreated, opener }: {
@@ -28,10 +28,11 @@ export function CreateProject({ open, mode = "create", onOpenChange, onCreated, 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false), [browsing, setBrowsing] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [oversized, setOversized] = useState<string[]>([]);
   const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => { if (failure === "github_repo_exists" && !busy) nameInput.current?.focus(); }, [failure, busy]);
   const pickFolder = (window as Window & { multiAgentDesktop?: { pickFolder?: () => Promise<string | null> } }).multiAgentDesktop?.pickFolder;
-  const changeFolder = (value: string) => { setRepository(value); setPreview(null); setFailure(null); };
+  const changeFolder = (value: string) => { setRepository(value); setPreview(null); setFailure(null); setOversized([]); };
   const browse = async () => {
     if (busy) return;
     if (!pickFolder) { setBrowsing(true); return; }
@@ -56,6 +57,9 @@ export function CreateProject({ open, mode = "create", onOpenChange, onCreated, 
     } catch (error) {
       const code = error instanceof OwnerReadError ? error.code : "team_creation_failed";
       setFailure(code);
+      // The refusal names the files that are too large, so the owner knows what to remove or ignore
+      // without guessing from a failed upload later.
+      setOversized(error instanceof OwnerReadError ? error.details.oversizedPaths ?? [] : []);
       if (code === "github_repo_exists") setPreview(null);
       if (code === "github_push_failed") setPreview(current => current ? { ...current, action: "push" } : null);
       if (code === "team_origin_changed" || code === "team_bootstrap_changed") setPreview(null);
@@ -77,7 +81,7 @@ export function CreateProject({ open, mode = "create", onOpenChange, onCreated, 
           </div>
           {mode === "create" && <div className="field"><label htmlFor="project-name">{t("projects.name")}</label>
             <input ref={nameInput} id="project-name" className="input" value={name} disabled={busy} required maxLength={100}
-              onChange={event => { setName(event.target.value); setPreview(null); setFailure(null); }} /></div>}
+              onChange={event => { setName(event.target.value); setPreview(null); setFailure(null); setOversized([]); }} /></div>}
           {preview && <section className="ui-create-preview" aria-label={t("projects.preview")}>
             {preview.action !== "open" && <strong>{t("projects.fileCount", { count: preview.fileCount })}</strong>}
             <code>{preview.repository}</code>
@@ -87,6 +91,8 @@ export function CreateProject({ open, mode = "create", onOpenChange, onCreated, 
               : preview.action === "push" ? "projects.pushConsequence" : "projects.createConsequence", { name: preview.name })}</p>
           </section>}
           {failure && <p role="alert">{t(ERRORS[failure] ?? (mode === "open" ? "projects.openFailed" : "projects.createFailed"))}</p>}
+          {oversized.length > 0 && <div><h3>{t("projects.oversized")}</h3>
+            <ul>{oversized.map(path => <li key={path}><code>{path}</code></li>)}</ul></div>}
           <div className="plate-foot"><button className="btn btn-primary" type="submit" disabled={busy || !repository.trim() || (mode === "create" && !name.trim())}>
             {t(busy ? "web.loading" : !preview ? "projects.reviewFiles" : failure === "github_push_failed" ? "projects.retry" : mode === "open" ? "projects.open" : "projects.submit")}
           </button></div>

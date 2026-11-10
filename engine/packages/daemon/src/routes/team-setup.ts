@@ -125,7 +125,7 @@ export function teamSetupRoutes(
     if (v.seats === undefined) {
       const input = { repository, name: text(v.name, "name", 100) };
       if (v.dryRun === true) return c.json({ protocolVersion: TEAM_CONTROL_VERSION,
-        preview: previewProject(input, undefined, rigRepo.db) });
+        preview: await previewProject(input, undefined, rigRepo.db) });
       const configured = options.settingsStore?.resolveOne("team.leadClient").value ?? "claude-code";
       const leadClient = typeof configured === "string" ? parseTeamClient(configured) : null;
       if (!leadClient) throw new TeamSetupError("team_seats_invalid", "Set the lead client to claude-code or codex before creating a project.");
@@ -150,7 +150,8 @@ export function teamSetupRoutes(
     }
     if (error instanceof ProjectBootstrapError) {
       const status = error.code === "team_origin_changed" || error.code === "team_bootstrap_changed" ? 409 : 400;
-      return c.json({ code: error.code, error: error.message, excludedPaths: error.excludedPaths }, status);
+      return c.json({ code: error.code, error: error.message, excludedPaths: error.excludedPaths,
+        ...(error.oversizedPaths.length ? { oversizedPaths: error.oversizedPaths } : {}) }, status);
     }
     if (error instanceof GithubCliError) {
       const status = error.code === "github_repo_exists" || error.code === "github_not_signed_in" ? 409

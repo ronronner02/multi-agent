@@ -153,6 +153,20 @@ describe("project creation", () => {
     expect(screen.getByText("Register sample with its existing origin. No repository is created and no files are uploaded.")).toBeTruthy();
   });
 
+  it("names the files that are too large and asks for another review", async () => {
+    request.mockImplementationOnce(async () => {
+      throw new OwnerReadError(400, "team_file_too_large", { oversizedPaths: ["assets/recording.mp4"] });
+    });
+    await show(); fill();
+    fireEvent.click(screen.getByRole("button", { name: "Review files" }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent",
+      "Files over 100 MiB cannot be uploaded to GitHub. Remove them or add them to the project's ignore file, then review the files again.");
+    expect(screen.getByText("Files that are too large")).toBeTruthy();
+    expect(screen.getByText("assets/recording.mp4")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review files" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create" })).toBeNull();
+  });
+
   it("keeps the target fixed while a preview is pending", async () => {
     let finish!: (value: object) => void;
     request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));

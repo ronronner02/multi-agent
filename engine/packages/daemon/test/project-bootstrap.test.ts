@@ -30,9 +30,9 @@ describe("project file preview", () => {
   });
   afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
-  it("previews a missing folder and its initial ignore file without creating anything", () => {
+  it("previews a missing folder and its initial ignore file without creating anything", async () => {
     const repository = join(home, "new-project");
-    expect(previewProject({ repository, name: "new-project" }, home)).toMatchObject({
+    expect(await previewProject({ repository, name: "new-project" }, home)).toMatchObject({
       repository, name: "new-project", action: "create", fileCount: 1, excludedPaths: [],
     });
     expect(existsSync(repository)).toBe(false);
@@ -51,7 +51,7 @@ describe("project file preview", () => {
     expect(projectFolder(short, home)).toBe(long);
   });
 
-  it("uses the same credential and default-ignore policy before an initial commit", () => {
+  it("uses the same credential and default-ignore policy before an initial commit", async () => {
     const repository = join(home, "project");
     mkdirSync(join(repository, ".ssh"), { recursive: true });
     mkdirSync(join(repository, ".config"));
@@ -62,7 +62,7 @@ describe("project file preview", () => {
     writeFileSync(join(repository, "node_modules", "dependency.js"), "generated\n");
     writeFileSync(join(repository, "source with spaces.ts"), "export const value = 1;\n");
     const before = readdirSync(repository).sort();
-    const preview = previewProject({ repository, name: "project" }, home);
+    const preview = await previewProject({ repository, name: "project" }, home);
     expect(preview.fileCount).toBe(2);
     expect(preview.excludedPaths).toEqual(expect.arrayContaining([".env", ".ssh/", ".config/"]));
     expect(readdirSync(repository).sort()).toEqual(before);
@@ -71,7 +71,7 @@ describe("project file preview", () => {
     expect(JSON.stringify(preview)).not.toContain("fixture credential");
   });
 
-  it("respects an existing ignore file and leaves a pre-staged owner index byte-identical", () => {
+  it("respects an existing ignore file and leaves a pre-staged owner index byte-identical", async () => {
     const repository = join(home, "project");
     mkdirSync(repository);
     git(repository, "init", "--quiet", "--initial-branch=main");
@@ -82,7 +82,7 @@ describe("project file preview", () => {
     git(repository, "add", "--", "source.ts", ".env");
     writeFileSync(join(repository, "source.ts"), "working version\n");
     const index = readFileSync(join(repository, ".git", "index"));
-    const preview = previewProject({ repository, name: "project" }, home);
+    const preview = await previewProject({ repository, name: "project" }, home);
     expect(preview.fileCount).toBe(2);
     expect(preview.excludedPaths).toContain(".env");
     expect(readFileSync(join(repository, ".git", "index"))).toEqual(index);
@@ -90,32 +90,37 @@ describe("project file preview", () => {
     expect(readFileSync(join(repository, "source.ts"), "utf8")).toBe("working version\n");
   });
 
-  it("does not follow a source symlink into an outside directory", () => {
+  it("does not follow a source symlink into an outside directory", async () => {
     const repository = join(home, "project"), outside = join(directory, "outside");
     mkdirSync(repository);
     mkdirSync(outside);
     writeFileSync(join(outside, "private.txt"), "outside fixture\n");
-    symlinkSync(outside, join(repository, "linked"));
-    const preview = previewProject({ repository, name: "project" }, home);
+    // A file symlink needs a developer-mode Windows host; a junction does not and is the same
+    // escape the boundary refuses.
+    symlinkSync(outside, join(repository, "linked"), process.platform === "win32" ? "junction" : "dir");
+    const preview = await previewProject({ repository, name: "project" }, home);
     expect(preview.fileCount).toBe(1);
     expect(preview.excludedPaths).toContain("linked");
   });
 
   it("rejects protected roots and aliases before creating a folder", () => {
     const alias = join(directory, "home-alias");
-    symlinkSync(home, alias);
-    for (const repository of [home, directory, "/", "/mnt/c", "/mnt/c/Users/FixtureOwner", alias]) {
+    symlinkSync(home, alias, process.platform === "win32" ? "junction" : "dir");
+    // The WSL mount spellings are POSIX path shapes: on Windows `/mnt/c` is the relative-looking
+    // `C:\mnt\c` after resolution, which is an ordinary folder there and not a protected root.
+    const roots = process.platform === "win32" ? [home, directory, alias] : [home, directory, "/", "/mnt/c", "/mnt/c/Users/FixtureOwner", alias];
+    for (const repository of roots) {
       expect(() => projectFolder(repository, home)).toThrow(expect.objectContaining({ code: "team_folder_refused" }));
     }
   });
 
-  it("rejects a selected child of an existing repository rather than uploading the parent", () => {
+  it("rejects a selected child of an existing repository rather than uploading the parent", async () => {
     const repository = join(home, "project");
     mkdirSync(join(repository, "child"), { recursive: true });
     git(repository, "init", "--quiet", "--initial-branch=main");
     for (const child of ["child", "missing-child"]) {
-      expect(() => previewProject({ repository: join(repository, child), name: "child" }, home))
-        .toThrow(expect.objectContaining({ code: "team_folder_refused" }));
+      await expect(previewProject({ repository: join(repository, child), name: "child" }, home))
+        .rejects.toThrow(expect.objectContaining({ code: "team_folder_refused" }));
     }
     expect(existsSync(join(repository, "missing-child"))).toBe(false);
   });

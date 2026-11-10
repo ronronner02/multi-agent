@@ -1,19 +1,31 @@
-import { execFileSync } from "node:child_process";
-import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import type { Stats } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type Database from "better-sqlite3";
 import { credentialExcluded } from "./scope-extension.js";
 import { GithubCliError, type GithubAccount, type GithubCli } from "./github-cli.js";
 import { availableTeamName, createTeam, listTeams, TeamSetupError, type Team, type TeamClient } from "./team-setup.js";
-import { canonicalPath, pathWithin } from "./platform.js";
+import { canonicalPath, isWindows, pathWithin } from "./platform.js";
 
 const DEFAULT_IGNORES = ["node_modules/", "dist/", "build/", "coverage/", ".env*", "*.pem", "*.key",
   ".config/", ".ssh/", ".aws/", ".codex/", ".claude/", ".npmrc", ".netrc", "credentials*"];
 const DEFAULT_IGNORE_FILE = DEFAULT_IGNORES.join("\n") + "\n";
 
+/**
+ * R17 — the largest file an initial upload may carry.
+ *
+ * GitHub refuses a pushed object over 100 MiB, and the push is the last step of setup, so a file
+ * that large turns a local mistake into a failed upload the owner reads as a connection problem.
+ * The limit is checked from the directory entry, before the file is opened.
+ */
+export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 export class ProjectBootstrapError extends Error {
-  constructor(readonly code: string, message: string, readonly excludedPaths: string[] = []) {
+  constructor(readonly code: string, message: string, readonly excludedPaths: string[] = [],
+    readonly oversizedPaths: string[] = []) {
     super(message);
     this.name = "ProjectBootstrapError";
   }
@@ -25,10 +37,22 @@ export interface ProjectPreview extends ProjectInput {
   fileCount: number;
   excludedPaths: string[];
 }
-interface ProjectFile { path: string; mode: string; data: Buffer }
+
+/**
+ * One entry of the initial snapshot, as it is classified and before it is read.
+ *
+ * `file` names a path Git will read for itself, `link` carries the target text a symlink is
+ * committed with, and `inline` is content this module writes (the default ignore file). Only the
+ * last two hold bytes, and both are small by construction.
+ */
+type ProjectEntry =
+  | { path: string; mode: "100644" | "100755"; kind: "file" }
+  | { path: string; mode: "120000"; kind: "link"; target: string }
+  | { path: string; mode: "100644"; kind: "inline"; data: Buffer };
+
 interface ProjectInspection {
   preview: ProjectPreview;
-  files: ProjectFile[];
+  files: ProjectEntry[];
   head: string | null;
   origin: string | null;
 }
@@ -93,6 +117,42 @@ function git(root: string, args: string[], options: { env?: NodeJS.ProcessEnv; i
   });
 }
 
+/**
+ * One Git command off the event loop, for the work that scales with the folder.
+ *
+ * `inspectProject` runs on the request that previews a project and again inside the create, so a
+ * synchronous child process per file would hold the daemon's only thread for as long as the folder
+ * is large. The commands below are batch-shaped (one process for the whole snapshot), and this
+ * boundary is what lets the timer-driven parts of the daemon keep running while they work.
+ */
+function gitAsync(root: string, args: string[], options: { env?: NodeJS.ProcessEnv; input?: Buffer | string } = {}):
+  Promise<string> {
+  const env = { ...process.env };
+  for (const key of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete env[key];
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn("git", ["-C", root, ...args], {
+      env: { ...env, LC_ALL: "C", GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", ...options.env },
+      stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    });
+    let stdout = "", stderr = "";
+    const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);
+    child.stdout?.setEncoding("utf8").on("data", (chunk: string) => { if (stdout.length < 16 * 1024 * 1024) stdout += chunk; });
+    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => { if (stderr.length < 1024 * 1024) stderr += chunk; });
+    child.on("error", error => { clearTimeout(timer); reject(error); });
+    child.on("close", status => {
+      clearTimeout(timer);
+      if (status === 0) { resolvePromise(stdout); return; }
+      const failure = Object.assign(new Error(stderr.trim() || `git ${args[0]} exited with ${status}`),
+        { status, stderr });
+      reject(failure);
+    });
+    if (options.input !== undefined) {
+      child.stdin?.on("error", () => { /* A refused write surfaces as a non-zero exit. */ });
+      child.stdin?.end(options.input);
+    }
+  });
+}
+
 function gitValue(root: string, args: string[]): string | null {
   try { return git(root, args).trim() || null; } catch (error) {
     const failure = error as { status?: number; stderr?: Buffer | string };
@@ -102,19 +162,19 @@ function gitValue(root: string, args: string[]): string | null {
   }
 }
 
-function historyExclusions(repository: string, commit: string): string[] {
+async function historyExclusions(repository: string, commit: string): Promise<string[]> {
   if (git(repository, ["rev-parse", "--is-shallow-repository"]).trim() === "true") {
     throw new ProjectBootstrapError("team_history_incomplete", "Fetch the complete repository history before creating its remote.");
   }
   const paths = new Set<string>();
-  const trees = new Set(git(repository, ["rev-list", "--format=%T", "--no-commit-header", commit, "--"]).trim().split("\n"));
-  for (const tree of trees) for (const path of git(repository, ["ls-tree", "-r", "-z", "--name-only", tree]).split("\0")) {
+  const trees = new Set((await gitAsync(repository, ["rev-list", "--format=%T", "--no-commit-header", commit, "--"])).trim().split("\n"));
+  for (const tree of trees) for (const path of (await gitAsync(repository, ["ls-tree", "-r", "-z", "--name-only", tree])).split("\0")) {
     if (path && excluded(path)) paths.add(path);
   }
   return [...paths].sort();
 }
 
-function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Bootstrap): ProjectInspection {
+async function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Bootstrap): Promise<ProjectInspection> {
   if (!/^[a-z\d][a-z\d_.-]{0,99}$/i.test(input.name)) {
     throw new ProjectBootstrapError("team_name_invalid", "Use a repository name beginning with a letter or number, followed by letters, numbers, dots, underscores or dashes.");
   }
@@ -132,10 +192,10 @@ function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Boots
   if (bootstrap?.remote_url && origin !== bootstrap.remote_url) throw originChanged();
   const uploadHead = bootstrap?.commit_oid ?? head;
   const uploads = !!bootstrap || !origin;
-  const files: ProjectFile[] = [], excludedPaths = new Set<string>();
+  const files: ProjectEntry[] = [], excludedPaths = new Set<string>();
   let fileCount = 0;
   if (uploads && uploadHead) {
-    const unsafe = historyExclusions(repository, uploadHead);
+    const unsafe = await historyExclusions(repository, uploadHead);
     if (unsafe.length) throw new ProjectBootstrapError("team_history_credentials",
       "Credential-policy paths exist in the outgoing history. That history stays local and is left unchanged.", unsafe);
     fileCount = git(repository, ["ls-tree", "-r", "-z", "--name-only", uploadHead]).split("\0").filter(Boolean).length;
@@ -149,29 +209,30 @@ function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Boots
         const prefix = ["--git-dir=" + metadata, "--work-tree=" + repository];
         const patterns = ["--exclude=.git", ...(!existsSync(join(repository, ".gitignore"))
           ? DEFAULT_IGNORES.map(pattern => "--exclude=" + pattern) : [])];
-        const paths = git(repository, [...prefix, "ls-files", "--others", "--exclude-standard", "-z", ...patterns])
+        const paths = (await gitAsync(repository, [...prefix, "ls-files", "--others", "--exclude-standard", "-z", ...patterns]))
           .split("\0").filter(Boolean);
-        const ignored = git(repository, [...prefix, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z", ...patterns])
+        const ignored = (await gitAsync(repository, [...prefix, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z", ...patterns]))
           .split("\0").filter(Boolean);
         for (const path of [...paths, ...ignored]) {
           if (path !== ".git" && path !== ".git/" && excluded(path)) excludedPaths.add(path);
         }
+        const oversized: string[] = [];
+        const seen = new Map<string, string | null>();
         for (const path of paths) {
           if (excluded(path)) continue;
-          const absolute = join(repository, path), stat = lstatSync(absolute);
-          if (stat.isSymbolicLink()) {
-            let target: string;
-            try { target = canonicalPath(absolute); } catch { excludedPaths.add(path); continue; }
-            if (!pathWithin(repository, target) || excluded(relative(repository, target))) { excludedPaths.add(path); continue; }
-            files.push({ path, mode: "120000", data: Buffer.from(readlinkSync(absolute)) });
-          } else if (stat.isFile()) {
-            files.push({ path, mode: stat.mode & 0o111 ? "100755" : "100644", data: readFileSync(absolute) });
-          }
+          // Windows only: on POSIX Git lists a symlink itself, so an ancestor can never be one.
+          const redirect = isWindows() ? redirectingAncestor(repository, path, seen) : null;
+          if (redirect !== null) { excludedPaths.add(redirect); continue; }
+          const entry = classify(repository, path, excludedPaths, oversized);
+          if (entry !== null) files.push(entry);
         }
+        if (oversized.length) throw new ProjectBootstrapError("team_file_too_large",
+          "Files over 100 MiB cannot be uploaded to GitHub. Remove them or add them to the project's ignore file, then review the files again.",
+          [], oversized.sort());
       } finally { rmSync(metadata, { recursive: true, force: true }); }
     }
     if (!existsSync(join(repository, ".gitignore"))) {
-      files.push({ path: ".gitignore", mode: "100644", data: Buffer.from(DEFAULT_IGNORE_FILE) });
+      files.push({ path: ".gitignore", mode: "100644", kind: "inline", data: Buffer.from(DEFAULT_IGNORE_FILE) });
     }
     files.sort((a, b) => a.path.localeCompare(b.path));
     fileCount = files.length;
@@ -181,10 +242,59 @@ function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Boots
   return { preview, files, head, origin };
 }
 
-export function previewProject(input: ProjectInput, home = homedir(), db?: Database.Database): ProjectPreview {
+/**
+ * The link a listed path was reached through, or `null` when it was reached directly.
+ *
+ * On POSIX Git lists a symlink as the link, never as the directory it names, so this is a no-op
+ * there. Windows is the exception: a junction is a directory entry to Git, so
+ * `ls-files --others` descends into it and reports `linked/file.ts`. Uploading that would put
+ * another directory's contents under the link's name. Each path's ancestors are therefore checked
+ * once and the answer is cached, so the walk costs one `lstat` per distinct directory.
+ */
+function redirectingAncestor(repository: string, path: string, seen: Map<string, string | null>): string | null {
+  const parts = path.replace(/\/$/, "").split("/");
+  for (let length = 1; length < parts.length; length += 1) {
+    const prefix = parts.slice(0, length).join("/");
+    let redirect = seen.get(prefix);
+    if (redirect === undefined) {
+      try { redirect = lstatSync(join(repository, prefix)).isSymbolicLink() ? prefix : null; }
+      catch { redirect = null; }
+      seen.set(prefix, redirect);
+    }
+    if (redirect !== null) return redirect;
+  }
+  return null;
+}
+
+/**
+ * Classify one candidate from its directory entry, without reading its bytes.
+ *
+ * R17 — the size check happens here, on the entry Git listed, so a file over the limit is refused
+ * before anything opens it. The mode is decided per host: NTFS reports every regular file with the
+ * same permission bits (`chmod +x` does not change them), so a Windows snapshot records `100644`
+ * for every regular file rather than inventing an executable bit; a POSIX host keeps the bit it
+ * actually reports. A symlink is committed as `120000` with its target text, and only when that
+ * target stays inside the project and outside the credential policy.
+ */
+function classify(repository: string, path: string, excludedPaths: Set<string>, oversized: string[]): ProjectEntry | null {
+  const absolute = join(repository, path);
+  let stat: Stats;
+  try { stat = lstatSync(absolute); } catch { return null; }
+  if (stat.isSymbolicLink()) {
+    let target: string;
+    try { target = canonicalPath(absolute); } catch { excludedPaths.add(path); return null; }
+    if (!pathWithin(repository, target) || excluded(relative(repository, target))) { excludedPaths.add(path); return null; }
+    return { path, mode: "120000", kind: "link", target: readlinkSync(absolute) };
+  }
+  if (!stat.isFile()) return null;
+  if (stat.size > MAX_UPLOAD_BYTES) { oversized.push(path); return null; }
+  return { path, mode: !isWindows() && stat.mode & 0o111 ? "100755" : "100644", kind: "file" };
+}
+
+export async function previewProject(input: ProjectInput, home = homedir(), db?: Database.Database): Promise<ProjectPreview> {
   const bootstrap = db ? readBootstrap(db, projectFolder(input.repository, home)) : undefined;
   if (bootstrap?.step === "push") throw teamExists();
-  return inspectProject(input, home, bootstrap).preview;
+  return (await inspectProject(input, home, bootstrap)).preview;
 }
 
 const teamExists = () => new TeamSetupError("team_exists", "This project already has a team. Open it instead of creating it again.");
@@ -211,7 +321,7 @@ async function performBootstrap(db: Database.Database, input: ProjectInput, opti
   const repository = projectFolder(input.repository);
   let state = readBootstrap(db, repository);
   if (state?.step === "push") throw teamExists();
-  let inspection = inspectProject(input, undefined, state);
+  let inspection = await inspectProject(input, undefined, state);
   if (!state && inspection.origin) return createTeam(db, { repository, name: input.name, leadClient: options.leadClient });
   if (!state?.team_id) availableTeamName(db, repository, input.name);
   if (state && state.name !== input.name) {
@@ -231,7 +341,7 @@ async function performBootstrap(db: Database.Database, input: ProjectInput, opti
       const account = await options.github.account();
       if (state && state.github_login !== account.login) throw new GithubCliError("github_not_signed_in");
       // Authentication is asynchronous; inspect again before making a local snapshot.
-      inspection = inspectProject(input, undefined, state);
+      inspection = await inspectProject(input, undefined, state);
       if (!state && inspection.origin) return createTeam(db, { repository, name: input.name, leadClient: options.leadClient });
       state ??= { repository, name: input.name, lead_client: options.leadClient, github_login: account.login,
         step: "pending", commit_oid: null, branch_ref: null, remote_url: null, team_id: null, last_error_code: null };
@@ -246,7 +356,7 @@ async function performBootstrap(db: Database.Database, input: ProjectInput, opti
       checkpoint("ignore");
       state.branch_ref = gitValue(repository, ["symbolic-ref", "--quiet", "HEAD"]);
       if (!state.branch_ref) throw new ProjectBootstrapError("team_branch_required", "Switch to a local branch before creating its remote.");
-      state.commit_oid = inspection.head ?? initialCommit(repository, state.branch_ref, inspection.files, account);
+      state.commit_oid = inspection.head ?? await initialCommit(repository, state.branch_ref, inspection.files, account);
       checkpoint("commit");
     }
     const expectedOrigin = `https://github.com/${state.github_login}/${state.name}.git`;
@@ -275,17 +385,59 @@ async function performBootstrap(db: Database.Database, input: ProjectInput, opti
   }
 }
 
-function initialCommit(repository: string, branch: string, files: ProjectFile[], account: GithubAccount): string {
+/** A regular file's bytes, read off the event loop, for the one name a batch cannot carry. */
+async function readFileBytes(path: string): Promise<Buffer> {
+  try { return await readFile(path); } catch {
+    throw new ProjectBootstrapError("team_bootstrap_failed", "The project's files could not be read for its initial snapshot.");
+  }
+}
+
+/**
+ * Build the initial snapshot and point the branch at it.
+ *
+ * KTD12 — one bounded external operation. Git hashes every accepted file in one
+ * `hash-object --stdin-paths` process and reads each of them from the working tree itself, so this
+ * module never holds a regular file's bytes and the work does not scale with one process per file.
+ * The two contents Git cannot take from a path — a symlink's target and the default ignore file —
+ * are written from memory and joined into the same index.
+ *
+ * Windows is asked for `100644` explicitly: NTFS reports no executable bit, so the index-info
+ * entry is the only place the mode is decided, and `core.fileMode=false` in the owner's
+ * configuration cannot change it. `update-index --index-info` (rather than `--add --stdin`) is
+ * used for exactly that reason, and `write-tree` then records the modes unchanged.
+ */
+async function initialCommit(repository: string, branch: string, files: ProjectEntry[], account: GithubAccount): Promise<string> {
   const temporary = mkdtempSync(join(tmpdir(), "project-commit-"));
   const index = join(temporary, "index"), env = { GIT_INDEX_FILE: index };
   try {
-    git(repository, ["read-tree", "--empty"], { env });
-    const entries = files.map(file => {
-      const oid = git(repository, ["hash-object", "-w", "--stdin"], { input: file.data }).trim();
-      return `${file.mode} ${oid}\t${file.path}\0`;
-    }).join("");
-    git(repository, ["update-index", "-z", "--index-info"], { env, input: entries });
-    const tree = git(repository, ["write-tree"], { env }).trim();
+    await gitAsync(repository, ["read-tree", "--empty"], { env });
+    // `--stdin-paths` takes one path per line and has no NUL-separated form, so a POSIX name that
+    // contains a newline cannot be expressed there. Such a name is hashed on its own instead; NTFS
+    // forbids the character, so a Windows project never takes that branch.
+    const fromPaths = files.flatMap(file => file.kind === "file" && !file.path.includes("\n") ? [file.path] : []);
+    const oids = new Map<string, string>();
+    if (fromPaths.length) {
+      const hashed = await gitAsync(repository, ["hash-object", "-w", "--stdin-paths", "--no-filters"],
+        { input: fromPaths.join("\n") + "\n" });
+      const lines = hashed.split("\n").filter(Boolean);
+      // Git answers in request order, one object id per line. A count that disagrees would pair a
+      // path with another file's content, so the snapshot is refused instead of misbuilt.
+      if (lines.length !== fromPaths.length) {
+        throw new ProjectBootstrapError("team_bootstrap_failed", "The project's files could not be read for its initial snapshot.");
+      }
+      fromPaths.forEach((path, position) => oids.set(path, lines[position]!.trim()));
+    }
+    for (const file of files) {
+      if (oids.has(file.path)) continue;
+      // A symlink's target and the default ignore file are written from memory; a regular file
+      // only reaches here when its name could not be sent in a batch.
+      const content = file.kind === "file" ? await readFileBytes(join(repository, file.path))
+        : Buffer.from(file.kind === "link" ? file.target : file.data);
+      oids.set(file.path, (await gitAsync(repository, ["hash-object", "-w", "--stdin"], { input: content })).trim());
+    }
+    const entries = files.map(file => `${file.mode} ${oids.get(file.path)!}\t${file.path}\0`).join("");
+    await gitAsync(repository, ["update-index", "-z", "--index-info"], { env, input: entries });
+    const tree = (await gitAsync(repository, ["write-tree"], { env })).trim();
     const name = gitValue(repository, ["config", "--get", "user.name"]) ?? account.name;
     const email = gitValue(repository, ["config", "--get", "user.email"]) ?? account.email;
     const oid = git(repository, ["-c", "commit.gpgsign=false", "commit-tree", tree, "-m", "Initial project snapshot"], {
