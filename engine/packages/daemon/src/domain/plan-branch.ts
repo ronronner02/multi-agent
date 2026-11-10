@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { runName } from "./display-names.js";
+import { addWorktree, isWorktreeOf } from "./worktree-policy.js";
 
 /**
  * U5 — the branch the daemon owns, and the worktree the plan is recorded in.
@@ -67,11 +68,6 @@ function branchExists(root: string, branch: string): boolean {
   try { git(root, ["rev-parse", "--verify", "refs/heads/" + branch]); return true; } catch { return false; }
 }
 
-/** Whether a path is a worktree of this repository, so a replay reuses it instead of failing. */
-function isWorktreeOf(root: string, path: string): boolean {
-  try { return realpathSync(git(path, ["rev-parse", "--show-toplevel"])) === realpathSync(path); } catch { return false; }
-}
-
 /** Write `planRef` into a worktree and commit it, unless the commit already holds those bytes. */
 export function commitPlan(input: { worktree: string; planRef: string; plan: string; message: string;
   documents?: readonly { path: string; content: string }[] }): string {
@@ -122,8 +118,10 @@ export function ensurePlanWorktree(input: {
     if (!isWorktreeOf(repository, path)) throw new Error("The plan worktree path is occupied by something else");
     return { path, branch };
   }
-  mkdirSync(dirname(path), { recursive: true });
-  if (branchExists(repository, branch)) git(repository, ["worktree", "add", "--quiet", path, branch]);
-  else git(repository, ["worktree", "add", "--quiet", "-b", branch, path, input.base ?? headOf(repository)]);
+  // KTD10 — the ceiling is checked before Git is asked, so a long root or a long run id is a
+  // named refusal rather than `'$GIT_DIR' too big` from inside Git.
+  addWorktree({ repository, worktree: path, args: branchExists(repository, branch)
+    ? ["--quiet", path, branch]
+    : ["--quiet", "-b", branch, path, input.base ?? headOf(repository)] });
   return { path, branch };
 }

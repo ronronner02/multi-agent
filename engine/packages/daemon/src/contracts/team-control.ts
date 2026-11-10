@@ -1,3 +1,5 @@
+import { posix, win32 } from "node:path";
+
 export const TEAM_CONTROL_VERSION = "1.0";
 export const TEAM_QUEUE_STATES = ["pending", "in-progress", "done", "blocked", "failed", "denied", "canceled", "handed-off"] as const;
 export type TeamQueueState = (typeof TEAM_QUEUE_STATES)[number];
@@ -716,6 +718,14 @@ export function digest(value: unknown, field: string): string {
   return value;
 }
 
+/**
+ * A repository-relative path as the protocol spells it: forward slashes, no root, no `..`.
+ *
+ * A backslash is refused rather than translated: inside a payload it is ambiguous (a separator
+ * on Windows, a legal filename character on POSIX), and R15 keeps every relative path in one
+ * spelling so a task's scope means the same thing on both hosts. A drive-relative path such as
+ * `C:foo` is refused for the same reason — it is a local path wearing a relative one's clothes.
+ */
 export function relativePath(value: unknown, field: string): string {
   const result = text(value, field, 4096);
   if (result.startsWith("/") || result.startsWith("~") || /[\\:*?\[\]{}]/.test(result)
@@ -728,10 +738,36 @@ export function bindingScopePath(value: unknown, field: string): string {
   return value === "." ? "." : relativePath(value, field);
 }
 
-function absolutePath(value: unknown, field: string): string {
+/**
+ * An absolute path the daemon may use as a root: a POSIX path or a native Windows one.
+ *
+ * R15 — the boundary accepts what the host's filesystem accepts instead of requiring a leading
+ * `/`. The shape is decided by the value's own spelling, not by the host running the parse, so a
+ * stored Windows binding still parses on a POSIX daemon. Both shapes are checked for what makes
+ * a path unsafe rather than merely unusual: a root with no name (`/`, `C:\`, a bare UNC share),
+ * `.` or `..` segments, and an empty segment all name a place other than the one written, and a
+ * trailing separator is refused so one root has one spelling. Relative Windows spellings
+ * (`\foo`, `C:foo`) are refused because they depend on a working directory or drive the payload
+ * never names, and a UNC path must use its canonical `\\server\share` form. The value is
+ * returned as received: canonicalising is the caller's job, and a stored root keeps the
+ * spelling the owner's own filesystem produced.
+ */
+export function absolutePath(value: unknown, field: string): string {
   const result = text(value, field, 4096);
-  if (!result.startsWith("/") || result === "/" || result.includes("\\")
-    || result.slice(1).split("/").some((part) => !part || part === "." || part === "..")) throw new TeamContractError(field);
+  const unc = /^[\\/]{2}[^\\/]/.test(result);
+  const drive = /^[A-Za-z]:[\\/]/.test(result);
+  if (unc || drive) {
+    // Windows root, including a UNC share, which must be written as `\\server\share` (or the
+    // same with forward slashes) and not as a bare server or a bare share.
+    const root = win32.parse(result).root;
+    const rest = result.slice(root.length);
+    if ((unc && !/^[\\/]{2}/.test(root)) || !rest
+      || rest.split(/[\\/]/).some((part) => part === "" || part === "." || part === "..")) throw new TeamContractError(field);
+    return result;
+  }
+  const rest = result.slice(posix.parse(result).root.length);
+  if (!result.startsWith("/") || !rest
+    || rest.split("/").some((part) => part === "" || part === "." || part === "..")) throw new TeamContractError(field);
   return result;
 }
 

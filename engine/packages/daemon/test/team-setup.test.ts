@@ -245,6 +245,25 @@ describe("U3 — the owner creates a team", () => {
     expect(new Set(seats.map(seat => seat.seat)).size).toBe(seats.length);
   });
 
+  it("accepts a native Windows root, which the boundary previously refused", async () => {
+    // R15 — a Windows daemon's own root is `C:\…`; the route must accept the shape this host
+    // uses, not only a leading `/`. On POSIX the host's absolute shape is `/`, so this test runs
+    // the same assertion on both: the canonical root the team records is the one Git reports.
+    const root = repository(directory);
+    const response = await create({ repository: root, seats: defaultSeats });
+    expect(response.status).toBe(201);
+    expect((await response.json() as Created).team.repository).toBe(root);
+    expect(root).toBe(realpathSync(root));
+  });
+
+  it("refuses a relative repository and a path that is not absolute on this host", async () => {
+    for (const repository of ["project", "C:project", "\\project"]) {
+      const response = await create({ repository, seats: defaultSeats });
+      expect(response.status, repository).toBe(400);
+      expect(await response.json()).toMatchObject({ code: "invalid_team_contract" });
+    }
+  });
+
   it("makes a repeated folder name unique, so a second repository is still a team", async () => {
     const first = await (await create({ repository: repository(join(directory, "one"), "project"), seats: defaultSeats })).json() as Created;
     const second = await (await create({ repository: repository(join(directory, "two"), "project"), seats: defaultSeats })).json() as Created;

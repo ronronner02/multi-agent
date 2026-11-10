@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import {
-  TEAM_CONTROL_VERSION, TeamContractError, object, parseProtocolVersion, text, type ControlActor,
+  TEAM_CONTROL_VERSION, TeamContractError, absolutePath, object, parseProtocolVersion, text, type ControlActor,
 } from "../contracts/team-control.js";
 import { readTeamModelSettings, saveTeamModelSettings, TeamModelError } from "../domain/team-model-policy.js";
 import { nativeModelChoices } from "../domain/native-model-choices.js";
@@ -103,8 +103,10 @@ export function teamSetupRoutes(
     const v = object(await c.req.json(), "team");
     const repository = text(v.repository, "repository", 4096);
     // The daemon runs on the host the repository is on, and every seat's cwd is that path, so a
-    // relative path would resolve against the daemon's own working directory instead.
-    if (!repository.startsWith("/")) throw new TeamContractError("repository");
+    // relative path would resolve against the daemon's own working directory instead. R15 — an
+    // absolute path is one this host can use, which on Windows means a drive or UNC root, not
+    // only a leading `/`.
+    absolutePath(repository, "repository");
     if (v.dryRun !== undefined && typeof v.dryRun !== "boolean") throw new TeamContractError("dryRun");
     if (v.openExisting !== undefined && typeof v.openExisting !== "boolean") throw new TeamContractError("openExisting");
     c.header("Cache-Control", "no-store");

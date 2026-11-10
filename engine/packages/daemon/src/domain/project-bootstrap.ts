@@ -6,6 +6,7 @@ import type Database from "better-sqlite3";
 import { credentialExcluded } from "./scope-extension.js";
 import { GithubCliError, type GithubAccount, type GithubCli } from "./github-cli.js";
 import { availableTeamName, createTeam, listTeams, TeamSetupError, type Team, type TeamClient } from "./team-setup.js";
+import { pathWithin } from "./platform.js";
 
 const DEFAULT_IGNORES = ["node_modules/", "dist/", "build/", "coverage/", ".env*", "*.pem", "*.key",
   ".config/", ".ssh/", ".aws/", ".codex/", ".claude/", ".npmrc", ".netrc", "credentials*"];
@@ -38,10 +39,6 @@ interface Bootstrap {
   team_id: string | null; last_error_code: string | null;
 }
 
-const within = (root: string, path: string) => {
-  const rel = relative(root, path);
-  return rel === "" || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel));
-};
 const excluded = (path: string) => credentialExcluded(path) || /(^|\/)\.config(?:\/|$)/.test(path);
 const refusedFolder = () => new ProjectBootstrapError("team_folder_refused", "Select a project folder, not a home, drive, profile, or parent repository root.");
 
@@ -64,9 +61,24 @@ function canonical(path: string): string {
 export function projectFolder(repository: string, home = homedir()): string {
   if (!isAbsolute(repository)) throw refusedFolder();
   const root = canonical(repository), ownerHome = canonical(home);
-  if (within(root, ownerHome) || dirname(root) === root || /^\/mnt\/[a-z]$/i.test(root)
-    || /^\/mnt\/[a-z]\/Users(?:\/[^/]+)?$/i.test(root) || excluded(root)) throw refusedFolder();
+  // A drive, a filesystem root, a user-profile folder and a parent repository root are all
+  // "somewhere a project is not". The WSL mount spellings (`/mnt/c`, `/mnt/c/Users/<name>`) are
+  // named here because on that host they are the same three shapes under a different root.
+  if (pathWithin(root, ownerHome) || dirname(root) === root || /^\/mnt\/[a-z]$/i.test(root)
+    || /^\/mnt\/[a-z]\/Users(?:\/[^/]+)?$/i.test(root) || isWindowsProfileFolder(root) || excluded(root)) throw refusedFolder();
   return root;
+}
+
+/**
+ * R15 — a Windows profile folder, which `dirname(root) === root` cannot catch.
+ *
+ * `C:\Users\<name>` is a user profile (the owner's own home is refused already, but a different
+ * profile on the same machine is not the project either) and `C:\Users` holds them all. The
+ * comparison folds case because Windows does.
+ */
+function isWindowsProfileFolder(root: string): boolean {
+  if (process.platform !== "win32") return false;
+  return /^[A-Za-z]:[\\/]Users(?:[\\/][^\\/]+)?$/i.test(root);
 }
 
 function git(root: string, args: string[], options: { env?: NodeJS.ProcessEnv; input?: Buffer | string } = {}): string {
@@ -148,7 +160,7 @@ function inspectProject(input: ProjectInput, home = homedir(), bootstrap?: Boots
           if (stat.isSymbolicLink()) {
             let target: string;
             try { target = realpathSync(absolute); } catch { excludedPaths.add(path); continue; }
-            if (!within(repository, target) || excluded(relative(repository, target))) { excludedPaths.add(path); continue; }
+            if (!pathWithin(repository, target) || excluded(relative(repository, target))) { excludedPaths.add(path); continue; }
             files.push({ path, mode: "120000", data: Buffer.from(readlinkSync(absolute)) });
           } else if (stat.isFile()) {
             files.push({ path, mode: stat.mode & 0o111 ? "100755" : "100644", data: readFileSync(absolute) });
@@ -290,7 +302,18 @@ function initialCommit(repository: string, branch: string, files: ProjectFile[],
 
 function directoryRoots(): string[] {
   const roots = [realpathSync(homedir())];
-  if (existsSync("/mnt")) for (const entry of readdirSync("/mnt", { withFileTypes: true })) {
+  if (process.platform === "win32") {
+    // R15 — the Windows counterpart of `/mnt/<drive>`: the drive the owner's home is on, then
+    // every other fixed drive that exists. Removable and network drives are not browsed by
+    // default; a project there is reachable by typing the path, which `projectFolder` accepts.
+    const home = roots[0]!;
+    const homeDrive = /^[A-Za-z]:/.exec(home)?.[0];
+    for (const letter of "CDEFGHIJKLMNOPQRSTUVWXYZAB") {
+      if (homeDrive && `${letter}:`.toLowerCase() === homeDrive.toLowerCase()) continue;
+      const drive = `${letter}:\\`;
+      if (existsSync(drive)) roots.push(drive);
+    }
+  } else if (existsSync("/mnt")) for (const entry of readdirSync("/mnt", { withFileTypes: true })) {
     if (/^[a-z]$/i.test(entry.name) && entry.isDirectory()) roots.push(realpathSync(join("/mnt", entry.name)));
   }
   return roots;
@@ -301,15 +324,17 @@ export function listProjectDirectories(path?: string, roots = directoryRoots()):
 } {
   if (!path) return { roots, path: null, directories: roots.map(root => ({ name: basename(root) || root, path: root })) };
   if (!isAbsolute(path)) throw refusedFolder();
-  const root = roots.find(root => within(root, path));
+  // A root the owner may browse is the home or a drive/share; the comparison folds case only
+  // where the filesystem does, so `c:\users\leo` and `C:\Users\leo` are one place on Windows.
+  const root = roots.find(root => pathWithin(root, path));
   let canonicalPath: string;
   try { canonicalPath = realpathSync(path); } catch { throw refusedFolder(); }
-  if (!root || !within(root, canonicalPath) || !statSync(canonicalPath).isDirectory()) throw refusedFolder();
+  if (!root || !pathWithin(root, canonicalPath) || !statSync(canonicalPath).isDirectory()) throw refusedFolder();
   const directories = readdirSync(canonicalPath, { withFileTypes: true }).flatMap(entry => {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) return [];
     try {
       const child = realpathSync(join(canonicalPath, entry.name));
-      return within(root, child) && statSync(child).isDirectory() ? [{ name: entry.name, path: child }] : [];
+      return pathWithin(root, child) && statSync(child).isDirectory() ? [{ name: entry.name, path: child }] : [];
     } catch { return []; }
   }).sort((a, b) => a.name.localeCompare(b.name));
   return { roots, path: canonicalPath, directories };

@@ -20,6 +20,7 @@ import type { CandidateIdentity } from "./review-evidence.js";
 import { isRedirectingEntry, isWindows } from "./platform.js";
 import type { ScopeProjection } from "../contracts/team-control.js";
 import type { CandidateScopeEvidence } from "./scope-extension.js";
+import { addWorktree } from "./worktree-policy.js";
 
 /**
  * T011 / KTD8 — isolated candidate ownership.
@@ -1113,7 +1114,12 @@ export function createCandidateWorkspace(input: {
   }
   mkdirSync(dirname(input.workspaceRoot), { recursive: true });
   if (input.base.kind === "commit") {
-    git(sourceRoot, ["worktree", "add", "--detach", "--force", input.workspaceRoot, input.base.commit]);
+    // KTD10 — every worktree goes through the one policy helper: the ceiling is preflighted
+    // (the candidate's leaf is `<runId>-<taskId>`, the longest leaf the daemon writes) and
+    // `core.longpaths=true` is passed, so a Windows host refuses a long candidate by name
+    // instead of failing inside Git.
+    addWorktree({ repository: sourceRoot, worktree: input.workspaceRoot,
+      args: ["--detach", "--force", input.workspaceRoot, input.base.commit] });
     return { root: input.workspaceRoot, sourceRoot, base: input.base, source };
   }
   for (const file of input.base.files) {

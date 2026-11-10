@@ -11,6 +11,7 @@ import {
 import { hashBinding, hashBytes, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import { runName } from "../domain/display-names.js";
 import { bootstrapPlan, commitPlan, ensurePlanWorktree } from "../domain/plan-branch.js";
+import { WorktreePathError } from "../domain/worktree-policy.js";
 import { roleConfiguration } from "../domain/role-configuration.js";
 import { LEAD_ESCALATION_PATH, leadRoster } from "../domain/lead-proposal.js";
 import { isRetiredTeamNode } from "../domain/team-setup.js";
@@ -265,6 +266,9 @@ export function teamStartRoutes(
         binding = { ...recorded, readPaths: [...new Set([...planningPaths, ...scope])] };
       } catch (error) {
         if (error instanceof TeamContractError) throw error;
+        // KTD10 — a root or run id that Git cannot take is a named refusal the owner can fix by
+        // choosing a shorter worktree root, not a generic persistence failure.
+        if (error instanceof WorktreePathError) return c.json({ code: error.code, error: error.message }, 400);
         return c.json({ code: "planning_worktree_unavailable",
           error: "The run's plan worktree could not be created: " + (error as Error).message }, 500);
       }

@@ -173,6 +173,7 @@ import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters
 import { createManagedLaunchControl } from "./adapters/worker-launch-control.js";
 import { DirectWorkerLauncher, type DirectLaunchFacts } from "./adapters/direct-worker-launch.js";
 import { unisolatedWorkerRoots, type ManagedWorkerRoots } from "./domain/unisolated-roots.js";
+import { defaultWorktreeRoot } from "./domain/worktree-policy.js";
 import { ProviderServiceImpl } from "./domain/provider/provider-service-impl.js";
 import { collectClaudeSignalsFromProviderUsageDirectory } from "./domain/provider/claude-usage-reader.js";
 import { legacyProviderUsageDirectory, providerUsageDirectory } from "./domain/telemetry-state-paths.js";
@@ -1253,11 +1254,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
           ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) })),
     // MVP slice 2 — the capability a start request approves its binding against.
     ...(runPolicyCapability ? { readPolicyCapability: runPolicyCapability } : {}),
-    // U5 — where a planning run's plan worktree lives. It sits beside the candidate records in
-    // the control state directory, which no worker tree contains: the plan's branch is the
-    // daemon's, not the owner's checkout's, and not a worker's to rewrite.
-    planWorktreeRoot: teamControl.planWorktreeRoot
-      ?? (() => nodePath.join(rootsNow().controlStateDir, "teams")),
+    // U5 / KTD10 — where a planning run's plan worktree lives. The default is the short root
+    // the worktree policy names (`%LOCALAPPDATA%\Multi-Agent\wt` on Windows, `~/.multi-agent/wt`
+    // elsewhere), because Git for Windows refuses a worktree path above a measured ceiling. The
+    // policy preflights every path against that ceiling, so a root that is too deep is refused
+    // by name rather than failing inside Git.
+    planWorktreeRoot: teamControl.planWorktreeRoot ?? defaultWorktreeRoot,
     ...(unisolated && !teamControl.resolveBinding && runPolicyCapability ? { resolveBinding: run => {
       const policy = runPolicyCapability();
       if (!policy) throw new Error("Current policy capability is unavailable");

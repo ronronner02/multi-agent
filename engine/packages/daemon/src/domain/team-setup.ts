@@ -6,6 +6,7 @@ import type { TeamRole } from "../contracts/team-control.js";
 import { RigRepository } from "./rig-repository.js";
 import { SessionRegistry } from "./session-registry.js";
 import { rosterSoulRefusal, soulId } from "./team-souls.js";
+import { samePath as canonicalSamePath } from "./platform.js";
 
 /**
  * U3 — one team for one repository.
@@ -233,8 +234,11 @@ function teamAt(db: Database.Database, root: string): string | null {
 }
 
 function samePath(left: string, right: string): boolean {
+  // R15 — one canonical comparison for both hosts: `realpath` then case folding only where the
+  // filesystem folds, so `C:\Users\leo\Repo` and `c:\users\leo\repo` are one team on Windows and
+  // two distinct roots on a case-sensitive filesystem.
   try {
-    return realpathSync(left) === right;
+    return canonicalSamePath(realpathSync(left), right);
   } catch {
     return false;
   }
