@@ -105,6 +105,7 @@ describe("owner team settings", () => {
       "team.leadClient": { value: "claude-code", source: "default", defaultValue: "claude-code" },
       "team.maxSeats": { value: 6, source: "default", defaultValue: 6 },
       "team.maxConcurrentAgents": { value: 3, source: "default", defaultValue: 3 },
+      "github.proxy": { value: "", source: "default", defaultValue: "" },
     } });
   });
 

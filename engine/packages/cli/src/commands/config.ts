@@ -107,6 +107,10 @@ Keys:
                          worktrees (default none), or inside the provisioned sandbox
                          (hardened; needs /etc/multi-agent and the sudo launcher).
                          Read at daemon startup.
+  team.leadClient        claude-code | codex — the client a new project's lead uses
+  team.maxSeats          most seats a team may hold (default 6)
+  team.maxConcurrentAgents  most agents running at once (default 3)
+  github.proxy           http(s) proxy for gh and git uploads; empty uses the environment
 
 Precedence: CLI flag > environment variable > config file > default`)
     .action((opts: { json?: boolean; withSource?: boolean }) => {
