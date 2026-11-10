@@ -32,6 +32,10 @@ function git(root: string, ...args: string[]): string {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+// The stub gh inherits this process's environment; a developer proxy would turn every
+// simulated network failure into github_proxy_unreachable. Tests set proxies explicitly.
+for (const key of ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"]) delete process.env[key];
+
 describe("project file preview", () => {
   let directory: string, home: string;
   beforeEach(() => {
