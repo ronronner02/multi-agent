@@ -1000,8 +1000,15 @@ export function createApp(deps: AppDeps): Hono {
     // S01 — the wake ladder's heartbeat is half of the operator rung's honest delivery
     // floor (escalation view + daemon-health); same additive contract.
     const wakeLadder = deps.wakeLadderStatus ? { wakeLadder: deps.wakeLadderStatus.snapshot() } : {};
+    // U5 — running attempt count for the Electron desktop close confirmation.
+    // Query is cheap: the running-state index on team_attempts is a narrow lookup.
+    let runningAttempts: number | undefined;
+    try {
+      const row = deps.rigRepo.db.prepare("SELECT count(*) AS count FROM team_attempts WHERE state = 'running'").get() as { count: number } | undefined;
+      runningAttempts = row ? row.count : 0;
+    } catch { runningAttempts = undefined; }
     if (!monitor) {
-      return c.json({ status: "ok", pid: process.pid, ...stamp, ...selfHost, ...slowOperations, ...bind, ...stuckSweep, ...wakeLadder });
+      return c.json({ status: "ok", pid: process.pid, ...stamp, ...selfHost, ...slowOperations, ...bind, ...stuckSweep, ...wakeLadder, ...(runningAttempts !== undefined ? { runningAttempts } : {}) });
     }
     const eventLoop = monitor.snapshot();
     return c.json({

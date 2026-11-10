@@ -346,6 +346,15 @@ export async function startServer(port?: number) {
   for (const host of bindHosts) {
     const srv = serve({ fetch: app.fetch, port: p, hostname: host }, (info) => {
       console.log(`OpenRig daemon listening on http://${host}:${info.port}`);
+      // U5 — report readiness to the Electron parent process over parentPort.
+      // Only the loopback bind reports (not a secondary tailscale bind).
+      if (host === "127.0.0.1") {
+        try {
+          (process as { parentPort?: { postMessage: (msg: unknown) => void } }).parentPort?.postMessage({
+            type: "ready", port: info.port, pid: process.pid,
+          });
+        } catch { /* parentPort may be closed during fast shutdown */ }
+      }
       if (!monitorsStarted && !managed) {
         contextMonitor.start();
         // PL-004 Phase C: start watchdog scheduler. Joins the supervision
@@ -439,6 +448,18 @@ export async function startServer(port?: number) {
   // Repeated signals join the first shutdown instead of bypassing its evidence.
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
+  /** U5 — parent-port bridge for Electron utility-process hosting. */
+  // parentPort is injected by Electron's utilityProcess runtime; it is not
+  // a standard Node.js Process property, so we access it via cast. Electron's
+  // MessagePortMain delivers `{ data }`; worker_threads delivers the value.
+  const parentPort = (process as { parentPort?: { on: (event: string, listener: (message: unknown) => void) => void } }).parentPort;
+  if (parentPort) {
+    parentPort.on("message", (message: unknown) => {
+      const envelope = message as { data?: unknown };
+      const msg = (envelope && typeof envelope === "object" && "data" in envelope ? envelope.data : message) as Record<string, unknown> | null;
+      if (msg?.type === "shutdown") shutdown("parent");
+    });
+  }
 
   // Backward-compatible single-server return (callers that just need a
   // handle reference; multi-bind shutdown is wired via signal handlers).

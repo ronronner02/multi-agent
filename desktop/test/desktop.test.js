@@ -17,14 +17,16 @@ function desktop(selected = { canceled: false, filePaths: [String.raw`D:\Client 
     loadURL(url) { loaded.push(url); return Promise.resolve(); }
   }
   const electron = {
-    app: { requestSingleInstanceLock: () => true, on() {}, whenReady: () => ({ then() {} }) },
+    app: { requestSingleInstanceLock: () => true, on() {}, whenReady: () => ({ then() {} }), getPath: () => path.join('D:', 'ma', 'tmp', 'userData') },
     BrowserWindow: Window,
     session: { defaultSession: { cookies: { set: async value => { if (cookieError) throw cookieError; cookies.push(value); } } } },
     screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 940 } }) },
     dialog: { showOpenDialog: async (parent, settings) => { dialogs.push({ parent, settings }); return selected; } },
   };
   const context = vm.createContext({ __dirname: path.resolve(__dirname, '../src'), URL, console,
+    process: { env: {} },
     require: name => name === 'electron' ? electron : name === './wsl.js' ? wsl
+      : name === './engine-bridge.js' ? { startEngine() { throw new Error('Native engine is not part of this fixture'); } }
       : name === 'node:child_process' ? { spawn() { throw new Error('Folder selection must not start a process'); } } : require(name),
   });
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../src/main.js'), 'utf8'), context);
