@@ -601,6 +601,13 @@ export function createApp(deps: AppDeps): Hono {
   deps.ownerSessions = ownerSessions;
   const github = deps.github ?? new GithubCli();
   deps.github = github;
+  // U9 (R18): the owner's proxy setting is read at each gh/git spawn, so a change applies to the next
+  // upload without a restart; an empty setting falls back to the daemon environment.
+  const settingsStore = deps.settingsStore;
+  if (settingsStore) github.setProxySource(() => {
+    const value = settingsStore.resolveOne("github.proxy").value;
+    return typeof value === "string" ? value : undefined;
+  });
   const terminalTakeover = deps.terminalTakeover ?? new TerminalTakeoverManager({
     eventBus: deps.eventBus,
     isOwnerSessionActive: ownerSessions

@@ -485,6 +485,8 @@ export const VALID_KEYS = [
   "team.leadClient",
   "team.maxSeats",
   "team.maxConcurrentAgents",
+  // U9 — proxy URL for GitHub operations; lockstep with daemon settings-store.
+  "github.proxy",
 ] as const;
 
 export type ValidKey = typeof VALID_KEYS[number];
@@ -581,6 +583,7 @@ export const ENV_MAP: Record<ValidKey, { primary: string; legacy?: string }> = {
   "team.leadClient": { primary: "OPENRIG_TEAM_LEAD_CLIENT" },
   "team.maxSeats": { primary: "OPENRIG_TEAM_MAX_SEATS" },
   "team.maxConcurrentAgents": { primary: "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS" },
+  "github.proxy": { primary: "OPENRIG_GITHUB_PROXY" },
 };
 
 // Maps dotted-string config keys to the camelCase RiggedConfig path.
@@ -666,6 +669,7 @@ const KEY_TO_PATH: Record<ValidKey, string[]> = {
   "team.leadClient": ["team", "leadClient"],
   "team.maxSeats": ["team", "maxSeats"],
   "team.maxConcurrentAgents": ["team", "maxConcurrentAgents"],
+  "github.proxy": ["github", "proxy"],
 };
 
 function isValidKey(key: string): key is ValidKey {

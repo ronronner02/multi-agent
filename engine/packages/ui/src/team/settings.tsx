@@ -54,6 +54,22 @@ function GithubAccount() {
   const { request } = useOwnerSession();
   const status = useGithubStatus(), cache = useQueryClient();
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
+  const [proxyInput, setProxyInput] = useState("");
+  const proxy = useQuery({
+    queryKey: settingsKey, enabled: !!status.data?.signedIn, retry: false,
+    select: (data: SettingsReply) => (data.settings as Record<string, { value: string }>)["github.proxy"]?.value ?? "",
+    queryFn: ({ signal }) => request<SettingsReply>("/settings", { signal }),
+  });
+  const saveProxy = async () => {
+    setBusy(true); setFailed(false);
+    try {
+      await request("/settings", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "github.proxy", value: proxyInput }),
+      });
+      await cache.invalidateQueries({ queryKey: settingsKey });
+    } catch { setFailed(true); } finally { setBusy(false); }
+  };
   return <section className="plate ui-settings-panel" aria-label={t("settings.section.github")}>
     <h2>{t("settings.section.github")}</h2>
     {status.isError ? <p role="alert">{t("github.statusFailed")}</p>
@@ -67,7 +83,12 @@ function GithubAccount() {
       }
       catch { setFailed(true); } finally { setBusy(false); }
     }}>{t("settings.signOut")}</button>
-    {failed && <p role="alert">{t("settings.signOutFailed")}</p>}
+    {proxy.data !== undefined && <label className="field">{t("settings.githubProxy")}
+      <input className="input mono" type="text" defaultValue={proxy.data} placeholder="http://proxy:port"
+        onChange={event => setProxyInput(event.target.value)} />
+      {proxyInput !== proxy.data && <button className="btn btn-outline" disabled={busy}
+        onClick={() => void saveProxy()}>{t("settings.save")}</button>}</label>}
+    {failed && <p role="alert">{t("settings.saveFailed")}</p>}
   </section>;
 }
 

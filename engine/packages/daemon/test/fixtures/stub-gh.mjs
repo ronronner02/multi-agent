@@ -3,10 +3,20 @@ import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } f
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 
+// U9: the stub supports two invocation forms:
+//   1. Direct: gh <args>  (POSIX shebang)
+//   2. Via node: node gh.mjs <args>  (Windows, through process.execPath)
+// In form 2, process.argv[1] is this script, and process.argv[2] onward are the gh args.
+// In some cases (through execArgv), the script name may appear in argv differently.
+let args = process.argv.slice(2);
+// Strip any leading argument that is the script path itself (Windows execFile form).
+while (args.length > 0 && (args[0] === process.argv[1] || args[0].endsWith(".mjs"))) {
+  args = args.slice(1);
+}
 const root = process.env.GH_STUB_DIR;
-const args = process.argv.slice(2);
 appendFileSync(join(root, "calls.jsonl"), JSON.stringify(args) + "\n");
-writeFileSync(join(root, "token-vars.json"), JSON.stringify(["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"].filter(key => process.env[key])));
+appendFileSync(join(root, "proxy.log"), (process.env.HTTPS_PROXY ?? "") + "\n");
+writeFileSync(join(root, "token-vars.json"), JSON.stringify(["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN"].filter(key => process.env[key])));
 const account = join(root, "account");
 async function waitForRelease(stage) {
   if (!existsSync(join(root, "hold-" + stage))) return;
@@ -61,6 +71,16 @@ if (args[0] === "--version") {
 } else if (args[0] === "api" && args[1] === "user") {
   if (!existsSync(account)) process.exit(1);
   console.log(JSON.stringify({ login: "octocat", name: "Fixture Owner", id: 123 }));
+} else if (args[0] === "api" && args[1] === "rate_limit") {
+  if (existsSync(join(root, "proxy-failure"))) {
+    process.exit(1);
+  }
+  // Use rate-limiting marker to simulate proxy unreachable (exit 1 without stderr vs timeout)
+  if (existsSync(join(root, "proxy-timeout"))) {
+    process.stderr.write("Error: connection timed out (proxy)\n");
+    process.exit(1);
+  }
+  console.log(JSON.stringify({ rate: { remaining: 42, limit: 5000 } }));
 } else if (args[0] === "repo" && args[1] === "create") {
   if (existsSync(join(root, "repo-exists"))) {
     process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: Name already exists on this account\n");
@@ -75,6 +95,16 @@ if (args[0] === "--version") {
   execFileSync("git", ["-C", source, "remote", "add", "origin", url]);
   console.log(url);
 } else if (args[0] === "repo" && args[1] === "view") {
+  // Simulate not-found transient failure after create.
+  if (existsSync(join(root, "view-not-found"))) {
+    process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: Repository not found.\n");
+    process.exit(1);
+  }
+  // Simulate view timeout
+  if (existsSync(join(root, "view-timeout"))) {
+    process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: could not read: timeout\n");
+    process.exit(1);
+  }
   console.log(JSON.stringify({ nameWithOwner: args[2], isPrivate: !existsSync(join(root, "repo-public")) }));
 } else {
   process.stderr.write("ghp_fixture_DO_NOT_EXPOSE: unexpected command\n");

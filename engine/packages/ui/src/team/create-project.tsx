@@ -16,6 +16,9 @@ const ERRORS: Record<string, MessageKey> = {
   team_folder_refused: "projects.folderRefused", team_exists: "projects.alreadyExists",
   team_origin_changed: "projects.folderChanged", team_bootstrap_changed: "projects.folderChanged",
   folder_pick_failed: "projects.pickFailed", team_file_too_large: "projects.fileTooLarge",
+  github_view_retry: "projects.viewRetry", github_push_timeout: "projects.pushTimeout",
+  github_large_file_rejected: "projects.largeFileRejected", github_network_failure: "projects.networkFailure",
+  github_auth_failure: "projects.authFailure", github_proxy_unreachable: "projects.proxyUnreachable",
 };
 
 export function CreateProject({ open, mode = "create", onOpenChange, onCreated, opener }: {
