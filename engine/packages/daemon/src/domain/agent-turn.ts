@@ -41,6 +41,9 @@ export function agentTurnOutputPaths(mutableStateRoot: string, attemptId: string
   const directory = join(mutableStateRoot, "turns", attemptId);
   return { directory, lastMessage: join(directory, "last-message.txt"), threadId: join(directory, "thread-id.txt"),
     activity: join(directory, "activity.jsonl"), usage: join(directory, "usage.json"), progress: join(directory, "progress.json"),
+    // U3 — the exit code and signal the supervisor observed, written once. A native turn has no
+    // pane to read an exit status from, so this file is the turn's own end for a later process.
+    exit: join(directory, "exit.json"),
     taskReport: join(directory, "report", "task-report.json") };
 }
 

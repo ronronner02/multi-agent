@@ -14,8 +14,9 @@ import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-s
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import { composePendingDispatch, pendingTasks } from "../src/domain/pending-dispatch.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
-import { agentTurnPromptPath, continuationNote, leadProgressNote, managedTurnPrompt } from "../src/domain/agent-turn.js";
+import { agentTurnPromptPath, continuationNote, leadProgressNote, managedTurnPrompt, writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
 import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
+import type { WorkerEvent } from "../src/contracts/worker-events.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 
 /**
@@ -36,6 +37,13 @@ const policy = unisolatedPolicyCapability(1);
 const stateRoot = mkdtempSync(join(tmpdir(), "agent-turn-state-"));
 afterAll(() => rmSync(stateRoot, { recursive: true, force: true }));
 
+/** A launchable file the launcher may name as its client: the resolver only checks the shape. */
+function executableFixture(): string {
+  const path = join(stateRoot, "claude-fixture");
+  writeFileSync(path, "", { mode: 0o755 });
+  return path;
+}
+
 /** A manifest-shaped fixture: the launcher reads only these fields. */
 function manifest(attemptId: string): ContextManifest {
   return {
@@ -55,48 +63,70 @@ function manifest(attemptId: string): ContextManifest {
 
 describe("the managed turn's command line", () => {
   /**
-   * The pane's pid is read for the receipt's identity, so it has to be a real process: the
-   * launcher reads `/proc/<pid>/stat` for its start tick and group. The test's own pid is that
-   * process, and it is alive for the whole case.
+   * U3 — a managed turn is one supervised child process, so the launcher's contract is the
+   * argv, the tree and the prompt it hands the supervisor. The supervisor itself is substituted
+   * here: its own behaviour is proven in `child-process-supervisor.test.ts`.
    */
-  const tmux = () => ({ sendText: vi.fn(async () => ({ ok: true as const })), sendKeys: vi.fn(async () => ({ ok: true as const })),
-    getPanePid: vi.fn(async () => process.pid), getPaneCommand: vi.fn(async () => "node"),
-    capturePaneScreen: vi.fn(async () => ""), getPaneExit: vi.fn(async () => ({ dead: false, code: null })) });
   const launch = async (opts: { resumeToken?: string; continueSessionId?: string } = {}) => {
-    const terminal = tmux();
-    const launcher = new DirectWorkerLauncher({ tmux: terminal, resolvePane: async () => "%1",
-      resolveAssignedTree: () => "/tree", tmuxServer: () => "/tmp/fixture" });
+    // The launcher feeds the prompt the orchestrator already wrote, so the case writes it first.
+    writeAgentTurnPrompt(manifest("attempt-1"), "Read the assigned plan.\n");
+    const launches: import("../src/adapters/child-process-supervisor.js").SupervisorLaunch[] = [];
+    const launcher = new DirectWorkerLauncher({ resolveAssignedTree: () => "/tree",
+      // An explicit configured path is used as given; the resolver still requires a real file.
+      executablePath: () => executableFixture(),
+      supervise: (launch, deps) => {
+        launches.push(launch);
+        const events: WorkerEvent[] = [];
+        return {
+          async start() {
+            // The client's first session event is what acknowledges the attempt, and what the
+            // launcher's readiness wait is satisfied by.
+            const event = { type: "session.started", provider: launch.provider, attemptId: launch.attemptId, sequence: 1,
+              timestamp: new Date().toISOString(), rawSummary: "{}", schema: "multi-agent-worker-events/v1",
+              protocolVersion: "1.0", sessionId: "fixture", resumeToken: "fixture" } as WorkerEvent;
+            events.push(event);
+            deps.onEvent(event);
+            return { processId: 4242, processStart: "fixture" };
+          },
+          async wait() { return { version: 1 as const, attemptId: launch.attemptId, provider: launch.provider, exitCode: 0,
+            signal: null, acknowledged: true, noResponse: false, threadId: null, stderrTail: "", outputTail: "",
+            at: new Date().toISOString(), identity: { processId: 4242, processStart: "fixture" },
+            events: [], finalMessage: null, resumeToken: null }; },
+          async cancel() { return { outcome: "stopped" as const, escalated: false, waitedMs: 0 }; },
+          settled() { return null; },
+          get processIdentity() { return { processId: 4242, processStart: "fixture" }; },
+          get observedEvents() { return events; },
+        };
+      } });
     const result = await launcher.launch({ client: "claude-code", resumeToken: opts.resumeToken,
       ...(opts.continueSessionId ? { continueSessionId: opts.continueSessionId } : {}),
       attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context: manifest("attempt-1") } });
-    return { result, terminal, line: terminal.sendText.mock.calls[0]?.[1] ?? "" };
+    return { result, observed: launches[0] };
   };
 
-  it("runs one headless turn: -p, the readable view, and the prompt fed on stdin", async () => {
-    const { result, line } = await launch();
+  it("runs one headless turn: -p, the streaming flags, and the prompt written once on stdin", async () => {
+    const { result, observed } = await launch();
     expect(result, JSON.stringify(result)).toMatchObject({ ok: true });
-    expect(line).toContain(" && exec ");
-    // The pane execs the view, which starts the client: the exit status stays the turn's own.
-    expect(line).toContain("agent-turn-view.mjs");
-    expect(line).toContain("'-p'");
-    expect(line).toContain("'--permission-mode' 'bypassPermissions'");
+    expect(observed.executable).toBe(executableFixture());
+    expect(observed.cwd).toBe("/tree");
+    expect(observed.prompt).toBe("Read the assigned plan.\n");
+    expect(observed.args).toContain("-p");
+    expect(observed.args).toContain("bypassPermissions");
     // Measured on the installed build: `text` prints nothing until the turn ends, and
     // `stream-json` without `--verbose` is refused. This is the only mode that streams.
-    expect(line).toContain("'--output-format' 'stream-json' '--verbose'");
+    expect(observed.args.join(" ")).toContain("--output-format stream-json --verbose");
     // A fresh attempt opens a conversation.
-    expect(line).toContain("'--session-id'");
-    expect(line).not.toContain("'--resume'");
-    // The prompt is a file on stdin, so its length and quoting never reach the shell line.
-    expect(line).toContain("< '" + join(stateRoot, "turns", "attempt-1.prompt") + "'");
-    // The turn's final message has one file per attempt, beside the prompt.
-    expect(line).toContain("'--result-file' '" + join(stateRoot, "turns", "attempt-1", "last-message.txt") + "'");
-    expect(line).not.toContain("'--thread-id-file'");
+    expect(observed.args).toContain("--session-id");
+    expect(observed.args).not.toContain("--resume");
+    // A Claude turn has no thread id to capture; the supervisor writes its `result` text.
+    expect(observed.threadIdPath).toBeUndefined();
   });
 
   it("continues a conversation with --resume when the seat hands one over", async () => {
-    const { line } = await launch({ continueSessionId: "11111111-2222-3333-4444-555555555555" });
-    expect(line).toContain("'--resume' '11111111-2222-3333-4444-555555555555'");
-    expect(line).not.toContain("'--session-id'");
+    const { observed } = await launch({ continueSessionId: "11111111-2222-3333-4444-555555555555" });
+    expect(observed.args).toContain("--resume");
+    expect(observed.args[observed.args.indexOf("--resume") + 1]).toBe("11111111-2222-3333-4444-555555555555");
+    expect(observed.args).not.toContain("--session-id");
   });
 
   it("writes the turn's prompt where the launcher reads it", async () => {
@@ -522,6 +552,31 @@ describe("a freed slot dispatches the run's next task", () => {
         processStart: "0", generation: 1, policyFingerprint: binding.policyFingerprint }));
     await completion.sweep();
     expect(governance.getAttempt("attempt-gone")?.state).toBe("stopped");
+    expect(dispatchPending).toHaveBeenCalledWith("run");
+    completion.stop();
+  });
+
+  it("closes a native turn from the exit facts its supervisor recorded, with no pane to read", async () => {
+    // U3 — a direct child records its own end. The attempt's identity has no pane, and the
+    // sweep must still stop it from the exit file rather than wait for a process that is gone.
+    const dispatchPending = vi.fn(async () => {});
+    const completion = composeAttemptCompletion({ db, governance, sessions: { findResumeContextByName: () => null,
+      updateStartupStatus: () => {} }, currentBinding: () => binding, dispatchPending, intervalMs: 60_000,
+      // A turn that reported its own end, and a liveness probe that would keep it open.
+      turnExit: attemptId => attemptId === "attempt-native" ? { version: 1 as const, attemptId, provider: "claude" as const,
+        exitCode: 0, signal: null, acknowledged: true, noResponse: false, threadId: null, stderrTail: "", outputTail: "",
+        at: new Date().toISOString() } : null,
+      alive: () => true });
+    expect(admit("task-1", "a@rig").status).toBe("accepted");
+    const qitemId = governance.findTask("run", "task-1")!.qitemId;
+    db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason,
+      state, usage_json, active_ms, created_at, updated_at) VALUES ('attempt-native', 'run', ?, 'implementer', 'claude',
+      ?, NULL, 'running', '{"activeMs":0,"inputTokens":{"value":null,"reason":"unobserved"},"outputTokens":{"value":null,"reason":"unobserved"},"costUsd":{"value":null,"reason":"unobserved"}}',
+      0, '2026-11-04T00:00:00.000Z', '2026-11-04T00:00:00.000Z')`)
+      .run(qitemId, JSON.stringify({ nativeSessionId: "native", tmuxServer: null, paneId: null, processId: 4242,
+        processStart: "2026-11-10T00:00:00.000Z", generation: 1, policyFingerprint: binding.policyFingerprint }));
+    await completion.sweep();
+    expect(governance.getAttempt("attempt-native")?.state).toBe("stopped");
     expect(dispatchPending).toHaveBeenCalledWith("run");
     completion.stop();
   });

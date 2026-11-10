@@ -180,6 +180,15 @@ export interface RuntimeAdapter {
   /** Claude's managed capability/launch seam, shared with seat selection. */
   readonly claudeManagedLaunch?: import("./claude-managed-launch.js").ClaudeManagedLaunch;
   readonly runtime: string;
+  /**
+   * U3 — how a managed attempt of this adapter is launched.
+   *
+   * `direct` is the native path: the turn is a piped child process the supervisor owns, its
+   * activity comes from the JSONL stream, and the adapter therefore writes none of the user's
+   * client configuration. Absent (or any other value) is the pane path, which keeps the
+   * projection it always had.
+   */
+  readonly managedTransport?: "direct";
   /** The file an adapter's project() writes for a skill when it lives outside
    *  the Claude project tree, for "already in place" detection. Absent = the
    *  instantiator's default target. */

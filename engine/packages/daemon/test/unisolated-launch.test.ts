@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import type { PlanBinding, TeamTaskAuthority } from "../src/contracts/team-control.js";
+import type { WorkerEvent } from "../src/contracts/worker-events.js";
 import { RestrictedWorkerLauncher } from "../src/adapters/worker-launch.js";
 import type { StartupInput } from "../src/domain/startup-orchestrator.js";
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
@@ -117,8 +118,11 @@ describe("workers.isolation: none launches a managed worker as the current user"
       cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
       // The stub runner in place of the native client: it writes the readiness sidecar and
       // idles as the pane's foreground process, so the launch is exercised end to end.
+      // U3 — the seat's agent is one supervised child process, so the stub stands in for the
+      // client itself. `--turn` makes it read its prompt and exit, which is what a headless turn
+      // does and what the launcher's readiness rule waits for.
       directLaunchCommand: facts => [process.execPath, STUB_RUNNER,
-        "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor"] });
+        "--session-name", facts.taskId, "--cwd", facts.tree, "--launch-id", facts.attemptId, "--posture", "floor", "--turn"] });
     db = daemon.db;
     const governance = daemon.deps.teamGovernance!;
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'rig')").run();
@@ -153,6 +157,40 @@ describe("workers.isolation: none launches a managed worker as the current user"
     }
     if (existsSync(directory)) { writable(directory); rmSync(directory, { recursive: true, force: true }); }
   });
+
+  /**
+   * U3 — a launcher whose supervised child answers like a client without spawning one.
+   *
+   * The launch is exercised through the daemon's own composition: admission, the runtime, the
+   * prompt, the argv and the receipt all run; only the child process is substituted.
+   */
+  const fakeLauncher = (launches: import("../src/adapters/child-process-supervisor.js").SupervisorLaunch[]) =>
+    new DirectWorkerLauncher({
+      resolveAssignedTree: (runId, assignment) => daemon.deps.workflowRuntime!.assignedTreeFor(runId, assignment),
+      executablePath: () => process.execPath,
+      supervise: (launch, deps) => {
+        launches.push(launch);
+        const events: WorkerEvent[] = [];
+        return {
+          async start() {
+            const event = { type: "session.started", provider: launch.provider, attemptId: launch.attemptId, sequence: 1,
+              timestamp: new Date().toISOString(), rawSummary: "{}", schema: "multi-agent-worker-events/v1",
+              protocolVersion: "1.0", sessionId: "fixture", resumeToken: "fixture" } as WorkerEvent;
+            events.push(event);
+            deps.onEvent(event);
+            return { processId: process.pid, processStart: "fixture" };
+          },
+          async wait() { return { version: 1 as const, attemptId: launch.attemptId, provider: launch.provider, exitCode: 0,
+            signal: null, acknowledged: true, noResponse: false, threadId: null, stderrTail: "", outputTail: "",
+            at: new Date().toISOString(), identity: { processId: process.pid, processStart: "fixture" },
+            events: [], finalMessage: null, resumeToken: null }; },
+          async cancel() { return { outcome: "stopped" as const, escalated: false, waitedMs: 0 }; },
+          settled() { return null; },
+          get processIdentity() { return { processId: process.pid, processStart: "fixture" }; },
+          get observedEvents() { return events; },
+        };
+      },
+    });
 
   /** Launch the seat through the daemon's own adapter, exactly as a restore would. */
   const launch = (overrides: Partial<StartupInput> = {}) => daemon.deps.startupOrchestrator!.startNode({
@@ -190,110 +228,35 @@ describe("workers.isolation: none launches a managed worker as the current user"
   });
 
   it.each([
-    ["claude-code", "claude", "--permission-mode", undefined],
-    ["claude-code", "claude", "--permission-mode", "existing-session"],
-    ["codex", "codex", "exec", undefined],
-    ["codex", "codex", "exec", "existing-session"],
-  ] as const)("includes the %s executable %s before %s (resume: %s)", async (client, executable, firstFlag, resumeToken) => {
-    // Capture before submission: exercise the default argv without starting a paid client.
-    const sendText = vi.fn(async (_pane: string, _text: string) => ({ ok: false as const, code: "fixture_captured" }));
-    const sendKeys = vi.fn();
-    const native = new DirectWorkerLauncher({
-      resolvePane: async () => seatPane,
-      resolveAssignedTree: () => repo,
-      tmuxServer: () => "fixture",
-      tmux: { sendText, sendKeys, getPanePid: vi.fn(async () => process.pid), getPaneCommand: vi.fn(), capturePaneScreen: vi.fn() },
-    });
-    vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch").mockImplementation(input => native.launch({
-      ...input, client, resumeToken, model: "fixture-model", effort: "high",
-      attempt: { ...input.attempt, context: { ...input.attempt.context, client } },
-    }));
-    await launch();
-    expect(sendText).toHaveBeenCalledTimes(1);
-    const line = sendText.mock.calls[0]![1];
-    // Both native clients run one headless turn through the readable view, with stdin input.
-    expect(line).toContain(" && exec ");
-    expect(line).toContain("agent-turn-view.mjs");
-    expect(line).toMatch(/ < '/);
+    ["claude-code", "--permission-mode"],
+    ["codex", "exec"],
+  ] as const)("hands the %s turn to the supervisor with the frozen argv", async (client, firstFlag) => {
+    // U3 — the transport is a direct child process. The launch still goes through both admission
+    // steps and the runtime, and what reaches the supervisor is the argv contract, the admitted
+    // tree and the prompt the orchestrator wrote.
+    const launches: import("../src/adapters/child-process-supervisor.js").SupervisorLaunch[] = [];
+    // The daemon's own adapters hold the launcher they were built with, so the substitution is
+    // made on both the composition and the adapters that launch through it.
+    const fake = fakeLauncher(launches);
+    daemon.deps.managedLaunch!.launcher = fake;
+    (daemon.deps.runtimeAdapters!["claude-code"] as unknown as { workerLauncher: unknown }).workerLauncher = fake;
+    (daemon.deps.runtimeAdapters!["codex"] as unknown as { workerLauncher: unknown }).workerLauncher = fake;
+    const started = await launch({ runId: "run", taskId: "task", adapter: client === "codex"
+      ? daemon.deps.runtimeAdapters!["codex"]! : daemon.deps.runtimeAdapters!["claude-code"]! });
+    expect(started.ok, JSON.stringify(started.ok ? null : started.errors)).toBe(true);
+    expect(launches).toHaveLength(1);
+    const observed = launches[0]!;
+    expect(observed.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor("run", task.assignment));
+    expect(observed.prompt).toContain("Managed task task for run run");
+    expect(observed.args).toContain(firstFlag);
     if (client === "claude-code") {
-      expect(line).toContain("'-p'");
-      expect(line).toContain("'--output-format' 'stream-json' '--verbose'");
-      expect(line).toContain("'--model' 'fixture-model' '--effort' 'high'");
-      if (resumeToken) expect(line).toContain(`'--resume' '${resumeToken}'`);
-      else expect(line).toContain("'--session-id'");
+      expect(observed.args).toContain("-p");
+      expect(observed.args.join(" ")).toContain("--output-format stream-json --verbose");
+      expect(observed.args).toContain("--session-id");
     } else {
-      expect(line).toContain(`'${executable}' '${firstFlag}'`);
-      expect(line).toContain("'-m' 'fixture-model' '-c' 'model_reasoning_effort=high'");
-      expect(line).not.toContain("'--effort'");
-      if (resumeToken) {
-        expect(line).toContain("'exec' 'resume'");
-        expect(line).toContain(`'${resumeToken}' '-'`);
-      }
+      expect(observed.args.slice(0, 2)).toEqual(["exec", "--json"]);
+      expect(observed.args.at(-1)).toBe("-");
     }
-    expect(sendKeys).not.toHaveBeenCalled();
-  });
-
-  const trustScreen = "Accessing workspace:\n/fixture\n1. Yes, I trust this folder\n2. No, exit";
-  const readyScreen = "Claude Code v2.1.0\n\u276f \n? for shortcuts";
-
-  function nativeScreen(paneContent: string, paneCommand = "claude") {
-    const terminal = {
-      sendText: vi.fn(async () => ({ ok: true as const })),
-      sendKeys: vi.fn(async () => ({ ok: true as const })),
-      getPanePid: vi.fn(async () => process.pid),
-      getPaneCommand: vi.fn(async () => paneCommand),
-      capturePaneScreen: vi.fn(async () => paneContent),
-      getPaneExit: vi.fn(async () => ({ dead: true, code: 0 })),
-    };
-    // Terminal I/O is substituted; the native launch has no command override.
-    const native = new DirectWorkerLauncher({ tmux: terminal, resolvePane: async () => seatPane,
-      resolveAssignedTree: () => repo, tmuxServer: () => "/tmp/fixture/default" });
-    return { native, terminal };
-  }
-
-  it.each([
-    ["claude-code", trustScreen, "trust_gate"],
-    ["claude-code", "You are running in Bypass Permissions mode.\n\u276f No, exit\n  Yes, I accept\nEnter to confirm \u00b7 Esc to cancel", "bypass_consent_gate"],
-    ["codex", "Do you trust the contents of this directory?\n\u203a 1. Yes, continue\n  2. No, quit", "trust_gate"],
-  ] as const)("keeps %s behind a native gate (case %#)", async (client, screen, code) => {
-    const { native } = nativeScreen(screen, client === "codex" ? "codex" : "claude");
-    const launcher = daemon.deps.managedLaunch!.launcher;
-    vi.spyOn(launcher, "launch").mockImplementation(input => native.launch({ ...input, client,
-      attempt: { ...input.attempt, context: { ...input.attempt.context, client } } }));
-    vi.spyOn(launcher, "checkReady").mockImplementation(attempt => native.checkReady(attempt));
-    const sent = vi.spyOn(daemon.deps.tmuxAdapter!, "sendText");
-    const result = await launch({ includeDurableObligations: true });
-    expect(result).toMatchObject({ ok: false, startupStatus: "attention_required" });
-    expect(sent).not.toHaveBeenCalled();
-    expect(daemon.deps.startupOrchestrator!.canContinueFresh(nodeId, sessionId)).toBe(true);
-    const attempt = vi.mocked(launcher.launch).mock.calls[0]![0].attempt;
-    expect(await native.checkReady(attempt)).toMatchObject({ ready: false, code });
-  });
-
-  it.each([
-    // A Claude Code turn has no composer to probe: a pane that is not at a gate is ready, and a
-    // turn that has already ended is a valid fast turn rather than a launch failure.
-    ["claude-code", "claude", "", true],
-    ["claude-code", "claude", "Starting...", true],
-    ["claude-code", "claude.exe", readyScreen, true],
-    // The one screen a turn can also hit is a gate the owner must clear.
-    ["claude-code", "claude", "Not logged in\nRun /login", false],
-    ["codex", "codex", "", true],
-    ["codex", "codex", "OpenAI Codex (v0.160.0)\n\u203a Implement the task", true],
-  ] as const)("checks %s native gates and process identity (command=%s, case %#)", async (client, command, screen, ready) => {
-    const observedLaunch = vi.spyOn(daemon.deps.managedLaunch!.launcher, "launch");
-    expect((await launch()).ok).toBe(true);
-    const input = observedLaunch.mock.calls[0]![0];
-    const attempt = { ...input.attempt, context: { ...input.attempt.context, client } };
-    const { native, terminal } = nativeScreen(screen, command);
-    const launched = await native.launch({ ...input, client, attempt });
-    expect(launched, JSON.stringify(launched)).toMatchObject({ ok: true });
-    expect(await native.checkReady(attempt)).toMatchObject({ ready });
-    terminal.getPanePid.mockResolvedValue(process.pid + 1);
-    expect(await native.checkReady(attempt)).toEqual({ ready: false, code: "managed_identity_changed" });
-    terminal.getPanePid.mockResolvedValue(process.pid);
-    terminal.capturePaneScreen.mockRejectedValue(new Error("fixture capture failed"));
-    expect(await native.checkReady(attempt)).toEqual({ ready: false, code: "managed_observation_unavailable" });
   });
 
   it("produces and launches the attempt into a worktree this user owns, and records the receipt", async () => {
@@ -309,14 +272,17 @@ describe("workers.isolation: none launches a managed worker as the current user"
     expect(statSync(tree).uid).toBe(process.getuid!());
     expect(git(tree, "rev-parse", "--is-inside-work-tree").trim()).toBe("true");
 
-    // The receipt is recorded as run evidence, naming the real identity the pane runs under.
+    // The receipt is recorded as run evidence, naming the real identity the turn runs under. A
+    // direct child has no pane, so the identity is the process pair alone.
     const row = db.prepare(`SELECT payload FROM events WHERE type = 'managed.attempt.receipt' ORDER BY seq DESC LIMIT 1`)
       .get() as { payload: string };
     const receipt = (JSON.parse(row.payload) as { receipt: import("../src/domain/runtime-adapter.js").ManagedSessionReceipt }).receipt;
     expect(receipt.workerUid).toBe(process.getuid!());
     expect(receipt.network.mode).toBe("unknown");
-    expect(receipt.identity.paneId).toBe(tmuxRun("list-panes", "-t", "builder@rig", "-F", "#{pane_id}").trim());
-    expect(receipt.processGroupId).toBeGreaterThan(0);
+    expect(receipt.identity.paneId).toBeNull();
+    expect(receipt.identity.tmuxServer).toBeNull();
+    expect(receipt.identity.processId).toBeGreaterThan(0);
+    expect(receipt.processGroupId).toBe(receipt.identity.processId);
     expect(receipt.contextHash).toBe(receipt.observedContextHash);
   }, 60_000);
 });

@@ -64,7 +64,10 @@ export function roleInstructionEntries(role: TeamRole): [["core", string], ["pro
   return [["core", current.core], [role === "lead" ? "protocol" : "charter", current.charter]];
 }
 export { immutable, roleConfiguration };
-export function within(root: string, path: string): boolean { const r = relative(root, path); return r === "" || (r !== ".." && !r.startsWith("../") && !isAbsolute(r)); }
+export function within(root: string, path: string): boolean {
+  const r = relative(root, path).replace(/\\/g, "/");
+  return r === "" || (r !== ".." && !r.startsWith("../") && !isAbsolute(r));
+}
 export function physicalPath(root: string, path: string): string {
   let existing = resolve(root, path); const suffix: string[] = [];
   while (true) { try { lstatSync(existing); break; } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; suffix.unshift(basename(existing)); existing = dirname(existing); } }
@@ -78,12 +81,12 @@ function projectionRoot(input: ContextInput): string {
     || !policy.worker_identities.includes(worker) || policy.policy_revision < 4
     || input.binding.policyRevision !== policy.policy_revision
     || !Number.isSafeInteger(controlUid) || controlUid < 0 || (!input.sameIdentity && controlUid === input.workerUid)
-    || !Number.isSafeInteger(workerGid) || workerGid <= 0) throw new Error("Invalid context projection identity");
+    || !Number.isSafeInteger(workerGid) || (workerGid <= 0 && !input.sameIdentity)) throw new Error("Invalid context projection identity");
   for (const root of [policy.paths.context_root, policy.paths.framework_dir]) {
     if (!isAbsolute(root) || resolve(root) !== root) throw new Error("Non-canonical context policy root");
   }
-  if (within(policy.paths.context_root, policy.paths.framework_dir) || within(policy.paths.framework_dir, policy.paths.context_root)
-    || policy.sandbox.context !== "/context" || policy.sandbox.framework !== "/framework") throw new Error("Invalid context mount policy");
+  if (!input.sameIdentity && (within(policy.paths.context_root, policy.paths.framework_dir) || within(policy.paths.framework_dir, policy.paths.context_root)
+    || policy.sandbox.context !== "/context" || policy.sandbox.framework !== "/framework")) throw new Error("Invalid context mount policy");
   return resolve(policy.paths.context_root, worker, input.runId, attemptId);
 }
 
@@ -100,8 +103,8 @@ function privateProjection(input: ContextInput): void {
   // A worker that is the daemon's own user reads this tree as its owner; there is no
   // separate identity to keep it private from, and the read-only mode still stands.
   if (input.sameIdentity) return;
-  const { worker, controlUid, workerGid, policy } = input.projection;
-  const workerRoot = resolve(policy.paths.context_root, worker);
+  const { controlUid, workerGid, policy } = input.projection;
+  const workerRoot = resolve(policy.paths.context_root, input.projection.worker);
   for (let p = input.root; ; p = dirname(p)) {
     const s = lstatSync(p);
     if (!s.isDirectory() || s.isSymbolicLink() || s.uid !== controlUid || s.gid !== workerGid || (s.mode & 0o027)
@@ -109,7 +112,6 @@ function privateProjection(input: ContextInput): void {
     if (p === workerRoot) break;
   }
 }
-
 
 function nativePolicyContextFiles(input: ContextInput): ContextFile[] {
   const policy = input.nativePolicy;
@@ -222,7 +224,7 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
   text(spec.runId, "runId");
   if (spec.root !== projectionRoot(spec) || spec.frameworkRoot !== spec.projection.policy.paths.framework_dir) throw new Error("Context projection path mismatch");
   if (!spec.binding.roles.includes(spec.role) || spec.assignment.role !== spec.role || !["claude-code", "codex"].includes(spec.client) || spec.frameworkRevision !== FRAMEWORK_PIN.revision) throw new Error("Context role, client or framework mismatch");
-  if (!Number.isSafeInteger(spec.workerUid) || spec.workerUid <= 0 || !spec.workerGroups.every(g => Number.isSafeInteger(g) && g >= 0)) throw new Error("Invalid worker identity");
+  if (!Number.isSafeInteger(spec.workerUid) || (spec.workerUid <= 0 && !spec.sameIdentity) || !spec.workerGroups.every(g => Number.isSafeInteger(g) && g >= 0)) throw new Error("Invalid worker identity");
   for (const p of [spec.root, spec.mutableStateRoot, spec.frameworkRoot, ...spec.discoveryRoots]) if (!isAbsolute(p) || realpathSync(p) !== p) throw new Error("Non-canonical context root");
   privateProjection(spec);
   locked(spec.root, spec); locked(spec.frameworkRoot, spec);
@@ -237,9 +239,9 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
   for (const f of spec.files) {
     if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter", "soul", "workflow"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
     workerContextPath(spec.projection.policy, spec.root, f.path);
-    if (within(spec.root, f.path)) {
+    if (within(spec.root, f.path) && !spec.sameIdentity) {
       const s = lstatSync(f.path);
-      if (s.uid !== spec.projection.controlUid || s.gid !== spec.projection.workerGid || (!spec.sameIdentity && (s.mode & 0o227))) throw new Error("Context file is not private and read-only");
+      if (s.uid !== spec.projection.controlUid || s.gid !== spec.projection.workerGid || (s.mode & 0o227)) throw new Error("Context file is not private and read-only");
     }
     locked(f.path, spec);
     if (f.kind === "framework" && (!f.source || !within(spec.frameworkRoot, realpathSync(f.source)) || /\/(?:\.agents|\.claude|\.codex|\.opencode|\.pi)(?:\/|$)/.test(realpathSync(f.source)))) throw new Error("Framework must come from pinned source, never root runtime mirrors");

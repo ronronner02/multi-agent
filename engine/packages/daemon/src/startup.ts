@@ -172,6 +172,9 @@ import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
 import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters/worker-launch.js";
 import { createManagedLaunchControl } from "./adapters/worker-launch-control.js";
 import { DirectWorkerLauncher, type DirectLaunchFacts } from "./adapters/direct-worker-launch.js";
+import { readSupervisorExit } from "./adapters/child-process-supervisor.js";
+import type { WorkerClient } from "./adapters/worker-launch.js";
+import type { WorkerEvent } from "./contracts/worker-events.js";
 import { unisolatedWorkerRoots, type ManagedWorkerRoots } from "./domain/unisolated-roots.js";
 import { defaultWorktreeRoot } from "./domain/worktree-policy.js";
 import { ProviderServiceImpl } from "./domain/provider/provider-service-impl.js";
@@ -243,8 +246,13 @@ interface DaemonOptions {
   webUiEnabled?: boolean;
   /** MVP: overrides the `workers.isolation` setting, which is otherwise read from config. */
   workersIsolation?: "none" | "hardened";
-  /** MVP: the client command an unisolated launch types into the seat's pane (tests use the stub runner). */
+  /** MVP: the client command an unisolated launch starts (tests use the stub runner). */
   directLaunchCommand?: (facts: DirectLaunchFacts) => string[];
+  /** U3: the real client executable an unisolated launch starts, when a test or an operator names it. */
+  directLaunchExecutable?: (client: WorkerClient) => string | undefined;
+  /** U3: a stand-in for the supervised child, so a test can drive the launch without spawning. */
+  directLaunchSupervise?: (launch: import("./adapters/child-process-supervisor.js").SupervisorLaunch,
+    deps: { onEvent: (event: WorkerEvent) => void }) => import("./adapters/child-process-supervisor.js").SupervisedTurn;
 }
 
 interface DaemonResult {
@@ -359,7 +367,7 @@ function composeManagedLaunch(dependencies: {
   // The daemon runs tmux without -L or -S, so its server is the one it recorded at startup, or the default socket.
   const tmuxServer = () => {
     const server = daemonTmuxServerArgs();
-    return server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + process.getuid!(), server[1] ?? "default");
+    return server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + (typeof process.getuid === "function" ? process.getuid() : ""), server[1] ?? "default");
   };
   const control = createManagedLaunchControl({ ...dependencies,
     resolvePane: async sessionId => seat(sessionId).pane,
@@ -427,16 +435,20 @@ function composeManagedLaunch(dependencies: {
  */
 function composeDirectLaunch(dependencies: {
   governance: PlanGovernance;
-  rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
-  /** The environment a launched seat's shell gets, so a seat pane this daemon opens matches one it launched. */
-  sessionEnv?: Record<string, string | undefined>;
-  runtimeSessionEnv?: Record<string, Record<string, string | undefined>>;
+  rigRepo: RigRepository;
   /** The workflow runtime a managed launch must be admitted through. Read at launch, not at composition. */
   workflowRuntime: () => WorkflowRuntime | undefined;
-  /** The client command the unisolated launch types into the seat's pane. */
+  /** The client command the unisolated launch starts. A test injects a stub here. */
   command?: (facts: DirectLaunchFacts) => string[];
+  /** An explicit client executable, which a fixture names and an operator may override. */
+  executablePath?: (client: WorkerClient) => string | undefined;
+  /** Publish a normalized worker event, where this daemon records attempt facts. */
+  onEvent?: (facts: DirectLaunchFacts, event: WorkerEvent) => void;
+  /** A stand-in for the supervised child, so a test can drive the launch without spawning. */
+  supervise?: (launch: import("./adapters/child-process-supervisor.js").SupervisorLaunch,
+    deps: { onEvent: (event: WorkerEvent) => void }) => import("./adapters/child-process-supervisor.js").SupervisedTurn;
 }) {
-  const { rigRepo, sessions, tmux } = dependencies;
+  const { rigRepo } = dependencies;
   const channel = new ManagedNativeChannelEvidence(native => {
     try {
       const raw = fs.readFileSync("/proc/" + native.processId + "/stat", "utf8"), fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
@@ -445,30 +457,23 @@ function composeDirectLaunch(dependencies: {
   });
   const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
   const launcher = new DirectWorkerLauncher({
-    tmux,
     modelRefusal: input => managedModelRefusal(rigRepo.db, input),
     documentRefusal: input => {
       const { runId, assignment, binding } = input.attempt.context;
       const run = dependencies.governance.getRun(runId);
       return documentDispatchRefusal(rigRepo.db, run, assignment.role, assignment.taskId, binding);
     },
-    launchPath: dependencies.sessionEnv?.PATH,
-    // The seat is the task's recorded destination: exactly one live session on the run's rig,
-    // bound to one tmux pane. A fresh install never runs `rig up`, so under `none` a seat with
-    // no terminal at all gets one here — the one owner of "where does this seat live" — and
-    // that pane is recorded exactly as any other binding is. A missing or ambiguous seat still
-    // refuses rather than guessing.
-    resolvePane: async (runId, taskId) => ensureSeatPane(dependencies, seatForTask(sessions, runId, taskId)),
+    // U3 — the turn runs in the tree the runtime admitted, as a direct child process. The seat's
+    // terminal is no longer the transport, so no pane is resolved and none is recorded.
     resolveAssignedTree: (runId, assignment) => {
       const runtime = dependencies.workflowRuntime();
       if (!runtime) throw new Error("direct_launch_runtime_unavailable");
       return runtime.assignedTreeFor(runId, assignment);
     },
     ...(dependencies.command ? { command: dependencies.command } : {}),
-    tmuxServer: () => {
-      const server = daemonTmuxServerArgs();
-      return server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + process.getuid!(), server[1] ?? "default");
-    },
+    ...(dependencies.executablePath ? { executablePath: dependencies.executablePath } : {}),
+    ...(dependencies.onEvent ? { onEvent: dependencies.onEvent } : {}),
+    ...(dependencies.supervise ? { supervise: dependencies.supervise } : {}),
   });
   // The channel reader is the same owner the hardened chain uses, so a seat's mailbox view is
   // built the same way; an unisolated launch records no channel evidence, so it stays closed.
@@ -1228,9 +1233,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       })()
     : managedWorkerRoots;
   const managedLaunch = managed ? (unisolated
-    ? composeDirectLaunch({ governance: teamGovernance, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter, sessionEnv: launchSessionEnv, runtimeSessionEnv,
+    ? composeDirectLaunch({ governance: teamGovernance, rigRepo,
         workflowRuntime: () => workflowRuntime,
-        ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}) })
+        ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}),
+        ...(opts?.directLaunchExecutable ? { executablePath: opts.directLaunchExecutable } : {}),
+        ...(opts?.directLaunchSupervise ? { supervise: opts.directLaunchSupervise } : {}) })
     : composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
         options: teamControl, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
         // Read when a launch is admitted, after startup has constructed the runtime.
@@ -3303,6 +3310,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     deps.attemptTelemetry = telemetry;
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
       turnStateRoot, telemetry,
+      // U3 — a native turn's own end: the supervisor writes what it observed to the attempt's
+      // output, and that is the classifier's evidence now that no pane holds an exit status.
+      turnExit: attemptId => readSupervisorExit(turnStateRoot, attemptId),
       captureTurnDocuments: attempt => {
         if (attempt.role !== "lead" || !teamGovernance.documents(attempt.runId)) return;
         const run = teamGovernance.getRun(attempt.runId), lead = teamGovernance.leadTask(attempt.runId);

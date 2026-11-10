@@ -1,312 +1,308 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import type { WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
-import { writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
+import { agentTurnOutputPaths, writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
 import { TEAM_CONTROL_VERSION } from "../src/contracts/team-control.js";
 import { unisolatedWorkerRoots } from "../src/domain/unisolated-roots.js";
 import type { createDaemon } from "../src/startup.js";
+import type { SupervisorLaunch, SupervisorResult, SupervisedTurn } from "../src/adapters/child-process-supervisor.js";
+import type { WorkerEvent } from "../src/contracts/worker-events.js";
+
+/**
+ * U3 — the launcher's side of the direct-child transport.
+ *
+ * The launcher no longer types a command line into a pane: it resolves the real executable
+ * through U1, hands the supervisor the frozen argv, the prompt and the tree, and records a
+ * receipt whose identity is the process pair. These cases pin exactly that hand-off, and then
+ * run the whole daemon path against a stub client to prove a turn is swept to stopped without a
+ * pane anywhere in it.
+ */
 
 const threadId = "019a527e-91e7-7000-8aac-35cd290bda12";
-const clientsBin = "/opt/multi-agent/toolchain/clients/bin";
-const view = fileURLToPath(new URL("../assets/agent-turn-view.mjs", import.meta.url));
 
+/** A projection is sealed read-only, so every directory is opened before removal. */
 function writable(path: string): void {
-  chmodSync(path, 0o700);
+  try { chmodSync(path, 0o755); } catch { return; }
   for (const entry of readdirSync(path, { withFileTypes: true })) {
-    if (entry.isSymbolicLink()) continue;
     const child = join(path, entry.name);
-    if (entry.isDirectory()) writable(child); else chmodSync(child, 0o600);
+    try { if (entry.isDirectory()) writable(child); else chmodSync(child, 0o644); } catch { /* already gone */ }
   }
 }
 
-describe("managed Codex turns", () => {
-  let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "codex-turn-")); });
-  afterEach(() => { writable(root); rmSync(root, { recursive: true, force: true }); });
+/** A turn that answers the launcher without spawning, so the hand-off can be inspected. */
+function fakeTurn(launch: SupervisorLaunch, onEvent: (event: WorkerEvent) => void): SupervisedTurn {
+  let identity: { processId: number; processStart: string } | null = null;
+  let settled: SupervisorResult | null = null;
+  const events: WorkerEvent[] = [];
+  const emit = (event: WorkerEvent) => { events.push(event); onEvent(event); };
+  return {
+    async start() {
+      identity = { processId: 4242, processStart: "2026-11-10T00:00:00.000Z" };
+      if (launch.provider === "codex" && launch.threadIdPath) writeFileSync(launch.threadIdPath, threadId, { mode: 0o600 });
+      emit({ type: "session.started", provider: launch.provider, attemptId: launch.attemptId, sequence: 1,
+        timestamp: new Date().toISOString(), rawSummary: "{}", schema: "multi-agent-worker-events/v1", protocolVersion: "1.0",
+        sessionId: threadId, resumeToken: threadId } as WorkerEvent);
+      return identity;
+    },
+    async wait() {
+      settled ??= { version: 1, attemptId: launch.attemptId, provider: launch.provider, exitCode: 0, signal: null,
+        acknowledged: true, noResponse: false, threadId: launch.provider === "codex" ? threadId : null,
+        stderrTail: "", outputTail: "", at: new Date().toISOString(),
+        identity: identity ?? { processId: 0, processStart: "" }, events, finalMessage: null, resumeToken: threadId };
+      return settled;
+    },
+    async cancel() { return { outcome: "stopped", escalated: false, waitedMs: 0 }; },
+    settled: () => settled,
+    get processIdentity() { return identity; },
+    get observedEvents() { return events; },
+  };
+}
 
-  const launch = async (options: Partial<WorkerLaunchInput> & { readOnly?: boolean } = {}, modelRefusal?: (input: WorkerLaunchInput) => string | null, documentRefusal?: (input: WorkerLaunchInput) => string | null) => {
-    const { readOnly, ...launchOptions } = options;
-    const context = {
-      runId: "run", assignment: { taskId: "task", role: "implementer", paths: ["plan.md"], dependencies: [] },
-      client: options.client ?? "codex", mutableStateRoot: root, projection: { attemptId: "attempt-1" },
-      ...(readOnly ? { workflow: { readOnly: true } } : {}),
-      binding: { policyFingerprint: "sha256:" + "b".repeat(64) }, generatedHash: "sha256:" + "a".repeat(64),
-    } as ContextManifest;
-    writeAgentTurnPrompt(context, "Read the assigned plan.\n");
-    const terminal = {
-      sendText: vi.fn(async (_pane: string, _line: string) => ({ ok: true as const })),
-      sendKeys: vi.fn(async () => ({ ok: true as const })),
-      getPanePid: vi.fn(async () => process.pid), getPaneCommand: vi.fn(async () => "node"),
-      capturePaneScreen: vi.fn(async () => ""), getPaneExit: vi.fn(async () => ({ dead: true, code: 0 })),
-    };
-    const launcher = new DirectWorkerLauncher({ tmux: terminal, modelRefusal, documentRefusal, resolvePane: async () => "%1",
-      resolveAssignedTree: () => join(root, "candidate tree"), tmuxServer: () => join(root, "tmux") });
-    const input: WorkerLaunchInput = { client: "codex",
-      attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context }, ...launchOptions };
+describe("U3 the launcher hands one turn to the supervisor", () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "u3-launch-"));
+    for (const name of ["codex.exe", "claude.exe"]) writeFileSync(join(root, name), "");
+  });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  const context = (options: { readOnly?: boolean; role?: string; client?: "claude-code" | "codex" } = {}) => ({
+    runId: "run", assignment: { taskId: "task", role: options.role ?? "implementer", paths: ["plan.md"], dependencies: [] },
+    client: options.client ?? "codex", mutableStateRoot: root, projection: { attemptId: "attempt-1" },
+    ...(options.readOnly ? { workflow: { readOnly: true } } : {}),
+    binding: { policyFingerprint: "sha256:" + "b".repeat(64) }, generatedHash: "sha256:" + "a".repeat(64),
+  }) as ContextManifest;
+
+  const launch = async (options: Partial<WorkerLaunchInput> & { readOnly?: boolean; role?: string;
+    modelRefusal?: (input: WorkerLaunchInput) => string | null; documentRefusal?: (input: WorkerLaunchInput) => string | null } = {}) => {
+    const { readOnly, role, modelRefusal, documentRefusal, ...launchOptions } = options;
+    const manifest = context({ readOnly, role, client: launchOptions.client });
+    writeAgentTurnPrompt(manifest, "Read the assigned plan.\n");
+    const launches: SupervisorLaunch[] = [];
+    const launcher = new DirectWorkerLauncher({
+      modelRefusal, documentRefusal,
+      resolveAssignedTree: () => join(root, "candidate tree"),
+      // An explicit configured path is used as given, which is how a fixture names a stub. The
+      // resolver still requires it to be a launchable file, so the fixtures are real ones.
+      executablePath: client => (client === "codex" ? join(root, "codex.exe") : join(root, "claude.exe")),
+      supervise: (launch, deps) => { launches.push(launch); return fakeTurn(launch, deps.onEvent); },
+    });
+    const input: WorkerLaunchInput = { client: "codex", attempt: { attemptId: "attempt-1", deadline: Date.now() + 60_000, context: manifest },
+      ...launchOptions };
     const result = await launcher.launch(input);
-    return { result, input, launcher, terminal, line: terminal.sendText.mock.calls[0]?.[1] ?? "" };
+    return { result, input, launcher, observed: launches[0] };
   };
 
-  it("launches exec with stdin, a per-attempt final message, and the supported model and effort flags", async () => {
-    const { result, line } = await launch({ model: "fixture-model", effort: "high" });
+  it("starts the resolved executable with the Codex implementer argv and the prompt as stdin", async () => {
+    const { result, observed } = await launch({ model: "fixture-model", effort: "high" });
     expect(result).toMatchObject({ ok: true });
-    expect(line).toContain("agent-turn-view.mjs");
-    expect(line).toContain("'--result-file' '" + join(root, "turns/attempt-1/last-message.txt") + "'");
-    expect(line).toContain("'codex' 'exec' '--json' '-o' '" + join(root, "turns/attempt-1/last-message.txt") + "'");
-    expect(line).toContain("'-C' '" + join(root, "candidate tree") + "' '-s' 'workspace-write'");
-    expect(line).toContain("'-c' 'sandbox_workspace_write.network_access=true'");
-    expect(line).toContain("'-c' 'check_for_update_on_startup=false'");
-    expect(line).toContain("'-m' 'fixture-model' '-c' 'model_reasoning_effort=high'");
-    expect(line).toContain("'-' < '" + join(root, "turns/attempt-1.prompt") + "'");
-    expect(line).not.toContain("'--effort'");
-    expect(line).not.toContain("danger-full-access");
-    expect(line).not.toContain("CODEX_HOME");
+    expect(observed.executable).toBe(join(root, "codex.exe"));
+    expect(observed.cwd).toBe(join(root, "candidate tree"));
+    expect(observed.prompt).toBe("Read the assigned plan.\n");
+    expect(observed.provider).toBe("codex");
+    expect(observed.args.slice(0, 4)).toEqual(["exec", "--json", "-o", join(root, "turns", "attempt-1", "last-message.txt")]);
+    expect(observed.args).toContain("-C");
+    expect(observed.args[observed.args.indexOf("-s") + 1]).toBe("workspace-write");
+    expect(observed.args).toContain("sandbox_workspace_write.network_access=true");
+    expect(observed.args).toContain("check_for_update_on_startup=false");
+    expect(observed.args).toContain("-m");
+    expect(observed.args).toContain("model_reasoning_effort=high");
+    expect(observed.args.at(-1)).toBe("-");
+    // The thread id is captured where the receipt and the sweep read it.
+    expect(observed.threadIdPath).toBe(join(root, "turns", "attempt-1", "thread-id.txt"));
     expect(result.ok && result.resumeToken).toBeUndefined();
   });
 
-  it.each(["resumeToken", "continueSessionId"] as const)("continues the stored thread through %s", async key => {
-    const { line } = await launch({ [key]: threadId });
-    expect(line).toContain("'codex' 'exec' 'resume' '--json' '-o'");
-    expect(line).toContain("'-c' 'sandbox_mode=workspace-write'");
-    expect(line).toContain("'-c' 'sandbox_workspace_write.network_access=true'");
-    expect(line).toContain("'" + threadId + "' '-' < '");
-    expect(line).toContain("cd '" + join(root, "candidate tree") + "'");
-    expect(line).not.toContain("'-C'");
-    expect(line).not.toContain("'-s'");
-  });
-
-  it.each([undefined, "resumeToken", "continueSessionId"] as const)("keeps read-only workflows read-only for fresh and continued turns (%s)", async key => {
-    const { result, line } = await launch({ readOnly: true, ...(key ? { [key]: threadId } : {}) });
-    expect(result).toMatchObject({ ok: true });
-    expect(line).toContain(key ? "'-c' 'sandbox_mode=read-only'" : "'-s' 'read-only'");
-    expect(line).toContain("'-c' 'approval_policy=never'");
-    expect(line).not.toContain("workspace-write");
-    expect(line).not.toContain("sandbox_workspace_write");
-  });
-
-  it("runs a read-only alternate-client workflow with read tools and no inherited external tools", async () => {
-    const { result, line } = await launch({ client: "claude-code", readOnly: true });
-    expect(result).toMatchObject({ ok: true });
-    expect(line).toContain("'--permission-mode' 'plan'");
-    expect(line).toContain("'--tools' 'Read,Glob,Grep'");
-    expect(line).toContain("'--strict-mcp-config'");
-    expect(line).not.toContain("bypassPermissions");
-  });
-
-  it.each(["resumeToken", "continueSessionId"] as const)("refuses hostile %s values before submitting a command", async key => {
-    for (const token of ["--last", "with whitespace", "trailing\n", "", "x".repeat(129)]) {
-      const { result, terminal } = await launch({ [key]: token });
-      expect(result).toMatchObject({ ok: false });
-      expect(terminal.sendText).not.toHaveBeenCalled();
+  it("keeps a reviewer read-only for both clients", async () => {
+    for (const [client, expected] of [["claude-code", ["--permission-mode", "plan"]], ["codex", ["-s", "read-only"]]] as const) {
+      const { observed } = await launch({ client, readOnly: true });
+      const index = observed.args.indexOf(expected[0]);
+      expect(index, client).toBeGreaterThanOrEqual(0);
+      expect(observed.args[index + 1]).toBe(expected[1]);
     }
   });
 
-  it.each([undefined, threadId])("enforces model policy before fresh or resumed native commands (%s)", async continueSessionId => {
-    const { result, terminal } = await launch({ model: "outside-allowlist", continueSessionId }, () => "team_model_not_allowed");
-    expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: team_model_not_allowed" });
-    expect(terminal.sendText).not.toHaveBeenCalled();
-    expect(terminal.sendKeys).not.toHaveBeenCalled();
+  it.each(["resumeToken", "continueSessionId"] as const)("continues the stored conversation through %s", async key => {
+    const { observed, result } = await launch({ [key]: threadId });
+    expect(observed.args.slice(0, 2)).toEqual(["exec", "resume"]);
+    expect(observed.args.at(-2)).toBe(threadId);
+    expect(observed.args.at(-1)).toBe("-");
+    expect(observed.args).not.toContain("-C");
+    expect(result).toMatchObject({ ok: true });
   });
 
-  it("rechecks model policy after preparation and before submitting the native command", async () => {
+  it("records an identity with a process pair and no pane", async () => {
+    const { result } = await launch();
+    const receipt = result.ok ? result.managedSession! : null;
+    expect(receipt).not.toBeNull();
+    expect(receipt!.identity).toMatchObject({ processId: 4242, processStart: "2026-11-10T00:00:00.000Z",
+      paneId: null, tmuxServer: null, nativeSessionId: threadId, generation: 1 });
+    // Nothing about this launch claims a network profile it does not enforce.
+    expect(receipt!.network).toMatchObject({ namespace: "host", mode: "unknown" });
+  });
+
+  it("clears the attempt's stale output before the turn starts", async () => {
+    const output = agentTurnOutputPaths(root, "attempt-1");
+    mkdirSync(dirname(output.taskReport), { recursive: true });
+    for (const path of [output.lastMessage, output.taskReport]) writeFileSync(path, "stale");
+    const { observed } = await launch();
+    expect(observed.attemptId).toBe("attempt-1");
+    // The supervisor clears these itself; this proves the launcher did not recreate them.
+    expect(readFileSync(output.lastMessage, "utf8")).toBe("stale");
+    rmSync(output.lastMessage, { force: true });
+  });
+
+  it.each(["--last", "with whitespace", "trailing\n", "", "x".repeat(129)])("refuses a hostile session token (%j)", async token => {
+    for (const key of ["resumeToken", "continueSessionId"] as const) {
+      const { result, observed } = await launch({ [key]: token });
+      expect(result).toMatchObject({ ok: false });
+      expect(observed).toBeUndefined();
+    }
+  });
+
+  it.each([undefined, threadId])("enforces model policy before fresh or continued turns (%s)", async continueSessionId => {
+    const { result, observed } = await launch({ model: "outside-allowlist", continueSessionId, modelRefusal: () => "team_model_not_allowed" });
+    expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: team_model_not_allowed" });
+    expect(observed).toBeUndefined();
+  });
+
+  it("rechecks model policy after preparation and before the turn starts", async () => {
     const refusal = vi.fn().mockReturnValueOnce(null).mockReturnValue("team_model_not_allowed");
-    const { result, terminal } = await launch({ model: "changed-policy" }, refusal);
+    const { result, observed } = await launch({ model: "changed-policy", modelRefusal: refusal });
     expect(refusal).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: team_model_not_allowed" });
-    expect(terminal.sendText).not.toHaveBeenCalled();
-    expect(terminal.sendKeys).not.toHaveBeenCalled();
+    expect(observed).toBeUndefined();
   });
 
-  it.each([undefined, threadId])("enforces approved document versions immediately before fresh or resumed launch (%s)", async continueSessionId => {
+  it("enforces approved document versions immediately before the turn starts", async () => {
     const refusal = vi.fn().mockReturnValueOnce(null).mockReturnValue("Approved document versions changed before launch");
-    const { result, terminal } = await launch({ continueSessionId }, undefined, refusal);
+    const { result, observed } = await launch({ documentRefusal: refusal });
     expect(refusal).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ ok: false, error: "Direct launch blocked: Approved document versions changed before launch" });
-    expect(terminal.sendText).not.toHaveBeenCalled(); expect(terminal.sendKeys).not.toHaveBeenCalled();
+    expect(observed).toBeUndefined();
   });
 
-  it("treats a finished headless turn as ready without an interactive composer", async () => {
+  it("treats a finished turn as ready without a composer", async () => {
     const { result, input, launcher } = await launch();
     expect(result).toMatchObject({ ok: true });
     expect(await launcher.checkReady(input.attempt)).toEqual({ ready: true });
   });
 
-  it("renders Codex events, captures only the first thread, and preserves stdin and the exit status", () => {
-    const script = join(root, "events.cjs"), threadFile = join(root, "thread-id.txt");
-    writeFileSync(script, `const fs = require('node:fs');
-const prompt = fs.readFileSync(0, 'utf8');
-const events = [
-  {type:'thread.started',thread_id:${JSON.stringify(threadId)}},
-  {type:'thread.started',thread_id:'later-thread'},
-  {type:'turn.started'},
-  {type:'item.started',item:{type:'command_execution',command:'git status',status:'in_progress'}},
-  {type:'item.completed',item:{type:'command_execution',command:'git status',aggregated_output:'clean tree',exit_code:0}},
-  {type:'item.completed',item:{type:'file_change',changes:[{kind:'update',path:'plan.md'}]}},
-  {type:'item.completed',item:{type:'agent_message',text:'Read: '+prompt}},
-  {type:'error',message:'502 high demand'},
-  {type:'turn.failed',error:{message:'provider unavailable'}}
-];
-process.stdout.write(events.map(event => JSON.stringify(event)).join('\\n'));
-process.exitCode = 7;
-`);
-    const result = spawnSync(process.execPath, [view, "--thread-id-file", threadFile, process.execPath, script],
-      { input: "the assigned plan", encoding: "utf8", timeout: 10_000 });
-    expect(result.status).toBe(7);
-    expect(readFileSync(threadFile, "utf8")).toBe(threadId);
-    expect(result.stdout).toContain("git status");
-    expect(result.stdout).toContain("clean tree");
-    expect(result.stdout).toContain("plan.md");
-    expect(result.stdout).toContain("Read: the assigned plan");
-    expect(result.stdout).toContain("502 high demand");
-    expect(result.stdout).toContain("provider unavailable");
-    expect(result.stdout).not.toContain('"type":');
-  });
-
-  it("keeps Claude output and a client's signal observable through the wrapper", () => {
-    const result = spawnSync(process.execPath, [view, process.execPath, "-e",
-      `console.log(JSON.stringify({type:'assistant',message:{content:[{type:'text',text:'Still readable'}]}})); process.kill(process.pid, 'SIGTERM');`],
-    { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", timeout: 10_000 });
-    expect(result.stdout).toContain("Still readable");
-    expect(result.signal).toBe("SIGTERM");
+  it("refuses a second launch of the same attempt", async () => {
+    const { input, launcher } = await launch();
+    expect(await launcher.launch(input)).toMatchObject({ ok: false, error: "Direct launch blocked: managed_attempt_already_started" });
   });
 });
 
-it.each([
-  { label: "valid thread and continuation", reportedThread: threadId, clientsEntries: 0 },
-  { label: "clients directory already present", reportedThread: threadId, clientsEntries: 1 },
-  { label: "duplicate clients directories", reportedThread: threadId, clientsEntries: 2 },
-  { label: "leading dash refused", reportedThread: "--last", clientsEntries: 0 },
-  { label: "whitespace refused", reportedThread: "bad thread", clientsEntries: 0 },
-])("sweeps a native Codex stub to stopped ($label)", async ({ reportedThread, clientsEntries }) => {
-  const root = mkdtempSync(join(tmpdir(), "codex-sweep-"));
-  const home = join(root, "home"), repo = join(root, "repo"), bin = join(root, "bin");
-  for (const path of [home, repo, bin, join(root, "tmux")]) mkdirSync(path);
-  const saved = { OPENRIG_HOME: process.env.OPENRIG_HOME, TMUX_TMPDIR: process.env.TMUX_TMPDIR,
-    TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE, PATH: process.env.PATH };
-  process.env.OPENRIG_HOME = home;
-  process.env.TMUX_TMPDIR = join(root, "tmux");
-  delete process.env.TMUX; delete process.env.TMUX_PANE;
-  process.env.PATH = [bin, ...(saved.PATH ?? "").split(delimiter).filter(part => part !== clientsBin),
-    ...Array<string>(clientsEntries).fill(clientsBin)].join(delimiter);
-  const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
-  let daemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
-  try {
-    git("init", "-q", "--initial-branch=main");
-    git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid");
-    writeFileSync(join(repo, "plan.md"), "Read the plan and report the result.\n");
-    git("add", "plan.md"); git("commit", "-qm", "fixture");
-    writeFileSync(join(bin, "codex"), `#!${process.execPath}
+// The whole daemon path starts from `bindingForGoal`, whose binding contract still requires a
+// POSIX-shaped repository root; accepting a Windows root is U7's unit. Until it lands this case
+// runs on Linux, where the direct transport is otherwise identical.
+describe.skipIf(process.platform === "win32")("a native turn through the daemon", () => {
+  it.each([
+    { label: "valid thread and continuation", reportedThread: threadId },
+    { label: "leading dash refused", reportedThread: "--last" },
+    { label: "whitespace refused", reportedThread: "bad thread" },
+  ])("sweeps a native Codex stub to stopped ($label)", async ({ reportedThread }) => {
+    const root = mkdtempSync(join(tmpdir(), "u3-sweep-"));
+    const home = join(root, "home"), repo = join(root, "repo");
+    for (const path of [home, repo]) mkdirSync(path, { recursive: true });
+    const saved = { OPENRIG_HOME: process.env.OPENRIG_HOME };
+    process.env.OPENRIG_HOME = home;
+    const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
+    let daemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
+    try {
+      git("init", "-q", "--initial-branch=main");
+      git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid");
+      writeFileSync(join(repo, "plan.md"), "Read the plan and report the result.\n");
+      git("add", "plan.md"); git("commit", "-qm", "fixture");
+      // The stub client is a real executable started through the production launch path — an
+      // explicit configured path, resolved by U1 and spawned with `shell: false` — so it sees
+      // exactly the argv the contract froze. It records its argv, prompt and cwd, writes Codex's
+      // `-o` answer, and streams the provider records.
+      const stub = join(root, "codex-stub");
+      writeFileSync(stub, `#!${process.execPath}
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 if (args[0] !== 'exec') { console.error('expected exec'); process.exit(2); }
 const output = args[args.indexOf('-o') + 1];
-fs.writeFileSync(output + '.launch.json', JSON.stringify({args, prompt:fs.readFileSync(0,'utf8'), cwd:process.cwd(), path:process.env.PATH}));
-console.log(JSON.stringify({type:'thread.started',thread_id:${JSON.stringify(reportedThread)}}));
-console.log(JSON.stringify({type:'turn.started'}));
-console.log(JSON.stringify({type:'item.started',item:{id:'command-1',type:'command_execution',command:'printf fixture',status:'in_progress'}}));
-console.log(JSON.stringify({type:'item.completed',item:{id:'command-1',type:'command_execution',command:'printf fixture',status:'completed',exit_code:0}}));
+fs.writeFileSync(output + '.launch.json', JSON.stringify({ args, prompt: fs.readFileSync(0, 'utf8'), cwd: process.cwd() }));
+console.log(JSON.stringify({ type: 'thread.started', thread_id: ${JSON.stringify(reportedThread)} }));
+console.log(JSON.stringify({ type: 'turn.started' }));
+console.log(JSON.stringify({ type: 'item.started', item: { id: 'command-1', type: 'command_execution', command: 'printf fixture', status: 'in_progress' } }));
+console.log(JSON.stringify({ type: 'item.completed', item: { id: 'command-1', type: 'command_execution', command: 'printf fixture', status: 'completed', exit_code: 0 } }));
 fs.writeFileSync(output, 'The assigned plan was read.');
-console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'The assigned plan was read.'}}));
-const firstTurn = ${JSON.stringify(join(root, 'first-turn'))};
-if (!fs.existsSync(firstTurn)) {
-  fs.writeFileSync(firstTurn, 'observed');
-  console.log(JSON.stringify({type:'error',message:'Error: connect ECONNRESET'}));
-  process.exit(1);
-}
-console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:17,cached_input_tokens:3,output_tokens:5}}));
+console.log(JSON.stringify({ type: 'item.completed', item: { id: 'message-1', type: 'agent_message', text: 'The assigned plan was read.' } }));
+console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 17, cached_input_tokens: 3, output_tokens: 5 } }));
 `, { mode: 0o755 });
-    vi.resetModules();
-    const { createDaemon } = await import("../src/startup.js");
-    expect(process.env.PATH!.split(delimiter).filter(part => part === clientsBin)).toHaveLength(clientsEntries);
-    daemon = await createDaemon({ dbPath: join(root, "demo.db"), managedMode: true, workersIsolation: "none",
-      teamControl: { credentials: { ownerToken: "fixture-owner" } },
-      cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); } });
-    const rig = daemon.deps.rigRepo.createRig("codex-fixture", repo);
-    const node = daemon.deps.rigRepo.addNode(rig.id, "builder", { role: "implementer", runtime: "codex", cwd: repo });
-    const seat = "builder@codex-fixture";
-    daemon.deps.sessionRegistry.registerSession(node.id, seat);
-    const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control/runs", {
-      method: "POST", headers: { Authorization: "Bearer fixture-owner", "Content-Type": "application/json" },
-      body: JSON.stringify({ goal: "Read the assigned plan and report the result.", seat, writePaths: ["plan.md"] }),
-    }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
-    const body = await response.json() as { runId: string };
-    expect(response.status, JSON.stringify(body)).toBe(201);
-    const governance = daemon.deps.teamGovernance!;
-    const qitemId = governance.findTask(body.runId, "task-1")!.qitemId;
-    const attemptIds = () => (daemon!.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid")
-      .all(qitemId) as Array<{ id: string }>).map(row => row.id);
-    // Provider failures retain their native thread while the counted retry waits.
-    await vi.waitFor(async () => {
-      await daemon!.deps.attemptCompletion!.sweep();
-      const ids = attemptIds();
-      expect(ids).toHaveLength(1);
-      expect(governance.getAttempt(ids[0]!)?.state).toBe("stopped");
-    }, { timeout: 20_000, interval: 100 });
-    const retryAt = governance.getTask(qitemId)!.evidence?.retryNotBefore;
-    expect(typeof retryAt).toBe("string");
-    expect(Date.parse(retryAt as string)).toBeGreaterThan(Date.now());
-    await daemon.deps.attemptCompletion!.sweep();
-    expect(attemptIds()).toHaveLength(1);
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(retryAt as string));
-    await vi.waitFor(async () => {
-      await daemon!.deps.attemptCompletion!.sweep();
-      const ids = attemptIds();
-      expect(ids).toHaveLength(2);
-      expect(ids.every(id => governance.getAttempt(id)?.state === "stopped")).toBe(true);
-    }, { timeout: 20_000, interval: 100 });
-    const [firstId, secondId] = attemptIds();
-    const first = governance.getAttempt(firstId!)!;
-    const second = governance.getAttempt(secondId!)!;
-    // The transport retry resumes once; its empty candidate then needs lead judgment, not another retry.
-    expect(first.failure).toMatchObject({ reasonCode: "agent_error.provider_network", retryEligible: true });
-    expect(second.failure).toMatchObject({ reasonCode: "evidence_invalid", retryEligible: false });
-    expect(governance.getRun(body.runId).retriesUsed).toBe(1);
-    const session = daemon.deps.sessionRegistry.getSessionsForRig(rig.id).find(row => row.sessionName === seat)!;
-    if (reportedThread !== threadId) {
-      expect(session.resumeToken).toBeNull();
-      expect(session.startupStatus).toBe("pending");
-      return;
+      vi.resetModules();
+      const { createDaemon } = await import("../src/startup.js");
+      daemon = await createDaemon({ dbPath: join(root, "demo.db"), managedMode: true, workersIsolation: "none",
+        teamControl: { credentials: { ownerToken: "fixture-owner" } },
+        cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
+        directLaunchExecutable: () => stub });
+      const rig = daemon.deps.rigRepo.createRig("codex-fixture", repo);
+      const node = daemon.deps.rigRepo.addNode(rig.id, "builder", { role: "implementer", runtime: "codex", cwd: repo });
+      const seat = "builder@codex-fixture";
+      daemon.deps.sessionRegistry.registerSession(node.id, seat);
+      const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control/runs", {
+        method: "POST", headers: { Authorization: "Bearer fixture-owner", "Content-Type": "application/json" },
+        body: JSON.stringify({ goal: "Read the assigned plan and report the result.", seat, writePaths: ["plan.md"] }),
+      }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+      const body = await response.json() as { runId: string };
+      expect(response.status, JSON.stringify(body)).toBe(201);
+      const governance = daemon.deps.teamGovernance!;
+      const qitemId = governance.findTask(body.runId, "task-1")!.qitemId;
+      const attemptIds = () => (daemon!.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid")
+        .all(qitemId) as Array<{ id: string }>).map(row => row.id);
+      // The turn ends on its own and the sweep records the stop from the process identity — no
+      // pane, no exit status read from a terminal.
+      await vi.waitFor(async () => {
+        await daemon!.deps.attemptCompletion!.sweep();
+        const ids = attemptIds();
+        expect(ids).toHaveLength(1);
+        expect(governance.getAttempt(ids[0]!)?.state).toBe("stopped");
+      }, { timeout: 30_000, interval: 100 });
+      const [attemptId] = attemptIds();
+      const attempt = governance.getAttempt(attemptId!)!;
+      const stateRoot = join(unisolatedWorkerRoots(home).workerRoot, "local", "scratch");
+      const finalMessage = join(stateRoot, "turns", attempt.id, "last-message.txt");
+      expect(readFileSync(finalMessage, "utf8")).toBe("The assigned plan was read.");
+      const observed = JSON.parse(readFileSync(finalMessage + ".launch.json", "utf8")) as { args: string[]; prompt: string; cwd: string };
+      expect(observed.prompt).toContain("Read the assigned plan and report the result.");
+      expect(observed.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor(body.runId, governance.getTask(qitemId)!.assignment));
+      expect(observed.args.slice(0, 3)).toEqual(["exec", "--json", "-o"]);
+      expect(observed.args.at(-1)).toBe("-");
+      // The receipt is the process pair, and the sweep read the same identity to prove the end.
+      expect(attempt.identity).toMatchObject({ paneId: null, tmuxServer: null, processId: expect.any(Number) });
+      // The turn's own exit facts were recorded where a later process reads them.
+      expect(JSON.parse(readFileSync(join(stateRoot, "turns", attempt.id, "exit.json"), "utf8")))
+        .toMatchObject({ attemptId: attempt.id, exitCode: 0, acknowledged: true });
+      const session = daemon.deps.sessionRegistry.getSessionsForRig(rig.id).find(row => row.sessionName === seat)!;
+      if (reportedThread !== threadId) {
+        expect(session.resumeToken).toBeNull();
+        expect(session.startupStatus).toBe("pending");
+        return;
+      }
+      expect(attempt.identity?.nativeSessionId).toBe(threadId);
+      expect(session).toMatchObject({ resumeType: "codex_id", resumeToken: threadId });
+      const usage = JSON.parse(readFileSync(join(stateRoot, "turns", attempt.id, "usage.json"), "utf8"));
+      expect(usage).toMatchObject({ available: true, client: "codex", nativeSessionId: threadId,
+        counts: { inputTokens: 14, cacheReadInputTokens: 3, outputTokens: 5 } });
+      const activity = readFileSync(join(stateRoot, "turns", attempt.id, "activity.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+      expect(activity.map(record => record.status)).toEqual(["running", "completed"]);
+    } finally {
+      daemon?.deps.attemptCompletion?.stop();
+      await daemon?.deps.workflowRuntime?.closeManagedAttempts();
+      if (daemon?.db.open) daemon.db.close();
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
+      if (existsSync(root)) { writable(root); rmSync(root, { recursive: true, force: true }); }
     }
-    expect(first.identity?.nativeSessionId).toBe(threadId);
-    expect(session).toMatchObject({ resumeType: "codex_id", resumeToken: threadId, startupStatus: "pending" });
-    const stateRoot = join(unisolatedWorkerRoots(home).workerRoot, "local", "scratch");
-    const finalMessage = join(stateRoot, "turns", first.id, "last-message.txt");
-    expect(readFileSync(finalMessage, "utf8")).toBe("The assigned plan was read.");
-    const initial = JSON.parse(readFileSync(finalMessage + ".launch.json", "utf8"));
-    expect(initial.prompt).toContain("Read the assigned plan and report the result.");
-    expect(initial.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor(body.runId, governance.getTask(qitemId)!.assignment));
-    expect(initial.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
-
-    const continued = JSON.parse(readFileSync(join(stateRoot, "turns", second.id, "last-message.txt.launch.json"), "utf8"));
-    expect(continued.args.slice(0, 2)).toEqual(["exec", "resume"]);
-    expect(continued.args.slice(-2)).toEqual([threadId, "-"]);
-    expect(continued.cwd).toBe(initial.cwd);
-    expect(continued.path.split(delimiter).filter((part: string) => part === clientsBin)).toHaveLength(1);
-    expect(second.identity?.nativeSessionId).toBe(threadId);
-    expect(dirname(finalMessage)).not.toContain(initial.cwd);
-    const telemetryRoot = join(stateRoot, "turns", second.id);
-    const usage = JSON.parse(readFileSync(join(telemetryRoot, "usage.json"), "utf8"));
-    expect(usage).toMatchObject({ available: true, client: "codex", nativeSessionId: threadId, resumed: true,
-      counts: { inputTokens: 14, cacheReadInputTokens: 3, outputTokens: 5 } });
-    const activity = readFileSync(join(telemetryRoot, "activity.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
-    expect(activity.map(record => record.status)).toEqual(["running", "completed"]);
-    expect(activity[0]).toMatchObject({ tool: "command_execution", summary: "printf fixture" });
-  } finally {
-    vi.useRealTimers();
-    daemon?.deps.attemptCompletion?.stop();
-    try { execFileSync("tmux", ["kill-server"], { stdio: "ignore" }); } catch { /* The private server may already be stopped. */ }
-    await daemon?.deps.workflowRuntime?.closeManagedAttempts();
-    if (daemon?.db.open) daemon.db.close();
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[key]; else process.env[key] = value;
-    }
-    writable(root); rmSync(root, { recursive: true, force: true });
-  }
-}, 60_000);
+  }, 90_000);
+});

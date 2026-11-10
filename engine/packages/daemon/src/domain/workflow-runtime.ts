@@ -512,7 +512,8 @@ function readProjectedDescriptors(root: string, frameworkFiles: readonly { path:
  * setgid directory hands the child the worker group, and a check demanding the daemon's
  * group would throw on every produce.
  */
-function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: number): void {
+function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: number,
+  sameIdentity = false): void {
   // Both ends must be canonical absolute paths before anything walks between them. A
   // relative anchor would pass `within` yet never be reached by the loop below, which
   // would then chmod its way to `/` and spin there — a write primitive and a hang from
@@ -527,12 +528,13 @@ function ensureOwnedDirectory(path: string, anchor: string, mode: number, gid: n
   // Under a setgid parent the child already carries the parent's group; the explicit
   // chmod keeps the mode exact without touching that group.
   for (let p = path; p !== anchor; p = dirname(p)) chmodSync(p, mode);
-  const stat = statSync(path);
-  // A directory that is not what was asked for is refused rather than repaired:
-  // repairing it would be this code deciding what another owner's data should look like.
-  if (!stat.isDirectory() || stat.uid !== process.getuid!() || stat.gid !== gid
-    || (stat.mode & 0o7777) !== mode) {
-    throw new Error("Managed attempt directory is not owned as the policy requires");
+  // Windows has no POSIX uid/gid; the ownership check is only meaningful on POSIX hosts.
+  if (typeof process.getuid === "function") {
+    const stat = statSync(path);
+    if (!stat.isDirectory() || stat.uid !== process.getuid() || stat.gid !== gid
+      || (stat.mode & 0o7777) !== mode) {
+      throw new Error("Managed attempt directory is not owned as the policy requires");
+    }
   }
 }
 
@@ -589,7 +591,7 @@ function ensureMailboxDirectory(path: string, roots: { mailboxRoot: string; work
   if (!sameIdentity && roots.mailboxRoot !== join(roots.controlStateDir, "mailboxes")) {
     throw new Error("Managed mailbox root is not beneath the control state directory");
   }
-  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700, process.getgid!());
+  ensureOwnedDirectory(path, join(roots.mailboxRoot, roots.worker), 0o700, typeof process.getgid === "function" ? process.getgid() : 0);
 }
 
 export class WorkflowRuntime {
@@ -1585,7 +1587,7 @@ export class WorkflowRuntime {
       root,
       frameworkRoot,
       frameworkRevision: roots.frameworkRevision,
-      projection: { worker: input.worker, attemptId: input.attemptId, controlUid: process.getuid!(),
+      projection: { worker: input.worker, attemptId: input.attemptId, controlUid: typeof process.getuid === "function" ? process.getuid() : 0,
         workerGid: input.workerGid,
         policy: { policy_revision: roots.policyRevision, worker_identities: [...roots.workerIdentities],
           paths: { context_root: roots.contextRoot, framework_dir: frameworkRoot },

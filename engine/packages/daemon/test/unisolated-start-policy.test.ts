@@ -75,6 +75,10 @@ it("accepts an owner's start and launches the seat with no injected policy", asy
   const receipts = () => db.prepare("SELECT 1 FROM events WHERE type = 'managed.attempt.receipt'").all();
   await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
   const row = db.prepare("SELECT payload FROM events WHERE type = 'managed.attempt.receipt'").get() as { payload: string };
-  const observed = JSON.parse(row.payload) as { receipt: { identity: { tmuxServer: string } } };
-  expect(observed.receipt.identity.tmuxServer).toBe(tmuxRun("display-message", "-p", "-t", SEAT, "#{socket_path}").trim());
+  const observed = JSON.parse(row.payload) as { receipt: { identity: { tmuxServer: string | null; paneId: string | null; processId: number } } };
+  // U3 — a native turn is a direct child process: the receipt names the process pair and no
+  // pane, and no terminal is opened for the seat at all.
+  expect(observed.receipt.identity.paneId).toBeNull();
+  expect(observed.receipt.identity.tmuxServer).toBeNull();
+  expect(observed.receipt.identity.processId).toBeGreaterThan(0);
 }, 90_000);

@@ -67,11 +67,16 @@ export class WorkerMailboxBridge {
       // The private control-owned directory prevents host-side discovery and replacement.
       // Only the individually bound socket is exposed inside this attempt's namespace.
       chmodSync(this.binding.socketPath, 0o666);
-      const stat = lstatSync(this.binding.socketPath);
-      if (!stat.isSocket() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()) {
-        throw new Error("mailbox_endpoint_invalid");
+      // Windows has no POSIX uid/gid; the identity check is only meaningful on POSIX hosts.
+      if (typeof process.getuid === "function") {
+        const stat = lstatSync(this.binding.socketPath);
+        if (!stat.isSocket() || stat.uid !== process.getuid() || stat.gid !== process.getgid!()) {
+          throw new Error("mailbox_endpoint_invalid");
+        }
+        this.socketIdentity = { dev: stat.dev, ino: stat.ino, uid: stat.uid, gid: stat.gid };
+      } else {
+        this.socketIdentity = { dev: 0, ino: 0, uid: 0, gid: 0 };
       }
-      this.socketIdentity = { dev: stat.dev, ino: stat.ino, uid: stat.uid, gid: stat.gid };
       this.endpoint();
       this.writeBootstrap();
       this.delivery.invalidateNativeChannel({ rigId: this.binding.rigId, recipient: this.binding.sessionId,
@@ -160,9 +165,12 @@ export class WorkerMailboxBridge {
 
   private checkDirectory(): void {
     const path = this.binding.socketPath, parent = dirname(path), stat = lstatSync(parent);
+    // Windows has no POSIX uid/gid or permission bits; those checks are only meaningful on
+    // POSIX hosts, where the mailbox directory must be control-private.
+    const posix = typeof process.getuid === "function";
     if (!isAbsolute(path) || basename(path) !== "mailbox.sock" || realpathSync(parent) !== parent
-      || !stat.isDirectory() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
-      || (stat.mode & 0o7777) !== 0o700) throw new Error("mailbox_endpoint_invalid");
+      || !stat.isDirectory() || (posix && (stat.uid !== process.getuid!() || stat.gid !== process.getgid!()))
+      || (posix && (stat.mode & 0o7777) !== 0o700)) throw new Error("mailbox_endpoint_invalid");
   }
 
   private accept(socket: Socket): void {

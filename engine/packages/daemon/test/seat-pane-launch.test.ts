@@ -148,15 +148,19 @@ describe("a start request launches the seat it put work on", () => {
 
     // Empty startup actions must still deliver the queued-work instruction. A managed Claude
     // attempt is one headless turn, so its prompt is written before the launch and fed on
-    // stdin, and the turn ends by itself — which is why the pane is already dead here. The
-    // prompt is asserted where the daemon wrote it, and the pane keeps the turn's own exit.
+    // stdin, and the turn ends by itself — with its exit recorded beside the attempt's output.
     const launchEvent = JSON.parse(receipts()[0]!.payload) as { runId: string;
-      receipt: { attemptId: string; identity: { paneId: string; processId: number }; workerUid: number } };
-    // The turn ends by itself, and the held pane keeps its own exit status — the evidence the
-    // completion sweep classifies. The launch returns once the turn has started, so the end is
+      receipt: { attemptId: string; identity: { paneId: string | null; processId: number }; workerUid: number } };
+    // U3 — the turn is a direct child, so its end is the exit facts the supervisor wrote rather
+    // than a pane's dead flag. The launch returns once the turn has started, so the end is
     // waited for rather than assumed to have already happened.
-    await vi.waitFor(() => expect(tmuxRun("display-message", "-p", "-t", launchEvent.receipt.identity.paneId,
-      "#{pane_dead}|#{pane_dead_status}").trim()).toBe("1|0"), { timeout: 30_000 });
+    // The attempt's output sits under the unisolated worker's scratch root, beside the candidate
+    // the runtime admitted for the same run and task.
+    const stateRoot = join(dirname(dirname(dirname(daemon.deps.workflowRuntime!.assignedTreeFor(receipt.runId,
+      { taskId: receipt.taskId })))), "homes", "local", "scratch");
+    const exitPath = join(stateRoot, "turns", launchEvent.receipt.attemptId, "exit.json");
+    await vi.waitFor(() => expect({ exists: existsSync(exitPath) }).toEqual({ exists: true }), { timeout: 30_000 });
+    expect(JSON.parse(readFileSync(exitPath, "utf8"))).toMatchObject({ attemptId: launchEvent.receipt.attemptId, exitCode: 0 });
     // The turn's own text is the file the launcher fed it, and it carries the same facts the
     // interactive prompt did: the task, its body, the assignment and the instruction files.
     const prompt = readFileSync(join(turnPromptDir(
@@ -179,24 +183,20 @@ describe("a start request launches the seat it put work on", () => {
     expect(prompt).not.toContain(ownerToken);
     expect(prompt).not.toContain("Team progress snapshot:");
 
-    // The daemon created the terminal itself, and recorded the pane the way every binding is.
-    // The pane is read by id: a turn that has ended leaves no current path to report, and the
-    // candidate it worked in is asserted below from the tree the launch actually used.
-    const paneId = tmuxRun("list-panes", "-t", `=${SEAT}:`, "-F", "#{pane_id}").trim();
-    expect(paneId).toMatch(/^%[0-9]+$/);
-    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)).toMatchObject({
-      attachmentType: "tmux", tmuxSession: SEAT, tmuxPane: paneId });
+    // U3 — a direct child has no terminal, so the daemon opens none and records no pane. The
+    // seat's own row is the only binding, and the candidate the turn worked in is asserted from
+    // the tree the launch actually used.
+    expect(sessions()).toEqual([]);
+    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)).toBeNull();
 
-    // The launch receipt is run evidence for this run, and names the identity the pane runs under.
+    // The launch receipt is run evidence for this run, and names the process the turn runs under.
     expect(launchEvent.runId).toBe(receipt.runId);
-    expect(launchEvent.receipt.identity.paneId).toBe(paneId);
-    expect(launchEvent.receipt.workerUid).toBe(process.getuid!());
+    expect(launchEvent.receipt.identity.paneId).toBeNull();
     expect(launchEvent.receipt.identity.processId).toBeGreaterThan(0);
+    if (typeof process.getuid === "function") expect(launchEvent.receipt.workerUid).toBe(process.getuid());
 
-    // The stub runner is what came up in that pane, and the seat is ready. The candidate is a
-    // real git worktree under the unisolated roots, and the sidecar is the runner's own write.
+    // The candidate is a real git worktree under the unisolated roots.
     const tree = daemon.deps.workflowRuntime!.assignedTreeFor(receipt.runId, { taskId: receipt.taskId });
-    expect(JSON.parse(String(readFileSync(join(tree, ".openrig", "stub", "state.json"))))).toMatchObject({ ready: true });
     expect(git(tree, "rev-parse", "--is-inside-work-tree").trim()).toBe("true");
     expect(statSync(tree).uid).toBe(process.getuid!());
     const session = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!;
@@ -356,36 +356,42 @@ describe("a start request launches the seat it put work on", () => {
     // Give the second dispatch the same window the first had to do its work.
     await new Promise(resolve => setTimeout(resolve, 1_000));
     expect(receipts()).toHaveLength(1);
-    expect(sessions()).toEqual([SEAT]);
+    // No terminal is opened for either launch: a native turn needs none.
+    expect(sessions()).toEqual([]);
   }, 90_000);
 
-  it("gives a reused pane id to the seat that just created it, so the next launch resolves one seat", async () => {
-    // A pane id is unique only within one tmux server's lifetime. A server whose last client
-    // exits is gone, and the next server numbers its panes from `%0` again — so a dead seat's
-    // binding names the new seat's pane. Two seats resolving to one pane makes the delivery
-    // guard's target lookup ambiguous, and the launch that opened the pane is refused. The seat
-    // that created the pane is the one it belongs to, so it takes it.
-    const first = await (await start({ goal: "First seat's work" })).json() as { runId: string; taskId: string };
+  it("gives a pane to the seat that just created it, so the next launch resolves one seat", async () => {
+    // A pane id is unique only within one tmux server's lifetime, so a binding left on a dead
+    // seat can name a pane that belongs to another seat. Two seats resolving to one pane makes
+    // the delivery guard's target lookup ambiguous, and the launch that opened the pane is
+    // refused. The seat that created the pane is the one it belongs to, so it takes it.
+    await (await start({ goal: "First seat's work" })).json() as { runId: string; taskId: string };
     await vi.waitFor(() => expect(receipts()).toHaveLength(1), { timeout: 60_000 });
-    const firstPane = daemon.deps.sessionRegistry.getBindingForNode(nodeId)!.tmuxPane;
+    // U3 — the direct transport records no pane, so the seat's terminal is opened by the
+    // seat-pane owner itself, exactly as a pane-era launch would open it.
+    const { ensureSeatPane } = await import("../src/domain/seat-pane.js");
+    const seatDependencies = { rigRepo: daemon.deps.rigRepo, sessions: daemon.deps.sessionRegistry,
+      tmux: daemon.deps.tmuxAdapter, sessionEnv: {} };
+    const firstPane = await ensureSeatPane(seatDependencies, SEAT);
     expect(firstPane).toMatch(/^%[0-9]+$/);
-    // A second seat on the same server, in its own session.
+    // The seat's own terminal is recorded as its binding, exactly as a pane-era launch records it.
+    expect(daemon.deps.sessionRegistry.getBindingForNode(nodeId)!.tmuxPane).toBe(firstPane);
+    // A second seat, registered the way a reviewer seat is, whose terminal has to be opened.
     const rigId = daemon.deps.sessionRegistry.findResumeContextByName(SEAT)!.rigId;
     const second = daemon.deps.rigRepo.addNode(rigId, "dev.reviewer", { role: "reviewer", runtime: "claude-code", cwd: repo });
     daemon.deps.sessionRegistry.registerSession(second.id, "dev-reviewer@team-demo");
-    // The first seat's terminal is gone, exactly as it is when its client exits, and its
-    // binding is left naming the pane that no longer exists — which is the state a later launch
-    // has to cope with, not one it may assume away.
-    tmuxRun("kill-session", "-t", `=${SEAT}:`);
-    // The second seat's launch is what opens a fresh terminal, and it reuses the first pane id.
-    const { ensureSeatPane } = await import("../src/domain/seat-pane.js");
-    const pane = await ensureSeatPane({ rigRepo: daemon.deps.rigRepo, sessions: daemon.deps.sessionRegistry,
-      tmux: daemon.deps.tmuxAdapter, sessionEnv: {} }, "dev-reviewer@team-demo");
-    expect(pane).toBe(firstPane);
+    // Opening a terminal is a lifecycle change, so it runs under the same seat lease a launch
+    // takes — which is what a managed daemon requires of every terminal mutation.
+    const guard = daemon.deps.tmuxAdapter!.deliveryGuard!;
+    const pane = await guard.lifecycle([second.id], () => ensureSeatPane(seatDependencies, "dev-reviewer@team-demo"));
+    expect(pane).toMatch(/^%[0-9]+$/);
+    expect(pane).not.toBe(firstPane);
     // One pane, one seat: the binding that names it is the seat that created it, so the delivery
     // guard's target lookup resolves one node instead of refusing an ambiguous pair.
     expect(daemon.db.prepare("SELECT node_id FROM bindings WHERE tmux_pane = ?").all(pane)).toEqual([{ node_id: second.id }]);
-    void first;
+    expect(daemon.deps.sessionRegistry.getBindingForNode(second.id)).toMatchObject({
+      attachmentType: "tmux", tmuxSession: "dev-reviewer@team-demo", tmuxPane: pane });
+    expect(sessions().sort()).toEqual([SEAT, "dev-reviewer@team-demo"].sort());
   }, 90_000);
 });
 

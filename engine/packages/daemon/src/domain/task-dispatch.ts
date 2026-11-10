@@ -88,12 +88,16 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
     const node = context ? dependencies.rigRepo.getRig(context.rigId)?.nodes.find(row => row.id === context.nodeId) : undefined;
     if (node && isRetiredTeamNode(dependencies.rigRepo.db, node.id)) return;
     const adapter = node?.runtime ? dependencies.runtimeAdapters[node.runtime] : undefined;
+    // U3 — a native managed turn is a direct child process, so it has no pane to check, to
+    // create, or to put back. Its seat's own startup status is the whole evidence, and a turn
+    // that ended is closed by the completion sweep from the process identity it recorded.
+    const direct = adapter?.managedTransport === "direct";
     // The seat's terminal, when it has one. A `ready` seat is skipped below, but a `ready` seat
     // whose pane is dead has no agent in it: the status is stale, not the truth, and the launch
     // that follows would paste into a dead pane. So the pane's own state is read here too. A
     // daemon that cannot read panes reports no evidence, which is never "dead".
-    const boundPane = context ? dependencies.sessions.getBindingForNode(context.nodeId)?.tmuxPane ?? null : null;
-    const paneDead = boundPane === null || !dependencies.tmux.getPaneExit
+    const boundPane = direct || !context ? null : dependencies.sessions.getBindingForNode(context.nodeId)?.tmuxPane ?? null;
+    const paneDead = direct || boundPane === null || !dependencies.tmux.getPaneExit
       ? false : (await dependencies.tmux.getPaneExit(boundPane))?.dead === true;
     // A seat this dispatch may start: one that has never launched (`pending`), one whose last
     // launch failed (`failed`), one waiting on a native prompt (`attention_required`), or one
@@ -130,10 +134,18 @@ export function composeTaskDispatch(dependencies: TaskDispatchDependencies): Tas
       if (session.startupStatus === "failed" || session.startupStatus === "attention_required" || paneDead) {
         await recoverFailedSeat(dependencies, session.id, node.id, seat, boundPane, paneDead);
       }
-      await ensureSeatPane(dependencies, seat);
+      // A pane-era seat launches into its terminal; a native turn needs no terminal at all, so
+      // its binding is the seat itself — the tree the runtime admitted comes from the attempt,
+      // and there is no pane to record.
+      if (!direct) await ensureSeatPane(dependencies, seat);
       // The terminal just opened is recorded as this node's binding, so the launch reads the
       // one binding record rather than a second copy invented here.
-      const recorded = dependencies.sessions.getBindingForNode(node.id);
+      // A native turn still names its seat, because the seat is what the task and its prompt are
+      // recorded against; it records no pane, because a direct child has none.
+      const recorded = direct
+        ? { id: `direct:${node.id}`, nodeId: node.id, attachmentType: "external_cli" as const,
+            tmuxSession: seat, tmuxWindow: null, tmuxPane: null, cmuxWorkspace: null, cmuxSurface: null, updatedAt: "" }
+        : dependencies.sessions.getBindingForNode(node.id);
       if (!recorded) return;
       const binding: NodeBinding = { ...recorded, cwd: node.cwd,
         ...(node.model ? { model: node.model } : {}), ...(node.effort ? { effort: node.effort } : {}),

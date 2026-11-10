@@ -185,8 +185,16 @@ export interface UsageEvidence {
 
 export interface NativeAttemptIdentity {
   nativeSessionId: string;
-  tmuxServer: string;
-  paneId: string;
+  /**
+   * The tmux server and pane a hardened launch ran in.
+   *
+   * U3 — a managed turn is now a direct child process, so the native launch path records no
+   * pane at all: the process pair below is the whole identity, and cancellation and recovery
+   * are aimed at it. The two fields stay required-but-nullable rather than removed because the
+   * hardened launcher still records them and every reader already tolerates their absence.
+   */
+  tmuxServer: string | null;
+  paneId: string | null;
   processId: number;
   processStart: string;
   generation: number;
@@ -903,10 +911,15 @@ export function parseUsage(value: unknown): UsageEvidence {
 
 export function parseAttemptIdentity(value: unknown): NativeAttemptIdentity {
   const v = object(value, "attemptIdentity");
-  const paneId = text(v.paneId, "paneId");
-  if (!/^%[0-9]+$/.test(paneId)) throw new TeamContractError("paneId");
-  return { nativeSessionId: text(v.nativeSessionId, "nativeSessionId"), tmuxServer: absolutePath(v.tmuxServer, "tmuxServer"),
-    paneId, processId: integer(v.processId, "processId", 1), processStart: text(v.processStart, "processStart"),
+  // U3 — a native turn runs as a direct child process and records no pane. A hardened launch
+  // still records both, and a stored row from either path must read back, so the pair is either
+  // absent together or present together rather than one without the other.
+  const paneId = v.paneId === null || v.paneId === undefined ? null : text(v.paneId, "paneId");
+  if (paneId !== null && !/^%[0-9]+$/.test(paneId)) throw new TeamContractError("paneId");
+  const tmuxServer = v.tmuxServer === null || v.tmuxServer === undefined ? null : absolutePath(v.tmuxServer, "tmuxServer");
+  if ((paneId === null) !== (tmuxServer === null)) throw new TeamContractError("paneId");
+  return { nativeSessionId: text(v.nativeSessionId, "nativeSessionId"), tmuxServer, paneId,
+    processId: integer(v.processId, "processId", 1), processStart: text(v.processStart, "processStart"),
     generation: integer(v.generation, "generation", 1), policyFingerprint: digest(v.policyFingerprint, "policyFingerprint") };
 }
 

@@ -50,6 +50,8 @@ const SHELL_COMMANDS = new Set(["bash", "fish", "nu", "sh", "tmux", "zsh"]);
  */
 export class ClaudeCodeAdapter implements RuntimeAdapter {
   readonly runtime = "claude-code";
+  /** U3 — a managed Claude attempt runs as a supervised child, not as a pane-hosted session. */
+  readonly managedTransport = "direct" as const;
   private tmux: TmuxAdapter;
   private workerLauncher?: WorkerLauncher;
   private seatLaunchEnvironment?: SeatLaunchEnvironment;
