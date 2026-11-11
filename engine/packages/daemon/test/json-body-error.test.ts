@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type Database from "better-sqlite3";
-import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
+import { createFullTestDb, createTestApp, mockTmuxAdapter } from "./helpers/test-app.js";
 import { jsonBodyErrorHandler, trackJsonBodyParseErrors } from "../src/middleware/json-body-error.js";
-import { DeliveryGuardError } from "../src/domain/seat-delivery-guard.js";
+import { SeatDeliveryGuard, DeliveryGuardError } from "../src/domain/seat-delivery-guard.js";
 
 const post = (body: string) => ({ method: "POST", headers: { "content-type": "application/json" }, body });
 
@@ -13,9 +13,10 @@ describe("malformed request bodies", () => {
   beforeEach(() => { db = createFullTestDb(); });
   afterEach(() => { db.close(); });
 
-  for (const path of ["/api/ask", "/api/transport/send", "/api/transport/capture", "/api/transport/broadcast"]) {
+  for (const path of ["/api/seat/set-typing-guard/fixture", "/api/seat/retire-held-message/fixture/message"]) {
     it(`${path} answers 400, not 500, for a body that is not JSON`, async () => {
-      const { app } = createTestApp(db);
+      const tmux = Object.assign(mockTmuxAdapter(), { deliveryGuard: new SeatDeliveryGuard(db, () => null) });
+      const { app } = createTestApp(db, { tmux });
       for (const body of ["{", "not json", ""]) {
         const res = await app.request(path, post(body));
         expect(res.status, JSON.stringify(body)).toBe(400);

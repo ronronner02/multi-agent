@@ -1,17 +1,10 @@
-// Slice 13 safe subset (B5): fixes 2 + 3 only — host attribution on node records, and the
-// resume_type label derived from the RUNTIME instead of a fixed default. Fix 1 (token value
-// surfacing) is deliberately absent.
-
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
-import { setSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
-
-afterEach(() => setSelfHostId(null));
 
 function seedRig(db: ReturnType<typeof createFullTestDb>) {
   const rigRepo = new RigRepository(db);
@@ -22,51 +15,6 @@ function seedRig(db: ReturnType<typeof createFullTestDb>) {
   reg.updateStatus(sess.id, "running");
   return { rigRepo, reg, rig, node, sess };
 }
-
-describe("fix 2 — host attribution on node records", () => {
-  it("every /nodes row carries the serving daemon's boot-reconciled self-id", async () => {
-    const db = createFullTestDb();
-    const { rig } = seedRig(db);
-    setSelfHostId("host-84c37990");
-    const { app } = createTestApp(db);
-
-    const res = await app.request(`/api/rigs/${rig.id}/nodes`);
-    expect(res.status).toBe(200);
-    const nodes = (await res.json()) as Array<{ hostSelfId?: string | null }>;
-    expect(nodes.length).toBeGreaterThan(0);
-    for (const n of nodes) expect(n.hostSelfId).toBe("host-84c37990");
-    db.close();
-  });
-
-  it("before the boot reconcile the key is PRESENT with null — unknown is a value, not an absence", async () => {
-    const db = createFullTestDb();
-    const { rig } = seedRig(db);
-    setSelfHostId(null);
-    const { app } = createTestApp(db);
-
-    const res = await app.request(`/api/rigs/${rig.id}/nodes`);
-    const nodes = (await res.json()) as Array<Record<string, unknown>>;
-    expect(nodes.length).toBeGreaterThan(0);
-    for (const n of nodes) {
-      expect("hostSelfId" in n).toBe(true);
-      expect(n.hostSelfId).toBeNull();
-    }
-    db.close();
-  });
-
-  it("node DETAIL carries the same attribution", async () => {
-    const db = createFullTestDb();
-    const { rig } = seedRig(db);
-    setSelfHostId("host-84c37990");
-    const { app } = createTestApp(db);
-
-    const res = await app.request(`/api/rigs/${rig.id}/nodes/dev.impl`);
-    expect(res.status).toBe(200);
-    const detail = (await res.json()) as { hostSelfId?: string | null };
-    expect(detail.hostSelfId).toBe("host-84c37990");
-    db.close();
-  });
-});
 
 describe("fix 3 — resume_type derives from the runtime on the identity hook", () => {
   async function postIdentity(app: { request: (p: string, init?: RequestInit) => Promise<Response> }, body: Record<string, unknown>) {

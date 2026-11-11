@@ -15,26 +15,20 @@ function makeDaemonFixture(managed: boolean) {
     prepare: vi.fn(() => ({ get: vi.fn(() => managed ? {} : undefined) })),
   };
   const contextMonitor = { start: vi.fn(), stop: vi.fn() };
-  const watchdogScheduler = { start: vi.fn(), stop: vi.fn() };
   const seatActivityService = { start: vi.fn(), stop: vi.fn(), getSeatState: vi.fn() };
   const seatStructuralActivityService = { start: vi.fn(), stop: vi.fn() };
   const seatIdentityReconciler = { start: vi.fn(), stop: vi.fn() };
-  const healthDiagnosis = { start: vi.fn(), stop: vi.fn() };
   const startupServices = {
     contextMonitor: contextMonitor.start,
-    watchdogScheduler: watchdogScheduler.start,
     seatActivity: seatActivityService.start,
     seatStructuralActivity: seatStructuralActivityService.start,
     seatIdentity: seatIdentityReconciler.start,
-    healthDiagnosis: healthDiagnosis.start,
   };
   const deps = {
     rigRepo: { db },
-    watchdogScheduler,
     seatActivityService,
     seatStructuralActivityService,
     seatIdentityReconciler,
-    healthDiagnosis,
     settingsStore: {
       resolveOne: (key: string) => ({ value: key === "retention.enabled" ? false : undefined }),
     },

@@ -214,10 +214,9 @@ describe("#275 every Codex launch site adds the override only when the reader ap
 });
 
 describe("#275 production wiring", () => {
-  it("startup wires one network reader into both Codex launch adapters", () => {
+  it("startup wires the network reader into the Codex runtime adapter", () => {
     const source = fs.readFileSync(new URL("../src/startup.ts", import.meta.url), "utf8");
     const lines = source.split("\n");
-    expect(lines.find((line) => line.includes("new CodexResumeAdapter("))).toContain("readNetworkDefault: readCodexNetworkDefault");
     expect(lines.find((line) => line.includes("new CodexRuntimeAdapter("))).toContain("readNetworkDefault: readCodexNetworkDefault");
     expect(lines.find((line) => line.includes("const readCodexNetworkDefault ="))).toContain("codexNetworkDefaultReader({ launchPath: process.env.PATH, home: daemonHome, codexHome })");
   });

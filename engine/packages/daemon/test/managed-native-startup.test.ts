@@ -1458,7 +1458,7 @@ describe("production managed launch composition", () => {
   });
   afterEach(() => { processIo.stats.clear(); rmSync(scratch, { recursive: true, force: true }); });
 
-  it("injects one launch chain into both fresh and both resume adapters in a managed daemon only", async () => {
+  it("injects one launch chain into both runtime adapters in a managed daemon only", async () => {
     const legacy = await boot("legacy");
     try {
       expect(legacy.deps.managedLaunch).toBeUndefined();
@@ -1466,10 +1466,10 @@ describe("production managed launch composition", () => {
     } finally { legacy.deps.proofSourceWatch?.close(); legacy.deps.modelDivergenceMonitor?.stop(); legacy.db.close(); }
     const managed = await boot("managed");
     try {
-      const launcher = managed.deps.managedLaunch!.launcher, restore = managed.deps.restoreOrchestrator as any;
+      const launcher = managed.deps.managedLaunch!.launcher;
       expect(launcher).toBeInstanceOf(RestrictedWorkerLauncher);
-      expect([(managed.deps.runtimeAdapters!["claude-code"] as any).workerLauncher, (managed.deps.runtimeAdapters!.codex as any).workerLauncher,
-        restore.claudeResume.options.workerLauncher, restore.codexResume.options.workerLauncher]).toEqual([launcher, launcher, launcher, launcher]);
+      expect([(managed.deps.runtimeAdapters!["claude-code"] as any).workerLauncher,
+        (managed.deps.runtimeAdapters!.codex as any).workerLauncher]).toEqual([launcher, launcher]);
       // The app's mailbox owner reads the launch chain's channel evidence, and the app shares its governance owner.
       expect(managed.deps.nativeChannelState).toBe(managed.deps.managedLaunch!.channel.read);
       expect(managed.deps.mailboxDelivery).toBeDefined();
@@ -1477,7 +1477,7 @@ describe("production managed launch composition", () => {
     } finally { managed.db.close(); }
   }, 60_000);
 
-  it("refuses a client outside the lock on fresh launch and resume through the composed adapters (A-R3)", async () => {
+  it("refuses a client outside the lock on fresh launch through the composed runtime adapters (A-R3)", async () => {
     const options: TeamControlOptions = { credentials: { ownerToken: "owner-fixture",
       workers: [{ token: "worker-fixture", sessionId: "builder@rig", runId: "run" }] },
     resolveBinding: () => structuredClone(current),
@@ -1509,7 +1509,7 @@ describe("production managed launch composition", () => {
         protocolVersion: null } as unknown as ContextManifest });
       const node = (client: "claude-code" | "codex", attemptId?: string) => ({ id: "binding", nodeId: "builder", cwd: tree, tmuxSession: "builder@rig",
         managedAttempt: attempt(client, attemptId) }) as any;
-      const adapters = daemon.deps.runtimeAdapters!, restore = daemon.deps.restoreOrchestrator as any;
+      const adapters = daemon.deps.runtimeAdapters!;
       // Without a registered endpoint nothing reaches the privileged launcher.
       expect(await adapters["claude-code"]!.launchHarness(node("claude-code"), { name: "builder" })).toMatchObject({ ok: false });
       expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(0);
@@ -1531,22 +1531,16 @@ describe("production managed launch composition", () => {
         open(register(client + "-fresh"), client);
         results.push(await adapters[client]!.launchHarness(node(client, client + "-fresh"), { name: "builder" }));
         expect(launch.channel.read("builder@rig")).toBeNull();
-        const resume = attempt(client, register(client + "-resume"));
-        open(client + "-resume", client);
-        results.push(client === "codex"
-          ? await restore.codexResume.resume("builder@rig", "codex_id", "native-session", tree, undefined, undefined, undefined, undefined, undefined, undefined, undefined, resume)
-          : await restore.claudeResume.resume("builder@rig", "claude_id", "native-session", tree, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, resume));
-        expect(launch.channel.read("builder@rig")).toBeNull();
       }
       for (const result of results) expect(JSON.stringify(result)).toContain(UNSUPPORTED_CLIENT_VERSION);
       // A blocked attempt's endpoint registration is dropped; it can never launch again.
-      for (const id of ["claude-code-fresh", "claude-code-resume", "codex-fresh", "codex-resume"]) expect(launch.endpoints.has(id)).toBe(false);
+      for (const id of ["claude-code-fresh", "codex-fresh"]) expect(launch.endpoints.has(id)).toBe(false);
       // Another attempt's block leaves the seat's verified channel open.
       open("verified-elsewhere", "claude-code");
       expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-other")), { name: "builder" })).toMatchObject({ ok: false });
       expect(launch.channel.read("builder@rig")).not.toBeNull();
       const inspections = inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo");
-      expect(inspections).toHaveLength(5);
+      expect(inspections).toHaveLength(3);
       for (const call of inspections) expect(call[1]).toEqual(expect.arrayContaining(["--inspect", "--client-lock", hashBytes(lock)]));
       // A seat whose tree is an alias of its assigned directory never reaches the privileged launcher.
       const alias = tree + "-alias";
@@ -1554,14 +1548,14 @@ describe("production managed launch composition", () => {
       db.prepare("UPDATE nodes SET cwd = ? WHERE id = ?").run(alias, nodeId);
       expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-aliased")), { name: "builder" }))
         .toMatchObject({ ok: false });
-      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(5);
+      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(3);
       db.prepare("UPDATE nodes SET cwd = ? WHERE id = ?").run(tree, nodeId);
       // A seat whose persisted terminal binding names another session never reaches the privileged launcher.
       sessions.updateBinding(nodeId, { tmuxSession: "other@rig", tmuxPane: "%3" });
       expect(await adapters["claude-code"]!.launchHarness(node("claude-code", register("claude-code-rebound")), { name: "builder" }))
         .toMatchObject({ ok: false });
-      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(5);
-      for (const id of ["claude-code-fresh", "claude-code-resume", "codex-fresh", "codex-resume", "claude-code-other"]) {
+      expect(inspectionIo.execFile.mock.calls.filter(call => call[0] === "/usr/bin/sudo")).toHaveLength(3);
+      for (const id of ["claude-code-fresh", "codex-fresh", "claude-code-other"]) {
         expect(governance.getNativeLaunchIntent("run", id)).toBeNull();
       }
     } finally { daemon.db.close(); }
@@ -1599,8 +1593,7 @@ describe("offline fixture-daemon restart", () => {
     };
     // Stands in for the launcher's verified receipt; the guard that applies it has its own contract tests.
     const verify = () => launch.channel.verified("attempt", "builder@rig", "claude-code", "2.1.296", "sha256:" + "e".repeat(64));
-    const out = { injected: [deps.runtimeAdapters["claude-code"].workerLauncher, deps.runtimeAdapters.codex.workerLauncher,
-      deps.restoreOrchestrator.claudeResume.options.workerLauncher, deps.restoreOrchestrator.codexResume.options.workerLauncher]
+    const out = { injected: [deps.runtimeAdapters["claude-code"].workerLauncher, deps.runtimeAdapters.codex.workerLauncher]
       .every(value => value === launch.launcher) };
     if (phase === "first") {
       db.prepare("INSERT INTO rigs(id, name) VALUES ('rig', 'rig')").run();

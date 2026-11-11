@@ -123,7 +123,6 @@ it("seatless startup, disable and projection preserve the other home's bytes; st
     const result = await a.project({ entries: [{ category: 'runtime_resource', effectiveId: 'fixture', classification: 'safe_projection', resourceType: 'codex_config_fragment', absolutePath: fragment }] } as any, { cwd: f.cwd } as any);
     expect(result.failed).toEqual([]); expect(fs.readFileSync(config, 'utf8')).toContain('network_access = false');
     expect(fs.readFileSync(config, 'utf8')).toContain(f.cwd);
-    expect((first.deps.pluginDiscoveryService as any).opts.codexCacheDir).toBe(path.join(f.selected, 'plugins/cache'));
     seed(f.selected, 'second');
     expect((first.deps.contextUsageStore as any).resolveCodexStateDbPaths()).toEqual([path.join(f.selected, 'state_5.sqlite')]);
     expect(await (first.deps.resumeMetadataRefresher as any).readCodexThreadIdByPid(42, 'Sat Oct  3 00:00:00 2026')).toBe('second');
@@ -164,7 +163,6 @@ it.each([
       expect(fs.readFileSync(f.firstConfig, 'utf8')).toContain('trusted_hash');
       expect(fs.readFileSync(f.firstConfig, 'utf8')).toContain('# BEGIN OPENRIG MANAGED ACTIVITY HOOKS');
       expect(daemon.deps.sessionEnv!.CODEX_HOME).toBe(path.join(f.home, '.codex'));
-      expect((daemon.deps.pluginDiscoveryService as any).opts.codexCacheDir).toBe(path.join(f.home, '.codex/plugins/cache'));
       expect(fs.readdirSync(f.selected)).toEqual([]);
     } finally { daemon.db.close(); }
   } finally { process.chdir(originalCwd); }

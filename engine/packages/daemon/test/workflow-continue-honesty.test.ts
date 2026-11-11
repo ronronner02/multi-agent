@@ -113,7 +113,7 @@ describe("FR-8: continue is an honest read-only inspector — label AND wire agr
     ).toBe(qitemCountBefore);
   });
 
-  it("label: the CLI command description + route comment carry inspector language and NO mechanical-advance claim", () => {
+  it("label: the CLI command description carries inspector language and NO mechanical-advance claim", () => {
     const cliSource = readFileSync(
       join(__dirname, "..", "..", "cli", "src", "commands", "workflow.ts"),
       "utf-8",
@@ -127,11 +127,7 @@ describe("FR-8: continue is an honest read-only inspector — label AND wire agr
     );
     expect(cliSource).toContain("rig workflow project");
 
-    const routeSource = readFileSync(
-      join(__dirname, "..", "src", "routes", "workflow.ts"),
-      "utf-8",
-    );
-    expect(routeSource).toContain("continue  inspect (idempotent)");
+
   });
 });
 

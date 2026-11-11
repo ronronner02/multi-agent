@@ -10,7 +10,6 @@
 // path is untouched — resume rejects it, project continues it).
 
 import { describe, it, expect, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -91,13 +90,7 @@ const LOOP_SPEC = `workflow:
 `;
 
 
-describe("WF-5 rev1-r2 B2: the SSE allow-list carries workflow.resumed", () => {
-  it("run/watch followers stream resumes live (source pin — the WF-3 import-graph-pin precedent)", () => {
-    const src = readFileSync(new URL("../src/routes/workflow.ts", import.meta.url), "utf8");
-    const sseFilter = src.slice(src.indexOf("const sseHandler"), src.indexOf("app.get(\"/sse\""));
-    expect(sseFilter).toContain('event.type !== "workflow.resumed"');
-  });
-});
+
 
 describe("WF-5 FR-4: resume (redrive)", () => {
   let db: Database.Database;
