@@ -112,6 +112,10 @@ export interface DaemonResponse<T = unknown> {
   data: T;
 }
 
+export class DaemonHttpError extends Error {
+  constructor(readonly code: string, message: string) { super(message); }
+}
+
 /**
  * Issue #425: wrap bare IPv6 literals in brackets for URL hosts. `::1` must
  * render as `[::1]` — `http://::1:7433` never parses in fetch. Hostnames,
@@ -132,6 +136,8 @@ interface DaemonRequestOptions {
 }
 
 interface DaemonClientOptions {
+  /** Owner commands authenticate over HTTP and never read local seat identity. */
+  senderIdentity?: boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }
@@ -161,8 +167,10 @@ export class DaemonClient {
   remoteTarget = false;
   private identity?: Promise<Record<string, string>>;
   private originUnknown = false;
+  private senderIdentity: boolean;
 
   private async identityHeaders(): Promise<Record<string, string>> {
+    if (!this.senderIdentity) return {};
     const localHeaders = senderIdentityHeaders();
     const session = localHeaders[SENDER_IDENTITY_HEADER];
     if (!session || session.split("@").length >= 3) return localHeaders;
@@ -212,8 +220,25 @@ export class DaemonClient {
       }
     }
 
+    this.senderIdentity = options?.senderIdentity ?? true;
     this.fetchImpl = options?.fetchImpl ?? fetch;
     this.timeoutMs = options?.timeoutMs ?? 5_000;
+  }
+
+  async waitForReady(): Promise<DaemonResponse<{ status?: string; pid?: number; code?: string; error?: string }>> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await this.get<{ status?: string; pid?: number; code?: string; error?: string }>("/healthz");
+        if (response.status === 200) return response;
+        if (response.status !== 503 || attempt === 4) {
+          throw new DaemonHttpError(response.data.code ?? "daemon_not_ready",
+            response.data.error ?? `The daemon is not ready (HTTP ${response.status}).`);
+        }
+      } catch (error) {
+        if (!(error instanceof DaemonConnectionError) || error.causeCode !== "ECONNREFUSED" || attempt === 4) throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
   }
 
   async get<T = unknown>(path: string, options?: DaemonRequestOptions): Promise<DaemonResponse<T>> {

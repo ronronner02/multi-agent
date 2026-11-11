@@ -10,7 +10,6 @@ export function prepareWorkspaceBuild(root, workspace, platform = process.platfo
   const mode = statSync(entry).mode;
   if (platform !== "win32") chmodSync(entry, mode | 0o111);
   for (const [source, target, extension] of [
-    ["src/schemas", "dist/schemas", ".json"],
     ["src/lib/scope-templates", "dist/lib/scope-templates", ".md"],
   ]) {
     const destination = path.join(dir, target);

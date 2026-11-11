@@ -10,7 +10,6 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { ContextMonitor } from "../src/domain/context-monitor.js";
 import { ContextUsageStore } from "../src/domain/context-usage-store.js";
 import { getNodeInventory } from "../src/domain/node-inventory.js";
-import { compactNodeProjection } from "../../cli/src/commands/ps.js";
 import { StartupOrchestrator, type StartupInput } from "../src/domain/startup-orchestrator.js";
 import type { TmuxAdapter } from "../src/adapters/tmux.js";
 import type { NodeBinding, ProjectionResult, ReadinessResult, RuntimeAdapter } from "../src/domain/runtime-adapter.js";
@@ -155,7 +154,6 @@ describe("ContextMonitor readiness ownership", () => {
       expect(state(session.id)).toMatchObject({ status: "running", startup_status: ready ? "ready" : "attention_required" });
       const inventory = getNodeInventory(db, rig.id);
       expect(inventory).toMatchObject([{ nodeId: node.id, startupStatus: ready ? "ready" : "attention_required" }]);
-      expect(compactNodeProjection(inventory)).toMatchObject([{ startupStatus: ready ? "ready" : "attention_required" }]);
       expect(check).toHaveBeenCalledWith(expect.objectContaining({ nodeId: node.id, tmuxSession: session.sessionName }));
       const first = state(session.id);
       await monitor.pollOnce();

@@ -6,7 +6,6 @@ import { execFileSync, spawn } from "node:child_process";
 import http from "node:http";
 import { Command } from "commander";
 import { writeTextAtomically } from "../src/atomic-text-write.js";
-import { exportCommand } from "../src/commands/export.js";
 import { STATE_FILE } from "../src/daemon-lifecycle.js";
 import { allowFetchTarget, resetFetchAllowlist } from "./fetch-guard.js";
 import { assertFixtureScopedHome } from "./live-daemon-guard.js";
@@ -95,32 +94,5 @@ it.skipIf(process.platform === "win32")("writes content to a native FIFO without
   } finally {
     clearTimeout(timeout);
     reader.kill();
-  }
-});
-it("uses the default export writer to preserve the saved spec after a partial write failure", async () => {
-  assertFixtureScopedHome(dirname(STATE_FILE));
-  dir = fs.mkdtempSync(join(tmpdir(), "export-atomic-"));
-  const target = join(dir, "rig.yaml"), original = "name: original\n";
-  const previousState = fs.existsSync(STATE_FILE) ? fs.readFileSync(STATE_FILE) : undefined;
-  const server = http.createServer((req, res) => {
-    res.end(req.url === "/healthz" ? "{}" : "schema_version: 1\nname: replacement\nnodes: []\n");
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  try {
-    const port = (server.address() as { port: number }).port;
-    allowFetchTarget(`http://127.0.0.1:${port}`);
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ pid: process.pid, port, db: "fixture.sqlite", startedAt: new Date().toISOString() }));
-    fs.writeFileSync(target, original);
-    const program = new Command().addCommand(exportCommand());
-    failure.active = true;
-    await expect(program.parseAsync(["node", "rig", "export", "fixture", "-o", target])).rejects.toThrow(/no space left/);
-    expect(fs.readFileSync(target, "utf8")).toBe(original);
-    expect(fs.readdirSync(dir)).toEqual(["rig.yaml"]);
-  } finally {
-    failure.active = false;
-    resetFetchAllowlist();
-    if (previousState) fs.writeFileSync(STATE_FILE, previousState);
-    else fs.unlinkSync(STATE_FILE);
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });

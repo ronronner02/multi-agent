@@ -6,7 +6,9 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
-import { createProgram } from "../src/index.js";
+import { Command } from "commander";
+import { seatCommand } from "../src/commands/seat.js";
+const createProgram = () => new Command().addCommand(seatCommand());
 import { TEAM_CLAUDE_ALLOW, TEAM_CLAUDE_ASK } from "../../daemon/src/adapters/kernel-authority.js";
 
 const { decide } = createRequire(import.meta.url)(fileURLToPath(new URL("../../daemon/assets/claude-team-permissions.cjs", import.meta.url)));
@@ -33,7 +35,6 @@ async function parse(command: string) {
     for (const child of cmd.commands) configure(child);
   };
   configure(program);
-  program.commands.find(cmd => cmd.name() === "down")!.action(() => { calls.push("down"); });
   program.commands.find(cmd => cmd.name() === "seat")!.commands.find(cmd => cmd.name() === "stop")!
     .action(() => { calls.push("seat stop"); });
   try { await program.parseAsync(JSON.parse(shell.stdout), { from: "user" }); }
@@ -43,11 +44,6 @@ async function parse(command: string) {
 
 describe("team hook agrees with real CLI dispatch", () => {
   it.each([
-    "rig down example", "rig -- down example",
-    "rig -- down --help", "rig -- down -h",
-    "command rig down example", "nice -n 5 rig down example",
-    "if true; then rig down example; fi", "for s in example; do rig down $s; done",
-    "{ rig down example; }", "rig down -- --help",
     "rig seat stop example@demo --reason --help",
   ])("asks when the action really dispatches: %s", async command => {
     const observed = await parse(command);
@@ -56,14 +52,12 @@ describe("team hook agrees with real CLI dispatch", () => {
   });
   it.each([
     ["rig seat -- stop example@demo --reason maintenance", "commander.missingMandatoryOptionValue"],
-    ["rig -- down --help example", "commander.excessArguments"],
   ])("keeps invalid separator forms conservative: %s", async (command, error) => {
     const observed = await parse(command);
     expect(observed.error).toBe(error); expect(observed.calls).toEqual([]);
     expect(observed.decision).toBe("ask");
   });
   it.each([
-    "rig down example --help", "rig down --help example", "rig down -h example",
     "rig seat stop --help example@demo",
   ])("allows help with no action: %s", async command => {
     const observed = await parse(command);

@@ -1,18 +1,13 @@
 // OPR.0.4.6.WF1 FR-8 (G6) + FR-9 (G8).
 //
-// FR-8: `continue` label-vs-wire honesty — after the relabel, the CLI
-// description, the route comment, and the behavior all AGREE on
-// read-only inspector semantics, and `project` remains the sole
-// advance write path (BR-2). The test exercises BOTH: the described
-// behavior (source text carries no advance language) and the actual
-// behavior (two continue calls mutate nothing).
+// FR-8: two continue calls inspect state without advancing the runtime.
 //
 // FR-9: every declared-but-unenforced spec key produces the fail-open
 // `declared_not_enforced_v1` advisory (warning; ok stays true) —
 // zero keys in the silent third state.
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
@@ -111,23 +106,6 @@ describe("FR-8: continue is an honest read-only inspector — label AND wire agr
     expect(
       (db.prepare(`SELECT COUNT(*) AS n FROM queue_items`).get() as { n: number }).n,
     ).toBe(qitemCountBefore);
-  });
-
-  it("label: the CLI command description carries inspector language and NO mechanical-advance claim", () => {
-    const cliSource = readFileSync(
-      join(__dirname, "..", "..", "cli", "src", "commands", "workflow.ts"),
-      "utf-8",
-    );
-    // The old lie is gone...
-    expect(cliSource).not.toContain("Mechanically advance an instance");
-    expect(cliSource).not.toContain("Advanced instance ${instanceId}");
-    // ...and the honest label + the project() pointer are present.
-    expect(cliSource).toContain(
-      "Inspect an instance's current frontier + step trail (read-only",
-    );
-    expect(cliSource).toContain("rig workflow project");
-
-
   });
 });
 

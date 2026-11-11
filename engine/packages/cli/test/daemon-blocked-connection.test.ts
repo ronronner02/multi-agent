@@ -26,7 +26,7 @@ const URL = "http://127.0.0.1:7433";
 const DOWN_ADVICE = /rig daemon start|'rig up'|if it is down/i;
 const WIDENING = /full_bypass|danger-full-access|network_access/i;
 const TODAY_DOWN_ACTION =
-  "Confirm the daemon is reachable with 'rig daemon status'; if it is down, start it with 'rig up' or 'rig daemon start'.";
+  "Confirm the daemon is reachable with 'rig daemon status'; if it is down, start it with 'rig daemon start'.";
 const UNKNOWN_WRITE_ACTION =
   "Check 'rig daemon status' on the affected host; if it is down, start it with 'rig daemon start'. Reconcile using the recovery ID before any retry. A lost connection does not prove the write failed.";
 
@@ -215,7 +215,7 @@ describe("status probe keeps the cause; the precheck guard agrees with the trans
   it("without a blocked code the guard keeps today's language", () => {
     expect(statusGuardMessage({ state: "unverified" } as DaemonStatus).fact).toMatch(/did not respond/i);
     expect(statusGuardMessage({ state: "unverified", probeErrorCode: "ETIMEDOUT" } as DaemonStatus).action)
-      .toBe("Re-check with 'rig daemon status'. If it is confirmed stopped, run 'rig up' or 'rig daemon start'.");
+      .toBe("Re-check with 'rig daemon status'. If it is confirmed stopped, run 'rig daemon start'.");
     expect(statusGuardMessage({ state: "stopped" } as DaemonStatus).fact).toMatch(/not running/i);
   });
 });

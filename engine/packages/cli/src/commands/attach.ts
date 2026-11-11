@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import { DaemonClient } from "../client.js";
 import { getDaemonStatus, getDaemonUrl , daemonStatusGuard} from "../daemon-lifecycle.js";
 import { realDeps } from "./daemon.js";
-import type { StatusDeps } from "./status.js";
+import type { StatusDeps } from "../status-deps.js";
 
 type TmuxExecFn = (cmd: string) => string;
 

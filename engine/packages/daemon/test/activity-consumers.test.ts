@@ -1,7 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { attachTerminalActivityAndWork } from "../src/domain/node-inventory.js";
 import { SeatActivityService } from "../src/domain/seat-activity-service.js";
 import type Database from "better-sqlite3";
@@ -11,7 +8,6 @@ import type { NodeInventoryEntry } from "../src/domain/types.js";
 // arbitrated state with display pre-derived through the ONE bridge; ps/TUI consume the
 // served value (grep-guard trace) — no surface re-arbitrates.
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const SEAT = "node-c1";
 const SESSION = "dev50-qa@v-openrig-build";
 
@@ -72,13 +68,5 @@ describe("S19 A8 — the enrichment serves the arbitrated taxonomy state", () =>
     const [enriched] = attachTerminalActivityAndWork([entryFor(SESSION)], { db: fakeDb() });
     expect(enriched!.activityState).toBeUndefined();
     expect(enriched!.terminalActive).toBeUndefined(); // the legacy fields behave exactly as before
-  });
-});
-
-describe("S19 A8 — consumption trace: the surfaces read the SERVED state (no re-arbitration)", () => {
-  it("cli ps renders activityState (taxonomy-first, legacy fallback cited)", () => {
-    const src = readFileSync(join(repoRoot, "packages", "cli", "src", "commands", "ps.ts"), "utf8");
-    expect(src).toContain("activityState");
-    expect(src).toMatch(/Legacy fallback/);
   });
 });

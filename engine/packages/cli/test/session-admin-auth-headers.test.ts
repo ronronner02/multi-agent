@@ -6,10 +6,8 @@
 // exact mode this slice protects. Mirrors seat-set-resume-token.test.ts.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { reconcileSessionCommand } from "../src/commands/reconcile-session.js";
-import { unclaimCommand } from "../src/commands/unclaim.js";
 import { seatCommand } from "../src/commands/seat.js";
-import type { StatusDeps } from "../src/commands/status.js";
+import type { StatusDeps } from "../src/status-deps.js";
 
 vi.mock("../src/daemon-lifecycle.js", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("../src/daemon-lifecycle.js");
@@ -39,26 +37,6 @@ describe("session-admin CLI callers attach the terminal bearer header (OPR.0.4.3
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     process.exitCode = undefined;
-  });
-
-  it("rig reconcile-session posts with { headers } (terminalAuthHeaders)", async () => {
-    const postCalls: PostCall[] = [];
-    const deps = makeDeps({ status: 200, data: { ok: true, result: {} } }, postCalls);
-    await reconcileSessionCommand(deps).parseAsync(["node", "rig", "dev-impl@my-rig", "--no-launch", "--json"]);
-
-    expect(postCalls.length).toBe(1);
-    expect(postCalls[0]!.path).toBe("/api/sessions/dev-impl%40my-rig/reconcile");
-    expect(postCalls[0]!.options).toHaveProperty("headers");
-  });
-
-  it("rig unclaim posts with { headers } (terminalAuthHeaders)", async () => {
-    const postCalls: PostCall[] = [];
-    const deps = makeDeps({ status: 200, data: { sessionName: "dev-impl@my-rig", logicalId: "dev.impl", rigId: "rig-1" } }, postCalls);
-    await unclaimCommand(deps).parseAsync(["node", "rig", "dev-impl@my-rig", "--json"]);
-
-    expect(postCalls.length).toBe(1);
-    expect(postCalls[0]!.path).toBe("/api/sessions/dev-impl%40my-rig/unclaim");
-    expect(postCalls[0]!.options).toHaveProperty("headers");
   });
 
   it("rig seat clear-attention posts with { headers } (terminalAuthHeaders)", async () => {

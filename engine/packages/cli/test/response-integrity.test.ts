@@ -24,7 +24,6 @@ import {
   DaemonTimeoutError,
   DaemonResponseError,
 } from "../src/client.js";
-import type { QueueDeps } from "../src/commands/queue.js";
 import { createProgram } from "../src/index.js";
 import { runProgram } from "../src/cli-error.js";
 
@@ -43,27 +42,15 @@ const jsonResponse = (body: string, status: number): typeof fetch =>
 
 // A queue clientFactory whose write throws the given transport error, driving the
 // real command → withClient → runProgram render path (no real network).
-function depsThrowing(err: Error): { queueDeps: QueueDeps } {
-  return {
-    queueDeps: {
-      lifecycleDeps: {} as QueueDeps["lifecycleDeps"],
-      clientFactory: () => ({
-        get: vi.fn(async () => { throw err; }),
-        getText: vi.fn(async () => ({ status: 200, data: "" })),
-        post: vi.fn(async () => { throw err; }),
-        delete: vi.fn(async () => ({ status: 204, data: null })),
-        postText: vi.fn(async () => ({ status: 200, data: "" })),
-        postExpectText: vi.fn(async () => ({ status: 200, data: "" })),
-      }) as unknown as ReturnType<QueueDeps["clientFactory"]>,
-    },
-  };
-}
+function depsThrowing(error: Error) { return { error }; }
 
-async function runCli(args: string[], deps?: Parameters<typeof createProgram>[0]) {
+async function runCli(args: string[], deps?: { error: Error }) {
   const out: string[] = [];
   const err: string[] = [];
   let exitCode = 0;
-  const program = createProgram(deps);
+  const program = createProgram();
+  if (deps) program.commands.find(command => command.name() === "team")!.commands
+    .find(command => command.name() === "chat")!.action(() => { throw deps.error; });
   await runProgram(program, ["node", "rig", ...args], {
     out: (l) => out.push(l),
     err: (l) => err.push(l),
@@ -128,7 +115,7 @@ describe("render response integrity — 3-part error + honest exit, never daemon
       // P21: --actor is deprecated + IGNORED; queue update derives the actor from the seat env, which the
       // describe's beforeEach now stubs (harness@rig) so this reaches the daemon-response path under test.
       // (--actor left in the argv is harmless — the daemon ignores it.)
-      ["queue", "update", "qitem-x", "--actor", "harness@rig", "--state", "done", "--closure-reason", "denied", "--json"],
+      ["team", "chat", "run", "--json"],
       depsThrowing(err),
     );
     expect(exitCode).toBe(1);
@@ -144,7 +131,7 @@ describe("render response integrity — 3-part error + honest exit, never daemon
   it("bad-response renders 3-part guidance to stderr with nonzero exit, never daemon-down (human)", async () => {
     const err = new DaemonResponseError(502, "<html>truncated");
     const { err: stderr, exitCode } = await runCli(
-      ["queue", "update", "qitem-x", "--actor", "harness@rig", "--state", "done", "--closure-reason", "denied"],
+      ["team", "chat", "run"],
       depsThrowing(err),
     );
     expect(exitCode).toBe(1);
@@ -155,7 +142,7 @@ describe("render response integrity — 3-part error + honest exit, never daemon
   it("slow-response (timeout) renders slow guidance, not daemon-down, nonzero exit", async () => {
     const err = new DaemonTimeoutError("Request to http://localhost:7433/api/queue/x/update timed out after 5000ms");
     const { err: stderr, exitCode } = await runCli(
-      ["queue", "update", "qitem-x", "--actor", "harness@rig", "--state", "done", "--closure-reason", "denied"],
+      ["team", "chat", "run"],
       depsThrowing(err),
     );
     expect(exitCode).toBe(1);
@@ -165,10 +152,10 @@ describe("render response integrity — 3-part error + honest exit, never daemon
     expect(stderr).not.toMatch(/retry once conditions ease/i);
   });
 
-  it("S4b preserve: a timed-out queue read is loud on stderr and exits nonzero", async () => {
+  it("S4b preserve: a timed-out team read is loud on stderr and exits nonzero", async () => {
     const timeout = new DaemonTimeoutError("Request to http://localhost:7433/api/queue/list timed out after 25ms");
     const { err: stderr, exitCode } = await runCli(
-      ["queue", "list"],
+      ["team", "chat", "run"],
       depsThrowing(timeout),
     );
     expect(exitCode).toBe(1);

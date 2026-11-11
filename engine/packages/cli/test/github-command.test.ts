@@ -1,17 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProgram } from "../src/index.js";
 import { type TeamStartDeps } from "../src/commands/team.js";
-import { STATE_FILE, type LifecycleDeps } from "../src/daemon-lifecycle.js";
+import { runProgram } from "../src/cli-error.js";
 
 function deps(fetchImpl: typeof fetch, ownerToken: string | null = "owner-github-fixture"): TeamStartDeps {
-  const lifecycleDeps: LifecycleDeps = {
-    spawn: vi.fn(() => ({ pid: 1, unref: vi.fn() }) as never), fetch: vi.fn(async () => ({ ok: true })),
-    kill: vi.fn(() => true), readFile: vi.fn((p: string) => p === STATE_FILE
-      ? JSON.stringify({ pid: 42, port: 7433, db: "test.sqlite", startedAt: "2026-11-06T00:00:00Z" }) : null),
-    writeFile: vi.fn(), removeFile: vi.fn(), exists: vi.fn((p: string) => p === STATE_FILE),
-    mkdirp: vi.fn(), openForAppend: vi.fn(() => 3), isProcessAlive: vi.fn(() => true),
-  };
-  return { lifecycleDeps, ownerToken, fetchImpl };
+  return { ownerToken, baseUrl: "http://127.0.0.1:7433", fetchImpl: ((url, init) =>
+    String(url).endsWith("/healthz") ? Promise.resolve(new Response("{}", { status: 200 })) : fetchImpl(url, init)) as typeof fetch };
 }
 
 async function run(options: string[], githubDeps: TeamStartDeps) {
@@ -21,7 +15,8 @@ async function run(options: string[], githubDeps: TeamStartDeps) {
   const saved = process.exitCode;
   process.exitCode = undefined;
   try {
-    await createProgram({ githubDeps }).exitOverride().parseAsync(["node", "rig", "github", "status", ...options]);
+    await runProgram(createProgram({ githubDeps }), ["node", "rig", "github", "status", ...options],
+      { out: line => lines.push(line), err: line => lines.push(line), exit: code => { process.exitCode = code; } });
     return { lines, code: process.exitCode };
   } finally {
     log.mockRestore(); error.mockRestore(); process.exitCode = saved;
@@ -62,7 +57,7 @@ describe("rig github status", () => {
     const result = await run([], deps(fetchImpl, null));
     expect(result.code).toBe(1);
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(result.lines.join(" ")).toContain("no owner credential");
+    expect(result.lines.join(" ")).toContain("No owner credential");
   });
 
   it.each([401, 403, 503])("handles HTTP %s without printing raw daemon errors", async status => {

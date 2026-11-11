@@ -31,6 +31,7 @@ describe("legacy subsystem deletion", () => {
       const routes = daemon.app.routes.map(route => `${route.method} ${route.path}`);
       expect(routes.some(route => route.includes("/api/team-control"))).toBe(true);
       expect(routes).toContain("GET /api/team-control/teams");
+      expect(routes).toContain("POST /api/team-control/github/login/stop");
     } finally {
       daemon.eventLoopMonitor.stop();
       daemon.db.close();

@@ -15,7 +15,6 @@ import {
   getDaemonPath,
   resolveDaemonPath,
   buildDaemonEnv,
-  ensureWorkspaceScaffold,
   daemonNotRunningError,
   printDaemonNotRunning,
   STATE_FILE,
@@ -104,63 +103,6 @@ describe("Daemon Lifecycle", () => {
       OPENRIG_DB: "openrig.sqlite",
     });
     expect(opts.detached).toBe(true);
-  });
-
-  it("start: initializes the canonical instance and configured workspace before spawning", async () => {
-    const created = new Set<string>();
-    const written = new Map<string, string>();
-    const deps = startableDeps({
-      exists: vi.fn((p: string) => created.has(p) || written.has(p)),
-      mkdirp: vi.fn((p: string) => { created.add(p); }),
-      writeFile: vi.fn((p: string, content: string) => { written.set(p, content); }),
-    });
-    await startDaemon({
-      port: 7433,
-      db: "openrig.sqlite",
-      workspaceRoot: "/tmp/openrig-workspace",
-      contextRoot: "/tmp/openrig-context",
-      skillsRoot: "/tmp/openrig-skills",
-      topologyRoot: "/tmp/openrig-topology",
-    }, deps);
-
-    for (const root of [
-      path.join(OPENRIG_DIR, "state"),
-      "/tmp/openrig-context",
-      path.join("/tmp/openrig-context", "system"),
-      "/tmp/openrig-skills",
-      path.join(OPENRIG_DIR, "specs"),
-      "/tmp/openrig-topology",
-      path.join(OPENRIG_DIR, "plugins"),
-      path.join(OPENRIG_DIR, "run"),
-      path.join(OPENRIG_DIR, "logs"),
-      path.join(OPENRIG_DIR, "transcripts"),
-      path.join(OPENRIG_DIR, "backups"),
-      path.join(OPENRIG_DIR, "secrets"),
-    ]) {
-      expect(created.has(root), root).toBe(true);
-    }
-    expect(written.get(path.join(OPENRIG_DIR, "config.json"))).toBe("{}\n");
-    expect(created.has("/tmp/openrig-workspace")).toBe(true);
-    expect(created.has(path.join("/tmp/openrig-workspace", "missions"))).toBe(true);
-    expect(created.has(path.join("/tmp/openrig-workspace", "exhaust"))).toBe(true);
-    expect(written.get(path.join("/tmp/openrig-workspace", "SPEC.md"))).toContain("intent: Organize this project's durable work");
-    expect(written.get(path.join("/tmp/openrig-workspace", "project.yaml"))).toContain("schema: openrig.project/v0alpha1");
-    expect(written.get(path.join("/tmp/openrig-workspace", "workspace.yaml"))).toContain("schema: openrig.workspace/v0alpha1");
-    expect(written.get(path.join("/tmp/openrig-workspace", ".gitignore"))).toContain("/exhaust/");
-  });
-
-  it("start: refuses an exact user-owned type conflict before any write or spawn", async () => {
-    const conflict = "/tmp/openrig-context";
-    const deps = startableDeps({
-      pathKind: vi.fn((candidate: string) => candidate === conflict ? "file" : "missing"),
-    });
-
-    await expect(startDaemon({ contextRoot: conflict }, deps)).rejects.toThrow(
-      `${conflict}: expected directory, found file`,
-    );
-    expect(deps.mkdirp).not.toHaveBeenCalled();
-    expect(deps.writeFile).not.toHaveBeenCalled();
-    expect(deps.spawn).not.toHaveBeenCalled();
   });
 
   // Test 3: start waits for healthz, writes daemon.json with pid+port+db+startedAt
@@ -600,73 +542,6 @@ describe("Daemon Lifecycle", () => {
 
     const content = readLogs(deps);
     expect(content).toBeNull();
-  });
-
-  // Test 14: CLI delegation: daemon status command uses injected deps
-  it("daemonCommand(deps) status calls getDaemonStatus with injected deps", async () => {
-    const { daemonCommand } = await import("../src/commands/daemon.js");
-    const { Command } = await import("commander");
-
-    const deps = mockDeps({
-      exists: vi.fn(() => false), // no daemon.json + no healthy daemon -> stopped
-      fetch: vi.fn(async () => { throw new Error("refused"); }),
-    });
-
-    const program = new Command();
-    program.addCommand(daemonCommand(deps));
-
-    // Capture console output
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-
-    try {
-      await program.parseAsync(["node", "rig", "daemon", "status"]);
-    } finally {
-      console.log = origLog;
-    }
-
-    // deps.exists was called (proving delegation happened through injected deps)
-    expect(deps.exists).toHaveBeenCalled();
-    // Output should reflect stopped status
-    expect(logs.join("\n")).toMatch(/stopped/i);
-  });
-
-  it("daemonCommand status omits pid when daemon is recovered without state", async () => {
-    const savedPort = process.env["OPENRIG_PORT"];
-    const savedHost = process.env["OPENRIG_HOST"];
-    process.env["OPENRIG_PORT"] = "7555";
-    process.env["OPENRIG_HOST"] = "127.0.0.1";
-    try {
-      const { daemonCommand } = await import("../src/commands/daemon.js");
-      const { Command } = await import("commander");
-      const deps = mockDeps({
-        exists: vi.fn(() => false),
-        fetch: vi.fn(async () => ({ ok: true })),
-      });
-
-      const program = new Command();
-      program.addCommand(daemonCommand(deps));
-
-      const logs: string[] = [];
-      const origLog = console.log;
-      console.log = (...args: unknown[]) => logs.push(args.join(" "));
-
-      try {
-        await program.parseAsync(["node", "rig", "daemon", "status"]);
-      } finally {
-        console.log = origLog;
-      }
-
-      const output = logs.join("\n");
-      expect(output).toContain("Daemon running on port 7555");
-      expect(output).not.toContain("pid undefined");
-    } finally {
-      if (savedPort === undefined) delete process.env["OPENRIG_PORT"];
-      else process.env["OPENRIG_PORT"] = savedPort;
-      if (savedHost === undefined) delete process.env["OPENRIG_HOST"];
-      else process.env["OPENRIG_HOST"] = savedHost;
-    }
   });
 
   it("daemonCommand stop surfaces missing-state recovery error instead of claiming success", async () => {
@@ -1630,39 +1505,14 @@ describe("buildDaemonEnv", () => {
   });
 });
 
-describe("ensureWorkspaceScaffold", () => {
-  it("does not overwrite existing workspace files", () => {
-    const existing = new Set<string>([
-      "/tmp/ws",
-      path.join("/tmp/ws", "SPEC.md"),
-      path.join("/tmp/ws", "missions", "operator-note.md"),
-    ]);
-    const deps = mockDeps({
-      exists: vi.fn((p: string) => existing.has(p)),
-      mkdirp: vi.fn((p: string) => { existing.add(p); }),
-      writeFile: vi.fn(),
-    });
-
-    const result = ensureWorkspaceScaffold("/tmp/ws", deps);
-
-    expect(result.rootCreated).toBe(false);
-    expect(result.files.find((f) => f.relPath === "SPEC.md")?.skipped).toBe("exists");
-    expect(deps.writeFile).not.toHaveBeenCalledWith(
-      path.join("/tmp/ws", "SPEC.md"),
-      expect.any(String),
-    );
-    expect(existing).toContain(path.join("/tmp/ws", "missions", "operator-note.md"));
-  });
-});
-
 // OPR.0.3.3.04.2 (AC-4): the ONE shared daemon-not-running honest error used by
 // the daemon-dependent journey verbs (bootstrap/discover/workspace/workflow).
 describe("daemonNotRunningError / printDaemonNotRunning (AC-4 shared honest error)", () => {
-  it("daemonNotRunningError is the 3-part fact/consequence/action shape pointing to rig up / rig daemon start", () => {
+  it("daemonNotRunningError is the 3-part fact/consequence/action shape pointing to daemon start", () => {
     const err = daemonNotRunningError();
     expect(err.fact).toContain("Daemon not running");
     expect(err.consequence).toContain("needs a running daemon");
-    expect(err.action).toContain("rig up");
+    expect(err.action).toBe("Run 'rig daemon start'.");
     expect(err.action).toContain("rig daemon start");
   });
 
@@ -1682,7 +1532,7 @@ describe("daemonNotRunningError / printDaemonNotRunning (AC-4 shared honest erro
     const out = lines.join("\n");
     expect(out).toContain("Daemon not running");
     expect(out).toContain("needs a running daemon");
-    expect(out).toContain("rig up");
+    expect(out).toContain("rig daemon start");
     expect(exit).toBe(1);
   });
 
@@ -1701,7 +1551,7 @@ describe("daemonNotRunningError / printDaemonNotRunning (AC-4 shared honest erro
     const parsed = JSON.parse(lines.join("")) as { error: { fact: string; consequence: string; action: string } };
     expect(parsed.error.fact).toContain("Daemon not running");
     expect(parsed.error.consequence).toContain("needs a running daemon");
-    expect(parsed.error.action).toContain("rig up");
+    expect(parsed.error.action).toBe("Run 'rig daemon start'.");
   });
 
   // ===================================================================

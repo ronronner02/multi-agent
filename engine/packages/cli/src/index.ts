@@ -3,269 +3,26 @@ import { Command } from "commander";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { daemonCommand } from "./commands/daemon.js";
-import { statusCommand, type StatusDeps } from "./commands/status.js";
-import { crashCartCommand } from "./commands/crash-cart.js";
-import { snapshotCommand } from "./commands/snapshot.js";
-import { restoreCommand } from "./commands/restore.js";
-import { exportCommand, type ExportDeps } from "./commands/export.js";
-import { importCommand, type ImportDeps } from "./commands/import.js";
-import { uiCommand, type UiDeps } from "./commands/ui.js";
-import { tuiCommand } from "./commands/tui.js";
 import { teamCommand, type TeamStartDeps } from "./commands/team.js";
-import { packageCommand } from "./commands/package.js";
-import { bootstrapCommand } from "./commands/bootstrap.js";
-import { requirementsCommand } from "./commands/requirements.js";
-import { discoverCommand } from "./commands/discover.js";
-import { attachCommand } from "./commands/attach.js";
-import { bindCommand } from "./commands/bind.js";
-import { adoptCommand, type AdoptDeps } from "./commands/adopt.js";
-import { bundleCommand } from "./commands/bundle.js";
-import { scopeCommand } from "./commands/scope.js";
-import { proofCommand } from "./commands/proof.js";
-import { upCommand } from "./commands/up.js";
-import { downCommand } from "./commands/down.js";
-import { archiveCommand } from "./commands/archive.js";
-import { unarchiveCommand } from "./commands/unarchive.js";
-import { rosterCommand } from "./commands/roster.js";
-import { psCommand } from "./commands/ps.js";
-import { parkedCommand } from "./commands/parked.js";
-import { mcpCommand } from "./commands/mcp.js";
-import { agentCommand, type AgentDeps } from "./commands/agent.js";
-import { rigCommand, type RigDeps } from "./commands/rig.js";
-import { transcriptCommand } from "./commands/transcript.js";
-import { sendCommand } from "./commands/send.js";
-import { streamCommand, type StreamDeps } from "./commands/stream.js";
-import { queueCommand, type QueueDeps } from "./commands/queue.js";
-import { projectCommand, type ProjectDeps } from "./commands/project.js";
-import { viewCommand, type ViewDeps } from "./commands/view.js";
-import { terminalCommand, type TerminalDeps } from "./commands/terminal.js";
-import { watchdogCommand, type WatchdogDeps } from "./commands/watchdog.js";
-import { workflowCommand, type WorkflowDeps } from "./commands/workflow.js";
-import { startCommand, type StartDeps } from "./commands/start.js";
-import { captureCommand } from "./commands/capture.js";
-import { broadcastCommand } from "./commands/broadcast.js";
-import { walkCommand } from "./commands/walk.js";
-import { configCommand } from "./commands/config.js";
-import { fileCommand } from "./commands/file.js";
-import { preflightCommand } from "./commands/preflight.js";
-import { authCommand } from "./commands/auth.js";
-import { providerCommand } from "./commands/provider.js";
-import { usageCommand } from "./commands/usage.js";
-import { telemetryCommand } from "./commands/telemetry.js";
-import { healthCommand, type HealthDeps } from "./commands/health.js";
-import { doctorCommand } from "./commands/doctor.js";
-import { expandCommand } from "./commands/expand.js";
-import { addMemberCommand } from "./commands/add.js";
-import { createCommand } from "./commands/create.js";
-import { growCommand } from "./commands/grow.js";
-import { reconcileSessionCommand } from "./commands/reconcile-session.js";
-import { envCommand } from "./commands/env.js";
-import { askCommand } from "./commands/ask.js";
-import { chatroomCommand } from "./commands/chatroom.js";
-import { specsCommand } from "./commands/specs.js";
-import { contextCommand } from "./commands/context.js";
-import { pluginCommand } from "./commands/plugin.js";
-import { skillCommand } from "./commands/skill.js";
-import { agentImageCommand } from "./commands/agent-image.js";
-import { forkCommand } from "./commands/fork.js";
-import { workspaceCommand, type WorkspaceDeps } from "./commands/workspace.js";
-import { whoamiCommand } from "./commands/whoami.js";
-import { unclaimCommand } from "./commands/unclaim.js";
-import { releaseCommand } from "./commands/release.js";
-import { launchCommand } from "./commands/launch.js";
-import { removeCommand } from "./commands/remove.js";
-import { shrinkCommand } from "./commands/shrink.js";
-import { destroyCommand, type DestroyCommandDeps } from "./commands/destroy.js";
-import { setupCommand } from "./commands/setup.js";
-import { restoreCheckCommand } from "./commands/restore-check.js";
-import { restorePacketCommand, type RestorePacketDeps } from "./commands/restore-packet.js";
-import { compactPlanCommand, type CompactPlanDeps } from "./commands/compact-plan.js";
-import { compactCommand, type CompactDeps } from "./commands/compact.js";
-import { heartbeatCommand, type HeartbeatDeps } from "./commands/heartbeat.js";
-import { seatCommand, handoverCommand, type SeatDeps } from "./commands/seat.js";
-import { rigModeCommand, type RigModeDeps } from "./commands/rig-mode.js";
-import { policyCommand } from "./commands/policy.js";
-import { startupProofCommand, type StartupProofDeps } from "./commands/startup-proof.js";
+import { githubCommand } from "./commands/github.js";
 import type { LifecycleDeps } from "./daemon-lifecycle.js";
 import { CLI_VERSION } from "./version.js";
-import { githubCommand } from "./commands/github.js";
 
 export interface ProgramDeps {
   daemonDeps?: LifecycleDeps;
-  statusDeps?: StatusDeps;
-  telemetryDeps?: StatusDeps;
-  snapshotDeps?: StatusDeps;
-  restoreDeps?: StatusDeps;
-  uiDeps?: UiDeps;
-  exportDeps?: ExportDeps;
-  importDeps?: ImportDeps;
-  packageDeps?: StatusDeps;
-  bootstrapDeps?: StatusDeps;
-  requirementsDeps?: StatusDeps;
-  discoverDeps?: StatusDeps;
-  attachDeps?: StatusDeps;
-  bindDeps?: StatusDeps;
-  adoptDeps?: AdoptDeps;
-  bundleDeps?: StatusDeps;
-  upDeps?: StatusDeps;
-  downDeps?: StatusDeps;
-  archiveDeps?: StatusDeps;
-  unarchiveDeps?: StatusDeps;
-  psDeps?: StatusDeps;
-  mcpDeps?: StatusDeps;
-  agentDeps?: AgentDeps;
-  rigDeps?: RigDeps;
-  transcriptDeps?: StatusDeps;
-  sendDeps?: StatusDeps;
-  streamDeps?: StreamDeps;
-  queueDeps?: QueueDeps;
-  projectDeps?: ProjectDeps;
-  viewDeps?: ViewDeps;
-  terminalDeps?: TerminalDeps;
-  watchdogDeps?: WatchdogDeps;
-  workflowDeps?: WorkflowDeps;
-  captureDeps?: StatusDeps;
-  broadcastDeps?: StatusDeps;
-  walkDeps?: StatusDeps;
-  askDeps?: StatusDeps;
-  chatroomDeps?: StatusDeps;
-  specsDeps?: StatusDeps;
-  contextDeps?: StatusDeps;
-  pluginDeps?: StatusDeps;
-  skillDeps?: StatusDeps;
-  agentImageDeps?: StatusDeps;
-  forkDeps?: StatusDeps;
-  workspaceDeps?: WorkspaceDeps;
-  whoamiDeps?: StatusDeps;
-  expandDeps?: StatusDeps;
-  addDeps?: StatusDeps;
-  createDeps?: StatusDeps;
-  growDeps?: StatusDeps;
-  reconcileSessionDeps?: StatusDeps;
-  envDeps?: StatusDeps;
-  unclaimDeps?: StatusDeps;
-  releaseDeps?: StatusDeps;
-  launchDeps?: StatusDeps;
-  removeDeps?: StatusDeps;
-  shrinkDeps?: StatusDeps;
-  destroyDeps?: DestroyCommandDeps;
-  restorePacketDeps?: RestorePacketDeps;
-  compactPlanDeps?: CompactPlanDeps;
-  compactDeps?: CompactDeps;
-  heartbeatDeps?: HeartbeatDeps;
-  seatDeps?: SeatDeps;
-  rigModeDeps?: RigModeDeps;
-  startupProofDeps?: StartupProofDeps;
-  healthDeps?: HealthDeps;
-  startDeps?: StartDeps;
+  daemonHttpDeps?: { baseUrl?: string; fetchImpl?: typeof fetch };
   teamStartDeps?: TeamStartDeps;
   githubDeps?: TeamStartDeps;
-  configPath?: string;
 }
 
 export function createProgram(depsOverride?: ProgramDeps): Command {
-  const program = new Command();
-
-  program
+  const program = new Command()
     .name("rig")
-    .description("CLI for the OpenRig local control plane")
-    .version(CLI_VERSION)
-    .addHelpText("after", "\nThe OpenRig operator (after install, and whenever the person wants their agents):\n  rig terminal open saved:kernel --window\n  Opens a new desktop terminal itself: advisor | operator.\n  An installing agent can run this from its shell on the daemon's desktop.\n  Start a stopped daemon with rig daemon start.\n  Herdr needs a terminal the person can see.\n  Over headless SSH, give the exact connection/attach command for a new terminal/tab.\n  The team dashboard is the Web UI at <daemon-url>/team.\n");
-
-  program.addCommand(startCommand(depsOverride?.startDeps));
-  program.addCommand(daemonCommand(depsOverride?.daemonDeps));
-  program.addCommand(statusCommand(depsOverride?.statusDeps));
-  program.addCommand(snapshotCommand(depsOverride?.snapshotDeps));
-  program.addCommand(restoreCommand(depsOverride?.restoreDeps));
-  program.addCommand(crashCartCommand());
-  program.addCommand(parkedCommand());
-  program.addCommand(exportCommand(depsOverride?.exportDeps));
-  program.addCommand(importCommand(depsOverride?.importDeps));
-  program.addCommand(uiCommand(depsOverride?.uiDeps));
-  // The retired terminal UI: kept as a stub so `rig tui` names the Web UI instead of failing as unknown.
-  program.addCommand(tuiCommand());
-  // MVP slices 2 and 3 - the owner starts team work from a goal, then reads and applies the result.
+    .description("Manage local teams through the daemon HTTP API")
+    .version(CLI_VERSION);
   program.addCommand(teamCommand(depsOverride?.teamStartDeps));
+  program.addCommand(daemonCommand(depsOverride?.daemonDeps, depsOverride?.daemonHttpDeps));
   program.addCommand(githubCommand(depsOverride?.githubDeps));
-  program.addCommand(packageCommand(depsOverride?.packageDeps));
-  program.addCommand(bootstrapCommand(depsOverride?.bootstrapDeps));
-  program.addCommand(requirementsCommand(depsOverride?.requirementsDeps));
-  program.addCommand(discoverCommand(depsOverride?.discoverDeps));
-  program.addCommand(attachCommand(depsOverride?.attachDeps));
-  program.addCommand(bindCommand(depsOverride?.bindDeps));
-  program.addCommand(adoptCommand(depsOverride?.adoptDeps));
-  program.addCommand(bundleCommand(depsOverride?.bundleDeps));
-  program.addCommand(upCommand(depsOverride?.upDeps));
-  program.addCommand(downCommand(depsOverride?.downDeps));
-  // OPR.0.3.3.19 - rig archive affordance (soft, reversible; NOT a delete).
-  program.addCommand(archiveCommand(depsOverride?.archiveDeps));
-  program.addCommand(unarchiveCommand(depsOverride?.unarchiveDeps));
-  program.addCommand(psCommand(depsOverride?.psDeps));
-  program.addCommand(rosterCommand());
-  program.addCommand(mcpCommand(depsOverride?.mcpDeps));
-  program.addCommand(agentCommand(depsOverride?.agentDeps));
-  program.addCommand(rigCommand(depsOverride?.rigDeps));
-  program.addCommand(transcriptCommand(depsOverride?.transcriptDeps));
-  program.addCommand(sendCommand(depsOverride?.sendDeps));
-  program.addCommand(streamCommand(depsOverride?.streamDeps));
-  program.addCommand(queueCommand(depsOverride?.queueDeps));
-  program.addCommand(projectCommand(depsOverride?.projectDeps));
-  program.addCommand(viewCommand(depsOverride?.viewDeps));
-  program.addCommand(terminalCommand(depsOverride?.terminalDeps));
-  program.addCommand(watchdogCommand(depsOverride?.watchdogDeps));
-  program.addCommand(workflowCommand(depsOverride?.workflowDeps));
-  program.addCommand(captureCommand(depsOverride?.captureDeps));
-  program.addCommand(broadcastCommand(depsOverride?.broadcastDeps));
-  program.addCommand(walkCommand(depsOverride?.walkDeps));
-  program.addCommand(askCommand(depsOverride?.askDeps));
-  program.addCommand(chatroomCommand(depsOverride?.chatroomDeps));
-  program.addCommand(specsCommand(depsOverride?.specsDeps));
-  program.addCommand(contextCommand(depsOverride?.contextDeps));
-  program.addCommand(pluginCommand(depsOverride?.pluginDeps));
-  program.addCommand(skillCommand(depsOverride?.skillDeps));
-  program.addCommand(agentImageCommand(depsOverride?.agentImageDeps));
-  program.addCommand(forkCommand(depsOverride?.forkDeps));
-  program.addCommand(workspaceCommand(depsOverride?.workspaceDeps));
-  program.addCommand(rigModeCommand(depsOverride?.rigModeDeps));
-  // B7 — the reintroduced permission-policy verb (the context-mode verb above is now `rig mode`).
-  program.addCommand(policyCommand());
-  program.addCommand(whoamiCommand(depsOverride?.whoamiDeps));
-  program.addCommand(configCommand(depsOverride?.configPath));
-  program.addCommand(fileCommand());
-  program.addCommand(preflightCommand());
-  program.addCommand(authCommand());
-  program.addCommand(providerCommand());
-  program.addCommand(usageCommand());
-  program.addCommand(telemetryCommand(depsOverride?.telemetryDeps));
-  program.addCommand(healthCommand(depsOverride?.healthDeps));
-  program.addCommand(doctorCommand());
-  program.addCommand(expandCommand(depsOverride?.expandDeps));
-  program.addCommand(addMemberCommand(depsOverride?.addDeps));
-  program.addCommand(createCommand(depsOverride?.createDeps));
-  program.addCommand(growCommand(depsOverride?.growDeps));
-  program.addCommand(reconcileSessionCommand(depsOverride?.reconcileSessionDeps));
-  program.addCommand(envCommand(depsOverride?.envDeps));
-  program.addCommand(unclaimCommand(depsOverride?.unclaimDeps));
-  program.addCommand(releaseCommand(depsOverride?.releaseDeps));
-  program.addCommand(launchCommand(depsOverride?.launchDeps));
-  program.addCommand(removeCommand(depsOverride?.removeDeps));
-  program.addCommand(shrinkCommand(depsOverride?.shrinkDeps));
-  program.addCommand(destroyCommand(depsOverride?.destroyDeps));
-  program.addCommand(setupCommand());
-  program.addCommand(restoreCheckCommand());
-  program.addCommand(restorePacketCommand(depsOverride?.restorePacketDeps));
-  program.addCommand(compactPlanCommand(depsOverride?.compactPlanDeps));
-  program.addCommand(compactCommand(depsOverride?.compactDeps));
-  program.addCommand(heartbeatCommand(depsOverride?.heartbeatDeps));
-  program.addCommand(seatCommand(depsOverride?.seatDeps));
-  program.addCommand(handoverCommand(depsOverride?.seatDeps));
-  program.addCommand(startupProofCommand(depsOverride?.startupProofDeps));
-  // release-0.3.2 slice 12 — rig scope CLI primitive.
-  program.addCommand(scopeCommand());
-  // OPR.0.4.4.19 FR-8 — rig proof: the C1 proof-drop write path.
-  program.addCommand(proofCommand());
-  // MVP slice 3 — read a finished task's result and apply it to the owner's repository.
-
   return program;
 }
 
@@ -273,7 +30,7 @@ export function isDirectRun(argv1 = process.argv[1], moduleUrl = import.meta.url
   if (!argv1) return false;
 
   try {
-    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+    return realpathSync.native(argv1) === realpathSync.native(fileURLToPath(moduleUrl));
   } catch {
     return false;
   }

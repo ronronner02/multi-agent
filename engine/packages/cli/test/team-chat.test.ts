@@ -1,26 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProgram } from "../src/index.js";
 import type { TeamStartDeps } from "../src/commands/team.js";
-import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-lifecycle.js";
 
 /**
- * U5 — `rig team chat` and `rig team approve-plan`.
+ * U5 — `rig team chat` and `rig team approve`.
  *
  * The verbs are thin: the conversation, the turn and the approval are the daemon's work. What is
  * worth pinning is the contract — the owner credential, the exact paths, the control request a
  * message becomes, and the honest report of a queued message versus a started turn.
  */
 
-const state: DaemonState = { pid: 42, port: 7433, db: "test.sqlite", startedAt: "2026-10-31T00:00:00Z" };
 
 function deps(fetchImpl: typeof fetch, ownerToken: string | null = "owner-token"): TeamStartDeps {
-  const lifecycleDeps: LifecycleDeps = {
-    spawn: vi.fn(() => ({ pid: 1, unref: vi.fn() }) as never), fetch: vi.fn(async () => ({ ok: true })),
-    kill: vi.fn(() => true), readFile: vi.fn((p: string) => p === STATE_FILE ? JSON.stringify(state) : null),
-    writeFile: vi.fn(), removeFile: vi.fn(), exists: vi.fn((p: string) => p === STATE_FILE), mkdirp: vi.fn(),
-    openForAppend: vi.fn(() => 3), isProcessAlive: vi.fn(() => true),
-  };
-  return { lifecycleDeps, ownerToken, fetchImpl };
+  return { ownerToken, baseUrl: "http://127.0.0.1:7433", fetchImpl: ((url, init) =>
+    String(url).endsWith("/healthz") ? Promise.resolve(new Response("{}", { status: 200 })) : fetchImpl(url, init)) as typeof fetch };
 }
 
 async function run(argv: string[], startDeps: TeamStartDeps): Promise<{ lines: string[]; code: number | undefined }> {
@@ -107,24 +100,23 @@ describe("rig team chat", () => {
   });
 });
 
-describe("rig team approve-plan", () => {
+describe("rig team approve", () => {
   it("posts the owner's approval and reports the run in delivery", async () => {
     const fetchImpl = answering({ status: 200, body: { run: { entityVersion: 7, phase: "planning" } } },
       { status: 200, body: { status: "accepted", value: { phase: "delivery", planRef: "plan.md" } } });
-    const result = await run(["team", "approve-plan", "run-1"], deps(fetchImpl));
+    const result = await run(["team", "approve", "run-1"], deps(fetchImpl));
     expect(result.code).toBeUndefined();
     const [url, init] = calls(fetchImpl)[1]!;
     expect(url).toBe("http://127.0.0.1:7433/api/team-control/runs/run-1/plan/approve");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toMatchObject({ runId: "run-1", expectedEntityVersion: 7, payload: {} });
     expect(result.lines.join("\n")).toContain("Approved plan.md; the run is delivery.");
-    expect(result.lines.join("\n")).toContain("rig team proposal <run> <task>");
   });
 
   it("names the refusal when there is no plan to approve", async () => {
     const fetchImpl = answering({ status: 200, body: { run: { entityVersion: 3 } } },
       { status: 409, body: { code: "plan_missing", error: "The lead wrote no plan at plan.md" } });
-    const result = await run(["team", "approve-plan", "run-1"], deps(fetchImpl));
+    const result = await run(["team", "approve", "run-1"], deps(fetchImpl));
     expect(result.code).toBe(1);
     expect(result.lines.join("\n")).toContain("The lead wrote no plan at plan.md");
   });

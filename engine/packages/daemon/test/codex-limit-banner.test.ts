@@ -18,8 +18,6 @@ import { attachAgentActivity } from "../src/domain/node-inventory.js";
 import type { AgentActivity } from "../src/domain/types.js";
 import type Database from "better-sqlite3";
 import { createFullTestDb } from "./helpers/test-app.js";
-import { psCommand } from "../../cli/src/commands/ps.js";
-import { STATE_FILE } from "../../cli/src/daemon-lifecycle.js";
 
 const BANNER = [
   " long output above",
@@ -537,7 +535,7 @@ describe("codex-limit-banner — store mapping and seat status", () => {
     { name: "submitted prompt followed by actual work", draft: "› Continue the task\n◦ Working (2s • esc to interrupt)", limit: false },
     ...["Explain this example", ""].map(first => ({ name: `unsent nested draft: ${first || "blank first line"}`,
       draft: `› ${first}\n  › Continue the task\n  • Working (1s • esc to interrupt)`, limit: true })),
-  ])("keeps store, inventory and --active consistent across repeated polls: $name", async ({ draft, limit }) => {
+  ])("keeps store and inventory consistent across repeated polls: $name", async ({ draft, limit }) => {
     const db = createFullTestDb();
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
@@ -564,19 +562,7 @@ describe("codex-limit-banner — store mapping and seat status", () => {
         });
         expect.soft(out[0]!.agentActivity).toMatchObject(limit
           ? { state: "unknown", reason: "usage_limit" } : { state: "running", reason: "mid_work_pattern" });
-        log.mockClear();
-        await psCommand({
-          lifecycleDeps: {
-            exists: (path) => path === STATE_FILE,
-            readFile: () => JSON.stringify({ pid: 1, port: 1, db: "fixture.sqlite", startedAt: NOW.toISOString() }),
-            isProcessAlive: () => true, fetch: async () => ({ ok: true }),
-          } as never,
-          clientFactory: () => ({ get: async (path: string) => ({ status: 200, data: path.includes("/nodes")
-            ? [{ canonicalSessionName: sessionName, logicalId: "dev.qa", agentActivity: out[0]!.agentActivity }]
-            : [{ rigId: "fixture", rigName: "test-rig", status: "running" }] }) }) as never,
-        }).parseAsync(["node", "rig", "--nodes", "--active", "--json", "--rig", "test-rig"]);
-        expect.soft(JSON.parse(log.mock.calls[0]![0])).toMatchObject(limit
-          ? { totalNodes: 0, entries: [] } : { totalNodes: 1, entries: [{ canonicalSessionName: sessionName }] });
+
       }
       expect.soft(db.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'agent.activity'").get()).toEqual({ n: limit ? 1 : 2 });
     } finally { log.mockRestore(); db.close(); }
@@ -623,20 +609,6 @@ describe("codex-limit-banner — store mapping and seat status", () => {
       await motion.pollSeat(sessionName);
       const recovered = await read(motion);
       expect.soft(recovered).toMatchObject({ state: "running", reason: "window_activity_motion" });
-      const log = vi.spyOn(console, "log").mockImplementation(() => {});
-      try {
-        await psCommand({
-          lifecycleDeps: {
-            exists: (path) => path === STATE_FILE,
-            readFile: () => JSON.stringify({ pid: 1, port: 1, db: "fixture.sqlite", startedAt: NOW.toISOString() }),
-            isProcessAlive: () => true, fetch: async () => ({ ok: true }),
-          } as never,
-          clientFactory: () => ({ get: async (path: string) => ({ status: 200, data: path.includes("/nodes")
-            ? [{ canonicalSessionName: sessionName, logicalId: "dev.qa", agentActivity: recovered }]
-            : [{ rigId: "fixture", rigName: "test-rig", status: "running" }] }) }) as never,
-        }).parseAsync(["node", "rig", "--nodes", "--active", "--json", "--rig", "test-rig"]);
-        expect.soft(JSON.parse(log.mock.calls[0]![0])).toMatchObject({ totalNodes: 1, entries: [{ canonicalSessionName: sessionName, agentActivity: { state: "running" } }] });
-      } finally { log.mockRestore(); }
       expect(db.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'agent.activity'").get()).toEqual(eventCount);
       capturePaneContent.mockResolvedValue("Do you want to proceed?");
       await structuralActivity.pollSeat(sessionName, null, "codex");

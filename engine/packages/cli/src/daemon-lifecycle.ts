@@ -8,15 +8,6 @@ import { DAEMON_STOP_WAIT_MS, DAEMON_SHUTDOWN_RECEIPT, type DaemonShutdownReceip
 import { ConfigStore } from "./config-store.js";
 import { readLocalOrigin } from "./local-origin.js";
 import { OPENRIG_HOME, LEGACY_RIGGED_HOME, readOpenRigEnv } from "./openrig-compat.js";
-import {
-  ensureDefaultWorkspace,
-  ensureOpenRigInstance,
-  formatInstanceInitializationConflicts,
-  type InitializationFsOps,
-  type InitWorkspaceResult,
-  type ManagedPathKind,
-} from "@openrig/daemon/instance-initialization";
-
 export interface DaemonState {
   pid: number;
   port: number;
@@ -98,7 +89,7 @@ export function daemonNotRunningError(): DaemonNotRunningError {
   return {
     fact: "Daemon not running.",
     consequence: "This command needs a running daemon.",
-    action: "Run 'rig up' (it auto-starts the daemon), or 'rig daemon start'.",
+    action: "Run 'rig daemon start'.",
   };
 }
 
@@ -129,7 +120,7 @@ export function statusGuardMessage(status: DaemonStatus): DaemonNotRunningError 
   return {
     fact: "Daemon did not respond — it may be busy or stopped (state not confirmed).",
     consequence: "This command needs a responsive daemon; the outcome of proceeding would be indeterminate.",
-    action: "Re-check with 'rig daemon status'. If it is confirmed stopped, run 'rig up' or 'rig daemon start'.",
+    action: "Re-check with 'rig daemon status'. If it is confirmed stopped, run 'rig daemon start'.",
     ...causeCode,
   };
 }
@@ -213,7 +204,7 @@ export interface LifecycleDeps {
   mkdirp: (path: string) => void;
   /** Exact production path typing for additive initialization. Tests that do
    * not exercise collisions may omit it and use the legacy exists seam. */
-  pathKind?: (path: string) => ManagedPathKind;
+  pathKind?: (path: string) => "file" | "directory" | "other" | "missing";
   openForAppend: (path: string) => number;
   closeFile?: (fd: number) => void;
   isProcessAlive: (pid: number) => boolean;
@@ -265,25 +256,6 @@ const STATUS_PROBE_RETRY_DELAY_MS = 200;
 // prior fixed-bound timing (the settle deadline above is status-probe-LOCAL); this
 // restores the timeout the removed HEALTHZ_PROBE_TIMEOUT_MS supplied to them.
 const HEALTHZ_PROBE_TIMEOUT_MS = 250;
-
-export type WorkspaceScaffoldResult = InitWorkspaceResult;
-
-const INITIALIZATION_FILE_NAMES = new Set(["config.json", "SPEC.md", "project.yaml", "workspace.yaml", ".gitignore"]);
-
-function lifecycleInitializationFs(deps: LifecycleDeps): InitializationFsOps {
-  return {
-    pathKind: deps.pathKind ?? ((candidate) => {
-      if (!deps.exists(candidate)) return "missing";
-      return INITIALIZATION_FILE_NAMES.has(path.basename(candidate)) ? "file" : "directory";
-    }),
-    mkdirp: deps.mkdirp,
-    writeFile: deps.writeFile,
-  };
-}
-
-export function ensureWorkspaceScaffold(root: string, deps: LifecycleDeps): WorkspaceScaffoldResult {
-  return ensureDefaultWorkspace({ root, fs: lifecycleInitializationFs(deps) });
-}
 
 class HealthProbeTimeoutError extends Error {
   constructor(url: string) {
@@ -665,17 +637,7 @@ async function startOwnedDaemon(opts: StartOptions, deps: LifecycleDeps, lock: D
   }
   const daemonEntry = path.join(getDaemonPath(), "dist/index.js");
 
-  const initialization = ensureOpenRigInstance({
-    home: OPENRIG_DIR,
-    workspaceRoot: opts.workspaceRoot,
-    contextRoot: opts.contextRoot,
-    skillsRoot: opts.skillsRoot,
-    topologyRoot: opts.topologyRoot,
-    fs: lifecycleInitializationFs(deps),
-  });
-  if (!initialization.ok) {
-    throw new Error(`OpenRig instance initialization blocked: ${formatInstanceInitializationConflicts(initialization)}`);
-  }
+  deps.mkdirp(OPENRIG_DIR);
 
   const logOffset = deps.fileSize?.(LOG_FILE) ?? Buffer.byteLength(deps.readFile(LOG_FILE) ?? "");
   const logFd = deps.openForAppend(LOG_FILE);
