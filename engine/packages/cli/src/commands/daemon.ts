@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { acquireDaemonStartLock } from "../daemon-start-lock.js";
-import { DaemonClient } from "../client.js";
+import { DaemonClient, DaemonConnectionError } from "../client.js";
 import { execFileSync, spawn } from "node:child_process";
 import { fetchWithTimeout } from "../fetch-with-timeout.js";
 import {
@@ -89,6 +89,7 @@ export function realDeps(): LifecycleDeps {
 
   return {
     processLiveness,
+    platform: process.platform,
     acquireStartLock: () => acquireDaemonStartLock(OPENRIG_DIR),
     spawn: (cmd, args, opts) => spawn(cmd, args, opts as Parameters<typeof spawn>[2]),
     fetch: async (url) => {
@@ -215,11 +216,13 @@ export function daemonCommand(depsOverride?: LifecycleDeps, httpDeps?: { baseUrl
   cmd
     .command("stop")
     .description("Stop the daemon (10s shutdown budget; 12s process wait; incomplete drain exits nonzero)")
-    .addHelpText("after", "\nSends at most one SIGTERM to a live target and verifies the original PID and listener. Repeated signals join shutdown.\nFor a recorded target, missing/stale receipts and incomplete drains exit nonzero, including retries.\nTarget state is retained until a matching clean receipt; status reads preserve unverified state.\nNo target is a distinct no-op, never clean-drain certification; unbound incomplete evidence stays unverified.\nInspect OPENRIG_HOME/daemon-shutdown.json and daemon.log for the phase and outcome.\nThe bound covers asynchronous shutdown; an event-loop wedge still requires operator recovery.\n")
+    .addHelpText("after", "\nSends at most one SIGTERM to a live target and verifies the original PID and listener. Repeated signals join shutdown.\nFor a recorded target, missing/stale receipts and incomplete drains exit nonzero, including retries.\nTarget state is retained until a matching clean receipt; status reads preserve unverified state.\nNo target is a distinct no-op, never clean-drain certification; unbound incomplete evidence stays unverified.\nInspect OPENRIG_HOME/daemon-shutdown.json and daemon.log for the phase and outcome.\nThe bound covers asynchronous shutdown; an event-loop wedge still requires operator recovery.\nOn Windows SIGTERM terminates the process rather than draining it, so a stop reports that no graceful drain ran and the daemon reconciles interrupted work at its next start.\n")
     .action(async () => {
       try {
         const outcome = await stopDaemon(getDeps());
-        console.log(outcome === "stopped" ? "Daemon stopped" : "No daemon target recorded; listener refused. Nothing to stop; prior drain not certified.");
+        console.log(outcome === "stopped" ? "Daemon stopped"
+          : outcome === "terminated" ? "Daemon terminated without a graceful drain; it reconciles interrupted work at its next start."
+          : "No daemon target recorded; listener refused. Nothing to stop; prior drain not certified.");
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
         process.exitCode = 1;
@@ -232,7 +235,21 @@ export function daemonCommand(depsOverride?: LifecycleDeps, httpDeps?: { baseUrl
     .option("--json", "Print daemon health as JSON")
     .action(async (opts: { json?: boolean }) => {
       const client = new DaemonClient(httpDeps?.baseUrl, { fetchImpl: httpDeps?.fetchImpl, senderIdentity: false });
-      const response = await client.waitForReady();
+      let response;
+      try {
+        response = await client.waitForReady();
+      } catch (err) {
+        // A refusal is positive evidence that nothing is listening. Windows has no stale-state
+        // cleanup path, so after a non-graceful stop this is the only place the stopped state is
+        // reported; elsewhere keep the existing connection error.
+        if ((getDeps().platform ?? process.platform) === "win32"
+          && err instanceof DaemonConnectionError && err.causeCode === "ECONNREFUSED") {
+          if (opts.json) console.log(JSON.stringify({ state: "stopped" }));
+          else console.log("Daemon stopped");
+          return;
+        }
+        throw err;
+      }
       if (opts.json) console.log(JSON.stringify(response.data));
       else console.log(`Daemon running at ${client.baseUrl}${response.data.pid ? ` (pid ${response.data.pid})` : ""}`);
     });

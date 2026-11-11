@@ -208,6 +208,8 @@ export interface LifecycleDeps {
   openForAppend: (path: string) => number;
   closeFile?: (fd: number) => void;
   isProcessAlive: (pid: number) => boolean;
+  /** Platform for the stop path's exit semantics. Absent = the POSIX rules; realDeps supplies the running platform. */
+  platform?: NodeJS.Platform;
   /** #275 — three-state liveness for status reads (production: realDeps). Optional so existing
    *  mocks keep the boolean rule; absent = derived from isProcessAlive. */
   processLiveness?: (pid: number) => ProcessLiveness;
@@ -256,6 +258,10 @@ const STATUS_PROBE_RETRY_DELAY_MS = 200;
 // prior fixed-bound timing (the settle deadline above is status-probe-LOCAL); this
 // restores the timeout the removed HEALTHZ_PROBE_TIMEOUT_MS supplied to them.
 const HEALTHZ_PROBE_TIMEOUT_MS = 250;
+// Windows terminates a process outright on SIGTERM, so the killed daemon leaves the keep-alive
+// socket the probe just used reset (ECONNRESET) rather than the port refusing. This bounded
+// re-probe lets that socket settle so the stop observation reports the port's real state.
+const WIN32_LISTENER_SETTLE_MS = 1_000;
 
 class HealthProbeTimeoutError extends Error {
   constructor(url: string) {
@@ -824,7 +830,7 @@ function removeMatchingState(deps: LifecycleDeps, stateFile: string, state: Daem
     && current.host === state.host && current.db === state.db) deps.removeFile(stateFile);
 }
 
-export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-target"> {
+export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-target" | "terminated"> {
   const state = readState(deps);
   const configured = resolveConfiguredDaemonTarget();
   const explicitUrl = readOpenRigEnv("OPENRIG_URL", "RIGGED_URL");
@@ -840,6 +846,19 @@ export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-t
       return "responding";
     } catch (error) {
       return isRefusedError(error) ? "refused" : "unavailable";
+    }
+  };
+  // Windows has no graceful drain to verify: SIGTERM terminates the process outright, so the
+  // daemon writes no shutdown receipt and the killed process resets the probe's pooled socket
+  // instead of leaving the port refused. Bounded re-probe until the port settles.
+  const settledListener = async (): Promise<"responding" | "refused" | "unavailable"> => {
+    // The pre-signal identity check keeps the plain probe; only judgment after the one signal waits.
+    if (deps.platform !== "win32") return listener();
+    const deadline = Date.now() + WIN32_LISTENER_SETTLE_MS;
+    for (;;) {
+      const effect = await listener();
+      if (effect !== "unavailable" || Date.now() >= deadline) return effect;
+      await new Promise((r) => setTimeout(r, 100));
     }
   };
   if (!state) {
@@ -878,11 +897,20 @@ export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-t
     }
   }
   const present = deps.isProcessAlive(state.pid);
-  const effect = await listener();
+  const effect = await settledListener();
   const observation = `targeted ${target}; checked ${check}; PID ${state.pid} ${present ? "present" : "absent"}; listener ${effect}`;
   if (present) {
     throw new Error(`Daemon did not exit after SIGTERM within ${DAEMON_STOP_WAIT_MS}ms; ${observation}` +
       (effect === "responding" ? " (still listening)" : "") + "; state file preserved.");
+  }
+  if (deps.platform === "win32") {
+    // Windows has no drain to verify: SIGTERM terminates the process outright, so the daemon
+    // writes no shutdown receipt. Identity was confirmed before the single signal; an absent
+    // PID with a listener that is not responding is the strongest evidence this platform
+    // offers. A still-responding listener stays an error.
+    if (effect === "responding") throw new Error(`Daemon stop verification is unverified: ${observation}; state preserved.`);
+    removeMatchingState(deps, stateFile, state);
+    return "terminated";
   }
   if (effect !== "refused") throw new Error(`Daemon stop verification is unverified: ${observation}; state preserved.`);
 
