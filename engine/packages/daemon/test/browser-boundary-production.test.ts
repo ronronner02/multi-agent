@@ -48,7 +48,7 @@ describe("F1: production createAppWithWebSocket + registered terminal route, raw
     const built = createTestApp(db, {
       tmux: tmux as never,
       withWebSocket: true,
-      appDeps: { webUiEnabled: true, browserBoundaryObserver: (d) => decisions.push(d.code ?? d.outcome) },
+      appDeps: { terminalService: { listViews: async () => [] } as never, webUiEnabled: true, browserBoundaryObserver: (d) => decisions.push(d.code ?? d.outcome) },
     });
     ({ server, port } = await listen(built.app.fetch as Hono["fetch"]));
     built.injectWebSocket!(server);
@@ -100,14 +100,14 @@ describe("F1: production createAppWithWebSocket + registered terminal route, raw
       ["Host: "],
       [`Host: 127.0.0.1:${port}`, "Origin: "],
     ]) {
-      const status = await rawRequest(port, "GET /api/ps HTTP/1.1", [...headers, "Connection: close"]);
+      const status = await rawRequest(port, "GET /api/terminal/views HTTP/1.1", [...headers, "Connection: close"]);
       console.log("F1-HTTP", JSON.stringify(headers), status);
       expect(status).not.toContain(" 200 ");
     }
   });
 
   it("genuinely absent Host (HTTP/1.0, non-browser) is still admitted", async () => {
-    const status = await rawRequest(port, "GET /api/ps HTTP/1.0", []);
+    const status = await rawRequest(port, "GET /api/terminal/views HTTP/1.0", []);
     expect(status).toContain("200");
   });
 });

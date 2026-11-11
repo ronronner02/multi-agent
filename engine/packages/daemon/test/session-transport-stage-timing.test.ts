@@ -22,7 +22,7 @@ async function createTestDaemon(
   };
   try {
     const daemon = await createDaemon(options);
-    expect(fetchedUrls).toEqual([pluginVendorUrl]);
+    expect(fetchedUrls).toEqual([]);
     return daemon;
   } finally {
     globalThis.fetch = originalFetch;

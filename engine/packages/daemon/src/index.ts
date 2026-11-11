@@ -311,7 +311,7 @@ export async function startServer(port?: number) {
 
   // Multi-bind via N serve() instances sharing the same Hono app.
   // Hono's serve() targets a single host:port; for multi-bind we spawn
-  // one per host. The contextMonitor + watchdog scheduler only start
+  // one per host. The contextMonitor and seat schedulers only start
   // once after the first successful bind callback fires.
   let monitorsStarted = false;
   // P7 — lifecycle heartbeat: advance last-seen every tick while running.

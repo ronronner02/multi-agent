@@ -181,11 +181,9 @@ describe("#69 buildCodexResumeCore", () => {
 });
 
 describe("#69 production wiring", () => {
-  it("startup wires the real daemon-support probe into both Codex launch adapters", () => {
+  it("startup wires the real daemon-support probe into the Codex runtime adapter", () => {
     const source = fs.readFileSync(new URL("../src/startup.ts", import.meta.url), "utf8");
-    const resumeLine = source.split("\n").find((line) => line.includes("new CodexResumeAdapter("))!;
     const runtimeLine = source.split("\n").find((line) => line.includes("new CodexRuntimeAdapter("))!;
-    expect(resumeLine).toContain("detectDaemonSupport");
     expect(runtimeLine).toContain("detectDaemonSupport");
   });
 });

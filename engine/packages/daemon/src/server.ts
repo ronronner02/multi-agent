@@ -1,3 +1,4 @@
+import { activityHookRoutes } from "./routes/activity-hooks.js";
 import { requireLocalTarget } from "./middleware/local-target.js";
 import { Hono } from "hono";
 import fs from "node:fs";
@@ -673,6 +674,7 @@ export function createApp(deps: AppDeps): Hono {
   } else if (deps.enableNodeWebSocket) {
     registerTerminalAuthOnly(app, { bearerToken: deps.terminalBearerToken ?? null, managed: pairedOwners, credentials: teamOptions.credentials, allowPairedOwner: pairedOwners });
   }
+  app.route("/api/activity", activityHookRoutes);
   app.route("/api/seat", seatRoutes);
   app.route("/api/terminal", terminalRoutes());
 

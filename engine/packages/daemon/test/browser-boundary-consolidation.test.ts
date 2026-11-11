@@ -25,7 +25,7 @@ describe("one browser boundary on the production API and terminal routes", () =>
         ...mockTmuxAdapter(), hasSession: async () => { routeEffects++; return true; },
         setWindowOption: ok, startPipePane: ok, stopPipePane: ok, sendKeys: ok, sendText: ok, resizeWindow: ok,
       } as never,
-      appDeps: { webUiEnabled: true, browserBoundaryObserver: (d) => decisions.push(d.code ?? d.outcome) },
+      appDeps: { terminalService: { listViews: async () => [] } as never, webUiEnabled: true, browserBoundaryObserver: (d) => decisions.push(d.code ?? d.outcome) },
     });
     app = built.app;
     await new Promise<void>((resolve) => {
@@ -59,7 +59,7 @@ describe("one browser boundary on the production API and terminal routes", () =>
     it(`honors the primary allowlist for API and WS: ${origin}`, async () => {
       const headers = { Host: `127.0.0.1:${port}`, Origin: origin };
       const before = decisions.length;
-      expect((await app.request("/api/ps", { headers })).status).toBe(200);
+      expect((await app.request("/api/terminal/views", { headers })).status).toBe(200);
       expect(await upgrade(headers)).toBe(101);
       expect(decisions.slice(before)).toEqual(["allow", "allow"]);
     });
@@ -67,7 +67,7 @@ describe("one browser boundary on the production API and terminal routes", () =>
 
   it("admits the own UI on a non-loopback IP without a terminal token", async () => {
     const headers = { Host: `192.0.2.10:${port}`, Origin: `http://192.0.2.10:${port}` };
-    expect((await app.request("/api/ps", { headers })).status).toBe(200);
+    expect((await app.request("/api/terminal/views", { headers })).status).toBe(200);
     expect(await upgrade(headers)).toBe(101);
   });
 
@@ -75,7 +75,7 @@ describe("one browser boundary on the production API and terminal routes", () =>
     const before = routeEffects;
     for (const origin of ["chrome-extension://other", "https://dashboard.example:444", "http://dashboard.example", "null", "invalid"]) {
       const headers = { Host: `127.0.0.1:${port}`, Origin: origin };
-      const response = await app.request("/api/ps", { headers });
+      const response = await app.request("/api/terminal/views", { headers });
       expect(response.status).toBe(403);
       expect(await response.json()).toMatchObject({ code: "browser_origin_refused" });
       expect(await upgrade(headers)).toBe(403);

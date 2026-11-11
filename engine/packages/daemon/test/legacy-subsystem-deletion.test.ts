@@ -75,6 +75,8 @@ describe("legacy subsystem deletion", () => {
     ["GET", "/api/health-diagnosis"],
     ["GET", "/api/restore-check"],
     ["GET", "/api/activity"],
+    ["GET", "/api/activity/events"],
+    ["GET", "/api/activity/parked"],
     ["GET", "/api/attention"],
     ["GET", "/api/chat"],
     ["POST", "/api/compaction"],
