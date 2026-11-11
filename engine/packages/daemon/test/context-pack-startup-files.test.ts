@@ -25,7 +25,6 @@ describe("startup_files rejects the retired delivery-coupled context_pack repres
       "../src/domain/startup-validation.ts",
       "../src/domain/runtime-adapter.ts",
       "../src/domain/types.ts",
-      "../src/domain/rigspec-instantiator.ts",
     ];
     const source = paths.map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
     expect(source).not.toContain("contextPackRef");

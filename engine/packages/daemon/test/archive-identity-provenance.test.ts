@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Hono } from "hono";
 import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { QueueTransitionLog } from "../src/domain/queue-transition-log.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
-import { queueRoutes } from "../src/routes/queue.js";
 import { archiveAgedTerminalTransitions } from "../src/domain/queue-retention.js";
 
 const OLD = "2026-01-01T00:00:00.000Z";
@@ -68,12 +66,6 @@ describe("archived audit identity — real migration, writer and history readers
     expect(log.latestOwnerNotificationForQitem("archived")).toEqual(before.at(-1));
     expect(log.hasOwnerNotificationReceipt("archived", "fixture:key")).toBe(true);
     expect(log.hasOwnerNotificationReceipt("archived", "different:key")).toBe(false);
-    const app = new Hono();
-    app.use("*", async (c, next) => { c.set("queueRepo" as never, repo); await next(); });
-    app.route("/api/queue", queueRoutes());
-    const response = await app.request("/api/queue/archived/transitions");
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(before);
     // A newer live row and an archived row must share one ordering/limit.
     const newer = log.append({ qitemId: "archived", state: "done", actorSession: "owner@rig-a", identityProvenance: "transport:v1" });
     expect(log.listForQitem("archived")).toEqual([...before, newer]);

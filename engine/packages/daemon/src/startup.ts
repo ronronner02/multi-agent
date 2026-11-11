@@ -1,15 +1,9 @@
 import { documentDispatchRefusal } from "./domain/project-documents.js";
 import { managedModelRefusal } from "./domain/team-model-policy.js";
-import { fileURLToPath } from "node:url";
 import { discoverTailscaleSelfNames } from "./middleware/browser-boundary.js";
 import { configureShadowCapture } from "./domain/shadow-capture.js";
 import { SeatDeliveryGuard, resolveGuardTarget } from "./domain/seat-delivery-guard.js";
 import { queueRecoveryOwnsWake } from "./domain/queue-wake-ladder.js";
-import { HealthPolicyStore } from "./domain/health-policy.js";
-import { HealthCheckpointSource } from "./domain/health-checkpoints.js";
-import { PassiveCeremonySource } from "./domain/health-passive-ceremony.js";
-import { HealthDiagnosisService } from "./domain/health-diagnosis.js";
-import { readHealthArtifact, healthAuthority } from "./domain/health-context.js";
 import type { Hono } from "hono";
 import type Database from "better-sqlite3";
 import type { ArgvExecFn, ExecFn } from "./adapters/tmux.js";
@@ -29,52 +23,16 @@ import { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
 import { TmuxAdapter } from "./adapters/tmux.js";
 import { daemonTmuxServerArgs, setDaemonTmuxServer, tmuxServerArgs } from "./adapters/tmux-server.js";
 import { execArgvCommand, execCommand } from "./adapters/tmux-exec.js";
-import { execPreflightCommand } from "./adapters/preflight-exec.js";
-import { SnapshotRepository } from "./domain/snapshot-repository.js";
-import { CheckpointStore } from "./domain/checkpoint-store.js";
-import { SnapshotCapture } from "./domain/snapshot-capture.js";
-import { RestoreOrchestrator } from "./domain/restore-orchestrator.js";
 import { ClaudeManagedLaunch } from "./domain/claude-managed-launch.js";
-import { ClaudeResumeAdapter } from "./adapters/claude-resume.js";
-import { CodexResumeAdapter } from "./adapters/codex-resume.js";
 import { codexDaemonSupportProbe } from "./domain/codex-daemon-support.js";
 import { codexNetworkDefaultReader } from "./domain/codex-network-default.js";
 import { codexUsageReader } from "./domain/provider/codex-usage-reader.js";
-import { CodexUsageWindows } from "./domain/provider/codex-usage-windows.js";
 import { prepareCodexTeamWorkspace } from "./domain/codex-team-workspace.js";
-import { PiResumeAdapter } from "./adapters/pi-resume.js";
-import { OmpResumeAdapter } from "./adapters/omp-resume.js";
 import { OMP_PROVIDER_ENV_VARS, OMP_PROVIDER_EXTRA_ENV_VARS } from "./adapters/pi-runner-protocol.js";
-import { RigSpecExporter } from "./domain/rigspec-exporter.js";
-import { PodRepository } from "./domain/pod-repository.js";
-import { RigSpecPreflight } from "./domain/rigspec-preflight.js";
-import { RigInstantiator } from "./domain/rigspec-instantiator.js";
 import { Reconciler } from "./domain/reconciler.js";
-import { PackageRepository } from "./domain/package-repository.js";
-import { InstallRepository } from "./domain/install-repository.js";
-import { InstallEngine } from "./domain/install-engine.js";
-import { InstallVerifier } from "./domain/install-verifier.js";
-import { BootstrapRepository } from "./domain/bootstrap-repository.js";
-import { RuntimeVerifier } from "./domain/runtime-verifier.js";
 import { RequirementsProbeRegistry } from "./domain/requirements-probe.js";
-import { ExternalInstallPlanner } from "./domain/external-install-planner.js";
-import { ExternalInstallExecutor } from "./domain/external-install-executor.js";
-import { PackageInstallService } from "./domain/package-install-service.js";
-import { BootstrapOrchestrator } from "./domain/bootstrap-orchestrator.js";
-import { routeBundleContents } from "./domain/bundle-content-routing.js";
-import { TmuxDiscoveryScanner } from "./domain/tmux-discovery-scanner.js";
-import { SessionFingerprinter } from "./domain/session-fingerprinter.js";
-import { SessionEnricher } from "./domain/session-enricher.js";
 import { DiscoveryRepository } from "./domain/discovery-repository.js";
-import { DiscoveryCoordinator } from "./domain/discovery-coordinator.js";
-import { ClaimService } from "./domain/claim-service.js";
-import { SelfAttachService } from "./domain/self-attach-service.js";
-import { RigLifecycleService } from "./domain/rig-lifecycle-service.js";
-import { RigExpansionService } from "./domain/rig-expansion-service.js";
 // TODO: AS-T12 — migrate to pod-aware bundle source resolver
-import { LegacyBundleSourceResolver as BundleSourceResolver } from "./domain/bundle-source-resolver.js";
-import { PodBundleSourceResolver } from "./domain/bundle-source-resolver.js";
-import { PsProjectionService } from "./domain/ps-projection.js";
 import { SeatActivityService } from "./domain/seat-activity-service.js";
 import { readClaudeSelfReportEvidence } from "./adapters/claude-code-adapter.js";
 import { SeatStructuralActivityService } from "./domain/seat-structural-activity-service.js";
@@ -84,18 +42,12 @@ import { ensureSeatPane, seatForTask } from "./domain/seat-pane.js";
 import { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
 import { randomUUID } from "node:crypto";
 import { setSelfHostId, setSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
-import { UpCommandRouter } from "./domain/up-command-router.js";
-import { RigTeardownOrchestrator } from "./domain/rig-teardown.js";
 import { ResumeMetadataRefresher } from "./domain/resume-metadata-refresher.js";
 import { observeClaudePaneStartedAt } from "./domain/native-process-lineage.js";
 import { TranscriptStore } from "./domain/transcript-store.js";
 import { resumeRunningTranscriptCaptures } from "./domain/transcript-capture.js";
 import { SessionTransport } from "./domain/session-transport.js";
 import { AgentActivityStore } from "./domain/agent-activity-store.js";
-import { HistoryQuery } from "./domain/history-query.js";
-import { AskService } from "./domain/ask-service.js";
-import { WakeResolveService } from "./domain/wake-resolve-service.js";
-import type { WakeSessionRow } from "./domain/wake-resolver.js";
 import { ChatRepository } from "./domain/chat-repository.js";
 import { StreamStore } from "./domain/stream-store.js";
 import { SlowOpRecorder, type SlowOperationInstrumentation } from "./domain/slow-op-recorder.js";
@@ -111,36 +63,15 @@ import { ClassificationAttemptLedger } from "./domain/classification-attempts.js
 import { ViewProjector } from "./domain/view-projector.js";
 import { wireViewEventBridge } from "./domain/view-event-bridge.js";
 import { WatchdogJobsRepository } from "./domain/watchdog-jobs-repository.js";
-import { WatchdogAutoRegistration } from "./domain/watchdog-auto-registration.js";
 import { WatchdogHistoryLog } from "./domain/watchdog-history-log.js";
-import {
-  formatWatchdogDeliveryMessage,
-  WatchdogPolicyEngine,
-} from "./domain/watchdog-policy-engine.js";
-import { WatchdogScheduler } from "./domain/watchdog-scheduler.js";
-import {
-  ContinuityPolicyMaterializer,
-  createContinuityCutoverBaton,
-  findClaudeTranscriptByToken,
-  recordManagedWidthReceipt,
-} from "./domain/continuity-policy-materializer.js";
 import { WorkflowRuntime, dependencySatisfied } from "./domain/workflow-runtime.js";
 import { resolveWorkflowHumanDestination } from "./domain/workflow-human-destination.js";
 import { makeWorkflowKeepalivePolicy } from "./domain/policies/workflow-keepalive.js";
 import { makeIdleGateQitemPolicy } from "./domain/policies/idle-gate-qitem.js";
 import { makeParkedOwnerConsumerPolicy, makeRigAnchor, PARKED_OWNER_POLICY_NAME } from "./domain/policies/parked-owner-consumer.js";
 import { diagnoseRigParked } from "./domain/parked-query.js";
-import { SpecReviewService } from "./domain/spec-review-service.js";
-import { SpecLibraryService } from "./domain/spec-library-service.js";
 // Phase 3a slice 3.3 — plugin discovery service.
-import { PluginDiscoveryService } from "./domain/plugin-discovery-service.js";
 // Slice 28 Checkpoint C-3 — skill-library discovery (SC-29 #11 cumulative).
-import { SkillLibraryDiscoveryService } from "./domain/skill-library-discovery.js";
-import { ContextPackLibraryService } from "./domain/context-packs/context-pack-library-service.js";
-import { openRigContextLibraryRoots } from "./domain/instance-initialization.js";
-import { resolveSystemWorld } from "./domain/system-world.js";
-import { AgentImageLibraryService } from "./domain/agent-images/agent-image-library-service.js";
-import { SnapshotCapturer } from "./domain/agent-images/snapshot-capturer.js";
 import { SettingsStore as ContextPackSettingsStore } from "./domain/user-settings/settings-store.js";
 import { SettingsStore } from "./domain/user-settings/settings-store.js";
 import { WhoamiService } from "./domain/whoami-service.js";
@@ -173,10 +104,6 @@ import type { WorkerClient } from "./adapters/worker-launch.js";
 import type { WorkerEvent } from "./contracts/worker-events.js";
 import { unisolatedWorkerRoots, type ManagedWorkerRoots } from "./domain/unisolated-roots.js";
 import { defaultWorktreeRoot } from "./domain/worktree-policy.js";
-import { ProviderServiceImpl } from "./domain/provider/provider-service-impl.js";
-import { collectClaudeSignalsFromProviderUsageDirectory } from "./domain/provider/claude-usage-reader.js";
-import { legacyProviderUsageDirectory, providerUsageDirectory } from "./domain/telemetry-state-paths.js";
-import { execFile } from "node:child_process";
 import fs, { readFileSync as readFileSyncNamed } from "node:fs";
 import os from "node:os";
 import nodePath from "node:path";
@@ -185,15 +112,9 @@ import nodePath from "node:path";
 // can record diagnostic rows. SC-29 #10 declared verbatim in commit body.
 import { RigModeStore } from "./domain/rig-mode/rig-mode-store.js";
 import { OperatingPostureService, configuredCatalogPath } from "./domain/rig-mode/operating-posture.js";
-import { MissionControlActionLog } from "./domain/scope/action-log.js";
 import { OPENRIG_HOME } from "./openrig-compat.js";
-import { materializeBuiltinPolicyReference } from "./domain/builtin-policy-reference.js";
 import { ensureActivityHookToken, writeActivityEndpointFile, deriveActivityUrl, readActivityEndpointFile } from "./domain/activity-endpoint.js";
-import {
-  getCompatibleOpenRigPath,
-  getDefaultOpenRigPath,
-  readOpenRigEnv,
-} from "./openrig-compat.js";
+import { readOpenRigEnv } from "./openrig-compat.js";
 
 interface DaemonOptions {
   dbPath?: string;
@@ -1041,18 +962,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     (sessionName) => sessionRegistry.currentOccupantGenerationForSession(sessionName),
   );
   queueRepoInstance.attachWatchdogJobsRepository(watchdogJobsRepoInstance);
-  const watchdogAutoRegistration = new WatchdogAutoRegistration({
-    db,
-    jobsRepo: watchdogJobsRepoInstance,
-    settingsStore: new ContextPackSettingsStore(),
-    warn: (message) => console.warn(message),
-  });
-  if (!managed) {
-    sessionRegistry.setWatchdogRegistrationObserver(watchdogAutoRegistration);
-    // Existing sessions predate the structural mint hook. Audit them at every
-    // legacy boot without creating jobs: additive coverage stays loud, core boot stays live.
-    watchdogAutoRegistration.assertLiveSeatCoverage();
-  }
   const watchdogHistoryLogInstance = new WatchdogHistoryLog(db);
 
   const argvExec = opts?.argvExec
@@ -1186,9 +1095,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     tmuxOptionDefaults,
   });
 
-  const snapshotRepo = new SnapshotRepository(db);
-  const checkpointStore = new CheckpointStore(db);
-  const snapshotCapture = new SnapshotCapture({ db, rigRepo, sessionRegistry, eventBus, snapshotRepo, checkpointStore });
   const claudeManagedLaunch = new ClaudeManagedLaunch(db, { ...launchSessionEnv, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }, {
     OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN: process.env.OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN,
   });
@@ -1281,44 +1187,17 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
             qitemId: string; taskId: string; role: string; queueState: string; session: string | null }>),
     });
   }
-  const claudeResume = new ClaudeResumeAdapter(tmuxAdapter, { claudeManagedLaunch, seatLaunchEnvironment, ...workerLauncher });
   // #275: one reader for both Codex launch adapters, with the PATH, HOME and CODEX_HOME a seat session gets.
   const readCodexNetworkDefault = codexNetworkDefaultReader({ launchPath: process.env.PATH, home: daemonHome, codexHome });
   const prepareTeamWorkspace = (sessionName: string) => prepareCodexTeamWorkspace(sessionName,
     new ContextPackSettingsStore().resolveConfig().workspaceRoot,
     process.env.OPENRIG_SHARED_DOCS_ROOT?.trim() || nodePath.join(daemonHome, ".openrig", "shared-docs"), daemonHome);
-  const codexResume = new CodexResumeAdapter(tmuxAdapter, { prepareTeamWorkspace, seatLaunchEnvironment, ...workerLauncher, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault });
   // OPR.0.4.6.PI1 — the Pi seat-state root + the compiled runner entry (daemon
   // dist). Shared by the Pi runtime adapter, the resume adapter, and the
   // resume-token capture sidecar reader.
   const piStateRoot = nodePath.join(OPENRIG_HOME, "state", "pi");
   const ompStateRoot = nodePath.join(OPENRIG_HOME, "state", "omp");
   const piRunnerEntryPath = nodePath.resolve(import.meta.dirname, "./adapters/pi-runner.js");
-  const piResume = new PiResumeAdapter(
-    tmuxAdapter,
-    { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }) },
-    { stateRoot: piStateRoot, runnerEntryPath: piRunnerEntryPath },
-    { seatLaunchEnvironment },
-  );
-  const ompResume = new OmpResumeAdapter(
-    tmuxAdapter,
-    { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }) },
-    { stateRoot: ompStateRoot, runnerEntryPath: piRunnerEntryPath },
-  );
-  // Services infrastructure (RigEnv) — created early so restore/bootstrap can use it
-  const { ComposeServicesAdapter } = await import("./adapters/compose-services-adapter.js");
-  const { ServiceOrchestrator } = await import("./domain/service-orchestrator.js");
-  const composeAdapter = new ComposeServicesAdapter(opts?.tmuxExec ?? execCommand);
-  const serviceOrchestrator = new ServiceOrchestrator({ rigRepo, composeAdapter });
-
-  const restoreOrchestrator = new RestoreOrchestrator({
-    db, rigRepo, sessionRegistry, eventBus, snapshotRepo, snapshotCapture,
-    checkpointStore, nodeLauncher, tmuxAdapter, claudeResume, codexResume, piResume, ompResume,
-    transcriptStore, serviceOrchestrator,
-    managedAttempt: input => managedAttempt?.(input) ?? Promise.resolve(undefined),
-  });
-
-
   // Reconcile all managed rigs — marks stale sessions as detached.
   // Capture aggregate counts and log a compact summary so cold-start truth
   // repair is visible in daemon output instead of silently swallowed.
@@ -1364,60 +1243,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     } catch { /* logging must never throw */ }
   }
 
-  const podRepo = new PodRepository(db);
-  const rigSpecExporter = new RigSpecExporter({ rigRepo, sessionRegistry, podRepo });
-  const rigSpecPreflight = new RigSpecPreflight({
-    rigRepo, tmuxAdapter, exec: opts?.tmuxExec ?? execPreflightCommand,
-  });
-  const rigInstantiator = new RigInstantiator({
-    db, rigRepo, sessionRegistry, eventBus, nodeLauncher, preflight: rigSpecPreflight, tmuxAdapter,
-  });
-
-  // Phase 4: Package install services
-  const packageRepo = new PackageRepository(db);
-  const installRepo = new InstallRepository(db);
-  const engineFsOps = {
-    readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-    writeFile: (p: string, content: string) => fs.writeFileSync(p, content, "utf-8"),
-    exists: (p: string) => fs.existsSync(p),
-    mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }),
-    copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest),
-    deleteFile: (p: string) => fs.unlinkSync(p),
-  };
-  const installEngine = new InstallEngine(installRepo, engineFsOps);
-  const verifierFsOps = {
-    readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-    exists: (p: string) => fs.existsSync(p),
-  };
-  const installVerifier = new InstallVerifier(installRepo, packageRepo, verifierFsOps);
-
-  // Phase 5: Bootstrap services
-  const bootstrapRepo = new BootstrapRepository(db);
   const exec = opts?.tmuxExec ?? execCommand;
-  const runtimeVerifier = new RuntimeVerifier({ exec, db });
   const probeRegistry = new RequirementsProbeRegistry(exec);
-  const externalInstallPlanner = new ExternalInstallPlanner();
-  const externalInstallExecutor = new ExternalInstallExecutor({ exec, db });
-  const packageInstallService = new PackageInstallService({ packageRepo, installRepo, installEngine, installVerifier });
-  const resolverFsOps = {
-    readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-    exists: (p: string) => fs.existsSync(p),
-    listFiles: (dirPath: string) => {
-      const results: string[] = [];
-      function walk(dir: string, prefix: string) {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          if (entry.isDirectory()) walk(nodePath.join(dir, entry.name), nodePath.join(prefix, entry.name));
-          else results.push(prefix ? nodePath.join(prefix, entry.name) : entry.name);
-        }
-      }
-      walk(dirPath, "");
-      return results;
-    },
-  };
-  const bundleSourceResolver = new BundleSourceResolver({ fsOps: resolverFsOps });
-  // Pod-aware instantiator (AgentSpec reboot)
-  const { PodRigInstantiator } = await import("./domain/rigspec-instantiator.js");
-  const { reconcileSkillLoadout } = await import("./domain/skill-catalog.js");
   const { StartupOrchestrator } = await import("./domain/startup-orchestrator.js");
   const { ClaudeCodeAdapter } = await import("./adapters/claude-code-adapter.js");
   // P20 — the projection manifest: record-at-apply so the projector can later
@@ -1474,11 +1301,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     ).get() as { version: string | null } | undefined;
     if (codexVersionRow?.version) {
       codexVersion = codexVersionRow.version;
-    } else {
-      try {
-        const verifyResult = await runtimeVerifier.verifyCodex();
-        codexVersion = verifyResult.version ?? undefined;
-      } catch { /* codex not available — skip feature flag */ }
     }
     codexAdapter.ensureCodexFeatureFlag(enabled, { codexVersion });
     // OPR.0.4.1.10 FR-A — project the OpenRig activity hooks into the Codex config
@@ -1495,269 +1317,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     console.error(`[openrig] runtime setup warning: ${(err as Error).message}`);
   }
 
-  // plugin-primitive Phase 3a slice 3.2 — vendor openrig-core plugin to
-  // ~/.openrig/plugins/openrig-core/ on first launch. Auto-fetch from
-  // github.com/mvschwarz/openrig-plugins is best-effort + 404-tolerant
-  // (repo currently empty as of 2026-05-10; vendored
-  // copy is the source of truth at v0).
-  if (!managed) try {
-    const { PluginVendorService } = await import("./domain/plugin-vendor-service.js");
-    const vendoredAssetsDir = nodePath.resolve(import.meta.dirname, "../assets/plugins");
-    const userPluginsDir = getDefaultOpenRigPath("plugins");
-    const realFs = {
-      readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-      writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"),
-      exists: (p: string) => fs.existsSync(p),
-      mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }),
-      listFiles: (dir: string) => {
-        const r: string[] = [];
-        function w(d: string, pre: string) {
-          for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-            if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name));
-            else r.push(pre ? nodePath.join(pre, e.name) : e.name);
-          }
-        }
-        w(dir, "");
-        return r;
-      },
-      statMode: (p: string) => fs.statSync(p).mode,
-      chmod: (p: string, m: number) => fs.chmodSync(p, m),
-    };
-    const httpClient = async (url: string, opts?: { timeoutMs?: number }) => {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), opts?.timeoutMs ?? 5000);
-      try {
-        const resp = await fetch(url, { signal: ctrl.signal });
-        return { ok: resp.ok, status: resp.status };
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-    const vendorService = new PluginVendorService({
-      vendoredAssetsDir,
-      userPluginsDir,
-      fs: realFs,
-      httpClient,
-      logger: (...args) => console.log("[openrig]", ...args),
-    });
-    await vendorService.ensureLatest("openrig-core");
-    for (const skill of ["openrig-skills", "refocusing"]) {
-      try {
-        vendorService.ensureSkillGlobally("openrig-core", skill, [
-          nodePath.join(os.homedir(), ".claude", "skills"),
-          nodePath.join(os.homedir(), ".agents", "skills"),
-        ]);
-      } catch (err) {
-        console.error(`[openrig] global ${skill} skill setup warning: ${(err as Error).message}`);
-      }
-    }
-    // `rigs` is the person-facing guide (skills/rigs, the skills.sh front door), for a session that isn't on a
-    // team yet, so it isn't a plugin skill: that would put it in every seat's loadout. Its packaged copy
-    // installs under OpenRig's own version, so each upgrade refreshes it; a copy installed another way has no
-    // OpenRig marker and is left as it is.
-    try {
-      const { getDaemonVersion } = await import("./domain/daemon-version.js");
-      vendorService.ensureSkillDirGlobally(nodePath.resolve(import.meta.dirname, "../assets/skills/rigs"), "rigs", getDaemonVersion(), [
-        nodePath.join(os.homedir(), ".claude", "skills"),
-        nodePath.join(os.homedir(), ".agents", "skills"),
-      ]);
-    } catch (err) {
-      console.error(`[openrig] global rigs skill setup warning: ${(err as Error).message}`);
-    }
-  } catch (err) {
-    console.error(`[openrig] plugin vendor setup warning: ${(err as Error).message}`);
-  }
-
-  // PL-014: one daemon-scoped ContextPackLibraryService backs the
-  // delivery-free /api/context-packs list/sync/compose/read/delete/preview/pieces
-  // routes. Startup context-pack expansion is intentionally unsupported;
-  // dedicated send/broadcast/walk/queue verbs own delivery.
-  const contextPackLibrary = (() => {
-    // OPR.0.5.9.5 Wave B — config-resolved canonical context library. The
-    // shared instance initializer normally creates both roots; the mkdirs keep
-    // direct createDaemon test harnesses compatible.
-    const userPacksRoot = new ContextPackSettingsStore().resolveOne("context.root").value as string;
-    const [contextRoot, systemPacksRoot] = openRigContextLibraryRoots(userPacksRoot);
-    if (!managed) try { fs.mkdirSync(systemPacksRoot, { recursive: true }); } catch { /* best-effort */ }
-    const roots: Array<{ path: string; sourceType: "builtin" | "user_file" | "workspace" }> = [
-      { path: contextRoot, sourceType: "user_file" },
-      { path: systemPacksRoot, sourceType: "user_file" },
-    ];
-    try {
-      const settingsStore = new ContextPackSettingsStore();
-      const cfg = settingsStore.resolveConfig();
-      const workspacePacksRoot = nodePath.join(cfg.workspaceRoot, ".openrig", "context-packs");
-      // Registered even before it exists: scan() skips a missing root, so a
-      // folder created after startup is found by the next sync, not a restart.
-      if (workspacePacksRoot !== userPacksRoot && workspacePacksRoot !== systemPacksRoot) {
-        roots.push({ path: workspacePacksRoot, sourceType: "workspace" });
-      }
-    } catch { /* settings unavailable; fall through with user-file root only */ }
-    const builtinPacksRoot = nodePath.resolve(import.meta.dirname, "../context-packs");
-    if (fs.existsSync(builtinPacksRoot)) {
-      roots.unshift({ path: builtinPacksRoot, sourceType: "builtin" });
-    }
-    const lib = new ContextPackLibraryService({ roots });
-    lib.scan();
-    return lib;
-  })();
-
-  // PL-016 Item 2 + Item 4: hoist AgentImageLibraryService construction
-  // so the PodRigInstantiator can resolve `session_source: mode:
-  // agent_image` at materialize time. Same instance returned to deps
-  // below so /api/agent-images/* + the SnapshotCapturer share it.
-  const agentImageRootBuilder = () => {
-    const userImagesRoot = getDefaultOpenRigPath("agent-images");
-    if (!managed) try { fs.mkdirSync(userImagesRoot, { recursive: true }); } catch { /* best-effort */ }
-    const roots: Array<{ path: string; sourceType: "builtin" | "user_file" | "workspace" }> = [
-      { path: userImagesRoot, sourceType: "user_file" },
-    ];
-    try {
-      const settingsStore = new ContextPackSettingsStore();
-      const cfg = settingsStore.resolveConfig();
-      const workspaceImagesRoot = nodePath.join(cfg.workspaceRoot, ".openrig", "agent-images");
-      if (workspaceImagesRoot !== userImagesRoot && fs.existsSync(workspaceImagesRoot)) {
-        roots.push({ path: workspaceImagesRoot, sourceType: "workspace" });
-      }
-    } catch { /* settings unavailable */ }
-    return { userImagesRoot, roots };
-  };
-  const agentImageLibrary = (() => {
-    const { roots } = agentImageRootBuilder();
-    const lib = new AgentImageLibraryService({ roots });
-    lib.scan();
-    return lib;
-  })();
-  const snapshotCapturer = new SnapshotCapturer({
-    db,
-    rigRepo,
-    sessionRegistry,
-    agentImageLibrary,
-    targetRoot: getDefaultOpenRigPath("agent-images"),
-  });
-
-  const continuityPolicyMaterializer = new ContinuityPolicyMaterializer(
-    watchdogJobsRepoInstance,
-    ({ sessionId }) => {
-      const row = db.prepare("SELECT resume_token FROM sessions WHERE id = ?").get(sessionId) as
-        | { resume_token: string | null }
-        | undefined;
-      const token = row?.resume_token;
-      if (!token) return null;
-      const claudeRoot = process.env.CLAUDE_CONFIG_DIR ?? nodePath.join(os.homedir(), ".claude");
-      return findClaudeTranscriptByToken(nodePath.join(claudeRoot, "projects"), token);
-    },
-  );
-
-  const podInstantiator = new PodRigInstantiator({
-    db, rigRepo, podRepo,
-    sessionRegistry, eventBus, nodeLauncher, startupOrchestrator,
-    fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), exists: (p: string) => fs.existsSync(p) },
-    adapters: { "claude-code": claudeAdapter, "codex": codexAdapter, "pi": piAdapter, "omp": ompAdapter, "stub": stubAdapter, "terminal": new (await import("./adapters/terminal-adapter.js")).TerminalAdapter() },
-    tmuxAdapter,
-    agentImageLibrary,
-    continuityPolicyMaterializer,
-    exec: opts?.tmuxExec ?? execPreflightCommand,
-    // OPR.0.5.3.6 — shipped topology chain-file defaults install under the
-    // typed topology.root at materialization (copy-if-absent).
-    topologyRootResolver: () => String(new ContextPackSettingsStore().resolveOne("topology.root").value),
-    onboardingEnabledResolver: () =>
-      new ContextPackSettingsStore().resolveOne("onboarding.default_pack.enabled").value === true,
-    skillsRootResolver: () =>
-      String(new ContextPackSettingsStore().resolveOne("skills.root").value),
-    systemWorldResolver: () => {
-      const settings = new ContextPackSettingsStore();
-      const cfg = settings.resolveConfig();
-      const selected = settings.resolveOne("context.system_world");
-      return resolveSystemWorld({
-        contextRoot: cfg.contextRoot,
-        selection: String(selected.value),
-        source: selected.source,
-      });
-    },
-    skillReconciler: reconcileSkillLoadout,
-  });
-
-  const podBundleSourceResolver = new PodBundleSourceResolver();
-
-  const bootstrapOrchestrator = new BootstrapOrchestrator({
-    db, bootstrapRepo, runtimeVerifier, probeRegistry,
-    installPlanner: externalInstallPlanner, installExecutor: externalInstallExecutor,
-    packageInstallService, rigInstantiator, fsOps: resolverFsOps,
-    bundleSourceResolver, podInstantiator, podBundleSourceResolver,
-    serviceOrchestrator, rigRepo,
-    // A bundle's packs land in context.root before its seats launch; rescan
-    // so the live library serves them on the first turn.
-    routeBundleContents: (bundlePath) => routeBundleContents(bundlePath, {
-      onContextPacksRouted: () => contextPackLibrary.scan(),
-    }),
-  });
-
-  // V0.3.1 slice 05 kernel-rig-as-default — auto-boot the kernel rig
-  // on daemon-start. Forward-fix #3 architectural: the bootstrap is
-  // FIRED in the background, not awaited. createDaemon completes as
-  // soon as the tracker is created so server.ts can bind healthz
-  // independent of kernel-agent readiness. A broken kernel agent no
-  // longer keeps the daemon HTTP surface from starting.
-  //
-  // Tracker state is exposed via /api/kernel/status (route below) and
-  // the CLI's `rig daemon start --wait-for-kernel` flag polls it.
-  // After the configurable degraded-timer window (default 90s; env
-  // override OPENRIG_KERNEL_DEGRADED_MS for ops + test fixtures), the
-  // tracker emits a single `kernel.agent.degraded` event for
-  // observability. The kernel rig is still the only rig the daemon
-  // auto-boots; other rigs require explicit operator-initiated
-  // `rig up` / `rig restore` per amended IMPL-PRD §16.2.
-  let kernelBootTracker: import("./domain/kernel-boot-tracker.js").KernelBootTracker | undefined;
-  if (!managed) try {
-    const { bootKernelIfNeeded } = await import("./domain/kernel-boot.js");
-    const degradedRaw = readOpenRigEnv("OPENRIG_KERNEL_DEGRADED_MS");
-    const degradedTimeoutMs = degradedRaw && /^\d+$/.test(degradedRaw)
-      ? parseInt(degradedRaw, 10)
-      : undefined;
-    kernelBootTracker = await bootKernelIfNeeded({
-      rigRepo,
-      sessionRegistry,
-      eventBus,
-      bootstrapOrchestrator,
-      specsDir: nodePath.resolve(nodePath.dirname(fileURLToPath(new URL(import.meta.url))), "..", "specs"),
-      // V0.3.1 slice 05 — kernel members run against the operator's
-      // workspace, not the daemon installation tree. Without this
-      // cwdOverride, BootstrapOrchestrator refuses with
-      // "cwd is inside the OpenRig installation". Use the resolved
-      // workspace.root setting as the per-operator default.
-      cwdOverride: runtimeSettings.workspaceRoot,
-      degradedTimeoutMs,
-    });
-    try {
-      // eslint-disable-next-line no-console
-      console.log(`kernel-boot: tracker-state=${kernelBootTracker.getStatus().kernelState}`);
-    } catch { /* logging must never throw */ }
-  } catch (err) {
-    try {
-      // eslint-disable-next-line no-console
-      console.warn(`kernel-boot: skipped due to error: ${err instanceof Error ? err.message : String(err)}`);
-    } catch { /* logging must never throw */ }
-  }
-
-  // Discovery services
-  const tmuxScanner = new TmuxDiscoveryScanner({ tmuxAdapter });
-  const sessionFingerprinter = new SessionFingerprinter({
-    tmuxAdapter, fsExists: (p: string) => fs.existsSync(p),
-  });
-  const sessionEnricher = new SessionEnricher({
-    fsExists: (p: string) => fs.existsSync(p),
-    fsReaddir: (p: string) => fs.readdirSync(p),
-  });
   const discoveryRepo = new DiscoveryRepository(db);
-  const discoveryCoordinator = new DiscoveryCoordinator({
-    scanner: tmuxScanner, fingerprinter: sessionFingerprinter, enricher: sessionEnricher,
-    discoveryRepo, sessionRegistry, eventBus,
-  });
-  // Context usage store — constructed ahead of the refresher + ClaimService so the
-  // Claude status-line sidecar reader can be injected into BOTH: FR-3
-  // adoption-boundary capture (ClaimService) and FR-4 snapshot null-fill (refresher).
-  // Also threaded through WhoamiService + routes below (same single instance).
+  // Context usage store backs the retained seat handover and runtime readers.
   const { ContextUsageStore } = await import("./domain/context-usage-store.js");
   const contextUsageStore = new ContextUsageStore(db, {
     stateDir: OPENRIG_HOME,
@@ -1766,61 +1327,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // generation) so a frozen pre-handover sample can't drive the threshold. null = UNKNOWN (inert).
     resolveOccupantBootAt: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.bootAt ?? null,
   });
-  const { HealthProjectionService, LiveContextHealthSource } = await import("./domain/health-detectors.js");
-  const healthSettingsStore = new ContextPackSettingsStore();
-  const contextHealthSource = new LiveContextHealthSource({
-    db,
-    rigRepo,
-    sessionRegistry,
-    contextUsageStore,
-    resolveContextPressurePolicy: () => healthSettingsStore.resolveContextPressurePolicy(),
-  });
-  const healthPolicy = new HealthPolicyStore(OPENRIG_HOME, () => healthSettingsStore.resolveContextPressurePolicy());
-  const healthCheckpoints = new HealthCheckpointSource(OPENRIG_HOME, queueRepoInstance, healthPolicy, undefined, healthSettingsStore.resolveOne("workspace.root").value as string);
-  const rigModeStore = new RigModeStore(db);
-  const operatingPosture = new OperatingPostureService(db, rigModeStore,
-    () => healthSettingsStore.resolveOne("workspace.root").value as string,
-    configuredCatalogPath(healthSettingsStore));
-  const passiveCeremony = new PassiveCeremonySource(healthSettingsStore.resolveOne("workspace.root").value as string, queueRepoInstance, healthPolicy, undefined, healthCheckpoints, { reader: operatingPosture, instanceId: OPENRIG_HOME });
-  const healthProjection = new HealthProjectionService([contextHealthSource, healthCheckpoints, passiveCeremony], () => healthPolicy.read(), (record) => operatingPosture.forHealth(record));
-  const healthDiagnosis = new HealthDiagnosisService({ queue: queueRepoInstance, projection: healthProjection, policy: healthPolicy,
-    authority: (record) => healthAuthority(healthSettingsStore.resolveOne("workspace.root").value as string, healthCheckpoints, record),
-    resolveEvidence: (path, finding) => readHealthArtifact(finding.operatingPosture?.context?.paths?.project ?? healthSettingsStore.resolveOne("workspace.root").value as string, path),
-  });
-  // OPR.0.4.3.20 FR-4 — inject contextUsageStore so refresh() can null-fill a
-  // Claude token from the sidecar during periodic/manual snapshot refresh.
-  // #421 — the pane's current Claude process start time; a sidecar sampled earlier is not this
-  // process's, so capture and null-fill skip it.
   const claudeProcessStartedAt = (sessionName: string) => observeClaudePaneStartedAt({ target: sessionName, tmux: tmuxAdapter });
   const resumeMetadataRefresher = new ResumeMetadataRefresher({ sessionRegistry, tmuxAdapter, contextUsageStore, claudeProcessStartedAt, codexHome: configuredCodexHome });
-  const claimService = new ClaimService({
-    db, rigRepo, sessionRegistry, discoveryRepo, eventBus, tmuxAdapter, transcriptStore,
-    claudeContextProvisioner: claudeAdapter,
-    // OPR.0.4.3.20 FR-3 — adoption-boundary resume-token capture deps
-    // (Claude sidecar reader + Codex thread-id capturer, both reuse).
-    contextUsageStore,
-    claudeProcessStartedAt,
-    resumeTokenCapturer: resumeMetadataRefresher,
-    // OPR.0.4.6.PI1 FR-6 — pi-runner sidecar reader (the adapter exposes it).
-    piRunnerStateStore: piAdapter,
-    ompRunnerStateStore: ompAdapter,
-  });
-  const selfAttachService = new SelfAttachService({
-    db, rigRepo, podRepo, sessionRegistry, eventBus, tmuxAdapter, transcriptStore,
-    claudeContextProvisioner: claudeAdapter,
-    // OPR.0.4.3.28 B3 — echo the resolved activity url+token into the self-attach
-    // response env so the caller's shell can produce activity signal.
-    activityEnv: { url: resolvedActivityHookUrl, token: resolvedActivityHookToken },
-  });
-  const rigLifecycleService = new RigLifecycleService({
-    db, rigRepo, sessionRegistry, discoveryRepo, eventBus, queueRepo: queueRepoInstance, tmuxAdapter,
-  });
-  const rigExpansionService = new RigExpansionService({ db, rigRepo, eventBus, nodeLauncher, podInstantiator, sessionRegistry });
-
-  const specReviewService = new SpecReviewService();
-
-  // (ContextUsageStore is constructed above, ahead of ClaimService, for FR-3.)
-  const whoamiService = new WhoamiService({ db, rigRepo, sessionRegistry, transcriptStore, contextUsageStore });
   // W2a-1 — producer wiring: the live occupant generation resolves synchronously from the shipped
   // occupant-tenure ledger. generation_uuid CHANGES for a new occupant and persists only within one
   // tenure (a same-session relaunch is a continuation with no new generation); node_id is the stable-
@@ -1849,26 +1357,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       });
     });
   }
-  const { SeatAttentionReconciler } = await import("./domain/seat-attention-reconciler.js");
-  const seatAttentionReconciler = new SeatAttentionReconciler({
-    sessionRegistry, eventBus, agentActivityStore, db, tmux: tmuxAdapter,
-    reconcileRestoreOutcome: (rigId, nodeId) => restoreOrchestrator.reconcileNodeRuntimeTruth(rigId, nodeId),
-    sendVerify: async (session, text, opts) => {
-      const transport = deps.sessionTransport;
-      if (!transport) return { ok: false, outcome: "failed" };
-      return transport.send(session, text, { verify: opts?.verify });
-    },
-    capture: async (session, opts) => {
-      const transport = deps.sessionTransport;
-      if (!transport) return { ok: false, sessionName: session, error: "transport_unavailable" };
-      return transport.capture(session, opts);
-    },
-  });
-
-  // Capture compatibility before the spec-library initializer creates the primary directory.
-  const userSpecLibraryRoot = getDefaultOpenRigPath("specs");
-  const compatibleSpecLibraryRoot = getCompatibleOpenRigPath("specs");
-
   const deps: AppDeps = {
     teamControl: teamControlOptions,
     teamGovernance,
@@ -1885,67 +1373,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     tmuxOptionDefaults,
     sessionEnv: launchSessionEnv,
     runtimeSessionEnv,
-    snapshotCapture,
-    snapshotRepo,
-    // Slice-04 OPR.0.5.0.4: production provider service — getReadModel over the codex-auth reader
-    // + node-inventory across rigs; precheck via the pure gate; switch honest-interim (D seam).
-    // C3: the Claude statusline provider_usage cache lane. Cache files are seat-keyed and the
-    // reader normalizes valid subscription windows. Live-seat fallback is owned by provider-collect.
-    providerService: new ProviderServiceImpl({
-      db,
-      listRigs: () => rigRepo.listRigs(),
-      collectClaudeSignals: () => collectClaudeSignalsFromProviderUsageDirectory(
-        providerUsageDirectory(OPENRIG_HOME),
-        undefined,
-        legacyProviderUsageDirectory(OPENRIG_HOME),
-      ),
-      agentActivityStore,
-      // Slice 01: Codex usage windows, off unless provider.usage_windows is on (read per call). The reader
-      // runs only on an explicit refresh, with the PATH, HOME and CODEX_HOME a seat session gets.
-      usageWindows: {
-        enabled: () => new ContextPackSettingsStore().resolveOne("provider.usage_windows").value === true,
-        windows: new CodexUsageWindows({ read: codexUsageReader({ launchPath: process.env.PATH, home: daemonHome, codexHome }) }),
-      },
-    }),
-    restoreOrchestrator,
-    resumeMetadataRefresher, // OPR.0.4.3.20 FR-4 — manual snapshot refresh-before-serialize
-    rigSpecExporter,
-    rigSpecPreflight,
-    rigInstantiator,
-    packageRepo,
-    installRepo,
-    installEngine,
-    installVerifier,
-    bootstrapOrchestrator,
-    bootstrapRepo,
-    discoveryCoordinator,
+    resumeMetadataRefresher,
     discoveryRepo,
-    claimService,
-    selfAttachService,
-    rigLifecycleService,
-    rigExpansionService,
-    // Slice 15 — SeatActivityService owns the `terminal-active` primitive
-    // (tmux byte-stream). Wired into PsProjectionService so `rig ps`
-    // + UI surfaces read the latest observation per seat. NEVER reads
-    // queue/assignment state (non-inference contract; see slice 15 IMPL-PRD §2.3).
     seatActivityService,
     seatStructuralActivityService,
     seatIdentityReconciler,
-    // OPR.0.4.4.21 — agentActivity feeds the rig-rollup attention
-    // predicate's needs_input signal (synchronous events lookup only).
-    psProjectionService: new PsProjectionService({ db, seatActivity: seatActivityService, agentActivity: agentActivityStore }),
-    upRouter: new UpCommandRouter({
-      fsOps: {
-        exists: (p: string) => fs.existsSync(p),
-        readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-        readHead: (p: string, bytes: number) => { const fd = fs.openSync(p, "r"); const buf = Buffer.alloc(bytes); fs.readSync(fd, buf, 0, bytes, 0); fs.closeSync(fd); return buf; },
-      },
-    }),
-    teardownOrchestrator: new RigTeardownOrchestrator({
-      db, rigRepo, sessionRegistry, tmuxAdapter, snapshotCapture, eventBus, resumeMetadataRefresher, serviceOrchestrator,
-    }),
-    podInstantiator,
-    podBundleSourceResolver,
     runtimeAdapters: { "claude-code": claudeAdapter, "codex": codexAdapter, "pi": piAdapter, "omp": ompAdapter, "stub": stubAdapter, "terminal": new (await import("./adapters/terminal-adapter.js")).TerminalAdapter() },
     transcriptStore,
     sessionTransport: (() => {
@@ -1984,7 +1416,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       return t;
     })(),
     chatRepo: new ChatRepository(db),
-    streamStore,
     slowOpRecorder,
     queueRepo: queueRepoInstance,
     inboxHandler: new InboxHandler(db, eventBus, queueRepoInstance),
@@ -1997,159 +1428,10 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     viewProjector: viewProjectorInstance,
     watchdogJobsRepo: watchdogJobsRepoInstance,
     watchdogHistoryLog: watchdogHistoryLogInstance,
-    wakeResolveService: new WakeResolveService({
-      listSessionsBySeat: (seat: string) =>
-        db
-          .prepare(
-            `SELECT s.id AS id, s.session_name AS sessionName, s.resume_token AS resumeToken,
-                    n.runtime AS runtime, s.created_at AS createdAt
-               FROM sessions s JOIN nodes n ON s.node_id = n.id
-              WHERE s.session_name = ? ORDER BY s.id DESC`,
-          )
-          .all(seat) as WakeSessionRow[],
-    }),
-    askService: (() => {
-      // P19 A5 (finding graduated): inject seatActivity like the attention path
-      // (line ~919) — one terminalActive truth, never two divergent projections.
-      const psProjectionService = new PsProjectionService({ db, seatActivity: seatActivityService, agentActivity: agentActivityStore });
-      const execDep = (cmd: string, args: string[]): Promise<{ stdout: string; exitCode: number }> =>
-        new Promise((resolve) => {
-          execFile(cmd, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
-            if (err && typeof (err as NodeJS.ErrnoException).code === "string" && (err as NodeJS.ErrnoException).code === "ENOENT") {
-              resolve({ stdout: "", exitCode: 2 });
-              return;
-            }
-            const exitCode = err ? (err as { code?: number }).code ?? 1 : 0;
-            resolve({ stdout: stdout ?? "", exitCode: typeof exitCode === "number" ? exitCode : 1 });
-          });
-        });
-      const chatRepoForAsk = new ChatRepository(db);
-      const historyQuery = new HistoryQuery({
-        transcriptsRoot: transcriptStore.enabled
-          ? (transcriptsPath ?? getCompatibleOpenRigPath("transcripts"))
-          : getCompatibleOpenRigPath("transcripts"),
-        exec: execDep,
-        chatSearchFn: (rigId: string, pattern: string) =>
-          chatRepoForAsk.searchChat(rigId, pattern).map((m) => ({
-            sender: m.sender,
-            body: m.body,
-            createdAt: m.createdAt,
-          })),
-      });
-      return new AskService({
-        psProjectionService,
-        rigRepo,
-        historyQuery,
-        transcriptsEnabled: transcriptStore.enabled,
-        whoamiService,
-      });
-    })(),
-    whoamiService,
     agentActivityStore,
-    seatAttentionReconciler,
     activityHookToken: resolvedActivityHookToken,
     contextUsageStore,
-    healthProjection,
-    healthDiagnosis,
-    healthPolicy,
-    healthCheckpoints,
-    serviceOrchestrator,
-    composeAdapter,
-    kernelBootTracker,
-    specReviewService,
-    specLibraryService: (() => {
-      const userSpecsRoot = userSpecLibraryRoot;
-      const legacySpecsRoot = compatibleSpecLibraryRoot;
-      if (!managed) try { fs.mkdirSync(userSpecsRoot, { recursive: true }); } catch { /* best-effort */ }
-      // From src/ or dist/, ../specs points to packages/daemon/specs/
-      const builtinSpecsRoot = nodePath.resolve(import.meta.dirname, "../specs");
-      const roots: Array<{ path: string; sourceType: "builtin" | "user_file" }> = [
-        { path: userSpecsRoot, sourceType: "user_file" },
-      ];
-      if (legacySpecsRoot !== userSpecsRoot && fs.existsSync(legacySpecsRoot)) {
-        roots.push({ path: legacySpecsRoot, sourceType: "user_file" });
-      }
-      // Only add builtin root if it exists
-      if (fs.existsSync(builtinSpecsRoot)) {
-        roots.unshift({ path: builtinSpecsRoot, sourceType: "builtin" });
-      }
-      const lib = new SpecLibraryService({ roots, specReviewService });
-      lib.scan();
-      return lib;
-    })(),
-    // Plugin reverse usage must cover the same built-in, user, and legacy roots as the spec library.
-    // bug-fix slice plugin-discovery-respects-openrig-home: route the
-    // openrigPluginsDir through the OPENRIG_HOME-aware resolver so
-    // discovery + vendor (which already uses the helper at line 428)
-    // resolve to the same root. Operator-level test isolation + the
-    // slice 22 populated-VM-env story both depend on this symmetry.
-    // Provider caches belong to their selected provider homes, not OPENRIG_HOME.
-    pluginDiscoveryService: new PluginDiscoveryService({
-      openrigPluginsDir: getDefaultOpenRigPath("plugins"),
-      claudeCacheDir: nodePath.join(os.homedir(), ".claude", "plugins", "cache"),
-      codexCacheDir: nodePath.join(codexHome, "plugins", "cache"),
-      specLibraryDir: userSpecLibraryRoot,
-      additionalSpecLibraryDirs: [
-        nodePath.resolve(import.meta.dirname, "../specs"),
-        compatibleSpecLibraryRoot,
-      ],
-    }),
-    // Slice 28 Checkpoint C-3 — skillLibraryDiscoveryService is constructed
-    // AFTER filesAllowlist resolution below (deps.skillLibraryDiscoveryService
-    // assignment near filesAllowlist binding).
-    // Shared context library backing the delivery-free context routes.
-    contextPackLibrary,
-    // PL-016 — agent_image typed primitive. Shared library + capturer
-    // + spec-roots supplier across /api/agent-images/* and the
-    // PodRigInstantiator's session_source: mode: agent_image dispatch.
-    agentImageLibrary,
-    snapshotCapturer,
-    // Slice 09 (OPR.0.3.2.9) — operator-context-mode bindings store
-    // (typed primitive on the shared db handle; HG-5: no parallel store).
-    rigModeStore,
-    operatingPosture,
-    agentImageSpecRoots: () => {
-      // Spec-library roots scanned by the evidence guard. v0: user
-      // specs under ~/.openrig/specs + workspace-local specs root
-      // (from the SettingsStore-resolved workspace.specsRoot).
-      const userSpecsRoot = getDefaultOpenRigPath("specs");
-      const roots: string[] = [userSpecsRoot];
-      try {
-        const settingsStore = new ContextPackSettingsStore();
-        const cfg = settingsStore.resolveConfig();
-        if (cfg.workspaceSpecsRoot && cfg.workspaceSpecsRoot !== userSpecsRoot) {
-          roots.push(cfg.workspaceSpecsRoot);
-        }
-      } catch { /* settings unavailable */ }
-      return roots;
-    },
   };
-  Object.assign(deps, { watchdogAutoRegistration });
-
-  // Copy bundled reference docs to ~/.openrig/reference/ so agents can find them at a stable path
-  if (!managed) try {
-    const bundledDocsDir = nodePath.resolve(import.meta.dirname, "../docs/reference");
-    if (fs.existsSync(bundledDocsDir)) {
-      const referenceDir = getDefaultOpenRigPath("reference");
-      fs.mkdirSync(referenceDir, { recursive: true });
-      for (const file of fs.readdirSync(bundledDocsDir)) {
-        if (file.endsWith(".md")) {
-          fs.copyFileSync(nodePath.join(bundledDocsDir, file), nodePath.join(referenceDir, file));
-        }
-      }
-    }
-  } catch { /* best-effort — reference docs are not critical to daemon operation */ }
-
-  // OPR.0.4.8.3 — materialize the packaged built-in policies as read-only
-  // inspection copies at $OPENRIG_HOME/reference/policies/builtin/ (same
-  // best-effort posture as the reference docs above; ../policies/builtin
-  // resolves from the compiled dist in BOTH the repo-run and assembled layouts)
-  if (!managed) try {
-    materializeBuiltinPolicyReference({
-      bundledDir: nodePath.resolve(import.meta.dirname, "../policies/builtin"),
-      targetDir: getDefaultOpenRigPath(nodePath.join("reference", "policies", "builtin")),
-    });
-  } catch { /* best-effort — inspection copies are not critical to daemon operation */ }
 
   // PL-004 Phase C — watchdog policy engine + scheduler. Wired here
   // (after deps construction) so the engine can dispatch deliveries
@@ -2190,7 +1472,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       credentials: workerControl,
     } : undefined;
     workflowRuntime = new WorkflowRuntime({
-      guidanceLibrary: contextPackLibrary,
       db,
       eventBus,
       queueRepo: queueRepoForWorkflow,
@@ -2307,18 +1588,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       cache: workflowRuntime.specCache,
       builtinDir: builtinSpecsDir,
     }) : undefined;
-    // Surface the resolved path to the routes layer so
-    // GET /api/workflow/specs can compute the per-row isBuiltIn flag.
-    deps.workflowBuiltinSpecsDir = builtinSpecsDir;
-
-    // Slice 11 (workflow-spec-folder-discovery) — expose the shared
-    // WorkflowSpecCache + the resolved workspace workflows folder so
-    // GET /api/specs/library can opportunistically discover operator-
-    // dropped YAML on each list request. Folder path is
-    // `<workspace.specs_root>/workflows`; SettingsStore resolves
-    // workspaceSpecsRoot from env > config > workspace-default.
-    deps.workflowSpecCache = workflowRuntime.specCache;
-
     // OPR.0.3.2.22 Bug 4 — one-time prune of cache rows whose source_path
     // lives in noise directories (.worktrees, node_modules, etc.). The
     // post-Bug-4 walkYamlFiles SKIP_DIRS guard prevents NEW rows from
@@ -2337,14 +1606,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const { getOpenRigInstallRoot } = await import("./domain/cwd-resolution.js");
     if (!managed) workflowRuntime.specCache.pruneNoiseDirRows(getOpenRigInstallRoot());
 
-    try {
-      const settingsStore = new ContextPackSettingsStore();
-      const cfg = settingsStore.resolveConfig();
-      if (cfg.workspaceSpecsRoot) {
-        deps.workflowsFolderDir = nodePath.join(cfg.workspaceSpecsRoot, "workflows");
-      }
-    } catch { /* settings unavailable — folder scan stays disabled */ }
-
     if (starterResult && starterResult.errors.length > 0) {
       console.warn(
         `[starter-spec-loader] ${starterResult.errors.length} spec(s) failed to load:`,
@@ -2353,118 +1614,12 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     }
   }
 
-  // Scope approval still records its audit in the existing table until its deletion unit.
-  if (deps.queueRepo && deps.viewProjector) deps.scopeActionLog = new MissionControlActionLog(db);
   deps.legacyBearerToken = opts?.bearerToken ?? null;
   const terminalTokenEnv = process.env.OPENRIG_TERMINAL_BEARER_TOKEN?.trim();
   deps.terminalBearerToken =
     opts && Object.prototype.hasOwnProperty.call(opts, "terminalBearerToken")
       ? opts.terminalBearerToken ?? null
       : terminalTokenEnv || null;
-
-  // Slice Story View v0 — slice indexer + per-tab projector.
-  //
-  // User Settings v0 graduates `OPENRIG_SLICES_ROOT` env-var into the
-  // typed `workspace.slices_root` setting (resolution chain: env >
-  // config-file > default `<workspace.root>/missions`). Backward-compat:
-  // operators with OPENRIG_SLICES_ROOT set continue to work because the
-  // settings store reads env in the same resolution slot. Operators
-  // setting via `rig config set workspace.slices_root <path>` or via the
-  // System drawer Settings panel UI now flow through the indexer too —
-  // closes the PRD § Scenario B requirement that wasn't wired in v0.
-  //
-  //   OPENRIG_SLICES_ROOT             legacy short env var (still honored
-  //                                   if set; preferred route is settings)
-  //   OPENRIG_WORKSPACE_SLICES_ROOT   typed-key env override
-  //   workspace.slices_root           typed setting in ~/.openrig/config.json
-  //   workspace.root                  cascade fallback (default ~/.openrig/workspace)
-  //   OPENRIG_DOGFOOD_EVIDENCE_ROOT   legacy proof-packet relocation override
-  //
-  // When the resolved slicesRoot path doesn't exist on disk, the indexer
-  // is still constructed but isReady() returns false — the routes return
-  // a clear "slices_root_not_configured" 503 with a setup hint.
-  {
-    // Prefer the legacy short env var if explicitly set (existing
-    // dogfood / test daemons rely on it). Otherwise fall back to the
-    // settings-resolved path (env > file > default cascade inside
-    // SettingsStore). The SettingsStore is constructed locally here
-    // so the slices block doesn't depend on the User Settings v0 wiring
-    // block ordering further below.
-    const legacyEnvSlicesRoot = readOpenRigEnv("OPENRIG_SLICES_ROOT", "RIGGED_SLICES_ROOT") ?? "";
-    let resolvedSlicesRoot = "";
-    let resolvedWorkspaceRoot = "";
-    try {
-      const { SettingsStore: SettingsStoreCtor } = await import("./domain/user-settings/settings-store.js");
-      const resolvedConfig = new SettingsStoreCtor().resolveConfig();
-      if (!legacyEnvSlicesRoot) {
-        resolvedSlicesRoot = resolvedConfig.workspaceSlicesRoot;
-      }
-      resolvedWorkspaceRoot = resolvedConfig.workspaceRoot;
-    } catch {
-      // SettingsStore unavailable — keep roots empty; routes return 503.
-    }
-    const slicesRoot = legacyEnvSlicesRoot || resolvedSlicesRoot;
-    // `workspace.dogfood_evidence_root` was retired with the eager legacy
-    // scaffold. Keep the existing proof-packet reader usable for old
-    // workspaces and explicit legacy relocations without exposing a second
-    // project-workspace setting.
-    const resolvedDogfoodRoot = readOpenRigEnv("OPENRIG_DOGFOOD_EVIDENCE_ROOT")
-      || (resolvedWorkspaceRoot ? nodePath.join(resolvedWorkspaceRoot, "dogfood-evidence") : "");
-    const additionalSliceRoots = resolvedWorkspaceRoot
-      ? [
-          nodePath.join(resolvedWorkspaceRoot, "missions"),
-          nodePath.join(resolvedWorkspaceRoot, "slices"),
-        ].filter((root) => root !== slicesRoot)
-      : [];
-    // S27 (OPR.0.5.6.27) — wire the execution view once the slices root is
-    // resolved; the thunk re-reads nothing (path resolution stays startup's).
-    viewProjectorInstance.setExecutionDeps({
-      db,
-      slicesRoot: () => slicesRoot || null,
-      // S19's locked one-oracle contract: the ARBITRATED seat-keyed read every
-      // surface (rig ps, node inventory, parked-query) consumes — never
-      // sessions.status, never the parallel AgentActivityStore ingest.
-      seatActivity: seatActivityService,
-    });
-    const { SliceIndexer } = await import("./domain/slices/slice-indexer.js");
-    const { SliceDetailProjector } = await import("./domain/slices/slice-detail-projector.js");
-    const sliceIndexer = new SliceIndexer({
-      slicesRoot,
-      additionalSliceRoots,
-      dogfoodEvidenceRoot: resolvedDogfoodRoot || null,
-      db,
-    });
-    // Slice Story View v1: pass workflowRuntime.specCache so the
-    // projector can resolve a bound workflow_instance's spec for
-    // spec-graph + phase + current-step projection. When the workflow
-    // runtime is not constructed (queueRepo absent — same condition
-    // already guards the workflowRuntime block above), the projector
-    // silently degrades to v0 behavior (workflowBinding=null,
-    // specGraph=null, phaseDefinitions=null, currentStep=null).
-    const sliceDetailProjector = new SliceDetailProjector({
-      db,
-      indexer: sliceIndexer,
-      workflowSpecCache: workflowRuntime?.specCache,
-    });
-    deps.sliceIndexer = sliceIndexer;
-    if (!managed && sliceIndexer.isReady()) {
-      const { watchProofSources } = await import("./domain/proof/source-watch.js");
-      deps.proofSourceWatch = watchProofSources(sliceIndexer.slicesRoot, () => sliceIndexer.invalidate(), eventBus);
-    }
-    deps.sliceDetailProjector = sliceDetailProjector;
-    // Living Notes Packet 2 (OPR.0.4.4.20): the composed-review gatherer.
-    // Git lineage facts come from OPENRIG_REVIEW_GIT_REPO when set; else
-    // lineage degrades honestly to unknown.
-    const { ReviewGatherer } = await import("./domain/review/gather.js");
-    deps.reviewGatherer = new ReviewGatherer({
-      db,
-      indexer: sliceIndexer,
-      gitRepoPath: process.env["OPENRIG_REVIEW_GIT_REPO"] ?? null,
-      // OPR.0.4.4.22 FR-2: the agent state glyph reads recorded hook
-      // activity (honest-unknown when absent) - synchronous, never polls.
-      activityStore: agentActivityStore,
-    });
-  }
 
   // OPR.0.4.6.02 C3 — the terminal-provider-ride service (ONE composer for
   // every view kind). Built here (post-hoc) so it can read the lazily-built
@@ -2535,20 +1690,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         return rows.length > 0 ? rows : null;
       },
       listScopeSeats: (scope) => {
-        const gatherer = deps.reviewGatherer;
-        if (!gatherer) return null;
-        // N1 (dev44-driver2 pre-guard): cast to the real AgentsScope union (not
-        // `never`) so the compile guard on the scope grammar is restored.
-        const band = gatherer.composeAgents(scope as import("./domain/review/types.js").AgentsScope);
-        if (!band) return null;
-        const wanted = new Set(band.rows.map((r) => r.sessionName));
-        const rows: ReturnType<typeof toLiveSeatRow>[] = [];
-        for (const rig of rigRepo.listRigs()) {
-          for (const e of getNodeInventory(db, rig.id)) {
-            if (e.canonicalSessionName && wanted.has(e.canonicalSessionName)) rows.push(toLiveSeatRow(e));
-          }
-        }
-        return rows;
+        void scope;
+        return null;
       },
       listRigNames: () => rigRepo.listRigs().map((r) => r.name),
       resolveHost: (id) => {
@@ -2563,82 +1706,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     });
   }
 
-  // UI Enhancement Pack v0:
-  //   - file allowlist (item 3) from OPENRIG_FILES_ALLOWLIST
-  //   - atomic write service (item 4) wired only when allowlist non-empty
-  //   - progress scan-roots (item 1B) from OPENRIG_PROGRESS_SCAN_ROOTS
-  //
-  // Empty env → empty allowlist / no-roots indexer; routes return 503
-  // with structured config hints so the UI can surface a setup message
-  // instead of a generic error.
-  {
-    const { decodeAllowlist } = await import("./domain/files/path-safety.js");
-    const { FileWriteService } = await import("./domain/files/file-write-service.js");
-    const { ProgressIndexer, decodeProgressScanRoots } = await import("./domain/progress/progress-indexer.js");
-    // User Settings v0 — UEP env-vars graduated to typed settings.
-    // Resolution: env > settings file > empty. SettingsStore handles
-    // the env > file > default precedence; we just decode the raw
-    // string into structured roots.
-    const { SettingsStore } = await import("./domain/user-settings/settings-store.js");
-    const settingsStore = new SettingsStore();
-    deps.settingsStore = settingsStore;
-    const cfg = settingsStore.resolveConfig();
-
-    // Preview Terminal v0 (PL-018) — per-session rate limiter for the
-    // /preview route. 1-second window per (session, lines) cache key:
-    // short enough that legitimate polling at the operator's refresh
-    // interval (`ui.preview.refresh_interval_seconds`, default 3s) always
-    // sees fresh content, but multiple pinned-pane requests for the same
-    // seat within a single second collapse to one tmux capture.
-    const { PreviewRateLimiter } = await import("./domain/preview/preview-rate-limiter.js");
-    deps.previewRateLimiter = new PreviewRateLimiter(1000);
-    const filesAllowlist = decodeAllowlist(cfg.filesAllowlistRaw);
-    deps.filesAllowlist = filesAllowlist;
-    deps.fileWriteService = filesAllowlist.length > 0
-      ? new FileWriteService({
-          allowlist: filesAllowlist,
-          auditFilePath: nodePath.join(OPENRIG_HOME, "file-edit-audit.jsonl"),
-        })
-      : null;
-    // Slice 28 Checkpoint C-3 — SkillLibraryDiscoveryService. sharedSkillsDir
-    // resolves to the daemon's bundled `specs/agents/shared/skills/`
-    // directory via import.meta.url (independent of operator allowlist
-    // configuration; closes HG-5 on the founder-walk VM where the operator
-    // allowlist doesn't include the daemon source tree). filesAllowlist
-    // is also passed so workspace `.openrig/skills/` skills surface via
-    // the same daemon endpoint.
-    deps.skillLibraryDiscoveryService = new SkillLibraryDiscoveryService({
-      sharedSkillsDir: nodePath.resolve(
-        nodePath.dirname(fileURLToPath(new URL(import.meta.url))),
-        "..",
-        "specs",
-        "agents",
-        "shared",
-        "skills",
-      ),
-      filesAllowlist,
-    });
-    deps.progressIndexer = new ProgressIndexer({ roots: decodeProgressScanRoots(cfg.progressScanRootsRaw) });
-
-    // Operator Surface Reconciliation v0 — steering composer (item 1).
-    // Reads typed workspace settings by default while preserving the
-    // OPENRIG_STEERING_* env override family for non-canonical layouts.
-    const { SteeringComposer, steeringOptsFromSettings } = await import("./domain/steering/steering-composer.js");
-    deps.steeringComposer = new SteeringComposer(steeringOptsFromSettings({
-      workspaceRoot: cfg.workspaceRoot,
-      workspaceSteeringPath: cfg.workspaceSteeringPath,
-    }));
-
-    // Workflows in Spec Library + Activation Lens v0 — active lens
-    // persistence under OPENRIG_HOME/active-workflow-lens.json. Same
-    // file-backed pattern as UI Enhancement Pack v0's audit JSONL —
-    // honors OPENRIG_HOME so isolated test/dogfood daemons keep their
-    // own lens state instead of bleeding into the operator's host.
-    const { ActiveLensStore } = await import("./domain/active-lens-store.js");
-    deps.activeLensStore = new ActiveLensStore({
-      filePath: nodePath.join(OPENRIG_HOME, "active-workflow-lens.json"),
-    });
-  }
+  const settingsStore = new SettingsStore();
+  deps.settingsStore = settingsStore;
 
   const sessionTransport = deps.sessionTransport;
   if (sessionTransport) {
@@ -2646,318 +1715,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       const node = db.prepare("SELECT node_id FROM sessions WHERE session_name = ? ORDER BY id DESC LIMIT 1").get(session) as { node_id: string } | undefined;
       return node ? seatActivityService.getSeatState(node.node_id) : null;
     });
-    const watchdogPolicyEngine = new WatchdogPolicyEngine({
-      jobsRepo: watchdogJobsRepoInstance,
-      historyLog: watchdogHistoryLogInstance,
-      eventBus,
-      deliver: async ({ targetSession, message, continuityAction }, source) => {
-        let continuityActionCompleted = false;
-        try {
-          if (continuityAction) {
-            await createContinuityCutoverBaton(continuityAction, queueRepoInstance);
-            continuityActionCompleted = true;
-          }
-          const deliveryId = `guard-watchdog-${source.occurrenceId ?? source.jobId}`;
-          const previous = outboxHandlerInstance.getById(deliveryId);
-          const payload = previous?.guardBinding ? previous.body : formatWatchdogDeliveryMessage(source, message);
-          const result = await sessionTransport.send(targetSession, payload,
-            { deliveryId, actorSession: "watchdog@system", auditPointer: source.jobId });
-          if (result.outcome === "retained") return { status: "retained", outboxIds: result.outboxIds, continuityActionCompleted };
-          return result.ok
-            ? { status: "ok", continuityActionCompleted }
-            : { status: "failed", error: result.error, continuityActionCompleted };
-        } catch (err) {
-          return {
-            status: "failed",
-            error: err instanceof Error ? err.message : String(err),
-            continuityActionCompleted,
-          };
-        }
-      },
-      // (i-c) fire-time target-generation gate: resolve the target's LIVE occupant-generation (P12
-      // occupant_tenures) so a generation-bound wake is refused once the target has handed over.
-      // UNKNOWN (null) fails open → deliver. A drop of this line disables the gate silently (gen-bound
-      // wakes would fire at the successor) — pinned in watchdog-target-gen-wiring.test.ts.
-      resolveTargetGeneration: (s) => sessionRegistry.currentOccupantGenerationForSession(s),
-      resolvePreDeliveryTerminalReason: ({ jobId }) =>
-        queueRepoInstance.resolveWatchdogPreDeliveryTerminalReason(jobId),
-      resolveQueueWait: (input) => queueRepoInstance.evaluateWaitReminder(input),
-      onWakeAttempt: ({ jobId, deliveryStatus }) => {
-        queueRepoInstance.recordWatchdogWakeAttempt(jobId, deliveryStatus);
-      },
-      // PL-004 Phase D: register workflow-keepalive policy alongside
-      // Phase C's three built-in policies. workflow-keepalive reads
-      // SQLite workflow_instances directly via the new Phase D tables
-      // (audit row 18: SQLite-source-only, no markdown read).
-      // OPR.0.4.3.16: register idle-gate-qitem — joins pending gate:*
-      // qitems (queue_items) with the shared arbitrated activity verdict
-      // rendered by public surfaces
-      // into one bounded wake. Wakes/flags only; cooldown via engine throttle.
-      additionalPolicies: [
-        makeWorkflowKeepalivePolicy({
-          db,
-          // OPR.0.4.6.WF5 FR-2 class (b): detection-time exception items,
-          // dedup by occurrence; dial resolved via the runtime's cached
-          // spec (registered-human selection inside the helper).
-          ensureStuckExceptionItem: workflowExceptionEnsurer,
-          reconcileStuckExceptions: (id) => workflowRuntime?.reconcileStuckExceptions(id) ?? 0,
-        }),
-        makeIdleGateQitemPolicy({ db, seatActivity: seatActivityService }),
-        // OPR.0.5.6.24 F-14: the parked-owner consumer — the WHOLE shipped
-        // parked diagnosis (diagnoseRigParked over the arbitrated oracle +
-        // destination-scoped obligations + wake status; the same derivation
-        // `rig parked` serves) consumed by one rig-level supervisor job.
-        // Episode receipts are TRANSITIONS on the obligation row, written
-        // reserve-before-deliver (the retention active-frontier invariant is
-        // the durability proof); watchdog history is telemetry only.
-        makeParkedOwnerConsumerPolicy({
-          diagnoseRig: (rigName) => {
-            const seats = db
-              .prepare(
-                `SELECT n.id AS node_id, s.session_name AS session_name
-                   FROM nodes n
-                   JOIN rigs r ON r.id = n.rig_id
-                   JOIN sessions s ON s.node_id = n.id
-                    AND s.id = (SELECT s2.id FROM sessions s2 WHERE s2.node_id = n.id ORDER BY s2.id DESC LIMIT 1)
-                  WHERE s.status = 'running' AND s.session_name IS NOT NULL AND r.name = ?`,
-              )
-              .all(rigName) as Array<{ node_id: string; session_name: string }>;
-            const parkedDeps = {
-              getSeatState: (seatNodeId: string) => seatActivityService.getSeatState(seatNodeId),
-              listOpenObligations: (destinationSession: string, limit: number) => ({
-                rows: queueRepoInstance
-                  .list({ destinationSession, state: ["pending", "in-progress", "blocked"], limit })
-                  .map((r) => ({
-                    qitemId: r.qitemId,
-                    state: r.state as "pending" | "in-progress" | "blocked",
-                    summary: r.summary ?? null,
-                  })),
-                limit,
-              }),
-              getParkWake: (qitemId: string) => queueRepoInstance.getParkWakeStatus(qitemId),
-            };
-            return diagnoseRigParked(
-              parkedDeps,
-              seats.map((s) => ({ seatNodeId: s.node_id, sessionName: s.session_name })),
-            ) as never;
-          },
-          history: {
-            listForJob: (jobId, limit) => watchdogHistoryLogInstance.listForJob(jobId, limit),
-            countForJob: (jobId) => watchdogHistoryLogInstance.countForJob(jobId),
-          },
-          // R2 repair: the durable row-side surfaces. Receipts are transitions on
-          // the obligation row (reserve-before-deliver); failures land in the
-          // ladder's native last_nudge_result vocabulary.
-          rows: {
-            recoveryOwnsWake: (qitemId) => queueRecoveryOwnsWake(db, queueRepoInstance.getById(qitemId)),
-            listTransitions: (qitemId: string) =>
-              queueRepoInstance
-                .listTransitions(qitemId)
-                .map((t) => ({ ts: t.ts, transitionNote: t.transitionNote ?? null, actorSession: t.actorSession, state: t.state, transitionId: t.transitionId })),
-            appendNote: (qitemId: string, note: string) => {
-              const row = queueRepoInstance.getById(qitemId);
-              if (!row || !isBlockerLive(row.state)) return { ok: false };
-              queueRepoInstance.update({
-                qitemId,
-                actorSession: "watchdog@system",
-                transitionNote: note,
-              });
-              return { ok: true };
-            },
-            recordNudgeResult: (qitemId: string, result: string) =>
-              queueRepoInstance.recordNudgeAttempt(qitemId, result),
-            listOpenIds: (destinationSession: string) =>
-              queueRepoInstance
-                .list({ destinationSession, state: ["pending", "in-progress", "blocked"], limit: 500 })
-                .map((r) => r.qitemId),
-          },
-          occupantGeneration: (sessionName) => sessionRegistry.currentOccupantGenerationForSession(sessionName),
-        }),
-      ],
-    });
-    if (!managed) queueRepoInstance.startWaitReminders();
-    const watchdogScheduler = new WatchdogScheduler({
-      jobsRepo: watchdogJobsRepoInstance,
-      policyEngine: watchdogPolicyEngine,
-      beforeTick: () => queueRepoInstance.reconcileWaitReminders(),
-    });
-    deps.watchdogPolicyEngine = watchdogPolicyEngine;
-    deps.watchdogScheduler = watchdogScheduler;
-
-    // OPR.0.5.6.24 F-14 — ONE parked-owner supervisor job per rig (mini-req 1):
-    // ensured idempotently on the (policy, target_session) tuple; the anchor is
-    // `parked-owner-consumer@<rigName>` (member@rig shape, policy name as the
-    // member slug). activeWakeIntervalSeconds stays NULL so the engine never
-    // throttles one seat's wake because another fired — per-seat dedup lives in
-    // the durable episode receipts. Rigs created after startup are BORN ARMED:
-    // rigRepo.onRigCreated (wired below) runs the same ensure in the creation
-    // act itself (the birth-property ruling) — no restart wait, no watcher.
-    if (!managed) {
-      const ensureParkedOwnerJob = (rigName: string) => {
-        const anchor = makeRigAnchor(rigName);
-        watchdogJobsRepoInstance.ensureAutoRegistration({
-          policy: PARKED_OWNER_POLICY_NAME,
-          targetSession: anchor,
-          registeredBySession: "daemon@kernel",
-          intervalSeconds: 120,
-          activeWakeIntervalSeconds: null,
-          scanIntervalSeconds: null,
-          specYaml: `policy: ${PARKED_OWNER_POLICY_NAME}\ntarget:\n  session: ${anchor}\ncontext:\n  rig: ${rigName}\n`,
-        });
-      };
-      const rigRows = db.prepare("SELECT name FROM rigs ORDER BY name").all() as Array<{ name: string }>;
-      for (const r of rigRows) ensureParkedOwnerJob(r.name);
-      // R2 repair — born-armed (advisor-ruled): a rig created after startup gets
-      // its supervisor job in the same act that creates it, never at the next
-      // daemon restart.
-      rigRepo.onRigCreated = (rig) => ensureParkedOwnerJob(rig.name);
-    }
-
-    // OPR.0.5.6.1 — the two digest windows as idempotent watchdog jobs (AM-F1:
-    // the flush rides the same named substrate; restart-durable by the same
-    // SQLite schedule; a daemon down across a window flushes on the next tick).
-    if (!managed) {
-      const ensureDigestJob = (window: "4h" | "daily", intervalSeconds: number) => {
-        watchdogJobsRepoInstance.ensureAutoRegistration({
-          policy: "delivery-digest-flush",
-          targetSession: `delivery-digest-${window}@kernel`,
-          registeredBySession: "daemon@kernel",
-          intervalSeconds,
-          activeWakeIntervalSeconds: null,
-          scanIntervalSeconds: null,
-          specYaml: `policy: delivery-digest-flush\ntarget:\n  session: delivery-digest-${window}@kernel\ncontext:\n  window: ${window}\n`,
-        });
-      };
-      ensureDigestJob("4h", 4 * 60 * 60);
-      ensureDigestJob("daily", 24 * 60 * 60);
-    }
-
-    // B8 / slice-07 A3 — the MODEL-DIVERGENCE MONITOR: cause-agnostic effective-vs-pinned
-    // comparison at the earliest reliable per-runtime read, one verdict per occupant generation,
-    // LOUD four-channel proclamation on divergence (orch seats + operator + oversight + the named
-    // Slack deferral per DS2). Channel targets per the desk ruling 2026-08-21: orch = the seat's
-    // own rig's orch.* seats; operator = derived from workspace.operator_seat_name (never
-    // hardcoded); oversight = the fleet judgment seat, locally resolvable or a NAMED deferral
-    // (no daemon-side cross-host send seam exists yet — the deferral names that, never silence).
-    {
-      const { ModelDivergenceMonitor } = await import("./domain/model-divergence/model-divergence-monitor.js");
-      const { readClaudeEffectiveModel, readCodexEffectiveModel } = await import("./domain/model-divergence/effective-model-readers.js");
-      const { resolveIdentityVerifiedClaudeRecord, resolveLiveCodexThreadId } = await import("./domain/model-divergence/current-generation-record.js");
-      const { defaultListProcesses } = await import("./domain/resume-metadata-refresher.js");
-      const { readCodexThreadIdFromCandidateHomes, defaultResolveHomeDirByPid } = await import("./domain/codex-thread-id.js");
-      const nodeOs = await import("node:os");
-      const nodeFs = await import("node:fs");
-      const seatIdentityStore = new SeatIdentityStore(db);
-      // OPR.0.5.3.10 — ONE shared census + ONE PID-home resolver for the whole
-      // divergence surface: no more `ps -Ao` per seat per poll, no more `ps eww`
-      // per pid (default-home-first + bounded PID cache).
-      const { ProcessCensus } = await import("./domain/process-census.js");
-      const { CodexThreadIdResolver } = await import("./domain/codex-thread-id.js");
-      const divergenceCensus = new ProcessCensus();
-      const codexThreadIdResolver = new CodexThreadIdResolver({ defaultHome: nodeOs.homedir(), codexHome: configuredCodexHome });
-      const currentGenDeps = {
-        getPanePid: async (sessionTarget: string) => tmuxAdapter.getPanePid ? tmuxAdapter.getPanePid(sessionTarget) : null,
-        listProcesses: () => divergenceCensus.list(),
-        // S10 follow-on: identity REQUIRED on resolve(); the identity-less case routes EXPLICITLY
-        // through the named ungated escape hatch — never a silent fallback (r1 owed item 3).
-        readThreadIdByPid: (pid: number, identity?: string) =>
-          identity === undefined ? codexThreadIdResolver.resolveUngatedLegacy(pid) : codexThreadIdResolver.resolve(pid, identity),
-      };
-      const OVERSIGHT_SEAT = "watch-lead@oversight";
-      const modelDivergenceMonitor = new ModelDivergenceMonitor({
-        processCensus: divergenceCensus,
-        listPinnedSeats: () => {
-          const rows = db.prepare(`
-            SELECT n.id AS nodeId, r.id AS rigId, r.name AS rigName, n.runtime AS runtime, n.model AS pinnedModel,
-                   (SELECT s.session_name FROM sessions s
-                     WHERE s.node_id = n.id AND s.status = 'running'
-                     ORDER BY s.created_at DESC, s.id DESC LIMIT 1) AS sessionName
-              FROM nodes n JOIN rigs r ON r.id = n.rig_id
-             WHERE n.model IS NOT NULL AND n.model <> ''
-          `).all() as Array<{ nodeId: string; rigId: string; rigName: string; runtime: string | null; pinnedModel: string; sessionName: string | null }>;
-          return rows
-            .filter((row): row is typeof row & { sessionName: string } => row.sessionName !== null)
-            .map((row) => ({ ...row, generation: sessionRegistry.currentOccupantGenerationForSession(row.sessionName) }));
-        },
-        // D-a / OPR.0.5.9.13 — the CURRENT GENERATION's record through the canonical binding and
-        // verified pane identity, never a name, registry token, or transcript recency lookup. A
-        // retained predecessor may keep writing under the canonical launch-time name forever.
-        // Every missing or ambiguous identity join is an explicit no-answer.
-        readEffectiveModel: async (seat, cycle) => {
-          // OPR.0.5.3.10 mini-req 1 — the poll-scoped census (one ps per pass) when the
-          // monitor threads it; the shared coalescing census otherwise.
-          const genDeps = cycle ? { ...currentGenDeps, listProcesses: cycle.listProcesses } : currentGenDeps;
-          if (seat.runtime === "codex") {
-            const live = await resolveLiveCodexThreadId(seat.sessionName, genDeps);
-            if (!live.ok) return { ok: false as const, reason: live.reason };
-            const rollout = contextUsageStore.readCodexAndNormalize({ threadId: live.id, sessionName: seat.sessionName }).transcriptPath;
-            if (!rollout) return { ok: false as const, reason: `live thread ${live.id.slice(0, 8)}… has no readable rollout` };
-            const model = readCodexEffectiveModel(rollout);
-            return model ? { ok: true as const, model } : { ok: false as const, reason: `no model signal in the bounded read of ${rollout}` };
-          }
-          if (seat.runtime === "claude-code") {
-            const tenure = sessionRegistry.currentOccupantTenure(seat.nodeId);
-            const sidecar = contextUsageStore.readSidecar(seat.sessionName);
-            const binding = sessionRegistry.getBindingForNode(seat.nodeId);
-            const selection = await resolveIdentityVerifiedClaudeRecord({
-              sessionName: seat.sessionName,
-              generation: seat.generation,
-              occupantBootAt: tenure?.bootAt ?? null,
-              binding: binding ? { tmuxSession: binding.tmuxSession, tmuxPane: binding.tmuxPane } : null,
-              identity: seatIdentityStore.getForNode(seat.nodeId),
-              sidecar: sidecar.ok ? sidecar.data : null,
-            }, genDeps, (path) => {
-              try { return nodeFs.statSync(path).isFile(); } catch { return false; }
-            });
-            if (!selection.ok) return { ok: false as const, reason: selection.reason };
-            const model = readClaudeEffectiveModel(selection.path);
-            return model
-              ? { ok: true as const, model }
-              : { ok: false as const, reason: `no assistant turn yet in the current occupant record ${selection.path} (selected from ${selection.source})` };
-          }
-          return { ok: false as const, reason: `runtime ${seat.runtime ?? "unknown"} has no effective-model reader yet` };
-        },
-        sendToSession: async (target, message, deliveryId) => {
-          try {
-            const previous = deliveryId ? outboxHandlerInstance.getById(deliveryId) : null;
-            const payload = previous?.guardBinding ? previous.body : message;
-            const result = await sessionTransport.send(target, payload, { deliveryId, actorSession: "model-monitor@system", auditPointer: deliveryId });
-            return result.ok ? { ok: true, outcome: result.outcome } : { ok: false, error: result.error };
-          } catch (err) {
-            return { ok: false, error: err instanceof Error ? err.message : String(err) };
-          }
-        },
-        resolveOrchSeats: (rigName) => (db.prepare(`
-          SELECT s.session_name AS sessionName
-            FROM sessions s JOIN nodes n ON n.id = s.node_id JOIN rigs r ON r.id = n.rig_id
-           WHERE r.name = ? AND s.status = 'running' AND n.logical_id LIKE 'orch.%'
-        `).all(rigName) as Array<{ sessionName: string }>).map((row) => row.sessionName),
-        resolveOperatorSeat: () => {
-          const value = deps.settingsStore?.resolveOne("workspace.operator_seat_name").value;
-          return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-        },
-        resolveOversightSeat: () => {
-          const row = db.prepare("SELECT session_name FROM sessions WHERE session_name = ? AND status = 'running' LIMIT 1").get(OVERSIGHT_SEAT);
-          return row ? OVERSIGHT_SEAT : null;
-        },
-        recordProclamation: (proclamation) => {
-          eventBus.emit({
-            type: "seat.model_divergence",
-            rigId: proclamation.rigId,
-            nodeId: proclamation.nodeId,
-            sessionName: proclamation.sessionName,
-            runtime: proclamation.runtime,
-            pinnedModel: proclamation.pinnedModel,
-            effectiveModel: proclamation.effectiveModel,
-            diagnosis: proclamation.diagnosis,
-            channels: proclamation.channels,
-          });
-        },
-      });
-      if (!managed) modelDivergenceMonitor.startPolling(60_000);
-      deps.modelDivergenceMonitor = modelDivergenceMonitor;
-    }
-
     // OPR.0.4.6.WF1 FR-4: the workflow startup resume sweep — re-arm
     // keepalives, reissue lost post-commit nudges (pending frontier
     // packets never nudged), surface stuck instances. Runs after the
@@ -3008,55 +1765,15 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     }
   }
 
-  // Context monitor — constructed before createApp so routes can access pollOnce for refresh.
-  // Caller (index.ts) starts polling after listen.
-  // Slice 27: wire ClaudeCompactionEnforcer when sessionTransport is
-  // available (it always is in the assembled deps; the conditional keeps
-  // the type narrow for downstream consumers).
+  // Context monitor is retained for runtime readiness telemetry used by the
+  // managed launch path. It no longer owns compaction or snapshot behavior.
   const { ContextMonitor } = await import("./domain/context-monitor.js");
-  const { ClaudeCompactionEnforcer } = await import("./domain/claude-compaction-enforcer.js");
-  const compactionEnforcer = deps.sessionTransport
-    ? new ClaudeCompactionEnforcer(
-        new ContextPackSettingsStore(),
-        deps.sessionTransport,
-        // GHOST-STAGE (b): resolve the LIVE occupant generation (atom-B tenure ledger) for a session
-        // so a stage minted by a retired generation is refused for the successor. null = UNKNOWN → the
-        // gate is inert (never compares a stale generation as if live).
-        {
-          resolveOccupantGeneration: (sessionName) =>
-            sessionRegistry.currentOccupantGenerationForSession(sessionName),
-          onPostRestoreComplete: (receipt) => {
-            recordManagedWidthReceipt(
-              receipt,
-              watchdogJobsRepoInstance,
-              watchdogHistoryLogInstance,
-            );
-          },
-        },
-      )
-    : undefined;
-  // 51-08 A1 — the over-time series rides the SAME 30s tick (PM decision 1):
-  // context lane appends beside the existing persist; the provider-window lane
-  // drains the same statusline cache directory the read model scans.
-  const { UsageSamplesStore, providerWindowSamplesFromSignals } = await import("./domain/usage-samples-store.js");
-  const usageSamplesStore = new UsageSamplesStore(db);
-  const contextMonitor = new ContextMonitor(db, contextUsageStore, claudeAdapter, compactionEnforcer, {
+  const contextMonitor = new ContextMonitor(db, contextUsageStore, claudeAdapter, undefined, {
     "claude-code": claudeAdapter,
     codex: codexAdapter,
     pi: piAdapter,
     omp: ompAdapter,
-  }, usageSamplesStore, () => providerWindowSamplesFromSignals(
-    collectClaudeSignalsFromProviderUsageDirectory(
-      providerUsageDirectory(OPENRIG_HOME),
-      undefined,
-      legacyProviderUsageDirectory(OPENRIG_HOME),
-    ),
-  ));
-  deps.contextMonitor = contextMonitor;
-  // OPR.0.4.3.14 — expose the SAME enforcer instance to routes for the manual
-  // compaction trigger. Sharing one instance with ContextMonitor is what makes
-  // the manual back-half drain through the auto poll loop (no second path).
-  deps.compactionEnforcer = compactionEnforcer;
+  });
 
   // GHOST-STAGE (e/Class-B) — construct the canonical OccupantInvalidator now that both Class-A deps
   // exist (the enforcer's in-mem maps 1a-1f + the context sidecar 2a). Injected into SeatHandoverService
@@ -3064,7 +1781,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // (degraded boot, no sessionTransport) falls back to a sidecar-only invalidator — never throws.
   const { DefaultOccupantInvalidator } = await import("./domain/occupant-invalidator.js");
   deps.occupantInvalidator = new DefaultOccupantInvalidator({
-    enforcer: compactionEnforcer ?? { invalidateOccupant: () => {} },
+    enforcer: { invalidateOccupant: () => {} },
     contextUsage: contextUsageStore,
     // (e/Class-B) watchdog store — armed jobs registered by the retiring generation stop at swap.
     watchdog: watchdogJobsRepoInstance,
@@ -3072,19 +1789,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     queue: queueRepoInstance,
     log: (msg) => console.warn(msg),
   });
-
-  // OPR.0.3.4.9 — periodic snapshot scheduler (crash-insurance floor).
-  const { PeriodicSnapshotScheduler } = await import("./domain/periodic-snapshot-scheduler.js");
-  // OPR.0.5.3.10 — the snapshot tick shares ONE census across all rigs/seats.
-  const { ProcessCensus: SnapshotProcessCensus } = await import("./domain/process-census.js");
-  const snapshotProcessCensus = new SnapshotProcessCensus();
-  const periodicSnapshotScheduler = new PeriodicSnapshotScheduler({
-    db, snapshotCapture, snapshotRepo,
-    // OPR.0.4.3.20 FR-4 — refresh live tokens before each periodic snapshot serializes.
-    sessionRegistry, resumeMetadataRefresher,
-    processCensus: snapshotProcessCensus,
-  });
-  deps.periodicSnapshotScheduler = periodicSnapshotScheduler;
 
   // MVP — what a new task starts. Under `workers.isolation: none` nothing else ever launches
   // the agent a start request puts work on, so the start request dispatches it. Under hardened
@@ -3230,16 +1934,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   deps.routeTimingRecorder = routeTimingRecorder;
   // S20 — bind provenance rides the health surface (absent = legacy healthz body).
   deps.bindPlan = opts?.bindPlan;
-
-  // Hermeticity (hotfix qitem-20260822230440-da0d2ad6 FIX 2): the REAL daemon
-  // constructs the drift observer here with an eagerly-warmed mode cache — the
-  // boot-time warm the observer's constructor used to do. Constructing it at
-  // the boot boundary (not inside createApp) is what keeps test-built apps
-  // from ever shelling `claude --help`.
-  const { PermissionDriftObserver, ClaudePermissionModeCache } = await import("./domain/permission-drift-observer.js");
-  const permissionModes = new ClaudePermissionModeCache();
-  if (!managed) permissionModes.warm();
-  deps.permissionDriftObserver = new PermissionDriftObserver({ db, permissionModes });
 
   // `ui.enabled` (default off): the web UI pages and its terminal WebSocket. Read once at start.
   deps.webUiEnabled = opts?.webUiEnabled ?? new ContextPackSettingsStore().resolveOne("ui.enabled").value === true;

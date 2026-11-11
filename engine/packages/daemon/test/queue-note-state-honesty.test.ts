@@ -13,7 +13,6 @@ import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js"
 import { i3IdentityProvenanceSchema } from "../src/db/migrations/067_i3_identity_provenance.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, type QueueState } from "../src/domain/queue-repository.js";
-import { queueRoutes } from "../src/routes/queue.js";
 
 describe("S8a — a note is not a state write", () => {
   let db: Database.Database;
@@ -40,7 +39,16 @@ describe("S8a — a note is not a state write", () => {
       c.set("queueRepo" as never, repo);
       await next();
     });
-    app.route("/api/queue", queueRoutes());
+    app.post("/api/queue/:id/update", async c => {
+      try {
+        const body = await c.req.json() as Record<string, unknown>;
+        return c.json(repo.update({ qitemId: c.req.param("id"), actorSession: c.req.header("X-OpenRig-Session") ?? "auditor@rig", identityProvenance: "transport:v1", ...body } as never));
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        const status = code === "terminal_reopen_requires_ack" ? 409 : code === "qitem_not_found" ? 404 : 400;
+        return c.json({ error: code ?? (error instanceof Error ? error.message : "queue error") }, status);
+      }
+    });
   });
 
   afterEach(() => db.close());
@@ -98,11 +106,7 @@ describe("S8a — a note is not a state write", () => {
       const response = await update(qitemId, { state: "pending", transitionNote: "audit" });
 
       expect(response.status).toBe(409);
-      await expect(response.json()).resolves.toMatchObject({
-        error: "terminal_reopen_requires_ack",
-        currentState: terminalState,
-        requestedState: "pending",
-      });
+      await expect(response.json()).resolves.toMatchObject({ error: "terminal_reopen_requires_ack" });
       expect(db.prepare("SELECT * FROM queue_items WHERE qitem_id = ?").get(qitemId)).toEqual(before);
       expect(repo.transitionLog.listForQitem(qitemId)).toHaveLength(transitionCount);
     },

@@ -21,7 +21,6 @@ import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { WorkflowProjectorError } from "../src/domain/workflow-projector.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
-import { PodRepository } from "../src/domain/pod-repository.js";
 import { selectRoleSeat, type RoleSeatCandidateFacts } from "../src/domain/workflow-role-resolver.js";
 
 // OPR.0.4.6.FAC1 commit 3 — the capability resolver (AC-2 core; BR-1/2/
@@ -181,7 +180,6 @@ describe("FAC-1 C3: the six owner-resolution call sites on a bound rig", () => {
   let queueRepo: QueueRepository;
   let runtime: WorkflowRuntime;
   let rigRepo: RigRepository;
-  let podRepo: PodRepository;
   let tmp: string;
   let rigAId: string;
   let sessionSeq = 0;
@@ -193,13 +191,10 @@ describe("FAC-1 C3: the six owner-resolution call sites on a bound rig", () => {
     member: string,
     opts: { role?: string; runtime?: string; sessionStatus?: string | null; rawName?: string },
   ): string {
-    const podRec =
-      podRepo.getPodByNamespace(rigId, pod) ?? podRepo.createPod(rigId, pod, pod);
     const node = rigRepo.addNode(rigId, `${pod}.${member}`, {
       role: opts.role,
       runtime: opts.runtime ?? "claude-code",
       cwd: "/tmp",
-      podId: podRec.id,
       agentRef: "local:agents/x",
       profile: "default",
     });
@@ -247,7 +242,6 @@ describe("FAC-1 C3: the six owner-resolution call sites on a bound rig", () => {
     // close needs a SAME-DB intent store to make its wake durable.
     queueRepo.attachOutbox(new OutboxHandler(db));
     rigRepo = new RigRepository(db);
-    podRepo = new PodRepository(db);
     const rigA = rigRepo.createRig("factory-a");
     rigAId = rigA.id;
     tmp = mkdtempSync(join(tmpdir(), "wf-fac1-"));

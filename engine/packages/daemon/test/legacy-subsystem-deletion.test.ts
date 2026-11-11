@@ -52,6 +52,54 @@ describe("legacy subsystem deletion", () => {
     ["GET", "/api/hosts"],
     ["POST", "/api/hosts/add"],
     ["POST", "/api/hosts/pair"],
+    ["GET", "/api/rigs/deleted/snapshots"],
+    ["POST", "/api/rigs/deleted/restore"],
+    ["POST", "/api/crash-cart"],
+    ["POST", "/api/rigs/import"],
+    ["GET", "/api/rigs/deleted/spec"],
+    ["GET", "/api/rigs/deleted/spec.json"],
+    ["GET", "/api/packages"],
+    ["POST", "/api/bootstrap"],
+    ["GET", "/api/discovery"],
+    ["GET", "/api/bundles"],
+    ["GET", "/api/specs/review"],
+    ["GET", "/api/specs/library"],
+    ["GET", "/api/plugins"],
+    ["GET", "/api/skills"],
+    ["GET", "/api/config"],
+    ["GET", "/api/context-packs"],
+    ["GET", "/api/agent-images"],
+    ["GET", "/api/watchdog"],
+    ["GET", "/api/health-summary"],
+    ["GET", "/api/attention"],
+    ["GET", "/api/health-diagnosis"],
+    ["GET", "/api/restore-check"],
+    ["GET", "/api/activity"],
+    ["GET", "/api/attention"],
+    ["GET", "/api/chat"],
+    ["POST", "/api/compaction"],
+    ["GET", "/api/env"],
+    ["GET", "/api/files"],
+    ["GET", "/api/missions"],
+    ["GET", "/api/progress"],
+    ["GET", "/api/projects"],
+    ["GET", "/api/proof"],
+    ["GET", "/api/provider"],
+    ["GET", "/api/ps"],
+    ["GET", "/api/queue"],
+    ["GET", "/api/review"],
+    ["GET", "/api/rig-mode"],
+    ["GET", "/api/scopes"],
+    ["GET", "/api/sessions"],
+    ["GET", "/api/steering"],
+    ["GET", "/api/stream"],
+    ["GET", "/api/telemetry"],
+    ["GET", "/api/transcripts"],
+    ["GET", "/api/transport"],
+    ["GET", "/api/views"],
+    ["GET", "/api/wake-resolve"],
+    ["GET", "/api/whoami"],
+    ["GET", "/api/workflow"],
   ])("returns 404 for deleted route %s %s", async (method, path) => {
     const db = createDb();
     migrate(db, ALL_MIGRATIONS);
@@ -70,7 +118,7 @@ describe("legacy subsystem deletion", () => {
   it("has no deleted subsystem imports in package sources", () => {
     const packages = fileURLToPath(new URL("../../", import.meta.url));
     const matches: string[] = [];
-    const deletedModules = /gateway\/slack|cmux|rig-cmux|domain\/topology\/|domain\/mission-control\/|routes\/(?:hosts|mission-control)\.|domain\/hosts\/(?:fanout-contract|read-through|hosts-registry-writer)\.|components\/(?:mission-control|for-you)\/|components\/topology\/(?:ScopePages|TopologyTreeView|TopologyTableView|TopologyTerminalView|TopologyViewModeTabs|TerminalLauncher)\.|components\/(?:HostIndicator|RigStatusControl|dashboard\/HostConfigCard)\.|commands\/host\./i;
+    const deletedModules = /gateway\/slack|cmux|rig-cmux|domain\/(?:topology|mission-control|review|feed|model-divergence|scope)\/|routes\/(?:adapters|agents|activity|attention|bootstrap|bundles|chat|compaction|config|context-packs|crash-cart|discovery|down|env|files|health|health-diagnosis|health-summary|info|kernel-status|missions|packages|plugins|progress|projects|proof|provider|ps|queue|restore-check|review|rig-mode|rigspec|rigs|scope-approve|scope-audit|scopes|sessions|skills|slices|snapshots|spec-review|spec-library|startup|steering|stream|telemetry|transcripts|transport|up|views|wake-resolve|watchdog|whoami|workflow)\.|domain\/(?:snapshot-repository|snapshot-capture|checkpoint-store|restore-orchestrator|periodic-snapshot-scheduler|package-repository|install-repository|install-engine|install-verifier|package-install-service|bootstrap-repository|bootstrap-orchestrator|external-install-planner|external-install-executor|runtime-verifier|bundle-source-resolver|bundle-identity|bundle-behaviour|bundle-content-routing|discovery-coordinator|tmux-discovery-scanner|session-fingerprinter|session-enricher|rigspec-exporter|rigspec-preflight|rigspec-instantiator|rig-expansion-service|rig-teardown|up-command-router|ps-projection|watchdog-policy-engine|watchdog-scheduler|watchdog-auto-registration|spec-library-service|spec-library-workflow-scanner|spec-review-service|plugin-discovery-service|skill-library-discovery|health-diagnosis|health-detectors|health-policy|health-checkpoints|health-passive-ceremony|health-context|health-projection|permission-drift-observer|model-divergence-monitor|remote-daemon-http|settings-browser)\.|domain\/(?:bundle|review|scope|steering|proof|crash-cart|model-divergence|workflow\/slice)\/|components\/(?:mission-control|for-you)\/|components\/topology\/(?:ScopePages|TopologyTreeView|TopologyTableView|TopologyTerminalView|TopologyViewModeTabs|TerminalLauncher)\.|components\/(?:HostIndicator|RigStatusControl|dashboard\/HostConfigCard)\.|commands\/host\./i;
 
     function scan(directory: string): void {
       for (const entry of readdirSync(directory, { withFileTypes: true })) {

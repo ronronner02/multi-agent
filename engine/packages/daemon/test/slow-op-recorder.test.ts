@@ -14,34 +14,15 @@ const expectedSites = new Map<string, string[]>([
   ["adapters/codex-runtime-adapter.ts", ["codex.runtime.profile_preflight"]],
   // The Codex process-table read moved into the shared lineage module; the site name is kept.
   ["domain/native-process-lineage.ts", ["codex.runtime.list_processes"]],
-  ["routes/rigspec.ts", ["rigspec.import.preflight"]],
-  ["domain/bootstrap-orchestrator.ts", ["bootstrap.plan.preflight"]],
   ["domain/resume-metadata-refresher.ts", ["resume_metadata.list_processes"]],
   ["domain/codex-thread-id.ts", ["codex_thread_id.resolve_home"]],
-  ["domain/review/gather.ts", ["review.gather.git"]],
   ["domain/tmux-option-defaults.ts", ["tmux_options.command_v"]],
 ]);
-
-const pluginVendorUrl = "https://github.com/mvschwarz/openrig-plugins/releases/latest/download/openrig-core.tar.gz";
 
 async function createTestDaemon(
   options: Parameters<typeof createDaemon>[0],
 ): Promise<Awaited<ReturnType<typeof createDaemon>>> {
-  const originalFetch = globalThis.fetch;
-  const fetchedUrls: string[] = [];
-  globalThis.fetch = async (input) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    fetchedUrls.push(url);
-    if (url !== pluginVendorUrl) throw new Error(`unexpected startup fetch: ${url}`);
-    return new Response(null, { status: 404 });
-  };
-  try {
-    const daemon = await createDaemon(options);
-    expect(fetchedUrls).toEqual([pluginVendorUrl]);
-    return daemon;
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  return createDaemon(options);
 }
 
 const tempDirs: string[] = [];
@@ -149,10 +130,6 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
           reason: "begin_barrier_timeout",
         },
       });
-      const observations = daemon.deps.streamStore!.list();
-      expect(observations).toHaveLength(1);
-      expect(observations[0]!.body).toContain("begin_barrier_timeout");
-      expect(observations[0]!.body).toContain("test.sync.degraded");
     } finally {
       daemon.eventLoopMonitor.stop();
       daemon.db.close();
@@ -319,7 +296,7 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
     expect(JSON.stringify(requests)).not.toContain("must-not-appear");
   });
 
-  it("wraps all nine accepted sync calls without moving them off the main thread", () => {
+  it("wraps all retained accepted sync calls without moving them off the main thread", () => {
     const srcRoot = path.resolve(import.meta.dirname, "../src");
     for (const [relativePath, sites] of expectedSites) {
       const source = fs.readFileSync(path.join(srcRoot, relativePath), "utf8");

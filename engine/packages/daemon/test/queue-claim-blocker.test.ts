@@ -8,7 +8,6 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WatchdogJobsRepository } from "../src/domain/watchdog-jobs-repository.js";
 import { escalationDedupTag, runWakeLadderTick } from "../src/domain/queue-wake-ladder.js";
-import { queueRoutes } from "../src/routes/queue.js";
 
 // Both SQL writers are supported by QueueRepository's generation-column detection.
 describe.each(["current", "without generation stamps"])("claim park exit (%s schema)", (schema) => {
@@ -25,7 +24,21 @@ describe.each(["current", "without generation stamps"])("claim park exit (%s sch
     jobs = new WatchdogJobsRepository(db);
     app = new Hono();
     app.use("*", async (c, next) => { c.set("queueRepo" as never, repo); await next(); });
-    app.route("/api/queue", queueRoutes());
+    app.post("/api/queue/:id/claim", async c => {
+      try {
+        return c.json(repo.claim({ qitemId: c.req.param("id"), destinationSession: c.req.header("X-OpenRig-Session") ?? "worker@rig" }));
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : "queue error" }, 500);
+      }
+    });
+    app.post("/api/queue/:id/update", async c => {
+      try {
+        const body = await c.req.json() as Record<string, unknown>;
+        return c.json(repo.update({ qitemId: c.req.param("id"), actorSession: c.req.header("X-OpenRig-Session") ?? "worker@rig", ...body } as never));
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : "queue error" }, 500);
+      }
+    });
   });
   afterEach(() => db.close());
 

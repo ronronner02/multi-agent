@@ -12,7 +12,7 @@ export TERM=xterm-256color
 # daemon-mode.test.ts runs here now that `workers.isolation: none` is the default: its
 # managed boot no longer needs the provisioned /etc/multi-agent policy.
 npm run test -w packages/daemon -- \
-  test/daemon-mode.test.ts \
+  test/scenario-daemon-mode.test.ts \
   test/team-control-auth.test.ts \
   test/team-governance.test.ts \
   test/team-read-model.test.ts \
@@ -53,7 +53,6 @@ npm run test -w packages/daemon -- \
   test/attempt-failure.test.ts \
   test/team-cancellation.test.ts \
   test/team-result.test.ts \
-  test/user-settings-routes.test.ts \
   --maxWorkers=2
 
 npm run test -w packages/cli -- test/team-start.test.ts test/team-setup.test.ts test/team-chat.test.ts test/team-apply.test.ts test/team-done.test.ts --maxWorkers=2

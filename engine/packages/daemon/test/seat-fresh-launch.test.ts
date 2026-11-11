@@ -9,7 +9,6 @@ import { NodeLauncher } from "../src/domain/node-launcher.js";
 import { StartupOrchestrator } from "../src/domain/startup-orchestrator.js";
 import { SeatLifecycleService } from "../src/domain/seat-lifecycle-service.js";
 import { getNodeInventory } from "../src/domain/node-inventory.js";
-import { PsProjectionService } from "../src/domain/ps-projection.js";
 import { SeatIdentityStore } from "../src/domain/seat-identity-store.js";
 import type { RuntimeAdapter } from "../src/domain/runtime-adapter.js";
 import type { ProjectionPlan } from "../src/domain/projection-planner.js";
@@ -17,7 +16,6 @@ import type { TmuxAdapter, TmuxResult } from "../src/adapters/tmux.js";
 import { normalizeStartupBlock } from "../src/domain/startup-validation.js";
 import { deriveOriented } from "../src/domain/startup-proof.js";
 import { deriveRehydrateSessionIdByNode } from "../src/domain/active-occupant.js";
-import { readFreshOccupantRelations } from "../src/domain/fresh-occupant-relation.js";
 import type { NativeProcessLister, NativeProcessRow } from "../src/domain/native-process-lineage.js";
 
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code-adapter.js";
@@ -255,24 +253,6 @@ describe("SeatLifecycleService.launchFresh", () => {
     const history = sessionRegistry.getSessionsForRig(seat.rig.id);
     expect(history.find((row) => row.id === seat.session!.id)?.status).toBe("superseded");
     expect(deriveRehydrateSessionIdByNode(history, [seat.node.id])[seat.node.id]).toBe(result.sessionId);
-  });
-
-  it("recovers an older fresh effect from its current generation without rewriting history", async () => {
-    const seat = seedSeat();
-    const result = await service.launchFresh({ seatRef: seat.sessionName, fresh: true, stop: true, reason: "explicit successor" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // Reproduce the old build's unsuperseded detached predecessor after reboot.
-    sessionRegistry.markDetached(seat.session!.id);
-    sessionRegistry.markDetached(result.sessionId);
-    const history = sessionRegistry.getSessionsForRig(seat.rig.id);
-    const recorded = readFreshOccupantRelations(db, seat.rig.id);
-    expect(deriveRehydrateSessionIdByNode(history, [seat.node.id], recorded)[seat.node.id]).toBe(result.sessionId);
-    expect(sessionRegistry.getSessionsForRig(seat.rig.id)).toEqual(history);
-    // A later occupant generation invalidates the old effect; no newest-row fallback.
-    sessionRegistry.mintOccupantTenure(seat.node.id, "handover");
-    expect(readFreshOccupantRelations(db, seat.rig.id)).toEqual({});
-    expect(deriveRehydrateSessionIdByNode(history, [seat.node.id], readFreshOccupantRelations(db, seat.rig.id))[seat.node.id]).toBeNull();
   });
 
   function seedSeat(opts?: { clean?: boolean; adopted?: boolean; model?: string; withContext?: boolean; runtime?: "claude-code" | "codex" }) {
@@ -628,9 +608,6 @@ describe("SeatLifecycleService.launchFresh", () => {
     expect(db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE node_id = ?").get(seat.node.id)).toEqual({ count: 1 });
     expect(getNodeInventory(db, seat.rig.id).find((entry) => entry.nodeId === seat.node.id)).toMatchObject({
       sessionStatus: "exited", intentionallyStopped: false,
-    });
-    expect(new PsProjectionService({ db }).getEntries().find((entry) => entry.rigId === seat.rig.id)).toMatchObject({
-      lifecycleState: "degraded", status: "partial", nodeCount: 2, runningCount: 1,
     });
   });
 

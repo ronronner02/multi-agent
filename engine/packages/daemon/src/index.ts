@@ -96,23 +96,6 @@ export async function drainSlowOpRecorderOnShutdown(
   return 0;
 }
 
-/** OPR.0.3.4.9 — extracted for testability. Starts the periodic snapshot
- *  scheduler and updates the ps-projection status when enabled. */
-export function startPeriodicSnapshotScheduler(deps: {
-  periodicSnapshotScheduler?: { start(intervalMs: number, retentionKeep: number): void };
-  psProjectionService: { setPeriodicSnapshotState(active: boolean, intervalSeconds: number): void };
-  settingsStore?: { resolveOne(key: string): { value: unknown } };
-}): void {
-  if (!deps.periodicSnapshotScheduler) return;
-  const settingsStore = deps.settingsStore;
-  const enabled = settingsStore ? settingsStore.resolveOne("snapshots.periodic.enabled").value === true : true;
-  if (!enabled) return;
-  const intervalS = settingsStore ? (settingsStore.resolveOne("snapshots.periodic.interval_seconds").value as number) : 300;
-  const retentionKeep = settingsStore ? (settingsStore.resolveOne("snapshots.periodic.retention_keep").value as number) : 10;
-  deps.periodicSnapshotScheduler.start(intervalS * 1000, retentionKeep);
-  deps.psProjectionService.setPeriodicSnapshotState(true, intervalS);
-}
-
 /** OPR.0.4.6.FS-1 W2 — start the queue-retention maintenance sweep (arch D3): a
  *  boot sweep + a daily tick that archives aged terminal `queue_transitions`
  *  (never-delete) and prunes `watchdog_history`, both in bounded batches with
@@ -331,9 +314,6 @@ export async function startServer(port?: number) {
   // one per host. The contextMonitor + watchdog scheduler only start
   // once after the first successful bind callback fires.
   let monitorsStarted = false;
-  let retentionTimer: ReturnType<typeof setInterval> | null = null;
-  let stuckSweepTimer: ReturnType<typeof setInterval> | null = null;
-  let wakeLadderScheduler: WakeLadderScheduler | null = null;
   // P7 — lifecycle heartbeat: advance last-seen every tick while running.
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   const servers: ServerType[] = [];
@@ -353,10 +333,6 @@ export async function startServer(port?: number) {
       }
       if (!monitorsStarted && !managed) {
         contextMonitor.start();
-        // PL-004 Phase C: start watchdog scheduler. Joins the supervision
-        // tree post-bind so the HTTP surface is ready before the first
-        // tick (matches contextMonitor pattern).
-        deps.watchdogScheduler?.start();
         // Slice 15 — start the seat-activity scheduler (1Hz default).
         // Polls every running tmux-bound seat's window_activity timestamp so
         // PsProjectionService + node-inventory enrichment serve
@@ -368,15 +344,6 @@ export async function startServer(port?: number) {
         // Persists the per-seat pane PID/command verdict so node-inventory
         // gates the running/active projection on verified process identity.
         deps.seatIdentityReconciler?.start();
-        startPeriodicSnapshotScheduler(deps);
-        // OPR.0.4.6.FS-1 W2 — boot sweep + daily retention tick (bounded,
-        // yields between batches; a sweep failure is logged, never fatal).
-        retentionTimer = startQueueRetentionScheduler(deps);
-        // S02 — the standing stuck sweep: nobody has to remember to run the verbs.
-        stuckSweepTimer = startStuckSweepScheduler(deps);
-        // S01 — wake-or-escalate on batons: a failed baton wake retries on schedule,
-        // then escalates through recorded rungs; never a silent park.
-        wakeLadderScheduler = startWakeLadderScheduler(deps);
       }
       if (!monitorsStarted) {
         monitorsStarted = true;
@@ -402,26 +369,16 @@ export async function startServer(port?: number) {
     servers.push(srv);
   }
 
-  // PL-004 Phase C: graceful shutdown — stop scheduler before process
-  // exit so any in-flight policy evaluation completes (or is awaited).
   // Multi-bind: close every serve() instance in parallel.
-  if (!managed) deps.healthDiagnosis?.start();
   const shutdown = createDaemonShutdown({
     receiptPath: path.join(OPENRIG_HOME, DAEMON_SHUTDOWN_RECEIPT),
     phases: [
       ["timers", () => {
         if (heartbeatTimer) clearInterval(heartbeatTimer);
-        if (retentionTimer) clearInterval(retentionTimer);
-        if (stuckSweepTimer) clearInterval(stuckSweepTimer);
       }],
-      ["proof-source-watch", () => deps.proofSourceWatch?.close()],
-      ["health-diagnosis", () => deps.healthDiagnosis?.stop()],
-      ["watchdog", () => deps.watchdogScheduler?.stop()],
       ["seat-activity", () => deps.seatActivityService?.stop()],
       ["seat-structural-activity", () => deps.seatStructuralActivityService?.stop()],
       ["seat-identity", () => deps.seatIdentityReconciler?.stop()],
-      ["periodic-snapshot", () => deps.periodicSnapshotScheduler?.stop()],
-      ["wake-ladder", () => wakeLadderScheduler?.stop()],
       ["attempt-completion", () => deps.attemptCompletion?.stop()],
       ["github-login", () => deps.github?.stop()],
       ["event-loop-monitor", () => eventLoopMonitor.stop()],

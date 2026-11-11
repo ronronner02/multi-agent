@@ -18,7 +18,6 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
-import { PodRepository } from "../src/domain/pod-repository.js";
 import { rigMemberExists } from "../src/domain/workflow-role-context.js";
 
 // OPR.0.4.6.FAC3 C2 — the FR-5 member-exists instantiate ADVISORY
@@ -229,7 +228,6 @@ describe("FAC-3 C2: FR-5 member-exists instantiate advisory", () => {
   let queueRepo: QueueRepository;
   let runtime: WorkflowRuntime;
   let rigRepo: RigRepository;
-  let podRepo: PodRepository;
   let tmp: string;
   let buildRigId: string;
   let sessionSeq = 0;
@@ -241,13 +239,10 @@ describe("FAC-3 C2: FR-5 member-exists instantiate advisory", () => {
     member: string,
     opts: { role?: string; runtime?: string; sessionStatus?: string | null } = {},
   ): string {
-    const podRec =
-      podRepo.getPodByNamespace(rigId, pod) ?? podRepo.createPod(rigId, pod, pod);
     const node = rigRepo.addNode(rigId, `${pod}.${member}`, {
       role: opts.role,
       runtime: opts.runtime ?? "claude-code",
       cwd: "/tmp",
-      podId: podRec.id,
       agentRef: "local:agents/x",
       profile: "default",
     });
@@ -288,7 +283,6 @@ describe("FAC-3 C2: FR-5 member-exists instantiate advisory", () => {
     bus = new EventBus(db);
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });
     rigRepo = new RigRepository(db);
-    podRepo = new PodRepository(db);
     const buildRig = rigRepo.createRig("acme-build");
     buildRigId = buildRig.id;
     // The real member the valid/typo pair discriminates against, a

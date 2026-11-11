@@ -159,37 +159,6 @@ describe("managed control authority on the shared application", () => {
     expect(governance.getRun("run").entityVersion).toBe(1);
   });
 
-  it.each([
-    "/api/queue/create", "/api/queue/claimed/update", "/api/queue/claimed/handoff",
-    "/api/up", "/api/down", "/api/startup", "/api/rigs/managed-rig/restore",
-    "/api/transport/send", "/api/transport/broadcast", "/api/compaction",
-    "/api/workflow/instantiate", "/api/workflow/project", "/api/workflow/instance/resume",
-    "/api/mission-control/action", "/api/seat/takeover",
-  ])("closes the legacy mutation route before its handler: %s", async (path) => {
-    const before = db.prepare("SELECT count(*) AS count FROM queue_items").get();
-    const response = await request(path, { sourceSession: "owner", destinationSession: "worker@managed", body: "unapproved", owner: true });
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({ code: "managed_control_required" });
-    expect(db.prepare("SELECT count(*) AS count FROM queue_items").get()).toEqual(before);
-  });
-
-  it("guards every registered legacy route, not only a hand-picked mutation list", async () => {
-    const routes = [...new Set(app.routes.filter(route => route.method !== "ALL"
-      && route.path.startsWith("/api/") && !route.path.startsWith("/api/team-control/"))
-      .map(route => `${route.method} ${route.path}`))];
-    expect(routes).toContain("POST /api/queue/create");
-    for (const entry of routes) {
-      const [method, pattern] = entry.split(" ");
-      const path = pattern!.replace(/:[^/]+/g, "fixture").replace(/\*/g, "fixture");
-      const response = await app.request(`http://localhost${path}`, {
-        method, headers: { Host: "localhost", Authorization: `Bearer ${ownerToken}`, "Content-Type": "application/json" },
-        ...(["GET", "HEAD"].includes(method!) ? {} : { body: "{}" }),
-      }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
-      expect(response.status, entry).toBe(403);
-      if (method !== "HEAD") expect(await response.json(), entry).toMatchObject({ code: "managed_control_required" });
-    }
-  });
-
   it("closes legacy WebSocket and read-with-side-effect paths as well", async () => {
     expect((await request("/api/terminal/ws?token=terminal-control-fixture")).status).toBe(403);
     expect((await request("/api/terminal/open")).status).toBe(403);

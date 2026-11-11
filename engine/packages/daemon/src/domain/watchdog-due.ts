@@ -40,3 +40,9 @@ export function nextDueAt(
   if (Number.isNaN(last) || last === 0) return null;
   return last + cadenceMs;
 }
+
+/** True when a watchdog job's next scheduled evaluation has elapsed. */
+export function isDue(job: WatchdogJob, nowMs: number): boolean {
+  const due = nextDueAt(job);
+  return due === null || nowMs >= due;
+}
