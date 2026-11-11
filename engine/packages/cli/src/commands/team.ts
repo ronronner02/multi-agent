@@ -100,7 +100,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       }
       const token = ownerToken(deps());
       if (!token) {
-        console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        console.error("error: no owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
         process.exitCode = 1;
         return;
       }
@@ -174,7 +174,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       }
       const token = ownerToken(deps());
       if (!token) {
-        console.error("error: no owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        console.error("error: no owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
         process.exitCode = 1;
         return;
       }
@@ -232,7 +232,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
   async function readResult(runId: string, taskId: string | undefined): Promise<TeamTaskResult> {
     const token = ownerToken(deps());
     if (!token) throw new TeamCommandError("control_auth_required",
-      "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+      "No owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
     const client = new DaemonClient(deps().baseUrl, { fetchImpl: deps().fetchImpl, senderIdentity: false });
     await client.waitForReady();
     const headers = { Authorization: "Bearer " + token };
@@ -243,7 +243,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     const code = (response.data as { code?: string } | undefined)?.code ?? "team_result_unavailable";
     const message = (response.data as { error?: string } | undefined)?.error ?? "The daemon refused the result read.";
     if (response.status === 401) throw new TeamCommandError(code,
-      "The owner credential was refused. Check MULTI_AGENT_OWNER_TOKEN or re-run ./setup.sh.");
+      "The owner credential was refused. Check MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
     if (response.status === 409) throw new TeamCommandError(code, `${message} Wait for the task to finish, then retry.`);
     throw new TeamCommandError(code, message);
   }
@@ -269,7 +269,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .action(async (runId: string, message: string | undefined, options: { json?: boolean }) => {
       const token = ownerToken(deps());
       if (!token) throw new TeamCommandError("control_auth_required",
-        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        "No owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
       const client = new DaemonClient(deps().baseUrl, { fetchImpl: deps().fetchImpl, senderIdentity: false });
       await client.waitForReady();
       const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}/chat`;
@@ -321,7 +321,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .action(async (runId: string, options: { json?: boolean }) => {
       const token = ownerToken(deps());
       if (!token) throw new TeamCommandError("control_auth_required",
-        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        "No owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
       const client = new DaemonClient(deps().baseUrl, { fetchImpl: deps().fetchImpl, senderIdentity: false });
       await client.waitForReady();
       const headers = { Authorization: "Bearer " + token };
@@ -369,7 +369,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     .action(async (runId: string, options: { json?: boolean }) => {
       const token = ownerToken(deps());
       if (!token) throw new TeamCommandError("control_auth_required",
-        "No owner credential. Run ./setup.sh, which writes the owner token, or set MULTI_AGENT_OWNER_TOKEN.");
+        "No owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
       const client = new DaemonClient(deps().baseUrl, { fetchImpl: deps().fetchImpl, senderIdentity: false });
       await client.waitForReady();
       const headers = { Authorization: "Bearer " + token }, path = `${BASE}/runs/${encodeURIComponent(runId)}`;

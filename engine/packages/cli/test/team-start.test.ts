@@ -127,7 +127,7 @@ describe("rig team start", () => {
     const result = await run(["team", "start", "Add a health endpoint"], deps(fetchImpl, null));
     expect(result.code).toBe(1);
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(result.lines.join("\n")).toMatch(/no owner credential.*Run \.\/setup\.sh/);
+    expect(result.lines.join("\n")).toContain("no owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
   });
 
   it("reports the daemon's refusal instead of printing a run", async () => {
