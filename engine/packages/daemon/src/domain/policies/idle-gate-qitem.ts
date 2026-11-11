@@ -20,7 +20,6 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { effectiveGateRoles } from "../gate-predicate.js";
-import type { SeatActivityService } from "../seat-activity-service.js";
 import type { Policy, PolicyEvaluation, PolicyJob } from "./types.js";
 
 export interface IdleGateQitemDeps {
@@ -30,7 +29,14 @@ export interface IdleGateQitemDeps {
    * `getSeatStateBySession` is used; typed as a Pick so unit tests can inject
    * a lightweight seam without constructing a second oracle.
    */
-  seatActivity: Pick<SeatActivityService, "getSeatStateBySession">;
+  seatActivity: {
+    getSeatStateBySession(session: string): {
+      activity: string;
+      needsInput: { count: number; reason?: string };
+      decidedBy?: string;
+      changedAt?: string;
+    } | null;
+  };
 }
 
 interface PendingGateRow {

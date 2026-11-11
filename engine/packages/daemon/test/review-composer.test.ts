@@ -561,11 +561,6 @@ describe("candidate derivation", () => {
 // create` output is the canonical intent-stage fixture.
 // ---------------------------------------------------------------------------
 
-import * as nodePath from "node:path";
-import { beforeAll as beforeAllIntent } from "vitest";
-
-const INTENT_REPO_ROOT = nodePath.resolve(import.meta.dirname, "..", "..", "..");
-
 interface PristineFixture {
   readme: string;
   prd: string;
@@ -573,25 +568,14 @@ interface PristineFixture {
 }
 
 let pristine: PristineFixture;
-
-beforeAllIntent(async () => {
-  const mod = await import(
-    nodePath.join(INTENT_REPO_ROOT, "packages/cli/src/lib/scope/templates.ts")
-  );
-  const opts = {
-    id: "OPR.T.99",
-    slice_number: "99",
-    slug: "pristine",
-    mission: "release-t",
-    title: "Pristine",
-    created_date: "2026-07-11",
-  };
-  pristine = {
-    readme: mod.renderSliceTemplate("placeholder", opts),
-    prd: mod.renderImplementationPrdTemplate(opts),
-    proof: mod.renderSliceProofTemplate({ id: "OPR.T.99", title: "Pristine" }),
-  };
-});
+// The CLI scope template renderer is deleted with the terminal/legacy command
+// surface. Keep the composer contract covered with the same minimal scaffold
+// shapes instead of importing that deleted module.
+pristine = {
+  readme: "---\ntitle: Pristine\nstatus: placeholder\n---\n\n# Pristine\n\n## Intent\n\nPristine\n\n## Mini-requirements\n\n1. [One promised requirement]\n",
+  prd: "---\n---\n\n# Implementation\n\n## Mini-requirements\n\n1. [One promised requirement]\n\n## Proof contract\n\n- [ ] [One promised deliverable]\n",
+  proof: "---\nverdict: null\n---\n\nPending.\n",
+};
 
 describe("T2 — extractProofContract filters scaffold placeholders", () => {
   it("a pristine template PRD's contract extracts to [] (placeholder-only)", () => {

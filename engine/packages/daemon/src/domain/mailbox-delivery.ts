@@ -2,7 +2,6 @@ import type Database from "better-sqlite3";
 import { latestHookMovedOn, type AgentActivityStore } from "./agent-activity-store.js";
 import { makePromptStateReader } from "./queue-wake-ladder.js";
 import type { WorkerLaunchEvent } from "../adapters/worker-launch.js";
-import type { SeatActivityService } from "./seat-activity-service.js";
 import type {
   ChatRepository,
   MailboxConsumptionReceipt,
@@ -25,7 +24,6 @@ export type MailboxPromptStateReader = (recipient: string) => MailboxPromptState
 
 export interface MailboxPromptStateDeps {
   db: Database.Database;
-  seatActivity?: Pick<SeatActivityService, "getSeatState"> | null;
   agentActivityStore?: Pick<AgentActivityStore, "getLatestForNode"> | null;
   /** When this daemon started observing; older evidence cannot read clear. */
   observedSince: string;
@@ -254,7 +252,6 @@ export function createMailboxPromptStateReader(deps: MailboxPromptStateDeps): Ma
   const now = deps.now ?? (() => new Date());
   const readWakePromptState = makePromptStateReader({
     db: deps.db,
-    getSeatState: (nodeId) => deps.seatActivity?.getSeatState(nodeId),
     getLatestHook: (sessionName) => deps.agentActivityStore?.getLatestForNode({ sessionName }),
   });
   return (recipient) => {
@@ -538,4 +535,3 @@ function optionalText(value: string | null | undefined, field: string): string |
   }
   return value.trim();
 }
-

@@ -6,7 +6,6 @@ import { closeHttpServer, createDaemonShutdown, DAEMON_SHUTDOWN_RECEIPT, trackHt
 import { readOpenRigEnv, OPENRIG_HOME } from "./openrig-compat.js";
 import { resolveDaemonDbPath } from "./daemon-db-path.js";
 import { createDaemon } from "./startup.js";
-import { removeParentSessionEnv } from "./domain/parent-session-env.js";
 import { resolveClientDependencies } from "./domain/executable-resolver.js";
 import { endRunningWorkerTrees } from "./domain/process-termination.js";
 import { resolveBindPlan } from "./domain/bind-plan.js";
@@ -28,9 +27,6 @@ import {
 import {
   assertBindAuthInvariant,
   detectTailscaleInterface,
-  isLoopbackBind,
-  isTailscaleBind,
-  resolveToIpOrNull,
 } from "./middleware/auth-bearer-token.js";
 import type { SlowOperationInstrumentation } from "./domain/slow-op-recorder.js";
 import type { ProviderService } from "./domain/provider/provider-service.js";
@@ -175,7 +171,6 @@ export function startWakeLadderScheduler(deps: {
   wakeLadderStatus?: import("./domain/queue-wake-ladder.js").WakeLadderStatus;
   providerService?: Pick<ProviderService, "getReadModel">;
   usageLimitJitterSeconds?: number;
-  seatActivityService?: Pick<import("./domain/seat-activity-service.js").SeatActivityService, "getSeatState">;
   agentActivityStore?: Pick<import("./domain/agent-activity-store.js").AgentActivityStore, "getLatestForNode">;
 }): WakeLadderScheduler | null {
   const queueRepo = deps.queueRepo;
@@ -190,7 +185,7 @@ export function startWakeLadderScheduler(deps: {
       status,
       readPromptState: makePromptStateReader({
         db,
-        getSeatState: (nodeId) => deps.seatActivityService?.getSeatState(nodeId),
+        getSeatState: () => null,
         getLatestHook: (sessionName) => deps.agentActivityStore?.getLatestForNode({ sessionName }),
       }),
       ...(deps.providerService
@@ -204,16 +199,6 @@ export function startWakeLadderScheduler(deps: {
   });
   scheduler.start();
   return scheduler;
-}
-
-async function isTrustedLocalOrTailnetBind(host: string): Promise<boolean> {
-  if (isLoopbackBind(host)) return true;
-  if (isTailscaleBind(host)) return true;
-  if (!/^[\d.]+$/.test(host) && !host.includes(":")) {
-    const resolvedIp = await resolveToIpOrNull(host);
-    if (resolvedIp) return isLoopbackBind(resolvedIp) || isTailscaleBind(resolvedIp);
-  }
-  return false;
 }
 
 export async function startServer(port?: number) {
@@ -280,15 +265,10 @@ export async function startServer(port?: number) {
   const bearerToken = process.env.OPENRIG_AUTH_BEARER_TOKEN ?? null;
 
   let bindHosts: string[];
-  const terminalTokenEnv = process.env.OPENRIG_TERMINAL_BEARER_TOKEN?.trim();
-  let terminalBearerToken: string | null = terminalTokenEnv || null;
   if (explicitHost) {
     // Operator opt-in path — invariant enforces bearer requirement for
     // genuinely public/LAN binds; loopback/tailscale binds short-circuit.
     await assertBindAuthInvariant({ host: explicitHost, bearerToken });
-    if (!terminalBearerToken && !(await isTrustedLocalOrTailnetBind(explicitHost))) {
-      terminalBearerToken = bearerToken;
-    }
     bindHosts = [explicitHost];
   } else {
     // Default path — the plan already computed loopback + tailscale-when-active.
@@ -300,12 +280,11 @@ export async function startServer(port?: number) {
   // routes, the managed launch chain and the mailbox endpoint — reads the same tokens, and
   // the owner credential it started with is never replaced by a second copy.
   const teamControlCredentials: TeamControlCredentials = { ownerToken: resolvedOwnerToken };
-  const { app, contextMonitor, deps, eventLoopMonitor, injectWebSocket } = await createDaemon({
+  const { app, contextMonitor, deps, eventLoopMonitor } = await createDaemon({
     dbPath,
     managedMode: requestedMode === "managed",
     teamControl: { credentials: teamControlCredentials },
     bearerToken,
-    terminalBearerToken,
     // S20 — the effective bind plan rides the health surface so adoption gates verify
     // listeners from BINDING EVIDENCE (probe each host) instead of config echo.
     bindPlan,
@@ -335,17 +314,6 @@ export async function startServer(port?: number) {
       }
       if (!monitorsStarted && !managed) {
         contextMonitor.start();
-        // Slice 15 — start the seat-activity scheduler (1Hz default).
-        // Polls every running tmux-bound seat's window_activity timestamp so
-        // PsProjectionService + node-inventory enrichment serve
-        // fresh data on each request.
-        deps.seatActivityService?.start(deps.rigRepo.db);
-        // 5b82324b — the structural pane-activity cache, on the same 1Hz cadence.
-        deps.seatStructuralActivityService?.start(deps.rigRepo.db);
-        // OPR.0.4.3.19 — start the liveness identity reconciler (5s default).
-        // Persists the per-seat pane PID/command verdict so node-inventory
-        // gates the running/active projection on verified process identity.
-        deps.seatIdentityReconciler?.start();
       }
       if (!monitorsStarted) {
         monitorsStarted = true;
@@ -366,7 +334,6 @@ export async function startServer(port?: number) {
         }, HEARTBEAT_INTERVAL_MS);
       }
     });
-    injectWebSocket(srv);
     trackHttpServerResponses(srv, deps.requestPhaseObserver?.observeRequest);
     servers.push(srv);
   }
@@ -376,9 +343,6 @@ export async function startServer(port?: number) {
     ["timers", () => {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     }],
-    ["seat-activity", () => deps.seatActivityService?.stop()],
-    ["seat-structural-activity", () => deps.seatStructuralActivityService?.stop()],
-    ["seat-identity", () => deps.seatIdentityReconciler?.stop()],
     ["attempt-completion", () => deps.attemptCompletion?.stop()],
     ["github-login", () => deps.github?.stop()],
     ["event-loop-monitor", () => eventLoopMonitor.stop()],
@@ -497,9 +461,5 @@ const isDirectRun =
   import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectRun) {
-  // Before anything spawns: the tmux server this daemon starts passes its
-  // environment to every seat, so drop the launching session's identity.
-  const removed = removeParentSessionEnv(process.env);
-  if (removed.length) console.log(`[openrig] Seats will not inherit the launching session's ${removed.join(", ")}.`);
   startServer();
 }

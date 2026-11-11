@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
@@ -8,8 +7,6 @@ import type { WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 import { agentTurnOutputPaths, writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
 import { TEAM_CONTROL_VERSION } from "../src/contracts/team-control.js";
-import { unisolatedWorkerRoots } from "../src/domain/unisolated-roots.js";
-import type { createDaemon } from "../src/startup.js";
 import type { SupervisorLaunch, SupervisorResult, SupervisedTurn } from "../src/adapters/child-process-supervisor.js";
 import type { WorkerEvent } from "../src/contracts/worker-events.js";
 
@@ -213,112 +210,4 @@ describe("U3 the launcher hands one turn to the supervisor", () => {
     const { input, launcher } = await launch();
     expect(await launcher.launch(input)).toMatchObject({ ok: false, error: "Direct launch blocked: managed_attempt_already_started" });
   });
-});
-
-// The whole daemon path starts from `bindingForGoal`, whose binding contract still requires a
-// POSIX-shaped repository root; accepting a Windows root is U7's unit. Until it lands this case
-// runs on Linux, where the direct transport is otherwise identical.
-describe.skipIf(process.platform === "win32")("a native turn through the daemon", () => {
-  it.each([
-    { label: "valid thread and continuation", reportedThread: threadId },
-    { label: "leading dash refused", reportedThread: "--last" },
-    { label: "whitespace refused", reportedThread: "bad thread" },
-  ])("sweeps a native Codex stub to stopped ($label)", async ({ reportedThread }) => {
-    const root = mkdtempSync(join(tmpdir(), "u3-sweep-"));
-    const home = join(root, "home"), repo = join(root, "repo");
-    for (const path of [home, repo]) mkdirSync(path, { recursive: true });
-    const saved = { OPENRIG_HOME: process.env.OPENRIG_HOME };
-    process.env.OPENRIG_HOME = home;
-    const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
-    let daemon: Awaited<ReturnType<typeof createDaemon>> | undefined;
-    try {
-      git("init", "-q", "--initial-branch=main");
-      git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid");
-      writeFileSync(join(repo, "plan.md"), "Read the plan and report the result.\n");
-      git("add", "plan.md"); git("commit", "-qm", "fixture");
-      // The stub client is a real executable started through the production launch path — an
-      // explicit configured path, resolved by U1 and spawned with `shell: false` — so it sees
-      // exactly the argv the contract froze. It records its argv, prompt and cwd, writes Codex's
-      // `-o` answer, and streams the provider records.
-      const stub = join(root, "codex-stub");
-      writeFileSync(stub, `#!${process.execPath}
-const fs = require('node:fs');
-const args = process.argv.slice(2);
-if (args[0] !== 'exec') { console.error('expected exec'); process.exit(2); }
-const output = args[args.indexOf('-o') + 1];
-fs.writeFileSync(output + '.launch.json', JSON.stringify({ args, prompt: fs.readFileSync(0, 'utf8'), cwd: process.cwd() }));
-console.log(JSON.stringify({ type: 'thread.started', thread_id: ${JSON.stringify(reportedThread)} }));
-console.log(JSON.stringify({ type: 'turn.started' }));
-console.log(JSON.stringify({ type: 'item.started', item: { id: 'command-1', type: 'command_execution', command: 'printf fixture', status: 'in_progress' } }));
-console.log(JSON.stringify({ type: 'item.completed', item: { id: 'command-1', type: 'command_execution', command: 'printf fixture', status: 'completed', exit_code: 0 } }));
-fs.writeFileSync(output, 'The assigned plan was read.');
-console.log(JSON.stringify({ type: 'item.completed', item: { id: 'message-1', type: 'agent_message', text: 'The assigned plan was read.' } }));
-console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 17, cached_input_tokens: 3, output_tokens: 5 } }));
-`, { mode: 0o755 });
-      vi.resetModules();
-      const { createDaemon } = await import("../src/startup.js");
-      daemon = await createDaemon({ dbPath: join(root, "demo.db"), managedMode: true, workersIsolation: "none",
-        teamControl: { credentials: { ownerToken: "fixture-owner" } },
-        cmuxFactory: async () => { throw Object.assign(new Error("no socket"), { code: "ENOENT" }); },
-        directLaunchExecutable: () => stub });
-      const rig = daemon.deps.rigRepo.createRig("codex-fixture", repo);
-      const node = daemon.deps.rigRepo.addNode(rig.id, "builder", { role: "implementer", runtime: "codex", cwd: repo });
-      const seat = "builder@codex-fixture";
-      daemon.deps.sessionRegistry.registerSession(node.id, seat);
-      const response = await daemon.app.fetch(new Request("http://127.0.0.1/api/team-control/runs", {
-        method: "POST", headers: { Authorization: "Bearer fixture-owner", "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: "Read the assigned plan and report the result.", seat, writePaths: ["plan.md"] }),
-      }), { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
-      const body = await response.json() as { runId: string };
-      expect(response.status, JSON.stringify(body)).toBe(201);
-      const governance = daemon.deps.teamGovernance!;
-      const qitemId = governance.findTask(body.runId, "task-1")!.qitemId;
-      const attemptIds = () => (daemon!.db.prepare("SELECT id FROM team_attempts WHERE qitem_id = ? ORDER BY rowid")
-        .all(qitemId) as Array<{ id: string }>).map(row => row.id);
-      // The turn ends on its own and the sweep records the stop from the process identity — no
-      // pane, no exit status read from a terminal.
-      await vi.waitFor(async () => {
-        await daemon!.deps.attemptCompletion!.sweep();
-        const ids = attemptIds();
-        expect(ids).toHaveLength(1);
-        expect(governance.getAttempt(ids[0]!)?.state).toBe("stopped");
-      }, { timeout: 30_000, interval: 100 });
-      const [attemptId] = attemptIds();
-      const attempt = governance.getAttempt(attemptId!)!;
-      const stateRoot = join(unisolatedWorkerRoots(home).workerRoot, "local", "scratch");
-      const finalMessage = join(stateRoot, "turns", attempt.id, "last-message.txt");
-      expect(readFileSync(finalMessage, "utf8")).toBe("The assigned plan was read.");
-      const observed = JSON.parse(readFileSync(finalMessage + ".launch.json", "utf8")) as { args: string[]; prompt: string; cwd: string };
-      expect(observed.prompt).toContain("Read the assigned plan and report the result.");
-      expect(observed.cwd).toBe(daemon.deps.workflowRuntime!.assignedTreeFor(body.runId, governance.getTask(qitemId)!.assignment));
-      expect(observed.args.slice(0, 3)).toEqual(["exec", "--json", "-o"]);
-      expect(observed.args.at(-1)).toBe("-");
-      // The receipt is the process pair, and the sweep read the same identity to prove the end.
-      expect(attempt.identity).toMatchObject({ paneId: null, tmuxServer: null, processId: expect.any(Number) });
-      // The turn's own exit facts were recorded where a later process reads them.
-      expect(JSON.parse(readFileSync(join(stateRoot, "turns", attempt.id, "exit.json"), "utf8")))
-        .toMatchObject({ attemptId: attempt.id, exitCode: 0, acknowledged: true });
-      const session = daemon.deps.sessionRegistry.getSessionsForRig(rig.id).find(row => row.sessionName === seat)!;
-      if (reportedThread !== threadId) {
-        expect(session.resumeToken).toBeNull();
-        expect(session.startupStatus).toBe("pending");
-        return;
-      }
-      expect(attempt.identity?.nativeSessionId).toBe(threadId);
-      expect(session).toMatchObject({ resumeType: "codex_id", resumeToken: threadId });
-      const usage = JSON.parse(readFileSync(join(stateRoot, "turns", attempt.id, "usage.json"), "utf8"));
-      expect(usage).toMatchObject({ available: true, client: "codex", nativeSessionId: threadId,
-        counts: { inputTokens: 14, cacheReadInputTokens: 3, outputTokens: 5 } });
-      const activity = readFileSync(join(stateRoot, "turns", attempt.id, "activity.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
-      expect(activity.map(record => record.status)).toEqual(["running", "completed"]);
-    } finally {
-      daemon?.deps.attemptCompletion?.stop();
-      await daemon?.deps.workflowRuntime?.closeManagedAttempts();
-      if (daemon?.db.open) daemon.db.close();
-      for (const [key, value] of Object.entries(saved)) {
-        if (value === undefined) delete process.env[key]; else process.env[key] = value;
-      }
-      if (existsSync(root)) { writable(root); rmSync(root, { recursive: true, force: true }); }
-    }
-  }, 90_000);
 });

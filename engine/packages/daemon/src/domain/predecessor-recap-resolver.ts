@@ -1,5 +1,7 @@
 import { parseJsonlExchanges, type JsonlExchange } from "./session-jsonl.js";
-import type { PredecessorRecapResolver, PredecessorRecapResolution } from "./seat-handover-service.js";
+interface PredecessorRecap { recap: JsonlExchange[]; recordPath: string; }
+type PredecessorRecapResolution = PredecessorRecap | { unavailableReason: string };
+type PredecessorRecapResolver = (args: { nodeId: string; runtime: string | null; sessionName: string }) => PredecessorRecapResolution;
 
 /**
  * Production resolver for the seat-handover boot recap: resolve the DEPARTING seat's provider record

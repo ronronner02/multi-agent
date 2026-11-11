@@ -157,13 +157,6 @@ export interface RiggedConfig {
       retentionKeep: number;
     };
   };
-  // OPR.0.4.6.02 S1 — inner-tmux status-bar default at session launch.
-  // Static boolean (default off), lockstep with the daemon settings-store
-  // twin. Consumed by the daemon NodeLauncher; the CLI carries it for the
-  // `rig config get/set terminal.status_bar` surface + twin parity.
-  terminal: {
-    statusBar: boolean;
-  };
   // Slice 15 (OPR.0.7.0.15) — the ONE switch for compact command-output
   // defaults (default off: today's output). Read by the CLI only; the daemon
   // settings-store twin keeps the two registries in lockstep.
@@ -326,10 +319,6 @@ const DEFAULTS = {
       retentionKeep: 10,
     },
   },
-  // OPR.0.4.6.02 S1 — inner-tmux status bar OFF at launch by default.
-  terminal: {
-    statusBar: false,
-  },
   // Slice 15 — compact command-output defaults OFF until the switch is on.
   output: {
     compact: false,
@@ -451,10 +440,6 @@ export const VALID_KEYS = [
   "snapshots.periodic.enabled",
   "snapshots.periodic.interval_seconds",
   "snapshots.periodic.retention_keep",
-  // OPR.0.4.6.02 S1 — inner-tmux status-bar launch default. ONE static
-  // boolean (default off), lockstep with the daemon settings-store twin
-  // (the parity test pins both). Flip is future-launches-only (BR-1).
-  "terminal.status_bar",
   // Slice 15 — compact command-output defaults; lockstep with the daemon twin.
   "output.compact",
   // Slice 01 — Codex usage windows in the provider view; lockstep with the daemon twin.
@@ -561,8 +546,6 @@ export const ENV_MAP: Record<ValidKey, { primary: string; legacy?: string }> = {
   "snapshots.periodic.enabled": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_ENABLED" },
   "snapshots.periodic.interval_seconds": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_INTERVAL_SECONDS" },
   "snapshots.periodic.retention_keep": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_RETENTION_KEEP" },
-  // OPR.0.4.6.02 S1 — net-new key; OPENRIG_* primary only (no RIGGED_* legacy).
-  "terminal.status_bar": { primary: "OPENRIG_TERMINAL_STATUS_BAR" },
   "output.compact": { primary: "OPENRIG_OUTPUT_COMPACT" },
   "provider.usage_windows": { primary: "OPENRIG_PROVIDER_USAGE_WINDOWS" },
   // OPR.0.4.6.FS-1 W2 — retention knobs; net-new keys, OPENRIG_* primary only.
@@ -649,7 +632,6 @@ const KEY_TO_PATH: Record<ValidKey, string[]> = {
   "snapshots.periodic.enabled": ["snapshots", "periodic", "enabled"],
   "snapshots.periodic.interval_seconds": ["snapshots", "periodic", "intervalSeconds"],
   "snapshots.periodic.retention_keep": ["snapshots", "periodic", "retentionKeep"],
-  "terminal.status_bar": ["terminal", "statusBar"],
   "output.compact": ["output", "compact"],
   "provider.usage_windows": ["provider", "usageWindows"],
   "retention.enabled": ["retention", "enabled"],
@@ -1201,9 +1183,6 @@ export class ConfigStore {
           intervalSeconds: v("snapshots.periodic.interval_seconds") as number,
           retentionKeep: v("snapshots.periodic.retention_keep") as number,
         },
-      },
-      terminal: {
-        statusBar: v("terminal.status_bar") as boolean,
       },
       output: {
         compact: v("output.compact") as boolean,

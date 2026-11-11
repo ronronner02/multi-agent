@@ -5,10 +5,6 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
-# The tui suite drives a real tmux PTY, and tmux refuses to attach without a TERM
-# that supports clear. A headless CI step has none, so pin one.
-export TERM=xterm-256color
-
 # daemon-mode.test.ts runs here now that `workers.isolation: none` is the default: its
 # managed boot no longer needs the provisioned /etc/multi-agent policy.
 npm run test -w packages/daemon -- \
@@ -20,13 +16,8 @@ npm run test -w packages/daemon -- \
   test/generated-titles.test.ts \
   test/team-workspace.test.ts \
   test/team-candidate-launch.test.ts \
-  test/managed-attempt-attachment.test.ts \
   test/scope-extension.test.ts \
   test/owner-session.test.ts \
-  test/unisolated-launch.test.ts \
-  test/default-native-command.test.ts \
-  test/seat-pane-launch.test.ts \
-  test/unisolated-start-policy.test.ts \
   test/team-start.test.ts \
   test/team-setup.test.ts \
   test/team-settings.test.ts \
@@ -44,7 +35,6 @@ npm run test -w packages/daemon -- \
   test/review-loop.test.ts \
   test/task-completion.test.ts \
   test/agent-turn.test.ts \
-  test/startup-orchestrator.test.ts \
   test/agent-turn-view-telemetry.test.ts \
   test/attempt-telemetry.test.ts \
   test/team-telemetry-routes.test.ts \

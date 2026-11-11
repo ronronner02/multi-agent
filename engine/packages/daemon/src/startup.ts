@@ -2,11 +2,9 @@ import { documentDispatchRefusal } from "./domain/project-documents.js";
 import { managedModelRefusal } from "./domain/team-model-policy.js";
 import { discoverTailscaleSelfNames } from "./middleware/browser-boundary.js";
 import { configureShadowCapture } from "./domain/shadow-capture.js";
-import { SeatDeliveryGuard, resolveGuardTarget } from "./domain/seat-delivery-guard.js";
 import { queueRecoveryOwnsWake } from "./domain/queue-wake-ladder.js";
 import type { Hono } from "hono";
 import type Database from "better-sqlite3";
-import type { ArgvExecFn, ExecFn } from "./adapters/tmux.js";
 import { createDb } from "./db/connection.js";
 import { migrate } from "./db/migrate.js";
 // P8: apply the CANONICAL migration list — the single source of truth (db/all-migrations.ts),
@@ -18,35 +16,16 @@ import { deriveCanonicalSessionName, isHumanSeatSessionRef, parseSessionName } f
 import { resolveExternal } from "./domain/queue-routing/external-admission.js";
 import { loadHumanRegistry } from "./domain/queue-routing/human-registry.js";
 import { EventBus } from "./domain/event-bus.js";
-import { NodeLauncher } from "./domain/node-launcher.js";
-import { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
-import { TmuxAdapter } from "./adapters/tmux.js";
-import { daemonTmuxServerArgs, setDaemonTmuxServer, tmuxServerArgs } from "./adapters/tmux-server.js";
-import { execArgvCommand, execCommand } from "./adapters/tmux-exec.js";
-import { ClaudeManagedLaunch } from "./domain/claude-managed-launch.js";
 import { codexDaemonSupportProbe } from "./domain/codex-daemon-support.js";
 import { codexNetworkDefaultReader } from "./domain/codex-network-default.js";
 import { codexUsageReader } from "./domain/provider/codex-usage-reader.js";
 import { prepareCodexTeamWorkspace } from "./domain/codex-team-workspace.js";
-import { OMP_PROVIDER_ENV_VARS, OMP_PROVIDER_EXTRA_ENV_VARS } from "./adapters/pi-runner-protocol.js";
-import { Reconciler } from "./domain/reconciler.js";
-import { RequirementsProbeRegistry } from "./domain/requirements-probe.js";
 import { DiscoveryRepository } from "./domain/discovery-repository.js";
 // TODO: AS-T12 — migrate to pod-aware bundle source resolver
-import { SeatActivityService } from "./domain/seat-activity-service.js";
-import { readClaudeSelfReportEvidence } from "./adapters/claude-code-adapter.js";
-import { SeatStructuralActivityService } from "./domain/seat-structural-activity-service.js";
-import { deriveSelfHostIdSource, SeatIdentityReconciler, reconcileSelfHostIdentity } from "./domain/seat-identity-reconciler.js";
-import { SeatIdentityStore, SelfHostIdentityStore } from "./domain/seat-identity-store.js";
-import { ensureSeatPane, seatForTask } from "./domain/seat-pane.js";
+import { setSelfHostId, setSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
 import { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
 import { randomUUID } from "node:crypto";
-import { setSelfHostId, setSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
-import { ResumeMetadataRefresher } from "./domain/resume-metadata-refresher.js";
-import { observeClaudePaneStartedAt } from "./domain/native-process-lineage.js";
 import { TranscriptStore } from "./domain/transcript-store.js";
-import { resumeRunningTranscriptCaptures } from "./domain/transcript-capture.js";
-import { SessionTransport } from "./domain/session-transport.js";
 import { AgentActivityStore } from "./domain/agent-activity-store.js";
 import { ChatRepository } from "./domain/chat-repository.js";
 import { StreamStore } from "./domain/stream-store.js";
@@ -75,7 +54,7 @@ import { diagnoseRigParked } from "./domain/parked-query.js";
 import { SettingsStore as ContextPackSettingsStore } from "./domain/user-settings/settings-store.js";
 import { SettingsStore } from "./domain/user-settings/settings-store.js";
 import { WhoamiService } from "./domain/whoami-service.js";
-import { createAppWithWebSocket, type AppDeps } from "./server.js";
+import { createApp, type AppDeps } from "./server.js";
 import { PlanGovernance, fixDaemonMode, hashBytes } from "./domain/plan-governance.js";
 import { refreshPlanBinding, unisolatedPolicyCapability } from "./routes/team-start.js";
 import { leadActivation } from "./domain/lead-proposal.js";
@@ -83,7 +62,6 @@ import { planningRosterRequired } from "./domain/lead-roster.js";
 import { composeLeadTurnEnd } from "./domain/lead-chat.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
-import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
 import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
 import { resolveTeamSoul } from "./domain/team-souls.js";
@@ -96,8 +74,6 @@ import { TeamReadModel } from "./team-control-surface.js";
 import { canonicalJson } from "./contracts/team-control.js";
 import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
 import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
-import { RestrictedWorkerLauncher, type WorkerLaunchAdmission } from "./adapters/worker-launch.js";
-import { createManagedLaunchControl } from "./adapters/worker-launch-control.js";
 import { DirectWorkerLauncher, type DirectLaunchFacts } from "./adapters/direct-worker-launch.js";
 import { readSupervisorExit } from "./adapters/child-process-supervisor.js";
 import type { WorkerClient } from "./adapters/worker-launch.js";
@@ -125,10 +101,6 @@ interface DaemonOptions {
    *  computed once in index.ts and exposed on /healthz so adoption gates verify
    *  listeners by binding evidence. Absent (tests/legacy) = healthz body unchanged. */
   bindPlan?: import("./domain/bind-plan.js").BindPlan;
-  tmuxExec?: ExecFn;
-  /** Optional shell-free tmux executor; selected by default on Windows. */
-  argvExec?: ArgvExecFn;
-  tmuxOptionPlatform?: NodeJS.Platform;
   slowOpRecorder?: SlowOperationInstrumentation;
   /**
    * PL-005 Phase B: bearer token for Mission Control write verbs.
@@ -138,13 +110,6 @@ interface DaemonOptions {
    * comparison + 401 on missing/mismatch.
    */
   bearerToken?: string | null;
-  /**
-   * Terminal bearer token for live-terminal routes. Null means the
-   * daemon bind posture is already trusted (loopback/tailnet), matching
-   * the Mission Control auth boundary. Non-null enforces bearer auth on
-   * terminal preview/transport/websocket routes.
-   */
-  terminalBearerToken?: string | null;
   /** Overrides the `ui.enabled` setting (tests). */
   webUiEnabled?: boolean;
   /** MVP: overrides the `workers.isolation` setting, which is otherwise read from config. */
@@ -166,7 +131,6 @@ interface DaemonResult {
   // OPR.0.4.3.21 — returned so index.ts can stop() it on graceful shutdown.
   eventLoopMonitor: import("./domain/event-loop-monitor.js").EventLoopMonitor;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  injectWebSocket: (server: any) => void;
 }
 
 const KNOWN_PROVIDER_AUTH_ENV = new Set([
@@ -181,149 +145,28 @@ const KNOWN_PROVIDER_AUTH_ENV = new Set([
   "OPENAI_BASE_URL",
   "OPENAI_ORG_ID",
   "OPENAI_PROJECT_ID",
-  // OPR.0.4.6.PI1 FR-7 — Pi seat providers. Without these in the KNOWN set,
-  // a daemon-launched Pi seat can never receive its provider key (the
-  // pi-runner's own deny-by-default allowlist then has nothing to pass
-  // through). Double opt-in preserved: the operator must still name each var
-  // in recovery.provider_auth_env_allowlist. OpenRouter is the founder-ruled
-  // preferred path (2026-07-06); zai/kimi-coding are the secondary natives;
-  // minimax follows the same per-family pattern (one key var per native slug).
-  "OPENROUTER_API_KEY",
-  "ZAI_API_KEY",
-  "KIMI_API_KEY",
-  "MINIMAX_API_KEY",
   // Issue #194: the bearer token of a Codex Amazon Bedrock provider
   // (`env_key = "AWS_BEARER_TOKEN_BEDROCK"`). Still forwarded only when the
   // operator names it in recovery.provider_auth_env_allowlist.
   "AWS_BEARER_TOKEN_BEDROCK",
 ]);
 
-// OMP seat providers, derived from the runner's OMP map so a key the runner
-// can pass is always admissible. Admitted only into OMP seats' launch env;
-// every other runtime keeps KNOWN_PROVIDER_AUTH_ENV above. Double opt-in is
-// unchanged: the operator names each var, and the runner forwards only the
-// declared provider's var.
-// A provider whose key is scoped to one endpoint (a self-hosted LiteLLM proxy)
-// contributes its base-URL variable too: admitting the key alone would hand the
-// seat an unusable credential, so the pair travels together — the same pairing
-// KNOWN_PROVIDER_AUTH_ENV makes for ANTHROPIC_BASE_URL / OPENAI_BASE_URL.
-const OMP_PROVIDER_AUTH_ENV: Record<string, true> = Object.fromEntries(
-  [
-    ...Object.values(OMP_PROVIDER_ENV_VARS),
-    ...Object.values(OMP_PROVIDER_EXTRA_ENV_VARS).flat(),
-  ].map((name) => [name, true as const]),
-);
-
 export function collectAllowlistedProviderAuthEnv(
   raw: string | null | undefined,
   env: Record<string, string | undefined>,
-  runtime?: "omp",
 ): Record<string, string> {
-  const admitOmp = runtime === "omp";
   const out: Record<string, string> = {};
   for (const item of (raw ?? "").split(",")) {
     const name = item.trim();
     if (!name) continue;
     if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) continue;
-    if (!KNOWN_PROVIDER_AUTH_ENV.has(name) && !(admitOmp && Object.hasOwn(OMP_PROVIDER_AUTH_ENV, name))) continue;
+    if (!KNOWN_PROVIDER_AUTH_ENV.has(name)) continue;
     const value = env[name];
     if (typeof value === "string" && value.length > 0) {
       out[name] = value;
     }
   }
   return out;
-}
-
-/**
- * T041: the managed launch chain over T040's control. Seat facts come from the persisted session and node,
- * and channel evidence only from the launcher's own verified observations, revoked before any blocked record.
- */
-function composeManagedLaunch(dependencies: {
-  db: Database.Database; governance: PlanGovernance; queue: QueueRepository; options: NonNullable<AppDeps["teamControl"]>;
-  rigRepo: RigRepository; sessions: SessionRegistry; tmux: TmuxAdapter;
-  /** T039: the workflow runtime a managed launch must be admitted through. Read at launch, not at composition. */
-  workflowRuntime: () => WorkflowRuntime | undefined;
-}) {
-  const { db, governance, queue, rigRepo, sessions } = dependencies;
-  // The verified native is the same instance only while its start time is unchanged; a reused PID is another process.
-  const channel = new ManagedNativeChannelEvidence(native => {
-    try {
-      const raw = fs.readFileSync("/proc/" + native.processId + "/stat", "utf8"), fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
-      return fields[19] === native.processStart && !["Z", "X"].includes(fields[0]!);
-    } catch { return false; }
-  });
-  const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
-  // The persisted seat facts available from a session name, before any terminal write: one live session on its own
-  // node, a canonical tree and a bound tmux pane. The client-runtime match needs the attempt, so the control's first
-  // observation checks it.
-  const seat = (sessionId: string, rigId?: string) => {
-    const session = sessions.findResumeContextByName(sessionId);
-    const live = session ? sessions.getLatestLiveSessions(session.rigId).filter(row => row.sessionName === sessionId) : [];
-    const node = session ? rigRepo.getRig(session.rigId)?.nodes.find(row => row.id === session.nodeId) : undefined;
-    if (!session || (rigId !== undefined && session.rigId !== rigId) || live.length !== 1 || live[0]!.sessionId !== session.sessionId
-      || live[0]!.nodeId !== session.nodeId || !node?.cwd || session.runtime !== node.runtime
-      || nodePath.posix.resolve(node.cwd) !== node.cwd || fs.realpathSync(node.cwd) !== node.cwd
-      || node.binding?.attachmentType !== "tmux" || node.binding.tmuxSession !== sessionId
-      || !/^%[0-9]+$/.test(node.binding.tmuxPane ?? "")) throw new Error("managed_seat_unresolved");
-    return { tree: node.cwd, pane: node.binding.tmuxPane! };
-  };
-  // The daemon runs tmux without -L or -S, so its server is the one it recorded at startup, or the default socket.
-  const tmuxServer = () => {
-    const server = daemonTmuxServerArgs();
-    return server[0] === "-S" ? server[1]! : nodePath.join(process.env.TMUX_TMPDIR?.trim() || "/tmp", "tmux-" + (typeof process.getuid === "function" ? process.getuid() : ""), server[1] ?? "default");
-  };
-  const control = createManagedLaunchControl({ ...dependencies,
-    resolvePane: async sessionId => seat(sessionId).pane,
-    // T039: every role launches into the task's own candidate, never the seat's
-    // working directory. The seat is still resolved first, because that is what
-    // refuses an aliased tree, a rebound terminal or a stale session before any
-    // privileged call — isolation changes where the worker works, not which seat is
-    // admitted.
-    //
-    // T043: a reviewer is a separate task row with its own `taskId` (`team_queue_authority`
-    // is UNIQUE(run_id, task_id), one role per row), so its own row names no tree the
-    // implementer wrote. The assignment's optional `reviewOf` supplies that link.
-    //
-    // Which tree that is stays the runtime's decision (`assignedTreeFor`), so the branch
-    // under test is the branch this composition runs. A review launch there resolves only
-    // a candidate the runtime holds or can adopt; it never stages one.
-    resolveAssignedTree: (scope) => {
-      seat(scope.sessionId, scope.run.rigId);
-      return requireWorkflowRuntime().assignedTreeFor(scope.run.id, scope.task.assignment);
-    },
-    mailbox: input => {
-      const endpoint = endpoints.get(input.attempt.attemptId);
-      if (!endpoint) throw new Error("managed_mailbox_unregistered");
-      return endpoint;
-    },
-    dependencySatisfied: (runId, taskId) => dependencySatisfied(db, queue,
-      qitemId => governance.getTask(qitemId)?.evidence?.validated === true, runId, taskId),
-    // Read when each identity is built, after startup has recorded the daemon's server.
-    get tmuxServer() { return tmuxServer(); },
-  });
-  const guarded = channel.guard(control, (runId, attemptId) => governance.getNativeLaunchIntent(runId, attemptId)?.sessionId);
-  // T039: the launcher asks the workflow runtime to admit each assignment and place
-  // its candidate tree. The runtime is constructed later in startup, but no managed
-  // launch can run before startup completes, so the reference is read at launch time
-  // rather than captured here — the same late-read shape as `tmuxServer` above.
-  const admission: WorkerLaunchAdmission = {
-    admitForLaunch: (runId, input) => requireWorkflowRuntime().admitForLaunch(runId, input),
-    prepareAssignment: input => requireWorkflowRuntime().prepareLaunchAssignment(input),
-    candidateSourceUnchanged: (runId, taskId) => requireWorkflowRuntime().candidateSourceUnchanged(runId, taskId),
-    releaseCandidate: (runId, taskId, attemptId) => requireWorkflowRuntime().releaseCandidate(runId, taskId, attemptId),
-  };
-  /** A managed launch without an approved runtime would bypass eligibility, so it refuses instead. */
-  const requireWorkflowRuntime = (): WorkflowRuntime => {
-    const runtime = dependencies.workflowRuntime();
-    if (!runtime) throw new Error("managed_launch_runtime_unavailable");
-    return runtime;
-  };
-  // A blocked attempt never launches again, so its endpoint registration is dropped once the block is recorded.
-  const launcher = new RestrictedWorkerLauncher({ ...guarded, record: async event => {
-    try { await guarded.record(event); } finally { if (event.phase === "blocked") endpoints.delete(event.attemptId); }
-  } }, Date.now, randomUUID, admission);
-  // `readHealthEvidence` is built by the control but not otherwise reachable from startup; the health reader reads it.
-  return { launcher, channel, endpoints, readHealthEvidence: guarded.readHealthEvidence };
 }
 
 /**
@@ -354,12 +197,6 @@ function composeDirectLaunch(dependencies: {
     deps: { onEvent: (event: WorkerEvent) => void }) => import("./adapters/child-process-supervisor.js").SupervisedTurn;
 }) {
   const { rigRepo } = dependencies;
-  const channel = new ManagedNativeChannelEvidence(native => {
-    try {
-      const raw = fs.readFileSync("/proc/" + native.processId + "/stat", "utf8"), fields = raw.slice(raw.lastIndexOf(")") + 2).trim().split(/\s+/);
-      return fields[19] === native.processStart && !["Z", "X"].includes(fields[0]!);
-    } catch { return false; }
-  });
   const endpoints: NonNullable<AppDeps["managedLaunch"]>["endpoints"] = new Map();
   const launcher = new DirectWorkerLauncher({
     modelRefusal: input => managedModelRefusal(rigRepo.db, input),
@@ -381,9 +218,7 @@ function composeDirectLaunch(dependencies: {
     ...(dependencies.lifecycle ? { lifecycle: dependencies.lifecycle } : {}),
     ...(dependencies.supervise ? { supervise: dependencies.supervise } : {}),
   });
-  // The channel reader is the same owner the hardened chain uses, so a seat's mailbox view is
-  // built the same way; an unisolated launch records no channel evidence, so it stays closed.
-  return { launcher, channel, endpoints, readHealthEvidence: undefined };
+  return { launcher, endpoints, readHealthEvidence: undefined };
 }
 
 /**
@@ -603,109 +438,29 @@ function managedCandidateRoot(assignmentRoot: string, worker: string, runId: str
   return nodePath.join(assignmentRoot, worker, `${runId}-${taskId}`);
 }
 
-/**
- * T047-H1: the KTD26 health reader over the owners startup already holds.
- *
- * Each probe reads one existing owner and returns evidence, never a repair. The
- * three boundary lights read the launcher's own verified observations first,
- * because that is the owner for them; the installed files are the standing fact
- * they are checked against and answer when no attempt is live. A light this
- * composition cannot reach is left absent, so it stays `unknown` with
- * `<name>_source_unavailable` instead of becoming a second source of truth.
- */
-export function composeSystemHealthReader(dependencies: {
-  db: Database.Database; queue: QueueRepository; tmux: Pick<TmuxAdapter, "readAllSessionWindowActivity">;
-  evidence?: () => ManagedWorkerHealthEvidence;
-}): () => Promise<TeamSystemHealth> {
-  const { db, queue, tmux, evidence } = dependencies;
-  // The level the launch chain runs under is a fact this process decided; the health read
-  // publishes it so a read-only client never has to infer it from a config file.
-  const isolation = "hardened" as const;
-  const result = (state: SystemHealthProbeResult["state"], evidenceRef: string, reason: string | null = null): SystemHealthProbeResult =>
-    ({ state, evidenceRef, reason });
-  // An installed file whose bytes decide a light: unreadable or malformed is failed, never a thrown probe.
-  const installed = (file: string, name: string, accept: (bytes: string) => string | null): SystemHealthProbeResult => {
-    let bytes: string, reason: string | null;
-    try { bytes = readFileSyncNamed(file, "utf8"); } catch { return result("failed", name, "installed_file_unreadable"); }
-    try { reason = accept(bytes); } catch { return result("failed", name, name + "_unreadable"); }
-    return reason ? result("failed", name, reason) : result("ok", name);
-  };
-  /**
-   * A boundary light's verdict, launcher evidence first and the installed file only when no attempt is live.
-   *
-   * `readHealthEvidence` reports every attempt the control has ever preflighted and never prunes settled ones, so the
-   * live filter is what keeps a stopped attempt from pinning the light failed forever after its worker signs back in
-   * or its policy is legitimately rotated. Only a `running` attempt is current evidence; anything settled falls back
-   * to the installed file, which is the standing fact.
-   */
-  const evidenceFirst = (light: string, file: string,
-    fault: (attempt: ManagedWorkerHealthEvidence["attempts"][number], installedBytes: () => string | null) => string | null,
-    accept: (bytes: string) => string | null): SystemHealthProbeResult => {
-    let attempts: ManagedWorkerHealthEvidence["attempts"];
-    try { attempts = evidence?.().attempts.filter(attempt => attempt.state === "running") ?? []; }
-    catch { return result("failed", light, "launch_evidence_unreadable"); }
-    if (!attempts.length) return installed(file, light, accept);
-    // Read the file once for the drift comparisons; an unreadable file cannot contradict a recorded digest.
-    const bytes = (() => { try { return readFileSyncNamed(file, "utf8"); } catch { return null; } })();
-    for (const attempt of attempts) {
-      const reason = fault(attempt, () => bytes);
-      if (reason) return result("failed", light + ":" + attempt.attemptId, reason);
-    }
-    return result("ok", light + ":" + attempts[0]!.attemptId);
-  };
-  // A recorded digest that disagrees with the installed file names that drift. The launcher refuses such a launch,
-  // so the way to observe it is an attempt recorded before the file changed.
-  const driftedFrom = (recorded: string, read: () => string | null, reason: string) => {
-    const bytes = read();
-    if (bytes === null) return null;
-    return recorded === hashBytes(bytes) ? null : reason;
-  };
-  /** The build the installed lock names for a client, or null when the bytes or the entry are unusable. */
-  const lockedVersion = (bytes: string | null, client: "claude-code" | "codex") => {
-    if (bytes === null) return null;
-    try { return (JSON.parse(bytes) as { clients?: Record<string, { version?: unknown }> }).clients?.[client]?.version as string | undefined ?? null; }
-    catch { return null; }
-  };
+/** Native managed health: no terminal control plane remains. */
+export function composeSystemHealthReader(dependencies: { db: Database.Database; queue: QueueRepository; evidence?: () => ManagedWorkerHealthEvidence }): () => Promise<TeamSystemHealth> {
   return createSystemHealthReader({
-    isolation,
-    // Read-only and synchronous: `quick_check` would scan the whole file, which the five-second bound cannot interrupt.
-    database: () => result("ok", "database:schema_version:" + String(db.prepare("PRAGMA schema_version").pluck().get())),
-    // The queue owns the mailbox's durable rows, so its own read is the readiness signal for both.
-    queueMailbox: () => result("ok", "queue:active:" + queue.list({ activeOnly: true, compact: true }).length),
-    // Null means tmux could not be read at all; an empty map is a live server with no windows.
-    controlTmux: async () => await tmux.readAllSessionWindowActivity() === null
-      ? result("failed", "tmux:server", "tmux_socket_missing") : result("ok", "tmux:server"),
-    workerBoundary: () => evidenceFirst("worker-boundary", "/etc/multi-agent/worker-policy.json",
-      (attempt, read) => attempt.provider === "signed_out" ? "worker_signed_out"
-        : driftedFrom(attempt.policyFingerprint, read, "policy_fingerprint_changed"),
-      bytes => {
-        const policy = JSON.parse(bytes) as { paths?: { assignment_root?: unknown }; worker_identities?: unknown; policy_revision?: unknown };
-        return nodePath.isAbsolute(String(policy.paths?.assignment_root ?? "")) && Array.isArray(policy.worker_identities)
-          && policy.worker_identities.length > 0 && Number.isInteger(policy.policy_revision) ? null : "worker_policy_incomplete";
-      }),
-    sandboxNetwork: () => evidenceFirst("sandbox-network", "/etc/multi-agent/egress.json",
-      (attempt, read) => attempt.networkMode === "unknown" ? "network_profile_unproven"
-        : driftedFrom(attempt.networkProfileFingerprint, read, "network_profile_fingerprint_changed"),
-      bytes => {
-        const profile = JSON.parse(bytes) as { schema?: unknown; allow?: unknown };
-        return profile.schema === "multi-agent-egress/v1" && Array.isArray(profile.allow) ? null : "egress_profile_incomplete";
-      }),
-    clients: () => evidenceFirst("clients", "/etc/multi-agent/client-lock.json",
-      // The lock's bytes decide first, because a changed digest is the stronger statement; the version is the
-      // finer fact and only meaningful against an unchanged lock. Both compare against the lock's own entry, so a
-      // legitimate lock upgrade does not read as drift.
-      (attempt, read) => driftedFrom(attempt.clientLockDigest, read, "client_lock_changed")
-        // An unreadable lock cannot contradict a version the launcher already checked at launch, so it is no finding.
-        ?? (() => { const named = lockedVersion(read(), attempt.client);
-          return named === null || named === attempt.clientVersion ? null : "client_lock_version_mismatch"; })(),
-      bytes => {
-        const lock = JSON.parse(bytes) as { clients?: Record<string, { version?: unknown }> };
-        for (const client of ["claude-code", "codex"] as const) {
-          if (typeof lock.clients?.[client]?.version !== "string") return "client_lock_version_mismatch";
-        }
-        return null;
-      }),
-    ...(evidence ? { latestAttempts: () => attemptsFromManagedWorkerEvidence(() => new Date(), evidence()) } : {}),
+    isolation: "hardened",
+    database: () => ({ state: "ok", evidenceRef: "database:schema_version:" + String(dependencies.db.prepare("PRAGMA schema_version").pluck().get()) }),
+    queueMailbox: () => ({ state: "ok", evidenceRef: "queue:active:" + dependencies.queue.list({ activeOnly: true, compact: true }).length }),
+    controlTmux: async () => ({ state: "unknown", evidenceRef: "native:direct-child", reason: "terminal_control_removed" }),
+    workerBoundary: () => ({ state: "unknown", evidenceRef: "native:direct-child", reason: "hardened_boundary_deferred" }),
+    sandboxNetwork: () => ({ state: "unknown", evidenceRef: "native:direct-child", reason: "hardened_boundary_deferred" }),
+    clients: () => ({ state: "unknown", evidenceRef: "native:direct-child", reason: "hardened_boundary_deferred" }),
+    ...(dependencies.evidence ? { latestAttempts: () => attemptsFromManagedWorkerEvidence(() => new Date(), dependencies.evidence!()) } : {}),
+  });
+}
+
+export function composeUnisolatedHealthReader(dependencies: { db: Database.Database; queue: QueueRepository }): () => Promise<TeamSystemHealth> {
+  const unknown = () => ({ state: "unknown" as const, evidenceRef: "workers.isolation:none", reason: "workers_isolation_none" });
+  return createSystemHealthReader({
+    isolation: "none",
+    database: () => ({ state: "ok", evidenceRef: "database:schema_version:" + String(dependencies.db.prepare("PRAGMA schema_version").pluck().get()) }),
+    queueMailbox: () => ({ state: "ok", evidenceRef: "queue:active:" + dependencies.queue.list({ activeOnly: true, compact: true }).length }),
+    controlTmux: async () => ({ state: "unknown", evidenceRef: "native:direct-child", reason: "terminal_control_removed" }),
+    workerBoundary: unknown, sandboxNetwork: unknown, clients: unknown,
+    latestAttempts: () => attemptsFromRecords(() => new Date(), (dependencies.db.prepare(`SELECT id, run_id AS runId, provider, state, failure_json AS failureJson FROM team_attempts ORDER BY updated_at DESC, id DESC LIMIT 100`).all() as Array<{ id: string; runId: string; provider: "claude" | "codex"; state: string; failureJson: string | null }>).map(row => ({ id: row.id, runId: row.runId, provider: row.provider, state: row.state, failure: storedFailure(row.failureJson) }))),
   });
 }
 
@@ -720,42 +475,6 @@ export function composeSystemHealthReader(dependencies: {
 export function selectIsolation(override: DaemonOptions["workersIsolation"]): "none" | "hardened" {
   const raw = override ?? new SettingsStore().resolveOne("workers.isolation").value;  if (raw !== "none" && raw !== "hardened") throw new Error(`workers.isolation must be "none" or "hardened", got "${String(raw)}"`);
   return raw;
-}
-
-/**
- * MVP — the health reader when `workers.isolation: none`.
- *
- * Three lights describe the hardened boundary: the installed worker policy, the egress
- * profile and the client lock. That boundary does not exist here, so reading those files
- * would report a host-provisioning fact this daemon never uses. They answer `unknown` with
- * the reason that says why, and the three lights that are real in either mode are composed
- * exactly as the hardened reader composes them.
- */
-export function composeUnisolatedHealthReader(dependencies: {
-  db: Database.Database; queue: QueueRepository; tmux: Pick<TmuxAdapter, "readAllSessionWindowActivity">;
-}): () => Promise<TeamSystemHealth> {
-  const { db, queue, tmux } = dependencies;
-  const unisolated = (): SystemHealthProbeResult => ({ state: "unknown", evidenceRef: "workers.isolation:none",
-    reason: "workers_isolation_none" });
-  return createSystemHealthReader({
-    isolation: "none",
-    database: () => ({ state: "ok", evidenceRef: "database:schema_version:" + String(db.prepare("PRAGMA schema_version").pluck().get()) }),
-    queueMailbox: () => ({ state: "ok", evidenceRef: "queue:active:" + queue.list({ activeOnly: true, compact: true }).length }),
-    controlTmux: async () => await tmux.readAllSessionWindowActivity() === null
-      ? { state: "failed", evidenceRef: "tmux:server", reason: "tmux_socket_missing" } : { state: "ok", evidenceRef: "tmux:server" },
-    workerBoundary: unisolated,
-    sandboxNetwork: unisolated,
-    clients: unisolated,
-    // T033 — the KTD20 decision each attempt recorded, so a health reader sees the same code
-    // and resume-safety the owner's task card shows. Bounded to the newest attempts, and a row
-    // whose stored decision disagrees with its own code is reported with no code rather than
-    // with a retryability nothing vouched for.
-    latestAttempts: () => attemptsFromRecords(() => new Date(), (db.prepare(`SELECT id, run_id AS runId, provider, state,
-      failure_json AS failureJson FROM team_attempts ORDER BY updated_at DESC, id DESC LIMIT 100`)
-      .all() as Array<{ id: string; runId: string; provider: "claude" | "codex"; state: string; failureJson: string | null }>)
-      .map(row => ({ id: row.id, runId: row.runId, provider: row.provider, state: row.state,
-        failure: storedFailure(row.failureJson) }))),
-  });
 }
 
 /** The recorded classification of an attempt, or null when it has none or the row is unusable. */
@@ -794,23 +513,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const workerControl = managed ? new WorkerControlAccess(db, teamControl.credentials) : undefined;
   workerControl?.reconcile();
 
-  // 51-09 increment 1 — establish the daemon's durable self-host identity at
-  // boot (mint on first boot, reconcile thereafter). host.name is a display-only
-  // CANDIDATE SEED (arch ruling cb19867f / DP4). Boot proceeds on a host.name
-  // conflict (the stored id is kept and the conflict is surfaced loudly).
-  const hostNameCandidate = new ContextPackSettingsStore().resolveOne("host.name").value as string;
-  const selfHost = reconcileSelfHostIdentity(new SelfHostIdentityStore(db), {
-    nowIso: new Date().toISOString(),
-    hostNameCandidate,
-  });
-  // 51-09 increment 2 — publish the resolved self-host id so the read-through
-  // (and, in increment 4, the queue-destination validator) resolve a request
-  // addressed to THIS host's own id HOME, instead of dialing/validating it as a
-  // remote/unknown host. Distinct spelling from the 'local' sentinel.
-  setSelfHostId(selfHost.hostId);
-  // Slice 14 §2c — derived from the SAME candidate the reconcile just used, so the two can never
-  // disagree, and computed here rather than per request (see fanout-contract).
-  setSelfHostIdSource(deriveSelfHostIdSource(selfHost.hostId, hostNameCandidate));
+  setSelfHostId(null);
+  setSelfHostIdSource("generated");
 
   // P7 — the daemon's LIFECYCLE record (distinct from the 059 identity record).
   // A new boot mints a fresh epoch, stamps started_at, and clears any prior run's
@@ -964,140 +668,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   queueRepoInstance.attachWatchdogJobsRepository(watchdogJobsRepoInstance);
   const watchdogHistoryLogInstance = new WatchdogHistoryLog(db);
 
-  const argvExec = opts?.argvExec
-    ?? (opts?.tmuxExec ? undefined : process.platform === "win32" ? execArgvCommand : undefined);
-  const tmuxAdapter = new TmuxAdapter(opts?.tmuxExec ?? execCommand, undefined, argvExec);
-  // The real tmux runs with this process's environment, so its server is the one $TMUX names.
-  // An injected exec has no server of its own: printed attach commands stay in the default form.
-  setDaemonTmuxServer(opts?.tmuxExec ? [] : tmuxServerArgs(process.env));
-  const deliveryGuard = new SeatDeliveryGuard(db, target => resolveGuardTarget(db, target));
-  if (!managed) deliveryGuard.recoverActivation();
-  tmuxAdapter.deliveryGuard = deliveryGuard;
-
-  // Slice 15 — Seat-activity service for the `terminal-active` primitive.
-  // Lives at module scope so the projection chain (PsProjectionService,
-  // node-inventory enrichment) reads from one source. Default silence
-  // window: 3s per slice 15 README. Per-seat silenceWindowSeconds from
-  // AgentSpec.profile.activity is currently inert (the poller uses the
-  // global default; per-seat windows are not wired to the live poll).
-  const seatActivityService = new SeatActivityService({
-    tmux: tmuxAdapter,
-    defaultWindowSeconds: 3,
-    eventBus,
-    // S19 — the Claude self-report rung (pid.json), consulted per sweep for seats whose
-    // declared inventory staffs it; unreadable = null = the ladder falls, never errors.
-    selfReportReader: (sessionName, seatNodeId) => {
-      const sessionsDir = nodePath.join(process.env.CLAUDE_CONFIG_DIR ?? nodePath.join(os.homedir(), ".claude"), "sessions");
-      return readClaudeSelfReportEvidence({ sessionsDir, sessionName, seatNodeId });
-    },
-  });
-  // 5b82324b — the STRUCTURAL activity cache (sibling of SeatActivityService). Captures pane TEXT once
-  // per running seat per tick + classifies motion STRUCTURALLY, so the `rig ps` ACTIVITY column reflects
-  // real liveness for hook-less / stale-hook / turn-boundary seats WITHOUT a per-request capture storm.
-  const seatStructuralActivityService = new SeatStructuralActivityService(tmuxAdapter);
-  // OPR.0.4.3.19 — SeatIdentityReconciler owns the liveness identity verdict
-  // (the THIRD axis). Reconciles each running seat's pane PID/command against
-  // the registered binding and persists the verdict so node-inventory can gate
-  // the running/active green derivations. Started post-bind in index.ts.
-  const seatIdentityReconciler = new SeatIdentityReconciler({
-    db,
-    tmux: tmuxAdapter,
-  });
-
-  // Read transcript config from env (passed by CLI via PNS-T02 config surface)
-  const transcriptsEnabled = readOpenRigEnv("OPENRIG_TRANSCRIPTS_ENABLED", "RIGGED_TRANSCRIPTS_ENABLED") !== "false";
-  const transcriptsPath = readOpenRigEnv("OPENRIG_TRANSCRIPTS_PATH", "RIGGED_TRANSCRIPTS_PATH") || undefined;
-  const activityHookToken = readOpenRigEnv("OPENRIG_ACTIVITY_HOOK_TOKEN", "RIGGED_ACTIVITY_HOOK_TOKEN") || undefined;
-  const activityHookUrl = readOpenRigEnv("OPENRIG_URL", "RIGGED_URL") || undefined;
-  const openRigPort = readOpenRigEnv("OPENRIG_PORT", "RIGGED_PORT") || undefined;
-  const openRigHost = readOpenRigEnv("OPENRIG_HOST", "RIGGED_HOST") || undefined;
-  // OPR.0.4.3.28 B2 — self-provision a STABLE activity url+token so launched
-  // seats reach the ingest endpoint without operator shell seeding (the
-  // confirmed live break). The token persists across daemon restarts (matches
-  // already-launched seats' frozen env); the URL derives from the daemon's
-  // loopback + port (DEFAULT_PORT 7433 fallback). The SAME token becomes both
-  // the ingest expected-token (server dep below) and the seats' env value, so
-  // hook POSTs authenticate. Also snapshotted to activity-endpoint.json for the
-  // relay file-discovery fallback used by reconcile/restored seats (B3).
-  const resolvedActivityHookToken = activityHookToken ?? (managed ? undefined : ensureActivityHookToken(OPENRIG_HOME));
-  // Derive from the daemon's OWN bound host+port (honors an explicit OPENRIG_HOST
-  // single-host bind; wildcard/absent → loopback) so seats post to a reachable
-  // address — a hardcoded 127.0.0.1 breaks an explicit tailnet/hostname bind.
-  const resolvedActivityHookUrl = activityHookUrl ?? deriveActivityUrl(openRigHost, openRigPort);
-  if (!managed && resolvedActivityHookToken) writeActivityEndpointFile(OPENRIG_HOME, { baseUrl: resolvedActivityHookUrl, token: resolvedActivityHookToken });
+  const launchPath = process.env.PATH ?? "";
   const startupSettings = new ContextPackSettingsStore().resolveConfig();
-  const providerAuthEnv = collectAllowlistedProviderAuthEnv(
-    startupSettings.recoveryProviderAuthEnvAllowlistRaw,
-    process.env,
-  );
-  // OMP's extra provider keys reach OMP seats only (fresh launch and handover
-  // successors); every other runtime's seat env is unchanged.
-  const runtimeSessionEnv: Record<string, Record<string, string | undefined>> = {
-    omp: collectAllowlistedProviderAuthEnv(startupSettings.recoveryProviderAuthEnvAllowlistRaw, process.env, "omp"),
-  };
-  const transcriptStore = new TranscriptStore({
-    enabled: transcriptsEnabled,
-    transcriptsRoot: transcriptsPath,
-  });
-
-  // Shared launch identity/activity env — used by NodeLauncher at launch AND
-  // by the seat-handover full-cycle composer when it creates a successor
-  // session (OPR.0.4.3.04), so a handed-over successor self-identifies +
-  // reports activity exactly like a launched seat.
-  const clientsBin = "/opt/multi-agent/toolchain/clients/bin";
-  const launchPath = [...(process.env.PATH ? process.env.PATH.split(nodePath.delimiter) : []), clientsBin]
-    .filter((entry, index, entries) => entry !== clientsBin || entries.indexOf(clientsBin) === index)
-    .join(nodePath.delimiter);
-  const launchSessionEnv: Record<string, string | undefined> = {
-    PATH: launchPath,
-    OPENRIG_HOME,
-    OPENRIG_PORT: openRigPort,
-    OPENRIG_HOST: openRigHost,
-    OPENRIG_URL: resolvedActivityHookUrl,
-    OPENRIG_ACTIVITY_HOOK_TOKEN: resolvedActivityHookToken,
-    ...providerAuthEnv,
-    HOME: daemonHome,
-    USER: process.env.USER,
-    LOGNAME: process.env.LOGNAME,
-    CODEX_HOME: codexHome,
-  };
-  // OPR.0.4.6.02 S1 — ONE shared tmux option-defaults applier, injected into
-  // BOTH NodeLauncher and (via AppDeps → the seat-handover route) the fresh
-  // successor launcher, so every fresh seat gets the same mouse/status/
-  // clipboard defaults and the server-scope defaults assert once per daemon
-  // lifetime (shared memo). The status-bar read resolves `terminal.status_bar`
-  // FRESH per launch (resolveOne re-reads the config file) so an operator flip
-  // applies to the NEXT launch without a daemon restart; a resolution failure
-  // falls back to off (bar hidden).
-  const tmuxOptionSettings = new ContextPackSettingsStore();
-  const tmuxOptionDefaults = new TmuxOptionDefaultsApplier({
-    tmuxAdapter,
-    platform: opts?.tmuxOptionPlatform,
-    readTmuxOptionDefaults: () => {
-      try {
-        return { statusBar: tmuxOptionSettings.resolveOne("terminal.status_bar").value === true };
-      } catch {
-        return { statusBar: false };
-      }
-    },
-  });
-  const { SeatLaunchEnvironment } = await import("./domain/seat-launch-environment.js");
-  const seatLaunchEnvironment = new SeatLaunchEnvironment(tmuxAdapter, launchSessionEnv, process.cwd(), undefined, configuredCodexHome);
-  const nodeLauncher = new NodeLauncher({
-    db,
-    rigRepo,
-    sessionRegistry,
-    eventBus,
-    tmuxAdapter,
-    transcriptStore,
-    sessionEnv: launchSessionEnv,
-    runtimeSessionEnv,
-    tmuxOptionDefaults,
-  });
-
-  const claudeManagedLaunch = new ClaudeManagedLaunch(db, { ...launchSessionEnv, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }, {
-    OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN: process.env.OPENRIG_CLAUDE_DISABLE_ALTERNATE_SCREEN,
-  });
   // KTD22: one governance owner serves the app and the managed launch chain, which only managed attempts reach.
   // MVP slice 2 — what a new run's binding is approved against. Under `hardened` that is the
   // caller's own reader, unchanged. Under `workers.isolation: none` nothing is installed, so
@@ -1116,18 +688,13 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         return () => roots;
       })()
     : managedWorkerRoots;
-  const managedLaunch = managed ? (unisolated
-    ? composeDirectLaunch({ governance: teamGovernance, rigRepo,
+  const managedLaunch = managed ? composeDirectLaunch({ governance: teamGovernance, rigRepo,
         workflowRuntime: () => workflowRuntime,
         // U4 — every supervised turn records its durable lifecycle facts through governance.
         lifecycle: fact => teamGovernance.recordAttemptLifecycle(fact),
         ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}),
         ...(opts?.directLaunchExecutable ? { executablePath: opts.directLaunchExecutable } : {}),
-        ...(opts?.directLaunchSupervise ? { supervise: opts.directLaunchSupervise } : {}) })
-    : composeManagedLaunch({ db, governance: teamGovernance, queue: queueRepoInstance,
-        options: teamControl, rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
-        // Read when a launch is admitted, after startup has constructed the runtime.
-        workflowRuntime: () => workflowRuntime })) : undefined;
+        ...(opts?.directLaunchSupervise ? { supervise: opts.directLaunchSupervise } : {}) }) : undefined;
   const workerLauncher = managedLaunch ? { workerLauncher: managedLaunch.launcher } : {};
   // T047 — the attachment every managed launch path resolves through. Assigned once the runtime
   // exists below; a wrapper that reads it at launch time is the only correct shape, because the
@@ -1142,8 +709,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       // MVP — three of the six lights describe the hardened boundary. With `workers.isolation:
       // none` that boundary genuinely does not exist, so each says so instead of reading an
       // installed file nothing enforces. The other three are unchanged.
-      ? composeUnisolatedHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter })
-      : composeSystemHealthReader({ db, queue: queueRepoInstance, tmux: tmuxAdapter,
+      ? composeUnisolatedHealthReader({ db, queue: queueRepoInstance })
+      : composeSystemHealthReader({ db, queue: queueRepoInstance,
           ...(managedLaunch ? { evidence: managedLaunch.readHealthEvidence } : {}) })),
     // MVP slice 2 — the capability a start request approves its binding against.
     ...(runPolicyCapability ? { readPolicyCapability: runPolicyCapability } : {}),
@@ -1161,10 +728,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // T053 — the seat capability a managed send must reuse. `createApp` builds the mailbox
   // owner when none is supplied, so this rides the deps slot rather than constructing it
   // twice: one owner, one seat table.
-  const seatCapabilities = new SeatMailboxCapabilities(db);
   // The mailbox owner `createApp` builds reads this slot (through `deps`), so a managed send
   // reuses the seat's recorded value instead of minting a second one.
-  const readSeatMailboxCapability = (runId: string, sessionId: string) => seatCapabilities.find(runId, sessionId);
+  const readSeatMailboxCapability = (_runId: string, _sessionId: string) => null;
   // T052 — the managed owner read projection, composed over the same owners the
   // daemon already built. A caller that supplied one keeps it: that is the
   // injection seam the tests and any embedding host use.
@@ -1188,233 +754,44 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     });
   }
   // #275: one reader for both Codex launch adapters, with the PATH, HOME and CODEX_HOME a seat session gets.
-  const readCodexNetworkDefault = codexNetworkDefaultReader({ launchPath: process.env.PATH, home: daemonHome, codexHome });
-  const prepareTeamWorkspace = (sessionName: string) => prepareCodexTeamWorkspace(sessionName,
-    new ContextPackSettingsStore().resolveConfig().workspaceRoot,
-    process.env.OPENRIG_SHARED_DOCS_ROOT?.trim() || nodePath.join(daemonHome, ".openrig", "shared-docs"), daemonHome);
-  // OPR.0.4.6.PI1 — the Pi seat-state root + the compiled runner entry (daemon
-  // dist). Shared by the Pi runtime adapter, the resume adapter, and the
-  // resume-token capture sidecar reader.
-  const piStateRoot = nodePath.join(OPENRIG_HOME, "state", "pi");
-  const ompStateRoot = nodePath.join(OPENRIG_HOME, "state", "omp");
-  const piRunnerEntryPath = nodePath.resolve(import.meta.dirname, "./adapters/pi-runner.js");
-  // Reconcile all managed rigs — marks stale sessions as detached.
-  // Capture aggregate counts and log a compact summary so cold-start truth
-  // repair is visible in daemon output instead of silently swallowed.
-  const reconciler = new Reconciler({ db, sessionRegistry, eventBus, tmuxAdapter });
-  const rigs = managed ? [] : rigRepo.listRigs();
-  let reconcileChecked = 0;
-  let reconcileDetached = 0;
-  let reconcileErrors = 0;
-  for (const rig of rigs) {
-    try {
-      const result = await reconciler.reconcile(rig.id);
-      reconcileChecked += result.checked;
-      reconcileDetached += result.detached;
-      reconcileErrors += result.errors.length;
-      for (const e of result.errors) {
-        try {
-          // eslint-disable-next-line no-console
-          console.warn(`startup reconcile warning: rig=${rig.id} session=${e.sessionId} error=${e.error}`);
-        } catch { /* logging must never throw */ }
-      }
-    } catch (err) {
-      reconcileErrors += 1;
-      try {
-        // eslint-disable-next-line no-console
-        console.warn(`startup reconcile warning: rig=${rig.id} error=${err instanceof Error ? err.message : String(err)}`);
-      } catch { /* logging must never throw */ }
-    }
-  }
-  try {
-    // eslint-disable-next-line no-console
-    console.log(`startup reconcile: rigs=${rigs.length} checked=${reconcileChecked} detached=${reconcileDetached} errors=${reconcileErrors}`);
-  } catch { /* logging must never throw */ }
-
-  // Transcript rotators are process-local. Reattach them after lifecycle
-  // reconciliation so surviving tmux sessions keep ingesting across daemon
-  // restarts while genuinely detached sessions stay excluded.
-  if (!managed) try {
-    await resumeRunningTranscriptCaptures(db, tmuxAdapter, transcriptStore);
-  } catch (err) {
-    try {
-      // eslint-disable-next-line no-console
-      console.warn(`startup transcript capture warning: ${err instanceof Error ? err.message : String(err)}`);
-    } catch { /* logging must never throw */ }
-  }
-
-  const exec = opts?.tmuxExec ?? execCommand;
-  const probeRegistry = new RequirementsProbeRegistry(exec);
   const { StartupOrchestrator } = await import("./domain/startup-orchestrator.js");
   const { ClaudeCodeAdapter } = await import("./adapters/claude-code-adapter.js");
-  // P20 — the projection manifest: record-at-apply so the projector can later
-  // discriminate a stale re-projection (safe overwrite) from an operator edit (protect).
+  const { CodexRuntimeAdapter } = await import("./adapters/codex-runtime-adapter.js");
   const { ProjectionManifestStore } = await import("./domain/projection-manifest-store.js");
   const { hashContent } = await import("./domain/conflict-detector.js");
   const projectionManifestStore = new ProjectionManifestStore(db);
-  // atom-4b — probe the manifest's readability AT BOOT. A rare per-lookup throw protects that one
-  // target (conflict-detector: broken≠absent → operator_conflict); but a WHOLE-TABLE-unreadable
-  // manifest degrades EVERY projection to protect — no overwrite ever applies — a safe but otherwise
-  // SILENT systemic degrade. Warn loudly at boot so the operator knows projections are held pending a
-  // DB repair, rather than silently discovering nothing projects.
-  if (!projectionManifestStore.isReadable()) {
-    console.warn(
-      "projection-manifest UNREADABLE at boot — every projection will degrade to PROTECT (no overwrites apply) until the DB is repaired; investigate projection_manifest (migration 064).",
-    );
-  }
-  const { CodexRuntimeAdapter } = await import("./adapters/codex-runtime-adapter.js");
-  const { PiRuntimeAdapter } = await import("./adapters/pi-runtime-adapter.js");
-  const { OmpRuntimeAdapter } = await import("./adapters/omp-runtime-adapter.js");
-
-  const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter, readFile: (p: string) => fs.readFileSync(p, "utf-8"),
+  const fsOps = {
+    readFile: (file: string) => fs.readFileSync(file, "utf8"),
+    writeFile: (file: string, content: string) => fs.writeFileSync(file, content, "utf8"),
+    exists: (file: string) => fs.existsSync(file),
+    mkdirp: (dir: string) => fs.mkdirSync(dir, { recursive: true }),
+    copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest),
+    listFiles: (dir: string) => fs.readdirSync(dir),
+    readdir: (dir: string) => fs.readdirSync(dir),
+    statMode: (file: string) => fs.statSync(file).mode,
+    chmod: (file: string, mode: number) => fs.chmodSync(file, mode),
+    homedir: daemonHome,
+  };
+  const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus,
     managedAttempt: input => managedAttempt?.(input) ?? Promise.resolve(undefined) });
-  const runtimeSettings = new ContextPackSettingsStore().resolveConfig();
-  const claudeAdapter = new ClaudeCodeAdapter({ tmux: tmuxAdapter, seatLaunchEnvironment, claudeManagedLaunch, ...workerLauncher, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, readdir: (dir: string) => fs.readdirSync(dir), statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: os.homedir() }, stateDir: OPENRIG_HOME, collectorAssetPath: nodePath.resolve(import.meta.dirname, "../assets/claude-statusline-context.cjs"), autoDriveProviderPrompts: runtimeSettings.recoveryAutoDriveProviderPrompts, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs"), claudeHooksManifestPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/claude.json"), recordProjection: (targetPath: string, content: string) => projectionManifestStore.record({ targetPath, lastHash: hashContent(content), writtenAt: new Date().toISOString() }) });
-  const codexAdapter = new CodexRuntimeAdapter({ prepareTeamWorkspace, tmux: tmuxAdapter, seatLaunchEnvironment, ...workerLauncher, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m), homedir: daemonHome }, codexHome: configuredCodexHome, launchPath: process.env.PATH, detectDaemonSupport: codexDaemonSupportProbe(process.env.PATH, undefined, configuredCodexHome), readNetworkDefault: readCodexNetworkDefault, activityRelayPath: nodePath.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs") });
-  // OPR.0.4.6.PI1 — the RPC-first Pi adapter (runner-in-a-pane). Same fsOps
-  // shape as the Codex adapter; seat isolation roots under piStateRoot.
-  const piAdapter = new PiRuntimeAdapter({ tmux: tmuxAdapter, seatLaunchEnvironment, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; }, statMode: (p: string) => fs.statSync(p).mode, chmod: (p: string, m: number) => fs.chmodSync(p, m) }, stateRoot: piStateRoot, runnerEntryPath: piRunnerEntryPath });
-  const ompAdapter = new OmpRuntimeAdapter({ tmux: tmuxAdapter, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; } }, stateRoot: ompStateRoot, runnerEntryPath: piRunnerEntryPath });
-  // OPR.0.5.1.1 — the stub runtime adapter (Pi-shaped node-script runner in a pane).
-  // Same fsOps shape as Pi; the compiled runner entry lives in the daemon dist.
-  const { StubRuntimeAdapter } = await import("./adapters/stub-runtime-adapter.js");
-  const stubRunnerEntryPath = nodePath.resolve(import.meta.dirname, "./adapters/stub-runner.js");
-  const stubAdapter = new StubRuntimeAdapter({ tmux: tmuxAdapter, fsOps: { readFile: (p: string) => fs.readFileSync(p, "utf-8"), writeFile: (p: string, c: string) => fs.writeFileSync(p, c, "utf-8"), exists: (p: string) => fs.existsSync(p), mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }), listFiles: (dir: string) => { const r: string[] = []; function w(d: string, pre: string) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) w(nodePath.join(d, e.name), nodePath.join(pre, e.name)); else r.push(pre ? nodePath.join(pre, e.name) : e.name); } } w(dir, ""); return r; } }, runnerEntryPath: stubRunnerEntryPath });
-
-  // plugin-primitive Phase 3a slice 3.5 — ensure Codex feature flag
-  // codex_hooks = true is set in ~/.codex/config.toml so plugin-shipped
-  // hooks fire on Codex runtime. Slice 27 also creates the default
-  // user-owned Claude compaction extra-instructions placeholder.
-  // Operator can disable Codex hooks via OPENRIG_RUNTIME_CODEX_HOOKS_ENABLED
-  // or rig config set runtime.codex.hooks_enabled false.
-  if (!managed) try {
-    const {
-      SettingsStore,
-      ensureDefaultClaudeCompactionFiles,
-    } = await import("./domain/user-settings/settings-store.js");
-    ensureDefaultClaudeCompactionFiles(OPENRIG_HOME);
-    const settingsStore = new SettingsStore();
-    const enabled = settingsStore.resolveOne("runtime.codex.hooks_enabled").value as boolean;
-    let codexVersion: string | undefined;
-    const codexVersionRow = db.prepare(
-      "SELECT version FROM runtime_verifications WHERE runtime = 'codex' ORDER BY verified_at DESC LIMIT 1"
-    ).get() as { version: string | null } | undefined;
-    if (codexVersionRow?.version) {
-      codexVersion = codexVersionRow.version;
-    }
-    codexAdapter.ensureCodexFeatureFlag(enabled, { codexVersion });
-    // OPR.0.4.1.10 FR-A — project the OpenRig activity hooks into the Codex config
-    // layer so Codex seats are hook-PRIMARY for the rig-send prompt guard (and gain
-    // SessionStart/UserPromptSubmit/Stop observability) from clean shipped config.
-    // Same enable gate as the feature flag; trust is auto-cleared at launch.
-    if (enabled) {
-      codexAdapter.ensureCodexActivityHooks();
-    } else {
-      // OPR.0.4.1.10 B3 — durable disable: strip any previously-written managed [hooks] block.
-      codexAdapter.removeCodexActivityHooks();
-    }
-  } catch (err) {
-    console.error(`[openrig] runtime setup warning: ${(err as Error).message}`);
-  }
-
-  const discoveryRepo = new DiscoveryRepository(db);
-  // Context usage store backs the retained seat handover and runtime readers.
+  const claudeAdapter = new ClaudeCodeAdapter({ fsOps, ...workerLauncher,
+    recordProjection: (targetPath: string, content: string) => projectionManifestStore.record({ targetPath, lastHash: hashContent(content), writtenAt: new Date().toISOString() }) });
+  const codexAdapter = new CodexRuntimeAdapter({ fsOps, ...workerLauncher });
   const { ContextUsageStore } = await import("./domain/context-usage-store.js");
-  const contextUsageStore = new ContextUsageStore(db, {
-    stateDir: OPENRIG_HOME,
-    codexHome: configuredCodexHome,
-    // GHOST-STAGE (c-id): reject context readings from before the live occupant booted (prior
-    // generation) so a frozen pre-handover sample can't drive the threshold. null = UNKNOWN (inert).
-    resolveOccupantBootAt: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.bootAt ?? null,
-  });
-  const claudeProcessStartedAt = (sessionName: string) => observeClaudePaneStartedAt({ target: sessionName, tmux: tmuxAdapter });
-  const resumeMetadataRefresher = new ResumeMetadataRefresher({ sessionRegistry, tmuxAdapter, contextUsageStore, claudeProcessStartedAt, codexHome: configuredCodexHome });
-  // W2a-1 — producer wiring: the live occupant generation resolves synchronously from the shipped
-  // occupant-tenure ledger. generation_uuid CHANGES for a new occupant and persists only within one
-  // tenure (a same-session relaunch is a continuation with no new generation); node_id is the stable-
-  // across-handover key, not this. null = UNKNOWN, honored by the store as abstain (never a stale claim
-  // rendered live). No tmux exec — a better-sqlite3 read on the hot path.
-  const agentActivityStore = new AgentActivityStore({
-    db,
-    eventBus,
+  const contextUsageStore = new ContextUsageStore(db, { stateDir: OPENRIG_HOME, codexHome: configuredCodexHome,
+    resolveOccupantBootAt: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.bootAt ?? null });
+  const agentActivityStore = new AgentActivityStore({ db, eventBus,
     resolveOccupantGeneration: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.generationUuid ?? null,
-    isRegisteredOccupantGeneration: (nodeId, generation) =>
-      sessionRegistry.isOccupantGenerationRegistered(nodeId, generation),
-  });
-  // #763 — Codex usage-limit banner detector. The reactive tap only accepts a
-  // typed at_limit hook row and no hook producer emits one for Codex, so the
-  // structural sweep reports what the seat itself shows. Attached late (rather
-  // than constructed with) so service construction order is untouched.
-  {
-    const { recordCodexLimitBanner } = await import("./domain/provider/codex-limit-banner.js");
-    seatStructuralActivityService.attachCodexLimitBanner((sessionName, banner, observedAt) => {
-      recordCodexLimitBanner({
-        store: agentActivityStore,
-        resolveGeneration: (s) => sessionRegistry.currentOccupantGenerationForSession(s),
-        sessionName,
-        banner,
-        now: () => observedAt,
-      });
-    });
-  }
+    isRegisteredOccupantGeneration: (nodeId, generation) => sessionRegistry.isOccupantGenerationRegistered(nodeId, generation) });
   const deps: AppDeps = {
     teamControl: teamControlOptions,
     teamGovernance,
-    readSeatMailboxCapability,
-    ...(managedLaunch ? { managedLaunch, nativeChannelState: managedLaunch.channel.read } : {}),
-    rigRepo,
-    sessionRegistry,
-    daemonLifecycleStore,
-    daemonBootEpoch,
-    eventBus,
-    nodeLauncher,
+    readSeatMailboxCapability: () => null,
+    ...(managedLaunch ? { managedLaunch } : {}),
+    rigRepo, sessionRegistry, daemonLifecycleStore, daemonBootEpoch, eventBus,
+    discoveryRepo: new DiscoveryRepository(db),
     startupOrchestrator,
-    tmuxAdapter,
-    tmuxOptionDefaults,
-    sessionEnv: launchSessionEnv,
-    runtimeSessionEnv,
-    resumeMetadataRefresher,
-    discoveryRepo,
-    seatActivityService,
-    seatStructuralActivityService,
-    seatIdentityReconciler,
-    runtimeAdapters: { "claude-code": claudeAdapter, "codex": codexAdapter, "pi": piAdapter, "omp": ompAdapter, "stub": stubAdapter, "terminal": new (await import("./adapters/terminal-adapter.js")).TerminalAdapter() },
-    transcriptStore,
-    sessionTransport: (() => {
-      const t = new SessionTransport({
-        db,
-        rigRepo,
-        sessionRegistry,
-        tmuxAdapter,
-        agentActivityStore,
-        eventBus,
-        slowOpRecorder,
-        activityEndpointFile: () => readActivityEndpointFile(OPENRIG_HOME),
-        captureObserver: shadow.capture?.observer,
-      });
-      // PL-004 Phase A revision (R1): wire QueueRepository's wake-path so
-      // create / handoff / handoff-and-complete nudge by default.
-      queueRepoInstance.attachTransport(t);
-      // PL-004 Phase B: wire classifier-lease-manager liveness check from
-      // the sessions table. Lease holder is "alive" iff there is at least
-      // one row in `sessions` with session_name == classifierSession AND
-      // status == 'running'.
-      classifierLeaseManagerInstance.attachIsAlive((classifierSession: string): boolean => {
-        try {
-          const row = db
-            .prepare(
-              `SELECT 1 FROM sessions WHERE session_name = ? AND status = 'running' LIMIT 1`,
-            )
-            .get(classifierSession) as { 1: number } | undefined;
-          return row !== undefined;
-        } catch {
-          // Conservative: on lookup error, treat as alive (do not falsely
-          // trigger deadness-based lease expiry).
-          return true;
-        }
-      });
-      return t;
-    })(),
+    runtimeAdapters: { "claude-code": claudeAdapter, codex: codexAdapter },
     chatRepo: new ChatRepository(db),
     slowOpRecorder,
     queueRepo: queueRepoInstance,
@@ -1429,7 +806,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     watchdogJobsRepo: watchdogJobsRepoInstance,
     watchdogHistoryLog: watchdogHistoryLogInstance,
     agentActivityStore,
-    activityHookToken: resolvedActivityHookToken,
     contextUsageStore,
   };
 
@@ -1468,7 +844,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         const policy = rootsNow();
         return { workerRoot: policy.workerRoot, assignmentRoot: policy.assignmentRoot, identities: policy.workerIdentities };
       }, undefined, unisolated),
-      capabilities: new SeatMailboxCapabilities(db),
       credentials: workerControl,
     } : undefined;
     workflowRuntime = new WorkflowRuntime({
@@ -1502,7 +877,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
             // A read, never a mint: the endpoint authenticates every request through this, and a
             // request against a revoked seat must not bring its credential back.
             readCredentials: () => managedInputs.credentials.readCredentials(),
-            mailboxCapability: (runId: string, sessionId: string) => managedInputs.capabilities.forSeat(runId, sessionId),
+            mailboxCapability: (_runId: string, _sessionId: string) => "",
             workerIdentity: (worker: string) => managedInputs.identities.resolve(worker),
           },
           onManagedAttemptRetired: (attempt: { runId: string; sessionId: string }) =>
@@ -1615,164 +990,18 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   }
 
   deps.legacyBearerToken = opts?.bearerToken ?? null;
-  const terminalTokenEnv = process.env.OPENRIG_TERMINAL_BEARER_TOKEN?.trim();
-  deps.terminalBearerToken =
-    opts && Object.prototype.hasOwnProperty.call(opts, "terminalBearerToken")
-      ? opts.terminalBearerToken ?? null
-      : terminalTokenEnv || null;
-
-  // OPR.0.4.6.02 C3 — the terminal-provider-ride service (ONE composer for
-  // every view kind). Built here (post-hoc) so it can read the lazily-built
-  // reviewGatherer for derived mission/slice views; if the gatherer never
-  // built, those scopes honestly return not-found rather than throwing.
-  {
-    const { TerminalService } = await import("./domain/terminal/terminal-service.js");
-    const { HerdrAdapter } = await import("./domain/terminal/herdr-adapter.js");
-    const { createHerdrSocketRpc, createHerdrSocketTransport, resolveHerdrSocketPath } = await import(
-      "./domain/terminal/herdr-transport.js"
-    );
-    const { TerminalViewsStore } = await import("./domain/terminal/terminal-views-store.js");
-    const { getNodeInventory, getNodeInventoryForRigs } = await import("./domain/node-inventory.js");
-    const { loadHostRegistry, resolveHost: resolveHostInRegistry } = await import(
-      "./domain/hosts/hosts-registry-reader.js"
-    );
-
-    // NodeInventoryEntry → the composer's minimal LiveSeatRow (single-host
-    // inventory: the canonical session name IS the tmux session; no host field).
-    const toLiveSeatRow = (e: {
-      canonicalSessionName: string | null;
-      attachmentType?: "tmux" | "external_cli" | null;
-      runtime?: string | null;
-      rigName: string;
-      logicalId: string;
-    }) => ({
-      canonicalSessionName: e.canonicalSessionName,
-      attachmentType: e.attachmentType ?? null,
-      runtime: e.runtime ?? null,
-      tmuxSession: e.canonicalSessionName,
-      rigName: e.rigName,
-      logicalId: e.logicalId,
-    });
-
-    const herdrSocketPath = resolveHerdrSocketPath();
-    const herdrProvider = new HerdrAdapter({
-      // FB4: herdr speaks its unix control socket (there is no `layout` CLI).
-      transportFactory: createHerdrSocketTransport(createHerdrSocketRpc(herdrSocketPath)),
-      launch: { socketPath: herdrSocketPath, ...(process.env["HERDR_SESSION"] ? { session: process.env["HERDR_SESSION"] } : {}) },
-    });
-    deps.terminalService = new TerminalService({
-      resolveProvider: (name) => name === "herdr" ? herdrProvider : null,
-      viewsStore: new TerminalViewsStore(),
-      listRigSeatsBatch: (names) => {
-        const rigs = rigRepo.listRigs();
-        // Match listRigSeats' first-name resolution, including duplicate names.
-        const selected = new Map(names.flatMap(name => {
-          const rig = rigs.find(rig => rig.name === name);
-          return rig ? [[name, rig] as const] : [];
-        }));
-        const inventory = getNodeInventoryForRigs(db, new Set([...selected.values()].map(rig => rig.id)));
-        return new Map([...selected].map(([name, rig]) => [name, (inventory.get(rig.id) ?? []).map(toLiveSeatRow)]));
-      },
-      listRigSeats: (rigArg) => {
-        const rigs = rigRepo.listRigs();
-        const rig = rigs.find((r) => r.name === rigArg) ?? rigs.find((r) => r.id === rigArg);
-        if (!rig) return null;
-        return getNodeInventory(db, rig.id).map(toLiveSeatRow);
-      },
-      listPodSeats: (rigArg, pod) => {
-        const rigs = rigRepo.listRigs();
-        const rig = rigs.find((r) => r.name === rigArg) ?? rigs.find((r) => r.id === rigArg);
-        if (!rig) return null;
-        const rows = getNodeInventory(db, rig.id)
-          .filter((e) => e.podNamespace === pod)
-          .map(toLiveSeatRow);
-        // No node carries that pod namespace → an unknown pod (not an empty view).
-        return rows.length > 0 ? rows : null;
-      },
-      listScopeSeats: (scope) => {
-        void scope;
-        return null;
-      },
-      listRigNames: () => rigRepo.listRigs().map((r) => r.name),
-      resolveHost: (id) => {
-        const res = loadHostRegistry();
-        if (!res.ok) return null;
-        const r = resolveHostInRegistry(res.registry, id);
-        return r.ok ? r.host : null;
-      },
-      hasSession: (session) => tmuxAdapter.hasSession(session),
-      // #707: local tiles run the tmux the daemon resolves, not whatever the provider's PATH finds.
-      resolveLocalTmux: async () => (await probeRegistry.probeCli("tmux")).detectedPath,
-    });
-  }
 
   const settingsStore = new SettingsStore();
   deps.settingsStore = settingsStore;
 
-  const sessionTransport = deps.sessionTransport;
-  if (sessionTransport) {
-    queueRepoInstance.attachActivityReader((session) => {
-      const node = db.prepare("SELECT node_id FROM sessions WHERE session_name = ? ORDER BY id DESC LIMIT 1").get(session) as { node_id: string } | undefined;
-      return node ? seatActivityService.getSeatState(node.node_id) : null;
-    });
-    // OPR.0.4.6.WF1 FR-4: the workflow startup resume sweep — re-arm
-    // keepalives, reissue lost post-commit nudges (pending frontier
-    // packets never nudged), surface stuck instances. Runs after the
-    // watchdog + transport are wired so re-nudges actually deliver.
-    // Failures are logged, never fatal: a sweep problem must not
-    // bring the daemon down.
-    if (!managed && workflowRuntime && queueRepoForWorkflow) {
-      try {
-        const { runWorkflowBootSweep } = await import("./domain/workflow-boot-sweep.js");
-        await runWorkflowBootSweep({
-          instanceStore: workflowRuntime.instanceStore,
-          queueRepo: queueRepoForWorkflow,
-          watchdogJobsRepo: watchdogJobsRepoInstance,
-          log: (line) => console.log(line),
-          // OPR.0.4.6.WF5 FR-2 class (b): the sweep leg of detection.
-          ensureStuckExceptionItem: workflowExceptionEnsurer,
-          reconcileStuckExceptions: () => workflowRuntime?.reconcileStuckExceptions() ?? 0,
-        });
-      } catch (err) {
-        console.warn(
-          `workflow boot sweep: failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
 
-    // W1 (transactional closure) FR — the wake-intent RECOVERY SWEEP. Deliver
-    // any wake intents a crash left committed-but-undelivered (the terminal txn
-    // committed, so the intent is durable, but the process died before the
-    // post-commit deliver). Runs after transport is wired so the re-deliveries
-    // actually land. Non-fatal — a sweep failure must not bring the daemon down.
-    // No periodic timer (ruled out of scope): a transient failure lands the row
-    // in a VISIBLE state and is retried on the next start.
-    if (!managed) try {
-      // BLOCKING 1: reconcile abandoned `sending` claims (a prior crash) FIRST,
-      // then drain committed `pending` intents. Reconcile is a one-time boundary
-      // step, separate from the drain.
-      const reconciled = queueRepoInstance.reconcileAbandonedWakeIntents();
-      const drained = await queueRepoInstance.drainPendingWakeIntents();
-      if (drained.delivered || drained.indeterminate || drained.failed || reconciled) {
-        console.log(
-          `wake-intent recovery sweep: delivered=${drained.delivered} indeterminate=${drained.indeterminate} failed=${drained.failed} reconciled=${reconciled}`,
-        );
-      }
-    } catch (err) {
-      console.warn(
-        `wake-intent recovery sweep: failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
 
   // Context monitor is retained for runtime readiness telemetry used by the
   // managed launch path. It no longer owns compaction or snapshot behavior.
   const { ContextMonitor } = await import("./domain/context-monitor.js");
-  const contextMonitor = new ContextMonitor(db, contextUsageStore, claudeAdapter, undefined, {
+  const contextMonitor = new ContextMonitor(db, contextUsageStore, undefined, undefined, {
     "claude-code": claudeAdapter,
     codex: codexAdapter,
-    pi: piAdapter,
-    omp: ompAdapter,
   });
 
   // GHOST-STAGE (e/Class-B) — construct the canonical OccupantInvalidator now that both Class-A deps
@@ -1803,8 +1032,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       "SELECT count(*) AS count FROM team_attempts WHERE run_id = ? AND state IN ('running', 'unknown')")
       .get(runId) as { count: number }).count;
     const maxSessions = (runId: string) => teamGovernance.getRun(runId).binding.limits.maxSessions;
-    deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, tmux: tmuxAdapter,
-      startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {}, sessionEnv: launchSessionEnv, runtimeSessionEnv,
+    deps.teamControl!.dispatch = composeTaskDispatch({ rigRepo, sessions: sessionRegistry, startupOrchestrator, runtimeAdapters: deps.runtimeAdapters ?? {},
       prepareDeliveryLeadTurn: (runId, taskId) => {
         if (!workflowRuntime) throw new Error("Candidate runtime is unavailable");
         return workflowRuntime.prepareDeliveryLeadTurn(runId, taskId);
@@ -1886,13 +1114,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       // and the last lines it held are the only structured evidence available without a
       // wrapper around the native client. Both reads are read-only; a pane this daemon cannot
       // see yields no evidence, which the classifier treats as "not classified", never a retry.
-      paneExit: paneId => tmuxAdapter.getPaneExit(paneId),
-      paneTail: (paneId, lines) => tmuxAdapter.capturePaneTail(paneId, lines),
       // The launch stamps the task it starts into the pane, so a seat with two live tasks — two
       // completed implementers are two pending reviews on the same reviewer seat — still admits
       // the attempt the receipt names.
-      paneTask: paneId => tmuxAdapter.getPaneTask(paneId),
-      releasePane: paneId => tmuxAdapter.respawnPane(paneId),
       // U5 — the end of a lead's turn is the lead's reply in the run's chat, and a message that
       // waited for that turn is the next turn's prompt. The conversation owner reads the turn's
       // recorded final message and asks the same dispatch for the next turn. U6 adds the one
@@ -1935,11 +1159,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // S20 — bind provenance rides the health surface (absent = legacy healthz body).
   deps.bindPlan = opts?.bindPlan;
 
-  // `ui.enabled` (default off): the web UI pages and its terminal WebSocket. Read once at start.
+  // `ui.enabled` (default off): read once at start.
   deps.webUiEnabled = opts?.webUiEnabled ?? new ContextPackSettingsStore().resolveOne("ui.enabled").value === true;
   // /api browser boundary: this machine's exact Tailscale MagicDNS name, looked up on demand.
   deps.selfNameDiscovery = () => discoverTailscaleSelfNames({ timeoutMs: 1500 });
-  const { app, injectWebSocket } = createAppWithWebSocket(deps);
+  const app = createApp(deps);
 
-  return { app, db, deps, contextMonitor, eventLoopMonitor, injectWebSocket };
+  return { app, db, deps, contextMonitor, eventLoopMonitor };
 }

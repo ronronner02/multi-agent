@@ -260,8 +260,8 @@ interface QueueItemRow {
  * minimal shape so test code can supply a stub.
  */
 export interface QueueNudgeTransport {
-  deliveryTarget?(session: string): import("./seat-delivery-guard.js").GuardTarget | null;
-  retentionTarget?(session: string): import("./seat-delivery-guard.js").GuardTarget | null;
+  deliveryTarget?(session: string): QueueGuardTarget | null;
+  retentionTarget?(session: string): QueueGuardTarget | null;
   send(
     sessionName: string,
     // (h): stampISO threads the nudge's compose time so the transport's delivered-latency calc can
@@ -269,6 +269,13 @@ export interface QueueNudgeTransport {
     text: string,
     opts?: { verify?: boolean; stampISO?: string; actorSession?: string; committedOutboxIds?: string[]; deliveryId?: string; auditPointer?: string }
   ): Promise<{ ok: boolean; verified?: boolean; error?: string; reason?: string; outcome?: string }>;
+}
+
+export interface QueueGuardTarget {
+  nodeId: string;
+  session: string;
+  occupant: string | null;
+  pane: string | null;
 }
 
 export interface QueueCreateInput {

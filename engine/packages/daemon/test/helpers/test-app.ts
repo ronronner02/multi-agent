@@ -18,8 +18,6 @@ import { leadDecisionsSchema } from "../../src/db/migrations/116_lead_decisions.
 import { teamBootstrapAndRetirementSchema } from "../../src/db/migrations/117_team_bootstrap_and_retirement.js";
 import { attemptTelemetrySchema } from "../../src/db/migrations/118_attempt_telemetry.js";
 import { rigNonInterruptiveSchema } from "../../src/db/migrations/095_rig_non_interruptive.js";
-import { mockShellCommand } from "./shell-command-mock.js";
-import { vi } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../../src/db/connection.js";
 import { migrate } from "../../src/db/migrate.js";
@@ -89,12 +87,9 @@ import { RigRepository } from "../../src/domain/rig-repository.js";
 import { SessionRegistry } from "../../src/domain/session-registry.js";
 import { EventBus } from "../../src/domain/event-bus.js";
 import { QueueRepository } from "../../src/domain/queue-repository.js";
-import { NodeLauncher } from "../../src/domain/node-launcher.js";
-import { StartupOrchestrator } from "../../src/domain/startup-orchestrator.js";
 import type { RuntimeAdapter } from "../../src/domain/runtime-adapter.js";
-import type { TmuxAdapter } from "../../src/adapters/tmux.js";
 import { AgentActivityStore } from "../../src/domain/agent-activity-store.js";
-import { createApp, createAppWithWebSocket } from "../../src/server.js";
+import { createApp } from "../../src/server.js";
 
 /** Seam B R6: the canonical full-fixture migration list, exported so file-backed
  *  DB-reopen tests migrate IDENTICALLY to createFullTestDb. */
@@ -166,47 +161,14 @@ export function createFullTestDb(): Database.Database {
   return db;
 }
 
-export function mockTmuxAdapter(): TmuxAdapter {
-  return mockShellCommand({
-    createSession: vi.fn(async () => ({ ok: true as const })),
-    killSession: vi.fn(async () => ({ ok: true as const })),
-    listSessions: vi.fn(async () => []),
-    listWindows: vi.fn(async () => []),
-    listPanes: vi.fn(async () => []),
-    listClients: vi.fn(async () => []),
-    switchClient: vi.fn(async () => ({ ok: true as const })),
-    hasSession: vi.fn(async () => false),
-    sendText: vi.fn(async () => ({ ok: true as const })),
-    sendKeys: vi.fn(async () => ({ ok: true as const })),
-    startPipePane: vi.fn(async () => ({ ok: true as const })),
-    setSessionOption: vi.fn(async () => ({ ok: true as const })),
-    getSessionOption: vi.fn(async () => null),
-  } as unknown as TmuxAdapter);
-}
-
-function readyRuntimeAdapter(runtime: string): RuntimeAdapter {
-  return {
-    runtime,
-    listInstalled: async () => [],
-    project: async () => ({ projected: [], skipped: [], failed: [] }),
-    deliverStartup: async () => ({ delivered: 0, failed: [] }),
-    launchHarness: async () => ({ ok: true }),
-    checkReady: async () => ({ ready: true }),
-  };
-}
-
 export function createTestApp(
   db: Database.Database,
   opts?: {
-    tmux?: TmuxAdapter;
     adapters?: Partial<Record<string, RuntimeAdapter>>;
-    activityHookToken?: string;
     activityFreshnessMs?: number;
-    seatStructuralActivityService?: import("../../src/domain/seat-structural-activity-service.js").SeatStructuralActivityService;
     eventLoopMonitor?: import("../../src/domain/event-loop-monitor.js").EventLoopMonitor;
     routeTimingRecorder?: import("../../src/domain/route-timing-recorder.js").RouteTimingRecorder;
     appDeps?: Partial<import("../../src/server.js").AppDeps>;
-    withWebSocket?: boolean;
     wireRuntimeAdapters?: boolean;
   },
 ) {
@@ -214,18 +176,9 @@ export function createTestApp(
   const sessionRegistry = new SessionRegistry(db);
   const eventBus = new EventBus(db);
   const queueRepo = new QueueRepository(db, eventBus);
-  const tmux = opts?.tmux ?? mockTmuxAdapter();
   const transcriptStore = new TranscriptStore("/tmp/openrig-test-transcripts");
-  const nodeLauncher = new NodeLauncher({ db, rigRepo, sessionRegistry, eventBus, tmuxAdapter: tmux });
   const discoveryRepo = new DiscoveryRepository(db);
-  const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter: tmux });
   const contextUsageStore = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
-  const adapters: Record<string, RuntimeAdapter> = {
-    terminal: readyRuntimeAdapter("terminal"),
-    "claude-code": readyRuntimeAdapter("claude-code"),
-    codex: readyRuntimeAdapter("codex"),
-    ...opts?.adapters,
-  };
   const agentActivityStore = new AgentActivityStore({
     db,
     eventBus,
@@ -237,38 +190,27 @@ export function createTestApp(
     rigRepo,
     sessionRegistry,
     eventBus,
-    nodeLauncher,
-    startupOrchestrator,
-    tmuxAdapter: tmux,
     discoveryRepo,
     queueRepo,
     transcriptStore,
     contextUsageStore,
     agentActivityStore,
-    activityHookToken: opts?.activityHookToken,
-    seatStructuralActivityService: opts?.seatStructuralActivityService,
     eventLoopMonitor: opts?.eventLoopMonitor,
     routeTimingRecorder: opts?.routeTimingRecorder,
-    runtimeAdapters: opts?.wireRuntimeAdapters ? adapters : opts?.adapters as Record<string, RuntimeAdapter> | undefined,
+    runtimeAdapters: opts?.wireRuntimeAdapters ? opts?.adapters as Record<string, RuntimeAdapter> | undefined : opts?.adapters as Record<string, RuntimeAdapter> | undefined,
     ...opts?.appDeps,
   };
-  const built = opts?.withWebSocket
-    ? createAppWithWebSocket(testAppDeps as never)
-    : { app: createApp(testAppDeps as never), injectWebSocket: undefined };
+  const built = { app: createApp(testAppDeps as never) };
   return {
     app: built.app,
-    injectWebSocket: built.injectWebSocket,
     db,
     rigRepo,
     sessionRegistry,
     eventBus,
-    nodeLauncher,
     discoveryRepo,
     queueRepo,
-    tmuxAdapter: tmux,
     transcriptStore,
     contextUsageStore,
     agentActivityStore,
-    startupOrchestrator,
   };
 }

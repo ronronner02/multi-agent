@@ -1,5 +1,4 @@
 import type Database from "better-sqlite3";
-import type { ClaudeCompactionEnforcer } from "./claude-compaction-enforcer.js";
 import type { ContextUsageStore } from "./context-usage-store.js";
 import {
   isAttentionRequiredReadinessCode,
@@ -8,7 +7,22 @@ import {
 } from "./runtime-adapter.js";
 import type { UsageSamplesStore, ProviderWindowSampleInput } from "./usage-samples-store.js";
 import type { ContextUsage } from "./types.js";
-import { hasPendingFreshStartup } from "./startup-orchestrator.js";
+
+interface ClaudeCompactionEnforcer {
+  reconcilePreparations?(): void;
+  maybeAutoCompact(input: Record<string, unknown>): Promise<void>;
+  hasPendingPostCompactStage?(sessionName: string): boolean;
+  drainPendingPostCompactStage?(input: Record<string, unknown>): Promise<void>;
+}
+
+function hasPendingFreshStartup(db: Database.Database, nodeId: string, sessionId: string): boolean {
+  const row = db.prepare("SELECT payload FROM events WHERE node_id = ? AND type IN ('node.startup_pending', 'node.startup_ready', 'node.startup_failed') ORDER BY seq DESC LIMIT 1").get(nodeId) as { payload: string } | undefined;
+  if (!row) return false;
+  try {
+    const event = JSON.parse(row.payload) as Record<string, unknown>;
+    return event.type === "node.startup_failed" && event.sessionId === sessionId && event.freshContextPending === true;
+  } catch { return false; }
+}
 
 /** Default polling interval: 30 seconds. */
 export const DEFAULT_POLL_INTERVAL_MS = 30_000;
@@ -181,7 +195,7 @@ export class ContextMonitor {
         return;
       }
       if (!this.compactionEnforcer.hasPendingPostCompactStage?.(session.session_name)) return;
-      await this.compactionEnforcer.drainPendingPostCompactStage({
+      await this.compactionEnforcer.drainPendingPostCompactStage?.({
         sessionName: session.session_name,
         cwd: session.cwd,
         runtime: session.runtime,

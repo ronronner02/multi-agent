@@ -144,7 +144,7 @@ export const TERMINAL_TAIL_LINES = 40;
  * A line that reads as a terminal error, so a fingerprint on it is the client's own report.
  *
  * The anchors are the shapes the evidence in this repository actually has: a bracketed runner
- * tag (`[stub-runner] ERROR`), an HTTP status (`401 authentication_error`, `529 overloaded`),
+ * tag (for example a worker error prefix), an HTTP status (`401 authentication_error`, `529 overloaded`),
  * Claude's `API Error:` prefix, and Codex's `■` banner. Prose that merely mentions a failure
  * does not begin with one of these.
  */
@@ -162,7 +162,7 @@ const TERMINAL_ERROR_LINE = /^(?:\[[^\]\n]{1,40}\]\s*)?(?:\d{3}\s|API Error\b|Er
  * Codex banner — needs no anchor, because no ordinary answer contains it as a sentence.
  *
  * - `401 authentication_error: API key is invalid.` — the OMP runner fixture
- *   (`test/omp-runner.test.ts`, mirroring OMP 18.2.11's own emission).
+ *   (provider error fixtures mirror the provider's own emission).
  * - `invalid x-api-key` — Anthropic's own error text.
  * - `■ You've hit your usage limit.` — the Codex banner (`domain/provider/codex-limit-banner.ts`).
  * - `529 overloaded` / `overloaded_error` — the OMP fixture and Anthropic's error type.

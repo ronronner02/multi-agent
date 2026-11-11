@@ -4,7 +4,7 @@ import {
   TEAM_CONTROL_VERSION, TeamContractError, object, parseControlRequest, parsePlanBinding, parseProtocolVersion,
   type ControlActor, type ControlRequest, type TeamRun, type TeamSystemHealth,
 } from "../contracts/team-control.js";
-import { hashBinding, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
+import { type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import {
   teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv,
 } from "../middleware/auth-bearer-token.js";
@@ -12,11 +12,6 @@ import { readSystemHealthBounded } from "../domain/system-health.js";
 import { ScopeExtensionError } from "../domain/scope-extension.js";
 import type { TeamReadModel } from "../team-control-surface.js";
 import type { Cancellation } from "../domain/team-cancellation.js";
-import type { SessionRegistry } from "../domain/session-registry.js";
-import type { StartupOrchestrator } from "../domain/startup-orchestrator.js";
-import { seatForTask } from "../domain/seat-pane.js";
-import { seatLifecycleService } from "./seat.js";
-import { refreshPlanBinding } from "./team-start.js";
 
 export interface TeamControlOptions {
   credentials: TeamControlCredentials;
@@ -97,37 +92,6 @@ export function teamControlRoutes(
   app.get("/runs/:runId/approvals", (c) => {
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, approvals: governance.listApprovals(c.req.param("runId")) });
-  });
-  app.post("/runs/:runId/tasks/:taskId/continue", async c => {
-    const body = object(await c.req.json(), "continue");
-    parseProtocolVersion(body.protocolVersion);
-    if (!Number.isSafeInteger(body.expectedEntityVersion) || (body.expectedEntityVersion as number) < 1) {
-      throw new TeamContractError("expectedEntityVersion");
-    }
-    const runId = c.req.param("runId"), taskId = c.req.param("taskId");
-    const run = governance.getRun(runId);
-    if (!governance.findTask(runId, taskId)) throw new Error("Task not found");
-    const sessions = c.get("sessionRegistry" as never) as SessionRegistry | undefined;
-    const startup = c.get("startupOrchestrator" as never) as StartupOrchestrator | undefined;
-    if (!sessions || !startup) return c.json({ code: "continuation_unavailable" }, 503);
-    const seat = seatForTask(sessions, runId, taskId), context = sessions.findResumeContextByName(seat);
-    const binding = context && startup.pendingManagedBinding(context.nodeId, context.sessionId);
-    const attempt = binding?.managedAttempt;
-    if (!context || context.rigId !== run.rigId || !attempt || attempt.context.runId !== runId
-      || attempt.context.assignment.taskId !== taskId) return c.json({ code: "continuation_unavailable" }, 409);
-    const assertContinuation = () => {
-      const current = sessions.findResumeContextByName(seat), policy = options.readPolicyCapability?.();
-      if (!policy || attempt.deadline <= Date.now() || current?.sessionId !== context.sessionId
-        || sessions.getBindingForNode(context.nodeId)?.tmuxPane !== binding.tmuxPane) {
-        throw new Error("Continuation conflict: the admitted authority or occupant changed");
-      }
-      governance.assertTaskContinuation(runId, taskId, body.expectedEntityVersion as number,
-        refreshPlanBinding(run.binding, policy), attempt.attemptId);
-      if (hashBinding(attempt.context.binding) !== run.bindingDigest) throw new Error("Continuation conflict: the attempt has an earlier plan binding");
-    };
-    assertContinuation();
-    const result = await seatLifecycleService(c).continueFreshStartup(seat, assertContinuation);
-    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, seat, ...result }, result.ok ? 200 : 409);
   });
   app.get("/runs/:runId/tasks/:taskId/scope", (c) => {
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);

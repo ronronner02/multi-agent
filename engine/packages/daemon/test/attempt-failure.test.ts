@@ -263,37 +263,6 @@ describe("the owner retry reads the recorded classification", () => {
     expect(retry().reason).toMatch(/no classification/);
   });
 
-  it("starts a fresh session after an unsafe failure", async () => {
-    const stopped = await end({ dead: true, code: 1 }, "API Error: 400 invalid_request_error\n");
-    expect(stopped.failure).toMatchObject({ reasonCode: "agent_error.provider_invalid_request", resumeSafe: false });
-    const seat = sessions.findResumeContextByName("builder@rig-1")!;
-    // The seat still carries the poisoned native token until the continuation decides about it.
-    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBe("poisoned-native-session");
-    const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
-    const started: Array<{ resumeToken?: string; continueSessionId?: string }> = [];
-    // A recorded, live binding makes the dispatch resolve the seat's existing terminal instead
-    // of opening one, so this case observes the launch decision and nothing about tmux.
-    const nodeId = sessions.findResumeContextByName("builder@rig-1")!.nodeId;
-    sessions.updateBinding(nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
-    const dispatch = composeTaskDispatch({
-      rigRepo: new RigRepository(db), sessions,
-      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }] } as never,
-      startupOrchestrator: { startNode: async (input: { resumeToken?: string; continueSessionId?: string }) => {
-        started.push({ resumeToken: input.resumeToken, continueSessionId: input.continueSessionId });
-        return { ok: true, startupStatus: "ready", continuityOutcome: "fresh" };
-      } } as never,
-      runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
-      // This run has room, so the limit is not what decides this case.
-      maxSessions: () => 2, liveSessions: () => 0,
-    });
-    sessions.updateStartupStatus(seat.sessionId, "pending");
-    await dispatch("run-1", "task-1");
-    expect(started).toHaveLength(1);
-    expect(started[0]!.resumeToken).toBeUndefined();
-    expect(started[0]!.continueSessionId).toBeUndefined();
-    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBeNull();
-  });
-
   it.each(["failed", "ready"] as const)("does no pane work for a retired seat with status %s", async status => {
     const seat = sessions.findResumeContextByName("builder@rig-1")!;
     sessions.updateBinding(seat.nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
@@ -312,79 +281,4 @@ describe("the owner retry reads the recorded classification", () => {
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)).toEqual(before);
   });
 
-  it("recovers a seat whose last launch failed, once, and then launches it", async () => {
-    // Measured on the C4 acceptance run: a launch pasted into a held-but-dead pane, failed, and
-    // left the seat `failed`. The dispatcher starts only a `pending` seat, and a managed daemon
-    // refuses the legacy `rig seat clean` / `rig seat launch` verbs, so the seat stayed wedged for
-    // the life of the run and the task it was starting could never be dispatched again.
-    const seat = sessions.findResumeContextByName("builder@rig-1")!;
-    const nodeId = seat.nodeId;
-    sessions.updateBinding(nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
-    sessions.updateStartupStatus(seat.sessionId, "failed");
-    const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
-    const started: unknown[] = [], respawned: string[] = [];
-    const dispatchWith = (exit: { dead: boolean; code: number | null } | null) => composeTaskDispatch({
-      rigRepo: new RigRepository(db), sessions,
-      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => exit,
-        respawnPane: async (pane: string) => { respawned.push(pane); return { ok: true }; } } as never,
-      startupOrchestrator: { startNode: async (input: unknown) => {
-        started.push(input);
-        return { ok: true, startupStatus: "ready", continuityOutcome: "resumed" };
-      } } as never,
-      runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
-      maxSessions: () => 2, liveSessions: () => 0,
-    });
-    // The seat's pane is dead: the recovery puts it back to a live shell before the launch, and
-    // the seat is `pending` again, which is what the dispatcher reads.
-    await dispatchWith({ dead: true, code: 0 })("run-1", "task-1");
-    expect(respawned).toEqual(["%1"]);
-    expect(started).toHaveLength(1);
-    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.startupStatus).not.toBe("failed");
-    // The conversation, the tree and the token are untouched: this is a retry, not a reset.
-    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.resumeToken).toBe("poisoned-native-session");
-    // A `ready` seat with a LIVE pane already has an agent, so it is not this dispatch's to
-    // overwrite: no recovery and no launch.
-    sessions.updateStartupStatus(seat.sessionId, "ready");
-    await dispatchWith({ dead: false, code: null })("run-1", "task-1");
-    expect(started).toHaveLength(1);
-    expect(respawned).toEqual(["%1"]);
-    // A `ready` seat whose pane is DEAD has no agent in it, and the status is stale rather than
-    // true. Measured on the C4 acceptance run: the turn's attempt was never recorded, so the seat
-    // stayed `ready` while its pane died, and the rework could never be dispatched.
-    sessions.updateStartupStatus(seat.sessionId, "ready");
-    await dispatchWith({ dead: true, code: 0 })("run-1", "task-1");
-    expect(respawned).toEqual(["%1", "%1"]);
-    expect(started).toHaveLength(2);
-    // And a live pane on a failed seat is kept as it stands rather than respawned under an agent.
-    sessions.updateStartupStatus(seat.sessionId, "failed");
-    await dispatchWith({ dead: false, code: null })("run-1", "task-1");
-    expect(respawned).toEqual(["%1", "%1"]);
-    expect(started).toHaveLength(3);
-    // U8 — attention_required is recoverable once per dispatch, just like a failed seat.
-    sessions.updateStartupStatus(seat.sessionId, "attention_required");
-    await dispatchWith({ dead: false, code: null })("run-1", "task-1");
-    expect(started).toHaveLength(4);
-    expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.startupStatus).not.toBe("attention_required");
-  });
-
-  it("reports the named startup reason when attention recovery remains wedged", async () => {
-    const seat = sessions.findResumeContextByName("builder@rig-1")!;
-    sessions.updateBinding(seat.nodeId, { attachmentType: "tmux", tmuxSession: "builder@rig-1", tmuxPane: "%1" });
-    sessions.updateStartupStatus(seat.sessionId, "attention_required");
-    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
-      const dispatch = composeTaskDispatch({
-        rigRepo: new RigRepository(db), sessions,
-        tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
-        startupOrchestrator: { startNode: async () => ({ ok: false, startupStatus: "attention_required", errors: ["trust_gate"] }) } as never,
-        runtimeAdapters: { "claude-code": { runtime: "claude-code" } } as never,
-        maxSessions: () => 2, liveSessions: () => 0,
-      });
-      await dispatch("run-1", "task-1");
-      expect(warning).toHaveBeenCalledWith(expect.stringContaining("trust_gate"));
-    } finally {
-      warning.mockRestore();
-    }
-  });
 });

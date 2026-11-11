@@ -22,7 +22,6 @@ import { roleConfiguration } from "./role-configuration.js";
 import { bindingCovers } from "./binding-scope.js";
 import { ordinalRunName, reviewName, taskName } from "./display-names.js";
 import { automaticRetryAt, retryIsDue, classificationFor, parseAttemptClassification, type AttemptReasonCode } from "./attempt-failure.js";
-import { ensureSeatMailboxCapability } from "./seat-mailbox-capability.js";
 import type { LeadTask, LeadResolution } from "./lead-proposal.js";
 import { parseTaskReport } from "./task-report.js";
 import { planningRosterRequired, rosterRefusal, type LeadRosterSeat, type LeadSeatChanges } from "./lead-roster.js";
@@ -1748,7 +1747,6 @@ export class PlanGovernance {
       .run(created.qitemId, ctx.run.id, assignment.taskId, canonicalJson(assignment), canonicalJson(outputs), canonicalJson(permissions), displayName,
         ctx.run.binding.documentVersions ? canonicalJson(ctx.run.binding.documentVersions) : null,
         selected ? canonicalJson(selected.workflow) : null);
-    ensureSeatMailboxCapability(this.db, ctx.run.id, destinationSession, new Date(ctx.now));
     return { status: "accepted", value: this.getTask(created.qitemId), taskId: assignment.taskId };
   }
 

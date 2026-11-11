@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ConfigStore } from "./config-store.js";
 import { getOpenRigHome } from "./openrig-compat.js";
-import { validateHostRegistry } from "./host-registry.js";
 
 /** Read the boot-minted identity without requiring the local daemon or minting a replacement. */
 export function readLocalOrigin(): string | undefined {
@@ -21,9 +20,8 @@ export function readLocalOrigin(): string | undefined {
     db = new Database(dbPath, { readonly: true, fileMustExist: true, timeout: 100 });
     const row = db.prepare("SELECT host_id FROM self_host_identity WHERE singleton = 1").get() as { host_id?: unknown } | undefined;
     const id = row?.host_id;
-    if (typeof id !== "string" || id === "localhost") return undefined;
-    const valid = validateHostRegistry({ hosts: [{ id, transport: "ssh", target: "identity-validation" }] }, "<local-origin>");
-    return valid.ok ? id : undefined;
+    if (typeof id !== "string" || id === "localhost" || id === "local") return undefined;
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) ? id : undefined;
   } catch {
     return undefined;
   } finally {
