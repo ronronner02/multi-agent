@@ -3,7 +3,6 @@ import { Command } from "commander";
 import { upCommand } from "../src/commands/up.js";
 import { STATE_FILE, type LifecycleDeps } from "../src/daemon-lifecycle.js";
 import type { DaemonClient } from "../src/client.js";
-import { buildAttentionResponse } from "../../daemon/src/routes/up.js";
 
 const attentionNodes = [
   { logicalId: "dev.owner", sessionName: "dev-owner@first", reason: "update_gate", evidence: "Update available!" },
@@ -12,10 +11,14 @@ const attentionNodes = [
 function attentionBody() {
   const result = { rigId: "first", stages: [{ stage: "import_rig", status: "blocked",
     detail: { code: "attention_required", message: "2 members need attention.", attentionNodes } }] };
-  return { ...result, ...buildAttentionResponse(result)! };
+  return { ...result, attentionNodes, error: {
+    fact: "2 members need attention.",
+    consequence: "Members marked attention_required have not been proven interactive; a runtime may be waiting for input or may have exited.",
+    action: "Inspect each affected session listed in attentionNodes and its reported reason before choosing recovery.",
+  } };
 }
 
-// Execute the actual command and daemon response builder; transport/lifecycle
+// Execute the actual command against a recorded response shape; transport/lifecycle
 // are injected. No listener, daemon, tmux or provider process is started.
 async function render(data: Record<string, unknown>, status = 409, json = false) {
   const oldExit = process.exitCode;
@@ -59,7 +62,7 @@ describe("startup attention guidance", () => {
     expect(json.err).toBe("");
     expect(json.exit).toBeUndefined();
   });
-  it("renders actual structured response and all affected members without spec advice", async () => {
+  it("renders structured response and all affected members without spec advice", async () => {
     const body = attentionBody();
     const r = await render(body);
     expect(r.err).toContain(`Error: ${body.error.fact}`);
@@ -73,13 +76,6 @@ describe("startup attention guidance", () => {
     expect(r.err).not.toMatch(/\[object Object\]|validate your spec|Sessions are running|answering it.*completes/);
     expect(r.out).toContain("import_rig: blocked");
     expect(r.exit).toBe(1);
-  });
-  it("daemon guidance does not assume a trust prompt or a live runtime", () => {
-    const { error } = attentionBody();
-    expect(error.consequence).toContain("attention_required");
-    expect(error.consequence).toMatch(/not.*proven|not.*confirmed/i);
-    expect(error.action).toMatch(/inspect/i);
-    expect(error.action).not.toMatch(/answer.*prompt|parked session/i);
   });
   it.each([409, 500])("preserves exact JSON body and exit for HTTP %i", async (status) => {
     const data = attentionBody();

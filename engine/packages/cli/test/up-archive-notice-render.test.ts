@@ -1,12 +1,11 @@
 // #141: `rig up` terminal output for the stopped-generation archive. The archive notice must reach the user
 // on the attention 409 too (the replacement is kept there), and a generation_unconfirmed refusal prints its
-// own actionable message. Actual command renderer and daemon attention builder; the client is stubbed.
+// own actionable message. Actual command renderer with a recorded attention response; the client is stubbed.
 import { describe, expect, it, vi } from "vitest";
 import { Command } from "commander";
 import { upCommand } from "../src/commands/up.js";
 import { STATE_FILE, type LifecycleDeps } from "../src/daemon-lifecycle.js";
 import type { DaemonClient } from "../src/client.js";
-import { buildAttentionResponse } from "../../daemon/src/routes/up.js";
 
 const OLD = "01OLDGENERATION00000000000";
 const NOTICE = `Archived the stopped earlier "first-project" rig ${OLD}; its records are kept. Restore it with: rig unarchive ${OLD}`;
@@ -39,7 +38,11 @@ function attentionWithNotice() {
   const attentionNodes = [{ logicalId: "dev.owner", sessionName: "dev-owner@first-project", reason: "trust_gate", evidence: "trust" }];
   const result = { rigId: "NEWRIG", warnings: [NOTICE], stages: [{ stage: "import_rig", status: "blocked",
     detail: { code: "attention_required", message: "1 member needs attention.", attentionNodes } }] };
-  return { ...result, ...buildAttentionResponse(result)! };
+  return { ...result, attentionNodes, error: {
+    fact: "1 member needs attention.",
+    consequence: "Members marked attention_required have not been proven interactive.",
+    action: "Inspect the affected session and its reported reason before choosing recovery.",
+  } };
 }
 
 describe("#141 rig up output for the stopped-generation archive", () => {

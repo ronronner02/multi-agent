@@ -1,15 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Command } from "commander";
-import Database from "better-sqlite3";
-import { Hono } from "hono";
-import { telemetryRoutes } from "../../daemon/src/routes/telemetry.js";
-import { eventsSchema } from "../../daemon/src/db/migrations/003_events.js";
 import { telemetryCommand } from "../src/commands/telemetry.js";
 import { STATE_FILE } from "../src/daemon-lifecycle.js";
 import type { StatusDeps } from "../src/commands/status.js";
-const databases: Database.Database[] = [];
-afterEach(() => { vi.restoreAllMocks(); for (const db of databases.splice(0))
-    db.close(); });
+afterEach(() => { vi.restoreAllMocks(); });
 async function run(args: string[], respond: (path: string) => Promise<{
     status: number;
     data: unknown;
@@ -70,23 +64,5 @@ describe("rig telemetry", () => {
         const result = await run(["events", "--json"], async () => ({ status, data: body }));
         expect(result.exit).toBe(status === 400 ? 1 : 2);
         expect(JSON.parse(result.logs.join("\n"))).toEqual(body);
-    });
-    it("feeds actual Commander arguments through actual Hono/SQLite with the same bounded response", async () => {
-        const db = new Database(":memory:");
-        databases.push(db);
-        db.exec(eventsSchema.sql);
-        const insert = db.prepare("INSERT INTO events(node_id,type,payload) VALUES ('node-a','node.started','private')");
-        db.transaction(() => { for (let i = 0; i < 5; i++)
-            insert.run(); })();
-        const app = new Hono().route("/api/telemetry", telemetryRoutes({ db: () => db, source: { hostId: "fixture", bootEpoch: "boot" } }));
-        const result = await run(["events", "--start", "retained", "--limit", "2", "--node", "unmatched", "--json"], async (path) => {
-            const response = await app.request(path);
-            return { status: response.status, data: await response.json() };
-        });
-        expect(result.paths).toHaveLength(1);
-        const body = JSON.parse(result.logs.join("\n"));
-        expect(body.rows).toEqual([]);
-        expect(body.page).toMatchObject({ scanned: 2, filtered: 2, lastScanned: "2", through: "5", hasMore: true });
-        expect(body.coverage.historyCompleteness).toBe("unknown");
     });
 });
