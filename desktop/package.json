@@ -2,7 +2,7 @@
   "name": "multi-agent-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Windows desktop window for Multi-Agent, running the engine in WSL2",
+  "description": "Windows desktop window for Multi-Agent, running the engine as its own native child process",
   "license": "Apache-2.0",
   "main": "src/main.js",
   "scripts": {

@@ -262,6 +262,75 @@ test('no LAN bind: engine bridge does not expose non-loopback port', () => {
   assert.ok(bridge, 'engine bridge loads without error');
 });
 
+test('an unexpected exit reaches onExit and an expected one does not', async () => {
+  const bridge = bridgeContext();
+  const exits = [];
+  bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') },
+    onExit: exit => exits.push(exit) });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+  for (const fn of bridge.childListeners.get('exit') || []) fn(0);
+  assert.equal(exits.length, 1, 'a daemon exit nobody asked for is reported');
+  assert.equal(exits[0].code, 0);
+  assert.match(exits[0].reason, /exit code 0/);
+});
+
+test('an exit after shutdown is not reported as unexpected', async () => {
+  const bridge = bridgeContext();
+  const exits = [];
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') },
+    onExit: exit => exits.push(exit) });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+  bridge.child.postMessage = (msg) => {
+    if (msg && msg.type === 'shutdown') {
+      setImmediate(() => { for (const fn of bridge.childListeners.get('exit') || []) fn(0); });
+    }
+  };
+  await engine.shutdown();
+  assert.equal(exits.length, 0, 'the shutdown this app asked for is not a crash');
+});
+
+// ---------------------------------------------------------------------------
+// U12 — the first-run dependency probe over the private parent channel
+// ---------------------------------------------------------------------------
+
+test('dependencies posts the probe and resolves the daemon resolver output', async () => {
+  const bridge = bridgeContext();
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+
+  const posted = [];
+  const resolutions = [{ ok: true, client: 'git', path: 'D:\\git.exe', source: 'path' }];
+  bridge.child.postMessage = (msg) => {
+    posted.push(msg);
+    if (msg && msg.type === 'dependencies') {
+      setImmediate(() => { for (const fn of bridge.childListeners.get('message') || []) fn({ type: 'dependencies', resolutions }); });
+    }
+  };
+
+  assert.deepEqual(await engine.dependencies(), resolutions);
+  assert.ok(posted.some(msg => msg.type === 'dependencies'), 'the probe goes over the port');
+});
+
+test('dependencies rejects with the daemon answer and when no daemon is running', async () => {
+  const bridge = bridgeContext();
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
+  await new Promise(r => setImmediate(r));
+
+  bridge.child.postMessage = (msg) => {
+    if (msg && msg.type === 'dependencies') {
+      setImmediate(() => { for (const fn of bridge.childListeners.get('message') || []) fn({ type: 'dependencies-error', error: 'probe_failed' }); });
+    }
+  };
+  await assert.rejects(engine.dependencies(), /probe_failed/);
+
+  bridge.killEngine();
+  await assert.rejects(engine.dependencies(), /not running/);
+});
+
 // ---------------------------------------------------------------------------
 // U6 — minting a one-time pairing code over the private parent channel
 // ---------------------------------------------------------------------------

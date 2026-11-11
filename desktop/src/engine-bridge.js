@@ -1,17 +1,17 @@
 'use strict';
 /**
- * U5 — Electron main-process bridge for the native utility-process daemon.
+ * Electron main-process bridge for the native utility-process daemon.
  *
  * Responsibilities:
  * - Fork the built daemon entry (engine-host.js) as an Electron utility process.
- * - Pass temp-home environment and 127.0.0.1:0.
- * - Receive the bound port and health identity over `parentPort` IPC.
- * - Expose readiness, crash, and shutdown lifecycle to `main.js`.
- * - On quit: send shutdown to the child, wait for the bounded receipt,
- *   then tree-kill any survivors.
+ * - Pass the data directory, the loopback bind host, and the daemon's environment.
+ * - Receive the bound port, the health identity, dependency status, and pairing codes over
+ *   `parentPort` IPC.
+ * - Expose readiness, exit, and shutdown lifecycle to `main.js`.
+ * - On quit: send shutdown to the child, wait for the bounded receipt, then end the child.
  *
- * The `require('electron')` call is lazy so tests that mock it via
- * `vm.runInContext` can load this module without an actual Electron binary.
+ * The `require('electron')` call is lazy so tests that mock it via `vm.runInContext` can load
+ * this module without an actual Electron binary.
  */
 
 const path = require('node:path');
@@ -20,15 +20,19 @@ const path = require('node:path');
 let child = null;
 /** True once the child has exited or been killed. */
 let childGone = true;
-/** The resolved port, or null. */
+/** True from the moment this app asked the child to stop, so that exit is expected. */
+let stopping = false;
+/** The resolved origin port, or null. */
 let boundPort = null;
 /** Resolver for the readiness promise. */
 let resolveReady = null;
 let rejectReady = null;
 /** U6 — the one in-flight `mint-pairing` request, if any. */
 let pendingMint = null;
+/** U12 — the one in-flight dependency-status request, if any. */
+let pendingDependencies = null;
 
-/** U6 — settle a pending mint request once and clear it. */
+/** Settle a pending mint request once and clear it. */
 function settleMint(error, code) {
   const pending = pendingMint;
   pendingMint = null;
@@ -36,6 +40,16 @@ function settleMint(error, code) {
   clearTimeout(pending.timer);
   if (error) pending.reject(error);
   else pending.resolve(code);
+}
+
+/** Settle a pending dependency request once and clear it. */
+function settleDependencies(error, resolutions) {
+  const pending = pendingDependencies;
+  pendingDependencies = null;
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  if (error) pending.reject(error);
+  else pending.resolve(resolutions);
 }
 
 function readinessFuture() {
@@ -60,11 +74,14 @@ function settleReady(error, value) {
  *
  * @param {object} opts
  * @param {string} opts.dataDir  – the daemon's mutable state directory
- * @param {object} opts.env      – env with temp OPENRIG_HOME, CODEX_HOME, etc.
- * @returns {{ ready: Promise<{ port: number, pid: number }>, shutdown: () => Promise<void> }}
+ * @param {object} opts.env      – the daemon's environment (the owner's own, plus managed overrides)
+ * @param {(exit: { code: number|null, reason: string }) => void} [opts.onExit]
+ *   called for every child exit; `main.js` decides which exits were unexpected
+ * @returns {{ ready: Promise<{ port: number, pid: number }>, shutdown: () => Promise<void>,
+ *             mintPairing: () => Promise<string>, dependencies: () => Promise<unknown[]> }}
  */
 function startEngine(opts) {
-  const { dataDir, env } = opts;
+  const { dataDir, env, onExit } = opts;
 
   // Lazy require so tests can mock electron.
   const electron = require('electron');
@@ -73,6 +90,7 @@ function startEngine(opts) {
   const entry = path.resolve(__dirname, 'engine-host.js');
 
   childGone = false;
+  stopping = false;
   child = electron.utilityProcess.fork(entry, [], {
     env,
     execArgv: [],
@@ -80,8 +98,8 @@ function startEngine(opts) {
     stdio: 'pipe',
   });
 
-  // Forward the daemon's own output so a startup failure is visible in the
-  // desktop log rather than silent.
+  // Forward the daemon's own output so a startup failure is visible in the desktop log rather
+  // than silent.
   if (child.stdout) child.stdout.on('data', (chunk) => { try { process.stdout.write(`[daemon] ${chunk}`); } catch { /* ignore */ } });
   if (child.stderr) child.stderr.on('data', (chunk) => { try { process.stderr.write(`[daemon] ${chunk}`); } catch { /* ignore */ } });
 
@@ -96,22 +114,29 @@ function startEngine(opts) {
     if (message.type === 'crash') {
       settleReady(new Error(`Daemon crash: ${message.error}`));
     }
-    // U6 — the daemon's answer to a `mint-pairing` request. The code is handed straight
-    // back to the caller and never logged; on failure only the error name is reported.
+    // U6 — the daemon's answer to a `mint-pairing` request. The code is handed straight back to
+    // the caller and never logged; on failure only the error name is reported.
     if (message.type === 'pairing-code') settleMint(null, message.code);
     if (message.type === 'pairing-error') settleMint(new Error(message.error || 'pairing_mint_failed'));
+    // U12 — first-run dependency status, resolved by the daemon's own resolver.
+    if (message.type === 'dependencies') settleDependencies(null, message.resolutions);
+    if (message.type === 'dependencies-error') settleDependencies(new Error(message.error || 'dependency_probe_failed'));
   });
 
   child.on('exit', (code) => {
+    const expected = stopping;
     childGone = true;
     child = null;
     boundPort = null;
     settleReady(new Error(`Daemon exited with code ${code} before ready`));
     settleMint(new Error('Daemon exited during pairing mint'));
+    settleDependencies(new Error('Daemon exited during the dependency probe'));
+    if (!expected && typeof onExit === 'function') onExit({ code, reason: `exit code ${code}` });
   });
 
   const shutdown = async () => {
     if (childGone || !child) return;
+    stopping = true;
     const current = child;
     // Ask the daemon to run its own bounded shutdown (receipt included).
     try { current.postMessage({ type: 'shutdown' }); } catch { /* child already gone */ }
@@ -119,7 +144,7 @@ function startEngine(opts) {
       const timeout = setTimeout(resolve, 12_000);
       current.once('exit', () => { clearTimeout(timeout); resolve(); });
     });
-    // Terminate any survivor tree after the bounded wait.
+    // End the child if the bounded wait did not.
     if (!childGone && current) {
       try { current.kill(); } catch { /* already gone */ }
     }
@@ -127,14 +152,15 @@ function startEngine(opts) {
     child = null;
     boundPort = null;
     settleMint(new Error('Daemon stopped during pairing mint'));
+    settleDependencies(new Error('Daemon stopped during the dependency probe'));
   };
 
   /**
-   * U6 — mint one one-time pairing code over the private parent channel.
+   * Mint one one-time pairing code over the private parent channel.
    *
-   * Only the daemon's own parent process can reach this port, so the code never has to
-   * travel over HTTP or sit in an environment variable. The returned value is the raw
-   * code; the caller exchanges it and must never log it or put it in a URL.
+   * Only the daemon's own parent process can reach this port, so the code never has to travel
+   * over HTTP or sit in an environment variable. The returned value is the raw code; the caller
+   * exchanges it and must never log it or put it in a URL.
    */
   const mintPairing = () => {
     if (childGone || !child) return Promise.reject(new Error('Daemon is not running'));
@@ -147,7 +173,24 @@ function startEngine(opts) {
     });
   };
 
-  return { ready, shutdown, mintPairing };
+  /**
+   * Ask the daemon what it resolved for `git`, `gh`, `claude` and `codex`.
+   *
+   * The daemon answers with its own resolver's output (U1), so the first-run page shows the same
+   * paths a worker launch will use. Nothing is resolved a second time in Electron.
+   */
+  const dependencies = () => {
+    if (childGone || !child) return Promise.reject(new Error('Daemon is not running'));
+    if (pendingDependencies) return Promise.reject(new Error('A dependency probe is already in flight'));
+    const current = child;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => settleDependencies(new Error('Dependency probe timed out')), 10_000);
+      pendingDependencies = { resolve, reject, timer };
+      try { current.postMessage({ type: 'dependencies' }); } catch (error) { settleDependencies(error); }
+    });
+  };
+
+  return { ready, shutdown, mintPairing, dependencies };
 }
 
 /**
@@ -175,6 +218,7 @@ function killEngine() {
   child = null;
   boundPort = null;
   settleMint(new Error('Daemon killed during pairing mint'));
+  settleDependencies(new Error('Daemon killed during the dependency probe'));
 }
 
 module.exports = { startEngine, isRunning, port, killEngine };

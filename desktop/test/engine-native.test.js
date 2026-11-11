@@ -1,61 +1,59 @@
 'use strict';
 /**
- * U5 — native engine host tests at the desktop level: startup after ready,
- * the dynamic origin reaching the window, second-instance focus, crash state,
- * the close confirmation with cancel, clean shutdown leaving no child, and no
- * LAN bind.
+ * U12 — the native desktop startup path at the desktop level: the engine starts after app
+ * readiness, the window loads the dynamic origin already paired, the first-run dependency list
+ * reaches the page, second-instance focuses the existing window, an unexpected engine exit shows
+ * a reconnect action, Stop engine leaves no child, and quitting runs the bounded shutdown.
  *
- * These drive `src/main.js` in a `vm` context with a mocked Electron and a
- * mocked `engine-bridge.js`, so they run under `node --test`.
+ * These drive `src/main.js` in a `vm` context with a mocked Electron and a mocked
+ * `engine-bridge.js`, so they run under `node --test`.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const wsl = require('../src/wsl.js');
+const originRules = require('../src/origin.js');
+const { dependencyRows } = require('../src/dependencies.js');
 
-/**
- * Build a main.js fixture in native mode.
- *
- * @param {object} opts
- * @param {object} opts.ready          – what the bridge's ready promise resolves to
- * @param {Error}  [opts.readyError]   – what it rejects with instead
- * @param {number} [opts.closeResponse] – the close-confirmation response index
- * @param {number} [opts.runningAttempts] – value for runningAttempts in healthz (0 = no confirmation)
- */
+const PORT = 58123;
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+
 function nativeDesktop(opts = {}) {
-  const { ready = { port: 58123, pid: 4321 }, readyError = null, closeResponse = 1 } = opts;
-  const runningAttempts = opts.runningAttempts !== undefined ? opts.runningAttempts : 0;
+  const ready = opts.ready ?? { port: PORT, pid: 4321 };
+  const runningAttempts = opts.runningAttempts ?? 0;
   const loaded = [];
   const messageBoxes = [];
   const lifecycle = new Map();
-  const dialogHandlers = [];
+  const contentsHandlers = new Map();
+  const windowHandlers = new Map();
   const ipcHandlers = new Map();
   const cookies = [];
   const clipboardWrites = [];
   const externalUrls = [];
   const mints = [];
   let capturedMenu = null;
-  let options = null;
+  let windowOptions = null;
   let bridgeShutdowns = 0;
   let started = 0;
+  let exitListener = null;
   let mintIndex = 0;
   const mintCode = opts.mintCode || (() => 'M'.repeat(40) + String(++mintIndex).padStart(3, '0'));
 
   const mainFrame = { url: 'file:///first-run.html' };
   const contents = {
     mainFrame,
-    on(event, fn) { if (event === 'will-navigate') dialogHandlers.push(fn); },
+    on(event, fn) { contentsHandlers.set(event, fn); },
     send() {},
     setWindowOpenHandler() {},
     reload() {},
+    getURL() { return mainFrame.url; },
   };
 
   class Window {
-    constructor(value) { options = value; this.webContents = contents; this.destroyed = false; }
+    constructor(value) { windowOptions = value; this.webContents = contents; this.destroyed = false; }
     once() {}
-    on(event, fn) { if (event === 'close') dialogHandlers.push(fn); }
+    on(event, fn) { windowHandlers.set(event, fn); }
     isDestroyed() { return this.destroyed; }
     isMinimized() { return false; }
     restore() {}
@@ -70,8 +68,7 @@ function nativeDesktop(opts = {}) {
     on(event, fn) { lifecycle.set(event, fn); },
     whenReady: () => Promise.resolve(),
     quit() {},
-    getPath: () => path.join('D:', 'ma', 'tmp', 'userData'),
-    getPath: (name) => name === 'appData' ? path.join('D:', 'ma', 'tmp', 'appData') : path.join('D:', 'ma', 'tmp', 'userData'),
+    getPath: name => name === 'appData' ? path.join('D:', 'ma', 'tmp', 'appData') : path.join('D:', 'ma', 'tmp', 'userData'),
   };
 
   const electron = {
@@ -81,7 +78,7 @@ function nativeDesktop(opts = {}) {
     screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 940 } }) },
     dialog: {
       showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
-      showMessageBox: async (...args) => { const box = args.length === 2 ? args[1] : args[0]; messageBoxes.push(box); return { response: closeResponse }; },
+      showMessageBox: async (...args) => { const box = args.length === 2 ? args[1] : args[0]; messageBoxes.push(box); return { response: opts.closeResponse ?? 1 }; },
     },
     ipcMain: {
       handle(channel, fn) { ipcHandlers.set(channel, fn); },
@@ -92,29 +89,30 @@ function nativeDesktop(opts = {}) {
     clipboard: { writeText: (text) => { clipboardWrites.push(text); } },
   };
 
+  const resolutions = opts.resolutions ?? [
+    { ok: true, client: 'claude', path: String.raw`D:\claude.exe`, source: 'shim' },
+    { ok: true, client: 'codex', path: String.raw`D:\codex.exe`, source: 'shim' },
+    { ok: true, client: 'git', path: String.raw`D:\git.exe`, source: 'path' },
+    { ok: false, client: 'gh', reason: 'not-found', tried: [] },
+  ];
   const bridge = {
-    startEngine(...args) {
+    startEngine(args) {
       started += 1;
-      bridge.lastStartArgs = args[0];
+      bridge.lastStartArgs = args;
+      exitListener = args.onExit;
       return {
-        ready: readyError ? Promise.reject(readyError) : Promise.resolve(ready),
+        ready: opts.readyError ? Promise.reject(opts.readyError) : Promise.resolve(ready),
         shutdown: async () => { bridgeShutdowns += 1; },
         mintPairing: async () => { const code = mintCode(); mints.push(code); return code; },
+        dependencies: async () => { if (opts.dependenciesError) throw opts.dependenciesError; return resolutions; },
       };
     },
     isRunning: () => true,
     port: () => (ready ? ready.port : null),
     killEngine: () => {},
-    lastStartArgs: null,
   };
 
-  // Default healthz response includes runningAttempts so the close handler
-  // can decide whether to show the confirmation dialog.
-  const defaultText = JSON.stringify({
-    status: 'ok', selfHostId: 'host-x', pid: 4321, runningAttempts,
-  });
-  // U6 — the default fetch answers the daemon's health probe and the owner-session exchange
-  // the desktop posts after minting a code over the parent channel.
+  const defaultText = JSON.stringify({ status: 'ok', selfHostId: 'host-x', pid: 4321, runningAttempts });
   const exchangeRequests = [];
   const defaultFetch = async (url, init) => {
     const href = String(url);
@@ -133,25 +131,19 @@ function nativeDesktop(opts = {}) {
 
   const context = vm.createContext({
     __dirname: path.resolve(__dirname, '../src'),
-    URL,
-    console,
+    URL, console,
     process: { env: { HOME: 'D:\\Users\\testuser', USERPROFILE: 'D:\\Users\\testuser', CODEX_HOME: 'D:\\Users\\testuser\\.codex', CLAUDE_CONFIG_DIR: 'D:\\Users\\testuser\\.claude' } },
     fetch: opts.fetch || defaultFetch,
     AbortSignal: { timeout: () => undefined },
-    setTimeout,
-    clearTimeout,
+    setTimeout, clearTimeout,
     require: name => {
       if (name === 'electron') return electron;
-      if (name === './wsl.js') return wsl;
       if (name === './engine-bridge.js') return bridge;
-      if (name === 'node:child_process') return { spawn() { throw new Error('No process in these tests'); } };
+      if (name === './origin.js') return originRules;
+      if (name === './dependencies.js') return { dependencyRows };
+      if (name === 'node:child_process') throw new Error('No process in these tests');
       if (name === 'node:fs') {
-        return {
-          existsSync: () => true,
-          mkdirSync() {},
-          writeFileSync() {},
-          readFileSync: fs.readFileSync,
-        };
+        return { existsSync: () => opts.engineEntryExists !== false, mkdirSync() {}, writeFileSync() {}, readFileSync: fs.readFileSync };
       }
       return require(name);
     },
@@ -160,145 +152,95 @@ function nativeDesktop(opts = {}) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../src/main.js'), 'utf8'), context);
 
   return {
-    context, electron, bridge, loaded, messageBoxes, lifecycle, dialogHandlers, ipcHandlers, contents, mainFrame,
+    context, electron, bridge, loaded, messageBoxes, lifecycle, contentsHandlers, windowHandlers, ipcHandlers, contents, mainFrame,
     cookies, clipboardWrites, externalUrls, mints, exchangeRequests,
-    options: () => options,
+    options: () => windowOptions,
     started: () => started,
     bridgeShutdowns: () => bridgeShutdowns,
     state: () => vm.runInContext('state', context),
-    setState: (patch) => vm.runInContext(`state = { ...state, ...${JSON.stringify(patch)} }`, context),
-    nativeEngine: () => vm.runInContext('nativeEngine', context),
+    nativeEngine: () => vm.runInContext('engine', context),
+    engineExit: () => vm.runInContext('engineExit', context),
     allowedOrigin: () => vm.runInContext('allowedOrigin', context),
     window: () => vm.runInContext('window', context),
-    // The will-navigate handler is the one that takes (event, url).
-    navigate: () => dialogHandlers.find(fn => fn.length === 2),
-    close: () => dialogHandlers.find(fn => fn.length === 1),
+    exit: () => exitListener,
+    close: () => windowHandlers.get('close'),
     lastEnv: () => bridge.lastStartArgs ? bridge.lastStartArgs.env : null,
     menuItem: (label) => (capturedMenu || []).flatMap(item => item.submenu || []).find(item => item.label === label),
   };
 }
 
-// Let the async startup chain (fork → ready → health → mint → exchange → load) settle.
-const settle = async () => { for (let i = 0; i < 8; i += 1) await new Promise(resolve => setImmediate(resolve)); };
+// Let the async startup chain (fork → ready → health → probe → mint → exchange → load) settle.
+const settle = async () => { for (let i = 0; i < 12; i += 1) await new Promise(resolve => setImmediate(resolve)); };
 
-test('native engine starts after app readiness and loads the dynamic origin', async () => {
+test('the engine starts after app readiness and the window loads the dynamic origin', async () => {
   const fixture = nativeDesktop();
   await settle();
-  await settle();
   assert.equal(fixture.started(), 1, 'the bridge must fork exactly one daemon');
-  assert.ok(fixture.loaded.some(url => url === 'http://127.0.0.1:58123/team'),
+  assert.ok(fixture.loaded.some(url => url === `${ORIGIN}/team`),
     `the window must load the dynamic origin, got ${JSON.stringify(fixture.loaded)}`);
-  assert.equal(fixture.allowedOrigin(), 'http://127.0.0.1:58123');
+  assert.equal(fixture.allowedOrigin(), ORIGIN);
   assert.equal(fixture.state().phase, 'ready');
 });
 
 test('the dynamic origin is the only origin the window may navigate to', async () => {
   const fixture = nativeDesktop();
   await settle();
-  await settle();
-  const navigate = fixture.navigate();
+  const navigate = fixture.contentsHandlers.get('will-navigate');
   let prevented = false;
-  navigate({ preventDefault: () => { prevented = true; } }, 'http://127.0.0.1:58123/team');
+  navigate({ preventDefault: () => { prevented = true; } }, `${ORIGIN}/team`);
   assert.equal(prevented, false, 'the dynamic origin must be allowed');
   navigate({ preventDefault: () => { prevented = true; } }, 'http://127.0.0.1:7433/team');
-  assert.equal(prevented, true, 'the old fixed origin must not be trusted in native mode');
+  assert.equal(prevented, true, 'a fixed origin must not be trusted');
 });
 
-test('a daemon crash shows a connection state without taking down the window', async () => {
-  const fixture = nativeDesktop({ readyError: new Error('Daemon crash: ENOENT') });
-  await settle();
-  await settle();
-  assert.equal(fixture.state().phase, 'start-failed');
-  assert.match(fixture.state().message, /Daemon crash/);
-  assert.ok(!fixture.loaded.some(url => url.includes('/team')));
-  assert.ok(fixture.options(), 'the window still exists after a daemon crash');
-});
-
-test('closing while attempts run asks for confirmation and cancel keeps the app open', async () => {
-  const fixture = nativeDesktop({ closeResponse: 1, runningAttempts: 2 });
-  await settle();
-  await settle();
-  const close = fixture.close();
-  let prevented = false;
-  await close({ preventDefault: () => { prevented = true; } });
-  assert.equal(prevented, true, 'the close must be held for confirmation');
-  assert.equal(fixture.messageBoxes.length, 1);
-  assert.match(fixture.messageBoxes[0].message, /Resume continues/);
-  assert.equal(fixture.window().destroyed, false, 'cancelling keeps the window open');
-});
-
-test('confirming the close stops the agents and proceeds', async () => {
-  const fixture = nativeDesktop({ closeResponse: 0, runningAttempts: 1 });
-  await settle();
-  await settle();
-  const close = fixture.close();
-  await close({ preventDefault: () => {} });
-  assert.equal(fixture.messageBoxes.length, 1);
-  assert.equal(fixture.window().destroyed, true, 'approving closes the window');
-});
-
-test('no close confirmation is shown when no attempt is running', async () => {
-  const fixture = nativeDesktop({ closeResponse: 0, runningAttempts: 0 });
-  await settle();
-  await settle();
-  const close = fixture.close();
-  let prevented = false;
-  await close({ preventDefault: () => { prevented = true; } });
-  assert.equal(prevented, false);
-  assert.equal(fixture.messageBoxes.length, 0);
-});
-
-test('second-instance focuses the existing window', async () => {
+test('the window pairs over the private parent channel and only the anti-forgery token reaches it', async () => {
   const fixture = nativeDesktop();
   await settle();
-  await settle();
-  const secondInstance = fixture.lifecycle.get('second-instance');
-  assert.equal(typeof secondInstance, 'function');
-  secondInstance();
-  assert.equal(fixture.window().focused, true);
+  const [code] = fixture.mints;
+  assert.equal(fixture.mints.length, 1, 'the desktop mints exactly one code for the window');
+  assert.ok(code, 'a one-time code was minted');
+
+  const [exchange] = fixture.exchangeRequests;
+  assert.ok(exchange, 'the code is exchanged over HTTP');
+  assert.equal(exchange.url, `${ORIGIN}/api/team-control/owner-session/exchange`);
+  assert.ok(!exchange.url.includes(code), 'the code never appears in the exchange URL');
+  assert.equal(exchange.init.headers.Origin, ORIGIN);
+  assert.equal(exchange.init.headers['Sec-Fetch-Site'], 'same-origin');
+  assert.deepEqual(JSON.parse(exchange.init.body), { code });
+
+  assert.equal(fixture.cookies.length, 1, 'the HttpOnly cookie goes into the window jar');
+  const [cookie] = fixture.cookies;
+  assert.equal(cookie.name, 'multi_agent_owner');
+  assert.equal(cookie.httpOnly, true);
+  assert.equal(cookie.sameSite, 'strict');
+  assert.equal(cookie.path, '/api');
+  assert.equal(cookie.url, ORIGIN);
+
+  assert.ok(fixture.loaded.some(url => url === `${ORIGIN}/team`));
+  assert.equal(fixture.state().phase, 'ready');
+  assert.ok(!JSON.stringify(fixture.state()).includes(code), 'the code never reaches the renderer state');
 });
 
-test('quitting runs the daemon shutdown before the app exits', async () => {
+test('the first-run page receives the dependency list with resolved paths and a missing hint', async () => {
   const fixture = nativeDesktop();
   await settle();
-  await settle();
-  const beforeQuit = fixture.lifecycle.get('before-quit');
-  assert.equal(typeof beforeQuit, 'function');
-  let prevented = false;
-  beforeQuit({ preventDefault: () => { prevented = true; } });
-  await settle();
-  await settle();
-  assert.equal(prevented, true, 'quit waits for the daemon shutdown');
-  assert.equal(fixture.bridgeShutdowns(), 1, 'the daemon shutdown runs exactly once');
-  assert.equal(fixture.nativeEngine(), null);
+  const dependencies = fixture.state().dependencies;
+  assert.ok(Array.isArray(dependencies) && dependencies.length === 4, `the page must receive the dependency list, got ${JSON.stringify(dependencies)}`);
+  assert.deepEqual(dependencies.map(row => row.client), ['git', 'gh', 'claude', 'codex']);
+  assert.equal(dependencies.find(row => row.client === 'claude').path, String.raw`D:\claude.exe`);
+  assert.equal(dependencies.find(row => row.client === 'gh').ok, false);
+  assert.match(dependencies.find(row => row.client === 'gh').hint, /gh\.exe|cli\.github\.com/);
 });
 
-test('a non-loopback health answer is refused before the window loads it', async () => {
-  const fixture = nativeDesktop({
-    fetch: async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ status: 'ok' }) }),
-  });
+test('a dependency probe failure still lets the window connect', async () => {
+  const fixture = nativeDesktop({ dependenciesError: new Error('dependency probe failed') });
   await settle();
-  await settle();
-  assert.equal(fixture.state().phase, 'connection-failed');
-  assert.ok(!fixture.loaded.some(url => url.includes('/team')));
+  assert.deepEqual(fixture.state().dependencies.map(row => row.ok), [false, false, false, false]);
+  assert.equal(fixture.state().phase, 'ready');
 });
 
-test('shutdown leaves no child: the bridge shutdown runs once and is cleared', async () => {
+test('the engine env keeps the parent HOME, USERPROFILE, CODEX_HOME and CLAUDE_CONFIG_DIR', async () => {
   const fixture = nativeDesktop();
-  await settle();
-  await settle();
-  assert.ok(fixture.nativeEngine(), 'the daemon is running before quit');
-  const beforeQuit = fixture.lifecycle.get('before-quit');
-  beforeQuit({ preventDefault: () => {} });
-  await settle();
-  await settle();
-  assert.equal(fixture.bridgeShutdowns(), 1);
-  assert.equal(fixture.nativeEngine(), null, 'the engine handle is cleared so no child is left behind');
-});
-
-test('the child env keeps the parent HOME, USERPROFILE, CODEX_HOME and CLAUDE_CONFIG_DIR', async () => {
-  const fixture = nativeDesktop();
-  await settle();
   await settle();
   const env = fixture.lastEnv();
   assert.ok(env, 'startEngine must have been called');
@@ -313,61 +255,145 @@ test('the child env keeps the parent HOME, USERPROFILE, CODEX_HOME and CLAUDE_CO
 });
 
 test('OPENRIG_HOME is identical across two launches', async () => {
-  const opts = { ready: { port: 58123, pid: 4321 } };
-  const f1 = nativeDesktop(opts);
-  await settle();
+  const f1 = nativeDesktop();
   await settle();
   const home1 = f1.lastEnv().OPENRIG_HOME;
-
-  const f2 = nativeDesktop(opts);
+  const f2 = nativeDesktop();
   await settle();
-  await settle();
-  const home2 = f2.lastEnv().OPENRIG_HOME;
-
-  assert.ok(home1 && home2, 'OPENRIG_HOME must be set in both launches');
-  assert.equal(home1, home2, 'OPENRIG_HOME must be identical across launches');
+  assert.ok(home1 && f2.lastEnv().OPENRIG_HOME, 'OPENRIG_HOME must be set in both launches');
+  assert.equal(home1, f2.lastEnv().OPENRIG_HOME, 'OPENRIG_HOME must be identical across launches');
 });
 
-test('OPENRIG_UI_ENABLED is set instead of writing config.json', async () => {
-  const fixture = nativeDesktop();
+test('a missing engine build says so instead of forking', async () => {
+  const fixture = nativeDesktop({ engineEntryExists: false });
   await settle();
-  await settle();
-  const env = fixture.lastEnv();
-  assert.ok(env, 'startEngine must have been called');
-  assert.equal(env.OPENRIG_UI_ENABLED, 'true', 'OPENRIG_UI_ENABLED must be set to enable the team UI');
-  assert.equal(env.MULTI_AGENT_OWNER_TOKEN, undefined, 'owner token must be cleared');
+  assert.equal(fixture.started(), 0);
+  assert.equal(fixture.state().phase, 'engine-missing');
 });
 
-// ---------------------------------------------------------------------------
-// U6 — native pairing and the optional browser viewer
-// ---------------------------------------------------------------------------
+test('an engine that fails before ready reports the failure and stays on the first-run page', async () => {
+  const fixture = nativeDesktop({ readyError: new Error('Daemon crash: ENOENT') });
+  await settle();
+  assert.equal(fixture.state().phase, 'start-failed');
+  assert.match(fixture.state().message, /Daemon crash/);
+  assert.ok(!fixture.loaded.some(url => url.includes('/team')));
+  assert.equal(fixture.nativeEngine(), null, 'a failed engine is not held as running');
+  assert.ok(fixture.options(), 'the window still exists after a daemon crash');
+});
 
-test('the window pairs over the private parent channel and only the anti-forgery token reaches it', async () => {
+test('an unexpected engine exit shows a reconnect action instead of a dead page', async () => {
   const fixture = nativeDesktop();
   await settle();
-  const [code] = fixture.mints;
-  assert.equal(fixture.mints.length, 1, 'the desktop mints exactly one code for the window');
-  assert.ok(code, 'a one-time code was minted');
-
-  const [exchange] = fixture.exchangeRequests;
-  assert.ok(exchange, 'the code is exchanged over HTTP');
-  assert.equal(exchange.url, 'http://127.0.0.1:58123/api/team-control/owner-session/exchange');
-  assert.ok(!exchange.url.includes(code), 'the code never appears in the exchange URL');
-  assert.equal(exchange.init.headers.Origin, 'http://127.0.0.1:58123');
-  assert.equal(exchange.init.headers['Sec-Fetch-Site'], 'same-origin');
-  assert.deepEqual(JSON.parse(exchange.init.body), { code });
-
-  assert.equal(fixture.cookies.length, 1, 'the HttpOnly cookie goes into the window jar');
-  const [cookie] = fixture.cookies;
-  assert.equal(cookie.name, 'multi_agent_owner');
-  assert.equal(cookie.httpOnly, true);
-  assert.equal(cookie.sameSite, 'strict');
-  assert.equal(cookie.path, '/api');
-  assert.equal(cookie.url, 'http://127.0.0.1:58123');
-
-  assert.ok(fixture.loaded.some(url => url === 'http://127.0.0.1:58123/team'));
   assert.equal(fixture.state().phase, 'ready');
-  assert.ok(!JSON.stringify(fixture.state()).includes(code), 'the code never reaches the renderer state');
+  fixture.exit()({ code: 1, reason: 'exit code 1' });
+  assert.equal(fixture.state().phase, 'engine-exited');
+  assert.match(fixture.state().message, /exit code 1/);
+  assert.equal(fixture.allowedOrigin(), null, 'a stopped engine has no origin to trust');
+  assert.deepEqual(fixture.engineExit(), { code: 1, reason: 'exit code 1' });
+  assert.match(fixture.loaded.at(-1), /first-run\.html$/, 'the dead team page is replaced by the reconnect page');
+
+  // Reconnect starts a fresh engine and connects the window again.
+  const before = fixture.loaded.length;
+  await fixture.ipcHandlers.get('desktop:reconnect-engine')();
+  await settle();
+  assert.equal(fixture.started(), 2, 'Reconnect forks the engine again');
+  assert.ok(fixture.loaded.length > before, 'Reconnect loads the new origin');
+  assert.equal(fixture.state().phase, 'ready');
+});
+
+test('Stop engine asks the bridge for the bounded shutdown and clears the origin', async () => {
+  const fixture = nativeDesktop();
+  await settle();
+  await fixture.menuItem('Stop engine').click();
+  await settle();
+  assert.equal(fixture.bridgeShutdowns(), 1, 'the daemon shutdown runs exactly once');
+  assert.equal(fixture.nativeEngine(), null, 'the engine handle is cleared so no child is left behind');
+  assert.equal(fixture.allowedOrigin(), null);
+  assert.equal(fixture.state().phase, 'stopped');
+});
+
+test('an exit the app asked for is not reported as a crash', async () => {
+  const fixture = nativeDesktop();
+  await settle();
+  await fixture.menuItem('Stop engine').click();
+  await settle();
+  fixture.exit()({ code: 0, reason: 'exit code 0' });
+  assert.equal(fixture.state().phase, 'stopped', 'the stop the app asked for is not a crash');
+  assert.equal(fixture.engineExit(), null);
+});
+
+test('no child is left when the shutdown runs before quit', async () => {
+  const fixture = nativeDesktop();
+  await settle();
+  const beforeQuit = fixture.lifecycle.get('before-quit');
+  assert.equal(typeof beforeQuit, 'function');
+  let prevented = false;
+  beforeQuit({ preventDefault: () => { prevented = true; } });
+  await settle();
+  assert.equal(prevented, true, 'quit waits for the daemon shutdown');
+  assert.equal(fixture.bridgeShutdowns(), 1, 'the daemon shutdown runs exactly once');
+  assert.equal(fixture.nativeEngine(), null);
+});
+
+test('quitting with no engine running does not prevent the quit', async () => {
+  const fixture = nativeDesktop({ engineEntryExists: false });
+  await settle();
+  const beforeQuit = fixture.lifecycle.get('before-quit');
+  let prevented = false;
+  beforeQuit({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.equal(fixture.bridgeShutdowns(), 0);
+});
+
+test('closing while attempts run asks for confirmation and cancel keeps the app open', async () => {
+  const fixture = nativeDesktop({ closeResponse: 1, runningAttempts: 2 });
+  await settle();
+  const close = fixture.close();
+  let prevented = false;
+  await close({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true, 'the close must be held for confirmation');
+  assert.equal(fixture.messageBoxes.length, 1);
+  assert.match(fixture.messageBoxes[0].message, /Resume continues/);
+  assert.equal(fixture.window().destroyed, false, 'cancelling keeps the window open');
+});
+
+test('confirming the close stops the agents and proceeds', async () => {
+  const fixture = nativeDesktop({ closeResponse: 0, runningAttempts: 1 });
+  await settle();
+  const close = fixture.close();
+  await close({ preventDefault: () => {} });
+  assert.equal(fixture.messageBoxes.length, 1);
+  assert.equal(fixture.window().destroyed, true, 'approving closes the window');
+});
+
+test('no close confirmation is shown when no attempt is running', async () => {
+  const fixture = nativeDesktop({ closeResponse: 0, runningAttempts: 0 });
+  await settle();
+  const close = fixture.close();
+  let prevented = false;
+  await close({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.equal(fixture.messageBoxes.length, 0);
+});
+
+test('second-instance focuses the existing window', async () => {
+  const fixture = nativeDesktop();
+  await settle();
+  const secondInstance = fixture.lifecycle.get('second-instance');
+  assert.equal(typeof secondInstance, 'function');
+  secondInstance();
+  assert.equal(fixture.window().focused, true);
+});
+
+test('a non-loopback health answer is refused before the window loads it', async () => {
+  const fixture = nativeDesktop({
+    fetch: async (url) => String(url).endsWith('/healthz')
+      ? { ok: true, status: 200, text: async () => JSON.stringify({ status: 'ok' }) }
+      : { ok: false, status: 404, text: async () => '', json: async () => ({}) },
+  });
+  await settle();
+  assert.equal(fixture.state().phase, 'connection-failed');
+  assert.ok(!fixture.loaded.some(url => url.includes('/team')));
 });
 
 test('renewal mints and exchanges again without navigating the window', async () => {
@@ -375,7 +401,7 @@ test('renewal mints and exchanges again without navigating the window', async ()
   await settle();
   const before = fixture.loaded.length;
   const exchangedBefore = fixture.exchangeRequests.length;
-  fixture.mainFrame.url = 'http://127.0.0.1:58123/team';
+  fixture.mainFrame.url = `${ORIGIN}/team`;
 
   const event = { sender: fixture.contents, senderFrame: fixture.mainFrame };
   const token = await fixture.ipcHandlers.get('desktop:reconnect')(event);
@@ -400,8 +426,18 @@ test('Open in browser mints a fresh code, copies it, and never puts it in the op
   assert.deepEqual(fixture.clipboardWrites, [code], 'the code is copied to the clipboard');
   assert.equal(fixture.externalUrls.length, 1, 'exactly one browser page is opened');
   const [url] = fixture.externalUrls;
-  assert.equal(url, 'http://127.0.0.1:58123/team');
+  assert.equal(url, `${ORIGIN}/team`);
   assert.ok(!url.includes(code), 'the code never appears in the opened URL');
-  const dialog = fixture.messageBoxes.find(box => String(box.detail || '').includes(code));
-  assert.ok(dialog, 'the code is shown to the owner in a dialog');
+  assert.ok(fixture.messageBoxes.find(box => String(box.detail || '').includes(code)), 'the code is shown to the owner in a dialog');
+});
+
+test('the Engine menu offers Stop engine and Reconnect', async () => {
+  const fixture = nativeDesktop();
+  await settle();
+  assert.equal(typeof fixture.menuItem('Stop engine').click, 'function');
+  assert.equal(typeof fixture.menuItem('Reconnect').click, 'function');
+  await fixture.menuItem('Stop engine').click();
+  await settle();
+  assert.equal(fixture.bridgeShutdowns(), 1);
+  assert.equal(fixture.state().phase, 'stopped');
 });
