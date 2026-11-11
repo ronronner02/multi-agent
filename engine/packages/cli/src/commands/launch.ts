@@ -5,7 +5,7 @@ import { resolveEffectiveHost } from "../host-selection.js";
 import { DaemonClient } from "../client.js";
 import { getDaemonStatus, getDaemonUrl , daemonStatusGuard} from "../daemon-lifecycle.js";
 import { realDeps } from "./daemon.js";
-import type { StatusDeps } from "./status.js";
+import type { StatusDeps } from "../status-deps.js";
 import { answerShowsAction, isPlanAnswer, notAPlanMessage, planSupportRefusal } from "../launch-plan-guard.js";
 
 type LaunchResponse = {

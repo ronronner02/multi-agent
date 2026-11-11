@@ -5,7 +5,9 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TerminalDeps } from "../src/commands/terminal.js";
-import { createProgram } from "../src/index.js";
+import { Command } from "commander";
+import { terminalCommand } from "../src/commands/terminal.js";
+const createProgram = (deps: { terminalDeps: TerminalDeps }) => new Command().addCommand(terminalCommand(deps.terminalDeps));
 
 vi.mock("../src/daemon-lifecycle.js", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("../src/daemon-lifecycle.js");

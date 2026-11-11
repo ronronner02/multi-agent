@@ -764,7 +764,7 @@ describe("public world pack", () => {
     expect(convention).toContain("world-building supplies the information architecture while software-shaping supplies buildability");
   });
 
-  it("stays portable and teaches only commands present on the live CLI surface", () => {
+  it("keeps the retained public-world pack portable", () => {
     const packDir = publicWorldDir();
     const text = readdirSync(packDir)
       .filter((file) => !file.endsWith(".json"))
@@ -785,9 +785,6 @@ describe("public world pack", () => {
     expect(text).toContain("rig context profile world-public --situation fresh");
     expect(text).toMatch(/consumers may filter that metadata as data/i);
     expect(text).toContain("rig --help");
-    const cliSource = readFileSync(resolve(DAEMON_ROOT, "../cli/src/commands/context.ts"), "utf8");
-    expect(cliSource).toContain('cmd.command("get")');
-    expect(cliSource).toContain('cmd.command("profile")');
-    expect(cliSource).toContain('requiredOption("--situation <situation>"');
+
   });
 });

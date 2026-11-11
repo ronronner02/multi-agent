@@ -1,7 +1,22 @@
 import { describe, it, expect, vi } from "vitest";
+import { getEventListeners } from "node:events";
 import { fetchWithTimeout, FetchTimeoutError } from "../src/fetch-with-timeout.js";
 
 describe("fetchWithTimeout", () => {
+  it.each([false, true])("removes the caller's abort listener after a settled request (fails=%s)", async fails => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => {
+      if (fails) throw new Error("request failed");
+      return new Response("ok");
+    });
+    const result = fetchWithTimeout(fetchImpl as typeof fetch, "http://localhost:7433/read", { signal: controller.signal }, {
+      timeoutMs: 1_000, timeoutMessage: "request timed out",
+    });
+    if (fails) await expect(result).rejects.toThrow("request failed");
+    else expect((await result).status).toBe(200);
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+  });
+
   it("shares one deadline across waiting for headers and reading the body", async () => {
     vi.useFakeTimers();
     try {

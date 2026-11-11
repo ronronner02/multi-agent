@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { captureCommand } from "../src/commands/capture.js";
 import { DaemonClient } from "../src/client.js";
 import { STATE_FILE, type LifecycleDeps, type DaemonState } from "../src/daemon-lifecycle.js";
-import type { StatusDeps } from "../src/commands/status.js";
+import type { StatusDeps } from "../src/status-deps.js";
 
 function mockLifecycleDeps(): LifecycleDeps {
   return { spawn: vi.fn(() => ({ pid: 1, unref: vi.fn() }) as never), fetch: vi.fn(async () => ({ ok: true })), kill: vi.fn(() => true), readFile: vi.fn(() => null), writeFile: vi.fn(), removeFile: vi.fn(), exists: vi.fn(() => false), mkdirp: vi.fn(), openForAppend: vi.fn(() => 3), isProcessAlive: vi.fn(() => true) };

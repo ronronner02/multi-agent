@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { DaemonClient, DaemonTimeoutError, terminalAuthHeaders } from "../client.js";
 import { getDaemonStatus, getDaemonUrl , daemonStatusGuard} from "../daemon-lifecycle.js";
 import { realDeps } from "./daemon.js";
-import type { StatusDeps } from "./status.js";
+import type { StatusDeps } from "../status-deps.js";
 import { shellQuote } from "../cross-host-executor.js";
 
 export type SeatDeps = StatusDeps;

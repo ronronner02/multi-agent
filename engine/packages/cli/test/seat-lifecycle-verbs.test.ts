@@ -5,7 +5,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { Command } from "commander";
 import { seatCommand } from "../src/commands/seat.js";
 import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-lifecycle.js";
-import type { StatusDeps } from "../src/commands/status.js";
+import type { StatusDeps } from "../src/status-deps.js";
 
 function mockLifecycleDeps(): LifecycleDeps {
   return {

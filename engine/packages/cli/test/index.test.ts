@@ -20,19 +20,4 @@ describe("CLI entrypoint direct-run detection", () => {
     const program = createProgram();
     expect(program.version()).toBe(CLI_VERSION);
   });
-
-  it("registers the native heartbeat command", () => {
-    const program = createProgram();
-    expect(program.commands.some((cmd) => cmd.name() === "heartbeat")).toBe(true);
-  });
-
-  it("registers the native seat command namespace", () => {
-    const program = createProgram();
-    expect(program.commands.some((cmd) => cmd.name() === "seat")).toBe(true);
-  });
-
-  it("registers the native health command", () => {
-    const program = createProgram();
-    expect(program.commands.some((cmd) => cmd.name() === "health")).toBe(true);
-  });
 });

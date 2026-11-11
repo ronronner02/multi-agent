@@ -20,7 +20,7 @@ import { Command } from "commander";
 import { DaemonClient } from "../client.js";
 import { getDaemonStatus, getDaemonUrl , daemonStatusGuard} from "../daemon-lifecycle.js";
 import { realDeps } from "./daemon.js";
-import type { StatusDeps } from "./status.js";
+import type { StatusDeps } from "../status-deps.js";
 import { openTerminalWindow, type WindowDeps } from "../terminal-window.js";
 
 export interface TerminalDeps extends StatusDeps { windowDeps?: WindowDeps }

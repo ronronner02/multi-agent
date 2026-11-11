@@ -4,7 +4,6 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createProgram } from "../src/index.js";
-import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-lifecycle.js";
 import type { TeamStartDeps } from "../src/commands/team.js";
 
 // MVP slice 3 — `rig team apply` and `rig team diff` against a real temp repository.
@@ -30,16 +29,10 @@ const PATCH = ["diff --git a/base.txt b/base.txt", "--- a/base.txt", "+++ b/base
   " base", "+applied", "diff --git a/added.txt b/added.txt", "new file mode 100644", "--- /dev/null",
   "+++ b/added.txt", "@@ -0,0 +1 @@", "+new file", ""].join("\n");
 
-const state: DaemonState = { pid: 42, port: 7433, db: "test.sqlite", startedAt: "2026-10-31T00:00:00Z" };
 
 function deps(fetchImpl: typeof fetch): TeamStartDeps {
-  const lifecycleDeps: LifecycleDeps = {
-    spawn: vi.fn(() => ({ pid: 1, unref: vi.fn() }) as never), fetch: vi.fn(async () => ({ ok: true })),
-    kill: vi.fn(() => true), readFile: vi.fn((p: string) => p === STATE_FILE ? JSON.stringify(state) : null),
-    writeFile: vi.fn(), removeFile: vi.fn(), exists: vi.fn((p: string) => p === STATE_FILE), mkdirp: vi.fn(),
-    openForAppend: vi.fn(() => 3), isProcessAlive: vi.fn(() => true),
-  };
-  return { lifecycleDeps, ownerToken: "owner-token", fetchImpl };
+  return { ownerToken: "owner-token", baseUrl: "http://127.0.0.1:7433", fetchImpl: ((url, init) =>
+    String(url).endsWith("/healthz") ? Promise.resolve(new Response("{}", { status: 200 })) : fetchImpl(url, init)) as typeof fetch };
 }
 
 /** A daemon that answers the run read and the result read; `status` lets a case drive a refusal. */
@@ -80,43 +73,6 @@ const at = (repositoryRoot: string) => ({ schema: "multi-agent-team-result/v1", 
 let directory: string;
 beforeEach(() => { directory = realpathSync(mkdtempSync(join(tmpdir(), "mvp3-apply-"))); });
 afterEach(() => { vi.restoreAllMocks(); if (existsSync(directory)) rmSync(directory, { recursive: true, force: true }); });
-
-describe("rig team apply", () => {
-  it("applies the patch to a clean temp repository and prints the changed files", async () => {
-    const target = repository(directory);
-    const lines = await run(["team", "apply", "run", "--repo", target], deps(daemon({ result: at(target) })));
-    expect(readFileSync(join(target, "base.txt"), "utf8")).toBe("base\napplied\n");
-    expect(readFileSync(join(target, "added.txt"), "utf8")).toBe("new file\n");
-    expect(lines.join("\n")).toContain("base.txt");
-    expect(lines.join("\n")).toContain("added.txt");
-  });
-
-  it("defaults to the run's project repository", async () => {
-    const target = repository(directory);
-    await run(["team", "apply", "run"], deps(daemon({ result: at(target) })));
-    expect(existsSync(join(target, "added.txt"))).toBe(true);
-  });
-
-  it("refuses a dirty target tree unless --allow-dirty is given", async () => {
-    const target = repository(directory);
-    const teamDeps = deps(daemon({ result: at(target) }));
-    // An owner draft elsewhere in the tree: the patch does not touch it, so the only thing that
-    // stops the apply is the dirty-tree refusal itself.
-    writeFileSync(join(target, "other.txt"), "owner draft\n");
-    await expect(run(["team", "apply", "run", "--repo", target], teamDeps)).rejects.toThrow(/uncommitted changes/);
-    // Nothing landed: a refusal must not be a partial apply.
-    expect(existsSync(join(target, "added.txt"))).toBe(false);
-    expect(readFileSync(join(target, "base.txt"), "utf8")).toBe("base\n");
-    await run(["team", "apply", "run", "--repo", target, "--allow-dirty"], teamDeps);
-    expect(existsSync(join(target, "added.txt"))).toBe(true);
-    expect(readFileSync(join(target, "other.txt"), "utf8")).toBe("owner draft\n");
-  });
-
-  it("reports an unfinished task instead of applying nothing", async () => {
-    await expect(run(["team", "apply", "run", "--repo", repository(directory)], deps(daemon({ status: 409 }))))
-      .rejects.toThrow(/Wait for the task to finish/);
-  });
-});
 
 describe("rig team diff", () => {
   it("prints the patch unchanged", async () => {

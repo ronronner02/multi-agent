@@ -3,7 +3,7 @@ import { resolveEffectiveHost } from "../host-selection.js";
 import { DaemonClient, terminalAuthHeaders } from "../client.js";
 import { getDaemonStatus, getDaemonUrl , daemonStatusGuard} from "../daemon-lifecycle.js";
 import { realDeps } from "./daemon.js";
-import type { StatusDeps } from "./status.js";
+import type { StatusDeps } from "../status-deps.js";
 import { loadHostRegistry, resolveHost, hostDisplayTarget, type HttpHostEntry } from "../host-registry.js";
 import { runCrossHostCommand, type RunCrossHostCommandOpts } from "../cross-host-executor.js";
 import { emitCrossHostError, emitCrossHostFailure, emitRemoteHttpFailure } from "../cross-host-cli-helpers.js";

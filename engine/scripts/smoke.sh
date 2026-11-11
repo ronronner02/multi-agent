@@ -55,7 +55,7 @@ npm run test -w packages/daemon -- \
   test/team-result.test.ts \
   --maxWorkers=2
 
-npm run test -w packages/cli -- test/team-start.test.ts test/team-setup.test.ts test/team-chat.test.ts test/team-apply.test.ts test/team-done.test.ts --maxWorkers=2
+npm run test -w packages/cli -- test/team-start.test.ts test/team-setup.test.ts test/team-chat.test.ts test/team-apply.test.ts test/thin-cli.test.ts test/github-command.test.ts test/github-sign-in.test.ts --maxWorkers=2
 
 # The catalog parity check runs here so a key that interpolates without a declared parameter
 # fails CI. Slice A added three such keys and nothing caught it until a later review.

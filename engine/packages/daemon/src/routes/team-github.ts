@@ -44,6 +44,10 @@ export function teamGithubRoutes(
   app.get("/github/status", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.status() }));
   app.post("/github/login", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.startLogin() }));
   app.get("/github/login", c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...github.loginState() }));
+  app.post("/github/login/stop", async c => {
+    await github.stop();
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...github.loginState() });
+  });
   app.post("/github/logout", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.logout() }));
   app.onError((error, c) => {
     const failure = error instanceof GithubCliError ? error : new GithubCliError("github_login_failed");

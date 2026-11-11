@@ -8,6 +8,7 @@ import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
 import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
 import { GithubCli } from "../src/domain/github-cli.js";
+import { OwnerSessions, OWNER_COOKIE, OWNER_CSRF_HEADER } from "../src/domain/owner-session.js";
 import { isLargeFileRejection, isAuthFailure, isNetworkFailure, redactCredentials } from "../src/domain/github-cli.js";
 import { parseProtocolVersion } from "../src/contracts/team-control.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
@@ -19,7 +20,7 @@ const ownerToken = "owner-github-fixture";
 const workerToken = "worker-github-fixture";
 const legacyToken = "legacy-github-fixture";
 const endpoints = [
-  ["GET", "/status"], ["POST", "/login"], ["GET", "/login"], ["POST", "/logout"],
+  ["GET", "/status"], ["POST", "/login"], ["GET", "/login"], ["POST", "/login/stop"], ["POST", "/logout"],
 ] as const;
 
 function ghSetup(directory: string): { executable: string; execArgv: string[] } {
@@ -226,6 +227,42 @@ describe("owner GitHub sign-in", () => {
     await github.stop();
     expect(() => process.kill(pid, 0)).toThrow();
     expect(github.loginState()).toEqual({ state: "idle" });
+  });
+
+  it("stops device sign-in idempotently without removing stored credentials", async () => {
+    writeFileSync(join(directory, "account"), "octocat");
+    expect((await call("POST", "/login")).status).toBe(200);
+    const pid = Number(readFileSync(join(directory, "login.pid"), "utf8"));
+    expect((await call("POST", "/login/stop", null)).status).toBe(401);
+    expect(github.loginState().state).toBe("pending");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const stopped = await call("POST", "/login/stop");
+      expect(stopped.status).toBe(200);
+      expect(stopped.headers.get("Cache-Control")).toBe("no-store");
+      expect(await stopped.json()).toEqual({ protocolVersion: "1.0", state: "idle" });
+    }
+    expect(() => process.kill(pid, 0)).toThrow();
+    expect(readFileSync(join(directory, "account"), "utf8")).toBe("octocat");
+    expect(calls().some(args => args[1] === "logout")).toBe(false);
+    expect(await (await call("GET", "/status")).json()).toMatchObject({ signedIn: true, login: "octocat" });
+  });
+
+  it("requires the paired owner session and anti-forgery token to stop login from a browser", async () => {
+    const sessions = new OwnerSessions(db);
+    const paired = sessions.exchange(sessions.mint(ownerToken).code, "http://localhost", ownerToken)!;
+    const stop = (headers: Record<string, string>) => app.request("http://localhost/api/team-control/github/login/stop", {
+      method: "POST", headers: { Host: "localhost", Origin: "http://localhost", ...headers },
+    }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+    const cookie = `${OWNER_COOKIE}=${paired.token}`;
+    await call("POST", "/login");
+    expect((await stop({ [OWNER_CSRF_HEADER]: paired.antiForgeryToken })).status).toBe(401);
+    const refused = await stop({ Cookie: cookie });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "owner_anti_forgery_required" });
+    expect(github.loginState().state).toBe("pending");
+    const stopped = await stop({ Cookie: cookie, [OWNER_CSRF_HEADER]: paired.antiForgeryToken });
+    expect(stopped.status).toBe(200);
+    expect(await stopped.json()).toEqual({ protocolVersion: "1.0", state: "idle" });
   });
 
   it("returns github_cli_missing from every route when the executable is absent", async () => {

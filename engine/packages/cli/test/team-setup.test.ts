@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createProgram } from "../src/index.js";
 import { teamCommand, type TeamStartDeps } from "../src/commands/team.js";
-import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-lifecycle.js";
 
 /**
  * U3 — `rig team create <repository>`.
@@ -14,19 +13,13 @@ import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-
  * body that travels, the credential that authenticates it, and the next command it prints.
  */
 
-const state: DaemonState = { pid: 42, port: 7433, db: "test.sqlite", startedAt: "2026-11-05T00:00:00Z" };
 const team = { id: "rig-1", name: "project", repository: "/work/project", seats: [
   { role: "lead", client: "claude-code" }, { role: "implementer", client: "claude-code" },
   { role: "implementer", client: "codex" }, { role: "reviewer", client: "claude-code" } ] };
 
 function deps(fetchImpl: typeof fetch, ownerToken: string | null = "owner-token"): TeamStartDeps {
-  const lifecycleDeps: LifecycleDeps = {
-    spawn: vi.fn(() => ({ pid: 1, unref: vi.fn() }) as never), fetch: vi.fn(async () => ({ ok: true })),
-    kill: vi.fn(() => true), readFile: vi.fn((p: string) => p === STATE_FILE ? JSON.stringify(state) : null),
-    writeFile: vi.fn(), removeFile: vi.fn(), exists: vi.fn((p: string) => p === STATE_FILE), mkdirp: vi.fn(),
-    openForAppend: vi.fn(() => 3), isProcessAlive: vi.fn(() => true),
-  };
-  return { lifecycleDeps, ownerToken, fetchImpl };
+  return { ownerToken, baseUrl: "http://127.0.0.1:7433", fetchImpl: ((url, init) =>
+    String(url).endsWith("/healthz") ? Promise.resolve(new Response("{}", { status: 200 })) : fetchImpl(url, init)) as typeof fetch };
 }
 
 async function run(argv: string[], createDeps: TeamStartDeps): Promise<{ lines: string[]; code: number | undefined }> {
@@ -40,6 +33,10 @@ async function run(argv: string[], createDeps: TeamStartDeps): Promise<{ lines: 
     program.exitOverride();
     await program.parseAsync(["node", "rig", ...argv]);
     return { lines, code: process.exitCode };
+  } catch (thrown) {
+    const error = thrown as Error & { code?: string };
+    if (["team_client_invalid", "team_options_conflict", "team_repository_unreadable"].includes(error.code ?? "")) throw thrown;
+    return { lines: [...lines, error.message, error.code ?? ""], code: process.exitCode ?? 1 };
   } finally {
     log.mockRestore(); error.mockRestore(); process.exitCode = saved;
   }

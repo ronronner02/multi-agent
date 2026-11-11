@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { attachCommand, resolveAttachContext } from "../src/commands/attach.js";
 import { DaemonClient } from "../src/client.js";
 import { STATE_FILE, type LifecycleDeps, type DaemonState } from "../src/daemon-lifecycle.js";
-import type { StatusDeps } from "../src/commands/status.js";
+import type { StatusDeps } from "../src/status-deps.js";
 
 function mockLifecycleDeps(overrides?: Partial<LifecycleDeps>): LifecycleDeps {
   return {
