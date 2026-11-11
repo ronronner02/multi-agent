@@ -3,7 +3,6 @@
 // Migration-faithful: the canonical queue set PLUS 044 (summary) + 048 (evidence_ref) so a drop is
 // provably the non-park rule, NOT a missing column (the test-suite parity gap this atom flags).
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
 import { migrate } from "../src/db/migrate.js";
@@ -18,29 +17,19 @@ import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summ
 import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
-import { queueRoutes } from "../src/routes/queue.js";
 
 const REJECT_CODE = "summary_evidence_not_persistable";
-
-function buildApp(bus: EventBus, queueRepo: QueueRepository): Hono {
-  const app = new Hono();
-  app.use("*", async (c, next) => { c.set("eventBus" as never, bus); c.set("queueRepo" as never, queueRepo); await next(); });
-  app.route("/api/queue", queueRoutes());
-  return app;
-}
 
 describe("51-06 D2 — non-park queue update metadata reject", () => {
   let db: Database.Database;
   let bus: EventBus;
   let repo: QueueRepository;
-  let app: Hono;
 
   beforeEach(() => {
     db = createDb();
     migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, inboxEntriesSchema, outboxEntriesSchema, queueTargetRepoSchema, queueItemSummarySchema, queueItemEvidenceRefSchema]);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus, { validateRig: () => true });
-    app = buildApp(bus, repo);
   });
   afterEach(() => db.close());
 
@@ -101,14 +90,4 @@ describe("51-06 D2 — non-park queue update metadata reject", () => {
     expect(res.evidenceRef).toBe("/proof/park.md");
   });
 
-  it("ROUTE: POST /:id/update non-park + summary -> HTTP 400 naming invalidFields", async () => {
-    // P21 I3: create/update derive the sender from the transport header; header==body claim ⇒ tolerated.
-    const created = await app.request("/api/queue/create", { method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "orch@rig" }, body: JSON.stringify({ sourceSession: "orch@rig", destinationSession: "dev-x@rig", body: "r" }) });
-    const id = ((await created.json()) as { qitemId: string }).qitemId;
-    const res = await app.request(`/api/queue/${id}/update`, { method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "dev-x@rig" }, body: JSON.stringify({ actorSession: "dev-x@rig", state: "in-progress", summary: "DROPME" }) });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string; invalidFields?: string[] };
-    expect(body.error).toBe(REJECT_CODE);
-    expect(body.invalidFields).toEqual(["summary"]);
-  });
 });

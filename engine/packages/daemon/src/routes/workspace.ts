@@ -24,7 +24,7 @@ import type { PlanGovernance } from "../domain/plan-governance.js";
 import type { WorkflowRuntime } from "../domain/workflow-runtime.js";
 import { credentialExcluded } from "../domain/scope-extension.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
-import { readManagedWorkspace } from "./files.js";
+import { readWorkspacePath, readCommittedWorkspacePath, type CandidateWorkspace } from "../domain/team-workspace.js";
 import * as path from "node:path";
 import {
   validateWorkspaceFrontmatter,
@@ -166,6 +166,46 @@ export function workspaceRoutes(): Hono {
   });
 
   return app;
+}
+
+/** Managed browsing reads the live workspace plus the recorded candidate base. */
+function readManagedWorkspace(root: string, relativePath: string,
+  candidate?: Pick<CandidateWorkspace, "sourceRoot" | "base">, excluded = credentialExcluded) {
+  let read = readWorkspacePath(root, relativePath, excluded);
+  const committed = candidate?.base.kind === "commit"
+    ? readCommittedWorkspacePath(candidate.sourceRoot, candidate.base.commit, relativePath)
+    : undefined;
+  const baselineFiles = candidate?.base.kind === "snapshot" ? candidate.base.files : [];
+  if (read.kind === "missing" && (committed?.kind === "directory"
+    || baselineFiles.some(file => file.path.startsWith(relativePath + "/") && !excluded(file.path)))) {
+    read = { kind: "directory", entries: [] };
+  }
+  const base = committed?.kind === "file" ? { hash: committed.hash } : baselineFiles.find(file => file.path === relativePath);
+  if (read.kind === "missing" && !base) throw new Error("Workspace path not available");
+  if (!candidate) return { ...read, path: relativePath };
+  if (read.kind === "directory") {
+    const entries = [...read.entries];
+    const prefix = relativePath ? relativePath + "/" : "";
+    if (committed?.kind === "directory") for (const entry of committed.entries) {
+      if (!excluded(prefix + entry.name) && !entries.some(existing => existing.name === entry.name)) entries.push(entry);
+    }
+    for (const file of baselineFiles) {
+      if (excluded(file.path) || !file.path.startsWith(prefix)) continue;
+      const name = file.path.slice(prefix.length).split("/")[0]!;
+      if (!entries.some(entry => entry.name === name)) entries.push({ name, kind: file.path.slice(prefix.length).includes("/") ? "directory" : "file" });
+    }
+    if (entries.length > 1000) throw new Error("Workspace directory exceeds browse limit");
+    return { ...read, path: relativePath, entries };
+  }
+  let before: string | null = committed?.kind === "file" ? committed.content : null;
+  if (base && !committed) {
+    try {
+      const source = readWorkspacePath(candidate.sourceRoot, relativePath, excluded);
+      if (source.kind === "file" && source.hash === base.hash) before = source.content;
+    } catch { /* Changed or unavailable source bytes are never presented as the recorded baseline. */ }
+  }
+  return { ...read, path: relativePath, before, baseHash: base?.hash ?? null,
+    change: read.kind === "missing" ? "deleted" : !base ? "created" : read.hash === base.hash ? "unchanged" : "modified" };
 }
 
 

@@ -19,7 +19,6 @@ import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
-import { PodRepository } from "../src/domain/pod-repository.js";
 import { resolveDefaultOwner } from "../src/domain/workflow-projector.js";
 import { selectRoleSeat, type RoleSeatCandidateFacts } from "../src/domain/workflow-role-resolver.js";
 import type { WorkflowSpec } from "../src/domain/workflow-types.js";
@@ -229,19 +228,16 @@ describe("FAC-1 C4: replay pins — zero role-resolution inventory reads on BOTH
   let queueRepo: QueueRepository;
   let runtime: WorkflowRuntime;
   let rigRepo: RigRepository;
-  let podRepo: PodRepository;
   let tmp: string;
   let rigAId: string;
   let specPath: string;
   let sessionSeq = 0;
 
   function seedSeat(pod: string, member: string, opts: { role?: string; sessionStatus?: string }): string {
-    const podRec = podRepo.getPodByNamespace(rigAId, pod) ?? podRepo.createPod(rigAId, pod, pod);
     const node = rigRepo.addNode(rigAId, `${pod}.${member}`, {
       role: opts.role,
       runtime: "claude-code",
       cwd: "/tmp",
-      podId: podRec.id,
       agentRef: "local:agents/x",
       profile: "default",
     });
@@ -293,7 +289,6 @@ describe("FAC-1 C4: replay pins — zero role-resolution inventory reads on BOTH
     // close needs a SAME-DB intent store to make its wake durable.
     queueRepo.attachOutbox(new OutboxHandler(db));
     rigRepo = new RigRepository(db);
-    podRepo = new PodRepository(db);
     rigAId = rigRepo.createRig("factory-a").id;
     tmp = mkdtempSync(join(tmpdir(), "wf-c4-"));
     specPath = join(tmp, "replay.yaml");

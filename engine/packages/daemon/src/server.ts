@@ -1,8 +1,4 @@
 import { requireLocalTarget } from "./middleware/local-target.js";
-import { healthDiagnosisRoutes } from "./routes/health-diagnosis.js";
-import type { HealthDiagnosisService } from "./domain/health-diagnosis.js";
-import type { HealthPolicyStore } from "./domain/health-policy.js";
-import type { HealthCheckpointSource } from "./domain/health-checkpoints.js";
 import { Hono } from "hono";
 import fs from "node:fs";
 import nodePath from "node:path";
@@ -15,110 +11,19 @@ import type { EventBus } from "./domain/event-bus.js";
 import type { NodeLauncher } from "./domain/node-launcher.js";
 import type { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
 import type { TmuxAdapter } from "./adapters/tmux.js";
-import type { SnapshotCapture } from "./domain/snapshot-capture.js";
-import type { SnapshotRepository } from "./domain/snapshot-repository.js";
-import type { RestoreOrchestrator } from "./domain/restore-orchestrator.js";
-import type { RigSpecExporter } from "./domain/rigspec-exporter.js";
-import type { RigSpecPreflight } from "./domain/rigspec-preflight.js";
-import type { RigInstantiator, PodRigInstantiator } from "./domain/rigspec-instantiator.js";
-import type { PodBundleSourceResolver } from "./domain/bundle-source-resolver.js";
-import type { PackageRepository } from "./domain/package-repository.js";
-import type { InstallRepository } from "./domain/install-repository.js";
-import type { InstallEngine } from "./domain/install-engine.js";
-import type { InstallVerifier } from "./domain/install-verifier.js";
-import type { BootstrapOrchestrator } from "./domain/bootstrap-orchestrator.js";
-import type { BootstrapRepository } from "./domain/bootstrap-repository.js";
-import type { DiscoveryCoordinator } from "./domain/discovery-coordinator.js";
 import type { DiscoveryRepository } from "./domain/discovery-repository.js";
-import type { ClaimService } from "./domain/claim-service.js";
-import type { SelfAttachService } from "./domain/self-attach-service.js";
-import { rigsRoutes } from "./routes/rigs.js";
-import { sessionsRoutes, nodesRoutes, sessionAdminRoutes } from "./routes/sessions.js";
-import { adaptersRoutes } from "./routes/adapters.js";
-import { eventsRoute, teamEventsRoutes } from "./routes/events.js";
-import { snapshotsRoutes, restoreRoutes } from "./routes/snapshots.js";
-import { handleExportYaml, handleExportJson, rigspecImportRoutes } from "./routes/rigspec.js";
-import { packagesRoutes } from "./routes/packages.js";
-import { bootstrapRoutes } from "./routes/bootstrap.js";
-import { discoveryRoutes } from "./routes/discovery.js";
-import { bundleRoutes } from "./routes/bundles.js";
-import { restoreCheckRoutes } from "./routes/restore-check.js";
-import { crashCartRoutes } from "./routes/crash-cart.js";
-import { agentsRoutes } from "./routes/agents.js";
-import { psRoutes } from "./routes/ps.js";
-import type { PsProjectionService } from "./domain/ps-projection.js";
-import type { UpCommandRouter } from "./domain/up-command-router.js";
-import type { RigTeardownOrchestrator } from "./domain/rig-teardown.js";
-import { upRoutes } from "./routes/up.js";
-import { infoRoutes } from "./routes/info.js";
-import { downRoutes } from "./routes/down.js";
-import { kernelStatusRoutes } from "./routes/kernel-status.js";
-import { startupRoutes } from "./routes/startup.js";
+import { teamEventsRoutes } from "./routes/events.js";
 import type { TranscriptStore } from "./domain/transcript-store.js";
 import type { SessionTransport } from "./domain/session-transport.js";
 import type { AgentActivityStore } from "./domain/agent-activity-store.js";
-import { transcriptRoutes } from "./routes/transcripts.js";
-import { transportRoutes } from "./routes/transport.js";
-import { compactionRoutes } from "./routes/compaction.js";
-import type { ClaudeCompactionEnforcer } from "./domain/claude-compaction-enforcer.js";
-import { activityRoutes } from "./routes/activity.js";
-import { askRoutes } from "./routes/ask.js";
-import { wakeResolveRoutes } from "./routes/wake-resolve.js";
-import type { AskService } from "./domain/ask-service.js";
-import type { WakeResolveService } from "./domain/wake-resolve-service.js";
-import { specReviewRoutes } from "./routes/spec-review.js";
-import { specLibraryRoutes } from "./routes/spec-library.js";
-// Phase 3a slice 3.3 — plugin discovery routes (read-only).
-// SC-29 EXCEPTION #8 verbatim: see packages/daemon/src/routes/plugins.ts
-// header for full declaration.
-import { pluginsRoutes } from "./routes/plugins.js";
-import type { PluginDiscoveryService } from "./domain/plugin-discovery-service.js";
-// Slice 28 Checkpoint C-3 — skill-library discovery routes (read-only).
-// SC-29 EXCEPTION #11 cumulative; full declaration in routes/plugins.ts header.
-import { skillsRoutes } from "./routes/skills.js";
-import type { SkillLibraryDiscoveryService } from "./domain/skill-library-discovery.js";
-import { configRoutes } from "./routes/config.js";
 import { jsonBodyErrorHandler, trackJsonBodyParseErrors } from "./middleware/json-body-error.js";
 import { getSelfHostId, getSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
-import { contextPacksRoutes } from "./routes/context-packs.js";
-import { agentImagesRoutes } from "./routes/agent-images.js";
-import type { SpecReviewService } from "./domain/spec-review-service.js";
-import type { SpecLibraryService } from "./domain/spec-library-service.js";
 import type { ChatRepository } from "./domain/chat-repository.js";
 import { MailboxDelivery, createMailboxPromptStateReader, type ManagedNativeChannelEvidence, type NativeChannelStateReader } from "./domain/mailbox-delivery.js";
-import { whoamiRoutes } from "./routes/whoami.js";
-import { providerRoutes } from "./routes/provider.js";
-import type { ProviderService } from "./domain/provider/provider-service.js";
-import type { WhoamiService } from "./domain/whoami-service.js";
-import { PermissionDriftObserver, type PermissionDriftReader } from "./domain/permission-drift-observer.js";
-import { chatRoutes } from "./routes/chat.js";
-import { streamRoutes } from "./routes/stream.js";
-import { queueRoutes } from "./routes/queue.js";
-import { workspaceRoutes, workspaceBrowseRoutes } from "./routes/workspace.js";
-import { projectsRoutes } from "./routes/projects.js";
-import { viewsRoutes } from "./routes/views.js";
-import { watchdogRoutes } from "./routes/watchdog.js";
-import { workflowRoutes } from "./routes/workflow.js";
-import { slicesRoutes } from "./routes/slices.js";
-import { reviewRoutes } from "./routes/review.js";
-import { rigModeRoutes } from "./routes/rig-mode.js";
-import { missionsRoutes } from "./routes/missions.js";
-import { terminalRoutes, rigTerminalRoutes } from "./routes/terminal.js";
-import { getNodeInventory } from "./domain/node-inventory.js";
-import { filesRoutes } from "./routes/files.js";
-import { progressRoutes } from "./routes/progress.js";
-import { scopeAuditRoutes } from "./routes/scope-audit.js";
-import { scopesRoutes } from "./routes/scopes.js";
-import { telemetryRoutes } from "./routes/telemetry.js";
-import { proofRoutes } from "./routes/proof.js";
-import { scopeApproveRoutes } from "./routes/scope-approve.js";
+import { workspaceBrowseRoutes } from "./routes/workspace.js";
+import { terminalRoutes } from "./routes/terminal.js";
 import { registerTerminalAuthOnly, registerTerminalWs } from "./routes/terminal-ws.js";
 import { createNodeWebSocket } from "@hono/node-ws";
-import { steeringRoutes } from "./routes/steering.js";
-import { healthSummaryRoutes } from "./routes/health-summary.js";
-import { attentionRoutes } from "./routes/attention.js";
-import { healthRoutes } from "./routes/health.js";
-import type { StreamStore } from "./domain/stream-store.js";
 import { createSlowOpRequestMiddleware, type SlowOperationInstrumentation } from "./domain/slow-op-recorder.js";
 import { QueueRepository } from "./domain/queue-repository.js";
 import type { InboxHandler } from "./domain/inbox-handler.js";
@@ -129,11 +34,7 @@ import type { ClassificationAttemptLedger } from "./domain/classification-attemp
 import type { ViewProjector } from "./domain/view-projector.js";
 import type { WatchdogJobsRepository } from "./domain/watchdog-jobs-repository.js";
 import type { WatchdogHistoryLog } from "./domain/watchdog-history-log.js";
-import type { WatchdogPolicyEngine } from "./domain/watchdog-policy-engine.js";
-import type { WatchdogScheduler } from "./domain/watchdog-scheduler.js";
 import type { WorkflowRuntime } from "./domain/workflow-runtime.js";
-import { envRoutes } from "./routes/env.js";
-import type { RigLifecycleService } from "./domain/rig-lifecycle-service.js";
 import { seatRoutes } from "./routes/seat.js";
 import { createRouteTimingMiddleware } from "./domain/route-timing-recorder.js";
 import { browserBoundary, type BrowserBoundaryOptions } from "./middleware/browser-boundary.js";
@@ -192,7 +93,6 @@ export interface AppDeps {
     /** Per-attempt mailbox endpoints; an unregistered attempt cannot launch. */
     endpoints: Map<string, Pick<import("./adapters/worker-mailbox-bridge.js").WorkerMailboxBridge, "binding" | "endpoint">>;
   };
-  proofSourceWatch?: import("./domain/proof/source-watch.js").ProofSourceWatch;
   /** S20 — effective bind plan for the health surface (absent = legacy body). */
   bindPlan?: { mode: "explicit" | "default"; hosts: string[]; tailscaleDetected: boolean; ignoredRoutingHost?: string };
   rigRepo: RigRepository;
@@ -208,28 +108,7 @@ export interface AppDeps {
   /** OPR.0.4.6.02 S1 — the shared tmux option-defaults applier, exposed to
    *  the seat-handover route so a fresh successor gets launch-only defaults. */
   tmuxOptionDefaults?: TmuxOptionDefaultsApplier;
-  snapshotCapture: SnapshotCapture;
-  snapshotRepo: SnapshotRepository;
-  /** Slice-04 OPR.0.5.0.4: the provider read-model/precheck/switch service. Routes 503 honestly if absent. */
-  providerService?: ProviderService;
-  restoreOrchestrator: RestoreOrchestrator;
-  // OPR.0.4.3.20 FR-4 — for refresh-before-serialize on the manual snapshot route.
-  resumeMetadataRefresher?: import("./domain/resume-metadata-refresher.js").ResumeMetadataRefresher;
-  rigSpecExporter: RigSpecExporter;
-  rigSpecPreflight: RigSpecPreflight;
-  rigInstantiator: RigInstantiator;
-  packageRepo: PackageRepository;
-  installRepo: InstallRepository;
-  installEngine: InstallEngine;
-  installVerifier: InstallVerifier;
-  bootstrapOrchestrator: BootstrapOrchestrator;
-  bootstrapRepo: BootstrapRepository;
-  discoveryCoordinator: DiscoveryCoordinator;
   discoveryRepo: DiscoveryRepository;
-  claimService: ClaimService;
-  selfAttachService?: SelfAttachService;
-  rigExpansionService?: import("./domain/rig-expansion-service.js").RigExpansionService;
-  rigLifecycleService?: RigLifecycleService;
   /**
    * Slice 15 — Seat-activity service (terminal-active primitive). The
    * daemon owns one instance and wires it into PsProjectionService and
@@ -241,18 +120,11 @@ export interface AppDeps {
   seatStructuralActivityService?: import("./domain/seat-structural-activity-service.js").SeatStructuralActivityService;
   /** OPR.0.4.3.19 — periodic liveness identity reconciler (started post-bind). */
   seatIdentityReconciler?: import("./domain/seat-identity-reconciler.js").SeatIdentityReconciler;
-  psProjectionService: PsProjectionService;
-  upRouter: UpCommandRouter;
-  teardownOrchestrator: RigTeardownOrchestrator;
-  podInstantiator: PodRigInstantiator;
-  podBundleSourceResolver: PodBundleSourceResolver | null;
   runtimeAdapters?: Record<string, import("./domain/runtime-adapter.js").RuntimeAdapter>;
   transcriptStore?: TranscriptStore;
+  resumeMetadataRefresher?: import("./domain/resume-metadata-refresher.js").ResumeMetadataRefresher;
   sessionTransport?: SessionTransport;
-  askService?: AskService;
-  wakeResolveService?: WakeResolveService;
   chatRepo?: ChatRepository;
-  streamStore?: StreamStore;
   slowOpRecorder?: SlowOperationInstrumentation;
   requestPhaseObserver?: import("./domain/request-phase-observer.js").RequestPhaseObserver;
   queueRepo?: QueueRepository;
@@ -273,11 +145,6 @@ export interface AppDeps {
   viewProjector?: ViewProjector;
   watchdogJobsRepo?: WatchdogJobsRepository;
   watchdogHistoryLog?: WatchdogHistoryLog;
-  watchdogPolicyEngine?: WatchdogPolicyEngine;
-  watchdogScheduler?: WatchdogScheduler;
-  /** B8 / slice-07 A3 — the model-divergence monitor (effective-vs-pinned, four-channel proclaim). */
-  modelDivergenceMonitor?: import("./domain/model-divergence/model-divergence-monitor.js").ModelDivergenceMonitor;
-  periodicSnapshotScheduler?: import("./domain/periodic-snapshot-scheduler.js").PeriodicSnapshotScheduler;
   workflowRuntime?: WorkflowRuntime;
   /**
    * MVP — the owner of "an attempt ended". A direct launch records a receipt and nothing closed
@@ -300,43 +167,10 @@ export interface AppDeps {
    * the route returns isBuiltIn=false for every spec (graceful — the
    * surface still works, just without the indicator).
    */
-  workflowBuiltinSpecsDir?: string;
-  /** Slice 11 (workflow-spec-folder-discovery) — workspace workflows
-   *  folder absolute path (typically `<workspace.specs_root>/workflows`).
-   *  When set, GET /api/specs/library opportunistically scans this dir
-   *  on each list request and surfaces valid + diagnostic rows. Unset
-   *  → no folder scan (cache-only behavior). */
-  workflowsFolderDir?: string;
-  /** Slice 11 — WorkflowSpecCache instance for the folder scanner to
-   *  read-through valid YAML and writeDiagnostic for invalid YAML.
-   *  Same singleton as workflowRuntime.specCache. */
-  workflowSpecCache?: import("./domain/workflow-spec-cache.js").WorkflowSpecCache;
-  scopeActionLog?: import("./domain/scope/action-log.js").MissionControlActionLog;
-  // Slice Story View v0 — slice indexer + per-tab projector. Both
-  // optional: when slicesRoot is unset, the routes return a clear
-  // "slices_root_not_configured" 503 so the UI can surface a setup hint.
-  sliceIndexer?: import("./domain/slices/slice-indexer.js").SliceIndexer;
-  reviewGatherer?: import("./domain/review/gather.js").ReviewGatherer;
   // OPR.0.4.6.02 C3 — the terminal-provider-ride composer (terminal views).
   terminalService?: import("./domain/terminal/terminal-service.js").TerminalService;
-  sliceDetailProjector?: import("./domain/slices/slice-detail-projector.js").SliceDetailProjector;
   /** User Settings v0 — daemon-side settings store (env > file > default). */
   settingsStore?: import("./domain/user-settings/settings-store.js").SettingsStore;
-  /** Preview Terminal v0 (PL-018) — per-session rate limiter for /preview. */
-  previewRateLimiter?: import("./domain/preview/preview-rate-limiter.js").PreviewRateLimiter<{
-    content: string;
-    lines: number;
-    sessionName: string;
-    capturedAt: string;
-  }>;
-  /** UI Enhancement Pack v0 — file allowlist + browser routes (item 3). */
-  filesAllowlist?: import("./domain/files/path-safety.js").AllowlistRoot[];
-  /** UI Enhancement Pack v0 — atomic write service (item 4). */
-  fileWriteService?: import("./domain/files/file-write-service.js").FileWriteService | null;
-  /** UI Enhancement Pack v0 — workspace PROGRESS.md indexer (item 1B). */
-  progressIndexer?: import("./domain/progress/progress-indexer.js").ProgressIndexer;
-  /** Operator Surface Reconciliation v0 — steering composer (item 1). */
-  steeringComposer?: import("./domain/steering/steering-composer.js").SteeringComposer;
   /**
    * PL-005 Phase B: bearer token (or null for loopback-only mode).
    * Retained routes accept the daemon bearer token alongside their scoped credentials.
@@ -351,49 +185,8 @@ export interface AppDeps {
   selfNameDiscovery?: () => Promise<string[]>;
   /** Test hook: one call per /api browser-boundary decision. */
   browserBoundaryObserver?: BrowserBoundaryOptions["onDecision"];
-  specReviewService?: SpecReviewService;
-  specLibraryService?: SpecLibraryService;
-  /**
-   * Phase 3a slice 3.3 — plugin discovery service (filesystem-scan over
-   * vendored + claude-cache + codex-cache; reads agent.yaml for used-by).
-   * Read-only; no SQL. SC-29 #8 verbatim declaration in routes/plugins.ts.
-   */
-  pluginDiscoveryService?: PluginDiscoveryService;
-  /**
-   * Slice 28 Checkpoint C-3 — skill-library discovery service.
-   * Consolidates workspace + openrig-managed skill sources; resolves
-   * shared-skills via daemon install path (independent of operator's
-   * OPENRIG_FILES_ALLOWLIST). Read-only; no SQL. SC-29 #11.
-   */
-  skillLibraryDiscoveryService?: SkillLibraryDiscoveryService;
-  /** Workflows in Spec Library v0 — active workflow lens persistence. */
-  activeLensStore?: import("./domain/active-lens-store.js").ActiveLensStore;
-  /** Rig Context / Composable Context Injection v0 (PL-014) — context_packs library service. */
-  contextPackLibrary?: import("./domain/context-packs/context-pack-library-service.js").ContextPackLibraryService;
-  /** Fork Primitive + Starter Agent Images v0 (PL-016) — agent_images library service. */
-  agentImageLibrary?: import("./domain/agent-images/agent-image-library-service.js").AgentImageLibraryService;
-  /** Fork Primitive + Starter Agent Images v0 (PL-016) — snapshot capturer. */
-  snapshotCapturer?: import("./domain/agent-images/snapshot-capturer.js").SnapshotCapturer;
-  /** PL-016 evidence-guard spec-roots (lazy supplier — recomputed
-   *  per scan so newly-installed specs get picked up). */
-  agentImageSpecRoots?: () => readonly string[];
-  whoamiService?: WhoamiService;
-  /** W3 single-seat, read-only runtime-policy observer. */
-  permissionDriftObserver?: PermissionDriftReader;
   contextUsageStore?: import("./domain/context-usage-store.js").ContextUsageStore;
-  /** 0.5.10 S04 — one on-demand, read-only health projection shared by consumers. */
-  healthProjection?: import("./domain/health-detectors.js").HealthProjectionService;
-  healthDiagnosis?: HealthDiagnosisService;
-  healthPolicy?: HealthPolicyStore;
-  healthCheckpoints?: HealthCheckpointSource;
   contextMonitor?: { pollOnce(): Promise<void> };
-  /**
-   * OPR.0.4.3.14 — Claude compaction enforcer, exposed to routes for the manual
-   * compaction trigger (POST /api/compaction/trigger). Constructed once in
-   * startup.ts and shared with ContextMonitor (same instance, so manual +
-   * auto share one back-half state machine — no second restore path).
-   */
-  compactionEnforcer?: ClaudeCompactionEnforcer;
   /**
    * GHOST-STAGE (e/Class-B) — the canonical OccupantInvalidator, constructed once in startup and
    * injected so SeatHandoverService.commit()'s re-key call actually FIRES (dev-driver's fold added
@@ -401,21 +194,8 @@ export interface AppDeps {
    */
   occupantInvalidator?: import("./domain/occupant-invalidator.js").OccupantInvalidator;
   agentActivityStore?: AgentActivityStore;
-  seatAttentionReconciler?: import("./domain/seat-attention-reconciler.js").SeatAttentionReconciler;
   activityHookToken?: string;
-  serviceOrchestrator?: import("./domain/service-orchestrator.js").ServiceOrchestrator;
-  composeAdapter?: import("./adapters/compose-services-adapter.js").ComposeServicesAdapter;
   uiDistDir?: string | null;
-  /** V0.3.1 slice 05 kernel-rig-as-default — forward-fix #3 architectural.
-   *  Tracker exposed via GET /api/kernel/status. Optional because tests
-   *  + custom daemon compositions may construct AppDeps without auto-
-   *  booting the kernel; the route returns 503 with a clear message
-   *  when the tracker isn't wired. */
-  kernelBootTracker?: import("./domain/kernel-boot-tracker.js").KernelBootTracker;
-  /** Slice 09 (OPR.0.3.2.9) — operator-context-mode bindings store.
-   *  Optional: when absent, the rig-policy routes return 503. */
-  rigModeStore?: import("./domain/rig-mode/rig-mode-store.js").RigModeStore;
-  operatingPosture?: import("./domain/rig-mode/operating-posture.js").OperatingPostureService;
   /**
    * OPR.0.4.3.21 — daemon event-loop health monitor. Optional: when absent
    * (e.g. direct-construction test harnesses) `/healthz` keeps its exact
@@ -526,50 +306,8 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.rigRepo.db !== deps.sessionRegistry.db) {
     throw new Error("createApp: rigRepo and sessionRegistry must share the same db handle");
   }
-  if (deps.rigRepo.db !== deps.snapshotRepo.db) {
-    throw new Error("createApp: snapshotRepo must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.snapshotCapture.db) {
-    throw new Error("createApp: snapshotCapture must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.restoreOrchestrator.db) {
-    throw new Error("createApp: restoreOrchestrator must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.rigSpecExporter.db) {
-    throw new Error("createApp: rigSpecExporter must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.rigSpecPreflight.db) {
-    throw new Error("createApp: rigSpecPreflight must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.rigInstantiator.db) {
-    throw new Error("createApp: rigInstantiator must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.packageRepo.db) {
-    throw new Error("createApp: packageRepo must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.installRepo.db) {
-    throw new Error("createApp: installRepo must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.bootstrapRepo.db) {
-    throw new Error("createApp: bootstrapRepo must share the same db handle");
-  }
   if (deps.rigRepo.db !== deps.discoveryRepo.db) {
     throw new Error("createApp: discoveryRepo must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.claimService.db) {
-    throw new Error("createApp: claimService must share the same db handle");
-  }
-  if (deps.selfAttachService && deps.rigRepo.db !== deps.selfAttachService.db) {
-    throw new Error("createApp: selfAttachService must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.psProjectionService.db) {
-    throw new Error("createApp: psProjectionService must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.teardownOrchestrator.db) {
-    throw new Error("createApp: teardownOrchestrator must share the same db handle");
-  }
-  if (deps.rigRepo.db !== deps.podInstantiator.db) {
-    throw new Error("createApp: podInstantiator must share the same db handle");
   }
 
   const pairedOwners = daemonModeOf(deps.rigRepo.db) === "managed";
@@ -606,9 +344,6 @@ export function createApp(deps: AppDeps): Hono {
   // A malformed request body is a 400, not the default 500.
   app.use("*", trackJsonBodyParseErrors);
   app.onError(jsonBodyErrorHandler);
-  const permissionDriftObserver = deps.permissionDriftObserver
-    ?? new PermissionDriftObserver({ db: deps.rigRepo.db });
-
   // Inject dependencies into context for all routes
   // One mailbox owner per daemon, admitted only by the daemon's own seat evidence (KTD11).
   if (deps.mailboxDelivery && deps.nativeChannelState) throw new Error("A supplied mailbox owner already fixes its channel reader");
@@ -634,43 +369,12 @@ export function createApp(deps: AppDeps): Hono {
     c.set("tmuxOptionDefaults" as never, deps.tmuxOptionDefaults);
     c.set("sessionEnv" as never, deps.sessionEnv);
     c.set("runtimeSessionEnv" as never, deps.runtimeSessionEnv);
-    c.set(
-      "nodeInventoryFn" as never,
-      (rigId: string) => getNodeInventory(deps.rigRepo.db, rigId),
-    );
-    c.set("snapshotCapture" as never, deps.snapshotCapture);
-    c.set("snapshotRepo" as never, deps.snapshotRepo);
-    c.set("providerService" as never, deps.providerService);
-    c.set("restoreOrchestrator" as never, deps.restoreOrchestrator);
-    c.set("resumeMetadataRefresher" as never, deps.resumeMetadataRefresher);
-    c.set("rigSpecExporter" as never, deps.rigSpecExporter);
-    c.set("rigSpecPreflight" as never, deps.rigSpecPreflight);
-    c.set("rigInstantiator" as never, deps.rigInstantiator);
-    c.set("packageRepo" as never, deps.packageRepo);
-    c.set("installRepo" as never, deps.installRepo);
-    c.set("installEngine" as never, deps.installEngine);
-    c.set("installVerifier" as never, deps.installVerifier);
-    c.set("bootstrapOrchestrator" as never, deps.bootstrapOrchestrator);
-    c.set("bootstrapRepo" as never, deps.bootstrapRepo);
-    c.set("discoveryCoordinator" as never, deps.discoveryCoordinator);
     c.set("discoveryRepo" as never, deps.discoveryRepo);
-    c.set("claimService" as never, deps.claimService);
-    c.set("selfAttachService" as never, deps.selfAttachService);
-    c.set("rigExpansionService" as never, deps.rigExpansionService);
-    c.set("rigLifecycleService" as never, deps.rigLifecycleService);
-    c.set("psProjectionService" as never, deps.psProjectionService);
-    c.set("upRouter" as never, deps.upRouter);
-    c.set("teardownOrchestrator" as never, deps.teardownOrchestrator);
-    c.set("podInstantiator" as never, deps.podInstantiator);
-    c.set("podBundleSourceResolver" as never, deps.podBundleSourceResolver);
     c.set("runtimeAdapters" as never, deps.runtimeAdapters ?? {});
     c.set("transcriptStore" as never, deps.transcriptStore);
     c.set("sessionTransport" as never, deps.sessionTransport);
-    c.set("askService" as never, deps.askService);
-    c.set("wakeResolveService" as never, deps.wakeResolveService);
     c.set("chatRepo" as never, deps.chatRepo);
     c.set("mailboxDelivery" as never, mailboxDelivery);
-    c.set("streamStore" as never, deps.streamStore);
     c.set("queueRepo" as never, deps.queueRepo);
     c.set("inboxHandler" as never, deps.inboxHandler);
     c.set("outboxHandler" as never, deps.outboxHandler);
@@ -682,55 +386,19 @@ export function createApp(deps: AppDeps): Hono {
     c.set("viewProjector" as never, deps.viewProjector);
     c.set("watchdogJobsRepo" as never, deps.watchdogJobsRepo);
     c.set("watchdogHistoryLog" as never, deps.watchdogHistoryLog);
-    c.set("watchdogPolicyEngine" as never, deps.watchdogPolicyEngine);
-    c.set("watchdogScheduler" as never, deps.watchdogScheduler);
     c.set("workflowRuntime" as never, deps.workflowRuntime);
-    c.set("workflowBuiltinSpecsDir" as never, deps.workflowBuiltinSpecsDir);
-    c.set("workflowsFolderDir" as never, deps.workflowsFolderDir);
-    c.set("workflowSpecCache" as never, deps.workflowSpecCache);
-    c.set("scopeActionLog" as never, deps.scopeActionLog);
-    c.set("sliceIndexer" as never, deps.sliceIndexer);
-    c.set("proofSourceWatch" as never, deps.proofSourceWatch);
-    c.set("sliceDetailProjector" as never, deps.sliceDetailProjector);
-    c.set("reviewGatherer" as never, deps.reviewGatherer);
     c.set("terminalService" as never, deps.terminalService);
-    c.set("filesAllowlist" as never, deps.filesAllowlist);
     c.set("settingsStore" as never, deps.settingsStore);
-    c.set("previewRateLimiter" as never, deps.previewRateLimiter);
-    c.set("fileWriteService" as never, deps.fileWriteService);
-    c.set("progressIndexer" as never, deps.progressIndexer);
-    c.set("steeringComposer" as never, deps.steeringComposer);
-    c.set("specReviewService" as never, deps.specReviewService);
-    c.set("specLibraryService" as never, deps.specLibraryService);
-    c.set("pluginDiscoveryService" as never, deps.pluginDiscoveryService);
-    c.set("skillLibraryDiscoveryService" as never, deps.skillLibraryDiscoveryService);
-    c.set("activeLensStore" as never, deps.activeLensStore);
-    c.set("contextPackLibrary" as never, deps.contextPackLibrary);
-    c.set("agentImageLibrary" as never, deps.agentImageLibrary);
-    c.set("snapshotCapturer" as never, deps.snapshotCapturer);
-    c.set("whoamiService" as never, deps.whoamiService);
-    c.set("permissionDriftObserver" as never, permissionDriftObserver);
     c.set("contextUsageStore" as never, deps.contextUsageStore);
-    c.set("healthProjection" as never, deps.healthProjection);
-    c.set("healthDiagnosis" as never, deps.healthDiagnosis);
-    c.set("healthPolicy" as never, deps.healthPolicy);
-    c.set("healthCheckpoints" as never, deps.healthCheckpoints);
     c.set("contextMonitor" as never, deps.contextMonitor);
-    c.set("compactionEnforcer" as never, deps.compactionEnforcer);
     c.set("occupantInvalidator" as never, deps.occupantInvalidator);
     c.set("agentActivityStore" as never, deps.agentActivityStore);
-    c.set("seatAttentionReconciler" as never, deps.seatAttentionReconciler);
     // Slice 15 — wire seatActivityService into request context so the
     // /api/rigs/:id/nodes route can enrich entries with terminalActive +
     // hasAssignedWork via attachTerminalActivityAndWork.
     c.set("seatActivityService" as never, deps.seatActivityService);
     c.set("seatStructuralActivityService" as never, deps.seatStructuralActivityService);
     c.set("activityHookToken" as never, deps.activityHookToken);
-    c.set("serviceOrchestrator" as never, deps.serviceOrchestrator);
-    c.set("composeAdapter" as never, deps.composeAdapter);
-    c.set("kernelBootTracker" as never, deps.kernelBootTracker);
-    c.set("rigModeStore" as never, deps.rigModeStore);
-    c.set("operatingPosture" as never, deps.operatingPosture);
     c.set("db" as never, deps.rigRepo.db);
     c.set("terminalBearerToken" as never, deps.terminalBearerToken ?? null);
     await next();
@@ -987,34 +655,6 @@ export function createApp(deps: AppDeps): Hono {
     });
   });
 
-  app.route("/api/rigs", rigsRoutes);
-  app.route("/api/rigs/:rigId/sessions", sessionsRoutes);
-  app.route("/api/rigs/:rigId/nodes", nodesRoutes);
-  app.route("/api/sessions", sessionAdminRoutes);
-  app.route("/api/adapters", adaptersRoutes);
-  app.route("/api/events", eventsRoute);
-  app.route("/api/rigs/:rigId/snapshots", snapshotsRoutes);
-  app.route("/api/rigs/:rigId/restore", restoreRoutes);
-  app.route("/api/crash-cart", crashCartRoutes);
-  app.route("/api/rigs/import", rigspecImportRoutes);
-  app.get("/api/rigs/:rigId/spec", handleExportYaml);
-  app.get("/api/rigs/:rigId/spec.json", handleExportJson);
-  app.route("/api/packages", packagesRoutes);
-  app.route("/api/agents", agentsRoutes);
-  app.route("/api/bootstrap", bootstrapRoutes);
-  app.route("/api/discovery", discoveryRoutes);
-  app.route("/api/bundles", bundleRoutes);
-  app.route("/api/ps", psRoutes);
-  app.route("/api/up", upRoutes);
-  app.route("/api/info", infoRoutes());
-  app.route("/api/down", downRoutes);
-  app.route("/api/kernel", kernelStatusRoutes);
-  app.route("/api/startup", startupRoutes);
-  app.route("/api/transcripts", transcriptRoutes());
-  app.route("/api/transport", transportRoutes({ bearerToken: deps.terminalBearerToken ?? null }));
-  // OPR.0.4.3.14 — manual compaction trigger (same terminal-bearer posture as
-  // transport, since it drives a send into the target seat).
-  app.route("/api/compaction", compactionRoutes({ bearerToken: deps.terminalBearerToken ?? null }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let injectWebSocket: (server: any) => void = () => {};
   // The terminal WebSocket only serves the web UI, so it exists only while the web UI is on.
@@ -1033,71 +673,8 @@ export function createApp(deps: AppDeps): Hono {
   } else if (deps.enableNodeWebSocket) {
     registerTerminalAuthOnly(app, { bearerToken: deps.terminalBearerToken ?? null, managed: pairedOwners, credentials: teamOptions.credentials, allowPairedOwner: pairedOwners });
   }
-  app.route("/api/activity", activityRoutes);
-  app.route("/api/ask", askRoutes);
-  app.route("/api/wake-resolve", wakeResolveRoutes);
-  app.route("/api/specs/review", specReviewRoutes());
-  app.route("/api/specs/library", specLibraryRoutes());
-  app.route("/api/plugins", pluginsRoutes());
-  // Slice 28 C-3 — skill-library + per-skill file endpoints (SC-29 #11).
-  app.route("/api/skills", skillsRoutes());
-  app.route("/api/config", configRoutes());
-  app.route("/api/context-packs", contextPacksRoutes());
-  app.route("/api/agent-images", agentImagesRoutes({
-    specRoots: deps.agentImageSpecRoots ?? (() => []),
-  }));
-  app.route("/api/whoami", whoamiRoutes());
-  // Slice-04 OPR.0.5.0.4: registered so the endpoints exist and 503 honestly; the providerService
-  // is not set in context until the collection/service seam (C) wires it (until then -> 503).
-  app.route("/api/provider", providerRoutes());
   app.route("/api/seat", seatRoutes);
-  app.route("/api/rigs/:rigId/chat", chatRoutes());
-  app.route("/api/stream", streamRoutes());
-  app.route("/api/queue", queueRoutes());
-  app.route("/api/workspace", workspaceRoutes());
-  app.route("/api/projects", projectsRoutes());
-  app.route("/api/views", viewsRoutes());
-  app.route("/api/watchdog", watchdogRoutes());
-  app.route("/api/workflow", workflowRoutes());
-  // Slice Story View v0 — slice indexer + per-tab payload routes.
-  app.route("/api/slices", slicesRoutes());
-  // Living Notes Packet 2 (OPR.0.4.4.20) — composed-review read contract.
-  app.route("/api/review", reviewRoutes());
-  // OPR.0.4.6.02 C3 — the canonical non-rig-scoped terminal composer + the
-  // rig-scoped thin alias (composes view=rig:<rigId>, delegates to the same
-  // TerminalService; arch R1 / guard b1).
   app.route("/api/terminal", terminalRoutes());
-  app.route("/api/rigs/:rigId/terminal", rigTerminalRoutes);
-  // V0.3.1 slice 12 walk-item 1 — mission scope data layer
-  // (aggregated mission metadata + slices filter; pairs with
-  // useScopeMarkdown for README / PROGRESS content via /api/files/read).
-  app.route("/api/missions", missionsRoutes());
-  // UI Enhancement Pack v0 — files (item 3 + item 4) + progress (item 1B) routes.
-  app.route("/api/files", filesRoutes());
-  app.route("/api/progress", progressRoutes());
-  app.route("/api/scope/audit", scopeAuditRoutes());
-  // SCOPES VIEW (d64d2f5c): the store-direct TUI read.
-  app.route("/api/scopes", scopesRoutes());
-  // 51-08 A3 — usage series + top-N burn over usage_samples (one projection, CLI+HTTP).
-  app.route("/api/telemetry", telemetryRoutes({ db: () => deps.rigRepo.db,
-    source: { hostId: getSelfHostId(), bootEpoch: deps.daemonBootEpoch ?? null } }));
-  // OPR.0.4.4.19 FR-9 — scope approve: frontmatter stamp + audit row.
-  app.route("/api/scope/approve", scopeApproveRoutes());
-  app.route("/api/proof", proofRoutes());
-  // Operator Surface Reconciliation v0 — steering composition + health summary.
-  app.route("/api/steering", steeringRoutes());
-  app.route("/api/health-summary", healthSummaryRoutes());
-  app.route("/api/health", healthRoutes());
-  app.route("/api/attention", attentionRoutes());
-  app.route("/api/health-diagnosis", healthDiagnosisRoutes());
-  app.route("/api/rigs/:rigId/env", envRoutes());
-  app.route("/api/restore-check", restoreCheckRoutes);
-  // Slice 09 (OPR.0.3.2.9) — rig-policy bindings (operator context mode).
-  // Same operator-bearer posture as mission-control; HG-SAFE preserved.
-  app.route(
-    "/api/rig-mode",
-    rigModeRoutes({ bearerToken: deps.legacyBearerToken ?? null }),
-  );
 
   app.all("/api/*", async (c, next) => {
     if (c.req.path === "/api") return next();

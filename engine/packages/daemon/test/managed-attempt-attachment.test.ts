@@ -16,8 +16,8 @@ import { writeFrameworkFixture } from "./helpers/framework-source.js";
 import { appendChatMessage } from "../src/domain/lead-chat.js";
 
 // T047: an admitted assignment reaches the privileged launch with the attempt the producer
-// made for it. Every seat launch — fresh, restore and a rig-instantiated member — passes
-// through `StartupOrchestrator.startNode`, so the attachment is proven through the daemon's
+// made for it. Every managed seat launch passes through `StartupOrchestrator.startNode`, so
+// the attachment is proven through the daemon's
 // own composition, not a hand-built binding. The adapter is the seam where the production
 // launcher receives the binding; it reports the attempt and whether the mailbox endpoint the
 // launcher would ask for is already registered at that moment. No provider session starts.
@@ -322,7 +322,7 @@ describe("a managed seat launches under the attempt produced for its admitted ta
     expect(attemptId).not.toBe("builder@rig");
   });
 
-  it("attaches again on the restore path, which shares the same launch seam", async () => {
+  it("attaches again when a managed seat resumes, which shares the same launch seam", async () => {
     expect(createTask().status).toBe("accepted");
     await launch();
     await launch(true);
@@ -403,15 +403,6 @@ describe("a managed seat launches under the attempt produced for its admitted ta
       '<workflow-outcome>{"status":"complete","artifacts":["src/result.ts"],"summary":"Completed the resumed implementation."}</workflow-outcome>');
     expect(outcome?.status).toBe("complete");
     expect(governance.workflowOutcomes("run").map(item => item.outcome?.status).sort()).toEqual(["blocked", "complete"]);
-  });
-
-  it("shares the attachment seam with the restore and rig-instantiation paths", () => {
-    // The pod instantiator launches through this same orchestrator instance, and the restore
-    // orchestrator carries the resolver into the orchestrator it constructs for each node.
-    expect((daemon.deps.podInstantiator as unknown as { deps: { startupOrchestrator?: unknown } })
-      .deps.startupOrchestrator).toBe(daemon.deps.startupOrchestrator);
-    expect(typeof (daemon.deps.restoreOrchestrator as unknown as { managedAttempt?: unknown })
-      .managedAttempt).toBe("function");
   });
 
   it("leaves a personal seat with no attempt and no registration", async () => {

@@ -82,57 +82,19 @@ import { rigArchiveSchema } from "../../src/db/migrations/042_rig_archive.js";
 import { resumeProvenanceSchema } from "../../src/db/migrations/043_resume_provenance.js";
 import { resumeVerificationSchema } from "../../src/db/migrations/045_resume_verification.js";
 import { seatIdentityVerdictsSchema } from "../../src/db/migrations/046_seat_identity_verdicts.js";
-import { BootstrapRepository } from "../../src/domain/bootstrap-repository.js";
-import { RuntimeVerifier } from "../../src/domain/runtime-verifier.js";
-import { RequirementsProbeRegistry } from "../../src/domain/requirements-probe.js";
-import { ExternalInstallPlanner } from "../../src/domain/external-install-planner.js";
-import { ExternalInstallExecutor } from "../../src/domain/external-install-executor.js";
-import { PackageInstallService } from "../../src/domain/package-install-service.js";
-import { BootstrapOrchestrator } from "../../src/domain/bootstrap-orchestrator.js";
-import { TmuxDiscoveryScanner } from "../../src/domain/tmux-discovery-scanner.js";
-import { SessionFingerprinter } from "../../src/domain/session-fingerprinter.js";
-import { SessionEnricher } from "../../src/domain/session-enricher.js";
 import { DiscoveryRepository } from "../../src/domain/discovery-repository.js";
-import { PsProjectionService } from "../../src/domain/ps-projection.js";
-import { UpCommandRouter } from "../../src/domain/up-command-router.js";
-import { RigTeardownOrchestrator } from "../../src/domain/rig-teardown.js";
-import { DiscoveryCoordinator } from "../../src/domain/discovery-coordinator.js";
-import { ClaimService } from "../../src/domain/claim-service.js";
-import { SelfAttachService } from "../../src/domain/self-attach-service.js";
-import { RigExpansionService } from "../../src/domain/rig-expansion-service.js";
 import { ContextUsageStore } from "../../src/domain/context-usage-store.js";
-import { HealthProjectionService, LiveContextHealthSource } from "../../src/domain/health-detectors.js";
-import { WhoamiService } from "../../src/domain/whoami-service.js";
 import { TranscriptStore } from "../../src/domain/transcript-store.js";
-import { RigLifecycleService } from "../../src/domain/rig-lifecycle-service.js";
 import { RigRepository } from "../../src/domain/rig-repository.js";
 import { SessionRegistry } from "../../src/domain/session-registry.js";
 import { EventBus } from "../../src/domain/event-bus.js";
 import { QueueRepository } from "../../src/domain/queue-repository.js";
 import { NodeLauncher } from "../../src/domain/node-launcher.js";
-import { SnapshotRepository } from "../../src/domain/snapshot-repository.js";
-import { CheckpointStore } from "../../src/domain/checkpoint-store.js";
-import { SnapshotCapture } from "../../src/domain/snapshot-capture.js";
-import { RestoreOrchestrator } from "../../src/domain/restore-orchestrator.js";
-import { RigSpecExporter } from "../../src/domain/rigspec-exporter.js";
-import { RigSpecPreflight } from "../../src/domain/rigspec-preflight.js";
-import { RigInstantiator, PodRigInstantiator } from "../../src/domain/rigspec-instantiator.js";
-import { PodRepository } from "../../src/domain/pod-repository.js";
 import { StartupOrchestrator } from "../../src/domain/startup-orchestrator.js";
 import type { RuntimeAdapter } from "../../src/domain/runtime-adapter.js";
-import { ClaudeResumeAdapter } from "../../src/adapters/claude-resume.js";
-import { CodexResumeAdapter } from "../../src/adapters/codex-resume.js";
 import type { TmuxAdapter } from "../../src/adapters/tmux.js";
-import type { ExecFn } from "../../src/adapters/tmux.js";
-import { PackageRepository } from "../../src/domain/package-repository.js";
-import { InstallRepository } from "../../src/domain/install-repository.js";
-import { InstallEngine } from "../../src/domain/install-engine.js";
-import { InstallVerifier } from "../../src/domain/install-verifier.js";
-import { PodBundleSourceResolver } from "../../src/domain/bundle-source-resolver.js";
 import { AgentActivityStore } from "../../src/domain/agent-activity-store.js";
-import { SeatAttentionReconciler } from "../../src/domain/seat-attention-reconciler.js";
 import { createApp, createAppWithWebSocket } from "../../src/server.js";
-import fs from "node:fs";
 
 /** Seam B R6: the canonical full-fixture migration list, exported so file-backed
  *  DB-reopen tests migrate IDENTICALLY to createFullTestDb. */
@@ -210,7 +172,7 @@ export function mockTmuxAdapter(): TmuxAdapter {
     killSession: vi.fn(async () => ({ ok: true as const })),
     listSessions: vi.fn(async () => []),
     listWindows: vi.fn(async () => []),
-    listPanes: async () => [],
+    listPanes: vi.fn(async () => []),
     listClients: vi.fn(async () => []),
     switchClient: vi.fn(async () => ({ ok: true as const })),
     hasSession: vi.fn(async () => false),
@@ -240,53 +202,12 @@ export function createTestApp(
     adapters?: Partial<Record<string, RuntimeAdapter>>;
     activityHookToken?: string;
     activityFreshnessMs?: number;
-    /** 5b82324b — inject a structural activity cache so route tests can prove the default /nodes ACTIVITY consumes it. */
     seatStructuralActivityService?: import("../../src/domain/seat-structural-activity-service.js").SeatStructuralActivityService;
-    // OPR.0.4.3.21 — opt-in event-loop health instrumentation for the health/
-    // stress proofs. Omitted by default so every existing test keeps the exact
-    // legacy `/healthz` `{ status: "ok" }` body.
     eventLoopMonitor?: import("../../src/domain/event-loop-monitor.js").EventLoopMonitor;
     routeTimingRecorder?: import("../../src/domain/route-timing-recorder.js").RouteTimingRecorder;
-    permissionDriftObserver?: {
-      diagnose(nodeId: string): import("../../src/domain/permission-drift.js").PermissionDriftDiagnostic | null;
-    };
-    listProcesses?: () => Promise<Array<{ pid: number; ppid: number; command: string }>>;
-    /**
-     * Agent Starter v1 vertical M2: optional real-fs upRouter for tests
-     * that POST /api/up with a YAML spec on disk. Default behavior
-     * (always-false fsOps) preserved when this is omitted, so existing
-     * rig-name-path tests are not affected.
-     */
-    upRouterFsOps?: {
-      exists: (p: string) => boolean;
-      readFile: (p: string) => string;
-      readHead: (p: string, n: number) => Buffer;
-    };
-    /**
-     * Agent Starter v1 vertical M2 R2: optional fsOps for the
-     * PodRigInstantiator used by /api/up apply-mode tests that need
-     * real agent.yaml resolution. Default (always-false) preserved.
-     */
-    podInstantiatorFsOps?: {
-      exists: (p: string) => boolean;
-      readFile: (p: string) => string;
-    };
-    /** Managed Claude activity-hook delivery asset paths, forwarded to the PodRigInstantiator
-     *  (defaults to daemon-shipped assets). Tests inject fixtures to exercise the nonfatal
-     *  delivery-gap warning through the real /api/up route. */
-    claudeActivityAssets?: { relayPath?: string; manifestPath?: string };
-    /** Wire the ready runtime adapters into the routes' `runtimeAdapters`, as startup does, so a
-     *  route launch can start harnesses. Off by default: existing tests keep no route adapters. */
-    wireRuntimeAdapters?: boolean;
-    /** Extra or overriding createApp deps (browser-boundary route tests inject inert spies). */
     appDeps?: Partial<import("../../src/server.js").AppDeps>;
-    /** Build through createAppWithWebSocket (production upgrade path) and return injectWebSocket. */
     withWebSocket?: boolean;
-    /**
-     * Agent Starter v1 vertical M2 R2: optionally expose the in-test
-     * StartupOrchestrator + PodRigInstantiator so callers can spy on
-     * `startNode` / inspect node_startup_context end-to-end.
-     */
+    wireRuntimeAdapters?: boolean;
   },
 ) {
   const rigRepo = new RigRepository(db);
@@ -296,177 +217,57 @@ export function createTestApp(
   const tmux = opts?.tmux ?? mockTmuxAdapter();
   const transcriptStore = new TranscriptStore("/tmp/openrig-test-transcripts");
   const nodeLauncher = new NodeLauncher({ db, rigRepo, sessionRegistry, eventBus, tmuxAdapter: tmux });
-  const snapshotRepo = new SnapshotRepository(db);
-  const checkpointStore = new CheckpointStore(db);
-  const snapshotCapture = new SnapshotCapture({ db, rigRepo, sessionRegistry, eventBus, snapshotRepo, checkpointStore });
-  const claudeResume = new ClaudeResumeAdapter(tmux);
-  const codexResume = new CodexResumeAdapter(tmux);
-  const restoreOrchestrator = new RestoreOrchestrator({
-    db, rigRepo, sessionRegistry, eventBus, snapshotRepo, snapshotCapture,
-    checkpointStore, nodeLauncher, tmuxAdapter: tmux, claudeResume, codexResume,
-    ...(opts?.listProcesses ? { listProcesses: opts.listProcesses } : {}),
-  });
-  const podRepo = new PodRepository(db);
-  const rigSpecExporter = new RigSpecExporter({ rigRepo, sessionRegistry, podRepo });
-  const exec: ExecFn = async () => "";
-  const rigSpecPreflight = new RigSpecPreflight({ rigRepo, tmuxAdapter: tmux, exec });
-  const rigInstantiator = new RigInstantiator({ db, rigRepo, sessionRegistry, eventBus, nodeLauncher, preflight: rigSpecPreflight });
-
-  // Phase 4: Package install services
-  const packageRepo = new PackageRepository(db);
-  const installRepo = new InstallRepository(db);
-  const realEngineFsOps = {
-    readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-    writeFile: (p: string, content: string) => fs.writeFileSync(p, content, "utf-8"),
-    exists: (p: string) => fs.existsSync(p),
-    mkdirp: (p: string) => fs.mkdirSync(p, { recursive: true }),
-    copyFile: (src: string, dest: string) => fs.copyFileSync(src, dest),
-    deleteFile: (p: string) => fs.unlinkSync(p),
-  };
-  const installEngine = new InstallEngine(installRepo, realEngineFsOps);
-  const realVerifierFsOps = {
-    readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-    exists: (p: string) => fs.existsSync(p),
-  };
-  const installVerifier = new InstallVerifier(installRepo, packageRepo, realVerifierFsOps);
-
-  // Phase 5: Bootstrap services
-  const bootstrapRepo = new BootstrapRepository(db);
-  const runtimeVerifier = new RuntimeVerifier({ exec, db });
-  const probeRegistry = new RequirementsProbeRegistry(exec);
-  const externalInstallPlanner = new ExternalInstallPlanner();
-  const externalInstallExecutor = new ExternalInstallExecutor({ exec, db });
-  const packageInstallService = new PackageInstallService({ packageRepo, installRepo, installEngine, installVerifier });
+  const discoveryRepo = new DiscoveryRepository(db);
   const startupOrchestrator = new StartupOrchestrator({ db, sessionRegistry, eventBus, tmuxAdapter: tmux });
+  const contextUsageStore = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
   const adapters: Record<string, RuntimeAdapter> = {
     terminal: readyRuntimeAdapter("terminal"),
     "claude-code": readyRuntimeAdapter("claude-code"),
     codex: readyRuntimeAdapter("codex"),
     ...opts?.adapters,
   };
-  const podInstantiator = new PodRigInstantiator({
-    db, rigRepo, podRepo, sessionRegistry, eventBus, nodeLauncher,
-    tmuxAdapter: tmux,
-    startupOrchestrator,
-    fsOps: opts?.podInstantiatorFsOps ?? { readFile: () => "", exists: () => false },
-    claudeActivityAssets: opts?.claudeActivityAssets,
-    adapters,
-  });
-
-  const bootstrapOrchestrator = new BootstrapOrchestrator({
-    db, bootstrapRepo, runtimeVerifier, probeRegistry,
-    installPlanner: externalInstallPlanner, installExecutor: externalInstallExecutor,
-    packageInstallService, rigInstantiator, fsOps: {
-      readFile: (p: string) => fs.readFileSync(p, "utf-8"),
-      exists: (p: string) => fs.existsSync(p),
-      listFiles: () => [],
-    },
-    bundleSourceResolver: null,
-    podInstantiator,
-    podBundleSourceResolver: new PodBundleSourceResolver(),
-  });
-
-  // Discovery services
-  const tmuxScanner = new TmuxDiscoveryScanner({ tmuxAdapter: tmux });
-  const fingerprinter = new SessionFingerprinter({ tmuxAdapter: tmux, fsExists: () => false });
-  const enricher = new SessionEnricher({ fsExists: () => false, fsReaddir: () => [] });
-  const discoveryRepo = new DiscoveryRepository(db);
-  const discoveryCoordinator = new DiscoveryCoordinator({
-    scanner: tmuxScanner, fingerprinter, enricher, discoveryRepo, sessionRegistry, eventBus,
-  });
-  const claimService = new ClaimService({ db, rigRepo, sessionRegistry, discoveryRepo, eventBus, tmuxAdapter: tmux, transcriptStore });
-  const selfAttachService = new SelfAttachService({ db, rigRepo, podRepo, sessionRegistry, eventBus, tmuxAdapter: tmux, transcriptStore });
-  const rigExpansionService = new RigExpansionService({ db, rigRepo, eventBus, nodeLauncher, podInstantiator, sessionRegistry });
-  const rigLifecycleService = new RigLifecycleService({ db, rigRepo, sessionRegistry, discoveryRepo, eventBus, queueRepo, tmuxAdapter: tmux });
-  const contextUsageStore = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
-  const healthProjection = new HealthProjectionService(new LiveContextHealthSource({
-    db,
-    rigRepo,
-    sessionRegistry,
-    contextUsageStore,
-  }));
-  const whoamiService = new WhoamiService({ db, rigRepo, sessionRegistry, transcriptStore, contextUsageStore });
   const agentActivityStore = new AgentActivityStore({
     db,
     eventBus,
     freshnessMs: opts?.activityFreshnessMs,
-    // W2a-1 — mirror the production producer wiring so integration tests exercise generation-honesty.
-    // Fixtures mint occupant tenures at registerSession, so same-tenure reads stay fresh; a test that
-    // reads across a minted new generation (or with no tenure) sees the honest UNKNOWN.
-    resolveOccupantGeneration: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.generationUuid ?? null,
-    isRegisteredOccupantGeneration: (nodeId, generation) =>
-      sessionRegistry.isOccupantGenerationRegistered(nodeId, generation),
+    resolveOccupantGeneration: nodeId => sessionRegistry.currentOccupantTenure(nodeId)?.generationUuid ?? null,
+    isRegisteredOccupantGeneration: (nodeId, generation) => sessionRegistry.isOccupantGenerationRegistered(nodeId, generation),
   });
-  const seatAttentionReconciler = new SeatAttentionReconciler({
+  const testAppDeps: Record<string, unknown> = {
+    rigRepo,
     sessionRegistry,
     eventBus,
-    agentActivityStore,
-    db,
-    tmux,
-    reconcileRestoreOutcome: (rigId, nodeId) => restoreOrchestrator.reconcileNodeRuntimeTruth(rigId, nodeId),
-  });
-
-  const podBundleSourceResolver = new PodBundleSourceResolver();
-
-  const upRouterFs = opts?.upRouterFsOps ?? {
-    exists: (_p: string) => false,
-    readFile: (_p: string) => "",
-    readHead: (_p: string, _n: number) => Buffer.alloc(0),
-  };
-  const upRouter = new UpCommandRouter({ fsOps: upRouterFs });
-
-  const testAppDeps = {
-    rigRepo, sessionRegistry, eventBus, nodeLauncher, startupOrchestrator, tmuxAdapter: tmux,
-    snapshotCapture, snapshotRepo, restoreOrchestrator,
-    rigSpecExporter, rigSpecPreflight, rigInstantiator,
-    packageRepo, installRepo, installEngine, installVerifier,
-    bootstrapOrchestrator, bootstrapRepo,
-    discoveryCoordinator, discoveryRepo, claimService, selfAttachService, rigExpansionService,
-    rigLifecycleService,
-    psProjectionService: new PsProjectionService({ db }),
-    upRouter,
-    teardownOrchestrator: new RigTeardownOrchestrator({ db, rigRepo, sessionRegistry, tmuxAdapter: tmux, snapshotCapture, eventBus }),
-    podInstantiator,
-    podBundleSourceResolver,
+    nodeLauncher,
+    startupOrchestrator,
+    tmuxAdapter: tmux,
+    discoveryRepo,
+    queueRepo,
+    transcriptStore,
     contextUsageStore,
-    healthProjection,
-    whoamiService,
     agentActivityStore,
-    seatAttentionReconciler,
-    seatStructuralActivityService: opts?.seatStructuralActivityService,
     activityHookToken: opts?.activityHookToken,
+    seatStructuralActivityService: opts?.seatStructuralActivityService,
     eventLoopMonitor: opts?.eventLoopMonitor,
     routeTimingRecorder: opts?.routeTimingRecorder,
-    // Hermeticity (hotfix qitem-20260822230440-da0d2ad6 FIX 2): default to a
-    // null observer — leaving this undefined makes createApp construct the
-    // PRODUCTION PermissionDriftObserver, whose constructor warms the claude
-    // permission-mode cache via execFile("claude","--help") (162 real launches
-    // across the suite). Tests for the observer itself construct it directly
-    // and pass it here explicitly.
-    permissionDriftObserver: opts?.permissionDriftObserver ?? { diagnose: () => null },
-    // Caller-supplied adapters always reach route handlers; the always-ready
-    // instantiator stubs only when explicitly wired, since they would make
-    // restore routes report resumes.
     runtimeAdapters: opts?.wireRuntimeAdapters ? adapters : opts?.adapters as Record<string, RuntimeAdapter> | undefined,
     ...opts?.appDeps,
   };
-  // withWebSocket: the production createAppWithWebSocket path, returning its injectWebSocket.
   const built = opts?.withWebSocket
     ? createAppWithWebSocket(testAppDeps as never)
     : { app: createApp(testAppDeps as never), injectWebSocket: undefined };
-  const app = built.app;
   return {
-    app, injectWebSocket: built.injectWebSocket, rigRepo, sessionRegistry, eventBus, nodeLauncher, snapshotRepo,
-    snapshotCapture, checkpointStore, restoreOrchestrator,
-    rigSpecExporter, rigSpecPreflight, rigInstantiator,
-    packageRepo, installRepo, installEngine, installVerifier,
-    bootstrapOrchestrator, bootstrapRepo,
-    discoveryCoordinator, discoveryRepo, claimService, selfAttachService, rigExpansionService, tmuxScanner,
-    rigLifecycleService,
-    psProjectionService: new PsProjectionService({ db }),
-    upRouter,
-    teardownOrchestrator: new RigTeardownOrchestrator({ db, rigRepo, sessionRegistry, tmuxAdapter: tmux, snapshotCapture, eventBus }),
-    podInstantiator, podBundleSourceResolver, db, tmuxAdapter: tmux,
+    app: built.app,
+    injectWebSocket: built.injectWebSocket,
+    db,
+    rigRepo,
+    sessionRegistry,
+    eventBus,
+    nodeLauncher,
+    discoveryRepo,
+    queueRepo,
+    tmuxAdapter: tmux,
+    transcriptStore,
+    contextUsageStore,
     agentActivityStore,
     startupOrchestrator,
   };

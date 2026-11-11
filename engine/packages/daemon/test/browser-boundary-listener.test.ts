@@ -10,9 +10,6 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import WebSocket from "ws";
 import { browserBoundary } from "../src/middleware/browser-boundary.js";
 import { terminalAuthMiddleware } from "../src/routes/terminal-ws.js";
-import { createFullTestDb, createTestApp } from "./helpers/test-app.js";
-import { remoteJsonRequest } from "../src/domain/hosts/remote-daemon-http.js";
-import { DaemonClient as CliDaemonClient } from "../../cli/src/client.js";
 
 const SELF = "openrig-vm.taile8a08.ts.net";
 type Server = ReturnType<typeof serve>;
@@ -142,39 +139,5 @@ describe("mirror of the server.ts order on a real listener: boundary, then termi
     await new Promise((r) => setTimeout(r, 50));
     expect(decisions.length - d1).toBe(3);
     expect(opened - o0).toBe(1);
-  });
-});
-
-describe("real request constructors against the real route table on a real listener", () => {
-  let server: Server;
-  let port = 0;
-  beforeAll(async () => {
-    const db = createFullTestDb();
-    const { app } = createTestApp(db);
-    ({ server, port } = await listen(app as unknown as Hono, "127.0.0.1"));
-  });
-  afterAll(async () => { await new Promise<void>((r) => (server as unknown as net.Server).close(() => r())); });
-
-  it("CLI DaemonClient (no Origin) reaches /api/ps by IP and localhost", async () => {
-    for (const base of [`http://127.0.0.1:${port}`, `http://localhost:${port}`]) {
-      const res = await new CliDaemonClient(base).get<unknown[]>("/api/ps?includeArchived=true");
-      expect(res.status, base).toBe(200);
-    }
-  });
-
-  it("records whether Node fetch honours an explicit Host header (needed to present an unlisted name without DNS)", async () => {
-    const res = await new CliDaemonClient(`http://127.0.0.1:${port}`, { headers: { Host: "unlisted.example" } }).get<{ code?: string; error?: string }>("/api/ps");
-    console.log(`CLI-HOST-OVERRIDE status=${res.status} code=${(res.data as { code?: string })?.code ?? "-"}`);
-    if (res.status === 403) {
-      expect(res.data.code).toBe("untrusted_host");
-      expect(res.data.error).toContain("OPENRIG_ALLOWED_HOSTS");
-    }
-  });
-
-  it("daemon-to-daemon remoteJsonRequest (no Origin) reaches the daemon by IP and localhost", async () => {
-    for (const url of [`http://127.0.0.1:${port}`, `http://localhost:${port}`]) {
-      const r = await remoteJsonRequest({ id: "peer", transport: "http", url }, "/api/ps", { method: "GET", timeoutMs: 3000, env: {} });
-      expect(r.ok, url).toBe(true);
-    }
   });
 });

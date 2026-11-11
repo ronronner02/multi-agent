@@ -113,17 +113,6 @@ describe("default onboarding pack", () => {
     expect(packText()).toMatch(expected);
   });
 
-  it("wires the typed setting into the production instantiator at launch time", () => {
-    const startup = readFileSync(resolve(DAEMON_ROOT, "src/startup.ts"), "utf8");
-    expect(startup).toContain('resolveOne("onboarding.default_pack.enabled")');
-    expect(startup).toContain("onboardingEnabledResolver");
-    expect(startup).not.toContain("OPENRIG_ONBOARDING_DEFAULT_PACK_ENABLED ===");
-
-    const instantiator = readFileSync(resolve(DAEMON_ROOT, "src/domain/rigspec-instantiator.ts"), "utf8");
-    expect(instantiator).toContain("assets/onboarding/01-world-and-purpose.md");
-    expect(instantiator).toContain("assets/onboarding/02-self-and-competent-action.md");
-  });
-
   it("keeps onboarding changes inside the declared product territory", () => {
     const packageJson = readFileSync(resolve(REPO_ROOT, "package.json"), "utf8");
     expect(packageJson).toContain('"packages/daemon"');

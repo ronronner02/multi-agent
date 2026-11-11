@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 const ulid = monotonicFactory();
 import type { Session, Binding } from "./types.js";
 import { validateSessionName } from "./session-name.js";
-import { formatWatchdogRegistrationError } from "./watchdog-auto-registration.js";
 import type { ClaudeLaunchedProcess, ClaudeResumeRotation } from "./native-process-lineage.js";
 
 // GHOST-STAGE atom-B (P12 3548d8eb) — the occupant-generation tenure.
@@ -106,23 +105,10 @@ export interface LatestLiveSession {
   cwd: string | null;
 }
 
-export interface WatchdogRegistrationObserver {
-  ensure(nodeId: string, sessionName: string): unknown;
-  assertCoverage(nodeId: string, sessionName: string): unknown;
-  isEligibleSessionName?(sessionName: string): boolean;
-  reconcileHandover?(nodeId: string, sessionName: string): unknown;
-}
-
 export class SessionRegistry {
   readonly db: Database.Database;
-  private watchdogRegistrationObserver?: WatchdogRegistrationObserver;
-  constructor(db: Database.Database, watchdogRegistrationObserver?: WatchdogRegistrationObserver) {
+  constructor(db: Database.Database) {
     this.db = db;
-    this.watchdogRegistrationObserver = watchdogRegistrationObserver;
-  }
-
-  setWatchdogRegistrationObserver(observer: WatchdogRegistrationObserver): void {
-    this.watchdogRegistrationObserver = observer;
   }
 
   registerSession(
@@ -144,7 +130,6 @@ export class SessionRegistry {
       )
       .run(id, nodeId, sessionName);
     this.mintOccupantTenureBestEffort(nodeId, kind, reservedGeneration); // atom-B: mint this occupant generation
-    this.observeWatchdogRegistration(nodeId, sessionName, kind);
     return this.rowToSession(
       this.db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as SessionRow
     );
@@ -164,7 +149,6 @@ export class SessionRegistry {
       )
       .run(id, nodeId, sessionName);
     this.mintOccupantTenureBestEffort(nodeId, kind, reservedGeneration); // atom-B: mint this occupant generation
-    this.observeWatchdogRegistration(nodeId, sessionName, kind);
 
     return this.rowToSession(
       this.db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as SessionRow
@@ -206,42 +190,6 @@ export class SessionRegistry {
     }
   }
   private static tenureMintWarned = false;
-
-  private observeWatchdogRegistration(nodeId: string, sessionName: string, kind: OccupantKind): void {
-    const observer = this.watchdogRegistrationObserver;
-    if (!observer) return;
-    if (observer.isEligibleSessionName?.(sessionName) === false) {
-      if (kind === "handover" && observer.reconcileHandover) {
-        this.runWatchdogEnsure(nodeId, sessionName, () => observer.reconcileHandover!(nodeId, sessionName));
-      }
-      return;
-    }
-    this.runWatchdogEnsure(nodeId, sessionName, () => observer.ensure(nodeId, sessionName));
-    try {
-      observer.assertCoverage(nodeId, sessionName);
-    } catch (error) {
-      console.warn(
-        `[session-registry] watchdog coverage FAILED for node_id="${nodeId}" ` +
-        `session="${sessionName}": ${formatWatchdogRegistrationError(error)}`,
-      );
-    }
-  }
-
-  private runWatchdogEnsure(nodeId: string, sessionName: string, ensure: () => unknown): void {
-    try {
-      ensure();
-    } catch (error) {
-      if (!SessionRegistry.watchdogEnsureWarned) {
-        SessionRegistry.watchdogEnsureWarned = true;
-        console.warn(
-          `[session-registry] watchdog auto-registration FAILED for node_id="${nodeId}" ` +
-          `session="${sessionName}": ${formatWatchdogRegistrationError(error)} ` +
-          `(further ensure failures suppressed this process)`,
-        );
-      }
-    }
-  }
-  private static watchdogEnsureWarned = false;
 
   /** Reserve the generation that a managed process will carry before it starts. The capability probe
    * is read-only: a failed/missing ledger yields null and launch continues without fabricating state. */
