@@ -7,6 +7,8 @@ import { readOpenRigEnv, OPENRIG_HOME } from "./openrig-compat.js";
 import { resolveDaemonDbPath } from "./daemon-db-path.js";
 import { createDaemon } from "./startup.js";
 import { removeParentSessionEnv } from "./domain/parent-session-env.js";
+import { resolveClientDependencies } from "./domain/executable-resolver.js";
+import { endRunningWorkerTrees } from "./domain/process-termination.js";
 import { resolveBindPlan } from "./domain/bind-plan.js";
 import { isManagedMode } from "./domain/plan-governance.js";
 import type { TeamControlCredentials } from "./middleware/auth-bearer-token.js";
@@ -370,26 +372,27 @@ export async function startServer(port?: number) {
   }
 
   // Multi-bind: close every serve() instance in parallel.
+  const shutdownPhases: Array<[string, () => unknown]> = [
+    ["timers", () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+    }],
+    ["seat-activity", () => deps.seatActivityService?.stop()],
+    ["seat-structural-activity", () => deps.seatStructuralActivityService?.stop()],
+    ["seat-identity", () => deps.seatIdentityReconciler?.stop()],
+    ["attempt-completion", () => deps.attemptCompletion?.stop()],
+    ["github-login", () => deps.github?.stop()],
+    ["event-loop-monitor", () => eventLoopMonitor.stop()],
+    ["connections", () => Promise.all(servers.map((srv) => closeHttpServer(srv)))],
+    ["recorder", async () => {
+      deps.requestPhaseObserver?.close();
+      if (await drainSlowOpRecorderOnShutdown(deps.slowOpRecorder) !== 0) {
+        throw new Error("slow-operation recorder drain incomplete; records may be lost");
+      }
+    }],
+  ];
   const shutdown = createDaemonShutdown({
     receiptPath: path.join(OPENRIG_HOME, DAEMON_SHUTDOWN_RECEIPT),
-    phases: [
-      ["timers", () => {
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-      }],
-      ["seat-activity", () => deps.seatActivityService?.stop()],
-      ["seat-structural-activity", () => deps.seatStructuralActivityService?.stop()],
-      ["seat-identity", () => deps.seatIdentityReconciler?.stop()],
-      ["attempt-completion", () => deps.attemptCompletion?.stop()],
-      ["github-login", () => deps.github?.stop()],
-      ["event-loop-monitor", () => eventLoopMonitor.stop()],
-      ["connections", () => Promise.all(servers.map((srv) => closeHttpServer(srv)))],
-      ["recorder", async () => {
-        deps.requestPhaseObserver?.close();
-        if (await drainSlowOpRecorderOnShutdown(deps.slowOpRecorder) !== 0) {
-          throw new Error("slow-operation recorder drain incomplete; records may be lost");
-        }
-      }],
-    ],
+    phases: shutdownPhases,
     // A service failure, open connection, or lost recorder drain is never clean.
     markClean: () => deps.daemonLifecycleStore.recordStop(deps.daemonBootEpoch, new Date().toISOString()),
   });
@@ -406,6 +409,27 @@ export async function startServer(port?: number) {
       postMessage: (message: unknown) => void;
     };
   }).parentPort;
+  /**
+   * U12 — ending the workers of a desktop-owned daemon.
+   *
+   * The desktop app owns this daemon's lifetime, so when it asks for a shutdown the agents it
+   * started must not survive it. Each live attempt recorded its own process pair, and the same
+   * tree kill cancellation and boot recovery use ends them: `taskkill /T /F` on Windows, the
+   * process group on POSIX. An identity that cannot be proved is never signalled as if it were
+   * dead; a tree that survives makes this phase fail, so the shutdown receipt does not claim a
+   * clean stop and the next boot reconciles what is left.
+   *
+   * A daemon that was not started by the desktop keeps its workers: the legacy path treats
+   * agents as durable across daemon restarts, and recovery reconciles them on the next boot.
+   */
+  const endWorkerChildren = async (): Promise<void> => {
+    const result = await endRunningWorkerTrees(deps.rigRepo.db);
+    if (result.unresolved > 0) {
+      throw new Error(`${result.unresolved} of ${result.attempted} worker process tree(s) could not be proved stopped`);
+    }
+  };
+  // The phase joins the existing bounded shutdown so its receipt says how it ended.
+  if (parentPort) shutdownPhases.push(["worker-processes", endWorkerChildren]);
   if (parentPort) {
     parentPort.on("message", (message: unknown) => {
       const envelope = message as { data?: unknown };
@@ -416,6 +440,9 @@ export async function startServer(port?: number) {
       // would. Only the parent process can reach this listener, so no HTTP route changes.
       // The code goes back over the port and is never logged or written anywhere.
       if (msg?.type === "mint-pairing") replyToMintPairing(deps.ownerSessions, resolvedOwnerToken, parentPort);
+      // U12 — first-run dependency status. The desktop asks the daemon that will launch the
+      // workers, so the resolved paths it shows are the paths a launch will use.
+      if (msg?.type === "dependencies") replyToDependencies(parentPort);
     });
   }
 
@@ -430,7 +457,7 @@ export function replyToMintPairing(
   ownerToken: string | null,
   port: { postMessage: (message: unknown) => void },
 ): void {
-  const reply = (message: unknown): void => { try { port.postMessage(message); } catch { /* parentPort may be closed */ } };
+  const reply = (message: unknown): void => replyOnParentPort(port, message);
   if (!sessions || !ownerToken) return reply({ type: "pairing-error", error: "owner_session_unavailable" });
   try {
     const { code } = sessions.mint(ownerToken);
@@ -438,6 +465,26 @@ export function replyToMintPairing(
   } catch {
     // Never echo the code or the underlying error: a failed mint is a failed mint.
     reply({ type: "pairing-error", error: "pairing_mint_failed" });
+  }
+}
+
+/** Post one answer on the parent port; a closed port is not an error worth raising. */
+function replyOnParentPort(port: { postMessage: (message: unknown) => void }, message: unknown): void {
+  try { port.postMessage(message); } catch { /* parentPort may be closed */ }
+}
+
+/**
+ * U12 — answer one `dependencies` request over the parent port.
+ *
+ * The answer is U1's resolver output for `claude`, `codex`, `git` and `gh`, unchanged: the
+ * desktop's first-run page shows what this daemon resolved, so its paths are the paths a launch
+ * will use. A resolver failure is reported as a named error, never as an empty "all good" list.
+ */
+export function replyToDependencies(port: { postMessage: (message: unknown) => void }): void {
+  try {
+    replyOnParentPort(port, { type: "dependencies", resolutions: resolveClientDependencies() });
+  } catch (error) {
+    replyOnParentPort(port, { type: "dependencies-error", error: error instanceof Error ? error.message : String(error) });
   }
 }
 

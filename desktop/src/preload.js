@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The isolated bridge for pairing, status, first-run actions and native folder selection.
+ * The isolated bridge for pairing, engine status and native folder selection.
  * The shared page owns its title strip and footer; no Node or filesystem API is exposed.
  */
 const { contextBridge, ipcRenderer } = require('electron');
@@ -28,6 +28,8 @@ ipcRenderer.on('desktop:state', (_event, status) => {
 contextBridge.exposeInMainWorld('multiAgentDesktop', {
   /** The last status the window sent, or null before the first one. */
   status: async () => current ?? ipcRenderer.invoke('desktop:get-state'),
+  /** Whether the engine child is running, and why it stopped when it did. */
+  engineStatus: () => ipcRenderer.invoke('desktop:engine-status'),
   pickFolder: () => ipcRenderer.invoke('desktop:pick-folder'),
   reconnect: () => ipcRenderer.invoke('desktop:reconnect'),
   /** Subscribe to status changes; returns an unsubscribe function. */
@@ -36,6 +38,6 @@ contextBridge.exposeInMainWorld('multiAgentDesktop', {
     ipcRenderer.on('desktop:state', listener);
     return () => ipcRenderer.removeListener('desktop:state', listener);
   },
-  /** Run a first-run action: "retry", "install-wsl" or "clone-repo". */
+  /** Run the first-run action "reconnect-engine". */
   run: action => ipcRenderer.invoke(`desktop:${action}`),
 });

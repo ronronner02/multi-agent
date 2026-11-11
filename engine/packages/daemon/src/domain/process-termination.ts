@@ -238,3 +238,43 @@ export function runningAttemptIdentities(db: { prepare(sql: string): { all(...pa
     return { processId: identity.processId, processStart: identity.processStart };
   });
 }
+
+/**
+ * Every live attempt on this daemon that recorded an identity, across every run.
+ *
+ * A desktop-owned daemon uses this at shutdown: the app is closing, so the workers it started
+ * end with it through the same tree kill cancellation uses. An identity that cannot be parsed
+ * is skipped here rather than throwing, because a shutdown phase must finish.
+ */
+export function allRunningAttemptIdentities(db: { prepare(sql: string): { all(...parameters: string[]): unknown[] } }): ProcessIdentity[] {
+  const rows = db.prepare("SELECT identity_json AS identityJson FROM team_attempts WHERE state = 'running' AND identity_json IS NOT NULL")
+    .all() as Array<{ identityJson: string }>;
+  const identities: ProcessIdentity[] = [];
+  for (const row of rows) {
+    try {
+      const identity = JSON.parse(row.identityJson) as ProcessIdentity;
+      if (Number.isSafeInteger(identity.processId) && typeof identity.processStart === "string") identities.push(identity);
+    } catch { /* an unreadable identity has nothing safe to signal; recovery reconciles it */ }
+  }
+  return identities;
+}
+
+/**
+ * End every live attempt's process tree, through the identity-checked termination above.
+ *
+ * A desktop-owned daemon runs this in its shutdown: the app that started the daemon is closing,
+ * so the agents it started end with it. `stopped` and `not-running` are both proof the tree is
+ * gone; anything else (a survivor, an unproven identity) is counted as unresolved and left for
+ * the boot reconciliation, which is the owner that never claims a stop it did not see.
+ */
+export async function endRunningWorkerTrees(
+  db: { prepare(sql: string): { all(...parameters: string[]): unknown[] } },
+  terminate: (identity: ProcessIdentity) => Promise<TerminationResult> = identity => terminateProcessGroup(identity),
+): Promise<{ attempted: number; stopped: number; unresolved: number }> {
+  const identities = allRunningAttemptIdentities(db);
+  const outcomes = await Promise.allSettled(identities.map(identity => terminate(identity)));
+  const unresolved = outcomes.filter(outcome => outcome.status === "rejected"
+    || (outcome.status === "fulfilled" && outcome.value.outcome !== "stopped"
+      && outcome.value.outcome !== "not-running")).length;
+  return { attempted: identities.length, stopped: identities.length - unresolved, unresolved };
+}
