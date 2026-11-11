@@ -155,8 +155,6 @@ describe("SettingsStore (User Settings v0)", () => {
       "files.allowlist", "progress.scan_roots",
       "ui.preview.refresh_interval_seconds", "ui.preview.max_pins", "ui.preview.default_lines", "ui.timezone",
       "ui.enabled",
-      // OPR.0.4.0.1 — global live-terminal cap.
-      "ui.terminal.max_live_terminals",
       "recovery.auto_drive_provider_prompts",
       "recovery.provider_auth_env_allowlist",
       // V1 attempt-3 Phase 4 — Advisor/Operator placeholders.
@@ -191,8 +189,6 @@ describe("SettingsStore (User Settings v0)", () => {
       "snapshots.periodic.enabled",
       "snapshots.periodic.interval_seconds",
       "snapshots.periodic.retention_keep",
-      // OPR.0.4.6.02 S1 — inner-tmux status-bar launch default (static bool).
-      "terminal.status_bar",
       // Slice 15 (OPR.0.7.0.15) — compact command-output defaults switch.
       "output.compact",
       // Slice 01 (OPR.0.7.0.1) — Codex usage windows switch.
@@ -219,6 +215,7 @@ describe("SettingsStore (User Settings v0)", () => {
       "team.leadClient",
       "team.maxSeats",
       "team.maxConcurrentAgents",
+      "github.proxy",
     ]);
   });
 

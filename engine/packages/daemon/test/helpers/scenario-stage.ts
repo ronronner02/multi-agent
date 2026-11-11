@@ -18,7 +18,7 @@
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { parseStubScript } from "../../src/adapters/stub-script.js";
+import { parseStubScript } from "./stub-script.js";
 
 /** A staged, self-contained topology root with per-seat CWDs authored in place. */
 export interface StagedTopology {

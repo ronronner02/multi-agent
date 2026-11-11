@@ -240,7 +240,6 @@ describe("ConfigStore — extended namespaces (User Settings v0)", () => {
       "snapshots.periodic.interval_seconds",
       "snapshots.periodic.retention_keep",
       // OPR.0.4.6.02 S1 — inner-tmux status-bar launch default (static bool).
-      "terminal.status_bar",
       // Slice 15 (OPR.0.7.0.15) — compact command-output defaults switch.
       "output.compact",
       // Slice 01 (OPR.0.7.0.1) — Codex usage windows switch.

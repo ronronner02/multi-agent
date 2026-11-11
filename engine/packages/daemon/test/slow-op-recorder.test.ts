@@ -10,13 +10,9 @@ import { createDaemon } from "../src/startup.js";
 import { createSlowOpRequestMiddleware } from "../src/domain/slow-op-recorder.js";
 
 const expectedSites = new Map<string, string[]>([
-  ["adapters/codex-resume.ts", ["codex.resume.profile_preflight"]],
-  ["adapters/codex-runtime-adapter.ts", ["codex.runtime.profile_preflight"]],
   // The Codex process-table read moved into the shared lineage module; the site name is kept.
   ["domain/native-process-lineage.ts", ["codex.runtime.list_processes"]],
-  ["domain/resume-metadata-refresher.ts", ["resume_metadata.list_processes"]],
   ["domain/codex-thread-id.ts", ["codex_thread_id.resolve_home"]],
-  ["domain/tmux-option-defaults.ts", ["tmux_options.command_v"]],
 ]);
 
 async function createTestDaemon(
@@ -441,34 +437,4 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
     expect((await app.request("/definitely-missing")).status).toBe(404);
   });
 
-  it("drives the real tmux command-v spawnSync site through a hermetic daemon", async () => {
-    const mod = await loadRecorderModule();
-    expect(mod, "slow-op-recorder production module is missing").not.toBeNull();
-    if (!mod) return;
-
-    const dir = tempDir();
-    const logPath = path.join(dir, "slow-operations.jsonl");
-    const recorder = new mod.SlowOpRecorder({ logPath });
-    const oldNoKernel = process.env.OPENRIG_NO_KERNEL;
-    process.env.OPENRIG_NO_KERNEL = "1";
-    const daemon = await createTestDaemon({
-      dbPath: ":memory:",
-      tmuxExec: async () => "",
-      cmuxExec: async () => "",
-      slowOpRecorder: recorder,
-      tmuxOptionPlatform: "linux",
-    } as never);
-    try {
-      await daemon.deps.tmuxOptionDefaults!.applyToFreshSession("instrumentation-control");
-      await recorder.flush();
-      const records = await readRecords(logPath);
-      expect(records.some((r) => r.site === "tmux_options.command_v" && r.phase === "end")).toBe(true);
-    } finally {
-      daemon.eventLoopMonitor.stop();
-      daemon.db.close();
-      await recorder.close();
-      if (oldNoKernel === undefined) delete process.env.OPENRIG_NO_KERNEL;
-      else process.env.OPENRIG_NO_KERNEL = oldNoKernel;
-    }
-  });
 });

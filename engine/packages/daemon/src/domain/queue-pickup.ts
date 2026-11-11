@@ -34,7 +34,7 @@ export interface PickupReceipt {
  *  (it reads parked, and its wake health is derived separately). */
 const CLOSED_PICKUP_STATES = ["done", "failed", "denied", "canceled", "handed-off"] as const;
 
-/** Threshold, FRESH-READ per call (the terminal.status_bar precedent: a config flip applies
+/** Threshold, FRESH-READ per call (a config flip applies
  *  to the next read, no restart). Fail-open to the default on any resolution error. */
 export function resolvePickupThresholdMinutes(): number {
   try {

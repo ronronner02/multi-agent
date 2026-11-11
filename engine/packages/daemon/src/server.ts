@@ -1,4 +1,3 @@
-import { activityHookRoutes } from "./routes/activity-hooks.js";
 import { requireLocalTarget } from "./middleware/local-target.js";
 import { Hono } from "hono";
 import fs from "node:fs";
@@ -9,22 +8,15 @@ import type { RigRepository } from "./domain/rig-repository.js";
 import type { SessionRegistry } from "./domain/session-registry.js";
 import type { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
 import type { EventBus } from "./domain/event-bus.js";
-import type { NodeLauncher } from "./domain/node-launcher.js";
-import type { TmuxOptionDefaultsApplier } from "./domain/tmux-option-defaults.js";
-import type { TmuxAdapter } from "./adapters/tmux.js";
 import type { DiscoveryRepository } from "./domain/discovery-repository.js";
 import { teamEventsRoutes } from "./routes/events.js";
 import type { TranscriptStore } from "./domain/transcript-store.js";
-import type { SessionTransport } from "./domain/session-transport.js";
 import type { AgentActivityStore } from "./domain/agent-activity-store.js";
 import { jsonBodyErrorHandler, trackJsonBodyParseErrors } from "./middleware/json-body-error.js";
 import { getSelfHostId, getSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
 import type { ChatRepository } from "./domain/chat-repository.js";
 import { MailboxDelivery, createMailboxPromptStateReader, type ManagedNativeChannelEvidence, type NativeChannelStateReader } from "./domain/mailbox-delivery.js";
 import { workspaceBrowseRoutes } from "./routes/workspace.js";
-import { terminalRoutes } from "./routes/terminal.js";
-import { registerTerminalAuthOnly, registerTerminalWs } from "./routes/terminal-ws.js";
-import { createNodeWebSocket } from "@hono/node-ws";
 import { createSlowOpRequestMiddleware, type SlowOperationInstrumentation } from "./domain/slow-op-recorder.js";
 import { QueueRepository } from "./domain/queue-repository.js";
 import type { InboxHandler } from "./domain/inbox-handler.js";
@@ -36,7 +28,6 @@ import type { ViewProjector } from "./domain/view-projector.js";
 import type { WatchdogJobsRepository } from "./domain/watchdog-jobs-repository.js";
 import type { WatchdogHistoryLog } from "./domain/watchdog-history-log.js";
 import type { WorkflowRuntime } from "./domain/workflow-runtime.js";
-import { seatRoutes } from "./routes/seat.js";
 import { createRouteTimingMiddleware } from "./domain/route-timing-recorder.js";
 import { browserBoundary, type BrowserBoundaryOptions } from "./middleware/browser-boundary.js";
 import { teamControlAuthentication, resolvePairedOwnerCookie } from "./middleware/auth-bearer-token.js";
@@ -59,8 +50,6 @@ import { AttemptTelemetry } from "./domain/attempt-telemetry.js";
 import { OwnerSessions } from "./domain/owner-session.js";
 import { ownerSessionRoutes } from "./routes/owner-session.js";
 import { isIP } from "node:net";
-import { TerminalTakeoverManager } from "./domain/terminal-takeover.js";
-import type { OwnerTerminalRelay } from "./terminal/owner-terminal-host.js";
 
 /** KTD22: the only `/api` paths a managed-mode daemon serves. */
 const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
@@ -69,10 +58,6 @@ export interface AppDeps {
   teamControl?: TeamControlOptions;
   github?: GithubCli;
   ownerSessions?: OwnerSessions;
-  /** Owner-account terminal relay; absent means the owner terminal is honestly unavailable. */
-  ownerTerminalHost?: OwnerTerminalRelay;
-  /** Injectable takeover authority for the owner terminal/session relay tests. */
-  terminalTakeover?: TerminalTakeoverManager;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
   attemptTelemetry?: AttemptTelemetry;
@@ -90,7 +75,7 @@ export interface AppDeps {
   /** The managed launch chain injected into both fresh and both resume adapters (managed mode only). */
   managedLaunch?: {
     launcher: import("./adapters/worker-launch.js").WorkerLauncher;
-    channel: ManagedNativeChannelEvidence;
+    channel?: ManagedNativeChannelEvidence;
     /** Per-attempt mailbox endpoints; an unregistered attempt cannot launch. */
     endpoints: Map<string, Pick<import("./adapters/worker-mailbox-bridge.js").WorkerMailboxBridge, "binding" | "endpoint">>;
   };
@@ -102,29 +87,11 @@ export interface AppDeps {
   daemonLifecycleStore: DaemonLifecycleStore;
   daemonBootEpoch: string;
   eventBus: EventBus;
-  nodeLauncher: NodeLauncher;
-  /** Seat-scoped explicit fresh launch composes the same startup owner as rig launch. */
-  startupOrchestrator?: import("./domain/startup-orchestrator.js").StartupOrchestrator;
-  tmuxAdapter: TmuxAdapter;
-  /** OPR.0.4.6.02 S1 — the shared tmux option-defaults applier, exposed to
-   *  the seat-handover route so a fresh successor gets launch-only defaults. */
-  tmuxOptionDefaults?: TmuxOptionDefaultsApplier;
-  discoveryRepo: DiscoveryRepository;
-  /**
-   * Slice 15 — Seat-activity service (terminal-active primitive). The
-   * daemon owns one instance and wires it into PsProjectionService and
-   * the per-node enrichment. Optional so existing test harnesses that
-   * construct AppDeps directly don't need to provide one.
-   */
-  seatActivityService?: import("./domain/seat-activity-service.js").SeatActivityService;
-  /** 5b82324b — the structural pane-activity cache; feeds attachAgentActivity so ACTIVITY is real. */
-  seatStructuralActivityService?: import("./domain/seat-structural-activity-service.js").SeatStructuralActivityService;
-  /** OPR.0.4.3.19 — periodic liveness identity reconciler (started post-bind). */
-  seatIdentityReconciler?: import("./domain/seat-identity-reconciler.js").SeatIdentityReconciler;
+  /** Retained route dependencies are composed by startup; the old seat/terminal launch services are gone. */
+  discoveryRepo?: DiscoveryRepository;
   runtimeAdapters?: Record<string, import("./domain/runtime-adapter.js").RuntimeAdapter>;
+  startupOrchestrator?: import("./domain/startup-orchestrator.js").StartupOrchestrator;
   transcriptStore?: TranscriptStore;
-  resumeMetadataRefresher?: import("./domain/resume-metadata-refresher.js").ResumeMetadataRefresher;
-  sessionTransport?: SessionTransport;
   chatRepo?: ChatRepository;
   slowOpRecorder?: SlowOperationInstrumentation;
   requestPhaseObserver?: import("./domain/request-phase-observer.js").RequestPhaseObserver;
@@ -168,8 +135,6 @@ export interface AppDeps {
    * the route returns isBuiltIn=false for every spec (graceful — the
    * surface still works, just without the indicator).
    */
-  // OPR.0.4.6.02 C3 — the terminal-provider-ride composer (terminal views).
-  terminalService?: import("./domain/terminal/terminal-service.js").TerminalService;
   /** User Settings v0 — daemon-side settings store (env > file > default). */
   settingsStore?: import("./domain/user-settings/settings-store.js").SettingsStore;
   /**
@@ -177,9 +142,7 @@ export interface AppDeps {
    * Retained routes accept the daemon bearer token alongside their scoped credentials.
    */
   legacyBearerToken?: string | null;
-  terminalBearerToken?: string | null;
-  enableNodeWebSocket?: boolean;
-  /** `ui.enabled`: serve the web UI pages and its terminal WebSocket. Off unless true; /api routes are unaffected. */
+  /** `ui.enabled`: serve the web UI pages; /api routes are unaffected. */
   webUiEnabled?: boolean;
   /** This machine's own extra names for the /api browser boundary (createDaemon wires the
    *  Tailscale MagicDNS self-name lookup). Absent: loopback, IP literals and OS names only. */
@@ -195,7 +158,6 @@ export interface AppDeps {
    */
   occupantInvalidator?: import("./domain/occupant-invalidator.js").OccupantInvalidator;
   agentActivityStore?: AgentActivityStore;
-  activityHookToken?: string;
   uiDistDir?: string | null;
   /**
    * OPR.0.4.3.21 — daemon event-loop health monitor. Optional: when absent
@@ -211,15 +173,6 @@ export interface AppDeps {
    * registered and the rolling last/max per route is surfaced on `/healthz`.
    */
   routeTimingRecorder?: import("./domain/route-timing-recorder.js").RouteTimingRecorder;
-  /**
-   * OPR.0.4.3.04 — OpenRig identity/activity env stamped onto a successor
-   * tmux session created by the seat-handover full-cycle composer, mirroring
-   * the env NodeLauncher uses at launch. Optional; the three core identity
-   * vars are always derived internally by the composer.
-   */
-  sessionEnv?: Record<string, string | undefined>;
-  /** Per-runtime launch env merged over sessionEnv (OMP's provider keys). */
-  runtimeSessionEnv?: Record<string, Record<string, string | undefined>>;
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -307,7 +260,7 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.rigRepo.db !== deps.sessionRegistry.db) {
     throw new Error("createApp: rigRepo and sessionRegistry must share the same db handle");
   }
-  if (deps.rigRepo.db !== deps.discoveryRepo.db) {
+  if (deps.discoveryRepo && deps.rigRepo.db !== deps.discoveryRepo.db) {
     throw new Error("createApp: discoveryRepo must share the same db handle");
   }
 
@@ -329,16 +282,6 @@ export function createApp(deps: AppDeps): Hono {
     const value = settingsStore.resolveOne("github.proxy").value;
     return typeof value === "string" ? value : undefined;
   });
-  const terminalTakeover = deps.terminalTakeover ?? new TerminalTakeoverManager({
-    eventBus: deps.eventBus,
-    isOwnerSessionActive: ownerSessions
-      ? (sessionId, at) => (sessionId === "owner-control" && !!teamOptions.credentials.ownerToken)
-        || ownerSessions.list().some(session => session.id === sessionId
-        && session.revoked_at === null
-        && session.expires_at > at
-        && session.last_seen_at > at - 30 * 60_000)
-      : undefined,
-  });
   const app = new Hono();
   if (ownerSessions) app.use("/api/*", async (c, next) => { c.set("ownerSessions" as never, ownerSessions); await next(); });
   if (deps.requestPhaseObserver) app.use("*", deps.requestPhaseObserver.middleware());
@@ -354,7 +297,6 @@ export function createApp(deps: AppDeps): Hono {
   const mailboxDelivery = deps.mailboxDelivery ?? (deps.chatRepo
     ? new MailboxDelivery(deps.chatRepo, createMailboxPromptStateReader({
         db: deps.rigRepo.db,
-        seatActivity: deps.seatActivityService,
         agentActivityStore: deps.agentActivityStore,
         observedSince: new Date().toISOString(),
       }), deps.nativeChannelState, managedSeatCapability)
@@ -364,16 +306,9 @@ export function createApp(deps: AppDeps): Hono {
     c.set("rigRepo" as never, deps.rigRepo);
     c.set("sessionRegistry" as never, deps.sessionRegistry);
     c.set("eventBus" as never, deps.eventBus);
-    c.set("nodeLauncher" as never, deps.nodeLauncher);
-    c.set("startupOrchestrator" as never, deps.startupOrchestrator);
-    c.set("tmuxAdapter" as never, deps.tmuxAdapter);
-    c.set("tmuxOptionDefaults" as never, deps.tmuxOptionDefaults);
-    c.set("sessionEnv" as never, deps.sessionEnv);
-    c.set("runtimeSessionEnv" as never, deps.runtimeSessionEnv);
     c.set("discoveryRepo" as never, deps.discoveryRepo);
     c.set("runtimeAdapters" as never, deps.runtimeAdapters ?? {});
     c.set("transcriptStore" as never, deps.transcriptStore);
-    c.set("sessionTransport" as never, deps.sessionTransport);
     c.set("chatRepo" as never, deps.chatRepo);
     c.set("mailboxDelivery" as never, mailboxDelivery);
     c.set("queueRepo" as never, deps.queueRepo);
@@ -388,20 +323,12 @@ export function createApp(deps: AppDeps): Hono {
     c.set("watchdogJobsRepo" as never, deps.watchdogJobsRepo);
     c.set("watchdogHistoryLog" as never, deps.watchdogHistoryLog);
     c.set("workflowRuntime" as never, deps.workflowRuntime);
-    c.set("terminalService" as never, deps.terminalService);
     c.set("settingsStore" as never, deps.settingsStore);
     c.set("contextUsageStore" as never, deps.contextUsageStore);
     c.set("contextMonitor" as never, deps.contextMonitor);
     c.set("occupantInvalidator" as never, deps.occupantInvalidator);
     c.set("agentActivityStore" as never, deps.agentActivityStore);
-    // Slice 15 — wire seatActivityService into request context so the
-    // /api/rigs/:id/nodes route can enrich entries with terminalActive +
-    // hasAssignedWork via attachTerminalActivityAndWork.
-    c.set("seatActivityService" as never, deps.seatActivityService);
-    c.set("seatStructuralActivityService" as never, deps.seatStructuralActivityService);
-    c.set("activityHookToken" as never, deps.activityHookToken);
     c.set("db" as never, deps.rigRepo.db);
-    c.set("terminalBearerToken" as never, deps.terminalBearerToken ?? null);
     await next();
   });
 
@@ -426,10 +353,10 @@ export function createApp(deps: AppDeps): Hono {
     webUiEnabled: deps.webUiEnabled === true,
     pairedOwnerBoundary: pairedOwners,
     authenticateOwnerCookie: c => {
-      const resolved = resolvePairedOwnerCookie(c, teamOptions.credentials, [deps.legacyBearerToken, deps.terminalBearerToken]);
+      const resolved = resolvePairedOwnerCookie(c, teamOptions.credentials, [deps.legacyBearerToken]);
       return resolved.ok ? null : c.json({ code: resolved.code, error: resolved.error }, resolved.status);
     },
-    bearerTokens: [deps.terminalBearerToken, deps.legacyBearerToken],
+    bearerTokens: [deps.legacyBearerToken],
     allowedOrigins: process.env.OPENRIG_ALLOWED_ORIGINS,
     allowedHosts: process.env.OPENRIG_ALLOWED_HOSTS,
     discoverSelfNames: deps.selfNameDiscovery,
@@ -438,18 +365,15 @@ export function createApp(deps: AppDeps): Hono {
 
   const managedMailboxAuthentication = teamControlAuthentication(
     () => teamOptions.credentials,
-    [deps.legacyBearerToken, deps.terminalBearerToken],
+    [deps.legacyBearerToken],
   );
 
   // KTD22: in managed mode this is the only route gate. Each managed route a later unit adds
   // joins this allowlist with its own authenticated managed-control check.
   app.use("/api/*", async (c, next) => {
-    const managedTerminalWebSocket = c.req.method === "GET"
-      && c.req.path.startsWith("/api/terminal/")
-      && c.req.header("Upgrade")?.toLowerCase() === "websocket";
     if (daemonModeOf(deps.rigRepo.db) === "managed"
       && !MANAGED_ROUTE_PREFIXES.some(prefix => c.req.path === prefix || c.req.path.startsWith(prefix + "/"))
-      && !managedTerminalWebSocket) {
+    ) {
       const poll = c.req.method === "GET" && /^\/api\/rigs\/[^/]+\/chat\/mailbox(?:\/poll)?$/.test(c.req.path);
       const consume = c.req.method === "POST" && /^\/api\/rigs\/[^/]+\/chat\/mailbox\/[^/]+\/consume$/.test(c.req.path);
       const body: unknown = consume ? await c.req.json().catch(() => null) : null;
@@ -514,28 +438,28 @@ export function createApp(deps: AppDeps): Hono {
 
   app.use("/api/team-control/*", requireLocalTarget);
   if (ownerSessions) app.route("/api/team-control/owner-session", ownerSessionRoutes(ownerSessions, () => teamOptions.credentials,
-    [deps.legacyBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken]));
   app.route("/api/team-control", teamControlRoutes(teamGovernance, teamOptionsWithRead,
-    [deps.legacyBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken]));
   // T052 — the managed replay transport. Mounted separately from the legacy
   // `/api/events` stream so legacy admission and behaviour stay exactly as they
   // were while managed reads get owner authentication and run scoping.
   app.route("/api/team-control", workspaceBrowseRoutes(teamGovernance, {
-    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
     orchestratorRoot: fileURLToPath(new URL("../../../../", import.meta.url)),
   }));
   // MVP slice 3 — the finished task's patch, served to the owner so `rig team apply` and the
   // Web UI can hand the result back. Absent a runtime there are no candidate trees to read.
   app.route("/api/team-control", teamResultRoutes(teamGovernance, {
-    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
   }));
   // MVP — the owner's completion read: the attempt the daemon observed stop, and the evidence it
   // could verify about the candidate. The owner action forwards both to `tasks/outcome`, so the
   // write contract is the one C2 already owns.
   app.route("/api/team-control", teamCompletionRoutes(teamGovernance, {
-    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken],
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime,
       readLeadProposal: (runId: string, taskId: string) => deps.workflowRuntime!.leadProposalFor(runId, taskId),
       // U6 — a delivery lead's turn may ask the owner for a decision instead of proposing work.
@@ -546,22 +470,22 @@ export function createApp(deps: AppDeps): Hono {
   }));
   app.route("/api/team-control", teamTelemetryRoutes(teamGovernance,
     deps.attemptTelemetry ?? new AttemptTelemetry(deps.rigRepo.db), {
-      credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+      credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken],
     }));
   app.route("/api/team-control", teamEventsRoutes({
     credentials: teamOptions.credentials,
-    legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+    legacyTokens: [deps.legacyBearerToken],
     ...(teamOptionsWithRead.readModel ? { readModel: teamOptionsWithRead.readModel } : {}),
   }));
   // U3 — the owner's teams: the rig and seats a repository's team runs on. Same surface and the
   // same owner credential as the start below, because a team is what a start routes work to.
   app.route("/api/team-control", teamGithubRoutes(github, teamOptions.credentials,
-    [deps.legacyBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken]));
   app.route("/api/team-control", teamSettingsRoutes(deps.settingsStore, teamOptions.credentials,
-    [deps.legacyBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken]));
   app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials, github,
     ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}) },
-    [deps.legacyBearerToken, deps.terminalBearerToken]));
+    [deps.legacyBearerToken]));
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {
     credentials: teamOptions.credentials,
@@ -569,14 +493,14 @@ export function createApp(deps: AppDeps): Hono {
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     ...(teamOptions.dispatch ? { dispatch: teamOptions.dispatch } : {}),
     ...(teamOptions.planWorktreeRoot ? { planWorktreeRoot: teamOptions.planWorktreeRoot } : {}),
-  }, [deps.legacyBearerToken, deps.terminalBearerToken]));
+  }, [deps.legacyBearerToken]));
   // MVP slice C3 — the owner's read of a lead's decomposition and the decision it becomes. The
   // read is the daemon's own reading of the file the lead wrote; the write records an owner
   // decision, never an admission.
   app.route("/api/team-control", teamLeadRoutes(teamGovernance, {
     ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}),
     ...(deps.attemptTelemetry ? { telemetry: deps.attemptTelemetry } : {}),
-    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+    credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken],
     ...(teamOptions.readPolicyCapability ? { readPolicyCapability: teamOptions.readPolicyCapability } : {}),
     // U5 — the chat and plan routes start the lead's next turn through the same dispatch a
     // start and a growth use, so a chat message and a plan approval launch exactly as they do.
@@ -586,7 +510,7 @@ export function createApp(deps: AppDeps): Hono {
   // U7 — the run's integration branch: what landed on it, and the owner's one merge.
   app.route("/api/team-control", teamMergeRoutes({
     credentials: teamOptions.credentials,
-    legacyTokens: [deps.legacyBearerToken, deps.terminalBearerToken],
+    legacyTokens: [deps.legacyBearerToken],
     ...(deps.integration ? { integration: deps.integration } : {}),
   }));
 
@@ -656,28 +580,6 @@ export function createApp(deps: AppDeps): Hono {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let injectWebSocket: (server: any) => void = () => {};
-  // The terminal WebSocket only serves the web UI, so it exists only while the web UI is on.
-  if (deps.enableNodeWebSocket && deps.webUiEnabled === true) {
-    const ws = createNodeWebSocket({ app });
-    injectWebSocket = ws.injectWebSocket as never;
-    _lastInjectWebSocket = injectWebSocket;
-    registerTerminalWs(app, ws.upgradeWebSocket as never, {
-      bearerToken: deps.terminalBearerToken ?? null,
-      managed: pairedOwners,
-      credentials: teamOptions.credentials,
-      allowPairedOwner: pairedOwners,
-      takeoverManager: terminalTakeover,
-      ownerTerminalHost: deps.ownerTerminalHost,
-    });
-  } else if (deps.enableNodeWebSocket) {
-    registerTerminalAuthOnly(app, { bearerToken: deps.terminalBearerToken ?? null, managed: pairedOwners, credentials: teamOptions.credentials, allowPairedOwner: pairedOwners });
-  }
-  app.route("/api/activity", activityHookRoutes);
-  app.route("/api/seat", seatRoutes);
-  app.route("/api/terminal", terminalRoutes());
-
   app.all("/api/*", async (c, next) => {
     if (c.req.path === "/api") return next();
     return c.json({ error: "not_found", path: c.req.path }, 404);
@@ -718,26 +620,8 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     const indexHtml = fs.readFileSync(uiIndexPath, "utf-8");
-    // The legacy token script hands the terminal bearer to whoever loads a page. A managed
-    // daemon serves its team view to any local process, so that page must never carry the
-    // bearer: the managed UI authenticates through the paired owner session instead.
-    const tokenScript = deps.terminalBearerToken && daemonModeOf(deps.rigRepo.db) !== "managed"
-      ? `<script>if(!window.localStorage.getItem("openrig.terminalBearerToken"))window.localStorage.setItem("openrig.terminalBearerToken",${JSON.stringify(deps.terminalBearerToken)})</script>`
-      : "";
-    const injected = tokenScript ? indexHtml.replace("</head>", `${tokenScript}</head>`) : indexHtml;
-    return c.html(injected);
+    return c.html(indexHtml);
   });
 
   return app;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _lastInjectWebSocket: ((server: any) => void) | null = null;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createAppWithWebSocket(deps: AppDeps): { app: Hono; injectWebSocket: (server: any) => void } {
-  deps.enableNodeWebSocket = true;
-  _lastInjectWebSocket = null;
-  const app = createApp(deps);
-  return { app, injectWebSocket: _lastInjectWebSocket ?? (() => {}) };
 }

@@ -7,7 +7,11 @@ import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
 import type { ContextMountPolicy, ContextObservation, ManagedNativePolicy, ManagedNativePolicyObservation } from "../integrations/framework/context-manifest.js";
 import type { WorkerMailboxBridge } from "./worker-mailbox-bridge.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, NodeBinding, ReadinessResult } from "../domain/runtime-adapter.js";
-import type { ResumeResult } from "./claude-resume.js";
+import type { AppliedLaunchObservation } from "../domain/permission-drift.js";
+
+export type ResumeResult =
+  | { ok: true; managedSession?: ManagedSessionReceipt; appliedLaunch?: AppliedLaunchObservation }
+  | { ok: false; code: string; message: string; evidence?: string };
 
 export type WorkerClient = "claude-code" | "codex";
 export interface WorkerLaunchInput {

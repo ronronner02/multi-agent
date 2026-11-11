@@ -161,42 +161,6 @@ describe("delivery roster changes", () => {
     expect(result.status).toBe("denied"); expect(result.reason).toContain("unfinished"); expect(state()).toEqual(before);
   });
 
-  it.each([
-    { runId: "run", reviewState: "pending" }, { runId: "run", reviewState: "in-progress" },
-    { runId: "other", reviewState: "pending" }, { runId: "other", reviewState: "in-progress" },
-  ])("keeps an implementer awaiting a $reviewState review in $runId, then dispatches its rework", async ({ runId, reviewState }) => {
-    if (runId === "other") approveRun(runId);
-    const qitemId = addTask("reviewed", "impl-1@demo", runId);
-    expect(completeTask("reviewed", { validated: true }, runId)).toMatchObject({ status: "observed", reviewTaskId: "reviewed-review-1" });
-    expect(governance.queueState(qitemId)).toBe("done");
-    const review = governance.findTask(runId, "reviewed-review-1")!;
-    expect(review.assignment.reviewOf).toBe("reviewed");
-    if (reviewState === "in-progress") {
-      expect(governance.transitionTask(request(review.qitemId, { expectedTaskVersion: review.entityVersion,
-        state: "in-progress", actorSession: "review-1@demo" }, runId), binding).status).toBe("accepted");
-    }
-    const before = state();
-    const result = governance.admitLeadProposal(request("retire-reviewed", {}), daemon, binding,
-      [task("replacement", "impl-2@demo")], { add: [implementer], retire: ["impl-1@demo"] }, 6);
-    expect(result.status).toBe("denied");
-    expect(result.reason).toContain("unresolved review");
-    expect(state()).toEqual(before);
-    expect(completeTask("reviewed-review-1", { findings: [{ id: "R1-1", severity: "P1", citation: "KTD5",
-      file: "src/reviewed.ts", category: "correctness", scenario: "The assigned task needs its first implementation corrected." }] }, runId))
-      .toMatchObject({ status: "observed", reworkTaskId: "reviewed" });
-    expect(governance.queueState(qitemId)).toBe("pending");
-    const sessions = new SessionRegistry(db), seat = sessions.findResumeContextByName("impl-1@demo")!;
-    sessions.updateBinding(seat.nodeId, { attachmentType: "tmux", tmuxSession: "impl-1@demo", tmuxPane: "%1" });
-    const started: unknown[] = [];
-    await composeTaskDispatch({ rigRepo: new RigRepository(db), sessions,
-      tmux: { hasSession: async () => true, listPanes: async () => [{ id: "%1" }], getPaneExit: async () => ({ dead: false, code: null }) } as never,
-      startupOrchestrator: { startNode: async (input: unknown) => { started.push(input); return { ok: true }; } } as never,
-      runtimeAdapters: { codex: { runtime: "codex" } } as never,
-      maxSessions: () => binding.limits.maxSessions, liveSessions: () => 0,
-    })(runId, "reviewed");
-    expect(started).toEqual([expect.objectContaining({ sessionName: "impl-1@demo", taskId: "reviewed" })]);
-  });
-
   it("allows retirement after the implementer's review approves its completed work", () => {
     const qitemId = addTask("reviewed", "impl-1@demo");
     expect(completeTask("reviewed", { validated: true }).status).toBe("observed");

@@ -118,8 +118,6 @@ export const SETTINGS_VALID_KEYS = [
   "ui.timezone",
   // The web UI and its terminal WebSocket are off unless this is true (read at daemon start).
   "ui.enabled",
-  // OPR.0.4.0.1 — global cap on simultaneously-live terminals (default 2).
-  "ui.terminal.max_live_terminals",
   "recovery.auto_drive_provider_prompts",
   "recovery.provider_auth_env_allowlist",
   // V1 attempt-3 Phase 4 - Advisor / Operator rail icon V1 placeholders
@@ -176,12 +174,6 @@ export const SETTINGS_VALID_KEYS = [
   "snapshots.periodic.enabled",
   "snapshots.periodic.interval_seconds",
   "snapshots.periodic.retention_keep",
-  // OPR.0.4.6.02 S1 — the inner-tmux status-bar default applied to a
-  // session at LAUNCH. ONE static boolean key (default off), lockstep
-  // with cli/src/config-store.ts VALID_KEYS (the parity test pins both
-  // twins). Consumed by NodeLauncher at session-create only; a flip is
-  // future-launches-only and never retroactive (BR-1 never-retro).
-  "terminal.status_bar",
   // Slice 15 (OPR.0.7.0.15) — compact command-output defaults; CLI-read, twin of the CLI key.
   "output.compact",
   // Slice 01 (OPR.0.7.0.1) — Codex usage windows in the provider view; daemon-read, twin of the CLI key.
@@ -262,7 +254,6 @@ const ENV_MAP: Record<SettingsValidKey, { primary: string; legacy?: string }> = 
   "ui.timezone": { primary: "OPENRIG_UI_TIMEZONE" },
   "ui.enabled": { primary: "OPENRIG_UI_ENABLED" },
   "ui.preview.default_lines": { primary: "OPENRIG_UI_PREVIEW_DEFAULT_LINES" },
-  "ui.terminal.max_live_terminals": { primary: "OPENRIG_UI_TERMINAL_MAX_LIVE_TERMINALS" },
   "recovery.auto_drive_provider_prompts": { primary: "OPENRIG_RECOVERY_AUTO_DRIVE_PROVIDER_PROMPTS" },
   "recovery.provider_auth_env_allowlist": { primary: "OPENRIG_RECOVERY_PROVIDER_AUTH_ENV_ALLOWLIST" },
   "agents.advisor_session": { primary: "OPENRIG_AGENTS_ADVISOR_SESSION" },
@@ -298,8 +289,6 @@ const ENV_MAP: Record<SettingsValidKey, { primary: string; legacy?: string }> = 
   "snapshots.periodic.enabled": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_ENABLED" },
   "snapshots.periodic.interval_seconds": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_INTERVAL_SECONDS" },
   "snapshots.periodic.retention_keep": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_RETENTION_KEEP" },
-  // OPR.0.4.6.02 S1 — net-new key; OPENRIG_* primary only (no RIGGED_* legacy).
-  "terminal.status_bar": { primary: "OPENRIG_TERMINAL_STATUS_BAR" },
   "output.compact": { primary: "OPENRIG_OUTPUT_COMPACT" },
   "provider.usage_windows": { primary: "OPENRIG_PROVIDER_USAGE_WINDOWS" },
   // OPR.0.4.6.FS-1 W2 — retention knobs; net-new keys, OPENRIG_* primary only.
@@ -354,7 +343,6 @@ const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
   "ui.timezone": ["ui", "timezone"],
   "ui.enabled": ["ui", "enabled"],
   "ui.preview.default_lines": ["ui", "preview", "defaultLines"],
-  "ui.terminal.max_live_terminals": ["ui", "terminal", "maxLiveTerminals"],
   "recovery.auto_drive_provider_prompts": ["recovery", "autoDriveProviderPrompts"],
   "recovery.provider_auth_env_allowlist": ["recovery", "providerAuthEnvAllowlist"],
   "agents.advisor_session": ["agents", "advisorSession"],
@@ -384,7 +372,6 @@ const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
   "snapshots.periodic.enabled": ["snapshots", "periodic", "enabled"],
   "snapshots.periodic.interval_seconds": ["snapshots", "periodic", "intervalSeconds"],
   "snapshots.periodic.retention_keep": ["snapshots", "periodic", "retentionKeep"],
-  "terminal.status_bar": ["terminal", "statusBar"],
   "output.compact": ["output", "compact"],
   "provider.usage_windows": ["provider", "usageWindows"],
   "retention.enabled": ["retention", "enabled"],
@@ -661,10 +648,6 @@ function getDefaultValue(key: SettingsValidKey, workspaceRoot: string): string |
     case "snapshots.periodic.enabled": return true;
     case "snapshots.periodic.interval_seconds": return 300;
     case "snapshots.periodic.retention_keep": return 10;
-    // OPR.0.4.6.02 S1 — inner-tmux status bar OFF at launch by default
-    // (herdr's pane label already carries identity; the inner tmux status
-    // is redundant chrome). Operator flip is future-launches-only.
-    case "terminal.status_bar": return false;
     case "output.compact": return false;
     case "provider.usage_windows": return false;
     // OPR.0.4.6.FS-1 W2 — retention defaults (arch D3 safe values: archive

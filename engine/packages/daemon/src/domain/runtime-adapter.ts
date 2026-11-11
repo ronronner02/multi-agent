@@ -177,8 +177,6 @@ export interface ForkSource {
  * to the startup orchestrator after checkReady().
  */
 export interface RuntimeAdapter {
-  /** Claude's managed capability/launch seam, shared with seat selection. */
-  readonly claudeManagedLaunch?: import("./claude-managed-launch.js").ClaudeManagedLaunch;
   readonly runtime: string;
   /**
    * U3 — how a managed attempt of this adapter is launched.
