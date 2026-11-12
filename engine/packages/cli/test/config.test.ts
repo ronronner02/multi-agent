@@ -7,7 +7,6 @@ import { Command } from "commander";
 import { ConfigStore, VALID_KEYS } from "../src/config-store.js";
 import { DaemonClient } from "../src/client.js";
 import { STATE_FILE, type DaemonState } from "../src/daemon-lifecycle.js";
-import type { StatusDeps } from "../src/status-deps.js";
 
 // config-store's DEFAULTS (module scope) resolve db/transcripts paths via
 // getDefaultOpenRigPath → getOpenRigHome → readOpenRigEnv("OPENRIG_HOME",
