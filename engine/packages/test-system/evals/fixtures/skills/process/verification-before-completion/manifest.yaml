@@ -1,0 +1,7 @@
+name: verification-before-completion
+version: "1"
+taxonomy: skills
+purpose: "(eval fixture) verify a result before claiming completion"
+files:
+  - path: content.md
+    role: source

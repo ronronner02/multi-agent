@@ -1,6 +1,6 @@
 name: shared
 version: "1.0"
-description: Shared builtin OpenRig resources for packaged starter agents
+description: Shared builtin Multi-Agent resources for packaged team agents
 
 resources:
   skills:
@@ -10,12 +10,6 @@ resources:
       path: skills/process/dogfood
     - id: frontend-design
       path: skills/process/frontend-design
-    - id: openrig-architect
-      path: skills/core/openrig-architect
-    - id: rig-lifecycle
-      path: skills/core/rig-lifecycle
-    - id: openrig-upgrade
-      path: skills/core/openrig-upgrade
     - id: test-driven-development
       path: skills/process/test-driven-development
     - id: systematic-debugging
@@ -44,10 +38,10 @@ resources:
     - id: backlog-capture
       path: skills/pm/backlog-capture
   plugins:
-    - id: openrig-core
+    - id: multi-agent-core
       source:
         kind: local
-        path: openrig-home:plugins/openrig-core
+        path: multi-agent-home:plugins/multi-agent-core
   runtime_resources:
     - id: claude-default-settings
       path: runtime/claude-settings.fragment.json

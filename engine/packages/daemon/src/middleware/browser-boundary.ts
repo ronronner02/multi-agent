@@ -11,10 +11,10 @@ import { constantTimeEqual, detectTailscaleInterface } from "./auth-bearer-token
  *
  * 1. Target name (Host). Accepted: `localhost`, IP literals, this machine's own
  *    names (OS hostname, and its exact Tailscale MagicDNS name found by a reverse
- *    lookup of its own tailnet IP at Tailscale's resolver) and OPENRIG_ALLOWED_HOSTS.
+ *    lookup of its own tailnet IP at Tailscale's resolver) and MULTI_AGENT_ALLOWED_HOSTS.
  *    A valid configured bearer token in Authorization waives only this check.
  * 2. Browser origin (Origin), when present. Accepted: the daemon's own UI origin
- *    while `ui.enabled` is on, or an entry in OPENRIG_ALLOWED_ORIGINS. Nothing
+ *    while `ui.enabled` is on, or an entry in MULTI_AGENT_ALLOWED_ORIGINS. Nothing
  *    waives this check.
  *
  * Requests without Origin (CLI, TUI, MCP, daemon-to-daemon) meet only rule 1.
@@ -29,9 +29,9 @@ export interface BrowserBoundaryOptions {
   authenticateOwnerCookie?: (c: Context) => Response | null;
   /** Configured bearer tokens; a matching Authorization header waives only the target-name check. */
   bearerTokens: Array<string | null | undefined>;
-  /** OPENRIG_ALLOWED_ORIGINS: browser origins only. */
+  /** MULTI_AGENT_ALLOWED_ORIGINS: browser origins only. */
   allowedOrigins?: string;
-  /** OPENRIG_ALLOWED_HOSTS: target names only. */
+  /** MULTI_AGENT_ALLOWED_HOSTS: target names only. */
   allowedHosts?: string;
   /** Returns this machine's own extra names (Tailscale MagicDNS). Absent: no discovery. */
   discoverSelfNames?: () => Promise<string[]>;
@@ -153,7 +153,7 @@ function parseAllowedHosts(raw: string | undefined): Set<string> {
   return out;
 }
 
-/** OPENRIG_ALLOWED_ORIGINS: a full `http(s)://…` entry matches that exact origin;
+/** MULTI_AGENT_ALLOWED_ORIGINS: a full `http(s)://…` entry matches that exact origin;
  *  any other `scheme://…` entry matches the identical string; a bare hostname matches
  *  that hostname on any scheme and port. */
 function parseAllowedOrigins(raw: string | undefined): { origins: Set<string>; hostnames: Set<string>; exact: Set<string> } {
@@ -272,12 +272,12 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
     if (logged.size >= MAX_LOGGED_REFUSALS) {
       if (!suppressionLogged) {
         suppressionLogged = true;
-        warn("[openrig] browser boundary: further distinct refusals are not logged");
+        warn("[multi-agent] browser boundary: further distinct refusals are not logged");
       }
       return;
     }
     logged.add(key);
-    warn(`[openrig] browser boundary refused ${code}: ${value} (${c.req.method} ${shown(c.req.path)})`);
+    warn(`[multi-agent] browser boundary refused ${code}: ${value} (${c.req.method} ${shown(c.req.path)})`);
   };
 
   const refuse = (c: Context, code: BoundaryCode, value: string, error: string) => {
@@ -353,7 +353,7 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
     if (host.kind === "malformed") {
       const value = shown(hostHeader === null ? "(duplicate Host)" : hostHeader ?? "");
       return refuse(c, "untrusted_host", value,
-        `This OpenRig daemon refused a request with an unusable Host header ("${value}"). Address the daemon by localhost, an IP address or this machine's own name.`);
+        `This Multi-Agent daemon refused a request with an unusable Host header ("${value}"). Address the daemon by localhost, an IP address or this machine's own name.`);
     }
     if (host.kind === "ok") {
       hostAccepted = await acceptedTarget(host.hostname);
@@ -363,7 +363,7 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
         if (!tokenValid) {
           const value = shown(host.hostname);
           return refuse(c, "untrusted_host", value,
-            `This OpenRig daemon does not accept requests addressed to "${value}". Use localhost, an IP address or this machine's own name, or add this name to OPENRIG_ALLOWED_HOSTS in the daemon's environment and restart the daemon.`);
+            `This Multi-Agent daemon does not accept requests addressed to "${value}". Use localhost, an IP address or this machine's own name, or add this name to MULTI_AGENT_ALLOWED_HOSTS in the daemon's environment and restart the daemon.`);
         }
       }
     }
@@ -378,7 +378,7 @@ export function browserBoundary(options: BrowserBoundaryOptions): MiddlewareHand
       if (!ownUi && !explicitlyAllowedOrigin(originHeader, origin)) {
         const value = shown(originHeader);
         return refuse(c, "browser_origin_refused", value,
-          `This OpenRig daemon refuses browser requests from origin "${value}". Open the OpenRig UI from the daemon's own address with the web UI enabled (rig config set ui.enabled true, then restart the daemon), or add this exact origin to OPENRIG_ALLOWED_ORIGINS in the daemon's environment and restart. Web pages on other origins cannot read this response.`);
+          `This Multi-Agent daemon refuses browser requests from origin "${value}". Open the Multi-Agent UI from the daemon's own address with the web UI enabled (multi-agent config set ui.enabled true, then restart the daemon), or add this exact origin to MULTI_AGENT_ALLOWED_ORIGINS in the daemon's environment and restart. Web pages on other origins cannot read this response.`);
       }
     }
 

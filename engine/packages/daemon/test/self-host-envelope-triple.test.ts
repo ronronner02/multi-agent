@@ -8,15 +8,15 @@ import { wrapPaneEnvelope } from "../src/lib/pane-envelope.js";
 
 describe("wrapPaneEnvelope — bare-as-received sender (CLI twin, byte-identical)", () => {
   it("renders the BARE local sender in From: and the reply hint (byte-identical to the CLI twin's expected literal)", () => {
-    const out = wrapPaneEnvelope("dev50-driver@v-openrig-build", "guard@my-rig", "hi");
+    const out = wrapPaneEnvelope("dev50-driver@v-multi-agent-build", "guard@my-rig", "hi");
     expect(out).toBe(
-      'From: dev50-driver@v-openrig-build\nTo: guard@my-rig\n---\nhi\n---\n\u21a9 Reply: rig send dev50-driver@v-openrig-build "..."',
+      'From: dev50-driver@v-multi-agent-build\nTo: guard@my-rig\n---\nhi\n---\n\u21a9 Reply: multi-agent send dev50-driver@v-multi-agent-build "..."',
     );
   });
 
   it("an arriving ORIGIN triple renders verbatim (the cross-host boundary constructed it; never re-stamped)", () => {
-    const out = wrapPaneEnvelope("dev50-driver@v-openrig-build@mm2-openrig1", "guard@my-rig", "hi");
-    expect(out).toContain("From: dev50-driver@v-openrig-build@mm2-openrig1");
-    expect(out).toContain('\u21a9 Reply: rig send dev50-driver@v-openrig-build@mm2-openrig1 "..."');
+    const out = wrapPaneEnvelope("dev50-driver@v-multi-agent-build@mm2-multi-agent1", "guard@my-rig", "hi");
+    expect(out).toContain("From: dev50-driver@v-multi-agent-build@mm2-multi-agent1");
+    expect(out).toContain('\u21a9 Reply: multi-agent send dev50-driver@v-multi-agent-build@mm2-multi-agent1 "..."');
   });
 });

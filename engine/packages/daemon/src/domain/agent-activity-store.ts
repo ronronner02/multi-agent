@@ -82,7 +82,7 @@ export class AgentActivityStore {
       return {
         ok: false,
         code: "session_not_found",
-        error: "Hook activity did not match a managed session. List seats with: rig ps --nodes",
+        error: "Hook activity did not match a managed session. List seats with: multi-agent ps --nodes",
       };
     }
 

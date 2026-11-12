@@ -12,7 +12,7 @@ describe("Context Usage Projection", () => {
   beforeEach(() => {
     db = createFullTestDb();
     setup = createTestApp(db);
-    store = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
+    store = new ContextUsageStore(db, { stateDir: "/tmp/multi-agent-test" });
   });
 
   afterEach(() => { db.close(); });

@@ -95,7 +95,7 @@ describe("DaemonClient response body deadline", () => {
     const out: string[] = [];
     const err: string[] = [];
     const exitCodes: number[] = [];
-    const run = runProgram(program, ["node", "rig", "write", ...(json ? ["--json"] : [])], {
+    const run = runProgram(program, ["node", "multi-agent", "write", ...(json ? ["--json"] : [])], {
       out: (line) => out.push(line), err: (line) => err.push(line), exit: (code) => exitCodes.push(code),
     });
     await expect(Promise.race([endpoint.headersWritten.then(() => "headers written"), run])).resolves.toBe("headers written");
@@ -107,7 +107,7 @@ describe("DaemonClient response body deadline", () => {
     expect(guidance).toMatch(/unreadable response/i);
     expect(guidance).toMatch(/outcome.*UNKNOWN/i);
     expect(guidance).toMatch(/re-check current state/i);
-    expect(guidance).not.toMatch(/not delivered|cannot connect|rig up|rig daemon start/i);
+    expect(guidance).not.toMatch(/not delivered|cannot connect|multi-agent up|multi-agent daemon start/i);
     if (json) expect(JSON.parse(guidance).error.consequence).toMatch(/UNKNOWN/);
     expect(endpoint.requests()).toBe(1);
     await expect.poll(endpoint.closedBeforeEnd).toBe(1);

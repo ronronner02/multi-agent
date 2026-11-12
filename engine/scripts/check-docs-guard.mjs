@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
  *   docs/as-built/  — every file there carries `last-verified-against-source`; DESIGN.md is not
  *                     source-derived, and Q1 rules this destination out by name
  *   docs/reference/ — that directory SHIPS (scripts/build-package.sh stages it into the package
- *                     and the daemon materializes it to $OPENRIG_HOME/reference/), so moving
+ *                     and the daemon materializes it to $MULTI_AGENT_HOME/reference/), so moving
  *                     there would start distributing the brand spec to every operator
  *   docs/releases/  — not a release note
  *

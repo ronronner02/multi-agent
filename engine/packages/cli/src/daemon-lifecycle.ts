@@ -4,10 +4,10 @@ import type { ChildProcess } from "node:child_process";
 import { connectionErrorCode, formatDaemonHostForUrl } from "./client.js";
 import { blockedConnectionGuidance, isBlockedConnectionCode } from "./daemon-reachability.js";
 import type { DaemonStartLock } from "./daemon-start-lock.js";
-import { DAEMON_STOP_WAIT_MS, DAEMON_SHUTDOWN_RECEIPT, type DaemonShutdownReceipt } from "@openrig/daemon/daemon-shutdown";
+import { DAEMON_STOP_WAIT_MS, DAEMON_SHUTDOWN_RECEIPT, type DaemonShutdownReceipt } from "@multi-agent/daemon/daemon-shutdown";
 import { ConfigStore } from "./config-store.js";
 import { readLocalOrigin } from "./local-origin.js";
-import { OPENRIG_HOME, LEGACY_RIGGED_HOME, readOpenRigEnv } from "./openrig-compat.js";
+import { MULTI_AGENT_HOME } from "@multi-agent/daemon/data-paths";
 export interface DaemonState {
   pid: number;
   port: number;
@@ -35,9 +35,6 @@ export interface DaemonStatus {
    *  lockstep): "stopped" requires POSITIVE evidence (connection refused); a probe TIMEOUT or
    *  other non-refusal failure is "unverified" — never a down assertion. */
   state: "running" | "stopped" | "stale" | "unverified";
-  /** Home-resolution honesty: set when the resolved home lacks daemon state but a live sibling
-   *  home (or a HOME-MOVED marker) exists — callers name BOTH paths, never assert down. */
-  siblingHint?: { resolvedHome: string; siblingHome: string };
   port?: number;
   host?: string;
   pid?: number;
@@ -89,7 +86,7 @@ export function daemonNotRunningError(): DaemonNotRunningError {
   return {
     fact: "Daemon not running.",
     consequence: "This command needs a running daemon.",
-    action: "Run 'rig daemon start'.",
+    action: "Run 'multi-agent daemon start'.",
   };
 }
 
@@ -120,7 +117,7 @@ export function statusGuardMessage(status: DaemonStatus): DaemonNotRunningError 
   return {
     fact: "Daemon did not respond — it may be busy or stopped (state not confirmed).",
     consequence: "This command needs a responsive daemon; the outcome of proceeding would be indeterminate.",
-    action: "Re-check with 'rig daemon status'. If it is confirmed stopped, run 'rig daemon start'.",
+    action: "Re-check with 'multi-agent daemon status'. If it is confirmed stopped, run 'multi-agent daemon start'.",
     ...causeCode,
   };
 }
@@ -137,9 +134,6 @@ export function daemonStatusGuard(status: DaemonStatus, opts?: { json?: boolean 
     console.error(`Error: ${err.fact}`);
     console.error(`  ${err.consequence}`);
     console.error(`  ${err.action}`);
-  }
-  if (status.siblingHint) {
-    console.error(`  note: OPENRIG_HOME may be wrong — resolved ${status.siblingHint.resolvedHome}, live sibling ${status.siblingHint.siblingHome}`);
   }
   process.exitCode = 1;
   return false;
@@ -161,23 +155,6 @@ export interface StartOptions {
   port?: number;
   host?: string;
   db?: string;
-  transcriptsEnabled?: boolean;
-  transcriptsPath?: string;
-  /** When set, daemon startup idempotently ensures the default workspace exists. */
-  workspaceRoot?: string;
-  contextRoot?: string;
-  skillsRoot?: string;
-  topologyRoot?: string;
-  // V1 pre-release CLI/daemon Item 1 — capture-pane rotation tunables.
-  // Threaded through to the daemon process env so the rotation hook
-  // picks up file-stored ConfigStore values, not just shell env.
-  transcriptsLines?: number;
-  transcriptsPollIntervalSeconds?: number;
-  // V0.3.1 slice 05 kernel-rig-as-default — when true, daemon startup
-  // skips the kernel auto-boot path (kernel rig is not materialized).
-  // Exposed at the CLI as `rig daemon start --no-kernel`; projected
-  // into the daemon process env as OPENRIG_NO_KERNEL.
-  skipKernelBoot?: boolean;
 }
 
 export interface LifecycleDeps {
@@ -218,22 +195,19 @@ export interface LifecycleDeps {
   // existing deps / mocks / callers are untouched.
   sleep?: (ms: number) => Promise<void>;
   // RULING 1ae863d2 — optional home-resolution honesty deps (optional so existing
-  // mocks/callers are untouched): homeDir overrides the module-load OPENRIG_DIR for
+  // mocks/callers are untouched): homeDir overrides the module-load MULTI_AGENT_DIR for
   // the sibling-home scan; listDir lists a directory (production: fs.readdirSync).
   homeDir?: string;
   listDir?: (path: string) => string[];
 }
 
-export const OPENRIG_DIR = OPENRIG_HOME;
-export const RIGGED_DIR = OPENRIG_DIR;
-export const STATE_FILE = path.join(OPENRIG_DIR, "daemon.json");
-export const LOG_FILE = path.join(OPENRIG_DIR, "daemon.log");
-export const LEGACY_STATE_FILE = path.join(LEGACY_RIGGED_HOME, "daemon.json");
-export const LEGACY_LOG_FILE = path.join(LEGACY_RIGGED_HOME, "daemon.log");
+export const MULTI_AGENT_DIR = MULTI_AGENT_HOME;
+export const STATE_FILE = path.join(MULTI_AGENT_DIR, "daemon.json");
+export const LOG_FILE = path.join(MULTI_AGENT_DIR, "daemon.log");
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 7433;
-const DEFAULT_DB = "openrig.sqlite";
+const DEFAULT_DB = "multi-agent.sqlite";
 // Fresh Linux hosts can take longer than a warmed dev machine to load native
 // modules, run startup reconciliation, and bind healthz. Keep the retry loop
 // bounded, but do not kill a healthy daemon during first-boot slack.
@@ -289,7 +263,7 @@ function summarizeDaemonStartFailure(healthzUrl: string, logContent: string | nu
       `Daemon failed to start under Node ${process.version} (${process.execPath}).`,
       `${moduleName} could not load because its native binary does not match the active Node runtime.`,
       `Recent daemon log: ${detail}`,
-      "Fix: switch back to the Node version used when @openrig/cli was installed, or reinstall @openrig/cli under the current node, then retry `rig daemon start`.",
+      "Fix: switch back to the Node version used when @multi-agent/cli was installed, or reinstall @multi-agent/cli under the current node, then retry `multi-agent daemon start`.",
     ].join(" ");
   }
 
@@ -311,15 +285,15 @@ export function resolveCliBaseDir(baseDir: string): string {
  * Why this order: in a monorepo dev checkout BOTH paths exist:
  *   - packages/daemon/dist                ← refreshed by
  *                                            `npm run build --workspace
- *                                            @openrig/daemon` (frequent;
+ *                                            @multi-agent/daemon` (frequent;
  *                                            source of truth)
  *   - packages/cli/daemon/dist            ← refreshed only by
  *                                            `scripts/build-package.sh`
  *                                            (rare; for npm publish)
  *
  * Picking the vendored copy first (the prior order) means devs run a
- * stale daemon through `rig daemon start` whenever they've rebuilt
- * `@openrig/daemon` but haven't rerun `build-package.sh`. That hid the
+ * stale daemon through `multi-agent daemon start` whenever they've rebuilt
+ * `@multi-agent/daemon` but haven't rerun `build-package.sh`. That hid the
  * fact that QA on local main 55e01f2e was getting a daemon WITHOUT the
  * shipped slice-09 `/api/rig-mode/*` routes (qitem-20260518054224).
  *
@@ -358,32 +332,26 @@ function readState(deps: LifecycleDeps): DaemonState | null {
   }
 }
 
-function resolveLifecycleFile(deps: LifecycleDeps, filename: "daemon.json" | "daemon.log"): string {
-  const primary = filename === "daemon.json" ? STATE_FILE : LOG_FILE;
-  if (deps.exists(primary)) return primary;
-
-  const legacy = filename === "daemon.json" ? LEGACY_STATE_FILE : LEGACY_LOG_FILE;
-  if (deps.exists(legacy)) return legacy;
-
-  return primary;
+function resolveLifecycleFile(_deps: LifecycleDeps, filename: "daemon.json" | "daemon.log"): string {
+  return filename === "daemon.json" ? STATE_FILE : LOG_FILE;
 }
 
-/** Check if a PID is an OpenRig daemon. Returns:
- *  - "openrig" — healthz responded (ok or not) → this is our daemon
- *  - "not_openrig" — connection refused → PID is alive but not listening on our port
+/** Check if a PID is an Multi-Agent daemon. Returns:
+ *  - "multi-agent" — healthz responded (ok or not) → this is our daemon
+ *  - "not_multi-agent" — connection refused → PID is alive but not listening on our port
  *  - "unresponsive" — pid is alive but healthz probe timed out
  *  - "dead" — PID not alive */
-async function checkPid(state: DaemonState, deps: LifecycleDeps): Promise<"openrig" | "not_openrig" | "unresponsive" | "dead"> {
+async function checkPid(state: DaemonState, deps: LifecycleDeps): Promise<"multi-agent" | "not_multi-agent" | "unresponsive" | "dead"> {
   if (!deps.isProcessAlive(state.pid)) return "dead";
   const host = state.host ?? DEFAULT_HOST;
   try {
     await fetchDaemonProbe(deps, `http://${formatDaemonHostForUrl(host)}:${state.port}/healthz`, HEALTHZ_PROBE_TIMEOUT_MS);
-    // Any response (ok or not) means something is listening on our port → OpenRig
-    return "openrig";
+    // Any response (ok or not) means something is listening on our port → Multi-Agent
+    return "multi-agent";
   } catch (err) {
     if (err instanceof HealthProbeTimeoutError) return "unresponsive";
     // Connection refused → PID alive but not our daemon
-    return "not_openrig";
+    return "not_multi-agent";
   }
 }
 
@@ -412,11 +380,11 @@ const ENV_SCRUB_PREFIXES = ["CODEX_", "GHOSTTY_", "XPC_", "__CF"];
 // S20 (OPR.0.5.5.20) — the ROUTING-OVERLOADED vars: client/endpoint state a managed
 // environment may inject, byte-indistinguishable from operator opt-in. They are ALWAYS
 // scrubbed from the daemon env; bind intent crosses ONLY via the dedicated
-// OPENRIG_BIND_HOST (exported below when opts.host declares it). THE RULE FOR FUTURE
+// MULTI_AGENT_BIND_HOST (exported below when opts.host declares it). THE RULE FOR FUTURE
 // PASSTHROUGH EDITS: any env var that doubles as client routing state must join this
 // set — routing state silently becoming bind policy is the incident class
 // (operator baton qitem-20260827070400: parent lost its Tailscale listener).
-const ROUTING_ENV_SCRUB = new Set(["OPENRIG_HOST", "RIGGED_HOST"]);
+const ROUTING_ENV_SCRUB = new Set(["MULTI_AGENT_HOST"]);
 
 const ENV_SCRUB_EXACT = new Set([
   "CMUX_SOCKET_PATH",
@@ -440,23 +408,13 @@ export function buildDaemonEnv(
      * auth-bearer-tailscale-trust). When defined, the daemon takes the
      * explicit-host branch and applies the bearer invariant to it.
      * S20: when undefined, NO env fallback exists — inherited
-     * OPENRIG_HOST/RIGGED_HOST are ROUTING state and are scrubbed by
+     * MULTI_AGENT_HOST are ROUTING state and are scrubbed by
      * ROUTING_ENV_SCRUB (the shell-level-opt-in premise died: injected
      * routing env is byte-indistinguishable from opt-in). The dedicated
-     * OPENRIG_BIND_HOST is the only env opt-in and passes through.
+     * MULTI_AGENT_BIND_HOST is the only env opt-in and passes through.
      */
     host?: string;
     db: string;
-    transcriptsEnabled?: boolean;
-    transcriptsPath?: string;
-    // V1 pre-release CLI/daemon Item 1 — projected from ConfigStore so
-    // the rotation hook honors file-stored values, not just inherited
-    // shell env.
-    transcriptsLines?: number;
-    transcriptsPollIntervalSeconds?: number;
-    // V0.3.1 slice 05 — projected via OPENRIG_NO_KERNEL env var so
-    // the daemon's startup.ts kernel-boot path honors the flag.
-    skipKernelBoot?: boolean;
   },
 ): Record<string, string> {
   const env: Record<string, string> = {};
@@ -470,30 +428,15 @@ export function buildDaemonEnv(
     env[key] = value;
   }
 
-  // Explicit OPENRIG_* overrides — always win over inherited values
-  env["OPENRIG_PORT"] = String(opts.port);
+  // Explicit MULTI_AGENT_* overrides — always win over inherited values
+  env["MULTI_AGENT_PORT"] = String(opts.port);
   if (opts.host !== undefined) {
     // S20 — DECLARED intent exports the dedicated bind surface plus a COHERENT routing
     // value (seats/consumers route where the daemon actually binds).
-    env["OPENRIG_BIND_HOST"] = opts.host;
-    env["OPENRIG_HOST"] = opts.host;
+    env["MULTI_AGENT_BIND_HOST"] = opts.host;
+    env["MULTI_AGENT_HOST"] = opts.host;
   }
-  env["OPENRIG_DB"] = opts.db;
-  if (opts.transcriptsEnabled !== undefined) {
-    env["OPENRIG_TRANSCRIPTS_ENABLED"] = String(opts.transcriptsEnabled);
-  }
-  if (opts.transcriptsPath) {
-    env["OPENRIG_TRANSCRIPTS_PATH"] = opts.transcriptsPath;
-  }
-  if (opts.transcriptsLines !== undefined) {
-    env["OPENRIG_TRANSCRIPTS_LINES"] = String(opts.transcriptsLines);
-  }
-  if (opts.transcriptsPollIntervalSeconds !== undefined) {
-    env["OPENRIG_TRANSCRIPTS_POLL_INTERVAL_SECONDS"] = String(opts.transcriptsPollIntervalSeconds);
-  }
-  if (opts.skipKernelBoot) {
-    env["OPENRIG_NO_KERNEL"] = "1";
-  }
+  env["MULTI_AGENT_DB"] = opts.db;
 
   return env;
 }
@@ -501,9 +444,9 @@ export function buildDaemonEnv(
 // ── OPR.0.5.5.20 — bind-intent provenance + the listener adoption gate (S20 RED: unwired) ──
 
 /** Resolve OPERATOR BIND INTENT from the dedicated surfaces ONLY: the --host flag, the
- *  daemon.host config key read from the FILE, or the dedicated OPENRIG_BIND_HOST env.
+ *  daemon.host config key read from the FILE, or the dedicated MULTI_AGENT_BIND_HOST env.
  *  A daemon.host value resolved from ENV is the overloaded routing channel
- *  (ENV_MAP maps daemon.host ← OPENRIG_HOST) and NEVER creates intent. */
+ *  (ENV_MAP maps daemon.host ← MULTI_AGENT_HOST) and NEVER creates intent. */
 export function resolveBindIntent(input: {
   flagHost: string | undefined;
   envBindHost: string | undefined;
@@ -581,7 +524,7 @@ export async function verifyRequiredListeners(input: {
 }
 
 function occupiedPortGuidance(port: number): string {
-  return `Address already in use (EADDRINUSE) on port ${port}. Inspect the listener before stopping it, or run 'rig daemon start --port <unused-port>'.`;
+  return `Address already in use (EADDRINUSE) on port ${port}. Inspect the listener before stopping it, or run 'multi-agent daemon start --port <unused-port>'.`;
 }
 
 class StartupIdentityError extends Error {}
@@ -608,7 +551,7 @@ async function startOwnedDaemon(opts: StartOptions, deps: LifecycleDeps, lock: D
   // user-explicit-vs-default distinction. `opts.host` is undefined when
   // the operator never opted in; in that case healthz probes still use
   // the loopback default, but buildDaemonEnv must NOT export
-  // OPENRIG_HOST so the daemon falls through to the multi-bind default
+  // MULTI_AGENT_HOST so the daemon falls through to the multi-bind default
   // (loopback + tailscale auto-detect).
   const explicitHost = opts.host;
   const probeHost = explicitHost ?? DEFAULT_HOST;
@@ -617,14 +560,14 @@ async function startOwnedDaemon(opts: StartOptions, deps: LifecycleDeps, lock: D
   const existing = readState(deps);
   if (existing) {
     const pidState = await checkPid(existing, deps);
-    if (pidState === "openrig") {
+    if (pidState === "multi-agent") {
       // Our daemon is running (possibly unhealthy, but alive on our port)
       throw new Error(`Daemon already running (pid ${existing.pid} on port ${existing.port})`);
     }
     if (pidState === "unresponsive") {
       throw new Error(`Existing daemon process (pid ${existing.pid} on port ${existing.port}) is unresponsive — recover it before starting a new daemon.`);
     }
-    // "dead" or "not_rigged" → stale state, safe to proceed
+    // "dead" or "not_removed" → stale state, safe to proceed
   } else {
     let recoveredRunning = false;
     try {
@@ -643,7 +586,7 @@ async function startOwnedDaemon(opts: StartOptions, deps: LifecycleDeps, lock: D
   }
   const daemonEntry = path.join(getDaemonPath(), "dist/index.js");
 
-  deps.mkdirp(OPENRIG_DIR);
+  deps.mkdirp(MULTI_AGENT_DIR);
 
   const logOffset = deps.fileSize?.(LOG_FILE) ?? Buffer.byteLength(deps.readFile(LOG_FILE) ?? "");
   const logFd = deps.openForAppend(LOG_FILE);
@@ -655,11 +598,6 @@ async function startOwnedDaemon(opts: StartOptions, deps: LifecycleDeps, lock: D
       port,
       host: explicitHost,
       db,
-      transcriptsEnabled: opts.transcriptsEnabled,
-      transcriptsPath: opts.transcriptsPath,
-      transcriptsLines: opts.transcriptsLines,
-      transcriptsPollIntervalSeconds: opts.transcriptsPollIntervalSeconds,
-      skipKernelBoot: opts.skipKernelBoot,
     }),
     stdio: ["ignore", logFd, logFd],
     detached: true,
@@ -808,7 +746,7 @@ function readShutdownReceipt(deps: LifecycleDeps, stateFile: string) {
   const raw = deps.readFile(receiptPath);
   let receipt: DaemonShutdownReceipt | undefined;
   try { receipt = JSON.parse(raw ?? "null") ?? undefined; } catch { /* unavailable */ }
-  if (receipt?.schema !== "openrig.daemon-shutdown/v1" || !Number.isSafeInteger(receipt.pid) || receipt.pid <= 0
+  if (receipt?.schema !== "multi-agent.daemon-shutdown/v1" || !Number.isSafeInteger(receipt.pid) || receipt.pid <= 0
     || !Number.isFinite(Date.parse(receipt.startedAt)) || !(Date.parse(receipt.completedAt) >= Date.parse(receipt.startedAt))
     || !(Date.parse(receipt.completedAt) <= Date.now()) || typeof receipt.phase !== "string"
     || !Array.isArray(receipt.failures) || !["clean", "failed", "timed-out"].includes(receipt.outcome)) receipt = undefined;
@@ -833,7 +771,7 @@ function removeMatchingState(deps: LifecycleDeps, stateFile: string, state: Daem
 export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-target" | "terminated"> {
   const state = readState(deps);
   const configured = resolveConfiguredDaemonTarget();
-  const explicitUrl = readOpenRigEnv("OPENRIG_URL", "RIGGED_URL");
+  const explicitUrl = process.env.MULTI_AGENT_URL;
   const stateUrl = state ? `http://${formatDaemonHostForUrl(state.host ?? DEFAULT_HOST)}:${state.port}` : undefined;
   const target = stateUrl ?? explicitUrl?.replace(/\/+$/, "") ?? `http://${formatDaemonHostForUrl(configured.host)}:${configured.port}`;
   if (stateUrl && explicitUrl && new URL(explicitUrl).origin !== new URL(stateUrl).origin) {
@@ -863,10 +801,8 @@ export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-t
   };
   if (!state) {
     const effect = await listener();
-    const sibling = findSiblingHome(deps);
-    if (effect !== "refused" || sibling) {
-      throw new Error(`Daemon state is missing — cannot stop safely. Checked ${check}; listener ${effect}.` +
-        (sibling ? ` Resolved home ${sibling.resolvedHome}; live sibling ${sibling.siblingHome}.` : ""));
+    if (effect !== "refused") {
+      throw new Error(`Daemon state is missing — cannot stop safely. Checked ${check}; listener ${effect}.`);
     }
     const stateFile = resolveLifecycleFile(deps, "daemon.json");
     if (deps.exists(stateFile)) {
@@ -882,7 +818,7 @@ export async function stopDaemon(deps: LifecycleDeps): Promise<"stopped" | "no-t
   const stateFile = resolveLifecycleFile(deps, "daemon.json");
 
   const pidState = await checkPid(state, deps);
-  if (pidState === "not_openrig") {
+  if (pidState === "not_multi-agent") {
     throw new Error(`Cannot stop safely: PID ${state.pid} is present but identity is not confirmed at ${check}; no signal sent, state preserved.`);
   }
 
@@ -935,53 +871,18 @@ function isRefusedError(err: unknown): boolean {
   return cause?.code === "ECONNREFUSED" || code === "ECONNREFUSED" || /refused/i.test(err.message);
 }
 
-/** RULING 1ae863d2 — best-effort wrong-home detection: a HOME-MOVED marker in the resolved
- *  home, else a live sibling `.openrig*` home (daemon.json with an alive pid) beside it.
- *  Never throws — a failed scan just yields no hint. */
-function findSiblingHome(deps: LifecycleDeps): DaemonStatus["siblingHint"] {
-  try {
-    const home = deps.homeDir ?? OPENRIG_DIR;
-    const marker = path.join(home, "HOME-MOVED");
-    if (deps.exists(marker)) {
-      const target = deps.readFile(marker)?.trim();
-      if (target) return { resolvedHome: home, siblingHome: target };
-    }
-    if (!deps.listDir) return undefined;
-    const parent = path.dirname(home);
-    const self = path.basename(home);
-    for (const entry of deps.listDir(parent)) {
-      if (!entry.startsWith(".openrig") || entry === self) continue;
-      const sibling = path.join(parent, entry);
-      const stateFile = path.join(sibling, "daemon.json");
-      if (!deps.exists(stateFile)) continue;
-      const raw = deps.readFile(stateFile);
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw) as { pid?: number };
-        if (typeof parsed.pid === "number" && deps.isProcessAlive(parsed.pid)) {
-          return { resolvedHome: home, siblingHome: sibling };
-        }
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    // best-effort only
-  }
-  return undefined;
-}
 
 export async function getDaemonStatus(
   deps: LifecycleDeps,
   options: GetDaemonStatusOptions = {},
 ): Promise<DaemonStatus> {
-  // If OPENRIG_URL is set, bypass daemon.json and probe that URL directly
-  const openrigUrl = readOpenRigEnv("OPENRIG_URL", "RIGGED_URL");
-  if (openrigUrl) {
+  // If MULTI_AGENT_URL is set, bypass daemon.json and probe that URL directly
+  const multiAgentUrl = process.env.MULTI_AGENT_URL;
+  if (multiAgentUrl) {
     try {
-      const res = await probeHealthzWithSettle(deps, `${openrigUrl}/healthz`);
+      const res = await probeHealthzWithSettle(deps, `${multiAgentUrl}/healthz`);
       const ev = await readHealthEvidence(res);
-      const url = new URL(openrigUrl);
+      const url = new URL(multiAgentUrl);
       return { state: "running", port: Number(url.port) || DEFAULT_PORT, host: url.hostname || DEFAULT_HOST, healthy: ev.healthy, reason: ev.reason, eventLoop: ev.eventLoop };
     } catch (err) {
       // 1ae863d2: refusal = positive down; anything else (timeout/wedged/blocked) = unverified.
@@ -1004,10 +905,6 @@ export async function getDaemonStatus(
         eventLoop: ev.eventLoop,
       };
     } catch (err) {
-      // 1ae863d2: the resolved home has NO daemon state — before asserting anything,
-      // look for a live sibling home / HOME-MOVED marker (the wrong-home class).
-      const siblingHint = findSiblingHome(deps);
-      if (siblingHint) return { state: "unverified", siblingHint, ...probeErrorCodeOf(err) };
       return isRefusedError(err) ? { state: "stopped" } : { state: "unverified", ...probeErrorCodeOf(err) };
     }
   }
@@ -1229,7 +1126,7 @@ async function probeHealthzWithSettle(deps: LifecycleDeps, url: string): Promise
 // V0.3.1 slice 05 kernel-rig-as-default — forward-fix #3 architectural.
 // Poll GET /api/kernel/status until kernel_state reaches ready or
 // partial_ready (the two "operator can use the kernel" states) or the
-// timeout elapses. Used by `rig daemon start --wait-for-kernel`.
+// timeout elapses. Used by `multi-agent daemon start --wait-for-kernel`.
 //
 // Returns { ok: true, ... } on success; { ok: false, ... } with the
 // last observed kernelState + detail for the CLI's 3-part error.

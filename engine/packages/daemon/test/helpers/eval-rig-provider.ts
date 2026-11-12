@@ -20,7 +20,7 @@ export interface RigSeatProviderOptions {
   /**
    * REPAIR 2: the EXACT production package the spawned seat resolves refs against (the packaged
    * builtin library) — NOT a hand-seeded fixture root — so fixture-vs-production drift fails
-   * structurally. The seat pulls via the production `rig context get skills/<ns>/<name>`.
+   * structurally. The seat pulls via the production `multi-agent context get skills/<ns>/<name>`.
    */
   productionPackage: string;
   /** Seat spec / model to fork for the eval, when the non-author wires this live. */

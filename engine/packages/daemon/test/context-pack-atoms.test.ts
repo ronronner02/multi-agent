@@ -39,7 +39,7 @@ const GOOD_ATOM = `
     priority: core
     probe:
       prompt: "A seat asks what verbs exist for reaching a peer."
-      expect: "Names rig send/capture without re-reading the install."
+      expect: "Names multi-agent send/capture without re-reading the install."
 `;
 
 describe("context-pack atoms — parse + round-trip (mini-req 1)", () => {
@@ -65,7 +65,7 @@ describe("context-pack atoms — parse + round-trip (mini-req 1)", () => {
     });
     expect(a.probe).toEqual({
       prompt: "A seat asks what verbs exist for reaching a peer.",
-      expect: "Names rig send/capture without re-reading the install.",
+      expect: "Names multi-agent send/capture without re-reading the install.",
     });
   });
 

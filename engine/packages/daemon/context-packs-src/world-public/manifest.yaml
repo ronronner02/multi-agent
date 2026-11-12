@@ -29,7 +29,7 @@ atoms:
     order: 10
     priority: core
     probe:
-      prompt: "You just arrived in an unfamiliar OpenRig environment. What do you derive before acting?"
+      prompt: "You just arrived in an unfamiliar Multi-Agent environment. What do you derive before acting?"
       expect: "The agent derives its identity, live topology, available context, and command surface instead of guessing."
   - id: author-a-world
     address: build-your-world.md

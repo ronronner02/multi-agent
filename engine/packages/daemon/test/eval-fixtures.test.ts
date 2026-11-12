@@ -40,11 +40,11 @@ describe("eval seed fixtures — valid packs covering the case refs", () => {
 
   it("covers every ref the cases expect a seat to pull", () => {
     const { cases } = loadEvalCasesFromDir(CASES_DIR);
-    // Each expectedPattern is `rig context get\s+<ref>`; recover the ref tail.
+    // Each expectedPattern is `multi-agent context get\s+<ref>`; recover the ref tail.
     const wanted = new Set<string>();
     for (const c of cases) {
       for (const p of c.expectedPatterns) {
-        const m = /rig context get\\s\+(\S+)/.exec(p);
+        const m = /multi-agent context get\\s\+(\S+)/.exec(p);
         if (m) wanted.add(m[1]!);
       }
     }

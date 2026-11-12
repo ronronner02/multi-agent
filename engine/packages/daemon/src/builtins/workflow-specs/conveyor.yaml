@@ -1,4 +1,4 @@
-# OpenRig 0.3.0 starter workflow.
+# Multi-Agent 0.3.0 starter workflow.
 # Generic station pipeline. Multiple workflow instances may run at once; queue
 # depth at each station is the backpressure signal.
 workflow:
@@ -14,19 +14,19 @@ workflow:
   coordination_terminal_turn_rule: hot_potato
   roles:
     intake:
-      skill_refs: [openrig-user, backlog-capture, orchestration-team]
+      skill_refs: [agent-operated-software, backlog-capture, orchestration-team]
       preferred_targets: [intake-lead@conveyor]
     planner:
-      skill_refs: [openrig-user, requirements-writer]
+      skill_refs: [agent-operated-software, requirements-writer]
       preferred_targets: [plan-planner@conveyor]
     builder:
-      skill_refs: [openrig-user, development-team, test-driven-development]
+      skill_refs: [agent-operated-software, development-team, test-driven-development]
       preferred_targets: [build-builder@conveyor]
     reviewer:
-      skill_refs: [openrig-user, review-team, plan-review]
+      skill_refs: [agent-operated-software, review-team, plan-review]
       preferred_targets: [review-reviewer@conveyor]
     closer:
-      skill_refs: [openrig-user, orchestration-team, verification-before-completion]
+      skill_refs: [agent-operated-software, orchestration-team, verification-before-completion]
       preferred_targets: [intake-lead@conveyor]
   steps:
     - id: intake

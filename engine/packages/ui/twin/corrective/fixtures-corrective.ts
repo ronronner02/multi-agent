@@ -230,7 +230,7 @@ const review08: ComposedSliceReview = {
   },
   plan: {
     concise: {
-      text: "**Mini-requirements**\n1. `rig proof <slice>` gains `--deliverable` + `--verified` + `--note` args (extend the verb, never a new one).\n2. A drop without a comparison verdict leaves the deliverable visibly unverified.",
+      text: "**Mini-requirements**\n1. `multi-agent proof <slice>` gains `--deliverable` + `--verified` + `--note` args (extend the verb, never a new one).\n2. A drop without a comparison verdict leaves the deliverable visibly unverified.",
       media: [],
     },
     lockedArtifacts: [{ name: "IMPLEMENTATION-PRD.md", path: "IMPLEMENTATION-PRD.md", kind: "prd" }],

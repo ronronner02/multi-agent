@@ -1,0 +1,7 @@
+name: agent-operated-workflows
+version: "1"
+taxonomy: skills
+purpose: "(eval fixture) follow a bounded repeatable workflow"
+files:
+  - path: content.md
+    role: source

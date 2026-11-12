@@ -47,27 +47,27 @@ Preset names such as `recommended` or `all-claude` are aliases shown beside the 
 
 ### Package digest
 
-`{ algorithm: "sha256", value, coverage: "openrig.package-digest/v1" }`:
+`{ algorithm: "sha256", value, coverage: "multi-agent.package-digest/v1" }`:
 - `value` is SHA-256 over UTF-8 lines `<quoted path>\t<sha256>\n`, one for each entry of the built archive's
   `integrity.files`, sorted by path in UTF-16 code-unit order;
 - `<quoted path>` is the path as a JSON string, exactly as JavaScript's `JSON.stringify(path)` writes it, so a tab or
   newline in a file name can't make two different file lists hash the same. In words: wrapped in `"`; `"` and `\`
   escaped with a backslash; U+0008, U+0009, U+000A, U+000C and U+000D written `\b`, `\t`, `\n`, `\f` and `\r`; any
   other character below U+0020, and any lone surrogate, written `\uXXXX` in lowercase hex; everything else as itself;
-- it's the same when the same folder is rebuilt by the same OpenRig, while the archive's own hash changes with every
+- it's the same when the same folder is rebuilt by the same Multi-Agent, while the archive's own hash changes with every
   build (`createdAt`).
 
 **Coverage, shown wherever the digest is:** the bytes of every packaged file. It doesn't cover:
 - `bundle.yaml`, so no manifest field, provenance or `createdAt`;
 - the names the integrity walk skips (`.DS_Store`, `Thumbs.db`, `.gitkeep`);
 - file modes;
-- anything resolved on the installing machine at launch, for example an `openrig-home:` plugin, catalog skills, or a
+- anything resolved on the installing machine at launch, for example an `multi-agent-home:` plugin, catalog skills, or a
   model or effort nothing declares.
 
 **A build result** carries `source` (`null` unless the bundle was built from a GitHub link), `configurationId`,
-`packageDigest`, `archiveHash` and `assembler`. `rig bundle inspect` reports the same fields for an archive, and any the
-archive doesn't state are `null`. `assembler` is `{ openrigVersion }`: the format also allows a `commit`, which this
-OpenRig doesn't write. `configurationId()` and `packageDigest()` are exported from `@openrig/daemon/bundle-identity`.
+`packageDigest`, `archiveHash` and `assembler`. `multi-agent bundle inspect` reports the same fields for an archive, and any the
+archive doesn't state are `null`. `assembler` is `{ multiAgentVersion }`: the format also allows a `commit`, which this
+Multi-Agent doesn't write. `configurationId()` and `packageDigest()` are exported from `@multi-agent/daemon/bundle-identity`.
 Shared test vectors are in `schemas/fixtures/identity-vectors.json`.
 
 ## The formats
@@ -75,19 +75,19 @@ Shared test vectors are in `schemas/fixtures/identity-vectors.json`.
 | Format | Schema | Lives | Written by |
 |---|---|---|---|
 | Declared configurations | `bundle-configurations.v1` | `configurations.yaml` beside `rig.yaml` | the bundle's author |
-| Before-install view | `bundle-behaviour.v1` (`openrig.bundle-behaviour/v1`) | the registry, one file per configuration and assembler version; never inside the archive | the daemon's inspect: `rig bundle inspect`, under `behaviour` with `--json` |
+| Before-install view | `bundle-behaviour.v1` (`multi-agent.bundle-behaviour/v1`) | the registry, one file per configuration and assembler version; never inside the archive | the daemon's inspect: `multi-agent bundle inspect`, under `behaviour` with `--json` |
 | Run record | `run-record.v1` | beside its receipt, private | Fleet, Dev QA, and maintainers for community reports |
-| Public status | `bundle-status.v1` | `openrig-registry` status, generated | the status generator only |
-| Registry entry | `registry-entry.v1` | `openrig-registry/registry/<slug>.yaml` | maintainers, through review |
+| Public status | `bundle-status.v1` | `multi-agent-registry` status, generated | the status generator only |
+| Registry entry | `registry-entry.v1` | `multi-agent-registry/registry/<slug>.yaml` | maintainers, through review |
 
 ### Declared configurations
 
 `seats` gives a `pod.member` the runtimes it may use, and the profile each runtime uses. A member it doesn't list keeps
 the runtime `rig.yaml` gives it. `presets` names full mappings, and `recommended` names one of them, which must be
-`rig.yaml` as written. `rig bundle create`, `rig bundle configurations` and `rig bundle check` refuse a file that breaks
+`rig.yaml` as written. `multi-agent bundle create`, `multi-agent bundle configurations` and `multi-agent bundle check` refuse a file that breaks
 these rules.
 
-`--preset` and `--seat` choose a configuration (see the [rig bundle reference](rig-bundle.md)). Any mix of each seat's
+`--preset` and `--seat` choose a configuration (see the [multi-agent bundle reference](rig-bundle.md)). Any mix of each seat's
 declared runtimes can be built, not only the presets; a runtime a seat doesn't declare is refused, and nothing is built.
 Without either flag, create builds `rig.yaml` as written. The built archive's manifest records
 `configuration: { id, preset }` outside the package digest; `preset` is there only when `--preset` or `--seat` chose a
@@ -100,7 +100,7 @@ carries no tested status.
 - **`identity`:** source, configuration ID, package digest, the archive's assembler, the generator that made the view,
   stated compatibility, stated provenance (not verified), and integrity (self-consistency, not authorship). A source,
   configuration ID, package digest or assembler the archive doesn't state is `null`; unstated compatibility and
-  provenance are empty objects. None of it is filled from the inspecting OpenRig.
+  provenance are empty objects. None of it is filled from the inspecting Multi-Agent.
 - **`team`, `posture`, `toldFiles`, `alsoRuns`, `writes`, `outsideAddresses`, `needs` and `unknownBeforeLaunch`**, in
   that order. Facts cite the archive file they come from (`sourceRefs`), except `team` entries and the bundle-wide
   unknowns. `toldFiles` and `alsoRuns` also say how each resolves: `archive`, `host_at_launch` or `unresolved`.
@@ -129,7 +129,7 @@ carries no tested status.
     `team` and `posture`. Elsewhere it's optional: bundle-wide facts (services, library and project writes, setup and
     version needs) omit it, and older generators may not have stated it.
 - **`not_generated`:** a combination without a generated view, or an archive the generator can't describe: schema 1, no
-  readable pod-aware rig spec, a member missing its pod, id or agent reference, a runtime that depends on an AgentSpec
+  readable pod-aware multi-agent spec, a member missing its pod, id or agent reference, a runtime that depends on an AgentSpec
   the archive can't read, or an error while reading. It carries a reason and the local command that shows it, and no
   sections.
 
@@ -139,10 +139,10 @@ The author's `bundle.yaml`, beside `rig.yaml`, may declare setup that the user m
 
 ```yaml
 preconditions:
-  - name: Run inside an OpenRig source clone with dependencies installed and packages built.
+  - name: Run inside an Multi-Agent source clone with dependencies installed and packages built.
     commands:
-      - git clone https://github.com/mvschwarz/openrig.git
-      - cd openrig
+      - git clone https://github.com/mvschwarz/multi-agent.git
+      - cd multi-agent
       - npm ci
       - npm run build
   - name: Sign in to the selected coding runtimes before starting the team.
@@ -158,7 +158,7 @@ Each command is one plain command line, without shell operators (`;`, `&&`, pipe
 redirection). Run them in order in **one shell**, then run the install command in that same shell: it inherits the
 working directory left by the setup commands. There is no separate `workdir` field. Commands are untrusted author data;
 a site building a copyable block must validate every line and bound the number of entries, omitting all setup lines
-if any fails its plain-command rule. OpenRig displays these declarations; it does not execute them, verify that setup
+if any fails its plain-command rule. Multi-Agent displays these declarations; it does not execute them, verify that setup
 was done, or add a prerequisite gate. The archive hash covers the manifest; `packageDigest` excludes `bundle.yaml`
 and therefore does not cover these declarations.
 
@@ -179,14 +179,14 @@ runtime). A harness check never upgrades a team label.
 **Relations:** `supersedes`, `withdraws` and `resolves`. Reusing earlier evidence for a changed package is a reviewer's
 decision, recorded in the registry entry's `evidenceReuse`.
 
-**The status file** is generated from records by rule `openrig.status-rule/v1`:
+**The status file** is generated from records by rule `multi-agent.status-rule/v1`:
 - **Labels:** `known_problem`, `tested`, `tested_with_help`, `partly_tested`, `not_tested` and `status_unavailable`.
-  They're shown as Known problem, Tested by OpenRig, Tested with help (N), Partly tested, Not tested by OpenRig
+  They're shown as Known problem, Tested by Multi-Agent, Tested with help (N), Partly tested, Not tested by Multi-Agent
   and Status unavailable.
 - **A label belongs to one configuration ID.** No configuration is ever shown another configuration's label.
-- **Empty `platforms`** means Not tested by OpenRig. So does a custom configuration, one the listing doesn't offer.
+- **Empty `platforms`** means Not tested by Multi-Agent. So does a custom configuration, one the listing doesn't offer.
 - **Status unavailable is only for a listed configuration** whose records can't be read, or that's missing from the
-  status file; never Not tested by OpenRig. A listing whose records can't be read is `status_unavailable` as a whole.
+  status file; never Not tested by Multi-Agent. A listing whose records can't be read is `status_unavailable` as a whole.
 - **Platform keys** are `<os>-<arch>` (`linux`, `darwin` or `win32`; `x64` or `arm64`).
 - **`tested` means no help was needed:** it can't carry an assistance count above zero.
 - **An assist** is one action a person or the test runner took to get past a problem during the run, such as restarting a seat or re-running a command; following the bundle's own documented steps doesn't count.

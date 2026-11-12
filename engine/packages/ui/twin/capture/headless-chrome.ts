@@ -2,7 +2,7 @@
 // URL-based so the SAME mechanism captures the INTENT (file:// twin) and the PROOF (http:// real
 // shipped UI). The timing flag is PARAMETERIZED, not shared blindly: --virtual-time-budget settles a
 // static/daemon-free file:// page deterministically (D-1), but it does NOT complete on a live http://
-// OpenRig route (SSE/polling keep the page from going idle, so the virtual clock never finishes and
+// Multi-Agent route (SSE/polling keep the page from going idle, so the virtual clock never finishes and
 // Chrome hangs — qa repro, candidate 7a578b32). Intent keeps vtb; proof omits it. Capture failures
 // are interpreted honestly + boundedly by classifyCaptureResult (no silent hang).
 export interface ChromeScreenshotInput {

@@ -8,7 +8,7 @@
 #
 # REAL 51-02 FORM (adapted to the CLEARED runner, verdict 57d5aa7d — see
 # FORMAT-CONFORMANCE-NOTES.md): the baton is a fixture-level `env.queue` PRECONDITION
-# (there is NO queue action verb); the pipeline runs the shipped `rig queue
+# (there is NO queue action verb); the pipeline runs the shipped `multi-agent queue
 # create`/`claim` before the steps. "restart" = `daemon:{op:restart}` (ratified; the
 # baton lives in daemon SQLite, so it must survive the daemon lifecycle) — NOT a seat
 # relaunch (no snapshot-free per-seat relaunch verb exists, F2). `expect queue` is a

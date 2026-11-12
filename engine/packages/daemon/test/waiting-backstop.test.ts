@@ -14,9 +14,9 @@ describe("waiting face names the next action the existing ladder can actually ta
   const advance = (seconds: number) => vi.setSystemTime(Date.now() + seconds * 1000);
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime("2026-09-08T00:00:00Z");
-    vi.stubEnv("OPENRIG_QUEUE_WAKE_RETRY_INTERVAL_SECONDS", "300");
-    vi.stubEnv("OPENRIG_QUEUE_WAKE_RETRY_CAP", "3");
-    vi.stubEnv("OPENRIG_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES", "30");
+    vi.stubEnv("MULTI_AGENT_QUEUE_WAKE_RETRY_INTERVAL_SECONDS", "300");
+    vi.stubEnv("MULTI_AGENT_QUEUE_WAKE_RETRY_CAP", "3");
+    vi.stubEnv("MULTI_AGENT_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES", "30");
     db = new Database(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id,name) VALUES ('r','rig')").run(); sends = [];
     queue = new QueueRepository(db, new EventBus(db), { validateRig: () => true, transport: { send: async target => {
@@ -81,8 +81,8 @@ describe("waiting face names the next action the existing ladder can actually ta
   });
 
   it("uses configured retry cadence and the shared destination budget", async () => {
-    vi.stubEnv("OPENRIG_QUEUE_WAKE_RETRY_INTERVAL_SECONDS", "40");
-    vi.stubEnv("OPENRIG_QUEUE_WAKE_RETRY_CAP", "1");
+    vi.stubEnv("MULTI_AGENT_QUEUE_WAKE_RETRY_INTERVAL_SECONDS", "40");
+    vi.stubEnv("MULTI_AGENT_QUEUE_WAKE_RETRY_CAP", "1");
     const first = await handoff(), second = await handoff();
     expect(view(first).nextBackstop.dueAt).toBe("2026-09-08T00:00:40.000Z");
     advance(41); const count = sends.length; await tick(); expect(sends).toHaveLength(count + 1);

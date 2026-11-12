@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ConfigStore } from "./config-store.js";
-import { getOpenRigHome } from "./openrig-compat.js";
+import { getMultiAgentHome } from "@multi-agent/daemon/data-paths";
 
 /** Read the boot-minted identity without requiring the local daemon or minting a replacement. */
 export function readLocalOrigin(): string | undefined {
@@ -13,7 +13,7 @@ export function readLocalOrigin(): string | undefined {
     // An explicit configured DB wins. Otherwise retain the last launch's --db selection.
     if (configured.source === "default") {
       try {
-        const state = JSON.parse(readFileSync(join(getOpenRigHome(), "daemon.json"), "utf8"));
+        const state = JSON.parse(readFileSync(join(getMultiAgentHome(), "daemon.json"), "utf8"));
         if (typeof state.db === "string" && state.db.length > 0) dbPath = state.db;
       } catch { /* No launch record: use the configured default, never search other homes. */ }
     }

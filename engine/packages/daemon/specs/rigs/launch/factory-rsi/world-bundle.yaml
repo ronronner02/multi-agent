@@ -7,7 +7,7 @@ summary: >
   reviews one slice, then prepares its release. Dogfood is decoupled: it
   continuously uses the SHIPPED product out-of-band and feeds findings back into
   the next plan — the recursive-self-improvement edge, with no human required in
-  the loop. Run it with `rig up factory-rsi`, then instantiate the `factory-rsi`
+  the loop. Run it with `multi-agent up factory-rsi`, then instantiate the `factory-rsi`
   workflow and watch the loop close. Seats inherit their runtime's default
   model; qa, review, and dogfood run on the alternate runtime for cross-runtime
   diversity against the builder.

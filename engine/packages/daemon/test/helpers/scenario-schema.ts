@@ -44,7 +44,7 @@ export const EXPECT_SURFACES = [
  * RESERVED surfaces — named by the arch shape but NOT currently backed by a
  * shipped read verb, so the format must not promise what the product cannot
  * answer. `proof` moved here by PM lock amendment (ruling row
- * qitem-20260811092250-a80735bc): `rig proof` ships only `add`; the surface
+ * qitem-20260811092250-a80735bc): `multi-agent proof` ships only `add`; the surface
  * re-enters EXPECT_SURFACES by un-reserving when a read verb ships.
  */
 export const RESERVED_SURFACES = ["proof"] as const;
@@ -208,7 +208,7 @@ function validateEnvBlock(
 }
 
 /** Teaching cross-requirements between declared env and the surfaces steps read:
- *  a scope expect needs env.scope_mission (the shipped `rig scope audit` read has
+ *  a scope expect needs env.scope_mission (the shipped `multi-agent scope audit` read has
  *  --mission as a requiredOption). Load-time teaching beats a runtime surprise. */
 function validateEnvStepCrossRequirements(
   env: Record<string, unknown> | undefined,
@@ -227,7 +227,7 @@ function validateEnvStepCrossRequirements(
     if (typeof mission !== "string" || mission.length === 0) {
       push(
         "SCOPE_MISSION_MISSING",
-        "env.scope_mission: required (non-empty string) when any step expects the scope surface — the shipped read is `rig scope audit --mission <name> --json` and --mission is a requiredOption",
+        "env.scope_mission: required (non-empty string) when any step expects the scope surface — the shipped read is `multi-agent scope audit --mission <name> --json` and --mission is a requiredOption",
         "env.scope_mission",
       );
     }
@@ -287,7 +287,7 @@ function validateExpect(
     push(
       "RESERVED_EXPECT_SURFACE",
       `${path}.surface: "${surface}" is reserved, not readable — no shipped read verb exists for it ` +
-        `(\`rig proof\` ships only \`add\`), so the format must not promise what the product cannot answer. ` +
+        `(\`multi-agent proof\` ships only \`add\`), so the format must not promise what the product cannot answer. ` +
         `Reserved until a read verb ships (PM ruling qitem-20260811092250-a80735bc); it re-enters the ` +
         `readable set by un-reserving then.`,
       `${path}.surface`,

@@ -7,47 +7,47 @@ import { grade, type EvalCase } from "./helpers/eval-grader.js";
 
 const SEL: EvalCase = {
   id: "sel-01",
-  name: "selects core/rig-lifecycle for a fleet bring-back",
+  name: "selects orchestration-team for a native team run",
   category: "selection",
-  prompt: "the box rebooted and everything's gone — bring the whole fleet back",
-  expectedPatterns: ["rig context get\\s+core/rig-lifecycle"],
+  prompt: "start a native team run and keep the owner decision explicit",
+  expectedPatterns: ["multi-agent context get\\s+skills/pods/orchestration-team"],
 };
 
 const LOAD: EvalCase = {
   id: "load-01",
-  name: "pulls core/rig-lifecycle before any bring-back action",
+  name: "pulls orchestration-team before starting a team run",
   category: "loading",
-  prompt: "the box rebooted and everything's gone — bring the whole fleet back",
-  expectedPatterns: ["rig context get\\s+core/rig-lifecycle"],
+  prompt: "start a native team run and keep the owner decision explicit",
+  expectedPatterns: ["multi-agent context get\\s+skills/pods/orchestration-team"],
   order: {
-    getPattern: "rig context get\\s+core/rig-lifecycle",
-    actionPattern: "rig (up|start|restore)",
+    getPattern: "multi-agent context get\\s+skills/pods/orchestration-team",
+    actionPattern: "multi-agent team start",
   },
 };
 
 describe("eval-grader — deterministic door", () => {
   it("selection PASS when the correct ref is pulled", () => {
-    expect(grade(SEL, "…thinking… rig context get core/rig-lifecycle\nrig start").pass).toBe(true);
+    expect(grade(SEL, "…thinking… multi-agent context get skills/pods/orchestration-team\nmulti-agent team start").pass).toBe(true);
   });
 
   it("selection FAIL when the wrong ref is pulled", () => {
-    expect(grade(SEL, "rig context get core/attention-queue\nrig start").pass).toBe(false);
+    expect(grade(SEL, "multi-agent context get skills/process/context-engineering\nmulti-agent team start").pass).toBe(false);
   });
 
   it("selection FAIL on a forbidden pattern", () => {
-    const c: EvalCase = { ...SEL, forbiddenPatterns: ["rig destroy"] };
-    expect(grade(c, "rig context get core/rig-lifecycle\nrig destroy").pass).toBe(false);
+    const c: EvalCase = { ...SEL, forbiddenPatterns: ["multi-agent team merge"] };
+    expect(grade(c, "multi-agent context get skills/pods/orchestration-team\nmulti-agent team merge").pass).toBe(false);
   });
 
   it("loading PASS when the get precedes the action", () => {
-    expect(grade(LOAD, "rig context get core/rig-lifecycle\n…\nrig start").pass).toBe(true);
+    expect(grade(LOAD, "multi-agent context get skills/pods/orchestration-team\n…\nmulti-agent team start").pass).toBe(true);
   });
 
   it("loading FAIL when the action runs with no preceding get", () => {
-    expect(grade(LOAD, "rig start   # acted without loading").pass).toBe(false);
+    expect(grade(LOAD, "multi-agent team start   # acted without loading").pass).toBe(false);
   });
 
   it("loading FAIL when the action precedes the get", () => {
-    expect(grade(LOAD, "rig start\nthen rig context get core/rig-lifecycle").pass).toBe(false);
+    expect(grade(LOAD, "multi-agent team start\nthen multi-agent context get skills/pods/orchestration-team").pass).toBe(false);
   });
 });

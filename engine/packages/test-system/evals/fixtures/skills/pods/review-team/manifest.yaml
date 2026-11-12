@@ -1,0 +1,7 @@
+name: review-team
+version: "1"
+taxonomy: skills
+purpose: "(eval fixture) review a native team result"
+files:
+  - path: content.md
+    role: source

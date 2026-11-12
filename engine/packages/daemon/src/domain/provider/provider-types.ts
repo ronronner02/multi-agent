@@ -13,7 +13,7 @@ export interface ProviderAccount {
   label: string; // human, stable
   provider: ProviderKind;
   authState: AccountAuthState;
-  profileRef: string | null; // the `rig auth` profile name where one exists; null for unmanaged
+  profileRef: string | null; // the `multi-agent auth` profile name where one exists; null for unmanaged
   asOf: string; // ISO-8601
 }
 
@@ -133,7 +133,7 @@ export type PrecheckResult = { safe: true } | { safe: false; reasons: PrecheckRe
 
 export type SwitchOutcome = "succeeded" | "rebind_in_progress" | "failed_safely";
 
-/** The whole four-block read model, emitted by `rig provider status --json`. */
+/** The whole four-block read model, emitted by `multi-agent provider status --json`. */
 export interface FourBlockReadModel {
   accounts: ProviderAccount[];
   bindings: ProviderBinding[];
@@ -200,6 +200,6 @@ export interface ProviderUsageAllowance {
   unavailableReason?: string;
   /** Present on an unresolved observation: never matched, merged or replaced; kept from the most recent reads. */
   unresolved?: { note: string; keptReads: number; droppedReads: number };
-  /** Present when rig auth profiles exist: this read covers only the login active in the daemon's CODEX_HOME. */
+  /** Present when multi-agent auth profiles exist: this read covers only the login active in the daemon's CODEX_HOME. */
   savedProfiles?: { names: string[]; note: string };
 }

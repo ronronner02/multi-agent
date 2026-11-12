@@ -9,7 +9,7 @@ import {
 
 // Slice 51-01 items 6-8 — the A3-R3 injected-clock env guard + injection plumb.
 //
-// OPENRIG_TEST_CLOCK_NOW is the deterministic-clock injection var the compaction
+// MULTI_AGENT_TEST_CLOCK_NOW is the deterministic-clock injection var the compaction
 // bridge reads (falling back to new Date() when ABSENT = production). A PRESENT
 // clock var in a REAL seat silently FREEZES production compaction stamps — the
 // temporal edition of the silent-retarget class. So the hermetic helper hard-refuses
@@ -19,23 +19,23 @@ import {
 const cleanBase = () => ({ HOME: "/base-home", PATH: "/usr/bin", TERM: "xterm" });
 
 describe("ambient test-clock hazard guard (A3-R3 leak pin)", () => {
-  it("detects a present OPENRIG_TEST_CLOCK_NOW, treats empty/absent as clean", () => {
-    expect(TEST_CLOCK_ENV_VARS).toContain("OPENRIG_TEST_CLOCK_NOW");
-    expect(detectAmbientClockHazard({ OPENRIG_TEST_CLOCK_NOW: "2020-01-01T00:00:00.000Z" }))
-      .toEqual({ name: "OPENRIG_TEST_CLOCK_NOW", value: "2020-01-01T00:00:00.000Z" });
-    expect(detectAmbientClockHazard({ OPENRIG_TEST_CLOCK_NOW: "" })).toBeNull();
+  it("detects a present MULTI_AGENT_TEST_CLOCK_NOW, treats empty/absent as clean", () => {
+    expect(TEST_CLOCK_ENV_VARS).toContain("MULTI_AGENT_TEST_CLOCK_NOW");
+    expect(detectAmbientClockHazard({ MULTI_AGENT_TEST_CLOCK_NOW: "2020-01-01T00:00:00.000Z" }))
+      .toEqual({ name: "MULTI_AGENT_TEST_CLOCK_NOW", value: "2020-01-01T00:00:00.000Z" });
+    expect(detectAmbientClockHazard({ MULTI_AGENT_TEST_CLOCK_NOW: "" })).toBeNull();
     expect(detectAmbientClockHazard({})).toBeNull();
   });
 
   it("assertNoAmbientClock hard-refuses a present clock var (named, fail-closed)", () => {
-    expect(() => assertNoAmbientClock({ OPENRIG_TEST_CLOCK_NOW: "frozen" })).toThrow(AmbientClockHazardError);
+    expect(() => assertNoAmbientClock({ MULTI_AGENT_TEST_CLOCK_NOW: "frozen" })).toThrow(AmbientClockHazardError);
     expect(() => assertNoAmbientClock(cleanBase())).not.toThrow();
   });
 
   it("prepareHermeticEnv REFUSES a base env carrying a leaked clock var (the leak pin), before any fs side effect", () => {
     let err: unknown;
     try {
-      prepareHermeticEnv({ baseEnv: { ...cleanBase(), OPENRIG_TEST_CLOCK_NOW: "leaked" } });
+      prepareHermeticEnv({ baseEnv: { ...cleanBase(), MULTI_AGENT_TEST_CLOCK_NOW: "leaked" } });
     } catch (e) { err = e; }
     expect(err).toBeInstanceOf(AmbientClockHazardError);
   });
@@ -43,7 +43,7 @@ describe("ambient test-clock hazard guard (A3-R3 leak pin)", () => {
   it("injectClockNow sets the clock var in the scaffold's OWN child env (self-set injection), then cleans up", () => {
     const scaffold = prepareHermeticEnv({ baseEnv: cleanBase(), injectClockNow: "2021-06-06T06:06:06.000Z" });
     try {
-      expect(scaffold.env.OPENRIG_TEST_CLOCK_NOW).toBe("2021-06-06T06:06:06.000Z");
+      expect(scaffold.env.MULTI_AGENT_TEST_CLOCK_NOW).toBe("2021-06-06T06:06:06.000Z");
     } finally {
       scaffold.cleanup();
     }
@@ -52,7 +52,7 @@ describe("ambient test-clock hazard guard (A3-R3 leak pin)", () => {
   it("omitting injectClockNow leaves the clock var UNSET in the child env (absence = production real-time)", () => {
     const scaffold = prepareHermeticEnv({ baseEnv: cleanBase() });
     try {
-      expect(scaffold.env.OPENRIG_TEST_CLOCK_NOW).toBeUndefined();
+      expect(scaffold.env.MULTI_AGENT_TEST_CLOCK_NOW).toBeUndefined();
     } finally {
       scaffold.cleanup();
     }

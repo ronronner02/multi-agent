@@ -116,7 +116,7 @@ describe("T1 — isScaffoldPlaceholderText unit vectors", () => {
 describe("T6 — progress records outcomes without a second acceptance checklist", () => {
   it("new scaffolds point to attributed proof and have no generic acceptance boxes", () => {
     const content = fs.readFileSync(path.join(TEMPLATES_DIR, "slice-progress.md"), "utf8");
-    expect(content).toContain("rig proof show <slice>");
+    expect(content).toContain("multi-agent proof show <slice>");
     expect(sectionBody(content, "Current state")).not.toBeNull();
     expect(sectionBody(content, "Outcomes")).not.toBeNull();
     expect(checkboxTexts(content)).toEqual([]);

@@ -574,7 +574,7 @@ function queryInventoryRowsForRigs(db: Database.Database, rigIds: readonly strin
   return runInventoryRowQuery(db, `WHERE n.rig_id IN (${placeholders})`, "n.rig_id, n.created_at", rigIds);
 }
 
-/** Per-rig setup context an inventory row is built against. FS-1 W1.2: the
+/** Per-multi-agent setup context an inventory row is built against. FS-1 W1.2: the
  *  single-rig (`getNodeInventory`) and all-rigs (`getNodeInventoryForAllRigs`)
  *  paths both build entries through THIS one function, so their output is
  *  byte-identical by construction — the collapse changes only HOW the context +
@@ -591,7 +591,7 @@ interface InventoryBuildContext {
 }
 
 /**
- * Build the shared inventory projection from a registration and its rig context.
+ * Build the shared inventory projection from a registration and its multi-agent context.
  * Apply only current-occupant identity evidence and retain stored status alongside
  * effective status so readers can distinguish absence from registration history.
  */
@@ -1020,7 +1020,7 @@ export function getNodeDetailWithContext(
  *   - assigned-work counts: pending, in-progress, and blocked queue_items
  *     where destination_session matches either canonical coordinate for the seat
  *
- * Pure / synchronous — keeps the projection cheap for both `rig ps` and
+ * Pure / synchronous — keeps the projection cheap for both `multi-agent ps` and
  * the UI which both fetch this per-request. The two enrichments do not
  * read each other's source.
  */
@@ -1056,7 +1056,7 @@ export function attachTerminalActivityAndWork(
  * For ADOPTED seats, canonicalSessionName is the RAW tmux session
  * name (whatever the adopter chose, e.g., `my-existing-claude`).
  * Operators address adopted seats by the canonical form (logical
- * `{pod}-{member}@{rig}`) through `rig queue create --destination`,
+ * `{pod}-{member}@{rig}`) through `multi-agent queue create --destination`,
  * so the single-key lookup misses.
  *
  * Resolve via BOTH forms:

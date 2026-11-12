@@ -6,7 +6,7 @@ export function workflowPlanningContext(contextRefs: string[] | undefined, insta
   const mission = contextRefs?.find(ref => ref.endsWith("/mission.yaml"));
   if (!mission) return [];
   const lines = [
-    "Workflow plan: The plan can change. Inspect authored versus running steps with rig workflow revise " + instanceId + "; file edits alone do not adopt a revision.",
+    "Workflow plan: The plan can change. Inspect authored versus running steps with multi-agent workflow revise " + instanceId + "; file edits alone do not adopt a revision.",
     "Workflow plan: Waves guide agent admission/review; only authored executable dependencies schedule steps. Preserve completed judgments and outstanding child custody.",
   ];
   try {

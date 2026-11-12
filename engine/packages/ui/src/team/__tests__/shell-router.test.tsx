@@ -20,7 +20,7 @@ beforeEach(() => {
   mobile = false; signedIn = true; accountFailure = false; unexpected.length = 0;
   vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   localStorage.clear(); sessionStorage.clear(); queryClient.clear();
-  localStorage.setItem("openrig.interfaceLanguage", "en");
+  localStorage.setItem("multi-agent.interfaceLanguage", "en");
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   const original = window.matchMedia.bind(window);

@@ -382,7 +382,7 @@ export interface PromisedItem {
 
 // KI-5.3-2 — the logical-checkbox grammar (LogicalCheckboxItem +
 // parseLogicalCheckboxes) now lives in the twinned module
-// ../scope/logical-checkbox.ts, byte-equal with the CLI so `rig proof add`
+// ../scope/logical-checkbox.ts, byte-equal with the CLI so `multi-agent proof add`
 // indexes the SAME items this composer renders. Re-exported here so existing
 // readers (slice-detail-projector) keep importing it from the composer; the
 // ONE parse is unchanged.
@@ -856,7 +856,7 @@ export function deriveWorkflowExceptions(
     });
   };
   for (const w of workflows) {
-    const trace = `rig workflow trace ${w.instanceId}`;
+    const trace = `multi-agent workflow trace ${w.instanceId}`;
     // OPR.0.4.6.WF4 Q6 — the pointer for every row this instance emits;
     // identity derived exactly once, here (never from prose downstream).
     const wref: WorkflowRowRef = {
@@ -1004,7 +1004,7 @@ export function composeRigAgents(inputs: RigComposeInputs): ComposedRigAgents {
     inputs.attention,
     derived,
     [],
-    `queue+ps (rig scope) · window: ${inputs.rosterWindow}`,
+    `queue+ps (multi-agent scope) · window: ${inputs.rosterWindow}`,
     nowIso,
   );
   const band = composeAgentsBand(inputs.agents, "rig", derived, nowIso);

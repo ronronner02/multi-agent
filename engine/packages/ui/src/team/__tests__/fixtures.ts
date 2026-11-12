@@ -1,4 +1,4 @@
-import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun, TeamSeatView, TeamSystemHealth } from "@openrig/daemon/team-control";
+import type { TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamRun, TeamSeatView, TeamSystemHealth } from "@multi-agent/daemon/team-control";
 
 /**
  * One demo-shaped run, shared by the team surface's tests.

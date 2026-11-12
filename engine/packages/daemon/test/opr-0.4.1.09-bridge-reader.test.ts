@@ -14,14 +14,14 @@ import { join, resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BRIDGE = resolve(HERE, "..", "assets", "plugins", "openrig-core", "hooks", "scripts", "compaction-restore-bridge.cjs");
+const BRIDGE = resolve(HERE, "..", "assets", "plugins", "multi-agent-core", "hooks", "scripts", "compaction-restore-bridge.cjs");
 const SEAT = "test-seat@kernel";
 
 function runBridge(home: string, input: Record<string, unknown>, seat: string = SEAT) {
   const result = spawnSync(process.execPath, [BRIDGE], {
     input: JSON.stringify(input),
     encoding: "utf8",
-    env: { ...process.env, OPENRIG_HOME: home, OPENRIG_SESSION_NAME: seat, RIGGED_HOME: undefined } as NodeJS.ProcessEnv,
+    env: { ...process.env, MULTI_AGENT_HOME: home, MULTI_AGENT_SESSION_NAME: seat, } as NodeJS.ProcessEnv,
   });
   return { stdout: result.stdout || "", stderr: result.stderr || "", status: result.status };
 }
@@ -47,7 +47,7 @@ function sentinelExists(home: string, seat: string): boolean {
 
 let tmpDir: string;
 let home: string;
-beforeEach(() => { tmpDir = mkdtempSync(join(tmpdir(), "opr0419-bridge-")); home = join(tmpDir, ".openrig"); });
+beforeEach(() => { tmpDir = mkdtempSync(join(tmpdir(), "opr0419-bridge-")); home = join(tmpDir, ".multi-agent"); });
 afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
 
 describe("OPR.0.4.1.09 part 2b — bridge reader resolves ONLY this seat's marker (never wrong-seat)", () => {

@@ -8,19 +8,19 @@ claims:
     kind: structural
     check: author-derive-rule
   - id: derive-identity
-    statement: "Use rig whoami --json to derive the identity of the seat you actually occupy."
+    statement: "Use multi-agent whoami --json to derive the identity of the seat you actually occupy."
     kind: operational
     check: derive-identity
   - id: derive-topology
-    statement: "Use rig ps --nodes --json to derive which seats exist in the rig you occupy now."
+    statement: "Use multi-agent ps --nodes --json to derive which seats exist in the rig you occupy now."
     kind: operational
     check: derive-topology
   - id: discover-context
-    statement: "Use rig context list to discover the context packs available on this installation."
+    statement: "Use multi-agent context list to discover the context packs available on this installation."
     kind: operational
     check: rig-command-surface
   - id: discover-commands
-    statement: "Use rig --help before inventing a command or wrapper."
+    statement: "Use multi-agent --help before inventing a command or wrapper."
     kind: operational
     check: rig-command-surface
   - id: trust-source-table
@@ -52,11 +52,11 @@ claims:
     kind: structural
     check: coverage-map-contract
   - id: retrieve-public-pack
-    statement: "Use `rig context get world-public` to retrieve the assembled public pack bytes."
+    statement: "Use `multi-agent context get world-public` to retrieve the assembled public pack bytes."
     kind: operational
     check: retrieve-public-pack
   - id: compose-fresh-profile
-    statement: "Use `rig context profile world-public --situation fresh` to compose its fresh-session atom graph."
+    statement: "Use `multi-agent context profile world-public --situation fresh` to compose its fresh-session atom graph."
     kind: operational
     check: compose-fresh-profile
   - id: region-metadata
@@ -76,7 +76,7 @@ claims:
     kind: judgment
     flagged: "Authored purpose and taste; no live scan can prove it."
   - id: retrieve-world-example
-    statement: "Use `rig context get world-example` to retrieve the worked book-world template."
+    statement: "Use `multi-agent context get world-example` to retrieve the worked book-world template."
     kind: operational
     check: retrieve-world-example
   - id: book-exercise-guidance
@@ -96,7 +96,7 @@ claims:
     kind: structural
     check: authoring-convention
   - id: derive-pack-path
-    statement: "Use rig context show world-public --json to derive the installed pack directory."
+    statement: "Use multi-agent context show world-public --json to derive the installed pack directory."
     kind: operational
     check: derive-pack-path
   - id: run-public-verifier
@@ -124,7 +124,7 @@ claims:
     kind: judgment
     flagged: "Authored purpose and taste; no live scan can prove it."
   - id: world-example-install
-    statement: "Use `rig context add <pack-directory>` to install a world pack, confirm its ref with `rig context list`, and derive the configured store with `rig config get context.root` only when a path is needed."
+    statement: "Use `multi-agent context add <pack-directory>` to install a world pack, confirm its ref with `multi-agent context list`, and derive the configured store with `multi-agent config get context.root` only when a path is needed."
     kind: operational
     check: world-example-install
   - id: world-example-authoring
@@ -132,7 +132,7 @@ claims:
     kind: structural
     check: world-example-consistency
   - id: world-example-book-exercise
-    statement: "Run `rig context get world-example`, copy this pack, and make the project a book world by describing the writer, manuscript, sources, editorial rules, decisions, current draft state, and next useful actions in a few coherent files."
+    statement: "Run `multi-agent context get world-example`, copy this pack, and make the project a book world by describing the writer, manuscript, sources, editorial rules, decisions, current draft state, and next useful actions in a few coherent files."
     kind: structural
     check: world-example-consistency
   - id: world-example-regions
@@ -168,7 +168,7 @@ claims:
     kind: structural
     check: public-manifest-authored-claims
   - id: public-manifest-probe-enter-the-world-prompt
-    statement: "You just arrived in an unfamiliar OpenRig environment. What do you derive before acting?"
+    statement: "You just arrived in an unfamiliar Multi-Agent environment. What do you derive before acting?"
     kind: structural
     check: public-manifest-authored-claims
   - id: public-manifest-probe-enter-the-world-expect
@@ -192,7 +192,7 @@ claims:
     kind: structural
     check: public-manifest-authored-claims
   - id: example-manifest-purpose
-    statement: "A fill-in template showing the anatomy of an OpenRig world pack."
+    statement: "A fill-in template showing the anatomy of an Multi-Agent world pack."
     kind: structural
     check: example-manifest-authored-claims
   - id: example-manifest-summary-your-world

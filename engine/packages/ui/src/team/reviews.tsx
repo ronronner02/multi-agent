@@ -1,6 +1,6 @@
 import { TextPreview } from "./text-preview.js";
 import { useTranslation } from "react-i18next";
-import type { TeamOwnerRead, TeamReviewView } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamReviewView } from "@multi-agent/daemon/team-control";
 import type { IntegrationState } from "./clients.js";
 import { taskName } from "./display.js";
 import { TaskChanges } from "./workspace/workspace-focus.js";

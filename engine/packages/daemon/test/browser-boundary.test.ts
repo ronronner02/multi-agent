@@ -9,7 +9,7 @@ import {
   type BrowserBoundaryOptions,
 } from "../src/middleware/browser-boundary.js";
 
-const SELF = "openrig-vm.taile8a08.ts.net";
+const SELF = "multi-agent-vm.taile8a08.ts.net";
 
 function guarded(opts: Partial<BrowserBoundaryOptions> = {}) {
   const lines: string[] = [];
@@ -80,7 +80,7 @@ describe("target-name rule", () => {
       const r = await g.send({ host });
       expect(r.status, host).toBe(403);
       expect(r.body.code).toBe("untrusted_host");
-      expect(r.body.error).toContain("OPENRIG_ALLOWED_HOSTS");
+      expect(r.body.error).toContain("MULTI_AGENT_ALLOWED_HOSTS");
     }
     for (const host of ["a b", "x@y", "h:99999", "a, b"]) {
       expect((await g.send({ host })).body.code, host).toBe("untrusted_host");
@@ -92,11 +92,11 @@ describe("target-name rule", () => {
     const g = guarded({ discoverSelfNames: async () => [`${SELF}.`] });
     await new Promise((r) => setTimeout(r, 10));
     expect((await g.send({ host: `${SELF}:7433` })).status).toBe(200);
-    expect((await g.send({ host: "OPENRIG-VM:7433" })).status).toBe(200);
+    expect((await g.send({ host: "MULTI-AGENT-VM:7433" })).status).toBe(200);
     expect((await g.send({ host: "other-vm:7433" })).status).toBe(403);
   });
 
-  it("OPENRIG_ALLOWED_HOSTS admits names; OPENRIG_ALLOWED_ORIGINS does not", async () => {
+  it("MULTI_AGENT_ALLOWED_HOSTS admits names; MULTI_AGENT_ALLOWED_ORIGINS does not", async () => {
     expect((await guarded({ allowedHosts: "rig.example.com" }).send({ host: "rig.example.com:7433" })).status).toBe(200);
     expect((await guarded({ allowedOrigins: "rig.example.com,http://rig.example.com:7433" }).send({ host: "rig.example.com:7433" })).status).toBe(403);
   });
@@ -145,7 +145,7 @@ describe("discovery controls", () => {
     const reverse = vi.fn(async () => [`${SELF}.`, "bad name!"]);
     expect(await discoverTailscaleSelfNames({ timeoutMs: 10, tailscaleIp: () => null, reverse })).toEqual([]);
     expect(reverse).not.toHaveBeenCalled();
-    expect(await discoverTailscaleSelfNames({ timeoutMs: 10, tailscaleIp: () => "100.106.37.120", reverse })).toEqual([SELF, "openrig-vm"]);
+    expect(await discoverTailscaleSelfNames({ timeoutMs: 10, tailscaleIp: () => "100.106.37.120", reverse })).toEqual([SELF, "multi-agent-vm"]);
   });
 });
 
@@ -187,7 +187,7 @@ describe("browser-origin rule", () => {
     const g = guarded({ allowedOrigins: "http://secret-allowed.example" });
     const r = await g.send({ host: "localhost:7433", origin: "http://evil.example" });
     expect(r.body.code).toBe("browser_origin_refused");
-    expect(r.body.error).toContain("OPENRIG_ALLOWED_ORIGINS");
+    expect(r.body.error).toContain("MULTI_AGENT_ALLOWED_ORIGINS");
     expect(r.body.error).toContain("cannot read this response");
     expect(JSON.stringify(r.body)).not.toContain("secret-allowed");
   });

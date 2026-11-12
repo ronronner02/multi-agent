@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { SpecialistSoul, TeamRole } from "@openrig/daemon/team-control";
+import type { SpecialistSoul, TeamRole } from "@multi-agent/daemon/team-control";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 
 interface SoulSettingsReply {

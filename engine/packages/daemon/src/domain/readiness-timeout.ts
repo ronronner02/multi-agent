@@ -16,7 +16,7 @@ export function resolveReadinessTimeoutMs(
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     process.stderr.write(
-      `[openrig-settings] read of runtime.readiness_timeout_seconds failed: ${reason}; falling back to ${DEFAULT_READINESS_TIMEOUT_SECONDS}s default\n`,
+      `[multi-agent-settings] read of runtime.readiness_timeout_seconds failed: ${reason}; falling back to ${DEFAULT_READINESS_TIMEOUT_SECONDS}s default\n`,
     );
     return DEFAULT_READINESS_TIMEOUT_SECONDS * 1000;
   }

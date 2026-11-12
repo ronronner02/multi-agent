@@ -39,7 +39,7 @@ describe("run-evals --provider rig — the wired runner seam (r2 round-6 HIGH-1)
     // grows append-only across reads, then goes quiet.
     const readGenerationRecord = async () => {
       const out = { generationId: state.generationId, content: state.content };
-      if (sent && !state.content.includes("DONE")) state.content = state.content + '{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"DONE rig context get skills/core/rig-lifecycle"}]}}\n{"type":"system","subtype":"turn_duration","isMeta":false}\n';
+      if (sent && !state.content.includes("DONE")) state.content = state.content + '{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"DONE multi-agent context get skills/pods/orchestration-team"}]}}\n{"type":"system","subtype":"turn_duration","isMeta":false}\n';
       return out;
     };
     const session = await buildRigProviderSession({
@@ -56,7 +56,7 @@ describe("run-evals --provider rig — the wired runner seam (r2 round-6 HIGH-1)
     const sends = calls.filter((c) => c[0] === "send");
     expect(sends).toEqual([["send", "--raw", "ops-eval@evalrig", "the case prompt"]]); // raw per PIN 5 — envelope suppressed, still exactly one send
     // The current-generation suffix is captured (grading sees the seat's turn), pre-send content excluded.
-    expect(since).toContain("DONE rig context get skills/core/rig-lifecycle");
+    expect(since).toContain("DONE multi-agent context get skills/pods/orchestration-team");
     expect(since).not.toContain("prior gen-1 record");
   });
 
@@ -109,7 +109,7 @@ describe("run-evals --provider rig — the wired runner seam (r2 round-6 HIGH-1)
     const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "eval-rig-runner-"));
     try {
       const jsonl = path.join(stateDir, "gen-abc.jsonl");
-      fs.writeFileSync(jsonl, '{"role":"assistant","text":"rig context get skills/core/rig-lifecycle"}\n');
+      fs.writeFileSync(jsonl, '{"role":"assistant","text":"multi-agent context get skills/pods/orchestration-team"}\n');
       const ctxDir = path.join(stateDir, "state", "context-usage");
       fs.mkdirSync(ctxDir, { recursive: true });
       // Minimal Claude status-line sidecar: session id + transcript path (the append-only JSONL).
@@ -117,7 +117,7 @@ describe("run-evals --provider rig — the wired runner seam (r2 round-6 HIGH-1)
       const reader = defaultRunnerGenerationReader({ stateDir });
       const rec = await reader("dev-x@r");
       expect(rec.generationId).toBe("gen-abc");
-      expect(rec.content).toContain("rig context get skills/core/rig-lifecycle");
+      expect(rec.content).toContain("multi-agent context get skills/pods/orchestration-team");
     } finally {
       fs.rmSync(stateDir, { recursive: true, force: true });
     }

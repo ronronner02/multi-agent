@@ -37,7 +37,7 @@ export interface WhoamiResult {
    * OPR.99.0.6.1 — the peers[] roster contract, stated in-band so a fresh
    * agent cannot misread the field. `peers[]` is the same-rig ROSTER excluding
    * self (no edge/status filter); `edges{}` is the directional graph;
-   * `rig ps --nodes` is the node inventory including self + live state.
+   * `multi-agent ps --nodes` is the node inventory including self + live state.
    * Additive note only — `peers[]` name and shape are unchanged.
    */
   peersNote: string;
@@ -304,14 +304,14 @@ export class WhoamiService {
     const transcript: WhoamiResult["transcript"] = {
       enabled: transcriptEnabled,
       path: transcriptPath,
-      tailCommand: transcriptEnabled ? `rig transcript ${currentSessionName} --tail 100` : null,
-      grepCommand: transcriptEnabled ? `rig transcript ${currentSessionName} --grep <pattern>` : null,
+      tailCommand: transcriptEnabled ? `multi-agent transcript ${currentSessionName} --tail 100` : null,
+      grepCommand: transcriptEnabled ? `multi-agent transcript ${currentSessionName} --grep <pattern>` : null,
     };
 
     // Build command examples from peers
     const reachablePeers = peers.filter((p) => p.sessionName !== null);
-    const sendExamples = reachablePeers.slice(0, 3).map((p) => `rig send ${p.sessionName} 'message' --verify`);
-    const captureExamples = reachablePeers.slice(0, 3).map((p) => `rig capture ${p.sessionName}`);
+    const sendExamples = reachablePeers.slice(0, 3).map((p) => `multi-agent send ${p.sessionName} 'message' --verify`);
+    const captureExamples = reachablePeers.slice(0, 3).map((p) => `multi-agent capture ${p.sessionName}`);
 
     // Context usage. OPR.0.4.0.27: compact whoami SKIPS the contextUsageStore
     // lookup entirely (the every-boot token win + the daemon compute skip);
@@ -329,19 +329,19 @@ export class WhoamiService {
 
     // PL-007: workspace block resolved from RigSpec.workspace. activeRepo
     // resolves per-rig default first; envOverride lets per-session
-    // OPENRIG_TARGET_REPO override (subject to repo-name validation).
+    // MULTI_AGENT_TARGET_REPO override (subject to repo-name validation).
     const workspaceSpec = this.rigRepo.getRigWorkspace(nodeRow.rig_id);
     const workspace = resolveWorkspaceContext({
       spec: workspaceSpec,
       cwd: nodeRow.cwd,
-      envOverride: query.targetRepoOverride ?? process.env["OPENRIG_TARGET_REPO"] ?? null,
+      envOverride: query.targetRepoOverride ?? process.env["MULTI_AGENT_TARGET_REPO"] ?? null,
     });
 
     return {
       resolvedBy,
       identity,
       peers,
-      peersNote: "peers = this rig's roster excluding self (no edge filter); edges = directional relationships; use `rig ps --nodes` for node inventory including self + live state",
+      peersNote: "peers = this rig's roster excluding self (no edge filter); edges = directional relationships; use `multi-agent ps --nodes` for node inventory including self + live state",
       edges: { outgoing, incoming },
       transcript,
       commands: { sendExamples, captureExamples },

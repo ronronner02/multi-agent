@@ -1,7 +1,7 @@
 // L6 STEP-0 — the container-mode TOPOLOGY STAGING adapter (the pipeline's half of the boundary).
 //
 // The defect it closes: the loader resolves a scenario's `topology` to a HOST absolute path, and
-// buildRealDeps forwards it UNCHANGED to a CONTAINER daemon (`rig up <hostPath>`), which reads it
+// buildRealDeps forwards it UNCHANGED to a CONTAINER daemon (`multi-agent up <hostPath>`), which reads it
 // INSIDE the container and reports a mystery "Source not found" — the same host-vs-container path
 // assumption behind the /root staging block and the readable-but-not-writable block.
 //
@@ -28,7 +28,7 @@ import type { DockerResult } from "./scenario-container.js";
 export type StagingDocker = (args: string[], stdinFrom?: string[]) => Promise<DockerResult>;
 
 /** Loud, typed failure — a silent stage/fence failure is exactly the false-green class we keep
- *  killing (an empty or unwritable stage looks fine until `rig up` EACCESes three steps downstream). */
+ *  killing (an empty or unwritable stage looks fine until `multi-agent up` EACCESes three steps downstream). */
 export class ContainerStageError extends Error {
   constructor(message: string) {
     super(message);

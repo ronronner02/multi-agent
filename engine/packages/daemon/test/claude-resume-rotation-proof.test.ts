@@ -1,4 +1,4 @@
-// #1077 — a resumed Claude seat whose session id changes. OpenRig launched the seat with
+// #1077 — a resumed Claude seat whose session id changes. Multi-Agent launched the seat with
 // `--resume T1`, Claude continued as T2 and its SessionStart hook recorded T2. The proof accepts T1
 // in argv only when the first current-generation hook after that launch said `source: resume`.
 // Every other hook (a /clear, startup or compaction, no source, a stale generation, and anything
@@ -17,7 +17,7 @@ import { CLAUDE_RESUME_ROTATION_COLUMNS, SessionRegistry, claudeResumeRotation }
 import { verifyClaudePaneProcess, observeClaudeDelivery, type NativeProcessRow } from "../src/domain/native-process-lineage.js";
 
 const require = createRequire(import.meta.url);
-const relay = require("../assets/plugins/openrig-core/hooks/scripts/activity-relay.cjs") as {
+const relay = require("../assets/plugins/multi-agent-core/hooks/scripts/activity-relay.cjs") as {
   buildSessionIdentityPayload(payload: Record<string, unknown>, env: Record<string, string>): Record<string, unknown> | null;
 };
 
@@ -37,7 +37,7 @@ function seat(opts: { armed?: boolean; launchWrite?: boolean; launchObserved?: t
   const rig = rigRepo.createRig("rotation");
   const node = rigRepo.addNode(rig.id, "dev.impl", { runtime: "claude-code" });
   const session = registry.registerSession(node.id, "dev-impl@rotation");
-  // OpenRig arms the launch before starting `claude --resume T1` (startup-orchestrator, legacy restore).
+  // Multi-Agent arms the launch before starting `claude --resume T1` (startup-orchestrator, legacy restore).
   if (opts.armed !== false) registry.recordResumeLaunch(session.id, T1);
   // The launch path's own record of the process it started on T1 (null: it could not observe one).
   const launchObserved = opts.launchObserved === undefined ? launchedClaude : opts.launchObserved;
@@ -48,7 +48,7 @@ function seat(opts: { armed?: boolean; launchWrite?: boolean; launchObserved?: t
   const row = () => db.prepare(
     "SELECT resume_token, resume_provenance, resume_launch_token, resume_rotated_from FROM sessions WHERE id = ?",
   ).get(session.id) as { resume_token: string; resume_provenance: string; resume_launch_token: string | null; resume_rotated_from: string | null };
-  // By default the hook comes from the process OpenRig launched, whose command carried the marker.
+  // By default the hook comes from the process Multi-Agent launched, whose command carried the marker.
   const hook = (token: string, source: string | null, currentGeneration = true, resumeLaunch: string | null = T1, launchedProcess = true) =>
     registry.recordHookSessionIdentity(session.id, "claude_id", token,
       { source, currentGeneration, resumeLaunch, launchedProcess: launchedProcess ? launchedClaude : null });
@@ -59,7 +59,7 @@ function seat(opts: { armed?: boolean; launchWrite?: boolean; launchObserved?: t
   return { db, registry, session, node, generation, row, hook, rotation, rotatedFrom };
 }
 
-describe("the first hook after OpenRig's --resume launch", () => {
+describe("the first hook after Multi-Agent's --resume launch", () => {
   // dev-review's reproduction against 21c55946: with the first post lost and the claim removed, a
   // replacement's own hook counts as first. Only the launch path's record of its process tells them apart.
   it.each([
@@ -145,7 +145,7 @@ describe("the first hook after OpenRig's --resume launch", () => {
     expect(s.row()).toMatchObject({ resume_token: T1, resume_launch_token: null, resume_rotated_from: null });
   });
 
-  it("without an armed launch (fresh, or a process OpenRig did not launch) nothing qualifies", () => {
+  it("without an armed launch (fresh, or a process Multi-Agent did not launch) nothing qualifies", () => {
     const fresh = seat({ armed: false });
     fresh.hook(T2, "resume");
     expect(fresh.rotatedFrom()).toBeNull();
@@ -200,15 +200,15 @@ describe("the relay forwards the evidence", () => {
   it("sends SessionStart's source, the occupant generation and the launch marker with the session id", () => {
     const payload = relay.buildSessionIdentityPayload(
       { hook_event_name: "SessionStart", session_id: T2, source: "resume" },
-      { OPENRIG_SESSION_NAME: "dev-impl@rotation", OPENRIG_RUNTIME: "claude-code", OPENRIG_OCCUPANT_GENERATION: "gen-1",
-        OPENRIG_RESUME_LAUNCH: T1 },
+      { MULTI_AGENT_SESSION_NAME: "dev-impl@rotation", MULTI_AGENT_RUNTIME: "claude-code", MULTI_AGENT_OCCUPANT_GENERATION: "gen-1",
+        MULTI_AGENT_RESUME_LAUNCH: T1 },
     );
     expect(payload).toMatchObject({ eventFamily: "session_identity", sessionId: T2, source: "resume", generation: "gen-1", resumeLaunch: T1,
       hookPid: process.pid });
   });
 
   it("claims the launch's first SessionStart once, on disk, per launch token and generation", () => {
-    const dir = mkdtempSync(join(tmpdir(), "openrig-relay-claim-"));
+    const dir = mkdtempSync(join(tmpdir(), "multi-agent-relay-claim-"));
     try {
       expect(relay.claimFirstLaunchHook(T1, "gen-1", dir)).toBe(true);
       // A later hook of the same launch (in-process /resume, a child) finds it claimed.
@@ -224,7 +224,7 @@ describe("the relay forwards the evidence", () => {
   it("sends nulls when the runtime or launch did not provide them", () => {
     const payload = relay.buildSessionIdentityPayload(
       { hook_event_name: "SessionStart", session_id: T2 },
-      { OPENRIG_SESSION_NAME: "dev-impl@rotation", OPENRIG_RUNTIME: "claude-code" },
+      { MULTI_AGENT_SESSION_NAME: "dev-impl@rotation", MULTI_AGENT_RUNTIME: "claude-code" },
     );
     expect(payload).toMatchObject({ sessionId: T2, source: null, generation: null, resumeLaunch: null });
   });

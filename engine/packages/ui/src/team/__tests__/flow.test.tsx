@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInterfaceI18n, type InterfaceLanguage } from "@openrig/i18n";
+import { createInterfaceI18n, type InterfaceLanguage } from "@multi-agent/i18n";
 import { I18nextProvider } from "react-i18next";
 import type { i18n as I18n } from "i18next";
 import { FlowView } from "../flow/FlowView.js";

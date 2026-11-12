@@ -122,7 +122,7 @@ export function makeEnsureStuckExceptionItem(deps: StuckExceptionDeps): EnsureSt
         resolvedVia: "engine-default" as const,
       };
     const e = exception.deadlineEvidence!;
-    const evidenceRef = `rig workflow trace ${e.instanceId}`;
+    const evidenceRef = `multi-agent workflow trace ${e.instanceId}`;
     const body =
       `WORKFLOW EXCEPTION (stuck_overdue)\n` +
       `workflow: ${input.workflowName} v${input.workflowVersion}\n` +

@@ -1,11 +1,11 @@
 // transcript-redaction.ts — daemon-side mirror of the v0 redaction policy.
 //
 // Mirrors packages/cli/src/restore-packet/redaction.ts SECRET_PATTERNS
-// (M1 contract § 4 / openrig-v0 policy). Patterns duplicated rather than
-// imported because @openrig/cli is not a daemon dependency (and adding
+// (M1 contract § 4 / multi-agent-v0 policy). Patterns duplicated rather than
+// imported because @multi-agent/cli is not a daemon dependency (and adding
 // it would invert the package graph). For M2c-Daemon scope: keep this
 // list byte-equivalent to the CLI list. A future slice may factor a
-// shared @openrig/redaction package; until then, drift between these
+// shared @multi-agent/redaction package; until then, drift between these
 // two arrays is a defect — reviewers should diff them on any change.
 
 /** v0 secret-pattern list. Mirrors packages/cli/src/restore-packet/redaction.ts:31-37. */
@@ -18,7 +18,7 @@ export const TRANSCRIPT_SECRET_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
- * Apply the openrig-v0 redaction policy to transcript content. Returns
+ * Apply the multi-agent-v0 redaction policy to transcript content. Returns
  * the input with each match of the secret patterns replaced by the
  * literal string `[REDACTED]`. Pure function; no side effects.
  *

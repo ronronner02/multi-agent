@@ -91,7 +91,7 @@ shipped vocabulary (four rungs plus two exits):
 `wip | provisional | established | canonical | superseded | retired`
 
 `superseded` must name its successor; `retired` means do-not-use. These are the ONLY
-valid values — `rig scope slice stage` and `rig scope mission stage` reject invented stages
+valid values — `multi-agent scope slice stage` and `multi-agent scope mission stage` reject invented stages
 (shape, shaped, draft) and a `superseded` without a successor; context-pack manifests and
 lore frontmatter aren't checked. Items minted under
 new conventions carry a stage from birth: labeling from day one is free, retrofitting

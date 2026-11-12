@@ -333,7 +333,7 @@ describe("WatchdogJobsRepository — W2c exact-tuple auto-registration", () => {
     policy: "idle-gate-qitem",
     specYaml:
       `policy: idle-gate-qitem\n` +
-      `generated_by: openrig-daemon\n` +
+      `generated_by: multi-agent-daemon\n` +
       `target:\n  session: ${targetSession}\n` +
       `interval_seconds: 60\n` +
       `scan_interval_seconds: 60\n` +

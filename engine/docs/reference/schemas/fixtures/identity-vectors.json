@@ -29,14 +29,14 @@
     {
       "integrityFiles": {
         "rig.yaml": "1111111111111111111111111111111111111111111111111111111111111111",
-        "agents/openrig-dev/agent.yaml": "2222222222222222222222222222222222222222222222222222222222222222",
+        "agents/multi-agent-dev/agent.yaml": "2222222222222222222222222222222222222222222222222222222222222222",
         "README.md": "3333333333333333333333333333333333333333333333333333333333333333",
-        "agents/openrig-dev/guidance/lead.md": "4444444444444444444444444444444444444444444444444444444444444444"
+        "agents/multi-agent-dev/guidance/lead.md": "4444444444444444444444444444444444444444444444444444444444444444"
       },
       "expected": {
         "algorithm": "sha256",
         "value": "cda24a7d4904e89e29c9513fc1e4916bee782a57b2b6ee43b859a84f4b94fb6a",
-        "coverage": "openrig.package-digest/v1"
+        "coverage": "multi-agent.package-digest/v1"
       }
     },
     {
@@ -48,7 +48,7 @@
       "expected": {
         "algorithm": "sha256",
         "value": "7ba71a4097dae6dbfb358af6b0b601a438f748eec578756f97144fe9f7fadaea",
-        "coverage": "openrig.package-digest/v1"
+        "coverage": "multi-agent.package-digest/v1"
       }
     },
     {
@@ -59,7 +59,7 @@
       "expected": {
         "algorithm": "sha256",
         "value": "413a88836f2b10561d9272a6d272e5c610a122d76d327d16bc2a6f1af44a0826",
-        "coverage": "openrig.package-digest/v1"
+        "coverage": "multi-agent.package-digest/v1"
       }
     },
     {
@@ -73,7 +73,7 @@
       "expected": {
         "algorithm": "sha256",
         "value": "9055bef9907afbafec3401bbba55625ed0ddf1924390259c6dd95a128b3d50e8",
-        "coverage": "openrig.package-digest/v1"
+        "coverage": "multi-agent.package-digest/v1"
       }
     }
   ]

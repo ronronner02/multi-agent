@@ -3,7 +3,7 @@ import { resolveBindPlan } from "../src/domain/bind-plan.js";
 
 // OPR.0.5.5.20 — bind intent has unambiguous provenance. The incident shape (operator
 // baton qitem-20260827070400): a maintenance command in a managed environment carried
-// OPENRIG_HOST=127.0.0.1; the daemon took single-bind and silently dropped Tailscale.
+// MULTI_AGENT_HOST=127.0.0.1; the daemon took single-bind and silently dropped Tailscale.
 
 describe("S20 — resolveBindPlan: routing env is never bind intent", () => {
   it("INCIDENT SHAPE: injected routing env + no dedicated intent → DEFAULT multi-bind, both listeners, ignore is VISIBLE", () => {

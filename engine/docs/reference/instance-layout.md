@@ -1,11 +1,11 @@
-# OpenRig Instance Layout
+# Multi-Agent Instance Layout
 
-An OpenRig instance keeps its managed state under one configured
-`$OPENRIG_HOME`. `rig daemon start` and direct daemon first start reconcile the
+An Multi-Agent instance keeps its managed state under one configured
+`$MULTI_AGENT_HOME`. `multi-agent daemon start` and direct daemon first start reconcile the
 same additive layout before the database is opened or the listener binds.
 
 ```text
-$OPENRIG_HOME/
+$MULTI_AGENT_HOME/
   config.json             # typed instance settings; created as an empty object
   state/                  # runtime-owned durable state
   context/                # addressable context library (`context.root`)
@@ -21,7 +21,7 @@ $OPENRIG_HOME/
     exhaust/
   specs/                  # canonical instance spec library
   topology/               # instance, rig, pod, and seat continuity tree
-  plugins/                # installed OpenRig plugins
+  plugins/                # installed Multi-Agent plugins
   run/                    # process coordination files
   logs/                   # daemon and operation logs
   transcripts/            # durable per-seat terminal transcripts
@@ -49,14 +49,14 @@ override:
 | Surface | Value |
 | --- | --- |
 | Config key | `context.root` |
-| Environment | `OPENRIG_CONTEXT_ROOT` |
-| Default | `$OPENRIG_HOME/context` |
+| Environment | `MULTI_AGENT_CONTEXT_ROOT` |
+| Default | `$MULTI_AGENT_HOME/context` |
 | Resolved property | `contextRoot` |
 
 The removed `context.packs_root`, `context.packsRoot`, and
-`OPENRIG_CONTEXT_PACKS_ROOT` spellings are refused with guidance to use
+`MULTI_AGENT_CONTEXT_PACKS_ROOT` spellings are refused with guidance to use
 `context.root`; they are not compatibility aliases. Bundle installation and
-`rig context add` both resolve the same configured landing root.
+`multi-agent context add` both resolve the same configured landing root.
 
 ## System World
 
@@ -64,19 +64,19 @@ The System World is the instance-wide baseline selected before topology/role
 and Project World material. Its versioned manifest contains ordered context-pack
 references plus managed skill identities; it never contains authoritative skill
 bytes. The default manifest is installed additively at
-`$OPENRIG_HOME/context/system/system-world.yaml`.
+`$MULTI_AGENT_HOME/context/system/system-world.yaml`.
 
 | Surface | Value |
 | --- | --- |
 | Config key | `context.system_world` |
-| Environment | `OPENRIG_CONTEXT_SYSTEM_WORLD` |
+| Environment | `MULTI_AGENT_CONTEXT_SYSTEM_WORLD` |
 | Default | `default` |
 | Resolved property | `systemWorld` |
 
 `default` selects the installed manifest, a safe relative or absolute path
 selects an explicit replacement, and `disabled` is an explicit off state.
 Missing or malformed selections fail; absence is never inferred as disablement.
-`rig context work-install --json` reports the effective state, source, manifest,
+`multi-agent context work-install --json` reports the effective state, source, manifest,
 context selectors, and skills. With `--runtime`, its managed skill loadout then
 combines System World, topology, and Project World selectors with provenance.
 The catalog is a Git checkout. A skill folder with uncommitted or untracked content is
@@ -85,7 +85,7 @@ exit 1. It inspects by default; `--apply-skills` projects the remaining clean sk
 keeping any previously projected copy of the skipped skill. An uncommitted change directly
 in the catalog root, such as `catalog.yaml`, still makes the whole catalog unavailable.
 
-For a pre-0.5.9 home, use the `openrig-upgrade` skill's
+For a pre-0.5.9 home, use the `multi-agent-upgrade` skill's
 `migrate-telemetry-state-0.5.9.mjs` helper as an Agent-Operated Migration. Its
 order is plan → `--apply-state` → separately activate the target runtime →
 paired new-root samples newer than any bounded legacy tail → `--verify` → the
@@ -103,7 +103,7 @@ mutation.
 
 ## Existing spec libraries
 
-Creating `$OPENRIG_HOME/specs` does not migrate existing launch-era specs.
+Creating `$MULTI_AGENT_HOME/specs` does not migrate existing launch-era specs.
 Upgraded installations may still have a separate legacy specs library that the
 runtime reads for compatibility. Treat the two-home state as an explicit
 limitation: use the live spec-library commands to determine where a spec is

@@ -96,7 +96,7 @@ export function validateHumanPark(req: HumanParkRequest): HumanRouteValidation {
     req.summary,
     req.evidenceRef,
     "parking a qitem on a human seat",
-    "Provide them at park time (rig queue block --summary --evidence-ref) or on the item beforehand; blocking on another qitem requires nothing new.",
+    "Provide them at park time (multi-agent queue block --summary --evidence-ref) or on the item beforehand; blocking on another qitem requires nothing new.",
   );
 }
 

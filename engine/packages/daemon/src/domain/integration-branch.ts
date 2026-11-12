@@ -68,7 +68,7 @@ export interface IntegrationDeps {
   governance: PlanGovernance;
   /** Where the daemon's per-run worktrees live: the same root U5's plan worktree uses. */
   worktreeRoot: () => string;
-  /** The candidate's own patch and manifest, the way `rig team apply` and the result read take it. */
+  /** The candidate's own patch and manifest, the way `multi-agent team apply` and the result read take it. */
   candidateManifest: (runId: string, taskId: string) => {
     base: "commit" | "snapshot"; baseIdentifier: string; patch: string; manifestDigest: string };
   /**
@@ -91,8 +91,8 @@ export interface Integration {
 }
 
 /** The daemon's own commit identity on the integration branch, as U5's plan commits use. */
-const DAEMON_GIT_ENV = { GIT_AUTHOR_NAME: "openrig", GIT_AUTHOR_EMAIL: "openrig@localhost",
-  GIT_COMMITTER_NAME: "openrig", GIT_COMMITTER_EMAIL: "openrig@localhost" };
+const DAEMON_GIT_ENV = { GIT_AUTHOR_NAME: "multi-agent", GIT_AUTHOR_EMAIL: "multi-agent@localhost",
+  GIT_COMMITTER_NAME: "multi-agent", GIT_COMMITTER_EMAIL: "multi-agent@localhost" };
 
 function git(cwd: string, args: readonly string[], input?: string): string {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", input,
@@ -153,7 +153,7 @@ export function composeIntegration(deps: IntegrationDeps): Integration {
     governance.integrationRecord(run.id).branch ?? runSlug({ runId: run.id, name: run.displayName });
 
   /**
-   * The owner's repository — the checkout `rig team merge` writes into.
+   * The owner's repository — the checkout `multi-agent team merge` writes into.
    *
    * A planning run's binding root is already the run's own worktree, so the owner's repository
    * is the one that worktree was added to: a linked worktree's common git directory lives in

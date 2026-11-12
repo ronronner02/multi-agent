@@ -17,7 +17,7 @@ function fixture(files) {
     writeFileSync(path, text);
   };
   write(daemonPackageJsonPath, JSON.stringify({
-    name: "@openrig/daemon",
+    name: "@multi-agent/daemon",
     exports: {
       "./attention": { types: "./dist/attention-surface.d.ts", import: "./dist/attention-surface.js" },
       "./crash-cart": { types: "./dist/crash-cart-surface.js", import: "./dist/crash-cart-surface.js" },
@@ -34,13 +34,13 @@ function fixture(files) {
 test("rewrites static, side-effect, re-export and dynamic imports in nested CLI paths", () => {
   const f = fixture({
     "dist/commands/attention.js": [
-      'import { a } from "@openrig/daemon/attention";',
-      "import '@openrig/daemon/crash-cart';",
-      'export { a as b } from "@openrig/daemon/attention";',
-      'const m = await import("@openrig/daemon/crash-cart");',
+      'import { a } from "@multi-agent/daemon/attention";',
+      "import '@multi-agent/daemon/crash-cart';",
+      'export { a as b } from "@multi-agent/daemon/attention";',
+      'const m = await import("@multi-agent/daemon/crash-cart");',
       "",
     ].join("\n"),
-    "dist/bin-wrapper.js": 'const c = await import( "@openrig/daemon/crash-cart" );\n',
+    "dist/bin-wrapper.js": 'const c = await import( "@multi-agent/daemon/crash-cart" );\n',
   });
   try {
     const result = rewriteDaemonImports({ cliDir: f.cliDir, daemonPackageJsonPath: f.daemonPackageJsonPath });
@@ -60,9 +60,9 @@ test("rewrites static, side-effect, re-export and dynamic imports in nested CLI 
 
 test("leaves prose, comments and non-import strings unchanged", () => {
   const text = [
-    "// LAZY-imports the narrow @openrig/daemon/crash-cart surface.",
-    "/** the bytes live in `@openrig/daemon`. */",
-    'const label = "@openrig/daemon/attention";',
+    "// LAZY-imports the narrow @multi-agent/daemon/crash-cart surface.",
+    "/** the bytes live in `@multi-agent/daemon`. */",
+    'const label = "@multi-agent/daemon/attention";',
     "",
   ].join("\n");
   const f = fixture({ "dist/prose.js": text });
@@ -75,7 +75,7 @@ test("leaves prose, comments and non-import strings unchanged", () => {
 });
 
 test("fails on a subpath with no exports entry, including the bare package name", () => {
-  for (const specifier of ["@openrig/daemon/not-exported", "@openrig/daemon"]) {
+  for (const specifier of ["@multi-agent/daemon/not-exported", "@multi-agent/daemon"]) {
     const f = fixture({ "dist/x.js": `import { x } from "${specifier}";\n` });
     try {
       assert.throws(
@@ -90,7 +90,7 @@ test("fails on a subpath with no exports entry, including the bare package name"
 });
 
 test("fails when the mapped target was not staged", () => {
-  const f = fixture({ "dist/x.js": 'import { x } from "@openrig/daemon/missing-file";\n' });
+  const f = fixture({ "dist/x.js": 'import { x } from "@multi-agent/daemon/missing-file";\n' });
   try {
     assert.throws(
       () => rewriteDaemonImports({ cliDir: f.cliDir, daemonPackageJsonPath: f.daemonPackageJsonPath }),
@@ -102,7 +102,7 @@ test("fails when the mapped target was not staged", () => {
 });
 
 test("a second run is a no-op", () => {
-  const f = fixture({ "dist/x.js": 'import { a } from "@openrig/daemon/attention";\n' });
+  const f = fixture({ "dist/x.js": 'import { a } from "@multi-agent/daemon/attention";\n' });
   try {
     rewriteDaemonImports({ cliDir: f.cliDir, daemonPackageJsonPath: f.daemonPackageJsonPath });
     const once = f.read("dist/x.js");
@@ -115,9 +115,9 @@ test("a second run is a no-op", () => {
 
 test("leaves import-shaped text in comments, strings and templates unchanged", () => {
   const text = [
-    '// import x from "@openrig/daemon/attention";',
-    "const example = 'import x from \"@openrig/daemon/attention\"';",
-    'const other = `import x from "@openrig/daemon/attention"`;',
+    '// import x from "@multi-agent/daemon/attention";',
+    "const example = 'import x from \"@multi-agent/daemon/attention\"';",
+    'const other = `import x from "@multi-agent/daemon/attention"`;',
     "export {};",
     "",
   ].join("\n");
@@ -133,9 +133,9 @@ test("leaves import-shaped text in comments, strings and templates unchanged", (
 test("rewrites real imports that carry comments or use a template literal", () => {
   const f = fixture({
     "dist/x.js": [
-      'const a = import /* kept */ ("@openrig/daemon/attention");',
-      'import b from /* kept */ "@openrig/daemon/attention";',
-      "const c = import(`@openrig/daemon/crash-cart`);",
+      'const a = import /* kept */ ("@multi-agent/daemon/attention");',
+      'import b from /* kept */ "@multi-agent/daemon/attention";',
+      "const c = import(`@multi-agent/daemon/crash-cart`);",
       "",
     ].join("\n"),
   });
@@ -153,7 +153,7 @@ test("rewrites real imports that carry comments or use a template literal", () =
 });
 
 test("fails on an unmapped subpath hidden behind a comment", () => {
-  const f = fixture({ "dist/x.js": 'const x = import /* kept */ ("@openrig/daemon/unknown");\n' });
+  const f = fixture({ "dist/x.js": 'const x = import /* kept */ ("@multi-agent/daemon/unknown");\n' });
   try {
     assert.throws(
       () => rewriteDaemonImports({ cliDir: f.cliDir, daemonPackageJsonPath: f.daemonPackageJsonPath }),
@@ -166,10 +166,10 @@ test("fails on an unmapped subpath hidden behind a comment", () => {
 
 test("fails on a non-literal module argument naming the package, and on unparseable files", () => {
   const cases = [
-    ['const x = import("@openrig/daemon/" + name);\n', /non-literal module argument/],
-    ["const x = import(`@openrig/daemon/${name}`);\n", /non-literal module argument/],
-    ['const x = require("@openrig/daemon/" + name);\n', /non-literal module argument/],
-    ['import { from "@openrig/daemon/attention";\n', /cannot parse/],
+    ['const x = import("@multi-agent/daemon/" + name);\n', /non-literal module argument/],
+    ["const x = import(`@multi-agent/daemon/${name}`);\n", /non-literal module argument/],
+    ['const x = require("@multi-agent/daemon/" + name);\n', /non-literal module argument/],
+    ['import { from "@multi-agent/daemon/attention";\n', /cannot parse/],
   ];
   for (const [text, expected] of cases) {
     const f = fixture({ "dist/x.js": text });
@@ -212,10 +212,10 @@ test("runs when executed directly from paths with spaces, # or a symlinked paren
     symlinkSync(parent, linked);
     const cases = [["plain", parent], ["with space", parent], ["with#hash", parent], ["space and #hash", parent], ["via link", linked]];
     for (const [name, base] of cases) {
-      const root = miniatureRepo(parent, name, 'import { a } from "@openrig/daemon/attention";\n');
+      const root = miniatureRepo(parent, name, 'import { a } from "@multi-agent/daemon/attention";\n');
       const result = runDirect(join(base, name));
       assert.equal(result.status, 0, `${name}: ${result.stderr}`);
-      assert.match(result.stdout, /Rewrote 1 @openrig\/daemon import\(s\) in 1 file\(s\)/, name);
+      assert.match(result.stdout, /Rewrote 1 @multi-agent\/daemon import\(s\) in 1 file\(s\)/, name);
       assert.equal(readFileSync(join(root, "packages/cli/dist/x.js"), "utf8"), 'import { a } from "../daemon/dist/attention-surface.js";\n', name);
     }
   } finally {
@@ -227,7 +227,7 @@ test("runs when executed directly from paths with spaces, # or a symlinked paren
 test("still fails the build when executed directly with an unmapped import", () => {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "rewrite-direct-")));
   try {
-    const compiled = 'import { x } from "@openrig/daemon/not-exported";\n';
+    const compiled = 'import { x } from "@multi-agent/daemon/not-exported";\n';
     const root = miniatureRepo(parent, "space and #hash", compiled);
     const result = runDirect(root);
     assert.equal(result.status, 1);

@@ -2,7 +2,7 @@ version: "0.2"
 name: kernel
 summary: >
   Claude-only kernel variant: all three agents run on Claude Code.
-  Selected by rig daemon start when claude auth status is green but
+  Selected by multi-agent daemon start when claude auth status is green but
   codex login status fails.
 
 culture_file: culture/CULTURE.md

@@ -15,7 +15,7 @@ async function run(options: string[], githubDeps: TeamStartDeps) {
   const saved = process.exitCode;
   process.exitCode = undefined;
   try {
-    await runProgram(createProgram({ githubDeps }), ["node", "rig", "github", "status", ...options],
+    await runProgram(createProgram({ githubDeps }), ["node", "multi-agent", "github", "status", ...options],
       { out: line => lines.push(line), err: line => lines.push(line), exit: code => { process.exitCode = code; } });
     return { lines, code: process.exitCode };
   } finally {
@@ -27,7 +27,7 @@ const response = (body: unknown, status = 200) =>
   vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
 afterEach(() => vi.restoreAllMocks());
 
-describe("rig github status", () => {
+describe("multi-agent github status", () => {
   it("uses the owner-authenticated daemon route and prints the login", async () => {
     const fetchImpl = response({ signedIn: true, login: "octocat", host: "github.com" });
     const result = await run([], deps(fetchImpl));

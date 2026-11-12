@@ -2,12 +2,10 @@
 // OPR.0.5.3.7 R2 — content ships WITH the CLI (the staleness kill).
 //
 // Projects public skill content from its declared spec/plugin source into
-// context-pack entries under packages/daemon/context-packs/. The daemon
-// already registers that directory as a `builtin` discovery root resolved
-// RELATIVE TO THE BINARY (startup.ts: `import.meta.dirname/../context-packs`),
-// and `rig context get` already serves any builtin-root pack — so once this
-// projection is generated and shipped, served bytes match `rig --version` by
-// construction and matches the source shipped by the same package.
+// context-pack entries under packages/daemon/context-packs/. build-package.sh
+// copies this directory beside the packaged daemon. The retained manifest parser
+// and library assembly validate the generated skills, help, and reference content
+// against the source shipped by the same package version.
 //
 // RULED SHAPE (dev-planner entry-shape ruling 2026-08-23, generated-manifest-
 // at-package-time): the projection is DERIVED AT PACKAGE TIME, never edited in
@@ -21,7 +19,7 @@
 //   node scripts/generate-context-packs.mjs            # clean + write + validate
 //   node scripts/generate-context-packs.mjs --check    # validate only, write nothing (build/CI gate)
 //   node scripts/generate-context-packs.mjs --version=0.5.3
-// Overridable for tests: OPENRIG_SKILLS_SOURCE, OPENRIG_PACKS_OUT, OPENRIG_PACKAGE_VERSION.
+// Overridable for tests: MULTI_AGENT_SKILLS_SOURCE, MULTI_AGENT_PACKS_OUT, MULTI_AGENT_PACKAGE_VERSION.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -35,11 +33,11 @@ import { scanInternalLeaks, buildInternalLeakMessage } from "./internal-leak-sca
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..");
 
-const SOURCE = process.env.OPENRIG_SKILLS_SOURCE
-  ? path.resolve(process.env.OPENRIG_SKILLS_SOURCE)
+const SOURCE = process.env.MULTI_AGENT_SKILLS_SOURCE
+  ? path.resolve(process.env.MULTI_AGENT_SKILLS_SOURCE)
   : path.join(REPO, "packages/daemon/specs/agents/shared/skills");
-const OUT = process.env.OPENRIG_PACKS_OUT
-  ? path.resolve(process.env.OPENRIG_PACKS_OUT)
+const OUT = process.env.MULTI_AGENT_PACKS_OUT
+  ? path.resolve(process.env.MULTI_AGENT_PACKS_OUT)
   : path.join(REPO, "packages/daemon/context-packs");
 
 // STATIC packs (Test-A preflight repair, row 0ac358a9): committed pack sources —
@@ -47,8 +45,8 @@ const OUT = process.env.OPENRIG_PACKS_OUT
 // verbatim into the same builtin root and validated through the same daemon
 // parser. The projection stamps the package version over the committed
 // `version: "0"` placeholder (single-line, comment-preserving).
-const STATIC_SOURCE = process.env.OPENRIG_STATIC_PACKS_SOURCE
-  ? path.resolve(process.env.OPENRIG_STATIC_PACKS_SOURCE)
+const STATIC_SOURCE = process.env.MULTI_AGENT_STATIC_PACKS_SOURCE
+  ? path.resolve(process.env.MULTI_AGENT_STATIC_PACKS_SOURCE)
   : path.join(REPO, "packages/daemon/context-packs-src");
 
 // Static pack content is scanned with the FULL committed leak authority —
@@ -85,7 +83,7 @@ const isExcludedFile = (name) =>
 
 function resolveVersion() {
   const arg = process.argv.find((a) => a.startsWith("--version="));
-  const raw = arg ? arg.slice("--version=".length) : process.env.OPENRIG_PACKAGE_VERSION;
+  const raw = arg ? arg.slice("--version=".length) : process.env.MULTI_AGENT_PACKAGE_VERSION;
   const fromPkg = () => {
     try {
       return JSON.parse(fs.readFileSync(path.join(REPO, "packages/cli/package.json"), "utf8")).version;
@@ -127,7 +125,7 @@ function findSkillDirs(dir, rel = "") {
 }
 
 function findPluginOnlyPublicSkillDirs() {
-  if (process.env.OPENRIG_SKILLS_SOURCE) return { skills: [], errors: [] };
+  if (process.env.MULTI_AGENT_SKILLS_SOURCE) return { skills: [], errors: [] };
 
   const membership = JSON.parse(
     fs.readFileSync(path.join(REPO, "scripts/product-public-skills.generated.json"), "utf8"),

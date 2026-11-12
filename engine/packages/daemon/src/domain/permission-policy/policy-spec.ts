@@ -1,7 +1,7 @@
 // Slice-03 (OPR.0.4.8.3) Seam A — the permission-policy SPEC primitive: parse + validate-by-convention.
 // A policy spec is a Markdown file with a leading YAML FRONTMATTER contract + an explanatory body.
 // This module PARSES the whole contract from frontmatter (preserving the body verbatim) and
-// VALIDATES it by convention — ADVISORY + fail-open (mirrors `rig scope audit`), never enforcement.
+// VALIDATES it by convention — ADVISORY + fail-open (mirrors `multi-agent scope audit`), never enforcement.
 // It NEVER validates the semantic-action vocabulary (the taxonomy 668bb0d2 owns that) and NEVER
 // resolves intent to a harness format (flag surface = deterministic code elsewhere; config surface =
 // the skill). Schema authority: ARCH-POLICY-SPEC-SCHEMA sha256-8 92409094.

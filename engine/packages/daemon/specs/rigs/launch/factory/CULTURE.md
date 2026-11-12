@@ -4,11 +4,11 @@ This is the human-operated product-development starter. It uses a full factory t
 
 ## Work selection
 
-Derive identity with `rig whoami --json`, then follow
+Derive identity with `multi-agent whoami --json`, then follow
 `project.yaml -> mission.yaml -> active slice.yaml -> selected component or wave
 map -> addressed context`. Use
 `docs/reference/product-journey-sdlc.md#resolve-the-selected-path` (installed:
-`$OPENRIG_HOME/reference/product-journey-sdlc.md#resolve-the-selected-path`).
+`$MULTI_AGENT_HOME/reference/product-journey-sdlc.md#resolve-the-selected-path`).
 No selection means light Part A. Only the selected work's required capabilities
 need to be ready; do not wait for the whole topology or invent work for idle roles.
 
@@ -34,19 +34,19 @@ turn an idle review seat into a milestone scanner.
 ## When blocked
 
 If a command fails due to permissions:
-1. Identify the exact command: e.g., `git commit`, `npm test`, `rig send`
+1. Identify the exact command: e.g., `git commit`, `npm test`, `multi-agent send`
 2. Tell the human clearly: "I need `<specific permission>` to continue. Without it, I cannot `<specific consequence>`."
 3. Suggest the one-time fix (e.g., adding to the allow list, granting write access)
 4. Continue with what you can do while waiting
 
 If blocked on another agent:
-1. Send them a direct message: `rig send <session> "I'm waiting on <specific thing>" --verify`
+1. Send them a direct message: `multi-agent send <session> "I'm waiting on <specific thing>" --verify`
 2. If they don't respond within a reasonable time, escalate to the orchestrator
 3. Do not stall silently
 
 ## After startup or compaction
 
-Run `rig whoami --json` immediately. This tells you who you are, who your peers are, and how to reach them.
+Run `multi-agent whoami --json` immediately. This tells you who you are, who your peers are, and how to reach them.
 
 ## Culture
 
@@ -90,7 +90,7 @@ This is the advanced factory lane. Use it when the work needs a lead, advisor, a
 
 ## Mission/slice tracking
 
-Use `mission-slice-sop` for the active work's artifact and handoff conventions.
+Use `agent-operated-workflows` for the active work's artifact and handoff conventions.
 The selected components or wave determine checks and independence; locks and
 Part B proof ceremony apply only when explicitly assigned. The scope audit is
 advisory, not a permission gate.

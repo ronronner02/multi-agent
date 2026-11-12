@@ -1,4 +1,4 @@
-# OpenRig architecture
+# Multi-Agent architecture
 
 > **This map is not the territory.** It is a zoomed-out guide for finding your way around the
 > code. It is incomplete by design and it may be stale. Where it disagrees with the code, the code
@@ -6,14 +6,14 @@
 > commit `c750304f` (0.6.6 development). Each count shows the command that produced it, so you
 > can re-run it.
 
-## What OpenRig is
+## What Multi-Agent is
 
-OpenRig runs a team of coding agents on your machine as one system. A local daemon keeps the team's
+Multi-Agent runs a team of coding agents on your machine as one system. A local daemon keeps the team's
 state in SQLite and runs each agent as an ordinary Claude Code or Codex session (or a plain
 terminal, a Pi or Oh My Pi (OMP) runner, or a scripted test stub) inside tmux. People and agents drive it through the
 `rig` CLI and an MCP server, both of which talk to the daemon over local HTTP, plus the Web UI the
 daemon serves.
-The agents themselves are unmodified. What OpenRig adds is the coordination around them: launching
+The agents themselves are unmodified. What Multi-Agent adds is the coordination around them: launching
 and restoring agents, delivering messages, keeping durable work in a queue, and giving each agent
 the right skills and context.
 
@@ -21,9 +21,9 @@ the right skills and context.
 
 | Directory | Package | What it is | How it ships |
 |---|---|---|---|
-| `packages/daemon` | `@openrig/daemon` (private) | The daemon: HTTP routes, domain services, SQLite migrations, runtime adapters, built-in specs, skills, plugins, static context-pack sources | Copied into `@openrig/cli` |
-| `packages/cli` | `@openrig/cli` | The `rig` command, the MCP server, daemon start and stop | The only published package |
-| `packages/ui` | `@openrig/ui` (private) | The React Web UI, including the team dashboard at `/team` | Built files copied into `@openrig/cli` and served by the daemon |
+| `packages/daemon` | `@multi-agent/daemon` (private) | The daemon: HTTP routes, domain services, SQLite migrations, runtime adapters, built-in specs, skills, plugins, static context-pack sources | Copied into `@multi-agent/cli` |
+| `packages/cli` | `@multi-agent/cli` | The `rig` command, the MCP server, daemon start and stop | The only published package |
+| `packages/ui` | `@multi-agent/ui` (private) | The React Web UI, including the team dashboard at `/team` | Built files copied into `@multi-agent/cli` and served by the daemon |
 | `packages/test-system` | none (not an npm workspace) | The stub-agent scenario library, the CI scenario harness, live-model eval cases | Not shipped |
 
 **What bundles what.** `packages/cli/package.json` publishes `LICENSE`, `dist`, `daemon`, `ui`
@@ -35,7 +35,7 @@ do not.
 
 **Sharing code between packages.** The CLI imports daemon code only through the subpaths in
 the `exports` field of `packages/daemon/package.json` (21 at this commit), for example
-`@openrig/daemon/attention`, which points at `packages/daemon/src/attention-surface.ts`. In
+`@multi-agent/daemon/attention`, which points at `packages/daemon/src/attention-surface.ts`. In
 development they resolve through the npm workspace. At
 package time `scripts/rewrite-daemon-imports.mjs` rewrites them to the shipped `daemon/dist` copy
 and fails the build on a specifier with no `exports` entry. To share new daemon code, add a
@@ -44,7 +44,7 @@ and fails the build on a specifier with no `exports` entry. To share new daemon 
 ## The request path
 
 ```
-  rig (CLI)                     MCP server (rig mcp serve, stdio)
+  rig (CLI)                     MCP server (multi-agent mcp serve, stdio)
        \                                /
         +---- HTTP to the daemon (port 7433 by default) --------------+
                                 |
@@ -86,7 +86,7 @@ and fails the build on a specifier with no `exports` entry. To share new daemon 
 - **`middleware/auth-bearer-token.ts`.** The bearer-token check for operator write routes, plus
   the loopback and Tailscale bind detection used at startup.
 - **Live updates** go out as server-sent events: `routes/events.ts` uses Hono's `streamSSE`.
-- **State** lives in `$OPENRIG_HOME` (default `~/.openrig`). The database is `openrig.sqlite`
+- **State** lives in `$MULTI_AGENT_HOME` (default `~/.multi-agent`). The database is `multi-agent.sqlite`
   there (`daemon-db-path.ts`).
 
 **The clients:**
@@ -96,10 +96,10 @@ and fails the build on a specifier with no `exports` entry. To share new daemon 
   through `DaemonClient` (`packages/cli/src/client.ts`) and render the result. A few lifecycle
   (`packages/cli/src/front-door.ts`).
 - **MCP.** `createMcpServer(client)` in `packages/cli/src/mcp-server.ts` registers the tools over
-  the same `DaemonClient`. `rig mcp serve` (`packages/cli/src/commands/mcp.ts`) runs it on stdio.
+  the same `DaemonClient`. `multi-agent mcp serve` (`packages/cli/src/commands/mcp.ts`) runs it on stdio.
 - **Web UI.** Served by the daemon from the bundled `ui/dist`.
 
-**In a development checkout,** `rig daemon start` prefers `packages/daemon/dist` over the bundled
+**In a development checkout,** `multi-agent daemon start` prefers `packages/daemon/dist` over the bundled
 copy (`resolveDaemonPath` in `packages/cli/src/daemon-lifecycle.ts`). Rebuild the package you changed. A daemon
 that is already running keeps running the code it started with.
 
@@ -177,7 +177,7 @@ requires an explicit decision.
 2. Register it in `packages/daemon/src/startup.ts`. The adapter maps are keyed by runtime name:
    `adapters:` (for the pod instantiator) and `runtimeAdapters:`. The context monitor has its own
    map for the runtimes it samples.
-3. Accept the runtime name in rig spec validation: `SUPPORTED_RUNTIMES` in
+3. Accept the runtime name in multi-agent spec validation: `SUPPORTED_RUNTIMES` in
    `packages/daemon/src/domain/rigspec-preflight.ts`. Other runtime lists, such as `RuntimeHint` in
    `domain/discovery-types.ts` and `LEGACY_KNOWN_RUNTIMES` in `domain/rigspec-schema.ts`, may need
    it too; search for an existing runtime name such as `"pi"` to find them.
@@ -192,7 +192,7 @@ Skills ship from three copies in this repository (the "edges"), listed in
 | Edge | Path | Layout |
 |---|---|---|
 | `spec` | `packages/daemon/specs/agents/shared/skills/` | by category (`core`, `pm`, `pods`, `process`) |
-| `plugin` | `packages/daemon/assets/plugins/openrig-core/skills/` | flat |
+| `plugin` | `packages/daemon/assets/plugins/multi-agent-core/skills/` | flat |
 | `canonical` | `skills/_canonical/` | public mirror of the `spec` copy |
 
 Each skill in the layout file lists which edges carry it. At this commit, 33 skills are in `spec`
@@ -201,16 +201,11 @@ and `canonical`, 17 only in `plugin`, and 2 in all three.
 - `npm run mirror-skills:check` (part of `npm test`) hashes every file in each edge and compares the
   hashes with `scripts/skill-edge-digests.generated.json`. It also fails on a `SKILL.md` the layout
   does not list.
-- The full apply, `npm run mirror-skills`, regenerates all three edges from the maintainers' skill
-  source, which lives outside this repository. It needs `OPENRIG_SKILL_CANON_ROOT` and three
-  authority-file environment variables, so an outside contributor cannot run it.
-- **To fix a skill:** edit the file in every edge that carries it (same bytes), run
-  `node scripts/regen-edge-digests.mjs` to refresh the hashes from disk, then run
-  `npm run mirror-skills:check`. Say in the pull request that you edited mirrored skill files: the
-  next full apply regenerates these copies from the maintainers' source, so the change has to land
-  there too.
-- **To add a skill:** open an issue first. Its layout entry is generated from files that are not
-  in this repository.
+- `npm run mirror-skills` regenerates the canonical and plugin edges from the repository's
+  `packages/daemon/specs/agents/shared/skills` source and product policy JSON.
+- **To fix a skill:** edit every edge that carries it, run
+  `node scripts/regen-edge-digests.mjs`, then run `npm run mirror-skills:check`.
+- **To add a skill:** update the product policy and generated layout together.
 - Every shipped skill also becomes a context pack at package time (next recipe).
 
 ### A context pack
@@ -227,7 +222,7 @@ and `canonical`, 17 only in `plugin`, and 2 in all three.
 - `npm run generate-context-packs:check` (part of `npm test`) validates every pack through the
   daemon's own manifest parser, so build the daemon first. It also runs the leak scan over the
   static sources, including the `docs/reference/` files they link to.
-- The daemon serves the shipped packs through `rig context get`; `startup.ts` registers the bundled
+- The daemon serves the shipped packs through `multi-agent context get`; `startup.ts` registers the bundled
   directory as its built-in root.
 
 ### A scenario
@@ -275,7 +270,7 @@ packages.
 - **Docs guard** (`scripts/check-docs-guard.mjs`). Under `docs/`, git may track only
   `docs/as-built/`, `docs/reference/`, `docs/releases/` and exactly `docs/DESIGN.md`;
   `.gitignore` ignores the rest of `docs/`. Remember that `docs/reference/` ships inside the npm
-  package, and the daemon copies its Markdown files to `$OPENRIG_HOME/reference/` when it
+  package, and the daemon copies its Markdown files to `$MULTI_AGENT_HOME/reference/` when it
   starts. Files in `docs/as-built/` carry a `last-verified-against-source` commit in their
   frontmatter.
 - **Internal-leak guard** (`scripts/internal-leak-scanner.mjs`, with rules in

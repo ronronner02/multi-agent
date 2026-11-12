@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { TeamReviewView } from "@openrig/daemon/team-control";
+import type { TeamReviewView } from "@multi-agent/daemon/team-control";
 
 export function TaskProgress({ task }: { task: TeamReviewView }) {
   const { t } = useTranslation();

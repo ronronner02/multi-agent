@@ -1,6 +1,6 @@
 # Conveyor Culture
 
-Conveyor is the small public starter for learning OpenRig workflow motion.
+Conveyor is the small public starter for learning Multi-Agent workflow motion.
 It is intentionally ordinary: one intake lead, one planner, one builder, and
 one reviewer moving queued work through a clear handoff path.
 

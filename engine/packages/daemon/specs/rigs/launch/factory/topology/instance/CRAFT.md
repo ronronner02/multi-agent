@@ -1,15 +1,15 @@
 # Instance Craft — shipped defaults
 
-<!-- Shipped by the factory rig spec (copy-if-absent; this file is yours
+<!-- Shipped by the factory multi-agent spec (copy-if-absent; this file is yours
      to append to — a later rig-up never overwrites it). Curated, generally
      applicable practice for EVERY seat on this instance. Machine-wide facts
      belong here; rig norms belong one level down; seat specifics at the seat. -->
 
 - **Check, do not recall.** Anything you remember about a file, a queue, or a
-  seat is a claim about the past. `rig whoami`, `rig ps`, `rig queue list
+  seat is a claim about the past. `multi-agent whoami`, `multi-agent ps`, `multi-agent queue list
   --mine` before any opinion; the filesystem and database are always ahead of
   your memory.
-- **Derive paths from configuration.** `rig config get <key>` answers where
+- **Derive paths from configuration.** `multi-agent config get <key>` answers where
   things live (`workspace.root`, `topology.root`, `db.path`). A literal path
   copied from another machine is wrong on this one.
 - **Two trees.** The topology tree (this file's tree: instance → rig → pod → seat)
@@ -19,6 +19,6 @@
   consumer, count the rows. Zero is not a plausible success.
 - **A scoped search is not a global absence.** "Not in the place I looked" and
   "not anywhere" are different claims; say which one you have.
-- **Trace before trusting context**: `rig context trace --rig <rig> [--pod
+- **Trace before trusting context**: `multi-agent context trace --rig <rig> [--pod
   <pod>] --seat <seat> --name <NAME>.md` walks this tree from where you stand.
   Your reads ARE the walk.

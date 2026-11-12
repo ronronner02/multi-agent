@@ -7,7 +7,7 @@
 // packages/cli/test/send-header.test.ts so if either implementation
 // drifts, this test (or its CLI counterpart) fails.
 //
-// HG-2 from IMPL-PRD §5: "Envelope format byte-identical to rig send
+// HG-2 from IMPL-PRD §5: "Envelope format byte-identical to multi-agent send
 // envelope".
 
 import { describe, it, expect } from "vitest";
@@ -19,15 +19,15 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
     expect(out).toContain("From: driver-3@my-rig");
     expect(out).toContain("To: guard-3@my-rig");
     expect(out).toContain("Status: ready.");
-    expect(out).toContain('↩ Reply: rig send driver-3@my-rig "..."');
+    expect(out).toContain('↩ Reply: multi-agent send driver-3@my-rig "..."');
   });
 
   it("routes an external sender's reply through the durable human queue", () => {
     const out = wrapPaneEnvelope("decision-maker@external", "driver@rig", "Decision received.");
     expect(out).toContain("From: decision-maker@external");
-    expect(out).toContain('↩ Reply if needed: rig queue create --destination decision-maker@external --body "..." --verify');
-    expect(out).not.toContain("rig send decision-maker@external");
-    expect(wrapPaneEnvelope("driver@external-tools", "guard@rig", "Status.")).toContain('↩ Reply: rig send driver@external-tools "..."');
+    expect(out).toContain('↩ Reply if needed: multi-agent queue create --destination decision-maker@external --body "..." --verify');
+    expect(out).not.toContain("multi-agent send decision-maker@external");
+    expect(wrapPaneEnvelope("driver@external-tools", "guard@rig", "Status.")).toContain('↩ Reply: multi-agent send driver@external-tools "..."');
   });
 
   it("preserves the original body verbatim between the dash separators", () => {
@@ -43,13 +43,13 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
     expect(out).toContain("From: a@r");
     expect(out).toContain("To: b@r");
     expect(out).toContain("---\n\n---");
-    expect(out).toContain('↩ Reply: rig send a@r "..."');
+    expect(out).toContain('↩ Reply: multi-agent send a@r "..."');
   });
 
   it("falls back to a marker when the sender is undefined or empty", () => {
     const undef = wrapPaneEnvelope(undefined, "b@r", "hi");
     expect(undef).toContain("From: <unknown sender>");
-    expect(undef).toContain('↩ Reply: rig send <unknown sender> "..."');
+    expect(undef).toContain('↩ Reply: multi-agent send <unknown sender> "..."');
     const blank = wrapPaneEnvelope("   ", "b@r", "hi");
     expect(blank).toContain("From: <unknown sender>");
   });
@@ -60,7 +60,7 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
   });
 
   // A4 PIN 2 — the preserve branch, now REACHABLE. A4 makes the CLI stamp a 3-part origin triple on
-  // X-OpenRig-Session; the remote daemon derives that 3-part actor and renders it HERE. This asserts the
+  // X-Multi-Agent-Session; the remote daemon derives that 3-part actor and renders it HERE. This asserts the
   // daemon renders an already-3-part sender VERBATIM — never re-stamped with THIS (destination) host's
   // selfHostId, which would forge the origin as the destination (the receipt's exact bug). Previously
   // this branch never fired (nothing 3-part arrived); A4 relies on it, so it is covered explicitly.
@@ -70,7 +70,7 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
     const out = wrapPaneEnvelope("dev50@v-rig@origin-host", "guard@my-rig", "hi");
     expect(out).toContain("From: dev50@v-rig@origin-host"); // the ORIGIN host, preserved
     expect(out).not.toContain("@destination-host"); // NOT re-stamped with the destination's id (no forgery)
-    expect(out).toContain('↩ Reply: rig send dev50@v-rig@origin-host "..."'); // reply hint round-trips the origin
+    expect(out).toContain('↩ Reply: multi-agent send dev50@v-rig@origin-host "..."'); // reply hint round-trips the origin
   });
 
   // V0.3.1 slice 23 — the queue-handoff nudge body MUST remain a
@@ -95,7 +95,7 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
 
   it("backward-compat: with no meta, the output is exactly today's 6-line DM envelope (no Sent line)", () => {
     const out = wrapPaneEnvelope("a@r", "b@r", "hi");
-    expect(out).toBe("From: a@r\nTo: b@r\n---\nhi\n---\n↩ Reply: rig send a@r \"...\"");
+    expect(out).toBe("From: a@r\nTo: b@r\n---\nhi\n---\n↩ Reply: multi-agent send a@r \"...\"");
   });
 
   it("multi-send renders the FULL recipient list on the To line (WHO got it)", () => {
@@ -104,8 +104,8 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
   });
 
   it("rig-broadcast renders 'broadcast to <rig> (N seats)' — the anti-storm scale", () => {
-    const out = wrapPaneEnvelope("a@r", "openrig-pm", "hi", { scope: { kind: "rig-broadcast", rig: "openrig-pm", seats: 11 } });
-    expect(out).toContain("To: broadcast to openrig-pm (11 seats)");
+    const out = wrapPaneEnvelope("a@r", "multi-agent-pm", "hi", { scope: { kind: "rig-broadcast", rig: "multi-agent-pm", seats: 11 } });
+    expect(out).toContain("To: broadcast to multi-agent-pm (11 seats)");
   });
 
   it("topology-broadcast renders 'broadcast to topology'", () => {
@@ -139,7 +139,7 @@ describe("wrapPaneEnvelope — slice 23 envelope renderer (daemon-side)", () => 
 
   it("(g) byte-exact full envelope with gen (cross-package parity anchor)", () => {
     const out = wrapPaneEnvelope("a@r", "b@r", "hi", { stampISO: "2026-08-06T17:42:09Z", genUuid: GEN });
-    expect(out).toBe('From: a@r\nTo: b@r\nSent: 08-06 17:42Z · gen a1b2c3d4\n---\nhi\n---\n↩ Reply: rig send a@r "..."');
+    expect(out).toBe('From: a@r\nTo: b@r\nSent: 08-06 17:42Z · gen a1b2c3d4\n---\nhi\n---\n↩ Reply: multi-agent send a@r "..."');
   });
 
   it("(g) pin-a: OMITS the suffix entirely when the generation is UNKNOWN (never 'gen unknown', never forged)", () => {

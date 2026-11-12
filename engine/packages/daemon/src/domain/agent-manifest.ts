@@ -480,7 +480,7 @@ function validatePluginResources(entries: Array<Record<string, unknown>>): strin
       errors.push(`resources.plugins[${i}].source.kind: only "local" is supported in v0 (got "${String(kind)}")`);
       continue;
     }
-    // Plugin paths may be absolute (e.g. ~/.openrig/plugins/<id> for vendored
+    // Plugin paths may be absolute (e.g. ~/.multi-agent/plugins/<id> for vendored
      // plugins, or absolute project paths). Skip the safe-path check used for
      // in-spec resources; plugin sources are explicit operator-managed paths.
     const pluginPath = sourceObj["path"];

@@ -18,7 +18,7 @@ describe("ContextUsageStore", () => {
     db = createDb();
     initializeDatabase(db);
     rigRepo = new RigRepository(db);
-    store = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
+    store = new ContextUsageStore(db, { stateDir: "/tmp/multi-agent-test" });
   });
 
   afterEach(() => { db.close(); });
@@ -117,7 +117,7 @@ describe("ContextUsageStore", () => {
       }),
     ].join("\n"));
 
-    const codexStore = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test", codexHomeDir: codexHome });
+    const codexStore = new ContextUsageStore(db, { stateDir: "/tmp/multi-agent-test", codexHomeDir: codexHome });
     const usage = codexStore.readCodexAndNormalize({
       threadId: "thread-1",
       sessionName: "dev-qa@test-rig",
@@ -197,10 +197,10 @@ describe("ContextUsageStore", () => {
   });
 
   // OPR.0.5.9.5 Wave A: runtime telemetry belongs beneath state/, leaving
-  // $OPENRIG_HOME/context available for the addressable context library.
+  // $MULTI_AGENT_HOME/context available for the addressable context library.
   it("getSidecarPath returns path under state/context-usage/", () => {
     const path = store.getSidecarPath("dev-impl@test-rig");
-    expect(path).toBe("/tmp/openrig-test/state/context-usage/dev-impl@test-rig.json");
+    expect(path).toBe("/tmp/multi-agent-test/state/context-usage/dev-impl@test-rig.json");
   });
 
   // T9: Freshness threshold is centralized
@@ -358,7 +358,7 @@ describe("ContextUsageStore", () => {
     beforeEach(() => {
       bootAtByNode = new Map();
       genStore = new ContextUsageStore(db, {
-        stateDir: "/tmp/openrig-test",
+        stateDir: "/tmp/multi-agent-test",
         resolveOccupantBootAt: (nodeId) => bootAtByNode.get(nodeId) ?? null,
       });
     });
@@ -422,7 +422,7 @@ describe("ContextUsageStore", () => {
     });
 
     it("never gates when no resolver is wired (opt-in)", () => {
-      const plain = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
+      const plain = new ContextUsageStore(db, { stateDir: "/tmp/multi-agent-test" });
       const { node } = seedNode();
       plain.persist(node.id, plain.normalizeSample({
         ...VALID_SIDECAR, session_name: "dev-impl@test-rig", sampled_at: "2026-08-07T08:00:00.000Z",

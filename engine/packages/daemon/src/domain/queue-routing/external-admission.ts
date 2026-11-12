@@ -48,7 +48,7 @@ export function resolveExternal(local: string, entities: readonly RegisteredEnti
     local,
     error:
       `'${local}@external' names no registered human (no gateway/humans/${local}.yaml fragment). ` +
-      `Register the human first: rig gateway human add ${local} --display-name … --binding … --delivery-class …; ` +
+      `Register the human first: multi-agent gateway human add ${local} --display-name … --binding … --delivery-class …; ` +
       `or address a human that is already registered. ` +
       `(This is a virtual-domain reference — it was NOT downgraded to an agent seat.)`,
   };

@@ -1,16 +1,16 @@
 # Project Workspace Contract
 
-OpenRig's Project TUI is a file-backed view over a workspace root. The folder
+Multi-Agent's Project TUI is a file-backed view over a workspace root. The folder
 shape is intentionally simple so humans and agents can create or repair it
 without daemon-internal knowledge.
 
-This subtree is part of the wider [OpenRig Instance Layout](instance-layout.md).
+This subtree is part of the wider [Multi-Agent Instance Layout](instance-layout.md).
 The instance initializer delegates these exact workspace bytes to this owner.
 
 ## Default Shape
 
-`rig config init-workspace` creates the default workspace at
-`~/.openrig/workspace` unless `--root` or `workspace.root` points elsewhere.
+`multi-agent config init-workspace` creates the default workspace at
+`~/.multi-agent/workspace` unless `--root` or `workspace.root` points elsewhere.
 
 ```text
 workspace/
@@ -24,14 +24,14 @@ workspace/
 
 The scaffold is additive: it creates missing canonical entries and never
 overwrites existing files, including with the deprecated `--force` flag.
-`exhaust/` and local `.openrig/` runtime projections are ignored; authored
+`exhaust/` and local `.multi-agent/` runtime projections are ignored; authored
 project context and mission/slice files remain versionable. `workspace.yaml`
 is the project-location catalog. The project manifest exposes empty
 `install.context` and `install.skills` selectors for ordered Markdown
 addresses and stable managed-catalog skill IDs, but neither skill source nor a
 System World belongs in this tree.
 
-Installing a bundle that carries a project (`rig bundle create --project-dir`)
+Installing a bundle that carries a project (`multi-agent bundle create --project-dir`)
 copies the project folder to `<workspace.projects_root>/<id>/`, adds its catalog
 entry, and lists the bundle's rig under that entry's `rigs` (see "Work-install
 project selection"), before any seat launches. Every byte already in the
@@ -53,7 +53,7 @@ bundle's project id, install reports a conflict and writes no catalog.
 `project.yaml` may select project context and managed skills together:
 
 ```yaml
-schema: openrig.project/v0alpha1
+schema: multi-agent.project/v0alpha1
 kind: project
 install:
   intent: SPEC.md
@@ -68,7 +68,7 @@ A project can also name world packs to read after the System World, in order:
 ```yaml
 install:
   worlds:
-    - ref: openrig-world
+    - ref: multi-agent-world
     - ref: project-world
       profiles: { claude: guided }
 ```
@@ -76,25 +76,25 @@ install:
 Each `install.worlds` entry has the same `{ ref, profiles }` shape as a System
 World `context` entry. `work-install` lists them as `context world <ref>` lines
 and `worlds` in `--json`; it never delivers their content, so read each with
-`rig context get <ref>`. An invalid entry, or a ref the System World or an
+`multi-agent context get <ref>`. An invalid entry, or a ref the System World or an
 earlier entry already lists, is ignored with a warning. Without the key, the
 output is unchanged. The list holds pack names only, resolved from the local
 library when read, so naming a world copies none of its content.
 
 `install.context` contains project-relative Markdown addresses. `install.skills`
 contains stable skill identities only. Skill source bytes live in the single
-configured managed catalog (`skills.root`, default `$OPENRIG_HOME/skills`),
-never under the project or workspace. `rig context work-install --runtime
+configured managed catalog (`skills.root`, default `$MULTI_AGENT_HOME/skills`),
+never under the project or workspace. `multi-agent context work-install --runtime
 <claude-code|codex>` resolves both parts; add `--apply-skills` to reconcile the
 selected exact bytes into `.claude/skills/` or `.agents/skills/` under the
 caller's current working directory. Use `--cwd` when the receiving agent works
 somewhere else; the project-world metadata root is never assumed to be its code
 working directory.
 
-The generated harness directories and `.openrig/skill-loadouts/` ownership
+The generated harness directories and `.multi-agent/skill-loadouts/` ownership
 receipts are projections, not source. Product repositories should ignore them.
 Reconciliation removes a deselected entry only when its current bytes still
-match OpenRig's last owned projection; unrelated and locally modified entries
+match Multi-Agent's last owned projection; unrelated and locally modified entries
 are preserved or reported as conflicts.
 
 Seats of the same runtime commonly share one working directory. Their topology
@@ -110,7 +110,7 @@ an explicit install whose `install.skills` is empty clears it. This keeps
 
 ## Work-install project selection
 
-`rig context work-install` picks one project from the catalog at
+`multi-agent context work-install` picks one project from the catalog at
 `workspace.catalog_path` (default `workspace.yaml`), in the order below. Without a
 catalog, the workspace root itself is the project (`selectedBy: workspace`, or
 `explicit` with a matching `--project`), and `--project` must match its
@@ -129,20 +129,20 @@ the same way when a task names no project (see
    command.
 
 ```yaml
-schema: openrig.workspace/v0alpha1
+schema: multi-agent.workspace/v0alpha1
 projects:
   - id: default
     root: .
   - id: contributor
     root: projects/contributor
-    rigs: [openrig-dev]
+    rigs: [multi-agent-dev]
 ```
 
 `rigs` is optional. A `rigs` value that isn't a list of rig names is ignored
 with a warning; the entry can still be chosen by `--project`, as the only entry
 or by working directory, but never counts as unclaimed in step 5. A rig listed under two projects, or two projects sharing the
 deepest root, leave the choice to `--project`. Step 3 reads the seat's
-`OPENRIG_SESSION_NAME`, so a plain shell skips it. `--json` reports the step
+`MULTI_AGENT_SESSION_NAME`, so a plain shell skips it. `--json` reports the step
 that chose the project as `position.selectedBy`.
 
 ## TUI project selection
@@ -222,14 +222,14 @@ default setup contract.
 
 If Project shows a mission discovery warning:
 
-1. Run `rig config get workspace.root --show-source`.
-2. Run `rig config get workspace.catalog_path --show-source`.
-3. Run `rig config get workspace.slices_root --show-source`.
+1. Run `multi-agent config get workspace.root --show-source`.
+2. Run `multi-agent config get workspace.catalog_path --show-source`.
+3. Run `multi-agent config get workspace.slices_root --show-source`.
 4. Confirm `workspace.slices_root` points at a folder containing mission
    directories with `slices/` children.
 5. Confirm `files.allowlist` includes `workspace:<workspace.root>` so the TUI
    can read mission `PROGRESS.md`.
-6. If the workspace is missing, run `rig config init-workspace` after operator
+6. If the workspace is missing, run `multi-agent config init-workspace` after operator
    approval.
 
 No daemon restart is required for most config reads. Restart when changing

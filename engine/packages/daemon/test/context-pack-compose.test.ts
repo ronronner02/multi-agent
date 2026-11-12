@@ -46,7 +46,7 @@ describe("ATOM 3 — plain ordered file assembly", () => {
       ],
     });
     expect(result.text).toBe(expected);
-    expect(result.text).not.toContain("# OpenRig Context Pack:");
+    expect(result.text).not.toContain("# Multi-Agent Context Pack:");
     expect(result.text).not.toContain("## File:");
     expect(result.bytes).toBe(Buffer.byteLength(expected));
   });

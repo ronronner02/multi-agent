@@ -149,7 +149,7 @@ export function evaluateQueueWait(jobs: WatchdogJobsRepository, jobId: string, v
   const reason = state.eventPending ? "Waiting source changed" : "Waiting backstop";
   return {
     action: "send", target: { session: view.owner },
-    message: `${reason}: ${view.obligation}; blocker ${view.blocker?.ref ?? "unknown"} (owner ${view.blocker?.owner ?? "unknown"}).\nActivity: ${view.liveness.activity}; confidence: ${view.liveness.confidence}. Full packet: rig queue show ${view.obligation} --full.`,
+    message: `${reason}: ${view.obligation}; blocker ${view.blocker?.ref ?? "unknown"} (owner ${view.blocker?.owner ?? "unknown"}).\nActivity: ${view.liveness.activity}; confidence: ${view.liveness.confidence}. Full packet: multi-agent queue show ${view.obligation} --full.`,
     notes: { qitemId: view.obligation, blocker: state.blocker, transition: state.blockerTransition, attentionRevision: state.attentionRevision, cause: state.eventPending ? "waiting-source-change" : "wait-backstop", nextOwner: "queue-stuck-sweep" },
   };
 }

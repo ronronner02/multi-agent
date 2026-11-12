@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// OpenRig Claude Status Line Context Collector
+// Multi-Agent Claude Status Line Context Collector
 // Reads Claude status line JSON from stdin, extracts context window data,
 // and writes atomically to a sidecar file.
 //
@@ -16,7 +16,7 @@ if (!outputTarget) {
 
 function logFailure(message, error) {
   const suffix = error && error.message ? `: ${error.message}` : "";
-  console.error(`[openrig][collector] ${message}${suffix}`);
+  console.error(`[multi-agent][collector] ${message}${suffix}`);
 }
 
 let input = "";
@@ -42,7 +42,7 @@ process.stdin.on("end", () => {
       },
       session_id: raw.session_id ?? null,
       session_name: raw.session_name ?? null,
-      occupant_generation: process.env.OPENRIG_OCCUPANT_GENERATION || process.env.RIGGED_OCCUPANT_GENERATION || null,
+      occupant_generation: process.env.MULTI_AGENT_OCCUPANT_GENERATION || null,
       transcript_path: raw.transcript_path ?? null,
       sampled_at: new Date().toISOString(),
     };

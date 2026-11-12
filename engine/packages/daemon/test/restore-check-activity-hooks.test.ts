@@ -5,7 +5,7 @@ import { deriveRelayEvents } from "../src/domain/claude-activity-hooks.js";
 
 describe("restore-check Claude activity-hook contract", () => {
   it("derives the required event set from the daemon-shipped Claude plugin manifest", () => {
-    const manifestPath = path.resolve(import.meta.dirname, "../assets/plugins/openrig-core/hooks/claude.json");
+    const manifestPath = path.resolve(import.meta.dirname, "../assets/plugins/multi-agent-core/hooks/claude.json");
     const events = deriveRelayEvents({
       exists: existsSync,
       readFile: (file) => readFileSync(file, "utf-8"),

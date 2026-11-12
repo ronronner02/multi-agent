@@ -9,12 +9,12 @@
  *     directly — it is the test harness's own daemon, not a rig subprocess.
  *
  * Verb → shipped `rig` command (traced at 13e26355):
- *   up            → rig up <topology> --json --yes         (captures rigId/rigName)
- *   send          → rig send <to> <text> --json
- *   restart <seat>→ rig launch <rigId> <seat> --json       (seat relaunch/resume;
+ *   up            → multi-agent up <topology> --json --yes         (captures rigId/rigName)
+ *   send          → multi-agent send <to> <text> --json
+ *   restart <seat>→ multi-agent launch <rigId> <seat> --json       (seat relaunch/resume;
  *                                                            there is no top-level
  *                                                            `restart` command)
- *   down          → rig down <rigName|rigId> --json --force
+ *   down          → multi-agent down <rigName|rigId> --json --force
  *   daemon {op}   → the ScenarioDaemon lifecycle (sigterm | restart)
  *
  * seed_regression calls an explicitly supplied test fault controller. With no
@@ -66,7 +66,7 @@ export interface RealDepsOptions {
   /** Resolved rig-spec path for the `up` verb (the scenario's `topology`). */
   topologyPath: string;
   /**
-   * Scratch working directory passed to `rig up --cwd` so a seat's `cwd: "."`
+   * Scratch working directory passed to `multi-agent up --cwd` so a seat's `cwd: "."`
    * resolves under the hermetic scaffold (its managed-file writes — AGENTS.md,
    * the stub readiness sidecar — never pollute the launch cwd). Omitted → the
    * shipped default (the daemon's cwd).
@@ -92,7 +92,7 @@ export interface RealDepsOptions {
    *  the only scenario-facing form, rides 51-03, and lowers to this seam). */
   normalizer?: (surface: ExpectSurface, value: unknown) => unknown;
   /** The mission scope reads audit (D3) — threaded from the scenario's
-   *  env.scope_mission into `rig scope audit --mission <name> --json`. */
+   *  env.scope_mission into `multi-agent scope audit --mission <name> --json`. */
   scopeMission?: string;
   /** Arm a named, scenario-local test fault (or explicitly record its healthy
    * control). The paired harness owns injection timing and verifies the actual
@@ -100,7 +100,7 @@ export interface RealDepsOptions {
   seedRegression?: (regressionClass: string) => Promise<ActionResult>;
 }
 
-/** `rig up` is heavy (real tmux seat launch) — give it a generous ceiling. */
+/** `multi-agent up` is heavy (real tmux seat launch) — give it a generous ceiling. */
 const UP_TIMEOUT_MS = 120_000;
 
 const fail = (stderr: string): ActionResult => ({ code: 1, stdout: "", stderr });
@@ -140,7 +140,7 @@ export function buildRealDeps(opts: RealDepsOptions): ScenarioRunnerDeps {
         return runRig(["send", to, text, "--json"], daemon.readEnv, rigBin);
       }
       case "restart": {
-        // Seat relaunch/resume — rig launch <rigId> <seat>. Distinct from the
+        // Seat relaunch/resume — multi-agent launch <rigId> <seat>. Distinct from the
         // `daemon` verb (which restarts the scenario-local DAEMON, not a seat).
         const node = typeof payload === "string" ? payload : seat;
         const target = rigId ?? rigName;

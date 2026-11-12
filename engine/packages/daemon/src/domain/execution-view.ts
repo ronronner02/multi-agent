@@ -53,7 +53,7 @@ export interface ExecutionViewDeps {
    *  to INDETERMINATE; the queue-derived sections still answer. */
   slicesRoot: () => string | null;
   /** THE one activity oracle (S19 locked contract): SeatActivityService's
-   *  ARBITRATED seat-keyed read — the same source rig ps, node inventory, and
+   *  ARBITRATED seat-keyed read — the same source multi-agent ps, node inventory, and
    *  parked-query consume. The vocabulary (working | idle-at-prompt | unknown)
    *  and the separate needsInput {count, reason} pass through UNTRANSLATED —
    *  this module never re-arbitrates. sessions.status and the parallel
@@ -312,7 +312,7 @@ function lifecycleProjectAction(input: {
   acceptance: Record<string, unknown> | null;
   receiptRequired?: boolean;
 }): string {
-  const base = `rig workflow project --instance ${input.instanceId} --current-packet ${input.packetId} --exit <handoff|waiting|done|failed> --actor-session ${input.owner}${input.receiptRequired ? " --evidence-ref <agent-judged-receipt>" : ""}`;
+  const base = `multi-agent workflow project --instance ${input.instanceId} --current-packet ${input.packetId} --exit <handoff|waiting|done|failed> --actor-session ${input.owner}${input.receiptRequired ? " --evidence-ref <agent-judged-receipt>" : ""}`;
   if (!input.acceptance) return base;
   const verdicts = Array.isArray(input.acceptance["verdicts"])
     ? input.acceptance["verdicts"].filter((value): value is string => typeof value === "string")
@@ -412,7 +412,7 @@ function readLifecycleExecutions(db: Database.Database, mission: string, project
             failure["status"] === "unresolved" &&
             row["status"] !== "completed" &&
             row["status"] !== "aborted"
-            ? `rig workflow resume ${instanceId} --occurrence ${String(failure["occurrence_id"])} --actor-session <you>`
+            ? `multi-agent workflow resume ${instanceId} --occurrence ${String(failure["occurrence_id"])} --actor-session <you>`
             : null,
         }))
       : [];
@@ -965,7 +965,7 @@ export async function buildExecutionView(deps: ExecutionViewDeps, opts?: { missi
             excluded,
           };
     }
-    // The selected project has no binding to the OpenRig daemon's source.
+    // The selected project has no binding to the Multi-Agent daemon's source.
     // Missing Git objects cannot establish applicability. Keep daemon ancestry
     // only on the legacy unscoped view, with its existing unknown/false rules.
     const folded: Rung = isUnusableDeclaration
@@ -976,7 +976,7 @@ export async function buildExecutionView(deps: ExecutionViewDeps, opts?: { missi
           ? { value: INDETERMINATE, basis: "no reachable repo context (no EC-3 worktree on the board)" }
           : await gitAncestor(exec, repoCtx, builtResolved ?? candidateSha, targetRef, declaredRef);
     const adopted: Rung = opts?.project
-      ? { value: "NOT_APPLICABLE", basis: "selected project has no binding to the OpenRig daemon source; daemon adoption is not project progress" }
+      ? { value: "NOT_APPLICABLE", basis: "selected project has no binding to the Multi-Agent daemon source; daemon adoption is not project progress" }
       : !candidateSha || !repoCtx
         ? { value: INDETERMINATE, basis: folded.basis }
         : buildInfo.commit
@@ -1137,7 +1137,7 @@ export async function buildExecutionView(deps: ExecutionViewDeps, opts?: { missi
         park_kind: parkKind,
         park_kind_basis: wake
           ? `armed wake ${wake.wake_ref} on queue_transition_wakes`
-          : "no armed wake row (deliberate-park-without-wake vs strand is underivable here — rig parked owns wake diagnosis)",
+          : "no armed wake row (deliberate-park-without-wake vs strand is underivable here — multi-agent parked owns wake diagnosis)",
         wake_target: wake?.wake_ref ?? null,
         age_minutes: ageMinutes,
         source: { qitem_id: r.qitem_id },
@@ -1238,7 +1238,7 @@ export async function buildExecutionView(deps: ExecutionViewDeps, opts?: { missi
             }
           : {}),
       git: { basis: repoCtx ? `per-lane git -C; repo context ${repoCtx}` : "no reachable repo context", asof: asof() },
-      build_info: { commit: buildInfo.commit ?? INDETERMINATE, asof: asof(), basis: "OpenRig daemon source build; not a selected project deployment" },
+      build_info: { commit: buildInfo.commit ?? INDETERMINATE, asof: asof(), basis: "Multi-Agent daemon source build; not a selected project deployment" },
       review_artifacts: { root: rigsRoot, asof: asof() },
       disk: { asof: asof() },
       workflow_lifecycle: {

@@ -110,7 +110,7 @@ export function absentSeatResumeHistory<T extends { id: string; nodeId: string; 
 /** The stop-for-decision explanation for such a seat, worded once for apply and preview. */
 export function absentSeatResumeHistoryError(logicalId: string, resumeType: string | null, rigName: string): string {
   const seat = `'${`${logicalId}@${rigName}`.replace(/'/g, `'"'"'`)}'`;
-  return `Original session not resumed: the seat had no running occupant when this snapshot was taken, but an earlier occupant left a '${resumeType}' resume token. No session was started. The recorded token has not been verified and may be stale or belong to another runtime. To deliberately start only this seat fresh, run: rig seat launch ${seat} --fresh --reason "<why>".`;
+  return `Original session not resumed: the seat had no running occupant when this snapshot was taken, but an earlier occupant left a '${resumeType}' resume token. No session was started. The recorded token has not been verified and may be stale or belong to another runtime. To deliberately start only this seat fresh, run: multi-agent seat launch ${seat} --fresh --reason "<why>".`;
 }
 
 /** One wording for the loud failure everywhere — divergent phrasings would be

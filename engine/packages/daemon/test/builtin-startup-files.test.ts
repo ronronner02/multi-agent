@@ -3,28 +3,28 @@ import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { reanchorBuiltinStartupFile, reanchorShippedProjectionEntry, runningBuiltinAssetsRoot, runningShippedSpecsRoot } from "../src/domain/builtin-startup-files.js";
 
-const RUNNING = "/new/lib/node_modules/@openrig/cli/daemon/assets";
-const OLD = "/mise/installs/npm-openrig-cli/0.6.2/node_modules/@openrig/cli/daemon/assets";
+const RUNNING = "/new/lib/node_modules/@multi-agent/cli/daemon/assets";
+const OLD = "/mise/installs/npm-multi-agent-cli/0.6.2/node_modules/@multi-agent/cli/daemon/assets";
 const meta = { deliveryHint: "guidance_merge" as const, required: true, appliesOn: ["fresh_start" as const, "restore" as const] };
 
 describe("reanchorBuiltinStartupFile", () => {
   it.each([
     ["CULTURE-default.md", "guidance/CULTURE-default.md"],
-    ["openrig-start.md", "guidance/openrig-start.md"],
-    ["openrig-onboarding-01.md", "onboarding/01-world-and-purpose.md"],
-    ["openrig-onboarding-02.md", "onboarding/02-self-and-competent-action.md"],
+    ["multi-agent-start.md", "guidance/multi-agent-start.md"],
+    ["multi-agent-onboarding-01.md", "onboarding/01-world-and-purpose.md"],
+    ["multi-agent-onboarding-02.md", "onboarding/02-self-and-competent-action.md"],
   ])("re-anchors %s from an old packaged install, preserving metadata", (name, rel) => {
     const stored = { path: name, absolutePath: `${OLD}/${rel}`, ownerRoot: OLD, ...meta, kind: "file" as const };
     expect(reanchorBuiltinStartupFile(stored, RUNNING)).toEqual({ ...stored, absolutePath: `${RUNNING}/${rel}`, ownerRoot: RUNNING });
   });
 
   it("re-anchors a built-in stored from a dev checkout (packages/daemon/assets)", () => {
-    const dev = "/src/openrig/packages/daemon/assets";
-    const stored = { path: "openrig-start.md", absolutePath: `${dev}/guidance/openrig-start.md`, ownerRoot: dev, ...meta };
-    expect(reanchorBuiltinStartupFile(stored, RUNNING).absolutePath).toBe(`${RUNNING}/guidance/openrig-start.md`);
+    const dev = "/src/multi-agent/packages/daemon/assets";
+    const stored = { path: "multi-agent-start.md", absolutePath: `${dev}/guidance/multi-agent-start.md`, ownerRoot: dev, ...meta };
+    expect(reanchorBuiltinStartupFile(stored, RUNNING).absolutePath).toBe(`${RUNNING}/guidance/multi-agent-start.md`);
   });
 
-  it("leaves a custom rig file with the same basename unchanged", () => {
+  it("leaves a custom multi-agent file with the same basename unchanged", () => {
     const custom = { path: "CULTURE-default.md", absolutePath: "/home/u/rig/CULTURE-default.md", ownerRoot: "/home/u/rig", ...meta };
     expect(reanchorBuiltinStartupFile(custom, RUNNING)).toBe(custom);
   });
@@ -58,8 +58,8 @@ describe("reanchorBuiltinStartupFile", () => {
 });
 
 describe("reanchorShippedProjectionEntry", () => {
-  const RUN_SPECS = "/new/lib/node_modules/@openrig/cli/daemon/specs";
-  const OLD_SPECS = "/mise/installs/npm-openrig-cli/0.6.2/node_modules/@openrig/cli/daemon/specs";
+  const RUN_SPECS = "/new/lib/node_modules/@multi-agent/cli/daemon/specs";
+  const OLD_SPECS = "/mise/installs/npm-multi-agent-cli/0.6.2/node_modules/@multi-agent/cli/daemon/specs";
   const base = { category: "runtime_resource", effectiveId: "shared:claude-default-settings", sourceSpec: "shared",
     resourcePath: "runtime/claude-settings.fragment.json", resourceType: "claude_settings_fragment", mergeStrategy: "managed_block", target: ".claude/settings.local.json" };
 
@@ -77,13 +77,13 @@ describe("reanchorShippedProjectionEntry", () => {
   });
 
   it("re-anchors from a dev checkout (packages/daemon/specs)", () => {
-    const dev = "/src/openrig/packages/daemon/specs";
+    const dev = "/src/multi-agent/packages/daemon/specs";
     const stored = { ...base, sourcePath: `${dev}/agents/shared`, absolutePath: `${dev}/agents/shared/runtime/claude-mcp.fragment.json` };
     expect(reanchorShippedProjectionEntry(stored, RUN_SPECS).absolutePath).toBe(`${RUN_SPECS}/agents/shared/runtime/claude-mcp.fragment.json`);
   });
 
-  it("leaves a plugin projected from ~/.openrig/plugins unchanged even though its sourcePath is a shipped spec", () => {
-    const plugin = { ...base, category: "plugin", effectiveId: "shared:openrig-core", sourcePath: `${OLD_SPECS}/agents/shared`, absolutePath: "/home/u/.openrig/plugins/openrig-core" };
+  it("leaves a plugin projected from ~/.multi-agent/plugins unchanged even though its sourcePath is a shipped spec", () => {
+    const plugin = { ...base, category: "plugin", effectiveId: "shared:multi-agent-core", sourcePath: `${OLD_SPECS}/agents/shared`, absolutePath: "/home/u/.multi-agent/plugins/multi-agent-core" };
     expect(reanchorShippedProjectionEntry(plugin, RUN_SPECS)).toBe(plugin);
   });
 
@@ -92,7 +92,7 @@ describe("reanchorShippedProjectionEntry", () => {
     expect(reanchorShippedProjectionEntry(user, RUN_SPECS)).toBe(user);
   });
 
-  it("does not treat a user folder merely named daemon/specs as an OpenRig install", () => {
+  it("does not treat a user folder merely named daemon/specs as an Multi-Agent install", () => {
     const lookalike = { ...base, sourcePath: "/home/u/daemon/specs/agents/x", absolutePath: "/home/u/daemon/specs/agents/x/role.md" };
     expect(reanchorShippedProjectionEntry(lookalike, RUN_SPECS)).toBe(lookalike);
   });
@@ -103,8 +103,8 @@ describe("reanchorShippedProjectionEntry", () => {
 });
 
 describe("reanchorBuiltinStartupFile — shipped-spec startup files", () => {
-  const RUN_SPECS = "/new/lib/node_modules/@openrig/cli/daemon/specs";
-  const OLD_SPECS = "/mise/installs/npm-openrig-cli/0.6.2/node_modules/@openrig/cli/daemon/specs";
+  const RUN_SPECS = "/new/lib/node_modules/@multi-agent/cli/daemon/specs";
+  const OLD_SPECS = "/mise/installs/npm-multi-agent-cli/0.6.2/node_modules/@multi-agent/cli/daemon/specs";
   const KERNEL = "rigs/launch/kernel";
 
   it("re-anchors the kernel rig culture (pre-launch guidance_merge), preserving metadata", () => {
@@ -138,15 +138,15 @@ describe("reanchorBuiltinStartupFile — shipped-spec startup files", () => {
 });
 
 describe("dev-checkout layouts re-anchor only when the stored file is missing", () => {
-  const RUN_SPECS = "/new/lib/node_modules/@openrig/cli/daemon/specs";
-  const DEV = "/src/openrig/packages/daemon";
+  const RUN_SPECS = "/new/lib/node_modules/@multi-agent/cli/daemon/specs";
+  const DEV = "/src/multi-agent/packages/daemon";
   const present = () => true;
   const missing = () => false;
 
   it("built-in from a present dev checkout stays as stored; a missing one re-anchors", () => {
-    const stored = { path: "openrig-start.md", absolutePath: `${DEV}/assets/guidance/openrig-start.md`, ownerRoot: `${DEV}/assets`, ...meta };
+    const stored = { path: "multi-agent-start.md", absolutePath: `${DEV}/assets/guidance/multi-agent-start.md`, ownerRoot: `${DEV}/assets`, ...meta };
     expect(reanchorBuiltinStartupFile(stored, RUNNING, RUN_SPECS, present)).toBe(stored);
-    expect(reanchorBuiltinStartupFile(stored, RUNNING, RUN_SPECS, missing).absolutePath).toBe(`${RUNNING}/guidance/openrig-start.md`);
+    expect(reanchorBuiltinStartupFile(stored, RUNNING, RUN_SPECS, missing).absolutePath).toBe(`${RUNNING}/guidance/multi-agent-start.md`);
   });
 
   it("shipped-spec startup file from a present dev checkout stays as stored; a missing one re-anchors", () => {
@@ -166,7 +166,7 @@ describe("dev-checkout layouts re-anchor only when the stored file is missing", 
     expect(reanchorBuiltinStartupFile(stored, RUNNING, RUN_SPECS, present).absolutePath).toBe(`${RUNNING}/guidance/CULTURE-default.md`);
   });
 
-  it("an unrecognized daemon/assets layout is not treated as an OpenRig install", () => {
+  it("an unrecognized daemon/assets layout is not treated as an Multi-Agent install", () => {
     const other = "/opt/something/daemon/assets";
     const stored = { path: "CULTURE-default.md", absolutePath: `${other}/guidance/CULTURE-default.md`, ownerRoot: other, ...meta };
     expect(reanchorBuiltinStartupFile(stored, RUNNING, RUN_SPECS, missing)).toBe(stored);

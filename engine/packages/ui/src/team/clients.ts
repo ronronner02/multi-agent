@@ -1,4 +1,4 @@
-import type { AttemptActivity, TeamAttemptView, TurnProgress, DocumentPins, ProjectDocumentStage, ProjectDocumentVersion, ProjectDocumentWorkflow } from "@openrig/daemon/team-control";
+import type { AttemptActivity, TeamAttemptView, TurnProgress, DocumentPins, ProjectDocumentStage, ProjectDocumentVersion, ProjectDocumentWorkflow } from "@multi-agent/daemon/team-control";
 import { OwnerReadError, type useOwnerSession } from "../hooks/useOwnerSession.js";
 
 /**

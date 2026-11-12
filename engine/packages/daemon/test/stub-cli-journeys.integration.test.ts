@@ -23,7 +23,7 @@ describe("stub CLI journeys", () => {
   const recipient = "work-worker@rig-beta";
 
   async function cli(args: string[]) {
-    const result = await runRig(args, { ...daemon!.readEnv, OPENRIG_SESSION_NAME: sender }, rigBin);
+    const result = await runRig(args, { ...daemon!.readEnv, MULTI_AGENT_SESSION_NAME: sender }, rigBin);
     expect(result.code, JSON.stringify({ args, ...result })).toBe(0);
     return JSON.parse(result.stdout);
   }
@@ -67,7 +67,7 @@ describe("stub CLI journeys", () => {
     // Pane rendering is the contract here. The stub has no consuming input loop.
   }, 60_000);
 
-  it("keeps the current-rig view exact while explicit scopes reach the other live rig", async () => {
+  it("keeps the current-multi-agent view exact while explicit scopes reach the other live rig", async () => {
     const all = await cli(["ps", "--nodes", "--all-rigs", "--json"]);
     expect(all.map((n: { canonicalSessionName: string }) => n.canonicalSessionName).sort()).toEqual([sender, recipient]);
     for (const [rig, seat] of [["rig-alpha", sender], ["rig-beta", recipient]]) {

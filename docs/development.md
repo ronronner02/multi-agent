@@ -44,7 +44,7 @@ export PATH=/opt/multi-agent/toolchain/node/bin:$PATH
 
 ## Engine Commands
 
-Run these from `engine/`. They are the retained upstream baseline (see `docs/upstream-baseline.md`).
+Run these from `engine/`. They are the retained upstream baseline (see `docs/validation/upstream-baseline.md`).
 
 | Command | Purpose |
 | --- | --- |
@@ -85,8 +85,8 @@ The following ran on Ubuntu 26.04.1 / WSL2 6.18.33.2 with Node v24.21.0 / npm 11
 | daemon `tmux-pane-cwd-native.test.ts › preserves pipe characters in pane cwd` | Pane fields do not match the expected object | Native tmux 3.6 behavior | U4 / T008 (tmux adapter) |
 | daemon `terminal-pipe-utf8.test.ts › preserves native terminal UTF-8 output…` | `native output timed out` | Native tmux pipe timing on WSL | U4 / T008 |
 | daemon `seat-activity-retirement-hooks.test.ts › adopted … successor's first permission hook` | `tmux -S /tmp/… new-session` failed | Native tmux session start in the test fixture | U4 / T008 |
-| cli `start.test.ts › S20 … env-sourced OPENRIG_HOST through rig start creates NO bind intent` | Auto-start never reaches its mocked spawn | Not diagnosed. The real `SystemPreflight` is ready outside Vitest, so the cause is inside the hermetic fixture. | U9 (bind / loopback surfaces) |
-| cli `up.test.ts › … S20: env-sourced OPENRIG_HOST creates NO bind intent through up auto-start` | Expected port `7472`, got `undefined` | Same S20 auto-start path | U9 |
+| cli `start.test.ts › S20 … env-sourced MULTI_AGENT_HOST through multi-agent start creates NO bind intent` | Auto-start never reaches its mocked spawn | Not diagnosed. The real `SystemPreflight` is ready outside Vitest, so the cause is inside the hermetic fixture. | U9 (bind / loopback surfaces) |
+| cli `up.test.ts › … S20: env-sourced MULTI_AGENT_HOST creates NO bind intent through up auto-start` | Expected port `7472`, got `undefined` | Same S20 auto-start path | U9 |
 
 The owning unit must diagnose its tests before changing that area, and must not count them as passing.
 

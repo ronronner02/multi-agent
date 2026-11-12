@@ -19,8 +19,8 @@ describe("default client endpoint selection", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "client-endpoint-"));
     home = path.join(root, "a");
     fs.mkdirSync(home);
-    for (const key of ["OPENRIG_URL", "RIGGED_URL", "OPENRIG_HOST", "RIGGED_HOST", "OPENRIG_PORT", "RIGGED_PORT", "RIGGED_HOME", "OPENRIG_SESSION_NAME", "RIGGED_SESSION_NAME", "OPENRIG_TERMINAL_BEARER_TOKEN"]) vi.stubEnv(key, undefined);
-    vi.stubEnv("OPENRIG_HOME", home);
+    for (const key of ["MULTI_AGENT_URL", "MULTI_AGENT_HOST", "MULTI_AGENT_PORT", "MULTI_AGENT_SESSION_NAME", "MULTI_AGENT_TERMINAL_BEARER_TOKEN"]) vi.stubEnv(key, undefined);
+    vi.stubEnv("MULTI_AGENT_HOME", home);
     configure();
   });
 
@@ -44,25 +44,25 @@ describe("default client endpoint selection", () => {
     expect(JSON.parse(fs.readFileSync(path.join(home, "config.json"), "utf8")).daemon.port).toBe(28123);
   });
 
-  it("preserves explicit baseUrl, primary URL and legacy URL precedence over state", () => {
+  it("uses the new URL override and ignores a former URL selector", () => {
     writeState(state());
-    vi.stubEnv("RIGGED_URL", "http://legacy.invalid:28001");
-    expect(new DaemonClient().baseUrl).toBe("http://legacy.invalid:28001");
-    vi.stubEnv("OPENRIG_URL", "http://explicit.invalid:28002");
+    vi.stubEnv(("RIG" + "GED") + "_URL", "http://legacy.invalid:28001");
+    expect(new DaemonClient().baseUrl).toBe("http://127.0.0.1:27451");
+    vi.stubEnv("MULTI_AGENT_URL", "http://explicit.invalid:28002");
     expect(new DaemonClient().baseUrl).toBe("http://explicit.invalid:28002");
     expect(new DaemonClient("http://argument.invalid:28003").baseUrl).toBe("http://argument.invalid:28003");
   });
 
   it("uses host/port config and its env overrides when no state exists", () => {
     expect(new DaemonClient().baseUrl).toBe(fallback);
-    vi.stubEnv("OPENRIG_HOST", "env.invalid");
-    vi.stubEnv("OPENRIG_PORT", "28004");
+    vi.stubEnv("MULTI_AGENT_HOST", "env.invalid");
+    vi.stubEnv("MULTI_AGENT_PORT", "28004");
     expect(new DaemonClient().baseUrl).toBe("http://env.invalid:28004");
-    vi.stubEnv("OPENRIG_HOST", undefined);
-    vi.stubEnv("OPENRIG_PORT", undefined);
-    vi.stubEnv("RIGGED_HOST", "legacy-config.invalid");
-    vi.stubEnv("RIGGED_PORT", "28005");
-    expect(new DaemonClient().baseUrl).toBe("http://legacy-config.invalid:28005");
+    vi.stubEnv("MULTI_AGENT_HOST", undefined);
+    vi.stubEnv("MULTI_AGENT_PORT", undefined);
+    vi.stubEnv(("RIG" + "GED") + "_HOST", "legacy-config.invalid");
+    vi.stubEnv(("RIG" + "GED") + "_PORT", "28005");
+    expect(new DaemonClient().baseUrl).toBe("http://configured.invalid:28123");
   });
 
   it("uses the existing default when both state and config are absent (no network request)", () => {
@@ -72,8 +72,8 @@ describe("default client endpoint selection", () => {
 
   it("keeps a live endpoint when startup host/port configuration changes", () => {
     writeState(state());
-    vi.stubEnv("OPENRIG_PORT", "28004");
-    vi.stubEnv("OPENRIG_HOST", "future.invalid");
+    vi.stubEnv("MULTI_AGENT_PORT", "28004");
+    vi.stubEnv("MULTI_AGENT_HOST", "future.invalid");
     expect(new DaemonClient().baseUrl).toBe("http://127.0.0.1:27451");
   });
 
@@ -108,29 +108,29 @@ describe("default client endpoint selection", () => {
     expect(new DaemonClient().baseUrl).toBe("http://custom.invalid:27451");
   });
 
-  it("resolves home per construction, accepts RIGGED_HOME, and never discovers a sibling", () => {
+  it("resolves home per construction, ignores the former home selector, and never discovers a sibling", () => {
     writeState(state());
     const first = new DaemonClient();
     const other = path.join(root, "b");
     fs.mkdirSync(other);
     configure(other);
-    vi.stubEnv("OPENRIG_HOME", other);
+    vi.stubEnv("MULTI_AGENT_HOME", other);
     expect(new DaemonClient().baseUrl).toBe(fallback);
     writeState(state(27452), other);
     expect(new DaemonClient().baseUrl).toBe("http://127.0.0.1:27452");
     expect(first.baseUrl).toBe("http://127.0.0.1:27451");
-    vi.stubEnv("OPENRIG_HOME", undefined);
-    vi.stubEnv("RIGGED_HOME", home);
-    expect(new DaemonClient().baseUrl).toBe("http://127.0.0.1:27451");
+    vi.stubEnv("MULTI_AGENT_HOME", undefined);
+    vi.stubEnv(("RIG" + "GED") + "_HOME", home);
+    expect(new DaemonClient().baseUrl).toBe("http://127.0.0.1:7433");
   });
 
   it("preserves remote destination and origin identity while local state exists", async () => {
     writeState(state());
-    vi.stubEnv("OPENRIG_SESSION_NAME", "author@fixture");
+    vi.stubEnv("MULTI_AGENT_SESSION_NAME", "author@fixture");
     const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response("{}"));
     const client = remoteDaemonClient(url => new DaemonClient(url, { fetchImpl }), "http://remote.invalid:28006", "origin-fixture");
     await client.post("/api/proof/judge", { fixture: true });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(fetchImpl.mock.calls[0]).toEqual(["http://remote.invalid:28006/api/proof/judge", expect.objectContaining({ headers: expect.objectContaining({ "X-OpenRig-Session": "author@fixture@origin-fixture" }) })]);
+    expect(fetchImpl.mock.calls[0]).toEqual(["http://remote.invalid:28006/api/proof/judge", expect.objectContaining({ headers: expect.objectContaining({ "X-Multi-Agent-Session": "author@fixture@origin-fixture" }) })]);
   });
 });

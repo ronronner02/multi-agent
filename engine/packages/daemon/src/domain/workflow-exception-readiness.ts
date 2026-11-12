@@ -69,7 +69,7 @@ export function inspectExceptionReadiness(input: {
       }
       routes.push({ exceptionClass, state: identity === "unregistered" ? "unregistered" : "ready", roleResolution,
         destinationSession, position, resolvedVia, identity,
-        message: identity === "unregistered" ? "The authored target is not a declared rig member. Check rig ps --nodes --json and correct the selected role's preferred_targets."
+        message: identity === "unregistered" ? "The authored target is not a declared multi-agent member. Check multi-agent ps --nodes --json and correct the selected role's preferred_targets."
           : route.position === "fallback" ? `Registered-human fallback; agent resolution: ${roleResolution}.`
           : "Current evidence resolves this route; it is re-read when an occurrence is admitted." });
     } catch (error) {
@@ -86,6 +86,6 @@ export function inspectExceptionReadiness(input: {
       : `Inspect the selected routing contract at ${input.source}.`;
   return { scope: "future-occurrences", posture: "advisory", selection, routes,
     nextAction: correction + (input.instanceId
-      ? ` After a source correction, inspect rig workflow revise ${input.instanceId} and deliberately apply its compatible proposal. Editing a file does not change the running owner. Existing exception obligations keep their owners.`
+      ? ` After a source correction, inspect multi-agent workflow revise ${input.instanceId} and deliberately apply its compatible proposal. Editing a file does not change the running owner. Existing exception obligations keep their owners.`
       : " Compile again after correction. This is a pre-failure advisory. At detection, a required resolution read that fails blocks that occurrence; ordinary work is not gated by this inspection.") };
 }

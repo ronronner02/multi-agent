@@ -29,7 +29,7 @@ export interface ReadSurfaceOptions {
   seat?: string;
   /** Timeout for a socket/CLI read (ms). */
   timeoutMs?: number;
-  /** The mission a scope read audits (D3): `rig scope audit` has --mission as a
+  /** The mission a scope read audits (D3): `multi-agent scope audit` has --mission as a
    *  requiredOption, so a scope read without it can never succeed. Sourced from
    *  the scenario's env.scope_mission (validator-required for scope expects). */
   scopeMission?: string;
@@ -82,7 +82,7 @@ export async function readSurface(
       // here means the pipeline failed to thread env.scope_mission through.
       if (!opts.scopeMission) {
         throw new Error(
-          `expect surface "scope" requires a mission — declare env.scope_mission (the shipped read is \`rig scope audit --mission <name> --json\`)`,
+          `expect surface "scope" requires a mission — declare env.scope_mission (the shipped read is \`multi-agent scope audit --mission <name> --json\`)`,
         );
       }
       return jsonRig(["scope", "audit", "--mission", opts.scopeMission, "--json"], ctx);

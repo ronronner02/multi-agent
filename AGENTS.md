@@ -24,7 +24,7 @@ These rules apply to every agent working in this repository. The owner reset the
 - The direction is Windows-first and portable:
   - the Electron desktop owns the engine, and the browser is an optional viewer;
   - agents run as direct child processes, with no tmux and no WSL;
-  - the OpenRig legacy and the TUI are deleted, and the product is renamed Multi-Agent;
+  - the Multi-Agent legacy and the TUI are deleted, and the product is renamed Multi-Agent;
   - a thin `multi-agent` CLI remains.
 - **Deferred:** hardened isolation, macOS support, release publication and code signing. T038 is cancelled with the WSL path.
 - A unit is done when its focused tests, typecheck and smoke pass, and its Windows verification ran wherever the unit calls for one. Don't harden, generalize or polish a unit while the next one doesn't yet work end to end.

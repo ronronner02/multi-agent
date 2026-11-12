@@ -7,17 +7,17 @@ context/continuity health, or health policy.
 
 ## Inspect and choose
 
-Use the existing `rig mode` surface. Give an exact rig or authored work scope:
+Use the existing `multi-agent mode` surface. Give an exact rig or authored work scope:
 
 ```sh
-rig mode effective --rig my-rig --json
-rig mode effective --project my-project --mission release-1 --json
-rig mode effective --qitem my-packet --json
-rig mode set delegated --scope mission --qualifier my-project/release-1 --evidence "Operator delegated this outcome"
+multi-agent mode effective --rig my-rig --json
+multi-agent mode effective --project my-project --mission release-1 --json
+multi-agent mode effective --qitem my-packet --json
+multi-agent mode set delegated --scope mission --qualifier my-project/release-1 --evidence "Operator delegated this outcome"
 # The proposal above exits 2 without writing. Apply the deliberate choice:
-rig mode set delegated --scope mission --qualifier my-project/release-1 --evidence "Operator delegated this outcome" --confirm
-rig mode set human-led --scope mission --qualifier my-project/release-1 --evidence "Return to interactive planning" --confirm
-rig mode unset mission my-project/release-1
+multi-agent mode set delegated --scope mission --qualifier my-project/release-1 --evidence "Operator delegated this outcome" --confirm
+multi-agent mode set human-led --scope mission --qualifier my-project/release-1 --evidence "Return to interactive planning" --confirm
+multi-agent mode unset mission my-project/release-1
 ```
 
 Unsetting reveals the next applicable explicit choice, or the visible human-led
@@ -57,9 +57,9 @@ the returned identity uses its SPEC ID and project/mission qualification.
 
 Project selection reads the declared `projects: [{id, root}]` catalog at
 `workspace.catalog_path` (default `workspace.yaml` in the workspace root), the
-same catalog `rig context work-install` uses, or the workspace's own
+same catalog `multi-agent context work-install` uses, or the workspace's own
 `project.yaml` when no catalog exists. A sole project may be derived. With several
-projects and no explicit selection, posture picks one the way `rig context work-install`
+projects and no explicit selection, posture picks one the way `multi-agent context work-install`
 does: a project whose `projects[].rigs` lists the rig, then (for qitem reads) the deepest
 project root containing the destination seat's working folder, then the only project no rig
 claims. The method is recorded in the source as `#selected-by=rig:<name>`, `cwd:<path>` or

@@ -1,10 +1,10 @@
-// OPR.0.4.1.11.1 (FR-1) — digital-twin entry. Mounts the REAL @openrig/ui App UNMODIFIED;
+// OPR.0.4.1.11.1 (FR-1) — digital-twin entry. Mounts the REAL @multi-agent/ui App UNMODIFIED;
 // the ONLY divergence from production main.tsx is: (a) the EventSource SSE stub, (b) a
 // seeded react-query cache, (c) staleTime:Infinity/retry:false so seeded data never
 // fetches. No forked component tree — the twin IS the real components, so it is 1:1 with
 // the live UI by construction and never needs manual re-sync.
 
-// MUST be first: install the daemon-free seams before any @openrig/ui module imports —
+// MUST be first: install the daemon-free seams before any @multi-agent/ui module imports —
 // the no-op EventSource (SSE) + the fixture-backed fetch (for staleTime:0 refetch hooks).
 import "./eventsource-stub.js";
 import "./fetch-stub.js";

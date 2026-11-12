@@ -19,7 +19,7 @@ function fixture(opts: { platform: NodeJS.Platform; survives?: boolean; cleanup?
   let probesAfterKill = 0;
   const receiptPresent = opts.cleanup === "stale" || opts.cleanup === "clean";
   const receipt = opts.cleanup === "clean" ? JSON.stringify({
-    schema: "openrig.daemon-shutdown/v1", pid: 987, startedAt: new Date().toISOString(),
+    schema: "multi-agent.daemon-shutdown/v1", pid: 987, startedAt: new Date().toISOString(),
     completedAt: new Date().toISOString(), outcome: "clean", phase: "complete", failures: [],
   }) : null;
   const deps = {
@@ -58,7 +58,7 @@ async function stop(deps: LifecycleDeps) {
   process.exitCode = undefined;
   const out = vi.spyOn(console, "log").mockImplementation(() => {}).mockClear();
   const err = vi.spyOn(console, "error").mockImplementation(() => {}).mockClear();
-  await settle(new Command().addCommand(daemonCommand(deps)).parseAsync(["node", "rig", "daemon", "stop"]));
+  await settle(new Command().addCommand(daemonCommand(deps)).parseAsync(["node", "multi-agent", "daemon", "stop"]));
   return { out: out.mock.calls.flat().join(" "), err: err.mock.calls.flat().join(" "), code: process.exitCode };
 }
 
@@ -71,7 +71,7 @@ async function status(platform: NodeJS.Platform, fetchImpl: typeof fetch) {
   vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => { err.push(args.join(" ")); });
   try {
     await settle(new Command().addCommand(daemonCommand({ platform } as LifecycleDeps,
-      { baseUrl: "http://127.0.0.1:17434", fetchImpl })).parseAsync(["node", "rig", "daemon", "status"]));
+      { baseUrl: "http://127.0.0.1:17434", fetchImpl })).parseAsync(["node", "multi-agent", "daemon", "status"]));
   } catch (error) {
     // The real CLI entry renders this and exits; a bare parse rethrows it.
     err.push(error instanceof Error ? error.message : String(error));

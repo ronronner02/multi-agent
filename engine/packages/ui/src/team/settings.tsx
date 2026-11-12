@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Monitor, Moon, Sun } from "lucide-react";
-import type { InterfaceI18n } from "@openrig/i18n";
+import type { InterfaceI18n } from "@multi-agent/i18n";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { TEAM_THEME_PREFERENCES, type useThemePreference } from "./theme.js";
 import { githubStatusKey, useGithubStatus, type GithubStatus } from "./github-gate.js";

@@ -74,7 +74,7 @@ function compare(db: Database.Database, instance: WorkflowInstance): { view: Gra
       boundSlices: sourcesOf(instance).filter(s => s.kind === "slice").map(s => s.path),
       executableSteps: oldSpec?.steps.map(s => ({ id: s.id, dependsOn: s.depends_on ?? [] })) ?? [],
     },
-    nextAction: "rig workflow trace " + instance.instanceId,
+    nextAction: "multi-agent workflow trace " + instance.instanceId,
   };
   if (!binding || !instance.lifecycleOperationKey) {
     view.reasons.push("This is not a manifest-bound lifecycle. Inspect its authored spec; lifecycle revision does not migrate arbitrary workflows.");
@@ -93,7 +93,7 @@ function compare(db: Database.Database, instance: WorkflowInstance): { view: Gra
   try { compilation = compileProjectLifecycle({ missionPath, operationKey: instance.lifecycleOperationKey }); }
   catch (error) {
     view.status = "unavailable"; view.reasons.push(error instanceof Error ? error.message : String(error));
-    view.nextAction = "Repair the named authored input, then rig workflow revise " + instance.instanceId;
+    view.nextAction = "Repair the named authored input, then multi-agent workflow revise " + instance.instanceId;
     return { view };
   }
   view.proposedDigest = compilation.compiledInputDigest;
@@ -159,10 +159,10 @@ function compare(db: Database.Database, instance: WorkflowInstance): { view: Gra
   view.adopted = instance.compiledInputDigest === compilation.compiledInputDigest;
   view.compatible = view.reasons.length === 0;
   view.status = view.adopted ? "current" : !view.compatible ? "incompatible" : same(graph(oldSpec), graph(proposed)) ? "source-only" : "compatible";
-  view.nextAction = "rig workflow revise " + instance.instanceId;
+  view.nextAction = "multi-agent workflow revise " + instance.instanceId;
   if (!view.adopted && view.compatible) {
     view.operationKey = "revision-" + createHash("sha256").update(canonical([instance.instanceId, instance.version, compilation.compiledInputDigest])).digest("hex").slice(0, 24);
-    view.applyCommand = "rig workflow revise " + instance.instanceId + " --apply --expected-version " + instance.version + " --expected-digest " + compilation.compiledInputDigest + " --operation-key " + view.operationKey + " --actor-session <you> --reason <decision>";
+    view.applyCommand = "multi-agent workflow revise " + instance.instanceId + " --apply --expected-version " + instance.version + " --expected-digest " + compilation.compiledInputDigest + " --operation-key " + view.operationKey + " --actor-session <you> --reason <decision>";
   }
   return { view, compilation };
 }
@@ -187,13 +187,13 @@ export function reviseGraph(db: Database.Database, bus: EventBus, input: {
 }) {
   const fail = (message: string, details?: Record<string, unknown>): never => { throw new WorkflowInstanceError("lifecycle_revision_conflict", message, details); };
   if (typeof input.operationKey !== "string" || !input.operationKey.trim() || typeof input.actorSession !== "string" || !input.actorSession.trim() || typeof input.reason !== "string" || !input.reason.trim() || !Number.isSafeInteger(input.expectedVersion) || typeof input.expectedDigest !== "string" || !input.expectedDigest)
-    fail("Revision needs the inspected version/digest, stable operation key, actor and decision. Run rig workflow revise <instance>.");
+    fail("Revision needs the inspected version/digest, stable operation key, actor and decision. Run multi-agent workflow revise <instance>.");
   const prior = recoverGraphOperation(db, input.operationKey);
   if (prior) {
     if (prior.kind !== "revision" || prior.instance.instanceId !== input.instanceId ||
         prior.receipt.expectedVersion !== input.expectedVersion || prior.receipt.compiledInputDigest !== input.expectedDigest ||
         prior.receipt.actorSession !== input.actorSession || prior.receipt.reason !== input.reason)
-      fail("This operation key already records a different decision. Inspect rig workflow operation " + shellQuote(input.operationKey));
+      fail("This operation key already records a different decision. Inspect multi-agent workflow operation " + shellQuote(input.operationKey));
     return { ...prior, replayed: true };
   }
   let receipt!: Record<string, unknown>;

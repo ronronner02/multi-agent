@@ -185,7 +185,7 @@ describe("WorkflowSpecCache (PL-004 Phase D)", () => {
   // source_path lives in noise directories that walkYamlFiles' new
   // SKIP_DIRS guard now refuses to scan. Without this prune, stale
   // rows from before SKIP_DIRS shipped would survive forever and keep
-  // showing up in `rig specs show` / `rig specs preview` candidates.
+  // showing up in `multi-agent specs show` / `multi-agent specs preview` candidates.
   it("pruneNoiseDirRows removes cache rows from .worktrees/node_modules paths and preserves canonical-path rows", () => {
     const fixtures: Array<{ path: string; specName: string; noise: boolean }> = [
       { path: join(tmp, "workflows", "canon.yaml"), specName: "canonical-spec", noise: false },
@@ -229,7 +229,7 @@ describe("WorkflowSpecCache (PL-004 Phase D)", () => {
   // boot. The installRoot guard preserves rows whose source_path
   // starts with the install root.
   it("pruneNoiseDirRows with installRoot preserves built-in rows under <installRoot>/dist while removing user noise", () => {
-    const installRoot = join(tmp, "install", "@openrig", "daemon");
+    const installRoot = join(tmp, "install", "@multi-agent", "daemon");
     const builtinPath = join(installRoot, "dist", "builtins", "workflow-specs", "shipped.yaml");
     const userNoisePath = join(tmp, "user-workspace", "some-project", "dist", "stale.yaml");
 

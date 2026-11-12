@@ -10,11 +10,11 @@ import { resolveOriginSelfHostId } from "../src/daemon-lifecycle.js";
 let home: string;
 let dbPath: string;
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), "openrig-qa-origin-"));
+  home = mkdtempSync(join(tmpdir(), "multi-agent-qa-origin-"));
   dbPath = join(home, "source.sqlite");
-  vi.stubEnv("OPENRIG_HOME", home); vi.stubEnv("OPENRIG_DB", dbPath);
-  vi.stubEnv("RIGGED_DB", ""); vi.stubEnv("OPENRIG_URL", "http://forwarded-endpoint:7433");
-  vi.stubEnv("RIGGED_URL", ""); vi.stubEnv("OPENRIG_SESSION_NAME", "rig-admin@ops");
+  vi.stubEnv("MULTI_AGENT_HOME", home); vi.stubEnv("MULTI_AGENT_DB", dbPath);
+  vi.stubEnv("MULTI_AGENT_URL", "http://forwarded-endpoint:7433");
+  vi.stubEnv("MULTI_AGENT_SESSION_NAME", "rig-admin@ops");
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); rmSync(home, {recursive: true, force: true}); });
@@ -46,11 +46,11 @@ describe("local durable origin", () => {
     writeFileSync(join(home,"daemon.json"),JSON.stringify({db:previous})); expect(readLocalOrigin()).toBe("configured-origin");
   });
   it("retains an explicit --db from the last launch when no DB override exists", () => {
-    seed("launch-origin"); vi.stubEnv("OPENRIG_DB","");
+    seed("launch-origin"); vi.stubEnv("MULTI_AGENT_DB","");
     writeFileSync(join(home,"daemon.json"),JSON.stringify({db:dbPath})); expect(readLocalOrigin()).toBe("launch-origin");
   });
   it("honors a file-configured DB", () => {
-    seed("file-origin"); vi.stubEnv("OPENRIG_DB","");
+    seed("file-origin"); vi.stubEnv("MULTI_AGENT_DB","");
     writeFileSync(join(home,"config.json"),JSON.stringify({db:{path:dbPath}})); expect(readLocalOrigin()).toBe("file-origin");
   });
   it.each(["", "local", "localhost", "has@separator"])("does not promote invalid identity %s", id => {
@@ -63,27 +63,27 @@ describe("direct endpoint attribution", () => {
     seed("vm-origin"); const {factory,requests}=client(target); const c=factory("http://127.0.0.1:12345");
     await c.post("/write",{}); await c.post("/again",{});
     expect(requests.filter(r=>r.url.endsWith("/healthz"))).toHaveLength(1);
-    expect(requests.at(-1)?.headers["X-OpenRig-Session"]).toBe("rig-admin@ops@vm-origin");
+    expect(requests.at(-1)?.headers["X-Multi-Agent-Session"]).toBe("rig-admin@ops@vm-origin");
   });
   it("proven-local direct endpoint preserves bare addressing", async () => {
     seed("vm-origin"); const {factory,requests}=client("vm-origin"); await factory("http://alias:7433").post("/write",{});
-    expect(requests.at(-1)?.headers["X-OpenRig-Session"]).toBe("rig-admin@ops");
+    expect(requests.at(-1)?.headers["X-Multi-Agent-Session"]).toBe("rig-admin@ops");
   });
   it("unknown origin delivers a durable uncertainty marker and diagnostic", async () => {
     const {factory,requests}=client("parent-origin"); await factory("http://parent:7433").post("/write",{});
-    expect(requests.at(-1)?.headers).toMatchObject({"X-OpenRig-Session":"rig-admin@ops","X-OpenRig-Origin-Unknown":"true"});
+    expect(requests.at(-1)?.headers).toMatchObject({"X-Multi-Agent-Session":"rig-admin@ops","X-Multi-Agent-Origin-Unknown":"true"});
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("Origin instance unknown"));
   });
   it("ordinary default local requests do not need an origin read/probe", async () => {
-    vi.stubEnv("OPENRIG_URL",""); const {factory,requests}=client(); await factory("http://localhost:7433").post("/write",{});
-    expect(requests).toHaveLength(1); expect(requests[0]?.headers).toMatchObject({"X-OpenRig-Session":"rig-admin@ops"});
+    vi.stubEnv("MULTI_AGENT_URL",""); const {factory,requests}=client(); await factory("http://localhost:7433").post("/write",{});
+    expect(requests).toHaveLength(1); expect(requests[0]?.headers).toMatchObject({"X-Multi-Agent-Session":"rig-admin@ops"});
   });
   it("already-qualified sender survives unavailable local evidence", async () => {
-    vi.stubEnv("OPENRIG_SESSION_NAME","rig-admin@ops@upstream"); const {factory,requests}=client(); await factory("http://parent:7433").post("/write",{});
-    expect(requests).toHaveLength(1); expect(requests[0]?.headers["X-OpenRig-Session"]).toBe("rig-admin@ops@upstream");
+    vi.stubEnv("MULTI_AGENT_SESSION_NAME","rig-admin@ops@upstream"); const {factory,requests}=client(); await factory("http://parent:7433").post("/write",{});
+    expect(requests).toHaveLength(1); expect(requests[0]?.headers["X-Multi-Agent-Session"]).toBe("rig-admin@ops@upstream");
   });
   it("registered remote construction uses local durable fallback, never its target", async () => {
     seed("vm-origin"); const {factory,requests}=client("parent-origin"); await remoteDaemonClient(factory,"http://parent:7433").post("/write",{});
-    expect(requests).toHaveLength(1); expect(requests[0]?.headers["X-OpenRig-Session"]).toBe("rig-admin@ops@vm-origin");
+    expect(requests).toHaveLength(1); expect(requests[0]?.headers["X-Multi-Agent-Session"]).toBe("rig-admin@ops@vm-origin");
   });
 });

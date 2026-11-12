@@ -191,7 +191,7 @@ function resolveDefaultUiDistDir(): string {
 }
 
 export const WEB_UI_OFF_MESSAGE =
-  "The OpenRig web UI is off. To turn it on, run `rig config set ui.enabled true`, then stop and start the daemon (`rig daemon stop`, `rig daemon start`).\n";
+  "The Multi-Agent web UI is off. To turn it on, run `multi-agent config set ui.enabled true`, then stop and start the daemon (`multi-agent daemon stop`, `multi-agent daemon start`).\n";
 
 function safeResolveUiPath(uiDistDir: string, requestPath: string): string | null {
   const relativePath = requestPath.replace(/^\/+/, "") || "index.html";
@@ -351,8 +351,8 @@ export function createApp(deps: AppDeps): Hono {
       return resolved.ok ? null : c.json({ code: resolved.code, error: resolved.error }, resolved.status);
     },
     bearerTokens: [deps.legacyBearerToken],
-    allowedOrigins: process.env.OPENRIG_ALLOWED_ORIGINS,
-    allowedHosts: process.env.OPENRIG_ALLOWED_HOSTS,
+    allowedOrigins: process.env.MULTI_AGENT_ALLOWED_ORIGINS,
+    allowedHosts: process.env.MULTI_AGENT_ALLOWED_HOSTS,
     discoverSelfNames: deps.selfNameDiscovery,
     onDecision: deps.browserBoundaryObserver,
   }));
@@ -371,7 +371,7 @@ export function createApp(deps: AppDeps): Hono {
       const poll = c.req.method === "GET" && /^\/api\/rigs\/[^/]+\/chat\/mailbox(?:\/poll)?$/.test(c.req.path);
       const consume = c.req.method === "POST" && /^\/api\/rigs\/[^/]+\/chat\/mailbox\/[^/]+\/consume$/.test(c.req.path);
       const body: unknown = consume ? await c.req.json().catch(() => null) : null;
-      const capability = poll ? c.req.query("capability") ?? c.req.header("x-openrig-mailbox-capability")
+      const capability = poll ? c.req.query("capability") ?? c.req.header("x-multi-agent-mailbox-capability")
         : body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>).capability : null;
       const requestedRunId = poll ? c.req.query("runId")
         : body && typeof body === "object" && !Array.isArray(body) && typeof (body as Record<string, unknown>).runId === "string"
@@ -443,7 +443,7 @@ export function createApp(deps: AppDeps): Hono {
     ...(deps.workflowRuntime ? { runtime: deps.workflowRuntime } : {}),
     orchestratorRoot: fileURLToPath(new URL("../../../../", import.meta.url)),
   }));
-  // MVP slice 3 — the finished task's patch, served to the owner so `rig team apply` and the
+  // MVP slice 3 — the finished task's patch, served to the owner so `multi-agent team apply` and the
   // Web UI can hand the result back. Absent a runtime there are no candidate trees to read.
   app.route("/api/team-control", teamResultRoutes(teamGovernance, {
     credentials: teamOptions.credentials, legacyTokens: [deps.legacyBearerToken],
@@ -591,12 +591,12 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     if (daemonModeOf(deps.rigRepo.db) === "managed" && !isManagedUiRequestPath(requestPath)) {
-      c.header("X-OpenRig-Web-UI", "off");
+      c.header("X-Multi-Agent-Web-UI", "off");
       return c.text("Legacy pages are inactive in a managed-mode daemon.", 404);
     }
 
     if (deps.webUiEnabled !== true) {
-      c.header("X-OpenRig-Web-UI", "off");
+      c.header("X-Multi-Agent-Web-UI", "off");
       return c.text(WEB_UI_OFF_MESSAGE, 404);
     }
 

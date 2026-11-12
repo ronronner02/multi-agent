@@ -51,7 +51,7 @@ async function runCli(args: string[], deps?: { error: Error }) {
   const program = createProgram();
   if (deps) program.commands.find(command => command.name() === "team")!.commands
     .find(command => command.name() === "chat")!.action(() => { throw deps.error; });
-  await runProgram(program, ["node", "rig", ...args], {
+  await runProgram(program, ["node", "multi-agent", ...args], {
     out: (l) => out.push(l),
     err: (l) => err.push(l),
     exit: (c) => { exitCode = c; },
@@ -59,7 +59,7 @@ async function runCli(args: string[], deps?: { error: Error }) {
   return { out: out.join("\n"), err: err.join("\n"), exitCode };
 }
 
-const DAEMON_DOWN_PHRASES = [/daemon not running/i, /rig daemon start/i, /rig up/i];
+const DAEMON_DOWN_PHRASES = [/daemon not running/i, /multi-agent daemon start/i, /multi-agent up/i];
 
 describe("client response integrity — three distinct failure classes", () => {
   it("a non-empty unparseable/truncated body throws a typed DaemonResponseError carrying the status", async () => {
@@ -103,10 +103,10 @@ describe("client response integrity — three distinct failure classes", () => {
 });
 
 describe("render response integrity — 3-part error + honest exit, never daemon-down language", () => {
-  // P21 HERMETIC: queue update derives the actor from the seat env (X-OpenRig-Session); stub a
+  // P21 HERMETIC: queue update derives the actor from the seat env (X-Multi-Agent-Session); stub a
   // deterministic seat so the daemon-response path under test is REACHED, not aborted pre-POST on an
   // env-less harness. Unstubbed per test (singleFork shares the process).
-  beforeEach(() => { vi.stubEnv("OPENRIG_SESSION_NAME", "harness@rig"); process.exitCode = undefined; });
+  beforeEach(() => { vi.stubEnv("MULTI_AGENT_SESSION_NAME", "harness@rig"); process.exitCode = undefined; });
   afterEach(() => { vi.unstubAllEnvs(); });
 
   it("bad-response renders fact/consequence/action JSON with nonzero exit (json)", async () => {

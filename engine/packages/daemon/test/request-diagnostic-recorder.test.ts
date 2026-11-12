@@ -11,10 +11,10 @@ it("writes fast diagnostic events asynchronously with bounded backlog, explicit 
   const { recorder, file, dir } = fixture({ maxBytes: 1000 });
   const wait = vi.spyOn(Atomics, "wait");
   try {
-    expect(recorder.recordDiagnostic({ schema: "openrig.request-phase/v1", seq: 1, phase: "node_arrival" })).toBe(true);
+    expect(recorder.recordDiagnostic({ schema: "multi-agent.request-phase/v1", seq: 1, phase: "node_arrival" })).toBe(true);
     expect(recorder.recordDiagnostic({ field: "x".repeat(1025) })).toBe(false);
     await recorder.flush();
-    recorder.recordDiagnostic({ schema: "openrig.request-phase/v1", seq: 3, phase: "response_finish", status: 200 });
+    recorder.recordDiagnostic({ schema: "multi-agent.request-phase/v1", seq: 3, phase: "response_finish", status: 200 });
     await recorder.flush();
     expect(rows(file).at(-1).coverage).toMatchObject({ offered: 3, enqueued: 1, dropped: 1, acknowledged: 1, pending: 0 });
     for (let i = 0; i < 1025; i++) recorder.recordDiagnostic({ seq: i + 4, phase: "test" });

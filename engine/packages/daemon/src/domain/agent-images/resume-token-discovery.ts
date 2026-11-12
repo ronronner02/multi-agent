@@ -43,7 +43,7 @@ export function discoverResumeToken(db: Database.Database, sourceSession: string
       ok: false,
       failure: {
         code: "session_not_found",
-        message: `Source session '${sourceSession}' not found. Run 'rig ps --nodes' to see what's running.`,
+        message: `Source session '${sourceSession}' not found. Run 'multi-agent ps --nodes' to see what's running.`,
       },
     };
   }

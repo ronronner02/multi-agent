@@ -11,8 +11,8 @@ import {
 // the ambient env, the runner must REFUSE with a hard error naming the foreign target and
 // send ZERO traffic to it — never a silent fallback to the ambient daemon.
 describe("hermetic-env fail-closed guard", () => {
-  it("refuses with a named HermeticEnvError when an ambient OPENRIG_URL is present", () => {
-    const env = { OPENRIG_URL: "http://foreign-daemon:9999" };
+  it("refuses with a named HermeticEnvError when an ambient MULTI_AGENT_URL is present", () => {
+    const env = { MULTI_AGENT_URL: "http://foreign-daemon:9999" };
     expect(() => assertNoForeignDaemon(env)).toThrow(HermeticEnvError);
     let msg = "";
     try {
@@ -21,7 +21,7 @@ describe("hermetic-env fail-closed guard", () => {
       msg = (e as Error).message;
     }
     // The error must NAME the foreign target (var + value) so the operator can see it.
-    expect(msg).toContain("OPENRIG_URL");
+    expect(msg).toContain("MULTI_AGENT_URL");
     expect(msg).toContain("http://foreign-daemon:9999");
   });
 
@@ -37,10 +37,10 @@ describe("hermetic-env fail-closed guard", () => {
   });
 
   it("reports the FIRST foreign target found (deterministic, ordered)", () => {
-    const env = { OPENRIG_PORT: "7433", OPENRIG_URL: "http://x:1" };
+    const env = { MULTI_AGENT_PORT: "7433", MULTI_AGENT_URL: "http://x:1" };
     const hit = detectForeignDaemonTarget(env);
     // DAEMON_TARGET_ENV_VARS ordering is the detection order — URL precedes PORT.
-    expect(hit!.name).toBe("OPENRIG_URL");
+    expect(hit!.name).toBe("MULTI_AGENT_URL");
   });
 
   it("passes for a clean env with no foreign daemon target", () => {
@@ -50,7 +50,7 @@ describe("hermetic-env fail-closed guard", () => {
 
   it("ignores empty-string daemon-target vars (unset-equivalent)", () => {
     // An exported-but-empty var does not point at a daemon; treat it as absent.
-    expect(detectForeignDaemonTarget({ OPENRIG_URL: "" })).toBeNull();
-    expect(() => assertNoForeignDaemon({ OPENRIG_URL: "" })).not.toThrow();
+    expect(detectForeignDaemonTarget({ MULTI_AGENT_URL: "" })).toBeNull();
+    expect(() => assertNoForeignDaemon({ MULTI_AGENT_URL: "" })).not.toThrow();
   });
 });

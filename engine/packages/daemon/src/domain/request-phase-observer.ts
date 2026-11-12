@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import type { Context, MiddlewareHandler } from "hono";
 import type { SlowOperationInstrumentation } from "./slow-op-recorder.js";
 
-export const DIAGNOSTIC_ATTEMPT_HEADER = "x-openrig-diagnostic-attempt";
+export const DIAGNOSTIC_ATTEMPT_HEADER = "x-multi-agent-diagnostic-attempt";
 export const DIAGNOSTIC_LIMITS = { requestsPerMinute: 128, active: 128, phases: 16, ageMs: 60_000, tickWindow: 40 } as const;
 const UUID4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 type Route = "rigs_list" | "rig_nodes";
@@ -62,7 +62,7 @@ export class RequestPhaseObserver {
 
   private record(phase: string, fields: Record<string, unknown>): void {
     try {
-      this.sink.recordDiagnostic?.({ schema: "openrig.request-phase/v1", epoch: this.epoch,
+      this.sink.recordDiagnostic?.({ schema: "multi-agent.request-phase/v1", epoch: this.epoch,
         seq: ++this.seq, utc: this.utc(), elapsedMs: Math.max(0, this.now() - this.started), phase,
         rejected: this.rejected, expired: this.expired, observerErrors: this.observerErrors, ...fields });
     } catch { this.observerErrors++; }

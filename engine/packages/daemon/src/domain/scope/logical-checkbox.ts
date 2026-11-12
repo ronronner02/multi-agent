@@ -10,7 +10,7 @@
 // true shared module importable by both packages does not exist in this layout,
 // so the twin-plus-parity arrangement IS the single-grammar guarantee. The
 // review composer, the slice-detail acceptance projector, and the CLI
-// `rig proof add` evidence-index validator ALL parse through this one grammar,
+// `multi-agent proof add` evidence-index validator ALL parse through this one grammar,
 // so a 1-based byIndex evidence ref names the SAME promised item on every side
 // (no silent one-position mispair). If the layout ever gains a real shared
 // package, the twins collapse into it then — not before.

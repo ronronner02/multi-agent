@@ -1,4 +1,4 @@
-# Example scratch rig for run-evals --provider rig --seat-spec (Test-A blocker 3).
+# Example scratch rig for run-evals --provider multi-agent --seat-spec (Test-A blocker 3).
 # A one-seat claude-code rig; the eval spawns it, drives the cases, and tears it
 # down. NOTE (drive-side): on the shared daemon this seat sees the live rig graph
 # and behaves as a full agent — verified-blank Test-A needs it ISOLATED.

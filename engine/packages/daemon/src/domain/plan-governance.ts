@@ -1495,7 +1495,7 @@ export class PlanGovernance {
    * launch is outstanding, the run is `canceled` and every task still open is closed with it.
    *
    * Nothing is deleted. The candidate trees, the attempts and the evidence stay exactly as they
-   * were, so a canceled run's work is still reviewable and `rig team apply` still reads it — the
+   * were, so a canceled run's work is still reviewable and `multi-agent team apply` still reads it — the
    * owner asked for the work to stop, not for the record of it to disappear.
    *
    * While anything is unresolved the run stays `cancel_requested` and this says which attempts

@@ -77,10 +77,10 @@ describe("dependency failure ownership and occurrence-local recovery", () => {
     expect(runtime.inspect(b.id).instance.status).toBe("active");
     expect(queue.getById(b.right)).toEqual(sibling); expect(queue.getById(b.root)).toEqual(completed);
     const [exception] = exceptions(); expect(exceptions()).toHaveLength(1);
-    expect(exception).toMatchObject({ destination_session: "owner@rig", state: "pending", evidence_ref: `rig workflow trace ${b.id}` });
+    expect(exception).toMatchObject({ destination_session: "owner@rig", state: "pending", evidence_ref: `multi-agent workflow trace ${b.id}` });
     expect(JSON.parse(exception!.tags)).toEqual(expect.arrayContaining([`instance:${b.id}`, "step:left", `occurrence:${b.left}`, "exception:unmapped_failed"]));
     expect(JSON.parse(exception!.chain_of_record)).toEqual([b.left]);
-    expect(exception!.body).toContain(`rig workflow resume ${b.id} --occurrence ${b.left}`);
+    expect(exception!.body).toContain(`multi-agent workflow resume ${b.id} --occurrence ${b.left}`);
     expect(runtime.inspect(b.id).failures).toMatchObject([{ occurrenceId: b.left, stepId: "left", status: "unresolved" }]);
     expect(runtime.trailLog.listForInstance(b.id).find(t => t.priorQitemId === b.left)?.closureEvidence)
       .toMatchObject({ evidence_ref: "proof/actual-handout-comparison.json" });

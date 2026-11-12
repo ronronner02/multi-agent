@@ -1,6 +1,6 @@
-# OpenRig UI digital-twin harness (OPR.0.4.1.11.1)
+# Multi-Agent UI digital-twin harness (OPR.0.4.1.11.1)
 
-Builds the **real** `@openrig/ui` App with dummy data into ONE self-contained,
+Builds the **real** `@multi-agent/ui` App with dummy data into ONE self-contained,
 double-clickable `intent.html` — so an agent can fork a feature-version, change the one
 thing a slice proposes, and emit a clickable mockup that is **1:1 with the live UI by
 construction** (it IS the real components; it never needs manual re-syncing).
@@ -21,7 +21,7 @@ regenerable on demand; `twin-out/` is gitignored).
 
 ## Seams (daemon-free, NOT MSW)
 
-The twin renders the real App with three thin seams installed before any `@openrig/ui`
+The twin renders the real App with three thin seams installed before any `@multi-agent/ui`
 module imports (`twin-main.tsx`):
 
 - **cache-seed** (`seed.ts`) — seeds the react-query cache from typed fixtures under the

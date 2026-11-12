@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Packaging step (build-package.sh): point the CLI's compiled imports of
-// `@openrig/daemon/<subpath>` at the daemon copy the CLI package already ships in
+// `@multi-agent/daemon/<subpath>` at the daemon copy the CLI package already ships in
 // `daemon/dist`, so the published package has no dependency on the unpublished
-// `@openrig/daemon` and any package manager can install it (#66).
+// `@multi-agent/daemon` and any package manager can install it (#66).
 //
 // Files are parsed with the TypeScript compiler the build already uses, and only real
 // module specifiers are rewritten: import and export declarations, and `import()` or
@@ -18,7 +18,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-const PACKAGE = "@openrig/daemon";
+const PACKAGE = "@multi-agent/daemon";
 const isDaemonSpecifier = (value) => value === PACKAGE || value.startsWith(`${PACKAGE}/`);
 
 // The daemon module specifiers in one file, from its syntax tree.
@@ -95,11 +95,11 @@ export function rewriteDaemonImports({ cliDir, daemonPackageJsonPath }) {
   const targetFor = (subpath, file) => {
     const target = targets.get(`.${subpath}`);
     if (!target) {
-      throw new Error(`${file}: @openrig/daemon${subpath} has no entry in the daemon exports map`);
+      throw new Error(`${file}: @multi-agent/daemon${subpath} has no entry in the daemon exports map`);
     }
     const absolute = resolve(stagedDaemon, target);
     if (!existsSync(absolute)) {
-      throw new Error(`${file}: @openrig/daemon${subpath} maps to ${target}, which is not staged at ${absolute}`);
+      throw new Error(`${file}: @multi-agent/daemon${subpath} maps to ${target}, which is not staged at ${absolute}`);
     }
     return absolute;
   };
@@ -139,7 +139,7 @@ if (invokedDirectly()) {
       cliDir: join(repoRoot, "packages", "cli"),
       daemonPackageJsonPath: join(repoRoot, "packages", "daemon", "package.json"),
     });
-    console.log(`Rewrote ${rewritten} @openrig/daemon import(s) in ${files} file(s) to the shipped daemon/dist.`);
+    console.log(`Rewrote ${rewritten} @multi-agent/daemon import(s) in ${files} file(s) to the shipped daemon/dist.`);
   } catch (error) {
     console.error(`rewrite-daemon-imports: ${error.message}`);
     process.exitCode = 1;

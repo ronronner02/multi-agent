@@ -1,4 +1,4 @@
-schema: openrig.bundle-configurations/v1
+schema: multi-agent.bundle-configurations/v1
 recommended: r
 seats:
   'build lead': { runtimes: { codex: lead } }

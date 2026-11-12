@@ -175,15 +175,15 @@ edges:
 |-------|------|----------|---------|-------------|
 | `version` | string | yes | — | Use `"0.2"`. Any non-empty string validates; a spec is treated as pod-aware because `pods` is an array. |
 | `name` | string | yes | — | Rig name. Used in session naming (`{pod}-{member}@{name}`), snapshot identification, and spec library lookup. |
-| `summary` | string | no | — | Human-readable description. Shown in the spec library, review surfaces and `rig specs preview` (in `rig specs show` only with `--json`). |
+| `summary` | string | no | — | Human-readable description. Shown in the spec library, review surfaces and `multi-agent specs preview` (in `multi-agent specs show` only with `--json`). |
 | `culture_file` | string | no | — | Relative path to a rig-wide culture/constitution file. Must be a safe relative path (no `..`, no absolute). |
-| `non_interruptive` | boolean | no | — | Pod-aware rig launch-warning default. With full-bypass Claude/Codex seats, true accepts or hides supported harness warnings using launch flags. Explicit CLI choices override this field; this field overrides the machine default. It does not grant permissions, change native settings files, or bypass login. |
+| `non_interruptive` | boolean | no | — | Pod-aware multi-agent launch-warning default. With full-bypass Claude/Codex seats, true accepts or hides supported harness warnings using launch flags. Explicit CLI choices override this field; this field overrides the machine default. It does not grant permissions, change native settings files, or bypass login. |
 | `permission_policy` | string | no | — | Permission policy attached to the rig. Either a built-in (`builtin:locked`, `builtin:standard`, `builtin:open`, `builtin:yolo`, `builtin:auto`) or a safe relative path to a custom policy file (resolved from this spec's directory; no `..`, no absolute, no empty segments, each segment `[A-Za-z0-9][A-Za-z0-9._-]*`), or `none`, a recorded choice of the floor. Absent uses the default floor with the scoped team launch allowances described below. A bare built-in name such as `yolo` is refused ("use 'builtin:yolo'"), and so is an explicit `null`. A custom file that is missing, unreadable or invalid isn't a validation error: it resolves to the floor, and preflight warns. A member may set its own `permission_policy` (not on a terminal member), which takes precedence over the rig-level one; there is no pod level. See "Attaching a permission policy" below. |
-| `managed_blocks` | map | no | `CLAUDE.md` | File that receives OpenRig's managed instruction blocks for Claude Code members. Only the `claude-code` key is accepted, with `CLAUDE.md` or `CLAUDE.local.md`. Codex, Pi and OMP members use `AGENTS.md`. See "Choosing the Claude instruction file" below. |
+| `managed_blocks` | map | no | `CLAUDE.md` | File that receives Multi-Agent's managed instruction blocks for Claude Code members. Only the `claude-code` key is accepted, with `CLAUDE.md` or `CLAUDE.local.md`. Codex, Pi and OMP members use `AGENTS.md`. See "Choosing the Claude instruction file" below. |
 | `workspace` | object | no | — | The rig's workspace: `workspace_root` (required), `repos[]` of `{name, path, kind}` with `kind` one of `user`, `project`, `knowledge`, `lab` or `delivery` and unique names, an optional `default_repo` naming one of them, and an optional `knowledge_root`. Relative repo paths resolve against `workspace_root`. |
 | `docs` | Doc[] | no | — | Documentation files that should travel with the rig. Included in rig bundles. Each entry has a `path` field (safe relative path). The engine does not consume these — they are for humans and agents setting up the environment before launch. |
 | `startup` | StartupBlock | no | — | Rig-level startup files and actions. Applied to all members via the startup layering model. |
-| `services` | ServicesBlock | no | — | Optional managed services (Docker Compose). When present, `rig up` boots them before any agent launches; `rig import` doesn't boot them. |
+| `services` | ServicesBlock | no | — | Optional managed services (Docker Compose). When present, `multi-agent up` boots them before any agent launches; `multi-agent import` doesn't boot them. |
 | `pods` | Pod[] | yes | — | At least one pod required. Each pod is a bounded context containing members and pod-local edges. |
 | `edges` | CrossPodEdge[] | no | `[]` | Cross-pod edges connecting members in different pods. Must use fully-qualified `pod.member` IDs. |
 
@@ -211,7 +211,7 @@ application and inspection. In particular, `builtin:yolo` selects Codex's
 `danger-full-access` sandbox and `never` approval policy, and replaces
 any `codex_config_profile` argument. See [practical permission choices](getting-started.md#opt-in-permissive-operation).
 
-An explicit `rig seat set-permissions` choice overrides member/rig policy for
+An explicit `multi-agent seat set-permissions` choice overrides member/multi-agent policy for
 future managed launches of that stable seat; it does not rewrite this spec or
 its inherited policy provenance. `inherit` removes that override. See
 [per-seat permission mode](getting-started.md#per-seat-permission-mode).
@@ -228,11 +228,11 @@ is unchanged.
 Claude keeps `acceptEdits` and receives inline session settings allowing ordinary
 `rig` commands, project reads and common project test commands (for example,
 `npm test`, `pnpm test`, `pytest`, `go test` and `cargo test`). Lifecycle commands
-such as `rig up`, `rig down`, `rig restore`, `rig bundle install` and seat stop or
+such as `multi-agent up`, `multi-agent down`, `multi-agent restore`, `multi-agent bundle install` and seat stop or
 handover ask through a session `PreToolUse` hook. Their literal help forms, such
-as `rig down --help`, `rig bundle install -h` and `rig help down`, run without
+as `multi-agent down --help`, `multi-agent bundle install -h` and `multi-agent help down`, run without
 that lifecycle prompt. Native personal, project and managed deny/ask rules still
-apply; OpenRig does not remove or override them.
+apply; Multi-Agent does not remove or override them.
 
 For allowances, the hook recognizes literal command words (including quoted or absolute paths),
 leading environment assignments that do not change executable lookup or startup,
@@ -254,13 +254,13 @@ allowances, not containment: a project's test command can execute code. The
 hook and allowances are passed with `--settings` at launch, including resume
 and fork; nothing is written to personal or project permission files.
 
-If the helper asset is missing at launch, OpenRig falls back to the native lifecycle
+If the helper asset is missing at launch, Multi-Agent falls back to the native lifecycle
 ask rules; help can prompt in that fallback. A helper that disappears or times out
 after launch cannot supply a decision, leaving Claude's remaining native rules
 in effect. The hook is a convenience policy, not a containment boundary.
 
 Codex keeps `workspace-write` with its existing approval policy and receives the
-configured OpenRig workspace root plus its pod's shared state directory as
+configured Multi-Agent workspace root plus its pod's shared state directory as
 additional writable directories. The team workspace preparer creates missing
 directory ancestors and excludes the home directory and its ancestors from its
 prepared scopes. Unavailable optional directories are warned about and omitted
@@ -271,7 +271,7 @@ non-interruptive mode.
 
 **Codex lifecycle commands do not gain a new approval rule.** With Codex's
 existing `on-request` policy, non-escalated sandboxed commands, including
-`rig up` and `rig down`, can run without asking. This default addresses writable
+`multi-agent up` and `multi-agent down`, can run without asking. This default addresses writable
 workspace access; it does not promise a lifecycle confirmation prompt.
 
 ### Built-in permission policies
@@ -300,7 +300,7 @@ Every other seat launches at the floor (a non-kernel seat with no policy also ge
   `codex_config_profile`, in which case the profile governs its own sandbox;
 - Pi `--no-approve` by default.
 
-Seats of the rig named `kernel` are the exception. With no member or rig policy, no
+Seats of the rig named `kernel` are the exception. With no member or multi-agent policy, no
 per-seat choice and (for Codex) no named profile, Claude launches in `acceptEdits` with a
 per-launch `--settings` allow list for its file tools and operational commands, and Codex
 launches with `-s danger-full-access -a never`, plus per-launch `-c` overrides that hide its
@@ -308,7 +308,7 @@ full-access and GPT-5.1 migration notices, whatever the rig's non-interruptive c
 
 **Config-surface policies are recorded, not applied at launch.** The seat still starts at
 the floor. The `allow`, `ask` and `deny` rules take effect once they are translated into the
-runtime's native settings. The `applying-a-permission-policy` skill in `openrig-core` does
+runtime's native settings. The `applying-a-permission-policy` skill in `multi-agent-core` does
 that translation, with per-runtime limits. For example, Claude's prefix rules can't
 reliably tell `git push --force` from `git push`. An `ask` waits for a person, so it pauses
 an autonomous seat. Standard suits interactive work, and the policy files point
@@ -326,8 +326,8 @@ OMP variant maps that trust to its approval mode: `yolo` under `--approve`, othe
 
 **Claude Code's own checks.** The first time Claude Code starts an interactive session
 with permissions bypassed, it shows a warning dialog asking you to accept responsibility;
-declining exits. OpenRig reports such a seat as `attention_required` and holds its startup
-context for `rig seat continue`; `rig up --non-interruptive` or `rig bundle install
+declining exits. Multi-Agent reports such a seat as `attention_required` and holds its startup
+context for `multi-agent seat continue`; `multi-agent up --non-interruptive` or `multi-agent bundle install
 --non-interruptive` accepts the warning with a launch flag instead (see
 [non-interruptive mode](non-interruptive-mode.md)). That choice is saved on the rig, not in
 `rig.yaml`. On Linux and macOS Claude Code refuses that mode when run as root or under `sudo`,
@@ -336,7 +336,7 @@ except inside a recognized sandbox. See Claude Code's
 
 ### Choosing the Claude instruction file
 
-OpenRig writes its instructions for Claude Code members into managed blocks in
+Multi-Agent writes its instructions for Claude Code members into managed blocks in
 the member's working directory. By default the file is `CLAUDE.md`. If your
 repository tracks `CLAUDE.md`, write the blocks to `CLAUDE.local.md` instead:
 
@@ -351,17 +351,17 @@ convention the file is kept out of git, for example with a `.gitignore` entry.
 - Accepted values are `CLAUDE.md` and `CLAUDE.local.md`. Any other value or
   runtime key is rejected before a member launches.
 - The setting applies to launch, restore, relaunch, handover, adding members,
-  and export. `rig down` removes OpenRig's blocks from the selected file only.
-- OpenRig never edits, moves or deletes blocks in the other file.
+  and export. `multi-agent down` removes Multi-Agent's blocks from the selected file only.
+- Multi-Agent never edits, moves or deletes blocks in the other file.
 
 A rig that already wrote blocks into `CLAUDE.md` keeps them there after you
 switch. Until you remove them, `CLAUDE.md` stays modified and Claude Code loads
-both copies. Delete each `<!-- BEGIN OpenRig MANAGED BLOCK: … -->` …
-`<!-- END OpenRig MANAGED BLOCK: … -->` section by hand and keep the rest of the
+both copies. Delete each `<!-- BEGIN Multi-Agent MANAGED BLOCK: … -->` …
+`<!-- END Multi-Agent MANAGED BLOCK: … -->` section by hand and keep the rest of the
 file. If `CLAUDE.md` has no other uncommitted edits you need to keep, you can
 instead run `git restore CLAUDE.md`; that command discards every unstaged change
-to the file, not only OpenRig's blocks. Running `rig down` on a rig that still uses
-the default is not a substitute: it strips every OpenRig block from that
+to the file, not only Multi-Agent's blocks. Running `multi-agent down` on a rig that still uses
+the default is not a substitute: it strips every Multi-Agent block from that
 directory's `CLAUDE.md`, including blocks written by other rigs.
 
 ---
@@ -395,9 +395,9 @@ directory's `CLAUDE.md`, including blocks written by other rigs.
 | `id` | string | yes | — | Member identifier. Must not contain dots or `@`. Must be unique within the pod. |
 | `agent_ref` | string | yes | — | Reference to an AgentSpec. Must start with `local:` (relative) or `path:` (absolute). Exception: `builtin:terminal` for infrastructure nodes. |
 | `profile` | string | yes | — | Profile name from the referenced AgentSpec. Use `default` for the default profile. Exception: `none` for terminal nodes. |
-| `codex_config_profile` | string | no | — | Codex-only native profile passed as `-p <name>`; letters, numbers, `_`, `.`, `-`. Separate from the AgentSpec `profile`. With the normal launch mode, this replaces OpenRig's explicit workspace-write sandbox flag. A full-bypass policy instead emits danger-full-access and omits this profile argument. |
-| `runtime` | string | yes | — | Agent runtime. Current supported values: `claude-code`, `codex`, `pi`, `omp`, `terminal`, `stub`. `stub` is a deterministic test harness, not an agent: a Node runner in the seat's tmux pane goes through the normal launch, skill projection, startup-file and readiness path, follows `<cwd>/.openrig/stub/script.json` when present, and calls no model. See "What a stub can and cannot prove" in `docs/as-built/test-layers.md`. |
-| `cwd` | string | yes | — | Working directory for the agent. A relative path resolves against the rig root (the directory containing the rig spec). If that path exists as written, it is used. Otherwise a leading `~` or `~/` expands to the home directory (`~user` does not) and `$VAR` / `${VAR}` expand from the daemon host's environment; a relative result still resolves against the rig root. A reference to an unset variable stays as written, so the cwd is that literal path and works only if it exists. Use `"."` for the rig root itself. Can be overridden at launch time with `rig up --cwd`. A cwd inside the OpenRig installation fails preflight unless `--cwd` is given. |
+| `codex_config_profile` | string | no | — | Codex-only native profile passed as `-p <name>`; letters, numbers, `_`, `.`, `-`. Separate from the AgentSpec `profile`. With the normal launch mode, this replaces Multi-Agent's explicit workspace-write sandbox flag. A full-bypass policy instead emits danger-full-access and omits this profile argument. |
+| `runtime` | string | yes | — | Agent runtime. Current supported values: `claude-code`, `codex`, `pi`, `omp`, `terminal`, `stub`. `stub` is a deterministic test harness, not an agent: a Node runner in the seat's tmux pane goes through the normal launch, skill projection, startup-file and readiness path, follows `<cwd>/.multi-agent/stub/script.json` when present, and calls no model. See "What a stub can and cannot prove" in `docs/as-built/test-layers.md`. |
+| `cwd` | string | yes | — | Working directory for the agent. A relative path resolves against the rig root (the directory containing the multi-agent spec). If that path exists as written, it is used. Otherwise a leading `~` or `~/` expands to the home directory (`~user` does not) and `$VAR` / `${VAR}` expand from the daemon host's environment; a relative result still resolves against the rig root. A reference to an unset variable stays as written, so the cwd is that literal path and works only if it exists. Use `"."` for the rig root itself. Can be overridden at launch time with `multi-agent up --cwd`. A cwd inside the Multi-Agent installation fails preflight unless `--cwd` is given. |
 | `label` | string | no | — | Human-readable member name. Shown in UI when present. |
 | `model` | string | no | — | Model override. Runtime-specific (e.g., `claude-opus-4-6` for Claude Code). |
 | `effort` | string | no | — | Reasoning effort override, trimmed. A non-string value is ignored with an advisory. |
@@ -412,21 +412,21 @@ directory's `CLAUDE.md`, including blocks written by other rigs.
 
 ### Pi (`runtime: pi`)
 
-`runtime: pi` launches the Pi coding agent (`pi --mode rpc`) through OpenRig's RPC runner.
+`runtime: pi` launches the Pi coding agent (`pi --mode rpc`) through Multi-Agent's RPC runner.
 
-- **State:** Each seat uses `$OPENRIG_HOME/state/pi/<session>/agent` as its Pi agent directory, with `sessions/` beside it, instead of your default `~/.pi/agent`. The runner sets `PI_CODING_AGENT_DIR` to that directory. `<session>` is the seat's session name, unchanged; for a pod member it is `{podId}-{memberId}@{rigName}`. `$OPENRIG_HOME` defaults to `~/.openrig`. OpenRig creates these directories at launch and does not copy anything from `~/.pi/agent`.
-- **Custom models:** Pi reads `models.json` from its agent directory, so a seat reads `$OPENRIG_HOME/state/pi/<session>/agent/models.json`, not `~/.pi/agent/models.json`. Custom provider and model definitions for a seat go in that file. A seat that uses only providers Pi already includes does not need one. OpenRig does not create or write `models.json`.
-- **Credentials:** The Pi process receives only `PATH`, `HOME`, `USER`, `LOGNAME`, `TERM`, `LANG`, `LC_ALL`, `SHELL`, `TMPDIR`, a fixed set of OpenRig seat and instance variables, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, and at most one provider key. That key is `OPENROUTER_API_KEY`, `ZAI_API_KEY`, `KIMI_API_KEY` or `MINIMAX_API_KEY`, passed only when it is set in the seat's environment and the seat's `model` is written as `openrouter/<id>`, `zai/<id>`, `kimi-coding/<id>` or `minimax/<id>`. Naming that variable in `recovery.provider_auth_env_allowlist` (empty by default) makes the daemon add it, when set in the daemon's environment, to the seat's launch environment. No other variable reaches Pi, including other providers' keys and a custom provider's own key variable.
+- **State:** Each seat uses `$MULTI_AGENT_HOME/state/pi/<session>/agent` as its Pi agent directory, with `sessions/` beside it, instead of your default `~/.pi/agent`. The runner sets `PI_CODING_AGENT_DIR` to that directory. `<session>` is the seat's session name, unchanged; for a pod member it is `{podId}-{memberId}@{rigName}`. `$MULTI_AGENT_HOME` defaults to `~/.multi-agent`. Multi-Agent creates these directories at launch and does not copy anything from `~/.pi/agent`.
+- **Custom models:** Pi reads `models.json` from its agent directory, so a seat reads `$MULTI_AGENT_HOME/state/pi/<session>/agent/models.json`, not `~/.pi/agent/models.json`. Custom provider and model definitions for a seat go in that file. A seat that uses only providers Pi already includes does not need one. Multi-Agent does not create or write `models.json`.
+- **Credentials:** The Pi process receives only `PATH`, `HOME`, `USER`, `LOGNAME`, `TERM`, `LANG`, `LC_ALL`, `SHELL`, `TMPDIR`, a fixed set of Multi-Agent seat and instance variables, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, and at most one provider key. That key is `OPENROUTER_API_KEY`, `ZAI_API_KEY`, `KIMI_API_KEY` or `MINIMAX_API_KEY`, passed only when it is set in the seat's environment and the seat's `model` is written as `openrouter/<id>`, `zai/<id>`, `kimi-coding/<id>` or `minimax/<id>`. Naming that variable in `recovery.provider_auth_env_allowlist` (empty by default) makes the daemon add it, when set in the daemon's environment, to the seat's launch environment. No other variable reaches Pi, including other providers' keys and a custom provider's own key variable.
 
 ### Oh My Pi (`runtime: omp`)
 
-`runtime: omp` launches Oh My Pi through OpenRig's RPC runner. It is separate from `runtime: pi`; OMP does not use Pi's `--name` or `--approve` flags.
+`runtime: omp` launches Oh My Pi through Multi-Agent's RPC runner. It is separate from `runtime: pi`; OMP does not use Pi's `--name` or `--approve` flags.
 
-- **State:** Each seat uses `$OPENRIG_HOME/state/omp/<seat>/agent` and `sessions/` instead of your default `~/.omp` profile, and runs with that seat directory as `HOME`. OpenRig does not copy OMP credentials. The runner finds the real `omp` binary before switching `HOME`, so a version-manager shim such as mise on the daemon's `PATH` still works.
-- **Credentials:** Provision each seat separately, or put the provider's key variable in `recovery.provider_auth_env_allowlist` (for example `ANTHROPIC_API_KEY` or `MISTRAL_API_KEY`). The allowlist accepts the key variable of every provider in OpenRig's OMP provider map, from `anthropic` through `litellm`. A seat receives a key only when its `model` is written as `provider/id`, such as `anthropic/claude-sonnet-4-5`. Short names such as `opus` pass no key. A provider whose key is scoped to one endpoint also accepts that endpoint's variable: `anthropic`, `openai` and `litellm` each take their `<PROVIDER>_BASE_URL` — `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `LITELLM_BASE_URL`. The allowlist admits each variable on its own, so an endpoint named without its key is admitted too, which suits a keyless local proxy. The launch gate admits these endpoint names for OMP seats; the match against the seat's declared `provider/id` happens at the OMP child, which forwards a matching endpoint already in the runner's environment just as it forwards a key. OMP also reads the launch directory's `.env`, so use a trusted working directory.
+- **State:** Each seat uses `$MULTI_AGENT_HOME/state/omp/<seat>/agent` and `sessions/` instead of your default `~/.omp` profile, and runs with that seat directory as `HOME`. Multi-Agent does not copy OMP credentials. The runner finds the real `omp` binary before switching `HOME`, so a version-manager shim such as mise on the daemon's `PATH` still works.
+- **Credentials:** Provision each seat separately, or put the provider's key variable in `recovery.provider_auth_env_allowlist` (for example `ANTHROPIC_API_KEY` or `MISTRAL_API_KEY`). The allowlist accepts the key variable of every provider in Multi-Agent's OMP provider map, from `anthropic` through `litellm`. A seat receives a key only when its `model` is written as `provider/id`, such as `anthropic/claude-sonnet-4-5`. Short names such as `opus` pass no key. A provider whose key is scoped to one endpoint also accepts that endpoint's variable: `anthropic`, `openai` and `litellm` each take their `<PROVIDER>_BASE_URL` — `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `LITELLM_BASE_URL`. The allowlist admits each variable on its own, so an endpoint named without its key is admitted too, which suits a keyless local proxy. The launch gate admits these endpoint names for OMP seats; the match against the seat's declared `provider/id` happens at the OMP child, which forwards a matching endpoint already in the runner's environment just as it forwards a key. OMP also reads the launch directory's `.env`, so use a trusted working directory.
 - **Approval posture:** The default floor is `--approval-mode always-ask`. Because the runner is headless, OMP approval requests are cancelled and the seat stays in needing-attention after the turn ends, until the next agent run starts. A `full_bypass` permission policy selects `--approval-mode yolo`.
 - **Model errors:** A rejected prompt, a provider or authentication error during a turn, or exhausted automatic retries is printed in the pane and keeps the seat in needing-attention until the next agent run starts.
-- **Restore:** OMP creates its session file after the first persisted turn. A new seat with no persisted turn has no resume token; restoring it requires `rig up --existing <rig> --fresh <seat>`. After that file exists, OpenRig restores that exact session file. If a full rig restore leaves an OMP seat in `attention_required` or `failed`, `rig seat clear-attention` cannot yet reconcile it to `operator_recovered`, even with `--reason`, because restore reconciliation only verifies Claude Code and Codex processes ([#41](https://github.com/mvschwarz/openrig/issues/41)). Relaunch that seat with `rig up --existing <rig> --fresh <seat>`, or restore it manually.
+- **Restore:** OMP creates its session file after the first persisted turn. A new seat with no persisted turn has no resume token; restoring it requires `multi-agent up --existing <rig> --fresh <seat>`. After that file exists, Multi-Agent restores that exact session file. If a full multi-agent restore leaves an OMP seat in `attention_required` or `failed`, `multi-agent seat clear-attention` cannot yet reconcile it to `operator_recovered`, even with `--reason`, because restore reconciliation only verifies Claude Code and Codex processes ([#41](https://github.com/ronronner02/multi-agent/issues/41)). Relaunch that seat with `multi-agent up --existing <rig> --fresh <seat>`, or restore it manually.
 
 ### Terminal Nodes
 
@@ -443,7 +443,7 @@ All three must be present together. Any partial combination is a validation erro
 ### agent_ref Rules
 
 - Must start with `local:` or `path:`
-- `local:` paths are relative to the rig spec file's directory (the rig root)
+- `local:` paths are relative to the multi-agent spec file's directory (the rig root)
 - `path:` paths are absolute filesystem paths
 - The referenced path must contain an `agent.yaml` file
 - Exception: `builtin:terminal` for terminal nodes
@@ -521,7 +521,7 @@ Startup blocks can appear at three levels: rig, pod, and member. They are merged
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `path` | string | yes | — | Relative path to the file. Must be a safe relative path. |
-| `orientation` | string | no | — | Set to `role` to identify a per-seat role file for `rig queue whoami --json` and refocus. Does not change delivery or replay startup. |
+| `orientation` | string | no | — | Set to `role` to identify a per-seat role file for `multi-agent queue whoami --json` and refocus. Does not change delivery or replay startup. |
 | `delivery_hint` | string | no | `auto` | How the file is delivered. One of: `auto`, `guidance_merge`, `skill_install`, `send_text`. |
 | `required` | boolean | no | `true` | Whether startup fails if this file cannot be delivered. |
 | `applies_on` | string[] | no | `[fresh_start, restore]` | When this file is delivered. Subset of: `fresh_start`, `restore`. |
@@ -585,10 +585,10 @@ The effective selection is recorded on `node.startup_pending`; actions are
 persisted in startup context for restore and fresh relaunch.
 
 The harness readiness window defaults to 30 seconds. On a loaded machine, set
-`rig config set runtime.readiness_timeout_seconds 60` to give new seats and
+`multi-agent config set runtime.readiness_timeout_seconds 60` to give new seats and
 handover successors longer to become interactive. The setting accepts 1–600
 seconds, applies to the next launch without a daemon restart, and can also be
-set with `OPENRIG_RUNTIME_READINESS_TIMEOUT_SECONDS`. It does not change the
+set with `MULTI_AGENT_RUNTIME_READINESS_TIMEOUT_SECONDS`. It does not change the
 time spent by the runtime adapter before readiness polling starts.
 
 ---
@@ -603,7 +603,7 @@ The services block is optional. When present, services boot before any agent nod
 | `compose_file` | string | yes | — | Relative path to the Docker Compose file. Must be a safe relative path. Resolved relative to rig root. |
 | `project_name` | string | no | stored predecessor project or unique rig-ID default | Docker Compose project name. Must match `[a-z0-9][a-z0-9_-]*`. An explicit value takes precedence. A new rig uses a stable, unique rig-ID-derived name. A same-name replacement inherits the stored project of the exact generations it replaces; conflicting predecessor projects require an explicit value. Existing stored names remain unchanged. |
 | `profiles` | string[] | no | — | Compose profiles to activate. |
-| `down_policy` | string | no | `down` | What happens on `rig down`. One of: `leave_running`, `down`, `down_and_volumes`. |
+| `down_policy` | string | no | `down` | What happens on `multi-agent down`. One of: `leave_running`, `down`, `down_and_volumes`. |
 | `wait_for` | WaitTarget[] | no | — | Health targets that must pass before agent launch. |
 | `surfaces` | Surfaces | no | — | Metadata about accessible URLs and commands. Not executed — informational only. |
 | `checkpoints` | CheckpointHook[] | no | — | Shell commands for checkpoint export/import during snapshot/restore. |
@@ -645,7 +645,7 @@ surfaces:
       command: "vault status -address=http://127.0.0.1:8200"
 ```
 
-Surfaces are metadata only. They are displayed in the UI and in `rig env status --json` output (the text output lists only services) but are NOT executed by OpenRig.
+Surfaces are metadata only. They are displayed in the UI and in `multi-agent env status --json` output (the text output lists only services) but are NOT executed by Multi-Agent.
 
 ### Checkpoint Hooks
 
@@ -704,13 +704,13 @@ Unknown keys at the rig, pod, member and edge levels are refused ("unknown key �
 normalization would otherwise discard it"). Keys inside `startup`, `services`, `continuity_policy` and `workspace` are
 not checked this way. Some rules are enforced at preflight rather than validation: the runtime must be one of the
 supported values, rig, pod and member names may use only letters, digits, `-`, `_`, `.` and `@` where allowed above,
-each `agent_ref` must have an `agent.yaml`, Codex profiles must load, and a cwd may not be inside the OpenRig
+each `agent_ref` must have an `agent.yaml`, Codex profiles must load, and a cwd may not be inside the Multi-Agent
 installation.
 
 Schema validation checks the structural rules below. Pod and member IDs containing
 `@` are additionally rejected during preflight and member creation or launch; a
-spec can pass `rig spec validate` and then fail at preflight or import. Run
-`rig spec preflight` before creation or import.
+spec can pass `multi-agent spec validate` and then fail at preflight or import. Run
+`multi-agent spec preflight` before creation or import.
 
 1. `version` and `name` are required non-empty strings.
 2. `pods` must be a non-empty array.
@@ -743,7 +743,7 @@ spec can pass `rig spec validate` and then fail at preflight or import. Run
 
 ## Shipped Examples
 
-These are the built-in specs shipped with OpenRig. Read them as worked examples.
+These are the built-in specs shipped with Multi-Agent. Read them as worked examples.
 
 | Spec | Location | Pods | Members | Services |
 |------|----------|------|---------|----------|
@@ -754,6 +754,6 @@ These are the built-in specs shipped with OpenRig. Read them as worked examples.
 | `pm` | `packages/daemon/specs/rigs/focused/pm/rig.yaml` | pm, dev | 3 (lead, researcher, build) | no |
 | `secrets-manager` | `packages/daemon/specs/rigs/launch/secrets-manager/rig.yaml` | vault | 1 (specialist) | yes (Vault) |
 
-Also shipped, in the same tree: `launch/kernel`, OpenRig's own team, which starts automatically. `first-project` is
-starter's old name and still resolves to it. `workshop`, the four-agent middle team, is a rig bundle rather than a
-built-in. List the built-ins with `rig specs ls --kind rig`.
+Also shipped, in the same tree: `launch/kernel`, Multi-Agent's own team, which starts automatically. `first-project` is
+starter's old name and still resolves to it. `workshop`, the four-agent middle team, is a multi-agent bundle rather than a
+built-in. List the built-ins with `multi-agent specs ls --kind rig`.

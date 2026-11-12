@@ -111,8 +111,8 @@ describe("workflow frontier close-path guard (WF3 FR-6)", () => {
     // what/why/fix: names the binding AND the correct verbs.
     expect(caught?.message).toContain("frontier packet");
     expect(caught?.message).toContain("strand");
-    expect(caught?.message).toContain("rig workflow project");
-    expect(caught?.message).toContain("rig workflow route");
+    expect(caught?.message).toContain("multi-agent workflow project");
+    expect(caught?.message).toContain("multi-agent workflow route");
     // The packet is UNTOUCHED (prevention, not detection).
     const row = db.prepare(`SELECT state FROM queue_items WHERE qitem_id = ?`).get(entryPacket) as { state: string };
     expect(row.state).toBe("pending");

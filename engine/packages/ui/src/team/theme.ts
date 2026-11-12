@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
  * palettes; an explicit choice stays pinned when the OS changes.
  */
 
-export const TEAM_THEME_KEY = "openrig.teamTheme";
+export const TEAM_THEME_KEY = "multi-agent.teamTheme";
 export const TEAM_THEME_PREFERENCES = ["dark", "light", "system"] as const;
 export type TeamThemePreference = (typeof TEAM_THEME_PREFERENCES)[number];
 export type TeamTheme = Exclude<TeamThemePreference, "system">;

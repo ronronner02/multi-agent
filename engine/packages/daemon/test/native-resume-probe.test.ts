@@ -155,7 +155,7 @@ describe("native resume probe", () => {
     expect(result.status).toBe("resumed");
   });
 
-  it("recognizes the Codex 0.153 composer marker under the OpenRig shell wrapper", () => {
+  it("recognizes the Codex 0.153 composer marker under the Multi-Agent shell wrapper", () => {
     const paneContent = [
       "╭─────────────────────────────────────────────────╮",
       "│ >_ OpenAI Codex (v0.153.4)                      │",
@@ -163,7 +163,7 @@ describe("native resume probe", () => {
       "╰─────────────────────────────────────────────────╯",
       "• You have 3 usage limit resets available. Run /usage to use one.",
       "» Ask Codex to do anything",
-      "  gpt-6-astra ultra · ~/Documents/openrig",
+      "  gpt-6-astra ultra · ~/Documents/multi-agent",
     ].join("\n");
     expect(assessNativeResumeProbe({ runtime: "codex", paneCommand: "bash", paneContent })).toMatchObject({
       status: "resumed", code: "active_runtime",
@@ -177,7 +177,7 @@ describe("native resume probe", () => {
       "2 hooks are new or changed.",
       "Press t to trust; esc to go back",
       "» Ask Codex to do anything",
-      "  gpt-6-astra ultra · ~/Documents/openrig",
+      "  gpt-6-astra ultra · ~/Documents/multi-agent",
     ].join("\n");
     expect(assessNativeResumeProbe({ runtime: "codex", paneCommand: "bash", paneContent })).toMatchObject({
       status: "resumed", code: "active_runtime",
@@ -189,7 +189,7 @@ describe("native resume probe", () => {
       "OpenAI Codex (v0.153.4)",
       "» 1. gpt-6-astra",
       "  2. gpt-6-sol",
-      "  gpt-6-astra ultra · ~/Documents/openrig",
+      "  gpt-6-astra ultra · ~/Documents/multi-agent",
     ].join("\n");
     expect(assessNativeResumeProbe({ runtime: "codex", paneCommand: "bash", paneContent })).toMatchObject({
       status: "inconclusive", code: "model_selection_gate",
@@ -533,7 +533,7 @@ describe("native resume probe", () => {
           "  2. Switch to gpt-5.4-codex Stronger for complex tasks.",
           "  3. Keep current model",
           "",
-          "  gpt-5.4 default · ~/code/openrig",
+          "  gpt-5.4 default · ~/code/multi-agent",
         ].join("\n"),
       })
     ).toEqual({
@@ -552,7 +552,7 @@ describe("native resume probe", () => {
           "› 1. gpt-5.1-codex-mini",
           "  2. gpt-5.4-codex",
           "",
-          "  gpt-5.4 default · ~/code/openrig",
+          "  gpt-5.4 default · ~/code/multi-agent",
         ].join("\n"),
       }).code
     ).toBe("model_selection_gate");
@@ -571,12 +571,12 @@ describe("native resume probe", () => {
           "│ >_ OpenAI Codex (v0.120.0)            │",
           "│                                       │",
           "│ model:     gpt-5.4   /model to change │",
-          "│ directory: ~/code/openrig             │",
+          "│ directory: ~/code/multi-agent             │",
           "╰───────────────────────────────────────╯",
           "",
           "› Improve documentation in @filename",
           "",
-          "  gpt-5.4 default · ~/code/openrig",
+          "  gpt-5.4 default · ~/code/multi-agent",
         ].join("\n"),
       })
     ).toEqual({
@@ -602,7 +602,7 @@ describe("native resume probe", () => {
           "",
           "› Use /skills to list available skills",
           "",
-          "  gpt-5.4 default · ~/code/openrig",
+          "  gpt-5.4 default · ~/code/multi-agent",
           "",
           "",
         ].join("\n"),
@@ -677,7 +677,7 @@ describe("native resume probe", () => {
     expect(
       isProbeShellReady({
         paneCommand: "zsh",
-        paneContent: "user@example.test rigged % ",
+        paneContent: "user@example.test removed % ",
       })
     ).toBe(true);
 

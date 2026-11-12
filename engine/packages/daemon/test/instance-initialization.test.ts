@@ -13,14 +13,14 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import {
-  ensureOpenRigInstance,
-  openRigContextLibraryRoots,
+  ensureMultiAgentInstance,
+  multiAgentContextLibraryRoots,
 } from "../src/domain/instance-initialization.js";
 
 const roots: string[] = [];
 
 function freshRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), "openrig-instance-init-"));
+  const root = mkdtempSync(join(tmpdir(), "multi-agent-instance-init-"));
   roots.push(root);
   return root;
 }
@@ -47,9 +47,20 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-describe("canonical OpenRig instance initialization", () => {
+describe("canonical Multi-Agent instance initialization", () => {
+  it("creates configuration separately from mutable state", () => {
+    const parent = freshRoot();
+    const home = join(parent, "local");
+    const configHome = join(parent, "roaming");
+    const result = ensureMultiAgentInstance({ home, configHome });
+    expect(result.ok).toBe(true);
+    expect(readFileSync(join(configHome, "config.json"), "utf8")).toBe("{}\n");
+    expect(existsSync(join(home, "config.json"))).toBe(false);
+    expect(existsSync(join(home, "state"))).toBe(true);
+  });
+
   it("declares the canonical addressable and System World library roots together", () => {
-    expect(openRigContextLibraryRoots("/instance/context")).toEqual([
+    expect(multiAgentContextLibraryRoots("/instance/context")).toEqual([
       "/instance/context",
       "/instance/context/system",
     ]);
@@ -59,9 +70,9 @@ describe("canonical OpenRig instance initialization", () => {
     const parent = freshRoot();
     const home = join(parent, "home");
 
-    const first = ensureOpenRigInstance({ home });
+    const first = ensureMultiAgentInstance({ home });
     const firstTree = tree(home);
-    const second = ensureOpenRigInstance({ home });
+    const second = ensureMultiAgentInstance({ home });
 
     expect(first.ok).toBe(true);
     expect(first.createdPaths.length).toBeGreaterThan(0);
@@ -72,7 +83,7 @@ describe("canonical OpenRig instance initialization", () => {
       { path: "state", kind: "directory" },
       { path: "context", kind: "directory" },
       { path: "context/system", kind: "directory" },
-      { path: "context/system/system-world.yaml", kind: "file", content: expect.stringContaining("schema: openrig.system-world/v0alpha1") },
+      { path: "context/system/system-world.yaml", kind: "file", content: expect.stringContaining("schema: multi-agent.system-world/v0alpha1") },
       { path: "skills", kind: "directory" },
       { path: "workspace", kind: "directory" },
       { path: "workspace/missions", kind: "directory" },
@@ -94,7 +105,7 @@ describe("canonical OpenRig instance initialization", () => {
     writeFileSync(join(home, "config.json"), "{\"operator\":true}\n");
     writeFileSync(join(home, "workspace", "SPEC.md"), "# Mine\n");
 
-    const result = ensureOpenRigInstance({ home });
+    const result = ensureMultiAgentInstance({ home });
 
     expect(result.ok).toBe(true);
     expect(readFileSync(join(home, "config.json"), "utf8")).toBe("{\"operator\":true}\n");
@@ -106,7 +117,7 @@ describe("canonical OpenRig instance initialization", () => {
     mkdirSync(home, { recursive: true });
     writeFileSync(join(home, "context"), "owned file\n");
 
-    const result = ensureOpenRigInstance({ home });
+    const result = ensureMultiAgentInstance({ home });
 
     expect(result.ok).toBe(false);
     expect(result.conflicts).toEqual([
@@ -124,7 +135,7 @@ describe("canonical OpenRig instance initialization", () => {
     mkdirSync(outside);
     symlinkSync(outside, join(home, "context"));
 
-    const result = ensureOpenRigInstance({ home });
+    const result = ensureMultiAgentInstance({ home });
 
     expect(result.conflicts).toContainEqual({
       path: join(home, "context"),

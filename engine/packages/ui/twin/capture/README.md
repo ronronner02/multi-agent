@@ -12,7 +12,7 @@ npm run twin:capture -- \
   --slice opr-0.4.1.11.2 \
   --surface "Topology Graph" \
   --route /topology/rig/rig_delivery \
-  --out-root <abs path>/openrig-work/digital-twin
+  --out-root <abs path>/multi-agent-work/digital-twin
 ```
 
 | Flag | Required | Meaning |
@@ -63,7 +63,7 @@ Intent and proof use the **identical** capture mechanism (the same `buildChromeS
 only the URL differs: `file://` twin for intent, `http://` real UI for proof) and pair by the same
 file base (`<surface>.intent.png` ↔ `<surface>.proof.png`) so the founder can compare them directly.
 
-Proof standard (OPR.0.4.0.37): founder-grade proof is the **real** OpenRig UI in a real context —
+Proof standard (OPR.0.4.0.37): founder-grade proof is the **real** Multi-Agent UI in a real context —
 not an unlabeled or stubbed env. The proof path therefore needs a running build/daemon and is a
 **post-build** step (`--proof-url`), deliberately off by default so the intent path stays daemon-free.
 

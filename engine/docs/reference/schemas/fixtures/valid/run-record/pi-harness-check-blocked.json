@@ -1,5 +1,5 @@
 {
-  "schema": "openrig.run-record/v1",
+  "schema": "multi-agent.run-record/v1",
   "id": "rr-20261004-004",
   "subject": {
     "kind": "harness_check",
@@ -9,7 +9,7 @@
     "resources": [
       {
         "kind": "plugin",
-        "ref": "openrig-core",
+        "ref": "multi-agent-core",
         "version": "0.1.3"
       }
     ],
@@ -21,7 +21,7 @@
     ]
   },
   "environment": {
-    "openrig": {
+    "multi-agent": {
       "version": "0.6.6",
       "commit": "910bf9f1"
     },

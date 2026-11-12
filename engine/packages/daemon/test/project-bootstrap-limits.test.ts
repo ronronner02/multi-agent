@@ -48,7 +48,7 @@ describe("project bootstrap size, mode, and responsiveness", () => {
     mkdirSync(repository);
     vi.stubEnv("GIT_CONFIG_GLOBAL", join(directory, "gitconfig"));
     vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
-    vi.stubEnv("OPENRIG_TEAM_LEAD_CLIENT", "");
+    vi.stubEnv("MULTI_AGENT_TEAM_LEAD_CLIENT", "");
     github = Object.assign(Object.create(GithubCli.prototype), {
       account: async () => account,
       createPrivateRepository: async (name: string, source: string, login: string) => {

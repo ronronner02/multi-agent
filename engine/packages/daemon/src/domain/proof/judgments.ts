@@ -242,7 +242,7 @@ export function recordJudgment(missionsRoot: string, input: JudgeInput, actor: s
   if (!current.policy.judges.includes(actor)) throw new JudgmentError("actor_not_authorized", `${actor} is not a judge under ${current.policy.source}`, 403);
   if (current.issues.length) throw new JudgmentError("readiness_unavailable", current.issues.join("; "), 409);
   const item = current.items.find(i => i.id === input.item || String(i.index) === input.item || i.text === input.item);
-  if (!item) throw new JudgmentError("item_missing", "Select one current item from rig proof show");
+  if (!item) throw new JudgmentError("item_missing", "Select one current item from multi-agent proof show");
   if (!["accept", "reject", "withdraw"].includes(input.verdict) || !input.reason?.trim()) throw new JudgmentError("judgment_invalid", "Provide accept, reject or withdraw and the reason for that judgment");
   const evidence = input.evidence?.map(ref => evidenceAt(root, dir, ref)) ?? (input.verdict !== "accept" ? item.judgment?.evidence ?? [] : []);
   if (input.verdict === "accept" && !evidence.length) throw new JudgmentError("evidence_required", "Acceptance requires readable evidence; capture alone and queue done are not acceptance");
@@ -265,7 +265,7 @@ export function recordJudgment(missionsRoot: string, input: JudgeInput, actor: s
     return { judgment: priorOperation, readiness: readSliceReadiness(dir, proofFs, defaultPolicyRead, projectRoot), replayed: true };
   }
   const latest = receipts.filter(r => r.itemId === item.id).at(-1);
-  if (input.expectedRevision !== item.revision || input.expectedPrevious !== (latest?.id ?? null)) throw new JudgmentError("revision_conflict", "Item or correction changed; inspect rig proof show and judge the current evidence", 409);
+  if (input.expectedRevision !== item.revision || input.expectedPrevious !== (latest?.id ?? null)) throw new JudgmentError("revision_conflict", "Item or correction changed; inspect multi-agent proof show and judge the current evidence", 409);
   const payload = { version: 1 as const, scope: path.relative(root, dir).split(path.sep).join("/"), sequence: receipts.length + 1, operationId, itemId: item.id, itemRevision: item.revision, policyRevision: current.policy.revision, policySource: path.relative(root, current.policy.source), previous: latest?.id ?? null, actor, provenance, at: new Date().toISOString(), verdict: input.verdict, reason: input.reason, evidence, subject, intent };
   const judgment: Judgment = { ...payload, id: hash(payload) };
   const home = contained(root, path.join(dir, "proof", "judgments"));

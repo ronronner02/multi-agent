@@ -27,7 +27,7 @@ function validator() {
     ajv.addSchema(JSON.parse(fs.readFileSync(nodePath.join(SCHEMAS, file), "utf-8")));
   }
   return (schemaName: string, data: unknown) => {
-    const validate = ajv.getSchema(`https://openrig.dev/schemas/${schemaName}.json`);
+    const validate = ajv.getSchema(`https://multi-agent.dev/schemas/${schemaName}.json`);
     if (!validate) throw new Error(`schema ${schemaName} not found`);
     return { ok: validate(data) as boolean, errors: validate.errors };
   };

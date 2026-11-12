@@ -9,15 +9,15 @@ import {
   telemetrySidecarFilename,
 } from "../src/domain/telemetry-state-paths.js";
 
-describe("OpenRig-owned telemetry paths", () => {
+describe("Multi-Agent-owned telemetry paths", () => {
   it("owns both telemetry roots beneath state", () => {
-    expect(contextUsageDirectory("/openrig-home")).toBe("/openrig-home/state/context-usage");
-    expect(providerUsageDirectory("/openrig-home")).toBe("/openrig-home/state/provider-usage");
+    expect(contextUsageDirectory("/multi-agent-home")).toBe("/multi-agent-home/state/context-usage");
+    expect(providerUsageDirectory("/multi-agent-home")).toBe("/multi-agent-home/state/provider-usage");
   });
 
   it("names the 0.5.8 compatibility roots without changing canonical ownership", () => {
-    expect(legacyContextUsageDirectory("/openrig-home")).toBe("/openrig-home/context");
-    expect(legacyProviderUsageDirectory("/openrig-home")).toBe("/openrig-home/provider-usage");
+    expect(legacyContextUsageDirectory("/multi-agent-home")).toBe("/multi-agent-home/context");
+    expect(legacyProviderUsageDirectory("/multi-agent-home")).toBe("/multi-agent-home/provider-usage");
   });
 
   it("owns the sidecar filename rule used by readers", () => {

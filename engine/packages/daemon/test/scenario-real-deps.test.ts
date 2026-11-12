@@ -10,7 +10,7 @@ import type { RigResult } from "./helpers/scenario-daemon.js";
 
 function fakeDaemon(over: Record<string, unknown> = {}) {
   return {
-    readEnv: { OPENRIG_URL: "http://127.0.0.1:9", HOME: "/x" } as Record<string, string | undefined>,
+    readEnv: { MULTI_AGENT_URL: "http://127.0.0.1:9", HOME: "/x" } as Record<string, string | undefined>,
     baseUrl: "http://127.0.0.1:9",
     sigterm: vi.fn(async () => {}),
     restart: vi.fn(async () => {}),
@@ -21,7 +21,7 @@ function fakeDaemon(over: Record<string, unknown> = {}) {
 const ok = (stdout = ""): RigResult => ({ code: 0, stdout, stderr: "" });
 
 describe("buildRealDeps runAction verb->rig map", () => {
-  it("maps up to `rig up <topology> --json --yes` and captures rigId/rigName", async () => {
+  it("maps up to `multi-agent up <topology> --json --yes` and captures rigId/rigName", async () => {
     const calls: string[][] = [];
     const runRig = vi.fn(async (args: string[]) => { calls.push(args); return ok(JSON.stringify({ rigId: "r-1", rigName: "demo" })); });
     const deps = buildRealDeps({ daemon: fakeDaemon(), rigBin: "/bin/rig", topologyPath: "/t/spec.yaml", runRig });
@@ -38,7 +38,7 @@ describe("buildRealDeps runAction verb->rig map", () => {
     expect(calls[0]).toEqual(["up", "/t/spec.yaml", "--json", "--yes", "--cwd", "/scratch/seat"]);
   });
 
-  it("maps send to `rig send <to> <text> --json` (recipient from payload.to or the seat)", async () => {
+  it("maps send to `multi-agent send <to> <text> --json` (recipient from payload.to or the seat)", async () => {
     const calls: string[][] = [];
     const runRig = vi.fn(async (args: string[]) => { calls.push(args); return ok(); });
     const deps = buildRealDeps({ daemon: fakeDaemon(), rigBin: "/bin/rig", topologyPath: "/t/spec.yaml", runRig });
@@ -46,7 +46,7 @@ describe("buildRealDeps runAction verb->rig map", () => {
     expect(calls[0]).toEqual(["send", "a@r", "hello", "--json"]);
   });
 
-  it("maps restart <seat> to `rig launch <rigId> <seat> --json` after up captured the rigId", async () => {
+  it("maps restart <seat> to `multi-agent launch <rigId> <seat> --json` after up captured the rigId", async () => {
     const calls: string[][] = [];
     const runRig = vi.fn(async (args: string[]) => { calls.push(args); return args[0] === "up" ? ok(JSON.stringify({ rigId: "r-9", rigName: "demo" })) : ok(); });
     const deps = buildRealDeps({ daemon: fakeDaemon(), rigBin: "/bin/rig", topologyPath: "/t/spec.yaml", runRig });
@@ -55,7 +55,7 @@ describe("buildRealDeps runAction verb->rig map", () => {
     expect(calls[1]).toEqual(["launch", "r-9", "seat-a", "--json"]);
   });
 
-  it("maps down to `rig down <rigName> --json --force` using the captured rig", async () => {
+  it("maps down to `multi-agent down <rigName> --json --force` using the captured rig", async () => {
     const calls: string[][] = [];
     const runRig = vi.fn(async (args: string[]) => { calls.push(args); return args[0] === "up" ? ok(JSON.stringify({ rigId: "r-9", rigName: "demo" })) : ok(); });
     const deps = buildRealDeps({ daemon: fakeDaemon(), rigBin: "/bin/rig", topologyPath: "/t/spec.yaml", runRig });

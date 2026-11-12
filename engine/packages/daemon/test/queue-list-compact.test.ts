@@ -107,11 +107,11 @@ describe("OPR.0.4.0.28 — queue list compact + scope-default", () => {
   });
 
   it("AC-3: caller-scoped default surfaces caller items even when older than fleet LIMIT", () => {
-    const callerSession = "dev1-driver@openrig-delivery";
+    const callerSession = "dev1-driver@multi-agent-delivery";
 
     // Caller's OLD item (created first, would be beyond LIMIT if unscoped)
     seedItem(db, "q-caller-old", {
-      source: "orch-lead@openrig-delivery",
+      source: "orch-lead@multi-agent-delivery",
       destination: callerSession,
       state: "pending",
       tsCreated: "2026-06-01T00:00:00.000Z",
@@ -139,23 +139,23 @@ describe("OPR.0.4.0.28 — queue list compact + scope-default", () => {
   });
 
   it("AC-3 / S4b: destination-only counts obligations while asSession keeps the authored union", () => {
-    const callerSession = "dev1-driver@openrig-delivery";
+    const callerSession = "dev1-driver@multi-agent-delivery";
 
     seedItem(db, "q-to-me", {
-      source: "orch-lead@openrig-delivery",
+      source: "orch-lead@multi-agent-delivery",
       destination: callerSession,
       state: "pending",
     });
 
     seedItem(db, "q-from-me", {
       source: callerSession,
-      destination: "dev1-guard@openrig-delivery",
+      destination: "dev1-guard@multi-agent-delivery",
       state: "in-progress",
     });
 
     seedItem(db, "q-unrelated", {
-      source: "rev1-r1@openrig-delivery",
-      destination: "rev1-r2@openrig-delivery",
+      source: "rev1-r1@multi-agent-delivery",
+      destination: "rev1-r2@multi-agent-delivery",
       state: "pending",
     });
 
@@ -224,7 +224,7 @@ describe("OPR.0.4.0.28 — queue list compact + scope-default", () => {
   });
 
   it("AC-5: existing filters compose with asSession", () => {
-    const callerSession = "dev1-driver@openrig-delivery";
+    const callerSession = "dev1-driver@multi-agent-delivery";
 
     seedItem(db, "q-pending", {
       source: "orch@rig",
@@ -306,7 +306,7 @@ describe("Slice 15 — findOverdue rig-scoped + bounded + compact (finding 2)", 
     expect(repo.findOverdue({ now: NOW }).map((i) => i.qitemId).sort()).toEqual(["q1", "q2"]);
   });
 
-  it("rig scope filters to a single rig", () => {
+  it("multi-agent scope filters to a single rig", () => {
     seedOverdue("q1", "rig-a");
     seedOverdue("q2", "rig-b");
     expect(repo.findOverdue({ now: NOW, rig: "rig-a" }).map((i) => i.qitemId)).toEqual(["q1"]);

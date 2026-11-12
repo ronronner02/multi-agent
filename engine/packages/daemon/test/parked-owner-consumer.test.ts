@@ -194,7 +194,7 @@ describe("parked-owner-consumer policy — unit contract (OPR.0.5.6.24)", () => 
     expect(result.message).toContain("After a wake that failed, was refused or has no recorded outcome, it wakes you again the next time you park");
     expect(result.message).toContain("for a claimed in-progress row, the wake-or-escalate ladder also retries a failed wake");
     expect(result.message).not.toContain("handles a wake that failed to deliver");
-    expect(result.message).toContain("rig view show held");
+    expect(result.message).toContain("multi-agent view show held");
     expect(result.message).not.toContain("S01");
     expect(result.message).not.toContain("OPR.0.5.5.1");
   });

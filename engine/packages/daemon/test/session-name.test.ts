@@ -41,7 +41,7 @@ describe("session-name", () => {
   // Test 1: deriveCanonicalSessionName produces {pod}-{member}@{rig}
   it("deriveCanonicalSessionName produces canonical {pod}-{member}@{rig} format", () => {
     expect(deriveCanonicalSessionName("dev", "impl", "auth-feats")).toBe("dev-impl@auth-feats");
-    expect(deriveCanonicalSessionName("orch1", "lead", "rigged-buildout")).toBe("orch1-lead@rigged-buildout");
+    expect(deriveCanonicalSessionName("orch1", "lead", "removed-buildout")).toBe("orch1-lead@removed-buildout");
     expect(deriveCanonicalSessionName("rev", "r1", "my.rig")).toBe("rev-r1@my.rig");
   });
 
@@ -58,7 +58,7 @@ describe("session-name", () => {
     expect(validateSessionName("r00-my-rig-worker")).toBe(true);
     // Canonical
     expect(validateSessionName("dev-impl@auth-feats")).toBe(true);
-    expect(validateSessionName("orch1-lead@rigged-buildout")).toBe(true);
+    expect(validateSessionName("orch1-lead@removed-buildout")).toBe(true);
     // Invalid
     expect(validateSessionName("")).toBe(false);
     expect(validateSessionName("no-format-at-all")).toBe(false);

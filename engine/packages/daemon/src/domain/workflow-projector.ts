@@ -65,7 +65,7 @@ export function renderWorkflowProjectCommand(input: {
   ownerSession: string;
   step?: Pick<WorkflowStepSpec, "acceptance">;
 }): string {
-  const base = `rig workflow project --instance ${input.instanceId} --current-packet ${input.packetId} --exit <handoff|waiting|done|failed> --actor-session ${input.ownerSession}`;
+  const base = `multi-agent workflow project --instance ${input.instanceId} --current-packet ${input.packetId} --exit <handoff|waiting|done|failed> --actor-session ${input.ownerSession}`;
   const acceptance = input.step?.acceptance;
   if (!acceptance) return base;
   const verdict = acceptance.verdicts.length === 1
@@ -645,7 +645,7 @@ export class WorkflowProjector {
         );
         // OPR.0.4.6.WF2 FR-5 (guard blocker 1): a HUMAN gate packet PARKS
         // in the same txn — state=blocked, blocked_on=<human seat> — the
-        // exact leg-1 shape the shipped `rig queue resolve` verb acts on
+        // exact leg-1 shape the shipped `multi-agent queue resolve` verb acts on
         // (validateHumanPark enforces summary + evidence_ref here, carried
         // from create). Resolve unparks it for the step owner to resume.
         if (gateCompile?.parkOn) {
@@ -669,7 +669,7 @@ export class WorkflowProjector {
       // SIGKILL the daemon mid-transaction. Default off/absent = zero
       // effect (test-only; never set in production). Synchronous by
       // design — better-sqlite3 transactions are sync.
-      const holdMs = Number(process.env.OPENRIG_TEST_WF_TXN_HOLD_MS ?? 0);
+      const holdMs = Number(process.env.MULTI_AGENT_TEST_WF_TXN_HOLD_MS ?? 0);
       if (holdMs > 0) {
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, holdMs);
       }
@@ -934,7 +934,7 @@ export class WorkflowProjector {
         tryResolveRoleByCapability(roleResolutionContext(this.db, instance.boundRig), role),
       humanFallbackSeat: this.exceptionDial?.humanFallbackSeat,
     });
-    const evidenceRef = `rig workflow trace ${instance.instanceId}`;
+    const evidenceRef = `multi-agent workflow trace ${instance.instanceId}`;
     const itemBody =
       `WORKFLOW EXCEPTION (${exception.identity.exceptionClass})\n` +
       `workflow: ${instance.workflowName} v${instance.workflowVersion}\n` +
@@ -943,7 +943,7 @@ export class WorkflowProjector {
       `occurrence: ${input.currentPacketId}\n` +
       `reason: ${exception.reason}\n` +
       `evidence: ${evidenceRef}\n` +
-      `resolve: diagnose via the trace above, then \`rig workflow resume ${instance.instanceId}${occurrenceId ? ` --occurrence ${occurrenceId}` : ""} [--decision <text>]\` re-drives from this step (completed steps never re-run).`;
+      `resolve: diagnose via the trace above, then \`multi-agent workflow resume ${instance.instanceId}${occurrenceId ? ` --occurrence ${occurrenceId}` : ""} [--decision <text>]\` re-drives from this step (completed steps never re-run).`;
     const createExceptionItem = (destination: string, tier: string) =>
       this.queueRepo.createWithinTransaction({
         sourceSession: input.actorSession,
@@ -1436,7 +1436,7 @@ function resolveRoleOnBoundRig(
   if (declaring.length === 0) {
     throw new WorkflowProjectorError(
       "next_owner_unresolved",
-      `cannot resolve role "${roleName}" for step "${stepId}" (no seats on rig "${roleCtx.boundRig}" declare role "${roleName}"). Add a member with role ${roleName} to rig ${roleCtx.boundRig} via rig add, declare role on an existing member, or add preferred_targets to the role in the spec.`,
+      `cannot resolve role "${roleName}" for step "${stepId}" (no seats on rig "${roleCtx.boundRig}" declare role "${roleName}"). Add a member with role ${roleName} to rig ${roleCtx.boundRig} via multi-agent add, declare role on an existing member, or add preferred_targets to the role in the spec.`,
       {
         stepId,
         role: roleName,
@@ -1449,7 +1449,7 @@ function resolveRoleOnBoundRig(
     "next_owner_unresolved",
     `cannot resolve a live capable seat for role "${roleName}" for step "${stepId}" on rig "${roleCtx.boundRig}". Candidates: ${declaring
       .map((c) => `${c.coordinate ?? c.logicalId} → ${c.disqualifier}`)
-      .join(", ")}. Start/repair a role seat (see rig ps), add a member with role ${roleName} via rig add, or add preferred_targets to the role.`,
+      .join(", ")}. Start/repair a role seat (see multi-agent ps), add a member with role ${roleName} via multi-agent add, or add preferred_targets to the role.`,
     {
       stepId,
       role: roleName,
@@ -1468,7 +1468,7 @@ function resolveRoleOnBoundRig(
  * wrong harness. `runtimeOf` resolves a canonical session name to its
  * node's runtime column (null = not a managed node / unknown).
  *
- * OPR.0.4.6.FAC1: gains the optional bound-rig context — see the tier
+ * OPR.0.4.6.FAC1: gains the optional bound-multi-agent context — see the tier
  * comment in the body. Tier order (P2-6, guard-BLOCKING on deviation):
  *   1. explicit input.nextOwnerSession (caller-reconciled)
  *   2. gate compile (the caller branches there first)
@@ -1648,7 +1648,7 @@ export interface GateCompileResult {
   evidenceRef: string | null;
   kind: "human" | "handler-role";
   /** HUMAN targets: the human seat the packet parks blocked_on (the leg-1
-   *  park the shipped `rig queue resolve` verb acts on — guard blocker 1:
+   *  park the shipped `multi-agent queue resolve` verb acts on — guard blocker 1:
    *  resolve requires state=blocked + human-seat blocked_on, so the gate
    *  item is created for the STEP OWNER and parked on the human, never
    *  minted as an unresolvable pending human-destined item). null for
@@ -1660,7 +1660,7 @@ export function compileGate(
   spec: WorkflowSpec,
   gatedStep: WorkflowStepSpec,
   runtimeOf: (session: string) => string | null,
-  /** OPR.0.4.6.FAC1: bound-rig context — threads capability resolution
+  /** OPR.0.4.6.FAC1: bound-multi-agent context — threads capability resolution
    *  into BOTH gate paths (guard B3: the human-gate OWNER path and the
    *  handler-role DESTINATION branch are different code paths and each
    *  must carry it). Absent = shipped behavior byte-identical. */
@@ -1687,7 +1687,7 @@ export function compileGate(
     }
     // The packet belongs to the gated step's ROLE OWNER (the seat that
     // does the work once the human signs off) and PARKS blocked_on the
-    // human seat — the exact leg-1 shape `rig queue resolve` unparks.
+    // human seat — the exact leg-1 shape `multi-agent queue resolve` unparks.
     // FAC-1 (guard B3 row 2a): the owner resolves through the full tier
     // stack — a bound instance's role-only gated step gets a rig-local
     // owner by capability.

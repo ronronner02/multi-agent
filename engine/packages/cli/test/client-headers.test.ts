@@ -88,11 +88,9 @@ describe("DaemonClient header merge", () => {
 
 // ── P18 sender-provenance: the seat identity is derived from the env ONCE at the transport chokepoint ──
 describe("DaemonClient sender-identity header (P18)", () => {
-  const savedSession = process.env.OPENRIG_SESSION_NAME;
-  const savedRigged = process.env.RIGGED_SESSION_NAME;
+  const savedSession = process.env.MULTI_AGENT_SESSION_NAME;
   afterEach(() => {
-    if (savedSession === undefined) delete process.env.OPENRIG_SESSION_NAME; else process.env.OPENRIG_SESSION_NAME = savedSession;
-    if (savedRigged === undefined) delete process.env.RIGGED_SESSION_NAME; else process.env.RIGGED_SESSION_NAME = savedRigged;
+    if (savedSession === undefined) delete process.env.MULTI_AGENT_SESSION_NAME; else process.env.MULTI_AGENT_SESSION_NAME = savedSession;
   });
 
   const captureHeaders = () => {
@@ -106,26 +104,25 @@ describe("DaemonClient sender-identity header (P18)", () => {
     return { client, box };
   };
 
-  it("derives the identity header from OPENRIG_SESSION_NAME", () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50-driver@rig";
+  it("derives the identity header from MULTI_AGENT_SESSION_NAME", () => {
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50-driver@rig";
     expect(senderIdentityHeaders()).toEqual({ [SENDER_IDENTITY_HEADER]: "dev50-driver@rig" });
   });
 
   it("emits NO header when the seat env is absent (the daemon refuses; the CLI never fabricates)", () => {
-    delete process.env.OPENRIG_SESSION_NAME;
-    delete process.env.RIGGED_SESSION_NAME;
+    delete process.env.MULTI_AGENT_SESSION_NAME;
     expect(senderIdentityHeaders()).toEqual({});
   });
 
   it("stamps the seat identity on EVERY request at the ONE transport chokepoint", async () => {
-    process.env.OPENRIG_SESSION_NAME = "alice@rig";
+    process.env.MULTI_AGENT_SESSION_NAME = "alice@rig";
     const { client, box } = captureHeaders();
     await client.post("/inbox/drop", { destinationSession: "bob@rig", body: "x" });
     expect(box.headers[SENDER_IDENTITY_HEADER]).toBe("alice@rig");
   });
 
   it("the transport identity is AUTHORITATIVE — a caller cannot override it via options.headers", async () => {
-    process.env.OPENRIG_SESSION_NAME = "alice@rig";
+    process.env.MULTI_AGENT_SESSION_NAME = "alice@rig";
     const { client, box } = captureHeaders();
     await client.post("/inbox/drop", { body: "x" }, { headers: { [SENDER_IDENTITY_HEADER]: "mallory@rig" } });
     expect(box.headers[SENDER_IDENTITY_HEADER]).toBe("alice@rig"); // the seat env wins, not the caller's claim
@@ -137,55 +134,51 @@ describe("DaemonClient sender-identity header (P18)", () => {
 //    DERIVED (env session + THIS host's selfHostId), never caller-supplied. These lock the composition
 //    mechanism; they would fail against the pre-A4 stamp (which ignored the arg and emitted 2-part). ──
 describe("A4 — origin-triple carry (senderIdentityHeaders + remoteDaemonClient)", () => {
-  const savedSession = process.env.OPENRIG_SESSION_NAME;
-  const savedRigged = process.env.RIGGED_SESSION_NAME;
+  const savedSession = process.env.MULTI_AGENT_SESSION_NAME;
   afterEach(() => {
-    if (savedSession === undefined) delete process.env.OPENRIG_SESSION_NAME; else process.env.OPENRIG_SESSION_NAME = savedSession;
-    if (savedRigged === undefined) delete process.env.RIGGED_SESSION_NAME; else process.env.RIGGED_SESSION_NAME = savedRigged;
+    if (savedSession === undefined) delete process.env.MULTI_AGENT_SESSION_NAME; else process.env.MULTI_AGENT_SESSION_NAME = savedSession;
   });
 
   it("2-part session + originSelfHostId ⇒ composes the ORIGIN triple member@rig@selfHostId", () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50@v-rig";
-    expect(senderIdentityHeaders("mm2-openrig1")).toEqual({ [SENDER_IDENTITY_HEADER]: "dev50@v-rig@mm2-openrig1" });
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50@v-rig";
+    expect(senderIdentityHeaders("mm2-multi-agent1")).toEqual({ [SENDER_IDENTITY_HEADER]: "dev50@v-rig@mm2-multi-agent1" });
   });
 
   it("pin 6 — an already-3-part origin is preserved VERBATIM, never re-stamped with this host", () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50@v-rig@origin-host";
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50@v-rig@origin-host";
     expect(senderIdentityHeaders("relay-host")).toEqual({ [SENDER_IDENTITY_HEADER]: "dev50@v-rig@origin-host" });
   });
 
   it("pin 4 — no originSelfHostId (LOCAL client) ⇒ 2-part, byte-identical to today", () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50@v-rig";
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50@v-rig";
     expect(senderIdentityHeaders()).toEqual({ [SENDER_IDENTITY_HEADER]: "dev50@v-rig" });
   });
 
   it("pin 5 — absent selfHostId (fetchSelfHostId fail-open ⇒ empty) ⇒ 2-part, no new failure mode", () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50@v-rig";
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50@v-rig";
     expect(senderIdentityHeaders("")).toEqual({ [SENDER_IDENTITY_HEADER]: "dev50@v-rig" });
   });
 
   it("no session ⇒ NO header regardless of originSelfHostId (the daemon refuses; CLI never fabricates)", () => {
-    delete process.env.OPENRIG_SESSION_NAME;
-    delete process.env.RIGGED_SESSION_NAME;
-    expect(senderIdentityHeaders("mm2-openrig1")).toEqual({});
+    delete process.env.MULTI_AGENT_SESSION_NAME;
+    expect(senderIdentityHeaders("mm2-multi-agent1")).toEqual({});
   });
 
   it("pin 5 (fail-open, whole resolution) — resolveOriginSelfHostId SWALLOWS a throwing local probe ⇒ undefined; a remote op NEVER depends on local daemon health", async () => {
-    const savedUrl = process.env.OPENRIG_URL; const savedRurl = process.env.RIGGED_URL;
-    delete process.env.OPENRIG_URL; delete process.env.RIGGED_URL; // force the getDaemonStatus branch
+    const savedUrl = process.env.MULTI_AGENT_URL;
+    delete process.env.MULTI_AGENT_URL; // force the getDaemonStatus branch
     try {
       // deps whose probe throws — getDaemonStatus is OUTSIDE fetchSelfHostId's own catch, so only a
       // whole-body try/catch keeps this fail-open (the regression the full gate caught).
       const deps = { fetch: async () => { throw new Error("local probe exploded"); }, exists: () => { throw new Error("boom"); } } as never;
       await expect(resolveOriginSelfHostId(deps)).resolves.toBeUndefined();
     } finally {
-      if (savedUrl === undefined) delete process.env.OPENRIG_URL; else process.env.OPENRIG_URL = savedUrl;
-      if (savedRurl === undefined) delete process.env.RIGGED_URL; else process.env.RIGGED_URL = savedRurl;
+      if (savedUrl === undefined) delete process.env.MULTI_AGENT_URL; else process.env.MULTI_AGENT_URL = savedUrl;
     }
   });
 
   it("remoteDaemonClient ⇒ the constructed client stamps the TRIPLE on the wire (via the injected factory)", async () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50@v-rig";
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50@v-rig";
     const box: { headers: Record<string, string> } = { headers: {} };
     const factory = (url: string) => new DaemonClient(url, {
       fetchImpl: (async (_u: string, init: RequestInit) => {
@@ -193,14 +186,14 @@ describe("A4 — origin-triple carry (senderIdentityHeaders + remoteDaemonClient
         return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
       }) as unknown as typeof fetch,
     });
-    const client = remoteDaemonClient(factory, "http://vps-b:7433", "mm2-openrig1");
-    expect(client.originSelfHostId).toBe("mm2-openrig1");
+    const client = remoteDaemonClient(factory, "http://vps-b:7433", "mm2-multi-agent1");
+    expect(client.originSelfHostId).toBe("mm2-multi-agent1");
     await client.post("/api/transport/broadcast", { text: "hi" });
-    expect(box.headers[SENDER_IDENTITY_HEADER]).toBe("dev50@v-rig@mm2-openrig1"); // ORIGIN triple on the wire
+    expect(box.headers[SENDER_IDENTITY_HEADER]).toBe("dev50@v-rig@mm2-multi-agent1"); // ORIGIN triple on the wire
   });
 
   it("a LOCAL client (not built via remoteDaemonClient) stamps 2-part on the wire — the scope stays narrow", async () => {
-    process.env.OPENRIG_SESSION_NAME = "dev50@v-rig";
+    process.env.MULTI_AGENT_SESSION_NAME = "dev50@v-rig";
     const box: { headers: Record<string, string> } = { headers: {} };
     const client = new DaemonClient("http://localhost:7433", {
       fetchImpl: (async (_u: string, init: RequestInit) => {

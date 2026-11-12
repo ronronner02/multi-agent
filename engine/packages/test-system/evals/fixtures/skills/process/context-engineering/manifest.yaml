@@ -1,0 +1,7 @@
+name: context-engineering
+version: "1"
+taxonomy: skills
+purpose: "(eval fixture) shape the context an agent needs"
+files:
+  - path: content.md
+    role: source

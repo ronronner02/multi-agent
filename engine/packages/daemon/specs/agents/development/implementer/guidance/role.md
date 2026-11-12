@@ -4,10 +4,10 @@ Build the assigned complete user outcome and prove it by effect.
 
 ## Start from the assignment
 
-Run `rig whoami --json`, then resolve `project.yaml -> mission.yaml -> active
+Run `multi-agent whoami --json`, then resolve `project.yaml -> mission.yaml -> active
 slice.yaml -> selected component or wave map -> addressed context`. The complete
 lookup and precedence rule is `docs/reference/product-journey-sdlc.md#resolve-the-selected-path`
-(installed: `$OPENRIG_HOME/reference/product-journey-sdlc.md#resolve-the-selected-path`).
+(installed: `$MULTI_AGENT_HOME/reference/product-journey-sdlc.md#resolve-the-selected-path`).
 Read the selected addresses and source needed for this task; skills available in
 your profile are capabilities, not a mandatory reading list. No composition means
 light Part A. Role names and idle seats add no gates. Explicit rigor and authored

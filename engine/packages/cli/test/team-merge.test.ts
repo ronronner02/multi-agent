@@ -4,7 +4,7 @@ import { STATE_FILE, type DaemonState, type LifecycleDeps } from "../src/daemon-
 import type { TeamStartDeps } from "../src/commands/team.js";
 
 /**
- * U7 — `rig team merge <run-id>`.
+ * U7 — `multi-agent team merge <run-id>`.
  *
  * The daemon does the merge into the repository the team was created for, so this verb's job is
  * to send the one request and report what came back: how the branch joined the owner's branch,
@@ -43,7 +43,7 @@ async function run(argv: string[], teamDeps: TeamStartDeps): Promise<{ lines: st
   try {
     const program = createProgram({ teamStartDeps: teamDeps });
     program.exitOverride();
-    await program.parseAsync(["node", "rig", ...argv]);
+    await program.parseAsync(["node", "multi-agent", ...argv]);
     return { lines, code: process.exitCode };
   } catch (thrown) {
     return { lines: [...lines, (thrown as Error).message], code: process.exitCode };
@@ -54,7 +54,7 @@ async function run(argv: string[], teamDeps: TeamStartDeps): Promise<{ lines: st
 
 afterEach(() => { vi.restoreAllMocks(); });
 
-describe("rig team merge", () => {
+describe("multi-agent team merge", () => {
   it("posts the run's current version and reports a fast-forward", async () => {
     const fetchImpl = daemon({ body: { status: "merged", code: null, reason: null,
       branch: "team/add-a-health-endpoint-run-1", mode: "fast-forward", head: "0123456789abcdef0123456789abcdef01234567" } });

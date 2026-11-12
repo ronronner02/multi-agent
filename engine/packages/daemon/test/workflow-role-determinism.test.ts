@@ -145,7 +145,7 @@ describe("FAC-1 C4: tier-2 byte-parity (declared preferred_targets are NEVER inv
     };
   }
 
-  it("unpinned targets[0] wins even when a bound-rig context with a 'better' role seat is supplied", () => {
+  it("unpinned targets[0] wins even when a bound-multi-agent context with a 'better' role seat is supplied", () => {
     const spec = specWith(["declared-seat@rig", "second@rig"]);
     const ctx = {
       boundRig: "factory-a",

@@ -19,7 +19,7 @@ const GOOD_RECAP = [
   "We chose X because Y outweighed Z at the time.",
   "UNVERIFIED: the Z cost figure came second-hand from the ops channel.",
   "## Open Threads",
-  "Derive the live count with `rig queue list --mine` rather than trusting this snapshot.",
+  "Derive the live count with `multi-agent queue list --mine` rather than trusting this snapshot.",
 ].join("\n");
 
 let seatDir: string;

@@ -18,7 +18,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { getOpenRigHome } from "../../openrig-compat.js";
+import { getMultiAgentHome } from "../../data-paths.js";
 import { DispatchBuffer } from "./dispatch-buffer.js";
 import { parseSessionName } from "../session-name.js";
 
@@ -203,11 +203,11 @@ export function validateHumanFragment(raw: unknown): ValidateResult {
   };
 }
 
-// ── Paths (under getOpenRigHome(); `home` injectable for hermetic tests) ──
-export function humansDir(home: string = getOpenRigHome()): string {
+// ── Paths (under getMultiAgentHome(); `home` injectable for hermetic tests) ──
+export function humansDir(home: string = getMultiAgentHome()): string {
   return join(home, "gateway", "humans");
 }
-export function projectionPath(home: string = getOpenRigHome()): string {
+export function projectionPath(home: string = getMultiAgentHome()): string {
   return join(home, "gateway", "humans.generated.yaml");
 }
 
@@ -218,7 +218,7 @@ export const OPERATOR_HUMAN_DEFAULT_SLOT = "human-operator@kernel";
 const PROJECTION_HEADER =
   "# GENERATED FILE — DO NOT EDIT.\n" +
   "# Projection of the human fragments under gateway/humans/<entityId>.yaml.\n" +
-  "# The fragment is truth: add/edit a human via its fragment (or `rig gateway human\n" +
+  "# The fragment is truth: add/edit a human via its fragment (or `multi-agent gateway human\n" +
   "# add`), then re-project. A hand-edit here is REFUSED at load.\n";
 const PROJECTION_V2_HEADER = PROJECTION_HEADER + "# Projection format: v2 content-addressed\n";
 const PROJECTION_DIGEST_PREFIX = "# projection-body-sha256: ";
@@ -258,7 +258,7 @@ export type ProjectResult =
  *  used by both the write path and the drift/load check). Load-time validation is the
  *  SAME validateHumanFragment as add-time; the filename must equal <entityId>.yaml
  *  (collision-free key). Entities are sorted by entityId for a stable, diffable body. */
-export function projectHumans(home: string = getOpenRigHome()): ProjectResult {
+export function projectHumans(home: string = getMultiAgentHome()): ProjectResult {
   const dir = humansDir(home);
   const entities: HumanFragment[] = [];
   if (existsSync(dir)) {
@@ -315,7 +315,7 @@ export function resolveSlackHandle(
     handle,
     error:
       `inbound ${connectorKind} sender "${handle}" is not a registered human (no binding with handle "${handle}"). ` +
-      `Register the human + their handle first: rig gateway human add <entityId> --display-name … ` +
+      `Register the human + their handle first: multi-agent gateway human add <entityId> --display-name … ` +
       `--binding ${connectorKind}:<connectorRef>:<secretsRef>:primary:handle=${handle} --delivery-class …; ` +
       `until then this message is REFUSED (it was NOT landed as a fabricated human seat).`,
   };
@@ -334,7 +334,7 @@ function atomicWrite(path: string, body: string): { ok: true } | { ok: false; er
 }
 
 /** (Re)write the generated projection from the current fragments. Atomic. */
-export function writeProjection(home: string = getOpenRigHome()): { ok: true; path: string } | { ok: false; error: string } {
+export function writeProjection(home: string = getMultiAgentHome()): { ok: true; path: string } | { ok: false; error: string } {
   const proj = projectHumans(home);
   if (!proj.ok) return { ok: false, error: proj.error };
   const path = projectionPath(home);
@@ -353,7 +353,7 @@ export type AddHumanResult =
  *  a human's data (managed-config data-safety class). */
 export function addHumanFragment(
   raw: unknown,
-  home: string = getOpenRigHome(),
+  home: string = getMultiAgentHome(),
   opts: { replace?: boolean } = {},
 ): AddHumanResult {
   const v = validateHumanFragment(raw);
@@ -424,7 +424,7 @@ export type ListHumansResult =
 /** Amendment A1 (founder R5): the human surface is SINGLE-HUMAN. Several fragments render
  *  honestly, but enumeration is display, never management — the advisory names the boundary. */
 export const MULTI_HUMAN_ADVISORY =
-  "several human fragments exist; OpenRig supports one configured human, so they are displayed as found and no command manages several";
+  "several human fragments exist; Multi-Agent supports one configured human, so they are displayed as found and no command manages several";
 
 /** A field value with its provenance: authored in the fragment, or filled by a default. */
 export interface ProvenancedValue<T> {
@@ -498,7 +498,7 @@ function unknownHumanError(entityId: string, home: string): string {
   return `no human "${entityId}" is registered — known humans: ${known.length ? known.join(", ") : "(none)"}`;
 }
 
-export function listHumans(home: string = getOpenRigHome()): ListHumansResult {
+export function listHumans(home: string = getMultiAgentHome()): ListHumansResult {
   const proj = projectHumans(home);
   if (!proj.ok) return { ok: false, error: proj.error };
   const humans: HumanSummary[] = proj.entities.map((e) => {
@@ -537,7 +537,7 @@ function readFragment(entityId: string, home: string):
   return { ok: true, raw: raw as Record<string, unknown>, fragment: v.fragment, path };
 }
 
-export function showHuman(entityId: string, home: string = getOpenRigHome()): ShowHumanResult {
+export function showHuman(entityId: string, home: string = getMultiAgentHome()): ShowHumanResult {
   const f = readFragment(entityId, home);
   if (!f.ok) return f;
   const rawPrefs = isObj(f.raw.prefs) ? (f.raw.prefs as Record<string, unknown>) : {};
@@ -587,7 +587,7 @@ export function setHumanField(
   entityId: string,
   field: string,
   value: string,
-  home: string = getOpenRigHome(),
+  home: string = getMultiAgentHome(),
 ): SetHumanFieldResult {
   const f = readFragment(entityId, home);
   if (!f.ok) return f;
@@ -644,7 +644,7 @@ export function setHumanField(
 export function removeHumanFragment(
   entityId: string,
   opts: { force?: boolean; inflight: InflightItem[] },
-  home: string = getOpenRigHome(),
+  home: string = getMultiAgentHome(),
 ): RemoveHumanResult {
   const path = fragmentPathFor(entityId, home);
   if (!existsSync(path)) return { ok: false, error: unknownHumanError(entityId, home) };
@@ -693,7 +693,7 @@ export function removeHumanFragment(
 /** The dispatch-buffer half of the remove guard: un-Acked outbound decisions bound to this
  *  entity are open conversations. Match rule (documented, not guessed): entityBindingRef equal
  *  to the entityId, equal to its registered address, or prefixed "<entityId>:". */
-export function pendingConversationsFor(entityId: string, home: string = getOpenRigHome()): InflightItem[] {
+export function pendingConversationsFor(entityId: string, home: string = getMultiAgentHome()): InflightItem[] {
   const address = `${entityId}@${ADDRESS_DOMAIN}`;
   return new DispatchBuffer(home)
     .pending()
@@ -777,7 +777,7 @@ function canonicalProjectionSnapshot(body: string, expectedEntityBody: string): 
  *  the fragments are truth, so identities always come from a fresh fragment projection.
  *  A canonical snapshot from an adopted projection format is compatible and is
  *  rewritten atomically; malformed/non-canonical bytes remain a loud error. */
-export function loadHumanRegistry(home: string = getOpenRigHome(), opts: { readOnly?: boolean } = {}): LoadResult {
+export function loadHumanRegistry(home: string = getMultiAgentHome(), opts: { readOnly?: boolean } = {}): LoadResult {
   const proj = projectHumans(home);
   if (!proj.ok) return { ok: false, error: proj.error };
   const path = projectionPath(home);

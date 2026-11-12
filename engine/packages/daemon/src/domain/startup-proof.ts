@@ -61,15 +61,15 @@ export function computeExpectedAnswer(challengeId: string, contractHash: string)
  * startup text was read.
  */
 export const STARTUP_PROOF_INSTRUCTION_LINE =
-  "OpenRig, which launched this seat: please read your startup text above and run the startup-proof command from its orientation challenge.";
+  "Multi-Agent, which launched this seat: please read your startup text above and run the startup-proof command from its orientation challenge.";
 
 function buildProofSubmissionCommand(challengeId: string, expectedAnswer: string): string {
-  return `rig startup-proof submit --challenge-id ${challengeId} --answer ${expectedAnswer}`;
+  return `multi-agent startup-proof submit --challenge-id ${challengeId} --answer ${expectedAnswer}`;
 }
 
 function buildPromptBlock(challengeId: string, expectedAnswer: string): string {
   return [
-    "--- OpenRig startup orientation challenge ---",
+    "--- Multi-Agent startup orientation challenge ---",
     `challengeId: ${challengeId}`,
     "After you have read your startup contract (all the files/identity above),",
     "prove you oriented by submitting an authenticated startup_proof with EXACTLY:",

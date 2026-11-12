@@ -14,7 +14,7 @@
 
 ## 1. Owner rulings (2026-10-24)
 
-1. **Language.** Chinese and English are both supported, and Chinese is the default (`DEFAULT_LANGUAGE = "zh-CN"` in `@openrig/i18n`). The language switch stays, as KTD15 and U6 scenario 10 require. State codes, identifiers and agent text never change with the language.
+1. **Language.** Chinese and English are both supported, and Chinese is the default (`DEFAULT_LANGUAGE = "zh-CN"` in `@multi-agent/i18n`). The language switch stays, as KTD15 and U6 scenario 10 require. State codes, identifiers and agent text never change with the language.
 2. **Console input.** The input accepts system commands only, from a fixed allowlist (section 7). There is no chat with the Lead and no message to any agent (PC4); conversations stay in the native CLI. The brief's "Chat" navigation item is dropped.
 3. **Agent status is dual.** Every agent row shows the process state *and* the task state (section 6), so a running process is never read as a finished task.
 4. **Finalize.** The last workflow stage reads `等待决定` / `awaiting decision` until an owner decision is recorded. Nothing marks it complete automatically.
@@ -32,7 +32,7 @@ The TUI is the imported custom renderer in `engine/packages/tui`, not Ink or Bub
 | Color modes (truecolor, 256, 16, none) and `NO_COLOR` | `src/theme.ts` (`detectColorMode`, `createStyle`) | Add the ink-wash tokens; existing tokens stay as they are |
 | Line painting | `src/stylize.ts` | Unchanged; team views paint through the new tokens |
 | Frame output | `src/main.ts` (full repaint, `\x1b[2K` per line) | Replace with the frame writer in section 9 |
-| Strings and display width | `@openrig/i18n` (`CATALOGS`, `displayWidth`) | Use it for every label and every width calculation |
+| Strings and display width | `@multi-agent/i18n` (`CATALOGS`, `displayWidth`) | Use it for every label and every width calculation |
 | Team views | `src/render.ts`, `src/state.ts`, `src/attention/attention-model.ts` | T015 adds the regions below |
 
 Legacy (non-team) views must look and behave exactly as before.
@@ -96,7 +96,7 @@ Fonts: the owner installs `Maple Mono NF CN` (recommended, because its CJK glyph
 | Unknown | `` | nf-fa-question | `[?]` |
 | Locked / awaiting decision | `` | nf-fa-lock | `[Lock]` |
 
-Width: compute every width with `displayWidth` from `@openrig/i18n`. CJK characters are two cells and Nerd Font Mono glyphs are one. Text fallbacks are measured as the labels they are. Pad and truncate (with `…`) by display width, never by string length.
+Width: compute every width with `displayWidth` from `@multi-agent/i18n`. CJK characters are two cells and Nerd Font Mono glyphs are one. Text fallbacks are measured as the labels they are. Pad and truncate (with `…`) by display width, never by string length.
 
 ## 5. Layout and breakpoints
 

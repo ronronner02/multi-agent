@@ -24,7 +24,7 @@ describe("claim park exit (baseline)", () => {
     app.use("*", async (c, next) => { c.set("queueRepo" as never, repo); await next(); });
     app.post("/api/queue/:id/claim", async c => {
       try {
-        return c.json(repo.claim({ qitemId: c.req.param("id"), destinationSession: c.req.header("X-OpenRig-Session") ?? "worker@rig" }));
+        return c.json(repo.claim({ qitemId: c.req.param("id"), destinationSession: c.req.header("X-Multi-Agent-Session") ?? "worker@rig" }));
       } catch (error) {
         return c.json({ error: error instanceof Error ? error.message : "queue error" }, 500);
       }
@@ -32,7 +32,7 @@ describe("claim park exit (baseline)", () => {
     app.post("/api/queue/:id/update", async c => {
       try {
         const body = await c.req.json() as Record<string, unknown>;
-        return c.json(repo.update({ qitemId: c.req.param("id"), actorSession: c.req.header("X-OpenRig-Session") ?? "worker@rig", ...body } as never));
+        return c.json(repo.update({ qitemId: c.req.param("id"), actorSession: c.req.header("X-Multi-Agent-Session") ?? "worker@rig", ...body } as never));
       } catch (error) {
         return c.json({ error: error instanceof Error ? error.message : "queue error" }, 500);
       }
@@ -41,7 +41,7 @@ describe("claim park exit (baseline)", () => {
   afterEach(() => db.close());
 
   const claim = (id: string) => app.request(`/api/queue/${id}/claim`, {
-    method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "worker@rig" }, body: "{}",
+    method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "worker@rig" }, body: "{}",
   });
   const create = (destinationSession = "worker@rig") => repo.create({
     sourceSession: "orch@rig", destinationSession, body: "owned work", nudge: false,
@@ -104,7 +104,7 @@ describe("claim park exit (baseline)", () => {
       transitionNote: "claimed", closureTarget: "human-review@kernel", closureReason: null,
     });
     const response = await app.request(`/api/queue/${row.qitemId}/update`, {
-      method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "worker@rig" },
+      method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "worker@rig" },
       body: JSON.stringify({ state: "blocked", summary: "Still awaiting review", evidenceRef: "evidence:after" }),
     });
     expect(response.status).toBe(200);
@@ -121,14 +121,14 @@ describe("claim park exit (baseline)", () => {
     await claim(row.qitemId);
     for (const note of ["progress evidence", "more evidence"]) {
       const response = await app.request(`/api/queue/${row.qitemId}/update`, {
-        method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "worker@rig" },
+        method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "worker@rig" },
         body: JSON.stringify({ transitionNote: note }),
       });
       expect(response.status).toBe(200);
       expect(repo.getById(row.qitemId)?.blockedOn).toBeNull();
     }
     const response = await app.request(`/api/queue/${row.qitemId}/update`, {
-      method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "worker@rig" },
+      method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "worker@rig" },
       body: JSON.stringify({ state: "blocked", summary: "Still waiting", evidenceRef: "evidence:after" }),
     });
     expect(response.status).toBe(200);
@@ -142,7 +142,7 @@ describe("claim park exit (baseline)", () => {
     repo.update({ qitemId: row.qitemId, actorSession: "worker@rig", state: "blocked", blockedOn: "external:old-gate" });
     await claim(row.qitemId);
     const update = (body: object) => app.request(`/api/queue/${row.qitemId}/update`, {
-      method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "worker@rig" },
+      method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "worker@rig" },
       body: JSON.stringify(body),
     });
     // The same-state write is distinct from a note-only history append.
@@ -168,7 +168,7 @@ describe("claim park exit (baseline)", () => {
     });
     expect(repo.recordClosureOverdue(row.qitemId, { now: "9999-01-01T00:00:00.000Z" })).toBeNull();
     const response = await app.request(`/api/queue/${row.qitemId}/update`, {
-      method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "worker@rig" },
+      method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "worker@rig" },
       body: JSON.stringify({ state: "blocked" }),
     });
     expect(response.status).toBe(200);
@@ -204,7 +204,7 @@ describe("claim park exit (baseline)", () => {
     expect(repo.listTransitions(row.qitemId).at(-1)).toMatchObject({ closureReason: null, closureTarget: cleared ? null : gate });
     const destination = repo.getById(row.qitemId)!.destinationSession;
     const response = await app.request(`/api/queue/${row.qitemId}/update`, {
-      method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": destination },
+      method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": destination },
       body: JSON.stringify({ state: "blocked", ...(!cleared && gateKind === "human" ? { summary: "still awaiting review", evidenceRef: "owned-new-evidence" } : {}) }),
     });
     expect(response.status).toBe(200);
@@ -229,7 +229,7 @@ describe("claim park exit (baseline)", () => {
     await tick();
     const aggregate = repo.list().find((row) => row.tags?.includes(escalationDedupTag("worker@rig")))!;
     const post = (suffix: string, body: object) => app.request(`/api/queue/${aggregate.qitemId}/${suffix}`, {
-      method: "POST", headers: { "content-type": "application/json", "X-OpenRig-Session": "orch@rig" },
+      method: "POST", headers: { "content-type": "application/json", "X-Multi-Agent-Session": "orch@rig" },
       body: JSON.stringify(body),
     });
     const gate = gateKind === "human" ? "human-review@kernel" : "external:old-gate";

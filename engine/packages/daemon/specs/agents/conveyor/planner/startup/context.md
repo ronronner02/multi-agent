@@ -1,6 +1,6 @@
 # Startup Context
 
-Run `rig whoami --json` before making topology claims. Derive your actual seat
+Run `multi-agent whoami --json` before making topology claims. Derive your actual seat
 and rig from that result; this planner is reused by multiple rigs.
 
 Default workflow role: `planner`.

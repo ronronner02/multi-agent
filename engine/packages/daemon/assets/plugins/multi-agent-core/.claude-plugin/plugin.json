@@ -1,0 +1,20 @@
+{
+  "name": "multi-agent-core",
+  "version": "0.1.9",
+  "description": "Native Multi-Agent team skills and worker activity hooks.",
+  "author": {
+    "name": "Mike Schwarz",
+    "url": "https://github.com/mvschwarz"
+  },
+  "homepage": "https://github.com/mvschwarz/multi-agent-plugins",
+  "repository": "github:mvschwarz/multi-agent-plugins",
+  "license": "Apache-2.0",
+  "keywords": [
+    "multi-agent",
+    "agent",
+    "team",
+    "coordination"
+  ],
+  "skills": "./skills",
+  "hooks": "./hooks/claude.json"
+}

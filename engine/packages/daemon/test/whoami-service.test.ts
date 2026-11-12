@@ -119,7 +119,7 @@ describe("WhoamiService", () => {
 
     expect(result!.peersNote).toContain("roster excluding self");
     expect(result!.peersNote).toContain("edges");
-    expect(result!.peersNote).toContain("rig ps --nodes");
+    expect(result!.peersNote).toContain("multi-agent ps --nodes");
   });
 
   it("emits NO roster/podRoster field (advisor ruling: peers[] already IS the roster)", () => {
@@ -150,19 +150,19 @@ describe("WhoamiService", () => {
   });
 
   it("resolve surfaces external_cli attachment type and external session name", () => {
-    const rig = rigRepo.createRig("rigged-buildout");
+    const rig = rigRepo.createRig("removed-buildout");
     const node = rigRepo.addNode(rig.id, "orch1.lead", { role: "orchestrator", runtime: "claude-code" });
-    sessionRegistry.registerClaimedSession(node.id, "orch1-lead@rigged-buildout");
+    sessionRegistry.registerClaimedSession(node.id, "orch1-lead@removed-buildout");
     sessionRegistry.updateBinding(node.id, {
       attachmentType: "external_cli",
-      externalSessionName: "orch1-lead@rigged-buildout",
+      externalSessionName: "orch1-lead@removed-buildout",
     });
 
     const result = svc.resolve({ nodeId: node.id });
 
     expect(result).not.toBeNull();
     expect(result!.identity.attachmentType).toBe("external_cli");
-    expect(result!.identity.sessionName).toBe("orch1-lead@rigged-buildout");
+    expect(result!.identity.sessionName).toBe("orch1-lead@removed-buildout");
   });
 
   it("resolve returns null session and no transcript affordances for an unbound node", () => {

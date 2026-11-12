@@ -4,7 +4,7 @@
 // SAME module. Land once, here; P4 must not re-implement it.
 //
 // READ-ONLY FOREVER (arch ruling 3): the registry is operator-managed YAML at
-// ~/.openrig/hosts.yaml; nothing in the daemon ever writes it. This module is
+// ~/.multi-agent/hosts.yaml; nothing in the daemon ever writes it. This module is
 // a deliberate SEPARATE TWIN of the CLI's packages/cli/src/host-registry.ts
 // schema + validation (incl. the at-most-one-bearer rule — bearer optional
 // for a tokenless daemon, never both): the two copies are NOT unified, and
@@ -15,13 +15,13 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
-import { getDefaultOpenRigPath } from "../../openrig-compat.js";
+import { getStatePath } from "../../data-paths.js";
 
 export * from "../host-identity/registry-schema.js";
 import { validateHostRegistry, type HostEntry, type HostRegistry, type HostRegistryLoadResult, type HostResolution } from "../host-identity/registry-schema.js";
 
 export function defaultHostRegistryPath(): string {
-  return getDefaultOpenRigPath("hosts.yaml");
+  return getStatePath("hosts.yaml");
 }
 
 /** Load + validate the operator's hosts registry (read-only). Mirrors the CLI

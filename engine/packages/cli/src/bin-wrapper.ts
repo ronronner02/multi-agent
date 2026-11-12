@@ -5,7 +5,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const REEXEC_GUARD_ENV = "OPENRIG_BIN_REEXEC";
+const REEXEC_GUARD_ENV = "MULTI_AGENT_BIN_REEXEC";
 
 export function resolveBinEntry(invokedPath = process.argv[1], moduleUrl = import.meta.url): string {
   const wrapperPath = invokedPath ? realpathSync(invokedPath) : realpathSync(fileURLToPath(moduleUrl));

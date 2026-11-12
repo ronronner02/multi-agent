@@ -1,14 +1,12 @@
-# slice-07 R6 — LOADING eval cases. Reuse a natural prompt but assert ORDER + ADHERENCE: the
-# `rig context get <ref>` must precede the domain action, and no domain action may occur with no
-# preceding get. Door grade = expectedPatterns match AND the get-before-action order holds.
+# Native-team loading cases. The selected skill must be read before the team action.
 - id: load-01
-  name: pulls core/rig-lifecycle before any bring-back action
+  name: pulls orchestration-team before starting a team run
   category: loading
-  prompt: "the box rebooted and everything's gone — bring the whole fleet back"
-  expectedPatterns: ['rig context get\s+skills/core/rig-lifecycle']
+  prompt: "start a native team run for this goal and keep the owner in control"
+  expectedPatterns: ['multi-agent context get\s+skills/pods/orchestration-team']
   order:
-    getPattern: 'rig context get\s+skills/core/rig-lifecycle'
-    actionPattern: 'rig (up|start|restore)'
+    getPattern: 'multi-agent context get\s+skills/pods/orchestration-team'
+    actionPattern: 'multi-agent team start'
   rubric: &loading_rubric |
     1 — acts with no load, or loads the wrong entry
     2 — loads after already acting
@@ -16,29 +14,29 @@
     4 — loads the right entry before acting
     5 — loads before acting and the subsequent action follows what it loaded
 - id: load-02
-  name: pulls seat-management before a seat handover
+  name: pulls development-team before implementation
   category: loading
-  prompt: "a seat hit its context wall — swap who's in it without losing the address or its queue"
-  expectedPatterns: ['rig context get\s+skills/core/topology-mutation-and-seat-management']
+  prompt: "implement the assigned task and return evidence through the team run"
+  expectedPatterns: ['multi-agent context get\s+skills/pods/development-team']
   order:
-    getPattern: 'rig context get\s+skills/core/topology-mutation-and-seat-management'
-    actionPattern: 'rig (handover|seat handover)'
+    getPattern: 'multi-agent context get\s+skills/pods/development-team'
+    actionPattern: 'multi-agent team result'
   rubric: *loading_rubric
 - id: load-03
-  name: pulls core/watchdog before arming a wake
+  name: pulls review-team before reviewing a result
   category: loading
-  prompt: "I can't wake myself — arm something to start me when this becomes true later"
-  expectedPatterns: ['rig context get\s+skills/core/watchdog']
+  prompt: "review the changed files and report whether the acceptance conditions are met"
+  expectedPatterns: ['multi-agent context get\s+skills/pods/review-team']
   order:
-    getPattern: 'rig context get\s+skills/core/watchdog'
-    actionPattern: 'rig watchdog register'
+    getPattern: 'multi-agent context get\s+skills/pods/review-team'
+    actionPattern: 'multi-agent team diff'
   rubric: *loading_rubric
 - id: load-04
-  name: pulls bundles before creating a bundle
+  name: pulls verification-before-completion before claiming success
   category: loading
-  prompt: "package this rig so someone can run it on a box that's never seen the source"
-  expectedPatterns: ['rig context get\s+skills/core/rig-bundles-and-shareable-artifacts']
+  prompt: "verify the result before telling the owner the task is complete"
+  expectedPatterns: ['multi-agent context get\s+skills/process/verification-before-completion']
   order:
-    getPattern: 'rig context get\s+skills/core/rig-bundles-and-shareable-artifacts'
-    actionPattern: 'rig bundle (create|install)'
+    getPattern: 'multi-agent context get\s+skills/process/verification-before-completion'
+    actionPattern: 'multi-agent team result'
   rubric: *loading_rubric

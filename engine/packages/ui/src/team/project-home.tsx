@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { TextPreview } from "./text-preview.js";
-import type { MessageKey } from "@openrig/i18n";
+import type { MessageKey } from "@multi-agent/i18n";
 import type { RunSummary, TeamSummary } from "./hooks.js";
 
 export function ProjectHome({ team, runs, section, onOpenRun, onDiscuss, onModels }: {

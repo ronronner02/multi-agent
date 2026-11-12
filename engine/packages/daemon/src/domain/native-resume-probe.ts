@@ -68,7 +68,7 @@ export function buildCodexResumeCore(
 ): string {
   // OPR.0.4.8.2: the RESUME path uses the SAME posture decision (codexPostureArg) as fresh/fork.
   // YOLO forces -s danger-full-access (overriding even a named profile); otherwise a named profile
-  // governs itself and the no-profile case is OpenRig's explicit -s workspace-write floor flag.
+  // governs itself and the no-profile case is Multi-Agent's explicit -s workspace-write floor flag.
   const profileArg = codexConfigProfile ? ` -p ${shellQuote(codexConfigProfile)}` : "";
   const profileOrPosture = precomputedPostureArg ?? codexPostureArg(profileArg, process.env, resolvedPosture);
   // 0.5.2-07: -m is a top-level codex flag (matches the fresh-launch adapter), emitted before the

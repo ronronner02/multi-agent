@@ -56,8 +56,8 @@ function git(cwd: string, args: string[]): string {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     // A daemon-written commit states its own identity rather than borrowing one the owner may
     // have configured for their own work; the branch is the daemon's, and the log says so.
-    env: { ...process.env, GIT_AUTHOR_NAME: "openrig", GIT_AUTHOR_EMAIL: "openrig@localhost",
-      GIT_COMMITTER_NAME: "openrig", GIT_COMMITTER_EMAIL: "openrig@localhost" } }).trim();
+    env: { ...process.env, GIT_AUTHOR_NAME: "multi-agent", GIT_AUTHOR_EMAIL: "multi-agent@localhost",
+      GIT_COMMITTER_NAME: "multi-agent", GIT_COMMITTER_EMAIL: "multi-agent@localhost" } }).trim();
 }
 
 function headOf(root: string): string {

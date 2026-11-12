@@ -1,5 +1,5 @@
 {
-  "name": "@openrig/i18n",
+  "name": "@multi-agent/i18n",
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
@@ -21,7 +21,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --strict --noUncheckedIndexedAccess --skipLibCheck --resolveJsonModule --esModuleInterop test/catalog-parity.test.ts test/display-width.test.ts",
     "test": "npm run typecheck && npm run test:unit",
-    "test:unit": "node --input-type=module -e \"import { startVitest } from 'vitest/node'; await startVitest('test', ['test'], { config: false, watch: false, setupFiles: ['../../test/hermetic-env.setup.ts'] });\""
+    "test:unit": "node --input-type=module -e \"import { startVitest } from 'vitest/node'; await startVitest('test', ['test'], { config: false, watch: false, maxWorkers: 2, setupFiles: ['../../test/hermetic-env.setup.ts'] });\""
   },
   "dependencies": {
     "i18next": "26.4.4",

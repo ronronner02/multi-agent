@@ -43,10 +43,10 @@ resources:
     - id: diff-auditor
       path: subagents/diff-auditor.yaml
   plugins:
-    - id: openrig-core
+    - id: multi-agent-core
       source:
         kind: local
-        path: ~/.openrig/plugins/openrig-core
+        path: ~/.multi-agent/plugins/multi-agent-core
   runtime_resources:
     - id: codex-review-toolbar
       path: extensions/codex-review-toolbar/
@@ -71,7 +71,7 @@ profiles:
       skills: [deep-pr-review, acme-standards:repo-rules]
       guidance: [tdd-rules]
       subagents: [diff-auditor]
-      plugins: [openrig-core]
+      plugins: [multi-agent-core]
       runtime_resources: []
 `;
 
@@ -377,7 +377,7 @@ resources:
 profiles:
   default:
     uses:
-      skills: [openrig-user]
+      skills: [agent-operated-software]
       guidance: []
       subagents: []
       plugins: []
@@ -639,7 +639,7 @@ profiles:
   default: {}
 `;
 
-  it("accepts a canonical cross-rig seat address and preserves it", () => {
+  it("accepts a canonical cross-multi-agent seat address and preserves it", () => {
     const raw = parseAgentSpec(specWithMechanic("operator-agent@kernel"));
     expect(validateAgentSpec(raw).valid).toBe(true);
     expect(normalizeAgentSpec(raw).defaults?.lifecycle?.mechanic).toBe("operator-agent@kernel");

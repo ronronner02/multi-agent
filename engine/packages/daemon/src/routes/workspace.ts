@@ -84,7 +84,7 @@ export function workspaceRoutes(): Hono {
   // Resolves all inputs from the daemon's SettingsStore (matching
   // /api/config), runs the 8-check orchestrator, and returns the
   // DoctorReport. Caller can override the workspace under check via
-  // body.workspaceRoot — useful for `rig workspace doctor --workspace
+  // body.workspaceRoot — useful for `multi-agent workspace doctor --workspace
   // <path>` to probe an alternate workspace without restarting the
   // daemon. When overridden, the daemon-side workspace.root is still
   // resolved for check #4 (daemon-points-at-this-workspace).
@@ -124,7 +124,7 @@ export function workspaceRoutes(): Hono {
           : (store.resolveOne("workspace.slices_root").value as string);
 
       // FR-5e A2 — files.allowlist CLI-side env overlay. When the
-      // CLI sets OPENRIG_FILES_ALLOWLIST in its own shell, the
+      // CLI sets files.allowlist in its own shell, the
       // daemon's SettingsStore can't observe that env (different
       // process); the CLI forwards the raw value as
       // body.filesAllowlistOverride and we honor it here with

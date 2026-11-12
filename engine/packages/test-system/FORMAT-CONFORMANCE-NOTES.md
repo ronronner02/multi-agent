@@ -21,7 +21,7 @@ drives the conformance pass over all 11 scenarios + fixtures.
          summary: "..."
          claim: true
    ```
-   The pipeline runs the shipped `rig queue create`/`claim` writes BEFORE the steps.
+   The pipeline runs the shipped `multi-agent queue create`/`claim` writes BEFORE the steps.
    → My #2 (used `send`) and #11 (used `send`) must move baton creation to `env.queue`.
 3. **`expect queue` is a LIST** keyed on the real shipped fields: `qitemId`, `state`,
    `destinationSession` (NOT my `{items:[{destination,state,owner}]}`).
@@ -77,7 +77,7 @@ Ran 2026-08-06 against the CLEARED runner's real validator:
   Schema-pass ≠ runtime-correct. That pass is the next increment.
 
 ## dev-driver's source-grounded answers to #9 / #5 (2026-08-06) — for the runtime pass
-- **#9 (R-16 ps scope selector):** `rig ps` DOES support scope — per-rig `ps --nodes --rig <name>`,
+- **#9 (R-16 ps scope selector):** `multi-agent ps` DOES support scope — per-rig `ps --nodes --rig <name>`,
   all-rigs `ps --nodes -A` (FR-3: `-A` is the `--nodes` fleet-widener). The reader CAN map an
   optional scope selector to these. BUT the daemon may SILENTLY IGNORE the selector in its
   projection → asserting the scoped legs risks a FALSE GREEN (selector dropped). **RESOLUTION
@@ -110,7 +110,7 @@ Ran 2026-08-06 against the CLEARED runner's real validator:
   compaction-restore-bridge.cjs → one-shot directive) → expect pane contains "restore
   delivered" (the runner's real mirror line). Seed wrong-seat-restore exploits seat-keying.
 - #8 stream-emit-durable-replay-live: emit slow_output → deterministic chunks + activity set;
-  expect stream (rig stream list --json = durable/replayable bare array) match [{runtime:stub}]
+  expect stream (multi-agent stream list --json = durable/replayable bare array) match [{runtime:stub}]
   (intent-level; exact event field names verify-at-source) + expect pane contains "slow_output
   chunk 3/3" (deterministic last chunk). Seed stream-not-durable drops the durable-store event.
 - **All 11 STILL PASS the real validator (11/11).** Manifest YAML-only c0ba79aa.
@@ -121,18 +121,18 @@ Ran 2026-08-06 against the CLEARED runner's real validator:
 
 ## INCREMENT 4 (2026-08-06) — grounded the real read-surface shapes (verify-at-source, VERIFY-AT-SOURCE-51-02)
 REAL --json shapes the runner binds to (dumb-reader):
-- **ps** default `rig ps --json` = BARE ARRAY of PER-RIG PsEntry {rigId,name,nodeCount,runningCount,activeCount,
+- **ps** default `multi-agent ps --json` = BARE ARRAY of PER-RIG PsEntry {rigId,name,nodeCount,runningCount,activeCount,
   hasWorkCount,status:"running"|"partial"|"stopped",lifecycleState,uptime,...} — NOT per-seat (seats via `--nodes`
   = different endpoint/NodeEntry). So #1/#9 assert per-RIG summary, not per-seat.
 - **queue** list = BARE ARRAY QueueItem[] (qitemId/state/destinationSession…); compact BLANKS body/summary → read
   via --full/show. (#2 already correct.)
-- **stream** `rig stream list --json` = BARE ARRAY StreamItem {streamItemId,tsEmitted,sourceSession,body,format,
+- **stream** `multi-agent stream list --json` = BARE ARRAY StreamItem {streamItemId,tsEmitted,sourceSession,body,format,
   hintType,…}. NOTE: this is the SEND/BROADCAST coordination stream, NOT the activity/hooks stream that
   emit-behaviors write. FLAG-#8: `emit slow_output` writes ACTIVITY (/api/activity/hooks), not StreamItem — so
   #8's "stream durable" premise needs a decision: model it with `send` (which DOES create a durable StreamItem)
   OR confirm whether the runner's `stream` surface should also read activity. ROUTE to dev-driver/orch (surface
   semantics), don't guess. My #8 currently uses emit slow_output + a StreamItem match — mismatched; HELD pending the ruling.
-- **policy_provenance** = `rig policy effective --json` → {effective:{binding,resolvedScope}|null,
+- **policy_provenance** = `multi-agent policy effective --json` → {effective:{binding,resolvedScope}|null,
   posture:"known"|"unknown_posture",hint?}; binding carries setBy/setAt/record.evidence_citation. #3/#4 must assert
   {posture, effective:{binding:{…}}} — NOT my sketch {policy,source}. (Adapt in the next pass.)
 - **pane** capture → CaptureResult{content}; `contains` = substring on content (#2/#6/#7/#8-pane already correct).
@@ -181,6 +181,6 @@ ROUTED RUNNER/STUB GAPS (never shimmed in 51-03):
 - 51-02 verb bindings: seed_regression (ALL 11), emit-step (#6/#8), mutate (#3/#10), policy (#3/#4),
   restore (#4). scenario-real-deps default-throws these (main 5dc70f0e).
 - 51-02 format: F-#1 emptiness/absent/count assertion (#1 second leg); R-16 ps scope selector +
-  R-12 multi-rig up (#9 scoped legs); R-17 queue-establish verb (#11).
+  R-12 multi-multi-agent up (#9 scoped legs); R-17 queue-establish verb (#11).
 - 51-01 stub behavior: preseed emit (#5 "trust reached"), pane echo of sent text (#7), send `from`.
 - 51-06: #11 executed-unclosed closure surface (R-20).

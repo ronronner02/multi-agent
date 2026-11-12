@@ -6,7 +6,7 @@ This isn't a schedule or a promise: we release often, and an item ships when a g
 ## How to help
 
 1. Pick an item and comment on its issue to say you're working on it. If it has no issue yet, open one first.
-2. Read `CONTRIBUTING.md`, and ask your agent to use the `developing-openrig` skill. It's a map of how OpenRig is
+2. Read `CONTRIBUTING.md`, and ask your agent to use the `developing-multi-agent` skill. It's a map of how Multi-Agent is
    built, tested and changed.
 3. Open a pull request that says what a user gets and how you verified it.
 
@@ -41,7 +41,7 @@ tie. Feel free to coordinate on the issue first.
 - **Draft-aware delivery** (#48): automated sends wait while someone is typing in a seat, or a seat can be set to
   inbox-only.
 - **A host-aware resource budget for seats** (#80).
-- **Predictable `rig up` over a stopped rig with the same name.**
+- **Predictable `multi-agent up` over a stopped rig with the same name.**
 - **A "merged" stage in the project view** for teams that integrate on a branch other than main (#402).
 - **Codex seats that leave a repository's tracked `AGENTS.md` alone** (related: #64).
 - **Install and run on Node 26.**

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-export const RESULT_PREFIX = 'OPENRIG_SCENARIO_RESULT=';
+export const RESULT_PREFIX = 'MULTI_AGENT_SCENARIO_RESULT=';
 export const SCENARIO = 'queue-baton-survives-restart';
 export const CASES = {
   fixture: { file: 'scenarios/scenario-02-baton.yaml', destination: 'dev-worker@scn-baton', failedStep: 3 },

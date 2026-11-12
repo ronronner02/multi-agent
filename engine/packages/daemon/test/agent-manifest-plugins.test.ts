@@ -66,10 +66,10 @@ name: pluginned
 version: "0.2"
 resources:
   plugins:
-    - id: openrig-core
+    - id: multi-agent-core
       source:
         kind: local
-        path: ~/.openrig/plugins/openrig-core
+        path: ~/.multi-agent/plugins/multi-agent-core
 `);
     const result = validateAgentSpec(raw);
     expect(result.valid).toBe(true);
@@ -77,9 +77,9 @@ resources:
 
     const spec = normalizeAgentSpec(raw);
     expect(spec.resources.plugins).toHaveLength(1);
-    expect(spec.resources.plugins[0]!.id).toBe("openrig-core");
+    expect(spec.resources.plugins[0]!.id).toBe("multi-agent-core");
     expect(spec.resources.plugins[0]!.source.kind).toBe("local");
-    expect(spec.resources.plugins[0]!.source.path).toBe("~/.openrig/plugins/openrig-core");
+    expect(spec.resources.plugins[0]!.source.path).toBe("~/.multi-agent/plugins/multi-agent-core");
   });
 
   it("accepts plugin_type field (claude/codex/auto)", () => {
@@ -88,8 +88,8 @@ name: pluginned
 version: "0.2"
 resources:
   plugins:
-    - id: openrig-core
-      source: { kind: local, path: /abs/plugins/openrig-core }
+    - id: multi-agent-core
+      source: { kind: local, path: /abs/plugins/multi-agent-core }
       plugin_type: auto
     - id: superpowers
       source: { kind: local, path: /abs/plugins/superpowers }
@@ -157,7 +157,7 @@ resources:
   });
 
   it("plugin source.path may be absolute (operator-managed plugin location)", () => {
-    // Plugins live OUTSIDE the spec dir (vendored at ~/.openrig/plugins/<id>/
+    // Plugins live OUTSIDE the spec dir (vendored at ~/.multi-agent/plugins/<id>/
     // or operator-installed elsewhere). Unlike skill paths which must be
     // spec-relative for safety, plugin source paths are explicitly absolute.
     const raw = parseAgentSpec(`
@@ -166,7 +166,7 @@ version: "0.2"
 resources:
   plugins:
     - id: vendored
-      source: { kind: local, path: /Users/op/.openrig/plugins/openrig-core }
+      source: { kind: local, path: /Users/op/.multi-agent/plugins/multi-agent-core }
 `);
     expect(validateAgentSpec(raw).valid).toBe(true);
   });
@@ -181,12 +181,12 @@ name: test
 version: "0.2"
 resources:
   plugins:
-    - id: openrig-core
-      source: { kind: local, path: /p/openrig-core }
+    - id: multi-agent-core
+      source: { kind: local, path: /p/multi-agent-core }
 profiles:
   default:
     uses:
-      plugins: [openrig-core]
+      plugins: [multi-agent-core]
 `);
     const result = validateAgentSpec(raw);
     expect(result.valid).toBe(true);

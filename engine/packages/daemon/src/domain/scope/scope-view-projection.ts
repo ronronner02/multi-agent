@@ -194,7 +194,7 @@ function specShaFromLockedArtifacts(fs: ScopeFsDeps, sliceDir: string, fm: strin
 }
 
 /** `root`: a selected catalog project's root. It bounds the readiness (policy search and scope identity) exactly as
- *  `rig proof` does for that project, so the scopes view and proof agree; without it the nearest project.yaml is used. */
+ *  `multi-agent proof` does for that project, so the scopes view and proof agree; without it the nearest project.yaml is used. */
 export function projectSliceScope(fs: ScopeFsDeps, sliceDir: string, readPolicy?: ProofPolicyRead, root?: string): SliceScopeDetail | null {
   const readmePath = NODE_FILE_PRECEDENCE
     .map((n) => path.join(sliceDir, n))

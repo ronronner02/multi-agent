@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { act, cleanup, fireEvent, render as renderView, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInterfaceI18n } from "@openrig/i18n";
+import { createInterfaceI18n } from "@multi-agent/i18n";
 import { I18nextProvider } from "react-i18next";
 import { ChatPanel, pendingOwnerDecisions } from "../chat-panel.js";
 import { readChat, type ChatState } from "../clients.js";

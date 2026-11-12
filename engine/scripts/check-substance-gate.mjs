@@ -268,7 +268,7 @@ function runArtifactScan(options, treeClass, artifactFiles, rules) {
 }
 
 function runFullArtifactScan(options, artifactFiles) {
-  const temp = mkdtempSync(join(tmpdir(), "openrig-substance-scan-"));
+  const temp = mkdtempSync(join(tmpdir(), "multi-agent-substance-scan-"));
   const filesManifest = join(temp, "artifact-files.json");
   const reportPath = join(temp, "scan-report.json");
   try {

@@ -5,8 +5,6 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE="$REPO_ROOT/engine"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/multi-agent"
-OWNER_ENV="$CONFIG_DIR/owner.env"
 
 # shellcheck source=scripts/node-env.sh
 . "$REPO_ROOT/scripts/node-env.sh"
@@ -17,7 +15,6 @@ die() {
 }
 
 command -v git >/dev/null || die "git is required. Install it with: sudo apt-get install git"
-command -v tmux >/dev/null || die "tmux is required. Install it with: sudo apt-get install tmux"
 command -v node >/dev/null || die "Node.js 22 or 24 is required and none was found on PATH, in nvm, fnm, Volta or /usr/local/bin. Install it with nvm: nvm install 22"
 command -v npm >/dev/null || die "npm is required; it ships with Node.js."
 
@@ -34,12 +31,15 @@ npm ci --no-audit --no-fund
 npm run build
 node --input-type=module <<'NODE'
 import { installPinnedFramework } from "./packages/daemon/dist/integrations/framework/source.js";
-import { OPENRIG_HOME } from "./packages/daemon/dist/openrig-compat.js";
-console.log("Verified workflow source at " + installPinnedFramework(OPENRIG_HOME));
+import { MULTI_AGENT_HOME } from "./packages/daemon/dist/data-paths.js";
+console.log("Verified workflow source at " + installPinnedFramework(MULTI_AGENT_HOME));
 NODE
 # npm links a workspace bin only when its build output already exists, so a fresh
-# clone's `npm ci` leaves `rig` unlinked. Relinking after the build fixes that.
+# clone's `npm ci` leaves `multi-agent` unlinked. Relinking after the build fixes that.
 npm rebuild -w packages/cli >/dev/null
+
+CONFIG_DIR="$(node --input-type=module -e 'import { resolveDataRoots } from "./packages/daemon/dist/data-paths.js"; console.log(resolveDataRoots().config)')"
+OWNER_ENV="$CONFIG_DIR/owner.env"
 
 if [ -f "$OWNER_ENV" ]; then
   echo "Keeping the existing owner token at $OWNER_ENV."

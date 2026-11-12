@@ -17,7 +17,7 @@ import type {
 } from "./types.js";
 
 /**
- * OPR.0.3.3.19 - rig archive read filter. Default daemon reads EXCLUDE archived
+ * OPR.0.3.3.19 - multi-agent archive read filter. Default daemon reads EXCLUDE archived
  * rigs; explicit modes opt in. Mirrors the stream-items `--include-archived`
  * precedent (stream-store.list).
  */

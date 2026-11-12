@@ -5,7 +5,7 @@
 // `packages/daemon/specs` but the vendored copy at
 // `packages/cli/daemon/{dist,specs}` is stale (only rebuilt by
 // `scripts/build-package.sh`). Before the fix on baseline-fix-packaging,
-// `rig daemon start` from a monorepo checkout launched the stale
+// `multi-agent daemon start` from a monorepo checkout launched the stale
 // vendored daemon, so /api/rig-policy/* (slice 09) and the
 // review-feedback fix in the starter spec (slice 01) were
 // unreachable through the user-facing CLI path even though the
@@ -25,7 +25,7 @@
 //   2. The current built-in team specs and kernel variants must ship byte-for-byte.
 //      Old provider-specific starter entries must not survive in the package.
 //
-// The runtime resolveDaemonPath fix means `rig daemon start` from the
+// The runtime resolveDaemonPath fix means `multi-agent daemon start` from the
 // monorepo prefers source even when vendored is stale, so the user
 // path is no longer broken by staleness — but the assembled bundle
 // still matters for `npm publish`. This guard remains the assembly

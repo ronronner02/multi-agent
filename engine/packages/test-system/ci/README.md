@@ -66,8 +66,8 @@ the job. Assertions continue to use the shipped queue read, never a fake observe
 The same job then runs `../scenarios/transcript-reads-addressed-seat.yaml` and
 `../scenarios/capture-returns-addressed-seat.yaml` once each, healthy only, in their own
 fresh containers. Each brings up a two-seat stub rig whose seats print their own token from
-an `env.stub_scripts` script, and reads it back through the shipped `rig transcript` or
-`rig capture`. `verifyPassingRun` in `result.mjs` accepts only a clean PASS of the named
+an `env.stub_scripts` script, and reads it back through the shipped `multi-agent transcript` or
+`multi-agent capture`. `verifyPassingRun` in `result.mjs` accepts only a clean PASS of the named
 scenario: one ledger record matching the result, the scenario SHA256, exit 0, and no error,
 seed or fault.
 
@@ -112,7 +112,7 @@ The client can be macOS/arm64 while Docker is Linux/amd64: the build reads the
 **server** OS/architecture and passes the same platform to the image builds and
 containers. The Node deadline helper replaces GNU `timeout`, preserves the real
 exit status, returns 124 on deadline and escalates TERM to KILL after 15 seconds.
-All daemon work remains in the container. No local OpenRig daemon is touched.
+All daemon work remains in the container. No local Multi-Agent daemon is touched.
 
 Build contexts are uploaded by Docker, not mounted from the client. Logs, actual
 exit-code files, container names/inspection, server platform, image identity and

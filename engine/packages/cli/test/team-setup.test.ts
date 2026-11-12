@@ -6,7 +6,7 @@ import { createProgram } from "../src/index.js";
 import { teamCommand, type TeamStartDeps } from "../src/commands/team.js";
 
 /**
- * U3 — `rig team create <repository>`.
+ * U3 — `multi-agent team create <repository>`.
  *
  * The verb only carries the owner's choice: which clients the seats run and which repository
  * the team works on. The daemon owns the seats and their names, so what matters here is the
@@ -31,7 +31,7 @@ async function run(argv: string[], createDeps: TeamStartDeps): Promise<{ lines: 
   try {
     const program = createProgram({ teamStartDeps: createDeps });
     program.exitOverride();
-    await program.parseAsync(["node", "rig", ...argv]);
+    await program.parseAsync(["node", "multi-agent", ...argv]);
     return { lines, code: process.exitCode };
   } catch (thrown) {
     const error = thrown as Error & { code?: string };
@@ -47,7 +47,7 @@ const accepted = (body: unknown = { protocolVersion: "1.0", team }) =>
 
 afterEach(() => { vi.restoreAllMocks(); });
 
-describe("rig team create", () => {
+describe("multi-agent team create", () => {
   const preview = { repository: "/work/new-project", name: "new-project", action: "create", fileCount: 3, excludedPaths: [".env", ".ssh/"] };
   const project = { ...team, repository: preview.repository, name: preview.name, seats: [{ role: "lead", client: "claude-code" }] };
   const projectFetch = () => vi.fn(async (_url: string, init: RequestInit) => {
@@ -68,7 +68,7 @@ describe("rig team create", () => {
     expect(result.lines.join("\n")).toContain("3 files");
     expect(result.lines.join("\n")).toContain("private GitHub repository");
     expect(result.lines.join("\n")).toContain(".env");
-    expect(result.lines.join("\n")).toContain('Next: rig team start "<goal>" --rig new-project --planning');
+    expect(result.lines.join("\n")).toContain('Next: multi-agent team start "<goal>" --rig new-project --planning');
   });
 
   it("resolves a missing relative folder lexically for a named project", async () => {
@@ -108,7 +108,7 @@ describe("rig team create", () => {
     expect(result.lines).toContain("Team project");
     expect(result.lines).toContain("Repository: /work/project");
     expect(result.lines).toContain("  implementer  codex");
-    expect(result.lines.join("\n")).toContain('Next: rig team start "<goal>" --rig project');
+    expect(result.lines.join("\n")).toContain('Next: multi-agent team start "<goal>" --rig project');
   });
 
   it("accepts claude as the shorthand for claude-code and a comma-separated implementer list", async () => {
@@ -174,12 +174,12 @@ describe("rig team create", () => {
     const result = await run(["team", "create", "/work/project"], deps(fetchImpl));
     expect(result.code).toBe(1);
     expect(result.lines.join("\n")).toContain("the team was refused: The repository /work/project already has a team");
-    expect(result.lines.join("\n")).not.toContain("rig team start");
+    expect(result.lines.join("\n")).not.toContain("multi-agent team start");
   });
 });
 
 describe("team command registration", () => {
-  it("registers `rig team create` with the repository argument and the seat clients", () => {
+  it("registers `multi-agent team create` with the repository argument and the seat clients", () => {
     const command = teamCommand(deps(vi.fn() as unknown as typeof fetch));
     const create = command.commands.find(entry => entry.name() === "create")!;
     expect(create.registeredArguments.map(argument => argument.name())).toEqual(["repository"]);

@@ -1,6 +1,6 @@
 # Orchestration Craft — shipped defaults (factory)
 
-<!-- Shipped by the factory rig spec (copy-if-absent; append freely).
+<!-- Shipped by the factory multi-agent spec (copy-if-absent; append freely).
      Cross-pod tactical reminders stay at the RIG altitude; a pod directory is
      for context that one bounded sub-team owns. These are the reminders you
      need AT THE MOMENT OF ACTING on another seat. -->
@@ -27,8 +27,8 @@
   identical output twice means STOP polling, not poll harder. A tight loop on
   a shared provider can exhaust the usage limit and stop every seat on it.
 - **Liveness is not health.** A pane can render while nothing progresses.
-  Cross the screen (`rig capture`) with `claimedAt` and
-  `rig queue transitions` before you call a seat stuck.
+  Cross the screen (`multi-agent capture`) with `claimedAt` and
+  `multi-agent queue transitions` before you call a seat stuck.
 
 ## Acting on another seat
 

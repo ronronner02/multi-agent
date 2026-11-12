@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openrig.dev/schemas/registry-entry.v1.json",
-  "title": "Registry entry (openrig-registry/registry/<slug>.yaml)",
+  "$id": "https://multi-agent.dev/schemas/registry-entry.v1.json",
+  "title": "Registry entry (multi-agent-registry/registry/<slug>.yaml)",
   "type": "object",
   "required": [
     "schema",
@@ -14,7 +14,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "openrig.registry-entry/v1"
+      "const": "multi-agent.registry-entry/v1"
     },
     "slug": {
       "type": "string",
@@ -28,7 +28,7 @@
       "type": "string"
     },
     "source": {
-      "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/source"
+      "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/source"
     },
     "configurations": {
       "type": "array",
@@ -43,7 +43,7 @@
         ],
         "properties": {
           "id": {
-            "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/configurationId"
+            "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/configurationId"
           },
           "alias": {
             "type": "string",
@@ -53,10 +53,10 @@
             "type": "boolean"
           },
           "packageDigest": {
-            "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
+            "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
           },
           "assembler": {
-            "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/assembler"
+            "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/assembler"
           },
           "behaviour": {
             "type": "string",
@@ -73,7 +73,7 @@
               ],
               "properties": {
                 "packageDigest": {
-                  "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
+                  "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
                 },
                 "reason": {
                   "type": "string",

@@ -1,4 +1,4 @@
-# OpenRig 0.3.0 starter workflow.
+# Multi-Agent 0.3.0 starter workflow.
 # A slower walkthrough loop for watching one work packet move end to end.
 workflow:
   id: basic-loop
@@ -13,19 +13,19 @@ workflow:
   coordination_terminal_turn_rule: hot_potato
   roles:
     intake:
-      skill_refs: [openrig-user, backlog-capture]
+      skill_refs: [agent-operated-software, backlog-capture]
       preferred_targets: [intake-lead@conveyor]
     planner:
-      skill_refs: [openrig-user, verification-before-completion]
+      skill_refs: [agent-operated-software, verification-before-completion]
       preferred_targets: [plan-planner@conveyor]
     builder:
-      skill_refs: [openrig-user]
+      skill_refs: [agent-operated-software]
       preferred_targets: [build-builder@conveyor]
     reviewer:
-      skill_refs: [openrig-user, review-team]
+      skill_refs: [agent-operated-software, review-team]
       preferred_targets: [review-reviewer@conveyor]
     closer:
-      skill_refs: [openrig-user]
+      skill_refs: [agent-operated-software]
       preferred_targets: [intake-lead@conveyor]
   steps:
     - id: intake

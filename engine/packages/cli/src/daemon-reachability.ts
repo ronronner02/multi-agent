@@ -18,7 +18,7 @@ const HELP_SECTION = "The agent is waiting for permission or can't reach the dae
 
 /** Never advises starting a daemon, and names no access setting: whether a seat gets network
  *  access is the user's choice, taught in the help guide section it routes to. The guide is the
- *  offline copy, because `rig context get` itself needs the daemon this shell cannot reach. */
+ *  offline copy, because `multi-agent context get` itself needs the daemon this shell cannot reach. */
 export function blockedConnectionGuidance(
   code: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -26,12 +26,12 @@ export function blockedConnectionGuidance(
 ): { consequence: string; action: string } {
   const guide = helpPath
     ? `the help guide at ${helpPath}, section "${HELP_SECTION}"`
-    : `the help guide (https://www.openrig.dev/help/agents), section "${HELP_SECTION}"`;
+    : `the installed help guide at daemon/docs/reference/help.md, section "${HELP_SECTION}"`;
   const blocked = `This machine blocked the connection (${code}), so the daemon may still be running.`;
   if (env.CODEX_SANDBOX_NETWORK_DISABLED === "1") {
     return {
-      consequence: `${blocked} This shell runs in a Codex sandbox with network access off, which blocks the local OpenRig daemon (#275). The seat cannot change its own sandbox.`,
-      action: `Do not start another daemon. Tell the user this seat cannot reach OpenRig from its sandbox; whether it gets network access is their choice. See ${guide}.`,
+      consequence: `${blocked} This shell runs in a Codex sandbox with network access off, which blocks the local Multi-Agent daemon (#275). The seat cannot change its own sandbox.`,
+      action: `Do not start another daemon. Tell the user this seat cannot reach Multi-Agent from its sandbox; whether it gets network access is their choice. See ${guide}.`,
     };
   }
   return {

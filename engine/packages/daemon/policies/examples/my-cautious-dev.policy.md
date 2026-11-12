@@ -27,7 +27,7 @@ keep in your own project and attach by path — it is **not** one of the built-i
 ## Using it
 
 Keep a policy like this in your own project, then point a rig at it by **relative path**
-— resolved from the directory of the rig spec that references it:
+— resolved from the directory of the multi-agent spec that references it:
 
 ```yaml
 # rig.yaml

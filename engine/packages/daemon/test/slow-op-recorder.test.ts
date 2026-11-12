@@ -24,7 +24,7 @@ async function createTestDaemon(
 const tempDirs: string[] = [];
 
 function tempDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openrig-slow-op-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "multi-agent-slow-op-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -57,8 +57,8 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
     const dir = tempDir();
     const logPath = path.join(dir, "slow-operations.jsonl");
     const recorder = new mod.SlowOpRecorder({ logPath });
-    const secret = "OPENRIG_TEST_SECRET_DO_NOT_RECORD";
-    process.env.OPENRIG_TEST_SECRET = secret;
+    const secret = "MULTI_AGENT_TEST_SECRET_DO_NOT_RECORD";
+    process.env.MULTI_AGENT_TEST_SECRET = secret;
     try {
       const value = recorder.runSync("test.sync.boundary", () => {
         const records = fs.readFileSync(logPath, "utf8");
@@ -78,7 +78,7 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
       expect(fs.readFileSync(logPath, "utf8")).not.toContain(secret);
       expect(fs.statSync(logPath).mode & 0o777).toBe(0o600);
     } finally {
-      delete process.env.OPENRIG_TEST_SECRET;
+      delete process.env.MULTI_AGENT_TEST_SECRET;
       await recorder.close();
     }
   });
@@ -103,8 +103,6 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
       logPath: path.join(dir, "degraded.jsonl"),
       barrierTimeoutMs: 0,
     });
-    const oldNoKernel = process.env.OPENRIG_NO_KERNEL;
-    process.env.OPENRIG_NO_KERNEL = "1";
     const daemon = await createTestDaemon({
       dbPath: ":memory:",
       tmuxExec: async () => "",
@@ -130,8 +128,6 @@ describe("SlowOpRecorder locked instrumentation contract", () => {
       daemon.eventLoopMonitor.stop();
       daemon.db.close();
       await degraded.close();
-      if (oldNoKernel === undefined) delete process.env.OPENRIG_NO_KERNEL;
-      else process.env.OPENRIG_NO_KERNEL = oldNoKernel;
     }
   });
 

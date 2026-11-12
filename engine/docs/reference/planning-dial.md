@@ -51,4 +51,4 @@ pass to the failure modes the author may miss. Record the questions resolved and
 the resulting design changes so the owner can judge the value of the selected
 rung. Run planned research before build dispatch, while its answers can still
 shape the spec. Record the chosen rung in the slice's frontmatter as
-`approved-spec-dial:`; `rig view show execution` shows it as `planning_dial`.
+`approved-spec-dial:`; `multi-agent view show execution` shows it as `planning_dial`.

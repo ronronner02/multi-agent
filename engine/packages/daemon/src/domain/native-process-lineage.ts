@@ -419,7 +419,7 @@ export type NativeProcessLister = () => NativeProcessRow[] | Promise<NativeProce
 /** One OS process, by pid and `ps` start time: a reused pid has another start time. */
 export interface ClaudeLaunchedProcess { pid: number; startedAt: string }
 
-/** A recorded Claude resume rotation (#1077): OpenRig launched `process` to resume `token`, and that
+/** A recorded Claude resume rotation (#1077): Multi-Agent launched `process` to resume `token`, and that
  *  process's first hook said the conversation continued as the stored token. argv may name `token`
  *  instead of the stored one only in that same process. */
 export interface ClaudeResumeRotation { token: string; process: ClaudeLaunchedProcess }
@@ -513,7 +513,7 @@ export async function verifyCodexPaneProcess(input: Parameters<typeof observeCod
   return second?.fingerprint === first.fingerprint ? second : null;
 }
 
-/** #1077 — the process OpenRig launched to resume `launchToken`, when it emitted a Claude hook:
+/** #1077 — the process Multi-Agent launched to resume `launchToken`, when it emitted a Claude hook:
  *  the pane's one foreground Claude, whose argv names that token, must be the hook process's parent
  *  or grandparent (Claude runs a hook through a shell, which may exec it), with no other Claude
  *  between. A `claude -p --resume` started from inside the seat inherits the launch environment,

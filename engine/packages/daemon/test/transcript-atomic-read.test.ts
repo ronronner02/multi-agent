@@ -11,7 +11,7 @@ afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: 
 
 describe("transcript reads during atomic capture publication", () => {
   it.each(["tail", "grep"] as const)("%s reads one complete published file", async (mode) => {
-    const root = mkdtempSync(join(tmpdir(), "openrig-transcript-reader-"));
+    const root = mkdtempSync(join(tmpdir(), "multi-agent-transcript-reader-"));
     roots.push(root);
     const store = new TranscriptStore({ transcriptsRoot: root });
     mkdirSync(join(root, "fixture"));

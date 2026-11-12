@@ -132,7 +132,7 @@ describe("authored evidence scenarios (expressibility)", () => {
 });
 
 describe("queue-baton preconditions (post-P21 identity: env-carried, never a body flag)", () => {
-  it("carries the declared identity via OPENRIG_SESSION_NAME per call — creator=source, claimant=destination — and never passes the retired --source flag", async () => {
+  it("carries the declared identity via MULTI_AGENT_SESSION_NAME per call — creator=source, claimant=destination — and never passes the retired --source flag", async () => {
     const calls: { args: string[]; env: Record<string, string | undefined> }[] = [];
     const runRig = vi.fn(async (args: string[], env: Record<string, string | undefined>) => {
       calls.push({ args, env });
@@ -140,17 +140,17 @@ describe("queue-baton preconditions (post-P21 identity: env-carried, never a bod
     });
     await applyQueuePreconditions(
       [{ id: "baton-1", source: "harness@r", destination: "dev-worker@r", claim: true }],
-      { rigBin: "/bin/rig", readEnv: { OPENRIG_URL: "http://127.0.0.1:9" }, runRig },
+      { rigBin: "/bin/rig", readEnv: { MULTI_AGENT_URL: "http://127.0.0.1:9" }, runRig },
     );
     // P21 I3 (c4fad7b39) retired --source (deprecated + IGNORED): the sender rides
-    // the transport header, derived from OPENRIG_SESSION_NAME. An ignored flag in
+    // the transport header, derived from MULTI_AGENT_SESSION_NAME. An ignored flag in
     // the argv would be a stale claim in the harness — assert its ABSENCE.
     expect(calls[0].args.slice(0, 6)).toEqual(["queue", "create", "--id", "baton-1", "--destination", "dev-worker@r"]);
     expect(calls[0].args).not.toContain("--source");
-    expect(calls[0].env.OPENRIG_SESSION_NAME).toBe("harness@r");
-    expect(calls[0].env.OPENRIG_URL).toBe("http://127.0.0.1:9"); // daemon target preserved
+    expect(calls[0].env.MULTI_AGENT_SESSION_NAME).toBe("harness@r");
+    expect(calls[0].env.MULTI_AGENT_URL).toBe("http://127.0.0.1:9"); // daemon target preserved
     expect(calls[1].args).toEqual(["queue", "claim", "baton-1", "--destination", "dev-worker@r", "--json"]);
-    expect(calls[1].env.OPENRIG_SESSION_NAME).toBe("dev-worker@r");
+    expect(calls[1].env.MULTI_AGENT_SESSION_NAME).toBe("dev-worker@r");
   });
 
   it("skips claim when claim is not set, and fails closed on a create error", async () => {
@@ -172,7 +172,7 @@ describe("queue-baton preconditions (post-P21 identity: env-carried, never a bod
 });
 
 describe("D3 — env.scope_mission survives the WHOLE path into the shipped argv", () => {
-  it("load → env-extract → real-deps → reader produces `rig scope audit --mission <name> --json`", async () => {
+  it("load → env-extract → real-deps → reader produces `multi-agent scope audit --mission <name> --json`", async () => {
     const { runScenarioFile } = await import("./helpers/scenario-pipeline.js");
     const d = mkdtempSync(join(tmpdir(), "scope-mission-"));
     try {

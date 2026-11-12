@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import type { RefObject } from "react";
-import type { TeamOwnerRead, TeamReviewView } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamReviewView } from "@multi-agent/daemon/team-control";
 import { assignedSeat, clockTime, TASK_STAGE_LABELS, taskName } from "./display.js";
 import { TaskProgress } from "./task-progress.js";
 

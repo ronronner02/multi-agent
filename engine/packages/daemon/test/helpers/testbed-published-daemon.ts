@@ -4,12 +4,12 @@
 // mechanics are coupled and must be identical everywhere they appear, or the
 // runbooks and the container adapter drift and each "proves" a different thing:
 //
-//   1. EXPLICIT BIND. `packages/daemon/src/index.ts:148` reads OPENRIG_HOST;
+//   1. EXPLICIT BIND. `packages/daemon/src/index.ts:148` reads MULTI_AGENT_HOST;
 //      unset defaults to 127.0.0.1 (:167) — loopback is unreachable through a
 //      published port, which is exactly how the first A/B failed on BOTH arms.
 //   2. BEARER, because the bind demands it. `assertBindAuthInvariant`
 //      (middleware/auth-bearer-token.ts:240-264) REFUSES to start a
-//      non-loopback bind without OPENRIG_AUTH_BEARER_TOKEN. The procedure
+//      non-loopback bind without MULTI_AGENT_AUTH_BEARER_TOKEN. The procedure
 //      SATISFIES that guard; it never weakens, bypasses, or special-cases it.
 //   3. EXPLICIT HOST PORT. Apple `container` 1.2.0 rejects the ephemeral
 //      publish form (`invalid publish host port range: 0`) where Docker accepts
@@ -38,11 +38,11 @@ export const CONTAINER_PORT = 7433;
 export const L3_HOST_PORT = 19433;
 
 /** Env that forces the explicit bind (index.ts:148). */
-export const BIND_ENV = "OPENRIG_HOST";
+export const BIND_ENV = "MULTI_AGENT_HOST";
 export const BIND_VALUE = "0.0.0.0";
 
 /** Env carrying the bearer the bind guard requires (auth-bearer-token.ts:240). */
-export const BEARER_ENV = "OPENRIG_AUTH_BEARER_TOKEN";
+export const BEARER_ENV = "MULTI_AGENT_AUTH_BEARER_TOKEN";
 
 /**
  * Env a host-side `rig` READ needs to reach a guarded route (client.ts's
@@ -66,7 +66,7 @@ export const BEARER_ENV = "OPENRIG_AUTH_BEARER_TOKEN";
  * nothing. The negative control (same call, NO header, MUST be 401) is what
  * detects that state — it is the assertion that the guard is armed at all.
  */
-export const TERMINAL_BEARER_ENV = "OPENRIG_TERMINAL_BEARER_TOKEN";
+export const TERMINAL_BEARER_ENV = "MULTI_AGENT_TERMINAL_BEARER_TOKEN";
 
 /** Unauthenticated reachability probe. */
 export const HEALTH_PATH = "/healthz";
@@ -117,22 +117,22 @@ export function rigReadEnv(bearerToken: string, baseUrl: string): Record<string,
         "and a NULL terminal token would leave the route unguarded entirely (see TERMINAL_BEARER_ENV).",
     );
   }
-  return { [TERMINAL_BEARER_ENV]: bearerToken, OPENRIG_URL: baseUrl };
+  return { [TERMINAL_BEARER_ENV]: bearerToken, MULTI_AGENT_URL: baseUrl };
 }
 
 // ── STAGING: getting fixtures INTO a container correctly (one method, two consumers) ──
 //
 // Two defects were paid for here, both live: (1) staging under /root leaves the tree
-// unreadable to `USER openrig` (Dockerfile:61), and (2) `docker cp` preserves ROOT
-// ownership, so even a readable stage is NOT WRITABLE — and `rig up`'s pre-launch
+// unreadable to `USER multi-agent` (Dockerfile:61), and (2) `docker cp` preserves ROOT
+// ownership, so even a readable stage is NOT WRITABLE — and `multi-agent up`'s pre-launch
 // delivery WRITES into it (AGENTS.md), failing EACCES at instantiate.
 //
-// The fix that avoids both by construction: stage under the openrig user's OWN home and
-// deliver by TAR-PIPE into a DEFAULT `docker exec`, which extracts AS `openrig`. No chown,
+// The fix that avoids both by construction: stage under the multi-agent user's OWN home and
+// deliver by TAR-PIPE into a DEFAULT `docker exec`, which extracts AS `multi-agent`. No chown,
 // no root exec — the user the product runs as is the user that does the work.
 
 /** The exec user's home — everything staged lives under it. */
-export const CONTAINER_STAGE_ROOT = "/home/openrig";
+export const CONTAINER_STAGE_ROOT = "/home/multi-agent";
 
 /** An in-container stage path. Consumers pass THIS to the daemon, never a host path:
  *  the daemon reads the topology INSIDE the container. */
@@ -148,7 +148,7 @@ export function stageTarSourceArgv(hostDir: string): string[] {
   return ["-C", hostDir, "-cf", "-", "."];
 }
 
-/** docker-side argv: extract as the DEFAULT exec user (openrig) — no `-u`, no chown.
+/** docker-side argv: extract as the DEFAULT exec user (multi-agent) — no `-u`, no chown.
  *  Pipe stageTarSourceArgv's stdout into this process's stdin. */
 export function stageExtractArgv(container: string, stagePath: string): string[] {
   return ["exec", "-i", container, "tar", "-C", stagePath, "-xf", "-"];
@@ -162,7 +162,7 @@ export function stageFenceArgv(container: string, stagePath: string, expectFile?
   // it, so a delivery that shipped NOTHING (a tar failure whose non-zero exit the pipe
   // masked, since a shell pipeline reports only the LAST command's status) leaves an
   // empty-but-perfectly-readable-and-writable stage. Fencing the directory alone would
-  // pass it and defer the real symptom to a file-not-found from `rig up` downstream.
+  // pass it and defer the real symptom to a file-not-found from `multi-agent up` downstream.
   const target = expectFile ? `${stagePath}/${expectFile}` : stagePath;
   return [
     "exec", container, "sh", "-c",
@@ -177,7 +177,7 @@ export function stageFenceArgv(container: string, stagePath: string, expectFile?
  *
  * Ordering is load-bearing: the fence must run AFTER extraction (an empty stage
  * passes a naive read check) and BEFORE anything depends on the stage, or the
- * first symptom is an EACCES from `rig up` three steps downstream instead of a
+ * first symptom is an EACCES from `multi-agent up` three steps downstream instead of a
  * named failure here.
  *
  * Returns docker argv arrays for the consumer's own docker seam; `tarSource` is

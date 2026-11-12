@@ -275,7 +275,7 @@ export function classifyScopeItem(input: ScopeAuditInput): ScopeAuditResult {
       severity: input.isActiveRelease ? "high" : "low",
       path: input.path,
       message: `${input.level} has no PROGRESS.md and no readme-only marker`,
-      remediation: `Run: rig scope ${input.level} create (scaffolds PROGRESS.md) or add progress_rail: readme-only to README frontmatter`,
+      remediation: `Run: multi-agent scope ${input.level} create (scaffolds PROGRESS.md) or add progress_rail: readme-only to README frontmatter`,
     });
   }
 
@@ -395,7 +395,7 @@ export function classifyScopeItem(input: ScopeAuditInput): ScopeAuditResult {
           severity: "medium",
           path: artifact.path,
           message: `Proof artifact violates the C1 header contract: ${problems.join("; ")}.`,
-          remediation: `Re-drop via: rig proof add <slice> --artifact-type <${C1_ARTIFACT_TYPES.join("|")}> --verdict <${C1_VERDICTS.join("|")}> --candidate-sha <sha> --money-evidence "<line>" — or add the missing frontmatter fields in place.`,
+          remediation: `Re-drop via: multi-agent proof add <slice> --artifact-type <${C1_ARTIFACT_TYPES.join("|")}> --verdict <${C1_VERDICTS.join("|")}> --candidate-sha <sha> --money-evidence "<line>" — or add the missing frontmatter fields in place.`,
         });
       }
     }
@@ -500,7 +500,7 @@ export function classifyScopeItem(input: ScopeAuditInput): ScopeAuditResult {
           message: contractBody === null
             ? "No `## Proof contract` section — proof has no promised-deliverables source to pair against."
             : "`## Proof contract` carries no checkbox deliverables (`- [ ] …`) for proof to pair against.",
-          remediation: `Add \`## Proof contract\` to ${nodeFileName} with one checkbox line per promised deliverable, written as an observable outcome (conventions SSOT: docs/reference/sdlc-conventions.md (installed: $OPENRIG_HOME/reference/sdlc-conventions.md)).`,
+          remediation: `Add \`## Proof contract\` to ${nodeFileName} with one checkbox line per promised deliverable, written as an observable outcome (conventions SSOT: docs/reference/sdlc-conventions.md (installed: $MULTI_AGENT_HOME/reference/sdlc-conventions.md)).`,
         });
       }
 
@@ -521,7 +521,7 @@ export function classifyScopeItem(input: ScopeAuditInput): ScopeAuditResult {
             severity: "info",
             path: childPath(input.path, nodeFileName),
             message: "Slice declares an Intent visual (UI slice) but no mockup reference is present — a UI slice with no mockup in its locked set is an incomplete plan.",
-            remediation: "Attach the planned mockup: an image ref in `## Intent visual` or a plannedRef on the proof-contract deliverable (conventions SSOT: docs/reference/sdlc-conventions.md §3 (installed: $OPENRIG_HOME/reference/sdlc-conventions.md §3)).",
+            remediation: "Attach the planned mockup: an image ref in `## Intent visual` or a plannedRef on the proof-contract deliverable (conventions SSOT: docs/reference/sdlc-conventions.md §3 (installed: $MULTI_AGENT_HOME/reference/sdlc-conventions.md §3)).",
           });
         }
       }

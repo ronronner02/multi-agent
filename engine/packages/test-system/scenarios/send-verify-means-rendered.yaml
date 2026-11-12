@@ -1,5 +1,5 @@
 # Defect class: pane-render vs receipt (send --verify honesty).
-# Marathon origin: `rig send --verify` reported success on delivery/receipt (message
+# Marathon origin: `multi-agent send --verify` reported success on delivery/receipt (message
 #   queued) while the text never RENDERED in the seat's pane — a false-positive that
 #   masked wedged seats.
 # SEED (class: verify-is-receipt-not-render): the seeded regression makes --verify

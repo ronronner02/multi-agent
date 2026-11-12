@@ -306,7 +306,7 @@ function buildStuckNudgeMessage(input: {
   const e = input.evidence;
   return [
     `Workflow deadline: ${e.instanceId}, packet ${e.packetId}, owner ${e.ownerSession}; ${Math.floor(e.overdueBySeconds / 60)}m overdue (${e.anchor} at ${e.anchorAt}).`,
-    `Packet age does not establish idle. Inspect: rig workflow show ${e.instanceId}. Full packet: rig queue show ${e.packetId} --full.`,
+    `Packet age does not establish idle. Inspect: multi-agent workflow show ${e.instanceId}. Full packet: multi-agent queue show ${e.packetId} --full.`,
   ].join("\n");
 }
 

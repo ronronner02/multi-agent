@@ -23,12 +23,12 @@ import { resolveOfflineHelpPath } from "../src/daemon-reachability.js";
 import { createProcessLiveness, signalProbe } from "../src/commands/daemon.js";
 
 const URL = "http://127.0.0.1:7433";
-const DOWN_ADVICE = /rig daemon start|'rig up'|if it is down/i;
+const DOWN_ADVICE = /multi-agent daemon start|'multi-agent up'|if it is down/i;
 const WIDENING = /full_bypass|danger-full-access|network_access/i;
 const TODAY_DOWN_ACTION =
-  "Confirm the daemon is reachable with 'rig daemon status'; if it is down, start it with 'rig daemon start'.";
+  "Confirm the daemon is reachable with 'multi-agent daemon status'; if it is down, start it with 'multi-agent daemon start'.";
 const UNKNOWN_WRITE_ACTION =
-  "Check 'rig daemon status' on the affected host; if it is down, start it with 'rig daemon start'. Reconcile using the recovery ID before any retry. A lost connection does not prove the write failed.";
+  "Check 'multi-agent daemon status' on the affected host; if it is down, start it with 'multi-agent daemon start'. Reconcile using the recovery ID before any retry. A lost connection does not prove the write failed.";
 
 function failingFetch(code: string): typeof fetch {
   return (async () => {
@@ -159,19 +159,19 @@ describe("transport render: blocked is not down", () => {
 
 describe("status probe keeps the cause; the precheck guard agrees with the transport render", () => {
   it("records EPERM on every probe path, and never calls a blocked probe 'stopped'", async () => {
-    process.env.OPENRIG_URL = URL;
+    process.env.MULTI_AGENT_URL = URL;
     try {
       const viaUrl = await getDaemonStatus(lifecycleDeps({ fetch: probeFailing("EPERM") }));
       expect(viaUrl.state).toBe("unverified");
       expect(viaUrl.probeErrorCode).toBe("EPERM");
     } finally {
-      delete process.env.OPENRIG_URL;
+      delete process.env.MULTI_AGENT_URL;
     }
     const noState = await getDaemonStatus(lifecycleDeps({ fetch: probeFailing("EPERM") }));
     expect(noState.state).toBe("unverified");
     expect(noState.probeErrorCode).toBe("EPERM");
 
-    const state = { pid: 4242, port: 7433, db: "/x/openrig.sqlite", startedAt: new Date().toISOString() };
+    const state = { pid: 4242, port: 7433, db: "/x/multi-agent.sqlite", startedAt: new Date().toISOString() };
     const alive = await getDaemonStatus(lifecycleDeps({
       fetch: probeFailing("EPERM"),
       exists: (p: string) => p.endsWith("daemon.json"),
@@ -215,7 +215,7 @@ describe("status probe keeps the cause; the precheck guard agrees with the trans
   it("without a blocked code the guard keeps today's language", () => {
     expect(statusGuardMessage({ state: "unverified" } as DaemonStatus).fact).toMatch(/did not respond/i);
     expect(statusGuardMessage({ state: "unverified", probeErrorCode: "ETIMEDOUT" } as DaemonStatus).action)
-      .toBe("Re-check with 'rig daemon status'. If it is confirmed stopped, run 'rig daemon start'.");
+      .toBe("Re-check with 'multi-agent daemon status'. If it is confirmed stopped, run 'multi-agent daemon start'.");
     expect(statusGuardMessage({ state: "stopped" } as DaemonStatus).fact).toMatch(/not running/i);
   });
 });
@@ -225,16 +225,16 @@ describe("offline help guide path (reachable without the daemon)", () => {
     const checkout = "/r/packages/cli/src";
     expect(resolveOfflineHelpPath(checkout, (p) => p === "/r/docs/reference/help.md" || p === "/r/packages/cli/daemon/docs/reference/help.md"))
       .toBe("/r/docs/reference/help.md");
-    const installed = "/p/lib/node_modules/@openrig/cli/dist";
-    expect(resolveOfflineHelpPath(installed, (p) => p === "/p/lib/node_modules/@openrig/cli/daemon/docs/reference/help.md"))
-      .toBe("/p/lib/node_modules/@openrig/cli/daemon/docs/reference/help.md");
+    const installed = "/p/lib/node_modules/@multi-agent/cli/dist";
+    expect(resolveOfflineHelpPath(installed, (p) => p === "/p/lib/node_modules/@multi-agent/cli/daemon/docs/reference/help.md"))
+      .toBe("/p/lib/node_modules/@multi-agent/cli/daemon/docs/reference/help.md");
     expect(resolveOfflineHelpPath(installed, () => false)).toBeUndefined();
   });
 
   it("never resolves outside an installed package, even if a file sits there", () => {
-    const installed = "/p/lib/node_modules/@openrig/cli/dist";
+    const installed = "/p/lib/node_modules/@multi-agent/cli/dist";
     const outside = "/p/lib/node_modules/docs/reference/help.md";
-    const bundled = "/p/lib/node_modules/@openrig/cli/daemon/docs/reference/help.md";
+    const bundled = "/p/lib/node_modules/@multi-agent/cli/daemon/docs/reference/help.md";
     expect(resolveOfflineHelpPath(installed, (p) => p === outside || p === bundled)).toBe(bundled);
     expect(resolveOfflineHelpPath(installed, (p) => p === outside)).toBeUndefined();
   });
@@ -244,7 +244,7 @@ describe("offline help guide path (reachable without the daemon)", () => {
 // EPERM and `ps` cannot run, so the old boolean liveness said "dead", status said `stale`, and the
 // precheck told the seat to start a daemon before any health probe ran.
 describe("sandboxed liveness: EPERM on kill(pid, 0) is not a dead daemon", () => {
-  const STATE = { pid: 4242, port: 7433, db: "/x/openrig.sqlite", startedAt: new Date().toISOString() };
+  const STATE = { pid: 4242, port: 7433, db: "/x/multi-agent.sqlite", startedAt: new Date().toISOString() };
   const withState = (over: Partial<LifecycleDeps>): LifecycleDeps => lifecycleDeps({
     exists: (p: string) => p.endsWith("daemon.json"),
     readFile: (p: string) => (p.endsWith("daemon.json") ? JSON.stringify(STATE) : null),

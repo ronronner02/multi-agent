@@ -23,18 +23,18 @@ describe("canonical project-workspace scaffold parity", () => {
   it("emits valid project and catalog manifests without instance-owned sources", () => {
     const files = new Map(daemonScaffoldFiles().map((file) => [file.relPath, file.content]));
     expect(parseYaml(files.get("project.yaml")!)).toMatchObject({
-      schema: "openrig.project/v0alpha1",
+      schema: "multi-agent.project/v0alpha1",
       kind: "project",
       install: { intent: "SPEC.md", context: [], skills: [] },
       missions: { root: "missions" },
     });
     expect(parseYaml(files.get("workspace.yaml")!)).toEqual({
-      schema: "openrig.workspace/v0alpha1",
+      schema: "multi-agent.workspace/v0alpha1",
       projects: [{ id: "default", root: "." }],
     });
     expect(files.get("SPEC.md")).toContain("intent:");
     expect(files.get(".gitignore")).toContain("/exhaust/");
-    expect(files.get(".gitignore")).toContain("/.openrig/");
+    expect(files.get(".gitignore")).toContain("/.multi-agent/");
 
     const emitted = [...daemonScaffoldDirs(), ...files.keys()];
     for (const retired of [

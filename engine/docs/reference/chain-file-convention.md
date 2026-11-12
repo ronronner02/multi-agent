@@ -26,8 +26,8 @@ nodes, and carry no chain file).
 ### The topology tree
 
 Rooted at the typed config key **`topology.root`** (resolution
-`env OPENRIG_TOPOLOGY_ROOT > config file > derived default
-$OPENRIG_HOME/topology`). Never hardcode the path — `rig config get
+`env MULTI_AGENT_TOPOLOGY_ROOT > config file > derived default
+$MULTI_AGENT_HOME/topology`). Never hardcode the path — `multi-agent config get
 topology.root` is the answer on any machine. The instance altitude **is the
 top of the root** (there is no instance directory to find; the root is the
 instance):
@@ -52,7 +52,7 @@ Established chain names on the topology tree:
   is two different files.
 - `CRAFT.md` — how work is done at that altitude (shipped at instance, rig and
   seat), with `ORCHESTRATION-CRAFT.md` at rig level for orchestration practice.
-- `CULTURE.md` — team norms. Note that startup delivers the rig spec's own
+- `CULTURE.md` — team norms. Note that startup delivers the multi-agent spec's own
   `culture_file` (a path beside `rig.yaml`), not a `CULTURE.md` under
   `topology.root`.
 
@@ -67,17 +67,17 @@ without a `SPEC.md`.
 **Project-tree context cannot ship.** It describes what *you* are building —
 mission intent, slice specifications, proof contracts. No vendor can author it
 in advance, and shipping a default would install someone else's project as
-your context. Real projects author their own; `rig scope mission create` and
-`rig scope slice create` start the tree. (Topology-tree context is the opposite: how a team
+your context. Real projects author their own; `multi-agent scope mission create` and
+`multi-agent scope slice create` start the tree. (Topology-tree context is the opposite: how a team
 of agents runs well is largely general, which is why included rigs ship
 defaults.)
 
 ## Legacy location and the advisory
 
-Before this convention the topology tree lived at `~/.openrig/shared-docs/rigs/`
+Before this convention the topology tree lived at `~/.multi-agent/shared-docs/rigs/`
 (design decision 2026-08-14: an arbitrary folder on one machine, not a product
 path). That location **stays readable** as a per-level fallback for
-`rig context trace`, at the rig and seat levels, so existing rigs migrate instead
+`multi-agent context trace`, at the rig and seat levels, so existing rigs migrate instead
 of breaking. The refocus trace, `seat:` profile atoms and handover priming read
 only `topology.root`, so until migration they report those files as missing. Every
 read that resolves to the legacy location emits a
@@ -89,7 +89,7 @@ no path literal.
 
 ## The trace
 
-`rig context trace --rig <rig> [--pod <pod>] [--seat <seat>] --name <NAME>.md`
+`multi-agent context trace --rig <rig> [--pod <pod>] [--seat <seat>] --name <NAME>.md`
 performs the walk: it prints each selected altitude root-first (general →
 specific), marks whether content came from `topology.root`, the legacy tree
 (with the advisory on stderr), or is absent, and needs no running daemon —

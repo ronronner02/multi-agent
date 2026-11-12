@@ -8,8 +8,8 @@
  * signature is untouched and the runner's equals branch is unchanged.
  *
  * The problem it solves: the shipped surfaces answer in structurally different
- * shapes, so raw comparison always differs. `rig ps --json` is an array of rig
- * records; `rig queue list --json` is an array of qitems whose destinationSession
+ * shapes, so raw comparison always differs. `multi-agent ps --json` is an array of rig
+ * records; `multi-agent queue list --json` is an array of qitems whose destinationSession
  * is `<pod>-<member>@<rig>`. Comparing them requires DECLARING which field of each
  * carries the shared truth — that declaration is what a normalizer is.
  *

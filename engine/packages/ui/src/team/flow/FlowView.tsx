@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import type { MessageKey } from "@openrig/i18n";
+import type { MessageKey } from "@multi-agent/i18n";
 import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion.js";
 import { mapTeamEvents, type FlowEvent, type FlowIntent, type FlowNode, type FlowSeat } from "./flow-events.js";
 import { FlowRenderer } from "./flow-renderer.js";

@@ -29,7 +29,7 @@ On album cards for albums someone else shared with me, show a compact Shared by 
 
 ## Proof contract
 
-Each item pairs with its proof via `rig proof add … --evidences <n> --media <files>`. `plannedRef` names the mockup section the delivered artifact is compared against (`mockups/shared-by-label.html`).
+Each item pairs with its proof via `multi-agent proof add … --evidences <n> --media <files>`. `plannedRef` names the mockup section the delivered artifact is compared against (`mockups/shared-by-label.html`).
 
 - [ ] **1. Shared card label** — a non-owner album card shows `Shared by [display name]` above the title. *(plannedRef: §shared-card)*
 - [ ] **2. Privacy fallback** — a card whose owner has no usable display name shows the literal `Shared by Album owner`. *(plannedRef: §fallback-card)*
@@ -82,4 +82,4 @@ Considered and rejected:
 
 ---
 
-> **How you work this slice (SOP):** conventions SSOT: `docs/reference/sdlc-conventions.md`; full flow: the `mission-slice-sop` skill. Author intent → mini-requirements + proof contract (→ mockups for UI slices) → plan-lock (`rig scope slice approve --scope spec`) → build the locked set → QA visual compare → `rig proof add … --evidences --media` drops into `proof/` (never hand-place evidence without the drop) → proof-lock (`--scope delivery`). Track on PROGRESS.md; a slice is **not done** until every proof-contract item has evidence. Verify with `rig scope audit`.
+> **How you work this slice (SOP):** conventions SSOT: `docs/reference/sdlc-conventions.md`; full flow: the `agent-operated-workflows` skill. Author intent → mini-requirements + proof contract (→ mockups for UI slices) → plan-lock (`multi-agent scope slice approve --scope spec`) → build the locked set → QA visual compare → `multi-agent proof add … --evidences --media` drops into `proof/` (never hand-place evidence without the drop) → proof-lock (`--scope delivery`). Track on PROGRESS.md; a slice is **not done** until every proof-contract item has evidence. Verify with `multi-agent scope audit`.

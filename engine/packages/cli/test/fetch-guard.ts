@@ -27,9 +27,9 @@ interface FetchGuardState {
   allow: Set<string>;
   originalFetch: typeof globalThis.fetch | undefined;
 }
-const g = globalThis as unknown as { __openrigFetchGuard?: FetchGuardState };
-g.__openrigFetchGuard ??= { allow: new Set<string>(), originalFetch: undefined };
-const state = g.__openrigFetchGuard;
+const g = globalThis as unknown as { __multiAgentFetchGuard?: FetchGuardState };
+g.__multiAgentFetchGuard ??= { allow: new Set<string>(), originalFetch: undefined };
+const state = g.__multiAgentFetchGuard;
 const allowedOrigins = state.allow;
 
 // The permit rule is a SHAPE, not a registry: an in-process fixture is loopback on an
@@ -86,7 +86,7 @@ export function installFetchGuard(): void {
     return Promise.reject(
       new Error(
         `FETCH GUARD (P37): refused an outbound request to ${t.origin}` +
-          (isDaemon ? " (the canonical OpenRig daemon port)" : nonLoopback ? " (a NON-LOOPBACK / cross-machine target)" : "") +
+          (isDaemon ? " (the canonical Multi-Agent daemon port)" : nonLoopback ? " (a NON-LOOPBACK / cross-machine target)" : "") +
           " — a cli test made a REAL request to a target that is neither a loopback-ephemeral fixture nor registered. " +
           (nonLoopback
             ? "Non-loopback is refused unconditionally (a test must not cross a machine boundary — hosts.yaml names a real remote at 100.95.124.51)."

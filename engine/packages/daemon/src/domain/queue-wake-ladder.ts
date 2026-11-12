@@ -34,7 +34,7 @@ import { lastMeaningfulTransition, type WaitingView } from "./queue-waiting.js";
 // AM-P3-F2: suspension is DERIVED, never declared — the destination's post-swap state
 // (nodes.handover_at within a bounded grace; the handover txn itself is atomic and
 // unobservable) suspends wake attempts, with suspend/resume recorded. The manually
-// declared window survives ONLY as an operator override (OPENRIG_WAKE_SUSPEND, fresh-read).
+// declared window survives ONLY as an operator override (MULTI_AGENT_WAKE_SUSPEND, fresh-read).
 //
 // AM-P3-F4 + AM-R25: rungs DELIVER, not just record. The orchestrator rung attempts a real
 // wake on the aggregate escalation row; a rung whose own wake fails advances after one
@@ -97,7 +97,7 @@ export function drawUsageLimitJitterSeconds(random: () => number = Math.random):
 
 /** The operator-declared suspension override (F2: override, never the mechanism).
  *  Format: comma-separated `<session>:<untilIso>` pairs; fresh-read every tick. */
-export const WAKE_SUSPEND_OVERRIDE_ENV = "OPENRIG_WAKE_SUSPEND";
+export const WAKE_SUSPEND_OVERRIDE_ENV = "MULTI_AGENT_WAKE_SUSPEND";
 
 /** Stamp tag on the per-destination aggregate escalation row. */
 export const WAKE_ESCALATION_TAG = "wake-escalation";

@@ -1,4 +1,4 @@
-# Real stub output reaches the addressed seat's shipped `rig transcript` read.
+# Real stub output reaches the addressed seat's shipped `multi-agent transcript` read.
 # Host mode only: the existing pipeline stages per-seat scripts. No model runs.
 # This checks each seat's own output, not ordering, uniqueness, sibling-token
 # absence, tail limits, restart persistence or whether a seat consumed input.

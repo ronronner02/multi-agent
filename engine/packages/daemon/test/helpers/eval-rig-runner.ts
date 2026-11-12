@@ -22,7 +22,7 @@ export interface GenerationRecord { generationId: string; content: string }
 export type GenerationRecordReader = (seat: string) => Promise<GenerationRecord>;
 
 export interface RunnerReaderDeps {
-  /** OpenRig state dir (default: $OPENRIG_HOME); the sidecar lives at <stateDir>/context/<seat>.json. */
+  /** Multi-Agent state dir (default: $MULTI_AGENT_HOME); the sidecar lives at <stateDir>/context/<seat>.json. */
   stateDir?: string;
   /** Read a transcript file (default: fs.readFileSync utf-8) — injectable for the entry discriminator. */
   readFile?: (path: string) => string;
@@ -38,10 +38,10 @@ export interface RunnerReaderDeps {
  * without a live daemon db.
  */
 export function defaultRunnerGenerationReader(deps: RunnerReaderDeps = {}): GenerationRecordReader {
-  const stateDir = deps.stateDir ?? process.env.OPENRIG_HOME;
+  const stateDir = deps.stateDir ?? process.env.MULTI_AGENT_HOME;
   if (!stateDir) {
     return async () => {
-      throw new Error("run-evals --provider rig: OPENRIG_HOME is unset — cannot resolve the seat's current-generation conversation record");
+      throw new Error("run-evals --provider rig: MULTI_AGENT_HOME is unset — cannot resolve the seat's current-generation conversation record");
     };
   }
   const readFile = deps.readFile ?? ((p: string) => readFileSync(p, "utf-8"));

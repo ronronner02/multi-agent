@@ -4,11 +4,11 @@ This is the stable launch-grade version of the full product squad. Right now it 
 
 ## Work selection
 
-Derive identity with `rig whoami --json`, then follow
+Derive identity with `multi-agent whoami --json`, then follow
 `project.yaml -> mission.yaml -> active slice.yaml -> selected component or wave
 map -> addressed context`. Use
 `docs/reference/product-journey-sdlc.md#resolve-the-selected-path` (installed:
-`$OPENRIG_HOME/reference/product-journey-sdlc.md#resolve-the-selected-path`).
+`$MULTI_AGENT_HOME/reference/product-journey-sdlc.md#resolve-the-selected-path`).
 No selection means light Part A. Only the selected work's required capabilities
 need to be ready; do not wait for the whole topology or invent work for idle roles.
 
@@ -26,7 +26,7 @@ turn an idle review seat into a milestone scanner.
 
 ## Communication
 
-Use `rig send <session> "message" --verify` for direct messages. Use `rig chatroom send demo "message"` for rig-wide updates and review visibility.
+Use `multi-agent send <session> "message" --verify` for direct messages. Use `multi-agent chatroom send demo "message"` for rig-wide updates and review visibility.
 
 ## When you are blocked
 
@@ -40,7 +40,7 @@ Do not stall silently. Do not pretend you have permissions you don't.
 
 ## After startup
 
-Every agent should run `rig whoami --json` immediately after launch or compaction to recover identity, peers, and edges.
+Every agent should run `multi-agent whoami --json` immediately after launch or compaction to recover identity, peers, and edges.
 
 ## Culture
 
@@ -80,4 +80,4 @@ Follow patterns agents already know: docker, git, kubectl, npm. The agent's trai
 
 ## What this rig is for
 
-This is the rig that has to pass before release. It shows the full OpenRig team shape in a form we are willing to stand behind for new users. If this rig works end to end with a real agent, the release is in good shape.
+This is the rig that has to pass before release. It shows the full Multi-Agent team shape in a form we are willing to stand behind for new users. If this rig works end to end with a real agent, the release is in good shape.

@@ -956,7 +956,7 @@ export interface TeamTaskResult {
   taskId: string;
   /** The latest recorded attempt, or null when the producer recorded none. */
   attemptId: string | null;
-  /** The run's project repository, which `rig team apply` defaults to. */
+  /** The run's project repository, which `multi-agent team apply` defaults to. */
   repositoryRoot: string;
   /** Where the patch applies: an owner-established commit, or the snapshot baseline. */
   base: "commit" | "snapshot";

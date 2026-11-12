@@ -10,7 +10,7 @@ description: >-
   serve. Historical 2024–2025 snapshot; not normative for present-day frontier models — see the
   Status section.
 metadata:
-  openrig:
+  multi-agent:
     stage: provisional
 ---
 
@@ -20,8 +20,8 @@ metadata:
 
 This skill is a provisional historical research snapshot of context-engineering practice as
 published in 2024–2025. It is NOT normative. Do not apply it prescriptively to current frontier
-models without re-verification. On any conflict, OpenRig current skills, explicit user rulings,
-and directly measured OpenRig practice PREVAIL over this document. Treat these areas as
+models without re-verification. On any conflict, Multi-Agent current skills, explicit user rulings,
+and directly measured Multi-Agent practice PREVAIL over this document. Treat these areas as
 particularly suspect pending re-verification: compaction/summarization guidance, minimal-upfront
 versus broad orientation, just-in-time lookup assumptions, fixed context ceilings, and
 single-agent versus multi-agent advice.

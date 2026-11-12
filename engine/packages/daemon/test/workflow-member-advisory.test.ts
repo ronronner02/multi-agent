@@ -302,7 +302,7 @@ describe("FAC-3 C2: FR-5 member-exists instantiate advisory", () => {
     expect(advisory).toContain('role "builder"');
     expect(advisory).toContain("will not be claimed");
     expect(advisory).toContain("stuck exception");
-    expect(advisory).toContain("rig ps");
+    expect(advisory).toContain("multi-agent ps");
   });
 
   it("AC pair (typo, BOUND): the sweep also runs on a bound instance", async () => {

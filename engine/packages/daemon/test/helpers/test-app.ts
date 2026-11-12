@@ -33,8 +33,8 @@ export function createTestApp(
   const sessionRegistry = new SessionRegistry(db);
   const eventBus = new EventBus(db);
   const queueRepo = new QueueRepository(db, eventBus);
-  const transcriptStore = new TranscriptStore("/tmp/openrig-test-transcripts");
-  const contextUsageStore = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
+  const transcriptStore = new TranscriptStore("/tmp/multi-agent-test-transcripts");
+  const contextUsageStore = new ContextUsageStore(db, { stateDir: "/tmp/multi-agent-test" });
   const agentActivityStore = new AgentActivityStore({
     db,
     eventBus,

@@ -1,4 +1,4 @@
-# OpenRig 0.4.6 spec-language example — the LINEAR PIPELINE shape.
+# Multi-Agent 0.4.6 spec-language example — the LINEAR PIPELINE shape.
 # Zero WF-2 features: declaration-order routing, byte-identical to the
 # WF-1 engine's behavior (the zero-regression reference shape).
 workflow:

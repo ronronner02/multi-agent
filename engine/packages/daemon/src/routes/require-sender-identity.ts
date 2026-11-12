@@ -5,7 +5,7 @@ import { getSelfHostId } from "../domain/host-identity/fanout-contract.js";
  * P21 sender-provenance chokepoint — the ONE shared route helper that generalizes P18's inline
  * `/inbox/drop` form (b2437104) across every caller-identity site. The acting seat's identity is
  * DERIVED from the authenticated transport header the CLI's DaemonClient stamps once from the seat
- * env (X-OpenRig-Session), and the row records WHICH ERA that derivation came from.
+ * env (X-Multi-Agent-Session), and the row records WHICH ERA that derivation came from.
  *
  * P18 DELIVER-AND-LABEL (founder ruling, over-engineering audit — the refusals are deleted). The two
  * refusals this helper used to raise both asserted "this sender is ILLEGITIMATE" when the only thing
@@ -31,8 +31,8 @@ import { getSelfHostId } from "../domain/host-identity/fanout-contract.js";
  * default branch, and `resolveActorWithDeferral` already did deliver-and-label on founder-visible
  * surfaces. This extends that existing, correctly-degrading pattern to the sites that used to refuse.
  */
-export const SENDER_IDENTITY_HEADER = "x-openrig-session";
-export const ORIGIN_UNKNOWN_HEADER = "x-openrig-origin-unknown";
+export const SENDER_IDENTITY_HEADER = "x-multi-agent-session";
+export const ORIGIN_UNKNOWN_HEADER = "x-multi-agent-origin-unknown";
 
 /**
  * #131 — ONE canonicalizer for the transport identity. Inside one instance a seat is bare `member@rig`
@@ -56,7 +56,7 @@ export function canonicalSenderSession(session: string, selfId: string | null = 
   return `${parts[0]}@${parts[1]}`;
 }
 
-/** The trimmed, canonicalized transport identity (X-OpenRig-Session), or undefined when absent/blank. */
+/** The trimmed, canonicalized transport identity (X-Multi-Agent-Session), or undefined when absent/blank. */
 export function transportSenderSession(c: Context): string | undefined {
   const raw = c.req.header(SENDER_IDENTITY_HEADER)?.trim();
   return raw ? canonicalSenderSession(raw) : undefined;
@@ -97,7 +97,7 @@ export function requireSenderIdentity(
     response: c.json({
       error: "actor_required",
       message:
-        `Cannot record ${verb}: no authenticated transport identity (X-OpenRig-Session absent) and no ` +
+        `Cannot record ${verb}: no authenticated transport identity (X-Multi-Agent-Session absent) and no ` +
         "actor named in the request body. The channel of record needs an actor to attribute the row to — " +
         "name one, or run from a managed seat so the identity is derived for you.",
     }, 400),
@@ -108,7 +108,7 @@ export function requireSenderIdentity(
  * P21 — the CLOSED era-provenance union stamped on identity-carrying rows (PM-ratified pin). A shared
  * type so every producer (this helper, the forwarding re-stamp, the recorded-provenance decider) speaks
  * the same closed alphabet:
- *   - `transport:v1` — derived from the transport chokepoint (X-OpenRig-Session on a local request).
+ *   - `transport:v1` — derived from the transport chokepoint (X-Multi-Agent-Session on a local request).
  *   - `origin-unknown:v1` — seat known, originating instance unavailable; carried unchanged across hops.
  *   - `relay:v1`     — a forwarding daemon re-stamped from its OWN authenticated context (cross-host).
  *   - `claimed:v1`   — a founder-visible-surface UI/MCP tap under a not-yet-plumbed principal (the named
@@ -162,7 +162,7 @@ export function resolveActorWithDeferral(
       response: c.json({
         error: "actor_required",
         message:
-          `Refusing ${verb}: no authenticated transport identity (X-OpenRig-Session absent) and no body ` +
+          `Refusing ${verb}: no authenticated transport identity (X-Multi-Agent-Session absent) and no body ` +
           "actor to record. The channel of record needs at least a claimed-era actor.",
       }, 400),
     };
@@ -173,12 +173,12 @@ export function resolveActorWithDeferral(
 /**
  * The wire header a FORWARDING daemon stamps to carry the provenance it resolved for the actor it is
  * re-stamping, so the origin hop records the TRUTH about that actor's verification instead of inferring
- * it from the mere presence of a re-stamped X-OpenRig-Session. SAME token alphabet as the store
+ * it from the mere presence of a re-stamped X-Multi-Agent-Session. SAME token alphabet as the store
  * (IdentityProvenance) — never an ad-hoc string. Its absence is meaningful (see resolveRecordedProvenance).
  */
-export const IDENTITY_PROVENANCE_HEADER = "x-openrig-provenance";
+export const IDENTITY_PROVENANCE_HEADER = "x-multi-agent-provenance";
 /** Set by a forwarding daemon to mark "this arrived via a relay hop" (the actor was derived elsewhere). */
-export const RELAY_HEADER = "x-openrig-relay";
+export const RELAY_HEADER = "x-multi-agent-relay";
 
 /**
  * P21 §4 — the SOLE decider of the provenance RECORDED on a row (rail 2: exactly one place can ever say

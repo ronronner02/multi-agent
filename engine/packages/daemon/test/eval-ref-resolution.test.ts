@@ -18,13 +18,13 @@ mkdirSync(join(prod, "skills/core/known"), { recursive: true });
 writeFileSync(join(prod, "skills/core/known/manifest.yaml"), 'name: known\nversion: "1"\ntaxonomy: skills\nfiles: []\n');
 
 const CASES: EvalCase[] = [
-  { id: "good", name: "x", category: "selection", prompt: "p", expectedPatterns: ["rig context get\\s+skills/core/known"] },
-  { id: "bad-absent", name: "x", category: "selection", prompt: "p", expectedPatterns: ["rig context get\\s+skills/core/absent"] },
-  { id: "bad-bare", name: "x", category: "selection", prompt: "p", expectedPatterns: ["rig context get\\s+core/known"] },
+  { id: "good", name: "x", category: "selection", prompt: "p", expectedPatterns: ["multi-agent context get\\s+skills/core/known"] },
+  { id: "bad-absent", name: "x", category: "selection", prompt: "p", expectedPatterns: ["multi-agent context get\\s+skills/core/absent"] },
+  { id: "bad-bare", name: "x", category: "selection", prompt: "p", expectedPatterns: ["multi-agent context get\\s+core/known"] },
   { id: "bad-noref", name: "x", category: "selection", prompt: "p", expectedPatterns: ["do the thing"] },
   // slice-05 Q3 behavior case — asserts observable behavior, NO context-pull contract, so it must
   // never be refused by the production-ref preflight (re-review restack HIGH-1).
-  { id: "behavior-observable", name: "x", category: "behavior", prompt: "p", expectedPatterns: ["rig context (get|profile)"] },
+  { id: "behavior-observable", name: "x", category: "behavior", prompt: "p", expectedPatterns: ["multi-agent context (get|profile)"] },
 ];
 
 describe("eval-ref-resolution — per-case, by name", () => {

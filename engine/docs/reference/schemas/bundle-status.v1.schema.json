@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openrig.dev/schemas/bundle-status.v1.json",
+  "$id": "https://multi-agent.dev/schemas/bundle-status.v1.json",
   "title": "Public status file (generated; do not edit)",
-  "description": "Built from run records by rule openrig.status-rule/v1, from an allowlist of output fields: no private paths, host names, row IDs, account names or receipt text. Regenerating gives identical bytes. An empty platforms object means Not tested. Closed on purpose: no property outside this schema may appear, so a private field can't leak in.",
+  "description": "Built from run records by rule multi-agent.status-rule/v1, from an allowlist of output fields: no private paths, host names, row IDs, account names or receipt text. Regenerating gives identical bytes. An empty platforms object means Not tested. Closed on purpose: no property outside this schema may appear, so a private field can't leak in.",
   "type": "object",
   "required": [
     "generated",
@@ -28,7 +28,7 @@
           "const": "Generated file. Do not edit by hand; regenerate it."
         },
         "rule": {
-          "const": "openrig.status-rule/v1"
+          "const": "multi-agent.status-rule/v1"
         },
         "generatorVersion": {
           "type": "integer",
@@ -58,7 +58,7 @@
           "configurations": {
             "type": "object",
             "propertyNames": {
-              "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/configurationId"
+              "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/configurationId"
             },
             "additionalProperties": {
               "type": "object",
@@ -74,7 +74,7 @@
                     "required": [
                       "label",
                       "date",
-                      "openrigVersion",
+                      "multiAgentVersion",
                       "recordIds",
                       "packageDigests"
                     ],
@@ -97,7 +97,7 @@
                         "type": "string",
                         "format": "date"
                       },
-                      "openrigVersion": {
+                      "multiAgentVersion": {
                         "type": "string"
                       },
                       "recordIds": {
@@ -110,7 +110,7 @@
                       "packageDigests": {
                         "type": "array",
                         "items": {
-                          "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
+                          "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
                         }
                       },
                       "note": {
@@ -244,7 +244,7 @@
         "harnesses": {
           "type": "object",
           "propertyNames": {
-            "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/runtime"
+            "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/runtime"
           },
           "additionalProperties": {
             "type": "object",
@@ -253,7 +253,7 @@
               "required": [
                 "result",
                 "date",
-                "openrigVersion",
+                "multiAgentVersion",
                 "harnessVersion",
                 "recordIds"
               ],
@@ -270,7 +270,7 @@
                   "type": "string",
                   "format": "date"
                 },
-                "openrigVersion": {
+                "multiAgentVersion": {
                   "type": "string"
                 },
                 "harnessVersion": {

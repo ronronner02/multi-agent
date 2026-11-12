@@ -12,7 +12,7 @@ import { wrapPaneEnvelope } from "../src/lib/pane-envelope.js";
 
 const OUT = process.argv[2] ?? "send-header-captures";
 mkdirSync(OUT, { recursive: true });
-const SENDER = "orch-advisor@v-openrig-build"; // member@rig
+const SENDER = "orch-advisor@v-multi-agent-build"; // member@rig
 // The ORIGIN HOST id resolved per the 51-09 shipped rendering (host registry self-id) — the THIRD
 // triple slot. This is the real founder host (mm2), DISTINCT from the rig, so From/Reply render as a
 // clean member@rig@host. (Prior capture hardcoded the rig name here → a doubled 'rig@rig' teaching
@@ -22,16 +22,16 @@ const STAMP = "2026-08-07T00:42:00Z"; // fixed → deterministic captures
 
 const captures = {
   // A DM — To: the single recipient.
-  dm: wrapPaneEnvelope(SENDER, "dev-driver@v-openrig-build", "one-to-one status.", HOST, { stampISO: STAMP }),
+  dm: wrapPaneEnvelope(SENDER, "dev-driver@v-multi-agent-build", "one-to-one status.", HOST, { stampISO: STAMP }),
   // A multi-send — To: the FULL recipient list (WHO got it).
-  multi: wrapPaneEnvelope(SENDER, "dev-driver@v-openrig-build", "coordinate the three of you.", HOST, {
+  multi: wrapPaneEnvelope(SENDER, "dev-driver@v-multi-agent-build", "coordinate the three of you.", HOST, {
     stampISO: STAMP,
-    scope: { kind: "multi", recipients: ["dev-driver@v-openrig-build", "dev-guard@v-openrig-build", "dev-qa@v-openrig-build"] },
+    scope: { kind: "multi", recipients: ["dev-driver@v-multi-agent-build", "dev-guard@v-multi-agent-build", "dev-qa@v-multi-agent-build"] },
   }),
   // A rig-broadcast — "broadcast to <rig> (N seats)" scale line (a recipient knows peers have it).
-  "rig-broadcast": wrapPaneEnvelope(SENDER, "openrig-pm", "checkpoint review complete.", HOST, {
+  "rig-broadcast": wrapPaneEnvelope(SENDER, "multi-agent-pm", "checkpoint review complete.", HOST, {
     stampISO: STAMP,
-    scope: { kind: "rig-broadcast", rig: "openrig-pm", seats: 11 },
+    scope: { kind: "rig-broadcast", rig: "multi-agent-pm", seats: 11 },
   }),
   // A topology-broadcast — "broadcast to topology".
   topology: wrapPaneEnvelope(SENDER, "*", "system maintenance in 5 minutes.", HOST, {

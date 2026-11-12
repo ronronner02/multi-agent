@@ -2,21 +2,21 @@
 
 A roster records who to involve for a purpose and why. The same seat can appear in several
 rosters with different capabilities and engagement. Membership is a recommendation, not an
-assignment or a grant of authority. Contact someone with the existing `rig send` or `rig queue` commands.
+assignment or a grant of authority. Contact someone with the existing `multi-agent send` or `multi-agent queue` commands.
 
 Put JSON files in `<workspace.root>/rosters/`; the included starter and factory leads write
 their team's `<rig>.json` there at first start and never replace an existing one. Read `workspace.root` with
-`rig config get workspace.root`, or use `--folder` to read another folder in place.
+`multi-agent config get workspace.root`, or use `--folder` to read another folder in place.
 
 ```sh
-rig roster list
-rig roster show production --json
-rig roster find 'colour grading'
-rig roster find 'editor@studio' --folder ./rosters --json
+multi-agent roster list
+multi-agent roster show production --json
+multi-agent roster find 'colour grading'
+multi-agent roster find 'editor@studio' --folder ./rosters --json
 ```
 
 `list` reads authored purposes and curators without contacting daemons. `show` and `find` read the
-configured daemon and registered HTTP hosts through `rig ps`. Each command reads current node
+configured daemon and registered HTTP hosts through `multi-agent ps`. Each command reads current node
 listings once per route, not once per member. `find` matches part of a capability tag or seat
 address, ignoring case. A seat in two rosters produces two recommendations with their own reasons.
 
@@ -40,7 +40,7 @@ address, ignoring case. A seat in two rosters produces two recommendations with 
 }
 ```
 
-Use the serving daemon's `hostSelfId` and the exact seat address from `rig ps --nodes -A --json`.
+Use the serving daemon's `hostSelfId` and the exact seat address from `multi-agent ps --nodes -A --json`.
 A caller's local host alias is not necessarily that identity. Other hosts must already be
 registered; the roster command does not register them or dispatch work. Existing HTTP fan-out
 reports SSH-only hosts as unsupported. JSON retains per-host failures and partial-read warnings.
@@ -58,4 +58,4 @@ timestamp. Rosters are never rewritten by these commands. Malformed files produc
 valid rosters remain usable; duplicate IDs make `show` report ambiguity instead of selecting one.
 Non-regular file targets, such as FIFOs and directories, are skipped with a warning; links to
 regular files remain readable. Inventory uses `ps --no-cleanup` to preserve even stale local
-daemon state files. Ordinary `rig ps` keeps its existing cleanup behavior unless given that flag.
+daemon state files. Ordinary `multi-agent ps` keeps its existing cleanup behavior unless given that flag.

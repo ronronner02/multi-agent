@@ -35,7 +35,7 @@ describe("external-nudge accounting (gateway-owned, never tmux)", () => {
         send: async (sessionName: string, text: string) => {
           sends.push({ session: sessionName, text });
           return sessionName.endsWith("@external")
-            ? { ok: false, error: `Session '${sessionName}' not found: tmux reports no session with this name. No text was sent. Check available sessions with: rig ps --nodes` }
+            ? { ok: false, error: `Session '${sessionName}' not found: tmux reports no session with this name. No text was sent. Check available sessions with: multi-agent ps --nodes` }
             : { ok: true, verified: true };
         },
       },
@@ -47,11 +47,11 @@ describe("external-nudge accounting (gateway-owned, never tmux)", () => {
 
   it("SPECIMEN SHAPE: a create nudging @external never touches tmux transport and records a gateway-owned result", async () => {
     const item = await repo.create({
-      sourceSession: "orch-lead@v-openrig-build",
+      sourceSession: "orch-lead@v-multi-agent-build",
       destinationSession: FOUNDER,
       body: "L1 alert for the founder",
       summary: "Founder alert: plain-language decision ask",
-      evidenceRef: "shared-docs/rigs/v-openrig-build/state/evidence-a.md",
+      evidenceRef: "shared-docs/rigs/v-multi-agent-build/state/evidence-a.md",
     });
     await vi.waitFor(() => expect(repo.getById(item.qitemId)!.lastNudgeResult).not.toBeNull());
     // (a) tmux was NOT consulted — the row itself is the gateway's input:
@@ -68,11 +68,11 @@ describe("external-nudge accounting (gateway-owned, never tmux)", () => {
 
   it("DOGFOOD SURFACE HEALED: an @external row never appears on the undelivered (failed-nudge) surface", async () => {
     const item = await repo.create({
-      sourceSession: "orch-lead@v-openrig-build",
+      sourceSession: "orch-lead@v-multi-agent-build",
       destinationSession: FOUNDER,
       body: "founder message that DID deliver via slack",
       summary: "Founder message: delivered on the phone",
-      evidenceRef: "shared-docs/rigs/v-openrig-build/state/evidence-b.md",
+      evidenceRef: "shared-docs/rigs/v-multi-agent-build/state/evidence-b.md",
     });
     await vi.waitFor(() => expect(repo.getById(item.qitemId)!.lastNudgeResult).not.toBeNull());
     const undelivered = repo.findUndelivered({});
@@ -81,18 +81,18 @@ describe("external-nudge accounting (gateway-owned, never tmux)", () => {
 
   it("HANDOFF INTENT PATH: a wake intent to @external drains as gateway-owned without touching transport", async () => {
     const item = await repo.create({
-      sourceSession: "orch-lead@v-openrig-build",
-      destinationSession: "dev50-driver@v-openrig-build",
+      sourceSession: "orch-lead@v-multi-agent-build",
+      destinationSession: "dev50-driver@v-multi-agent-build",
       body: "work",
       nudge: false,
     });
-    repo.claim({ qitemId: item.qitemId, destinationSession: "dev50-driver@v-openrig-build" });
+    repo.claim({ qitemId: item.qitemId, destinationSession: "dev50-driver@v-multi-agent-build" });
     await repo.handoff({
       qitemId: item.qitemId,
-      fromSession: "dev50-driver@v-openrig-build",
+      fromSession: "dev50-driver@v-multi-agent-build",
       toSession: FOUNDER,
       summary: "Escalation to the founder in plain language",
-      evidenceRef: "shared-docs/rigs/v-openrig-build/state/evidence-c.md",
+      evidenceRef: "shared-docs/rigs/v-multi-agent-build/state/evidence-c.md",
     });
     await repo.drainPendingWakeIntents();
     expect(sends.filter((s) => s.session === FOUNDER)).toHaveLength(0);
@@ -117,11 +117,11 @@ describe("external-nudge accounting (gateway-owned, never tmux)", () => {
 
   it("CONTROL: a human-CLASS seat with a REAL pane (human-*@kernel) keeps tmux transport — only the virtual @external domain is gateway-owned", async () => {
     const item = await repo.create({
-      sourceSession: "orch-lead@v-openrig-build",
+      sourceSession: "orch-lead@v-multi-agent-build",
       destinationSession: "human-operator@kernel",
       body: "operator ping",
       summary: "Operator ping in plain language",
-      evidenceRef: "shared-docs/rigs/v-openrig-build/state/evidence-d.md",
+      evidenceRef: "shared-docs/rigs/v-multi-agent-build/state/evidence-d.md",
     });
     await vi.waitFor(() => expect(repo.getById(item.qitemId)!.lastNudgeResult).toBe("verified"));
     expect(sends).toHaveLength(1);

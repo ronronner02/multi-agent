@@ -75,7 +75,7 @@ describe("QueueRepository", () => {
   // found"), route to the addressing family, NOT retry. transient = a live seat refused this attempt.
   it("DR-1 classifyNudgeFailure: three POSITIVE classes + null; an unrecognized failure is UNKNOWN, never a silent transient", () => {
     expect(classifyNudgeFailure("failed:Session 'operator-agent@kernel' not found. Check available sessions"), "not-found = unresolvable on this daemon").toBe("permanent-topology");
-    expect(classifyNudgeFailure("failed:Refused: 'orch-advisor@v-openrig-build' is at an interactive prompt"), "a live seat refusing this attempt is transient").toBe("transient");
+    expect(classifyNudgeFailure("failed:Refused: 'orch-advisor@v-multi-agent-build' is at an interactive prompt"), "a live seat refusing this attempt is transient").toBe("transient");
     expect(classifyNudgeFailure("failed:timeout after 5000ms"), "a timeout to a resolvable seat is transient").toBe("transient");
     // The ship-block assertion (PM ruling): an unrecognized failure text is NEITHER known class. It must
     // NOT collapse into transient (that would assert a claim the text does not support). If someone later
@@ -499,7 +499,7 @@ describe("QueueRepository", () => {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const overdue = repo.findOverdue({ now: future });
     expect(overdue.map((q) => q.qitemId)).toContain(item.qitemId);
-    // scoped/bounded discriminator: a rig scope that matches nothing returns
+    // scoped/bounded discriminator: a multi-agent scope that matches nothing returns
     // empty, and limit bounds the result — the options are honored, not ignored
     expect(repo.findOverdue({ now: future, rig: "no-such-rig" })).toEqual([]);
     expect(repo.findOverdue({ now: future, limit: 1 }).length).toBeLessThanOrEqual(1);

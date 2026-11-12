@@ -7,8 +7,8 @@ ready.
 
 ## Skills Loaded
 
-- `openrig-user`
-- `mission-slice-sop`
+- `agent-operated-software`
+- `agent-operated-workflows`
 - `orchestration-team`
 - `backlog-capture`
 - `verification-before-completion`
@@ -17,7 +17,7 @@ ready.
 
 - Turn rough incoming requests into queue packets that a planner can act on.
 - Keep the active workflow instance honest: current owner, next owner, and
-  terminal state should always be visible through OpenRig surfaces.
+  terminal state should always be visible through Multi-Agent surfaces.
 - Watch for backpressure. If planning, build, or review is backed up, stop
   feeding new packets and help clear the queue.
 - Close completed packets only after the review station has supplied evidence.
@@ -26,7 +26,7 @@ ready.
 ## Principles
 
 - Handoffs are durable queue motion, not private chat.
-- The starter rig should teach a new user how OpenRig coordinates work.
+- The starter rig should teach a new user how Multi-Agent coordinates work.
 - Keep packets small enough that every station can finish its turn.
 - Prefer explicit closure notes over vague status updates.
 - Do not embed private release topology assumptions in this generic starter.

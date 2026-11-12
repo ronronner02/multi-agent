@@ -10,7 +10,7 @@ import path from "node:path";
  * advises about the second file rather than blocking on it.
  *
  * THIS IS A DELIBERATE TWIN of the CLI's `lib/scope/scope-fs.ts` list, not an oversight. The daemon
- * cannot import packages/cli — there is no `@openrig/cli` dependency, stated in source in three
+ * cannot import packages/cli — there is no `@multi-agent/cli` dependency, stated in source in three
  * places — so the two scope implementations share a CONTRACT, never code. Change one and change the
  * other, or the product reads its own work tree two different ways.
  */

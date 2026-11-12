@@ -10,7 +10,7 @@ scenario: clean-lifecycle-no-residue
 topology: ./solo-stub.yaml
 steps:
   - up: {}
-  # Real `rig ps --json` = BARE ARRAY of per-RIG PsEntry {name,rigName,nodeCount,
+  # Real `multi-agent ps --json` = BARE ARRAY of per-RIG PsEntry {name,rigName,nodeCount,
   # runningCount,status,...} — NOT the sketch {rigs:[{seats}]} (seats are the separate
   # `--nodes`/NodeEntry endpoint). Subset match on the bare array.
   - expect:

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { claudePostureFlag, codexPostureArg, piTrust } from "../src/adapters/yolo-mode.js";
 
 describe("Seam B R6 — resolved posture drives the REAL launch helpers on all three harnesses", () => {
-  const yoloOn = { OPENRIG_YOLO: "1" } as NodeJS.ProcessEnv;
+  const yoloOn = { MULTI_AGENT_YOLO: "1" } as NodeJS.ProcessEnv;
   const yoloOff = {} as NodeJS.ProcessEnv;
 
   it("full_bypass posture lifts a seat even with YOLO OFF (custom flag policy — the ruling)", () => {

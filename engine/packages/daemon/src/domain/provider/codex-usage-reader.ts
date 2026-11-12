@@ -134,6 +134,6 @@ function converse(
         }
       }
     });
-    send({ id: 1, method: "initialize", params: { clientInfo: { name: "openrig_usage_windows", version: "1.0.0" }, capabilities: null } });
+    send({ id: 1, method: "initialize", params: { clientInfo: { name: "multi-agent_usage_windows", version: "1.0.0" }, capabilities: null } });
   });
 }

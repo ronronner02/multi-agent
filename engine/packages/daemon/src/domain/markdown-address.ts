@@ -16,7 +16,7 @@
 // behavior explicitly not carried).
 //
 // This module is PURE (text in, spans out) and daemon-homed so the CLI (which depends on
-// @openrig/daemon) and the daemon assembler share one resolver — one grammar, one home.
+// @multi-agent/daemon) and the daemon assembler share one resolver — one grammar, one home.
 // Scope fence (Q4): resolution + composition support only; CRUD/surgical-edit/lint stays
 // with the 0.6.0 mdar-full-ship trail.
 

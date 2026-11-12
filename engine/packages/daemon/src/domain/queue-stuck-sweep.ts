@@ -312,12 +312,12 @@ function evidenceIsNewer(evidenceAt: string, closedAt: string): boolean {
 export function verificationCommand(target: string): string {
   if (target.startsWith("qitem-")) {
     const successorId = target.split("@", 1)[0] ?? target;
-    return `OPENRIG_URL=<registered-host> rig queue show ${successorId}`;
+    return `MULTI_AGENT_URL=<registered-host> multi-agent queue show ${successorId}`;
   }
   if (target === "(unspecified)") {
-    return "OPENRIG_URL=<registered-host> rig queue list";
+    return "MULTI_AGENT_URL=<registered-host> multi-agent queue list";
   }
-  return `OPENRIG_URL=<registered-host> rig queue list --destination ${target}`;
+  return `MULTI_AGENT_URL=<registered-host> multi-agent queue list --destination ${target}`;
 }
 
 function evidenceBody(db: Database.Database, c: Candidate): string {
@@ -334,7 +334,7 @@ function evidenceBody(db: Database.Database, c: Candidate): string {
       `why: ${c.why}\n` +
       `verification targets (indeterminate until checked on the registered host):\n${checks}\n` +
       `After a registered-host read confirms a target, record it durably on the closed row so the sweep stops asking:\n` +
-      `  rig queue update ${c.row.qitemId} --note "custody-verified: <target> <how verified>"\n` +
+      `  multi-agent queue update ${c.row.qitemId} --note "custody-verified: <target> <how verified>"\n` +
       `Do not rewrite historical custody from this local observation; record the verification result separately.`
     );
   }
@@ -350,7 +350,7 @@ function evidenceBody(db: Database.Database, c: Candidate): string {
 }
 
 /**
- * One sweep pass. Instance-wide (no rig scope — the loop is the net for every rig the
+ * One sweep pass. Instance-wide (no multi-agent scope — the loop is the net for every rig the
  * daemon carries). Never throws: a sweep that cannot run reports outcome=failed loudly
  * on the status surface and the log, because a silent skip is exactly the class this
  * slice exists to kill.
@@ -616,7 +616,7 @@ export async function runStuckSweep(deps: StuckSweepDeps): Promise<StuckSweepRes
           destinationSession: c.route,
           body: evidenceBody(deps.db, c),
           summary: `Stuck sweep: ${c.verificationTargets ? "successor-verification-required" : c.kind} on ${c.row.qitemId} (${c.ageMinutes} min)`,
-          evidenceRef: `rig queue show ${c.row.qitemId}`,
+          evidenceRef: `multi-agent queue show ${c.row.qitemId}`,
           tags: [STUCK_SWEEP_FINDING_TAG, dedupTag, recoveryTag(c.row.qitemId)],
         });
         findings.push({ kind: c.kind, qitemId: c.row.qitemId, findingQitemId: created.qitemId, action: "created" });

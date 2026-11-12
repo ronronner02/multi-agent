@@ -163,7 +163,7 @@ function normalize(tokens, forAllow = false) {
   if (/\/(?:node_modules\/\.bin)\/(vitest|jest)$/.test(executable)) {
     result.unshift({ value: "npx", literal: true });
   }
-  if (result[0].value === "rig") {
+  if (result[0].value === "multi-agent") {
     // Host selection does not change the lifecycle being requested.
     while (result[1]?.literal && /^--host(?:=|$)/.test(result[1].value)) {
       if (result[1].value === "--host") {
@@ -180,7 +180,7 @@ function prefixEnd(tokens, prefix) {
   for (const part of prefix) {
     // Commander accepts separators before a subcommand, including at root.
     // A separator AFTER the lifecycle prefix still terminates help options.
-    while (prefix[0] === "rig" && i > 0 && tokens[i]?.literal && tokens[i].value === "--") i++;
+    while (prefix[0] === "multi-agent" && i > 0 && tokens[i]?.literal && tokens[i].value === "--") i++;
     if (!tokens[i]?.literal || tokens[i].value !== part) return undefined;
     i++;
   }
@@ -196,7 +196,7 @@ function prefixes(rules) {
 
 function helpOnly(tokens, prefixLength) {
   // A separator before a subcommand also makes its remaining words operands.
-  // For example, the CLI dispatches `rig -- down --help` on a rig named --help.
+  // For example, the CLI dispatches `multi-agent -- down --help` on a rig named --help.
   if (tokens.slice(1, prefixLength).some(t => t.value === "--")) return false;
   const args = tokens.slice(prefixLength);
   // A help-looking option value or text after -- is not a help invocation.
@@ -255,7 +255,7 @@ if (require.main === module) {
         hookEventName: "PreToolUse", permissionDecision: decision,
         permissionDecisionReason: decision === "ask"
           ? "This rig lifecycle command needs confirmation. Use --help or -h to read its help."
-          : "This command matches the OpenRig session launch allowance.",
+          : "This command matches the Multi-Agent session launch allowance.",
       } }));
     } catch { /* No decision: retain Claude's own permission handling. */ }
   });

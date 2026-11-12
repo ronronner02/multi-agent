@@ -1,13 +1,36 @@
 # Operations
 
-Runbook for a team working on your repository. Commands run on Linux or inside WSL2
-unless stated otherwise. Use Linux Node.js 22 or 24, git and tmux. Put the selected
-Node installation first on `PATH`; a Windows npm on the WSL path cannot build the engine.
+Runbook for a team working on your repository. The desktop runs natively on
+Windows 10/11 x64 with Node.js 22 or 24 and Git for Windows. Install and sign in to
+the Claude Code or Codex clients you want to use. The engine also supports Linux.
+The desktop starts its engine child, pairs its window, and displays missing
+dependencies on the first-run screen. Use **Reconnect** after resolving one.
+
+## Data and configuration
+
+One resolver supplies the CLI and engine paths. Windows mutable state is
+`%LOCALAPPDATA%\Multi-Agent`; configuration is `%APPDATA%\Multi-Agent`. Both are
+`~/.multi-agent` on other platforms. `MULTI_AGENT_HOME` overrides both roots and is
+also where a manually started daemon writes `daemon.json`, `daemon.log`, and
+`multi-agent.sqlite`. `MULTI_AGENT_DB` explicitly selects another database file.
+No previous product home or environment alias is read or migrated.
+
+The desktop retains `%LOCALAPPDATA%\Multi-Agent\engine` for its engine state and
+sets `MULTI_AGENT_HOME` to that directory when it forks. A desktop profile override,
+`MULTI_AGENT_DESKTOP_DATA_DIR`, retains the same `engine` child layout. Its engine
+configuration shares this explicit home. Provider configuration and sign-in remain
+in the owner's normal client environment.
+
+Use `multi-agent daemon start --port <port>` for a manual engine and
+`multi-agent daemon status` or `multi-agent daemon stop` for its lifecycle. All
+other retained commands use HTTP and wait for readiness. `MULTI_AGENT_URL` selects
+an explicit engine origin. The desktop uses an OS-assigned port and exposes its
+browser handoff through **Open browser**; do not assume a fixed desktop port.
 
 ## Create a team for your repository
 
 From a fresh clone, run `./setup.sh`, add `engine/node_modules/.bin` to `PATH`, run
-`rig config set ui.enabled true`, then `./scripts/start.sh`. The
+`MULTI_AGENT_UI_ENABLED=true ./scripts/start.sh`. The
 [README quick start](../README.md#quick-start) gives the complete sequence. Setup creates
 the owner credential and installs GitHub CLI; the start script loads the credential
 and starts a managed daemon on loopback. The default `workers.isolation: none` needs
@@ -34,11 +57,11 @@ Open `http://127.0.0.1:7433/team`. A new browser needs a one-time pairing code; 
 Windows desktop app obtains and exchanges it automatically. Use the owner CLI to mint a one-time code:
 
 ```bash
-rig team pair-browser
+multi-agent team pair-browser
 ```
 
 The command prints only the code so it can be pasted directly into the browser. For
-scripts or diagnostics, use `rig team pair-browser --json` to receive the code and
+scripts or diagnostics, use `multi-agent team pair-browser --json` to receive the code and
 its expiry timestamp. The code expires after 60 seconds and is single-use.
 
 Enter the printed code in the browser's pairing field.
@@ -56,8 +79,8 @@ before mounting the project and run views. If the code expires or sign-in fails,
 choose **Try again** for a new flow. A missing GitHub CLI requires `./setup.sh`.
 
 ```bash
-rig github status
-rig github status --json
+multi-agent github status
+multi-agent github status --json
 ```
 
 These commands inspect the daemon's account; they do not start sign-in or print a token.
@@ -77,8 +100,8 @@ you choose **Retry**. It does not sign GitHub out or stop the team.
 After sign-in, preview and create a named project from the terminal:
 
 ```bash
-rig team create /absolute/path/to/project --name project-name --dry-run
-rig team create /absolute/path/to/project --name project-name
+multi-agent team create /absolute/path/to/project --name project-name --dry-run
+multi-agent team create /absolute/path/to/project --name project-name
 ```
 
 The second command asks for confirmation. For non-interactive use, review the dry run
@@ -113,7 +136,7 @@ upload is the engine's only push; delivery and Merge remain local.
 For CLI compatibility, an unnamed Create registers a repository that already has a commit:
 
 ```bash
-rig team create /absolute/path/to/existing-repository
+multi-agent team create /absolute/path/to/existing-repository
 ```
 
 This path does not create or push a GitHub repository. Its defaults remain a Claude Code
@@ -131,10 +154,10 @@ either artifact.
 The CLI requires `--planning` for this flow:
 
 ```bash
-rig team start "Describe the change you want" --planning --rig <team-name>
-rig team chat <run-id>
-rig team chat <run-id> "Your answers and requested changes"
-rig team approve-plan <run-id>
+multi-agent team start "Describe the change you want" --planning --rig <team-name>
+multi-agent team chat <run-id>
+multi-agent team chat <run-id> "Your answers and requested changes"
+multi-agent team approve-plan <run-id>
 ```
 
 Use the team name printed by Create and the run id printed by Start. `--rig` may be
@@ -180,8 +203,8 @@ agent utilization is the share of captured active time, not wall-clock capacity.
 Workspace can show a running turn before that attempt is eligible for Analytics.
 
 General selects the default lead client for future projects. `team.maxSeats` and
-`team.maxConcurrentAgents` bound roster size and dispatch; configure them through
-`rig config set`. Environment overrides take precedence over saved values. Appearance
+`team.maxConcurrentAgents` bound roster size and dispatch; configure them in the configuration root's
+`config.json`. Environment overrides take precedence over saved values. Appearance
 controls theme and the Shuimo Danqing backdrop's motion. The entrance plays once per
 app/browser session, then only the complete portrait segment repeats. Navigation,
 reload and reconnect do not restart the entrance. Reduced motion uses the portrait
@@ -254,8 +277,8 @@ acquiring write permission or declaring written outputs.
 ### Pinned source installation
 
 `./setup.sh` installs the exact catalog revision under
-`$OPENRIG_HOME/framework/<revision>` (using the application's normal per-user state
-home when `OPENRIG_HOME` is unset). Git must be able to fetch the pinned repository.
+`$MULTI_AGENT_HOME/framework/<revision>` (using the application's normal per-user state
+home when `MULTI_AGENT_HOME` is unset). Git must be able to fetch the pinned repository.
 To use an already installed, verified source package, set
 `MULTI_AGENT_FRAMEWORK_ROOT` to its absolute path before setup and daemon launch.
 
@@ -296,7 +319,7 @@ Read the block reason and resolve any external problem, then choose **Resume** i
 the run's primary action or use:
 
 ```bash
-rig team resume <run-id>
+multi-agent team resume <run-id>
 ```
 
 Resume clears a resumable block and offers pending work to dispatch, including a
@@ -304,9 +327,9 @@ failed lead. It does not restart the daemon or rerun finished tasks. Time and re
 budget blocks require a positive increase in that budget in the same action:
 
 ```bash
-rig team resume <run-id> --add-minutes 30
-rig team resume <run-id> --add-retries 1
-rig team resume <run-id> --add-review-rounds 1
+multi-agent team resume <run-id> --add-minutes 30
+multi-agent team resume <run-id> --add-retries 1
+multi-agent team resume <run-id> --add-review-rounds 1
 ```
 
 Use the option that matches the displayed budget block. Review exhaustion can also
@@ -320,7 +343,7 @@ Review the task diffs and the integration commits, then choose **Merge** in the 
 or run:
 
 ```bash
-rig team merge <run-id>
+multi-agent team merge <run-id>
 ```
 
 This updates the currently checked-out branch in the repository the team was created
@@ -337,27 +360,21 @@ lead-evidence and premature-merge defect recorded in the
 
 ## Worker Isolation
 
-`workers.isolation` selects how a managed worker runs. It is read once at daemon startup, so a change applies on the next restart.
+The shipped default is `workers.isolation: none`. Workers run as direct child
+processes under the engine's user, with one Git worktree per task and no host
+provisioning or extra accounts. Claude implementers use `bypassPermissions` and can
+access files outside the assigned tree. Codex implementers use `workspace-write`.
+Reviewers use Claude plan mode and read tools, or Codex read-only mode.
 
-| Value | What runs |
-| --- | --- |
-| `none` (default) | The native client runs as the daemon's own user, inside the task's candidate git worktree, in the seat's tmux pane. No host provisioning, sudo, extra accounts or sandbox. |
-| `hardened` | The existing restricted worker launcher. Requires the `ma-*` accounts, the installed policy and sudo, all from the provisioning step below. |
+The worktree and client permission settings help separate tasks; they do not
+provide host containment. The engine records process and attempt identities,
+terminates the child process tree on cancellation, and reconciles interrupted
+attempts after restart. Use **Cancel** in the run view and inspect the resulting
+attempt outcome before starting replacement work.
 
-Under `none`, the daemon keeps its state under `$OPENRIG_HOME/state/workers/`:
-`assignments/<worker>/<run>-<task>` for candidate worktrees and
-`context/<worker>/<run>/<attempt>` for attempt projections. Mailbox endpoints use
-`$OPENRIG_HOME/sock/<worker>/<attempt>/mailbox.sock` while that path fits Linux's
-107 usable AF_UNIX pathname bytes. For a longer profile, only the transient mailbox
-root moves to `/tmp/ma-<uid>-<profile-hash>`, a private `0700` directory checked for
-canonical path and current-user ownership. Databases, worktrees and credentials stay
-in their configured locations. No launch uses sudo or reads hardened provisioning
-from `/etc/multi-agent`, `/opt/multi-agent`, `/run/multi-agent` or
-`/usr/local/libexec/multi-agent`.
-
-The isolation is a boundary between tasks, not between the worker and the host: a worker under `none` has the daemon's full filesystem access, its network and its environment. The receipt records `network.mode: "unknown"` because no profile is enforced. Use `hardened` where that matters.
-
-The three health lights that describe the hardened boundary (`workerBoundary`, `sandboxNetwork`, `clients`) report `unknown` with the reason `workers_isolation_none` in this mode, rather than reading files nothing enforces.
+The hardened Linux provisioning material below is retained for existing internal
+tests. Hardened isolation is deferred for the native desktop and is outside the
+Windows setup path.
 
 ## Identities and Boundaries
 
@@ -548,18 +565,15 @@ The host preflight passed 29/29 checks against policy revision 2, with no prereq
 
 Claude Code's live sandboxed tool execution needs an authenticated worker home and a model call. It is exercised through the managed launch path in U4, under a recorded run budget.
 
-## Daemon Mode
+## Daemon lifecycle
 
-The daemon runs in exactly one mode per process, fixed at startup:
-
-| Mode | How it starts | What runs |
-| --- | --- | --- |
-| Legacy | Default, or `MULTI_AGENT_MODE=legacy` | Upstream OpenRig behavior. Registering a managed run is refused. |
-| Managed | `MULTI_AGENT_MODE=managed`, or automatically when the database already holds a managed run | Team control only. No legacy background service starts; every non-`/api/team-control` `/api/*` path returns HTTP 403 with `managed_control_required`, and legacy pages return HTTP 404. |
-
-Any other `MULTI_AGENT_MODE` value stops the daemon at startup. Pass the owner control credential in `MULTI_AGENT_OWNER_TOKEN`; the daemon reads it and removes it from its environment before starting anything else.
-
-Switching modes requires a daemon restart. Once a database holds a managed run, the daemon starts in managed mode from then on. Legacy tmux sessions that already exist when a managed daemon starts are left untouched; the managed daemon neither adopts nor stops them.
+The desktop starts and stops its own native engine child and recovers interrupted
+work from durable attempt and process facts on restart. The team API remains owner
+scoped. A manual engine can receive its owner credential in
+`MULTI_AGENT_OWNER_TOKEN`; the engine consumes and clears that value before it
+launches workers. `multi-agent daemon stop` reports the observed shutdown outcome.
+Inspect the engine home's `daemon.log` and `daemon-shutdown.json` when recovery
+requires attention.
 
 ## Managed Attempt Credentials
 

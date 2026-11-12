@@ -1,0 +1,7 @@
+name: development-team
+version: "1"
+taxonomy: skills
+purpose: "(eval fixture) implement an assigned native team task"
+files:
+  - path: content.md
+    role: source

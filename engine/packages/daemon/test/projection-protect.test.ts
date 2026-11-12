@@ -25,7 +25,7 @@ function skillEntry(over: Partial<ProjectionEntry> = {}): ProjectionEntry {
     classification: "operator_conflict",
     conflictDetail: {
       reason:
-        'skill "my-skill" was modified after OpenRig last projected it (operator edit?) — not overwriting; move it aside or fold it into the spec, then re-project',
+        'skill "my-skill" was modified after Multi-Agent last projected it (operator edit?) — not overwriting; move it aside or fold it into the spec, then re-project',
     },
     ...over,
   };

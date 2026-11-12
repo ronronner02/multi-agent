@@ -1,4 +1,4 @@
-# OpenRig 0.4.6 spec-language example — the BRANCHED REMEDIATION shape.
+# Multi-Agent 0.4.6 spec-language example — the BRANCHED REMEDIATION shape.
 # `failed` branches to a remediation step (branch keys = the recorded
 # exit enum ONLY); the remediate → verify → remediate loop is a
 # branch-created cycle, legitimate ONLY under the declared max_hops

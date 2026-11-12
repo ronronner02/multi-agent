@@ -1,4 +1,4 @@
-// OPR.0.4.1.11.1 (FR-5) — dev-only twin build target. Builds the REAL @openrig/ui App
+// OPR.0.4.1.11.1 (FR-5) — dev-only twin build target. Builds the REAL @multi-agent/ui App
 // (twin/ entry) into ONE self-contained, double-clickable `intent.html`. Separate config so
 // it never disturbs the product build. The single-file inline plugin below is the same
 // generateBundle technique vite-plugin-singlefile uses, kept dependency-free (the worktree

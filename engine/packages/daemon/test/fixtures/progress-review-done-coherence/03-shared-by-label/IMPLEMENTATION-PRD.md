@@ -23,7 +23,7 @@ On album cards for albums someone else shared with me, show a compact Shared by 
 
 ## Proof contract
 
-Mirrors `README.md#proof-contract`. Each item pairs with its proof via `rig proof add … --evidences <n> --media <files>`; `plannedRef` names the section of `mockups/shared-by-label.html` the delivered artifact is compared against.
+Mirrors `README.md#proof-contract`. Each item pairs with its proof via `multi-agent proof add … --evidences <n> --media <files>`; `plannedRef` names the section of `mockups/shared-by-label.html` the delivered artifact is compared against.
 
 - [ ] **1. Shared card label** — a non-owner album card shows `Shared by [display name]` above the title. *(plannedRef: §shared-card)*
 - [ ] **2. Privacy fallback** — a card whose owner has no usable display name shows the literal `Shared by Album owner`. *(plannedRef: §fallback-card)*

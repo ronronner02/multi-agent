@@ -249,19 +249,19 @@ test('the engine env keeps the parent HOME, USERPROFILE, CODEX_HOME and CLAUDE_C
   assert.equal(env.CODEX_HOME, 'D:\\Users\\testuser\\.codex', 'CODEX_HOME must pass through from the parent');
   assert.equal(env.CLAUDE_CONFIG_DIR, 'D:\\Users\\testuser\\.claude', 'CLAUDE_CONFIG_DIR must pass through from the parent');
   assert.equal(env.MULTI_AGENT_MODE, 'managed', 'MULTI_AGENT_MODE must be set');
-  assert.equal(env.OPENRIG_BIND_HOST, '127.0.0.1', 'OPENRIG_BIND_HOST must be loopback');
-  assert.equal(env.OPENRIG_UI_ENABLED, 'true', 'OPENRIG_UI_ENABLED must be set');
+  assert.equal(env.MULTI_AGENT_BIND_HOST, '127.0.0.1', 'MULTI_AGENT_BIND_HOST must be loopback');
+  assert.equal(env.MULTI_AGENT_UI_ENABLED, 'true', 'MULTI_AGENT_UI_ENABLED must be set');
   assert.equal(env.MULTI_AGENT_OWNER_TOKEN, undefined, 'owner token must be cleared');
 });
 
-test('OPENRIG_HOME is identical across two launches', async () => {
+test('MULTI_AGENT_HOME is identical across two launches', async () => {
   const f1 = nativeDesktop();
   await settle();
-  const home1 = f1.lastEnv().OPENRIG_HOME;
+  const home1 = f1.lastEnv().MULTI_AGENT_HOME;
   const f2 = nativeDesktop();
   await settle();
-  assert.ok(home1 && f2.lastEnv().OPENRIG_HOME, 'OPENRIG_HOME must be set in both launches');
-  assert.equal(home1, f2.lastEnv().OPENRIG_HOME, 'OPENRIG_HOME must be identical across launches');
+  assert.ok(home1 && f2.lastEnv().MULTI_AGENT_HOME, 'MULTI_AGENT_HOME must be set in both launches');
+  assert.equal(home1, f2.lastEnv().MULTI_AGENT_HOME, 'MULTI_AGENT_HOME must be identical across launches');
 });
 
 test('a missing engine build says so instead of forking', async () => {
