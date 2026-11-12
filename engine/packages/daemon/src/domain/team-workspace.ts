@@ -113,7 +113,7 @@ const sha256 = (bytes: Buffer | string): string => `sha256:${createHash("sha256"
 const GIT_OUTPUT_LIMIT = 256 * 1024 * 1024;
 
 function git(cwd: string, args: readonly string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
+  return execFileSync("git", ["-C", cwd, ...args], { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
 }
 
 function gitOrNull(cwd: string, args: readonly string[]): string | null {
@@ -325,7 +325,7 @@ function isUtf8(bytes: Buffer): boolean {
  */
 function controlGit(args: readonly string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): string {
   return execFileSync("git", ["-C", cwd, ...args],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(extraEnv),
+    { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv(extraEnv),
       maxBuffer: GIT_OUTPUT_LIMIT });
 }
 
@@ -353,7 +353,7 @@ function storeGit(store: string, workTree: string | null, args: readonly string[
     `--git-dir=${store}`,
     ...(workTree === null ? [] : [`--work-tree=${workTree}`]),
     ...args,
-  ], { input: options.input, stdio: ["pipe", "pipe", "pipe"], timeout: 120_000,
+  ], { windowsHide: true, input: options.input, stdio: ["pipe", "pipe", "pipe"], timeout: 120_000,
     env: controlGitEnv(options.env), maxBuffer: GIT_OUTPUT_LIMIT });
 }
 
@@ -475,6 +475,7 @@ export type WorkspaceRead =
 export function readCommittedWorkspacePath(sourceRoot: string, commit: string, path: string): WorkspaceRead {
   const readGit = (args: string[]) => execFileSync("git", ["-C", sourceRoot, "--no-replace-objects",
     "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", ...args], {
+    windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"], timeout: 5000, maxBuffer: 262145,
     env: controlGitEnv({ GIT_NO_LAZY_FETCH: "1" }),
   });
@@ -875,7 +876,7 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
     // base commit and every blob it quotes resolve without copying a repository.
     const store = join(scratch, "patch.git");
     execFileSync("git", ["init", "--quiet", "--bare", store],
-      { stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
+      { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, env: controlGitEnv() });
     const objectPath = controlGit(["rev-parse", "--git-path", "objects"], workspace.sourceRoot).trim();
     const sourceObjects = realpathSync(isAbsolute(objectPath) ? objectPath : join(workspace.sourceRoot, objectPath));
     mkdirSync(join(store, "objects", "info"), { recursive: true });

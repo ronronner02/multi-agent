@@ -55,7 +55,7 @@ try {
   telemetry = createTurnTelemetry(resultFile, args, redactTranscriptContent);
 } catch { /* Telemetry is best-effort, including during source-only execution before a build. */ }
 
-const child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"] });
+const child = spawn(command, args, { windowsHide: true, stdio: ["pipe", "pipe", "inherit"] });
 process.stdin.pipe(child.stdin);
 let observedThread = false;
 

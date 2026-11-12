@@ -169,6 +169,7 @@ export class GithubCli {
     const { executable, args: fullArgs, env } = this.ghArgv(args);
     try {
       const { stdout, stderr } = await execute(executable, fullArgs, {
+        windowsHide: true,
         env, encoding: "utf8", timeout: options.timeout ?? 15_000, maxBuffer: 65_536, cwd: options.cwd,
       });
       return { stdout, stderr, ok: true };
@@ -266,6 +267,7 @@ export class GithubCli {
 
       // Step 2: verify the destination URL.
       const destination = await execute("git", ["-C", repository, "remote", "get-url", "--push", "--all", "origin"], {
+        windowsHide: true,
         env: this.env, encoding: "utf8", timeout: 15_000, maxBuffer: 65_536,
       });
       if (destination.stdout.trim() !== remote) throw new GithubCliError("github_push_failed");
@@ -290,7 +292,7 @@ export class GithubCli {
     try {
       const result = await execute(this.resolvedExecutable(), [...this.execArgv, "repo", "view", identity,
         "--json", "nameWithOwner,isPrivate", "--hostname", HOST],
-        { env: this.env, encoding: "utf8", timeout: STAGED_VIEW_TIMEOUT, maxBuffer: 65_536 });
+        { windowsHide: true, env: this.env, encoding: "utf8", timeout: STAGED_VIEW_TIMEOUT, maxBuffer: 65_536 });
       const value = JSON.parse(result.stdout);
       return value.isPrivate === true && String(value.nameWithOwner).toLowerCase() === identity.toLowerCase();
     } catch (error) {
@@ -312,6 +314,7 @@ export class GithubCli {
     try {
       await execute("git", ["-C", repository, ...this.gitCredentialArgs(), "-c", "remote.origin.mirror=false",
         "push", "--no-follow-tags", "--recurse-submodules=no", "--", "origin", refspec], {
+        windowsHide: true,
         env: gitEnv as NodeJS.ProcessEnv, encoding: "utf8", timeout, maxBuffer: 65_536,
       });
       return true;
@@ -335,6 +338,7 @@ export class GithubCli {
   private async pushTimeout(repository: string, refspec: string): Promise<number> {
     try {
       const count = await execute("git", ["-C", repository, "rev-list", "--count", refspec], {
+        windowsHide: true,
         env: this.env, encoding: "utf8", timeout: 15_000, maxBuffer: 65_536,
       });
       const n = Number(count.stdout.trim());
@@ -363,7 +367,7 @@ export class GithubCli {
     let ready!: (value: GithubLoginState) => void;
     let closed!: () => void;
     const { executable, args, env } = this.ghArgv(["auth", "login", "--hostname", HOST, "--web", "--git-protocol", "https"]);
-    const child = spawn(executable, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(executable, args, { windowsHide: true, env, stdio: ["ignore", "pipe", "pipe"] });
     const flow: LoginFlow = { child,
       ready: new Promise(resolve => { ready = resolve; }),
       closed: new Promise(resolve => { closed = resolve; }) };

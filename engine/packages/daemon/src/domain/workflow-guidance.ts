@@ -119,7 +119,7 @@ export function readWorkflowGuidance(input: GuidanceInput) {
       const {ref, headerPath} = parseAddress(string(catalog.address, catalogSource + "#sdlc.catalog.address"));
       if (catalog.root !== undefined && catalog.root !== "repository") throw Error("Unknown SDLC catalog root: " + String(catalog.root));
       if (catalog.root === "repository") {
-        const repository = execFileSync("git", ["-C", dirname(catalogSource), "rev-parse", "--show-toplevel"], {encoding:"utf8", stdio:["ignore","pipe","pipe"], timeout:2000}).trim();
+        const repository = execFileSync("git", ["-C", dirname(catalogSource), "rev-parse", "--show-toplevel"], { windowsHide: true,encoding:"utf8", stdio:["ignore","pipe","pipe"], timeout:2000}).trim();
         catalogPath = resolve(repository, ref);
       } else if (ref.startsWith("$MULTI_AGENT_HOME/")) {
         if (!process.env.MULTI_AGENT_HOME) throw Error("MULTI_AGENT_HOME is unavailable for " + ref);

@@ -75,7 +75,7 @@ export class WorktreePathError extends Error {
 /** The repository's administrative directory for linked worktrees, as Git names it. */
 function adminDirectory(repository: string): string {
   const reported = execFileSync("git", ["-C", repository, "rev-parse", "--git-path", "worktrees"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   return isAbsolute(reported) ? reported : join(repository, reported);
 }
 
@@ -110,7 +110,7 @@ export function addWorktree(input: { repository: string; worktree: string; args:
   assertWorktreePathFits(input);
   mkdirSync(dirname(input.worktree), { recursive: true });
   execFileSync("git", ["-C", input.repository, "-c", "core.longpaths=true", "worktree", "add", ...input.args],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 });
+    { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 });
 }
 
 /** Whether a directory is already a worktree of this repository, so a replay reuses it. */
@@ -118,7 +118,7 @@ export function isWorktreeOf(repository: string, path: string): boolean {
   if (!existsSync(path)) return false;
   try {
     const top = execFileSync("git", ["-C", path, "rev-parse", "--show-toplevel"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+      { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
     // Git answers with the long form of the path; a Windows root reached through an 8.3 name
     // compares unequal to it unless both sides are canonicalised.
     return samePath(canonicalPath(top), canonicalPath(path));

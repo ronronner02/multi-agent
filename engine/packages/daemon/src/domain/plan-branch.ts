@@ -53,7 +53,7 @@ export function bootstrapPlan(goal: string): string {
 }
 
 function git(cwd: string, args: string[]): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  return execFileSync("git", ["-C", cwd, ...args], { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
     // A daemon-written commit states its own identity rather than borrowing one the owner may
     // have configured for their own work; the branch is the daemon's, and the log says so.
     env: { ...process.env, GIT_AUTHOR_NAME: "multi-agent", GIT_AUTHOR_EMAIL: "multi-agent@localhost",

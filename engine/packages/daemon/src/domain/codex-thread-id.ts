@@ -18,7 +18,7 @@ export async function defaultResolveHomeDirByPid(pid: number): Promise<string | 
     // BSD/macOS `ps` supports `eww` to expose the full process environment.
     // If Multi-Agent grows a Linux daemon target, this likely needs a /proc-based path.
     const output = (await runAsyncSite("codex_thread_id.resolve_home", async () => {
-      const { stdout } = await execFileAsync("ps", ["eww", "-p", String(pid), "-o", "command="], { encoding: "utf-8" });
+      const { stdout } = await execFileAsync("ps", ["eww", "-p", String(pid), "-o", "command="], { windowsHide: true, encoding: "utf-8" });
       return stdout;
     })).trim();
     if (!output) return undefined;

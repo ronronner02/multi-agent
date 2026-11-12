@@ -111,6 +111,7 @@ function git(root: string, args: string[], options: { env?: NodeJS.ProcessEnv; i
   const env = { ...process.env };
   for (const key of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete env[key];
   return execFileSync("git", ["-C", root, ...args], {
+    windowsHide: true,
     encoding: "utf8", stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     timeout: 60_000, maxBuffer: 16 * 1024 * 1024, input: options.input,
     env: { ...env, LC_ALL: "C", GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", ...options.env },
@@ -131,6 +132,7 @@ function gitAsync(root: string, args: string[], options: { env?: NodeJS.ProcessE
   for (const key of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete env[key];
   return new Promise((resolvePromise, reject) => {
     const child = spawn("git", ["-C", root, ...args], {
+      windowsHide: true,
       env: { ...env, LC_ALL: "C", GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0", GIT_NO_LAZY_FETCH: "1", ...options.env },
       stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     });

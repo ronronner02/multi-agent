@@ -32,7 +32,7 @@ export const resolveCodexGitAddDirs: CodexGitAddDirResolver = async (cwd) => {
     execFile(
       "git",
       ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"],
-      { timeout: GIT_TIMEOUT_MS, encoding: "utf8" },
+      { windowsHide: true, timeout: GIT_TIMEOUT_MS, encoding: "utf8" },
       (error, out) => resolve(error ? null : out),
     );
   });
