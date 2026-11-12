@@ -4,9 +4,9 @@
 # world. This is the automated form of the failure class that costs real time —
 # one surface confidently reporting a world another surface cannot see.
 #
-# WHAT IS COMPARED, and why these two: `rig ps` and `rig queue` are both
+# WHAT IS COMPARED, and why these two: `multi-agent ps` and `multi-agent queue` are both
 # daemon-truth surfaces, so the rigs ps reports and the rigs the queue's items are
-# destined for must be the SAME SET. A qitem addressed to a rig ps does not know
+# destined for must be the SAME SET. A qitem addressed to a multi-agent ps does not know
 # about — or a rig running with its queue work invisible — breaks this and fails
 # the scenario. The declarative mapping below is what makes the comparison
 # possible: the surfaces answer in different shapes (rig records vs qitems whose
@@ -22,7 +22,7 @@ env:
     - id: view-1
       source: harness@scn-baton
       destination: dev-worker@scn-baton
-      summary: "#10 one-view-state — the queue's rig must be a rig ps knows"
+      summary: "#10 one-view-state — the queue's rig must be a multi-agent ps knows"
       claim: true
 steps:
   - up: {}

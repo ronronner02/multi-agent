@@ -7,11 +7,11 @@
 # BATON PRECONDITION (fixture level). Per the locked grammar the scenario asserts
 # OBSERVABLES; the `env` block establishes PRECONDITIONS — there is no queue ACTION
 # verb (verb set = topology/seat + daemon:{op}). The pipeline runs these shipped
-# `rig queue` writes BEFORE the steps, so a reviewer sees exactly where the baton
+# `multi-agent queue` writes BEFORE the steps, so a reviewer sees exactly where the baton
 # comes from (queue state is daemon-side, independent of any seat process):
-#   OPENRIG_SESSION_NAME=harness@scn-baton    rig queue create --id baton-1 \
+#   MULTI_AGENT_SESSION_NAME=harness@scn-baton    multi-agent queue create --id baton-1 \
 #       --destination dev-worker@scn-baton --summary "..."
-#   OPENRIG_SESSION_NAME=dev-worker@scn-baton rig queue claim baton-1 \
+#   MULTI_AGENT_SESSION_NAME=dev-worker@scn-baton multi-agent queue claim baton-1 \
 #       --destination dev-worker@scn-baton
 # => qitem baton-1 is state=in-progress, owned by dev-worker@scn-baton, up front.
 # (Identity rides the env→transport header per P21 I3 — the old --source flag is

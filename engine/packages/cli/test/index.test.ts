@@ -9,7 +9,7 @@ import { CLI_VERSION } from "../src/version.js";
 describe("CLI entrypoint direct-run detection", () => {
   it("treats a symlinked bin path as direct execution", () => {
     const actualPath = fileURLToPath(new URL("../src/index.ts", import.meta.url));
-    const tmpDir = mkdtempSync(join(tmpdir(), "rigged-index-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "removed-index-"));
     const symlinkPath = join(tmpDir, "rig");
     symlinkSync(actualPath, symlinkPath);
 

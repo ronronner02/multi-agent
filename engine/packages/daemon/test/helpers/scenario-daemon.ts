@@ -31,13 +31,13 @@ export interface ScenarioDaemon {
   baseUrl: string;
   /**
    * Environment for shipped read/write subprocesses: the scaffold's scrubbed
-   * scratch env with OPENRIG_URL pointed at THIS daemon (the helper's own — not a
+   * scratch env with MULTI_AGENT_URL pointed at THIS daemon (the helper's own — not a
    * foreign target).
    */
   readEnv: Record<string, string | undefined>;
   /**
    * SIGTERM the scenario-local daemon (the `daemon: {op: sigterm}` verb) — kills
-   * it via the shipped `rig daemon stop`; the scaffold is KEPT so a restart can
+   * it via the shipped `multi-agent daemon stop`; the scaffold is KEPT so a restart can
    * re-spawn through the same guarantees. Idempotent.
    */
   sigterm: () => Promise<void>;
@@ -48,12 +48,12 @@ export interface ScenarioDaemon {
    * lifecycle path). Distinct from a seat-level restart, which never touches it.
    */
   restart: () => Promise<void>;
-  /** Stop the daemon (via the shipped `rig daemon stop`) and remove the scaffold. */
+  /** Stop the daemon (via the shipped `multi-agent daemon stop`) and remove the scaffold. */
   stop: () => Promise<void>;
   /**
    * L6 STEP-0 — translate a HOST topology path to a path the daemon can read. Host-mode omits this
    * (identity: the daemon reads the host path directly). CONTAINER-mode implements it by staging the
-   * topology's directory INTO the container and returning the in-container path, so `rig up` is never
+   * topology's directory INTO the container and returning the in-container path, so `multi-agent up` is never
    * handed a host-absolute path a container daemon cannot resolve ("Source not found").
    */
   stageTopology?: (hostTopologyPath: string) => Promise<string>;
@@ -112,7 +112,7 @@ export function runRig(
 
 /**
  * Spawn a real forced-local scenario daemon under the hermetic scaffold. The
- * shipped `rig daemon start` waits for its own /healthz before returning, so a
+ * shipped `multi-agent daemon start` waits for its own /healthz before returning, so a
  * zero exit means the daemon is accepting requests. Throws (fail-closed) if the
  * scaffold env still carries a foreign daemon target, or if start fails.
  */
@@ -144,7 +144,7 @@ export async function spawnScenarioDaemon(
     }
   };
   const killProc = async () => {
-    // `rig daemon stop` reads daemon.json under the scratch OPENRIG_HOME and
+    // `multi-agent daemon stop` reads daemon.json under the scratch MULTI_AGENT_HOME and
     // SIGTERMs the daemon. Best-effort (already-down is fine).
     await runRig(["daemon", "stop"], scaffold.env, rigBin, timeoutMs).catch(() => {});
   };
@@ -152,7 +152,7 @@ export async function spawnScenarioDaemon(
   await startProc();
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  const readEnv: Record<string, string | undefined> = { ...scaffold.env, OPENRIG_URL: baseUrl };
+  const readEnv: Record<string, string | undefined> = { ...scaffold.env, MULTI_AGENT_URL: baseUrl };
 
   return {
     port,

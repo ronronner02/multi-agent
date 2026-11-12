@@ -8,25 +8,15 @@ import { ConfigStore, VALID_KEYS } from "../src/config-store.js";
 import { DaemonClient } from "../src/client.js";
 import { STATE_FILE, type DaemonState } from "../src/daemon-lifecycle.js";
 
-// config-store's DEFAULTS (module scope) resolve db/transcripts paths via
-// getDefaultOpenRigPath → getOpenRigHome → readOpenRigEnv("OPENRIG_HOME",
-// "RIGGED_HOME"), read at IMPORT time — so an ambient home (primary OPENRIG_HOME
-// OR legacy RIGGED_HOME) freezes the default paths before any beforeEach can
-// scrub it, making "resolve() returns defaults" non-hermetic. vi.hoisted runs
-// BEFORE the module graph loads, so neutralizing BOTH aliases here binds the
-// default-resolution assertions to ~/.openrig deterministically.
-const { savedOpenrigHome, savedRiggedHome } = vi.hoisted(() => {
-  const savedOpenrig = process.env["OPENRIG_HOME"];
-  const savedRigged = process.env["RIGGED_HOME"];
-  delete process.env["OPENRIG_HOME"];
-  delete process.env["RIGGED_HOME"];
-  return { savedOpenrigHome: savedOpenrig, savedRiggedHome: savedRigged };
+// Defaults capture the canonical state home at module load.
+const { savedMultiAgentHome } = vi.hoisted(() => {
+  const savedMultiAgentHome = process.env.MULTI_AGENT_HOME;
+  delete process.env.MULTI_AGENT_HOME;
+  return { savedMultiAgentHome };
 });
 afterAll(() => {
-  if (savedOpenrigHome === undefined) delete process.env["OPENRIG_HOME"];
-  else process.env["OPENRIG_HOME"] = savedOpenrigHome;
-  if (savedRiggedHome === undefined) delete process.env["RIGGED_HOME"];
-  else process.env["RIGGED_HOME"] = savedRiggedHome;
+  if (savedMultiAgentHome === undefined) delete process.env.MULTI_AGENT_HOME;
+  else process.env.MULTI_AGENT_HOME = savedMultiAgentHome;
 });
 
 describe("ConfigStore", () => {
@@ -37,18 +27,18 @@ describe("ConfigStore", () => {
     tmpDir = mkdtempSync(join(tmpdir(), "config-test-"));
     // Save env vars we'll modify
     savedEnv = {
-      OPENRIG_PORT: process.env["OPENRIG_PORT"],
-      OPENRIG_HOST: process.env["OPENRIG_HOST"],
-      OPENRIG_DB: process.env["OPENRIG_DB"],
-      OPENRIG_TRANSCRIPTS_ENABLED: process.env["OPENRIG_TRANSCRIPTS_ENABLED"],
-      OPENRIG_TRANSCRIPTS_PATH: process.env["OPENRIG_TRANSCRIPTS_PATH"],
+      MULTI_AGENT_PORT: process.env["MULTI_AGENT_PORT"],
+      MULTI_AGENT_HOST: process.env["MULTI_AGENT_HOST"],
+      MULTI_AGENT_DB: process.env["MULTI_AGENT_DB"],
+      MULTI_AGENT_TRANSCRIPTS_ENABLED: process.env["MULTI_AGENT_TRANSCRIPTS_ENABLED"],
+      MULTI_AGENT_TRANSCRIPTS_PATH: process.env["MULTI_AGENT_TRANSCRIPTS_PATH"],
     };
     // Clear env vars for clean tests
-    delete process.env["OPENRIG_PORT"];
-    delete process.env["OPENRIG_HOST"];
-    delete process.env["OPENRIG_DB"];
-    delete process.env["OPENRIG_TRANSCRIPTS_ENABLED"];
-    delete process.env["OPENRIG_TRANSCRIPTS_PATH"];
+    delete process.env["MULTI_AGENT_PORT"];
+    delete process.env["MULTI_AGENT_HOST"];
+    delete process.env["MULTI_AGENT_DB"];
+    delete process.env["MULTI_AGENT_TRANSCRIPTS_ENABLED"];
+    delete process.env["MULTI_AGENT_TRANSCRIPTS_PATH"];
   });
 
   afterEach(() => {
@@ -66,9 +56,9 @@ describe("ConfigStore", () => {
     const config = store.resolve();
     expect(config.daemon.port).toBe(7433);
     expect(config.daemon.host).toBe("127.0.0.1");
-    expect(config.db.path).toContain(".openrig/openrig.sqlite");
+    expect(config.db.path).toContain(".multi-agent/multi-agent.sqlite");
     expect(config.transcripts.enabled).toBe(true);
-    expect(config.transcripts.path).toContain(".openrig/transcripts");
+    expect(config.transcripts.path).toContain(".multi-agent/transcripts");
   });
 
   // Test 2
@@ -87,7 +77,7 @@ describe("ConfigStore", () => {
   it("resolve() env vars override config file", () => {
     const configPath = join(tmpDir, "config.json");
     writeFileSync(configPath, JSON.stringify({ daemon: { port: 8888 } }));
-    process.env["OPENRIG_PORT"] = "9999";
+    process.env["MULTI_AGENT_PORT"] = "9999";
     const store = new ConfigStore(configPath);
     const config = store.resolve();
     expect(config.daemon.port).toBe(9999);
@@ -134,13 +124,13 @@ describe("DaemonClient config integration", () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "client-config-"));
     savedEnv = {
-      OPENRIG_PORT: process.env["OPENRIG_PORT"],
-      OPENRIG_HOST: process.env["OPENRIG_HOST"],
-      OPENRIG_DB: process.env["OPENRIG_DB"],
+      MULTI_AGENT_PORT: process.env["MULTI_AGENT_PORT"],
+      MULTI_AGENT_HOST: process.env["MULTI_AGENT_HOST"],
+      MULTI_AGENT_DB: process.env["MULTI_AGENT_DB"],
     };
-    delete process.env["OPENRIG_PORT"];
-    delete process.env["OPENRIG_HOST"];
-    delete process.env["OPENRIG_DB"];
+    delete process.env["MULTI_AGENT_PORT"];
+    delete process.env["MULTI_AGENT_HOST"];
+    delete process.env["MULTI_AGENT_DB"];
   });
 
   afterEach(() => {
@@ -164,33 +154,33 @@ describe("DaemonClient config integration", () => {
 describe("DaemonClient config-aware baseUrl", () => {
   it("new DaemonClient() without args resolves baseUrl from config env vars", async () => {
     const saved = {
-      OPENRIG_URL: process.env["OPENRIG_URL"],
-      OPENRIG_PORT: process.env["OPENRIG_PORT"],
-      OPENRIG_HOST: process.env["OPENRIG_HOST"],
+      MULTI_AGENT_URL: process.env["MULTI_AGENT_URL"],
+      MULTI_AGENT_PORT: process.env["MULTI_AGENT_PORT"],
+      MULTI_AGENT_HOST: process.env["MULTI_AGENT_HOST"],
     };
-    delete process.env["OPENRIG_URL"];
-    process.env["OPENRIG_PORT"] = "9999";
-    process.env["OPENRIG_HOST"] = "10.0.0.5";
+    delete process.env["MULTI_AGENT_URL"];
+    process.env["MULTI_AGENT_PORT"] = "9999";
+    process.env["MULTI_AGENT_HOST"] = "10.0.0.5";
     try {
       const { DaemonClient } = await import("../src/client.js");
       const client = new DaemonClient();
       expect(client.baseUrl).toBe("http://10.0.0.5:9999");
     } finally {
-      if (saved.OPENRIG_URL !== undefined) process.env["OPENRIG_URL"] = saved.OPENRIG_URL;
-      else delete process.env["OPENRIG_URL"];
-      if (saved.OPENRIG_PORT !== undefined) process.env["OPENRIG_PORT"] = saved.OPENRIG_PORT;
-      else delete process.env["OPENRIG_PORT"];
-      if (saved.OPENRIG_HOST !== undefined) process.env["OPENRIG_HOST"] = saved.OPENRIG_HOST;
-      else delete process.env["OPENRIG_HOST"];
+      if (saved.MULTI_AGENT_URL !== undefined) process.env["MULTI_AGENT_URL"] = saved.MULTI_AGENT_URL;
+      else delete process.env["MULTI_AGENT_URL"];
+      if (saved.MULTI_AGENT_PORT !== undefined) process.env["MULTI_AGENT_PORT"] = saved.MULTI_AGENT_PORT;
+      else delete process.env["MULTI_AGENT_PORT"];
+      if (saved.MULTI_AGENT_HOST !== undefined) process.env["MULTI_AGENT_HOST"] = saved.MULTI_AGENT_HOST;
+      else delete process.env["MULTI_AGENT_HOST"];
     }
   });
 });
 
 describe("getDaemonStatus host preservation", () => {
-  it("preserves non-localhost host from OPENRIG_URL", async () => {
+  it("preserves non-localhost host from MULTI_AGENT_URL", async () => {
     const { getDaemonStatus } = await import("../src/daemon-lifecycle.js");
-    const savedUrl = process.env["OPENRIG_URL"];
-    process.env["OPENRIG_URL"] = "http://10.0.0.5:8080";
+    const savedUrl = process.env["MULTI_AGENT_URL"];
+    process.env["MULTI_AGENT_URL"] = "http://10.0.0.5:8080";
     try {
       const mockDeps = {
         spawn: vi.fn(() => ({ pid: 1, unref: vi.fn() }) as never),
@@ -208,8 +198,8 @@ describe("getDaemonStatus host preservation", () => {
       expect(status.host).toBe("10.0.0.5");
       expect(status.port).toBe(8080);
     } finally {
-      if (savedUrl !== undefined) process.env["OPENRIG_URL"] = savedUrl;
-      else delete process.env["OPENRIG_URL"];
+      if (savedUrl !== undefined) process.env["MULTI_AGENT_URL"] = savedUrl;
+      else delete process.env["MULTI_AGENT_URL"];
     }
   });
 });

@@ -12,7 +12,7 @@ created: {{created_date}}
      proof. Everything between is ELASTIC. For a small slice the
      mini-requirements below may BE the whole PRD; add depth only where the
      work demands it. The scaffold must not mint ceremony.
-     Conventions SSOT: docs/reference/sdlc-conventions.md (installed: $OPENRIG_HOME/reference/sdlc-conventions.md) -->
+     Conventions SSOT: docs/reference/sdlc-conventions.md (installed: $MULTI_AGENT_HOME/reference/sdlc-conventions.md) -->
 
 # Slice {{slice_number}} — {{title}}
 
@@ -26,7 +26,7 @@ created: {{created_date}}
 
 ## Proof contract
 
-- [ ] [One promised deliverable, written as an observable outcome — captured. This list is the source the DELIVERED section pairs proof against — pair each item via `rig proof add … --evidences --media` (never hand-place evidence without the drop); UI deliverables name their planned mockup (`plannedRef`).]
+- [ ] [One promised deliverable, written as an observable outcome — captured. This list is the source the DELIVERED section pairs proof against — pair each item via `multi-agent proof add … --evidences --media` (never hand-place evidence without the drop); UI deliverables name their planned mockup (`plannedRef`).]
 
 ## Notes (elastic)
 

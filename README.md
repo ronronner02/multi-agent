@@ -6,32 +6,44 @@ local branch. The engine lives in `engine/`.
 
 ## Quick start
 
-Requires Linux or WSL2, with `git`, `tmux`, and a Linux installation of Node.js 22 or 24
-on `PATH`. Install and sign in to the clients you want the team to use: Claude Code
-(`claude`) or Codex (`codex`). The team uses your local client configuration.
+The shipped target is Windows 10/11 x64 with native Node.js 22 or 24 and Git for
+Windows on `PATH`. Install and sign in to Claude Code (`claude`) or Codex (`codex`)
+for the clients your team will use. Multi-Agent uses their existing local sign-in.
+The engine also runs on Linux with Node.js 22 or 24 and Git.
 
-On Windows, install the Windows desktop installer and open Multi-Agent from the
-Start menu. It sets up WSL, the engine and the Web UI, and handles local pairing
-automatically. Later launches reuse the saved engine repository path
-([desktop instructions](desktop/README.md)). The clients run inside WSL too.
+From a source checkout, build the engine and start the desktop:
 
-```bash
-git clone https://github.com/ronronner02/multi-agent.git
-cd multi-agent
-./setup.sh
-export PATH="$PWD/engine/node_modules/.bin:$PATH"
-rig config set ui.enabled true
-./scripts/start.sh
+```powershell
+cd engine
+npm ci --no-audit --no-fund
+npm run build
+cd ../desktop
+npm ci --no-audit --no-fund
+npm start
 ```
 
-Setup installs and builds the engine and its pinned workflow source, makes GitHub
-CLI available, and creates your owner credential. Agents run as your user in task worktrees with
-`workers.isolation: none`, the default.
+The desktop owns the native engine process, selects a free loopback port, pairs its
+window automatically, and reports missing dependencies on first run. The engine and
+workers run as ordinary child processes. See [desktop instructions](desktop/README.md).
+
+Windows state defaults to `%LOCALAPPDATA%\Multi-Agent`; configuration defaults to
+`%APPDATA%\Multi-Agent`. The desktop keeps engine state in the `engine` subdirectory
+of its data root. Other platforms use `~/.multi-agent`. `MULTI_AGENT_HOME` overrides
+both engine roots; `MULTI_AGENT_DESKTOP_DATA_DIR` overrides the desktop root.
+Each new installation creates `multi-agent.sqlite`; previous product data is ignored.
+
+For a Linux development setup, `./setup.sh` installs and builds the engine and its
+pinned workflow source, installs GitHub CLI when needed, and creates an owner
+credential. Run `./scripts/start.sh` to start the engine, then use
+`engine/node_modules/.bin/multi-agent --help` for the retained CLI commands.
+Agents run as your user in task worktrees with `workers.isolation: none`, the default.
+Claude implementers use `bypassPermissions` and can access files outside their task
+worktree. Codex implementers use `workspace-write`; reviewers use read-only tools.
 
 ## Sign in and create a project
 
-1. Open [the Web UI](http://127.0.0.1:7433/team) and
-   [pair your browser](docs/operations.md#pair-a-browser). The desktop app pairs itself.
+1. Open Multi-Agent. For an optional browser viewer, use **Open browser** in the
+   desktop and [pair your browser](docs/operations.md#pair-a-browser).
 2. Choose **Sign in to GitHub**, then **Open GitHub**. Enter the displayed one-time
    code on GitHub and approve sign-in. The app checks the account before opening
    your projects; there is no token to paste into the app.
@@ -73,13 +85,13 @@ Appearance, Sessions and Agents, with model policy and specialist profile settin
 After GitHub sign-in, the same project flow is available from the setup shell:
 
 ```bash
-rig github status
-rig team create /absolute/path/to/project --name project-name --dry-run
-rig team create /absolute/path/to/project --name project-name
-rig team start "Describe the change you want" --planning --rig <team-name>
-rig team chat <run-id>
-rig team chat <run-id> "Your answers and requested changes"
-rig team approve-plan <run-id>
+multi-agent github status
+multi-agent team create /absolute/path/to/project --name project-name --dry-run
+multi-agent team create /absolute/path/to/project --name project-name
+multi-agent team start "Describe the change you want" --planning --rig <team-name>
+multi-agent team chat <run-id>
+multi-agent team chat <run-id> "Your answers and requested changes"
+multi-agent team approve-plan <run-id>
 ```
 
 Review the preview before confirming Create. Use the team name printed by Create and
@@ -99,8 +111,8 @@ but not offered as direct owner commands. Results appear under **Workflow outcom
 in chat; they are distinct from task validation, independent review and acceptance.
 
 ```bash
-rig team start "Inspect the current architecture" --workflow spec-pov --read-only
-rig team chat <run-id> $'/spec-handoff --read-only\nSummarize the current task.'
+multi-agent team start "Inspect the current architecture" --workflow spec-pov --read-only
+multi-agent team chat <run-id> $'/spec-handoff --read-only\nSummarize the current task.'
 ```
 
 In **Settings → Agents → Specialist profiles**, edit a SOUL, create a specialist or
@@ -124,7 +136,7 @@ person is needed; there is no manual task-completion step.
 If a run is blocked, resolve the displayed reason and choose **Resume**, or run:
 
 ```bash
-rig team resume <run-id>
+multi-agent team resume <run-id>
 ```
 
 Time and retry budget blocks need an increase; the UI states any increase before
@@ -135,7 +147,7 @@ When work is ready, inspect its task diffs and the integration history on Overvi
 then choose **Merge**, or run:
 
 ```bash
-rig team merge <run-id>
+multi-agent team merge <run-id>
 ```
 
 Merge updates the currently checked-out branch in the project's repository. Keep

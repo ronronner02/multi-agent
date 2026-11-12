@@ -39,11 +39,11 @@ describe("queue target_repo (PL-007)", () => {
       sourceSession: "alice@rigA",
       destinationSession: "bob@rigA",
       body: "test",
-      targetRepo: "openrig",
+      targetRepo: "multi-agent",
     });
-    expect(created.targetRepo).toBe("openrig");
+    expect(created.targetRepo).toBe("multi-agent");
     const fetched = repo.getById(created.qitemId);
-    expect(fetched?.targetRepo).toBe("openrig");
+    expect(fetched?.targetRepo).toBe("multi-agent");
   });
 
   it("create without targetRepo persists null", async () => {
@@ -56,12 +56,12 @@ describe("queue target_repo (PL-007)", () => {
   });
 
   it("list filters by targetRepo", async () => {
-    await repo.create({ sourceSession: "a@r", destinationSession: "b@r", body: "x", targetRepo: "openrig" });
+    await repo.create({ sourceSession: "a@r", destinationSession: "b@r", body: "x", targetRepo: "multi-agent" });
     await repo.create({ sourceSession: "a@r", destinationSession: "b@r", body: "y", targetRepo: "internal" });
     await repo.create({ sourceSession: "a@r", destinationSession: "b@r", body: "z" });
-    const filtered = repo.list({ targetRepo: "openrig" });
+    const filtered = repo.list({ targetRepo: "multi-agent" });
     expect(filtered).toHaveLength(1);
-    expect(filtered[0]?.targetRepo).toBe("openrig");
+    expect(filtered[0]?.targetRepo).toBe("multi-agent");
   });
 
   it("handoff inherits source's targetRepo when not overridden", async () => {
@@ -69,14 +69,14 @@ describe("queue target_repo (PL-007)", () => {
       sourceSession: "a@r",
       destinationSession: "b@r",
       body: "x",
-      targetRepo: "openrig",
+      targetRepo: "multi-agent",
     });
     const result = await repo.handoff({
       qitemId: src.qitemId,
       fromSession: "b@r",
       toSession: "c@r",
     });
-    expect(result.created.targetRepo).toBe("openrig");
+    expect(result.created.targetRepo).toBe("multi-agent");
   });
 
   it("handoff explicit targetRepo overrides source", async () => {
@@ -84,7 +84,7 @@ describe("queue target_repo (PL-007)", () => {
       sourceSession: "a@r",
       destinationSession: "b@r",
       body: "x",
-      targetRepo: "openrig",
+      targetRepo: "multi-agent",
     });
     const result = await repo.handoff({
       qitemId: src.qitemId,
@@ -100,14 +100,14 @@ describe("queue target_repo (PL-007)", () => {
       sourceSession: "a@r",
       destinationSession: "b@r",
       body: "x",
-      targetRepo: "openrig",
+      targetRepo: "multi-agent",
     });
     const result = await repo.handoffAndComplete({
       qitemId: src.qitemId,
       fromSession: "b@r",
       toSession: "c@r",
     });
-    expect(result.created.targetRepo).toBe("openrig");
+    expect(result.created.targetRepo).toBe("multi-agent");
     expect(result.closed.state).toBe("done");
   });
 });

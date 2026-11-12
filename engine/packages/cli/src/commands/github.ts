@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import { DaemonClient, DaemonHttpError, type DaemonResponse } from "../client.js";
 import { readOwnerTokenFile, type TeamStartDeps } from "./team.js";
-import { readOpenRigEnv } from "../openrig-compat.js";
 
 interface GithubStatus { signedIn: boolean; login: string | null; host: string; code?: string; error?: string }
 interface LoginState { state: "idle" | "pending" | "done" | "failed"; code?: string; url?: string; error?: string }
@@ -39,7 +38,7 @@ export function githubCommand(depsOverride?: TeamStartDeps): Command {
   async function connection() {
     const deps = depsOverride ?? {};
     const token = deps.ownerToken === undefined
-      ? readOpenRigEnv("MULTI_AGENT_OWNER_TOKEN")?.trim() || readOwnerTokenFile() : deps.ownerToken;
+      ? process.env.MULTI_AGENT_OWNER_TOKEN?.trim() || readOwnerTokenFile() : deps.ownerToken;
     if (!token) throw new DaemonHttpError("control_auth_required",
       "No owner credential. Set MULTI_AGENT_OWNER_TOKEN or configure the owner token.");
     const client = new DaemonClient(deps.baseUrl, { fetchImpl: deps.fetchImpl, senderIdentity: false });

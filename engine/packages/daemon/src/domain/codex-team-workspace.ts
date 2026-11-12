@@ -33,7 +33,7 @@ export function prepareCodexTeamWorkspace(
       }
       return [root];
     } catch (error) {
-      console.warn(`[openrig] Codex team workspace not added (${root}): ${(error as Error).message}`);
+      console.warn(`[multi-agent] Codex team workspace not added (${root}): ${(error as Error).message}`);
       return [];
     }
   });
@@ -46,7 +46,7 @@ export function codexTeamWorkspaceArg(prepare: PrepareCodexTeamWorkspace | undef
   if (!prepare) return "";
   try { return prepare(sessionName).map(root => ` --add-dir ${shellQuote(root)}`).join(""); }
   catch (error) {
-    console.warn(`[openrig] Codex team workspace unavailable: ${(error as Error).message}`);
+    console.warn(`[multi-agent] Codex team workspace unavailable: ${(error as Error).message}`);
     return "";
   }
 }

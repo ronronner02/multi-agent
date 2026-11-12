@@ -29,7 +29,7 @@ describe("A4b resolveExternal", () => {
     expect(r.kind).toBe("unregistered");
     if (r.kind === "unregistered") {
       expect(r.error).toMatch(/not.*registered|no registered/i);
-      expect(r.error).toMatch(/rig gateway human add/);            // teaching: how to fix
+      expect(r.error).toMatch(/multi-agent gateway human add/);            // teaching: how to fix
       expect(r.error).toMatch(/NOT downgraded to an agent seat/i); // never a silent agent-class fall
     }
   });

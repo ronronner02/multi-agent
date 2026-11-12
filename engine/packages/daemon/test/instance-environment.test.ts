@@ -9,7 +9,7 @@ import { DaemonClient } from "../../cli/src/client.js";
 describe("test instance environment", () => {
   // scripts/test-instance-isolation.test.mjs supplies only a disposable outer
   // home/database/HTTP server. Never run this discriminator against a real seat.
-  it.skipIf(!process.env.OPENRIG_TEST_OUTER_INSTANCE)("exercises default database and endpoint routing", async () => {
+  it.skipIf(!process.env.MULTI_AGENT_TEST_OUTER_INSTANCE)("exercises default database and endpoint routing", async () => {
     const file = new ConfigStore().resolve().db.path;
     mkdirSync(dirname(file), { recursive: true });
     const db = createDb(file);
@@ -28,9 +28,9 @@ describe("test instance environment", () => {
   it("preserves explicit fixture overrides made after setup", async () => {
     const root = mkdtempSync(join(tmpdir(), "instance-override-"));
     try {
-      vi.stubEnv("OPENRIG_HOME", root);
-      vi.stubEnv("OPENRIG_DB", join(root, "chosen.sqlite"));
-      vi.stubEnv("OPENRIG_URL", "http://fixture.invalid:12345");
+      vi.stubEnv("MULTI_AGENT_HOME", root);
+      vi.stubEnv("MULTI_AGENT_DB", join(root, "chosen.sqlite"));
+      vi.stubEnv("MULTI_AGENT_URL", "http://fixture.invalid:12345");
       expect(new ConfigStore().resolve().db.path).toBe(join(root, "chosen.sqlite"));
       const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
       const client = new DaemonClient(undefined, { fetchImpl });

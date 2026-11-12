@@ -2,9 +2,9 @@
 
 > **Experimental in 0.6.0, optional and off by default.** The Jev classification path and shadow
 > capture may be incomplete or not work, and no accuracy or production-reliability claim is
-> made. OpenRig's delivery, watchdog and routing decisions do not use their output. If they do
+> made. Multi-Agent's delivery, watchdog and routing decisions do not use their output. If they do
 > not behave as described here, please
-> [open an issue](https://github.com/mvschwarz/openrig/issues/new/choose) or send a pull request
+> [open an issue](https://github.com/ronronner02/multi-agent/issues/new/choose) or send a pull request
 > ([CONTRIBUTING.md](../../CONTRIBUTING.md)).
 
 This source provides a bounded receiver for one real classifier occupant. It does
@@ -21,9 +21,9 @@ With no configuration, the experiment is off. Choose an explicit local JSON path
 in an existing private directory; the file contains only enabled state and bounds:
 
 ```sh
-rig project experimental status --config ./experiment.json --json
-rig project experimental enable --config ./experiment.json --max-requests 3 --timeout-ms 10000 --json
-rig project experimental disable --config ./experiment.json --json
+multi-agent project experimental status --config ./experiment.json --json
+multi-agent project experimental enable --config ./experiment.json --max-requests 3 --timeout-ms 10000 --json
+multi-agent project experimental disable --config ./experiment.json --json
 ```
 
 Enable does not start processing, capture, a daemon or an agent. Status and disable
@@ -43,7 +43,7 @@ limits. Failed requests consume their count. Nothing retries in the background.
 To process stream items from the actual selected occupant:
 
 ```sh
-rig project wake --project PROJECT --taxonomy ./taxonomy.yaml \
+multi-agent project wake --project PROJECT --taxonomy ./taxonomy.yaml \
   --classifier-version experimental-jev-1.13 --evidence-epoch OWNER_EPOCH \
   --limit 3 --experiment ./experiment.json --json
 ```
@@ -85,7 +85,7 @@ an explicit later invocation to do more work.
 For selected observations from an existing shadow archive:
 
 ```sh
-rig project experimental capture --config ./experiment.json \
+multi-agent project experimental capture --config ./experiment.json \
   --input ./selected-shadow.jsonl --output ./new-advisory-results.jsonl --json
 ```
 
@@ -107,7 +107,7 @@ as proof of success.
 From the selected occupant, read candidates using the configured project ID:
 
 ```sh
-rig project candidates --project PROJECT --taxonomy /private/taxonomy.yaml \
+multi-agent project candidates --project PROJECT --taxonomy /private/taxonomy.yaml \
   --classifier-version VERSION --evidence-epoch OWNER_EPOCH --limit 20 --json
 ```
 
@@ -123,7 +123,7 @@ The candidate hash binds the selectable values as well as source and taxonomy
 hashes. Packets prepared before this pool correction require fresh preparation;
 it does not reopen historical attempts or change the evidence epoch.
 
-Read each eligible item with `rig stream show ITEM --json`. Duplicate candidates
+Read each eligible item with `multi-agent stream show ITEM --json`. Duplicate candidates
 are the latest 100 nonarchived items with exact body-hash evidence references;
 their preview is capped at 2,000 characters and marked when truncated. Read the
 complete candidate before selecting a duplicate. A retrieval miss means unknown.
@@ -155,7 +155,7 @@ the matching `duplicateEvidenceRef` from the candidates, plus occupant judgment
 that it really is a duplicate. An existing item alone is not that judgment.
 
 ```sh
-rig project wake --project PROJECT --taxonomy /private/taxonomy.yaml \
+multi-agent project wake --project PROJECT --taxonomy /private/taxonomy.yaml \
   --classifier-version VERSION --evidence-epoch OWNER_EPOCH --limit 20 \
   --decisions /private/decisions.json --json
 ```
@@ -203,7 +203,7 @@ They record only captures already taken, with the node, occupant, pane and captu
 target bound before awaits. The ordinary cheap inventory path still takes no
 capture. Retained-no-write is a separate event, never delivery evidence.
 
-Activation requires explicitly supplied `OPENRIG_SHADOW_CAPTURE` JSON at a later
+Activation requires explicitly supplied `MULTI_AGENT_SHADOW_CAPTURE` JSON at a later
 authorized daemon start. Absence or invalid configuration leaves capture disabled.
 Daemon start checks only that `destination` is an absolute normalized path and the
 numeric ceilings; the private-directory checks and exclusive file creation happen
@@ -227,11 +227,11 @@ byte allowance; queue plus drain can therefore retain up to twice that allowance
 The standalone observer defaults are 256 entries, 4 MiB queued and 256 KiB per
 observation; explicit production configuration supplies each value.
 
-`rig project shadow-status` only inspects configuration/counters.
-`rig project shadow-drain` asks the existing HTTP service to drain up to 64 rows;
+`multi-agent project shadow-status` only inspects configuration/counters.
+`multi-agent project shadow-drain` asks the existing HTTP service to drain up to 64 rows;
 it requires an actor (outside a managed seat, name one with `--actor <name>`)
 and never enables capture. No background drain timer is added.
-`rig project shadow-stop` (which needs an actor the same way) disables new enqueueing immediately, finishes any active
+`multi-agent project shadow-stop` (which needs an actor the same way) disables new enqueueing immediately, finishes any active
 drain and the finite retained queue, then closes the sink. Repeated stop is
 idempotent; it cannot enable capture or delete the existing archive. Existing
 quota and sink-failure losses remain counted. A slow disk can leave stop pending;

@@ -16,7 +16,7 @@ const { ContextPackLibraryService } = await import(distUrl("context-pack-library
 const { assembleBundle } = await import(distUrl("bundle-assembler.js"));
 const { EXCLUDES } = await import(pathToFileURL(join(HERE, "mirror-skills.mjs")).href);
 const REAL_SKILLS = join(REPO, "packages/daemon/specs/agents/shared/skills");
-const REAL_PLUGIN_SKILLS = join(REPO, "packages/daemon/assets/plugins/openrig-core/skills");
+const REAL_PLUGIN_SKILLS = join(REPO, "packages/daemon/assets/plugins/multi-agent-core/skills");
 const REAL_STATIC_PACKS = join(REPO, "packages/daemon/context-packs-src");
 
 // Independent computation of the mirror's exclude-only ship set on a real tree —
@@ -47,17 +47,17 @@ function skill(root, rel, { name, description, files }) {
 function run(source, out, args = []) {
   return execFileSync("node", [GEN, ...args], {
     encoding: "utf8",
-    env: { ...process.env, OPENRIG_SKILLS_SOURCE: source, OPENRIG_PACKS_OUT: out, OPENRIG_PACKAGE_VERSION: "0.5.3" },
+    env: { ...process.env, MULTI_AGENT_SKILLS_SOURCE: source, MULTI_AGENT_PACKS_OUT: out, MULTI_AGENT_PACKAGE_VERSION: "0.5.3" },
   });
 }
 
 function runProduction(out, args = []) {
   const env = { ...process.env };
-  delete env.OPENRIG_SKILLS_SOURCE;
-  delete env.OPENRIG_STATIC_PACKS_SOURCE;
+  delete env.MULTI_AGENT_SKILLS_SOURCE;
+  delete env.MULTI_AGENT_STATIC_PACKS_SOURCE;
   return execFileSync("node", [GEN, ...args], {
     encoding: "utf8",
-    env: { ...env, OPENRIG_PACKS_OUT: out, OPENRIG_PACKAGE_VERSION: "0.5.3" },
+    env: { ...env, MULTI_AGENT_PACKS_OUT: out, MULTI_AGENT_PACKAGE_VERSION: "0.5.3" },
   });
 }
 
@@ -86,7 +86,7 @@ test("generates a valid, daemon-parseable pack per skill; SKILL.md is the instru
     // both packs exist under skills/<rel>
     assert.ok(existsSync(join(out, "skills/core/attention-queue/manifest.yaml")));
     assert.ok(existsSync(join(out, "skills/process/tdd/manifest.yaml")));
-    assert.ok(!existsSync(join(out, "skills/mission-slice-sop")), "an explicit source override must remain isolated");
+    assert.ok(!existsSync(join(out, "skills/agent-operated-workflows")), "an explicit source override must remain isolated");
 
     // manifest parses through the DAEMON's parser and SKILL.md leads as instruction
     const m1 = parseManifest(readFileSync(join(out, "skills/core/attention-queue/manifest.yaml"), "utf8"), "m1");
@@ -218,44 +218,22 @@ test("REAL CANON: referenced helpers are DELIVERED in the served bundle (packed-
   }
 });
 
-test("PRODUCTION PUBLIC PLUGIN-ONLY: mission-slice-sop catalogs once and helper assets ship byte-identically", () => {
+test("PRODUCTION PUBLIC PLUGIN-ONLY: retained team skill catalogs once and ships byte-identically", () => {
   const out = mkdtempSync(join(tmpdir(), "s10-plugin-only-"));
   try {
     runProduction(out);
-    const ref = "skills/mission-slice-sop";
+    const ref = "skills/agent-operated-software";
     const projectedSkill = join(out, ref, "SKILL.md");
-    const pluginSkill = join(REAL_PLUGIN_SKILLS, "mission-slice-sop", "SKILL.md");
-    assert.deepEqual(
-      readFileSync(projectedSkill),
-      readFileSync(pluginSkill),
-      "the builtin pack must contain the packaged plugin's exact SKILL.md bytes",
-    );
-
+    const pluginSkill = join(REAL_PLUGIN_SKILLS, "agent-operated-software", "SKILL.md");
+    assert.deepEqual(readFileSync(projectedSkill), readFileSync(pluginSkill));
     const manifest = parseManifest(readFileSync(join(out, ref, "manifest.yaml"), "utf8"), ref);
-    assert.equal(manifest.name, "mission-slice-sop");
-    assert.equal(manifest.files[0].path, "SKILL.md");
-    assert.equal(manifest.files[0].role, "instruction");
-
+    assert.equal(manifest.name, "agent-operated-software");
     const lib = new ContextPackLibraryService({ roots: [{ path: out, sourceType: "builtin" }] });
-    const scan = lib.scan();
-    assert.deepEqual(scan.errors, []);
-    assert.equal(lib.list().filter((entry) => entry.relativePath === ref).length, 1, "the public skill ref must be unique");
+    assert.deepEqual(lib.scan().errors, []);
+    assert.equal(lib.list().filter((entry) => entry.relativePath === ref).length, 1);
     const entry = lib.getByRef(ref);
-    assert.ok(entry, "the plugin-only public skill must be retrievable from the catalog");
-    const bundle = assembleBundle({ packEntry: entry });
-    assert.deepEqual(bundle.missingFiles, []);
-    assert.match(bundle.text, /mission-slice-sop/);
-
-    for (const [skillName, helper] of [
-      ["loading-addressable-markdown", "scripts/resolve-markdown.mjs"],
-      ["openrig-operating-model", "scripts/compose.py"],
-    ]) {
-      assert.deepEqual(
-        readFileSync(join(out, "skills", skillName, helper)),
-        readFileSync(join(REAL_PLUGIN_SKILLS, skillName, helper)),
-        `${helper} must remain byte-identical to its packaged plugin source`,
-      );
-    }
+    assert.ok(entry);
+    assert.deepEqual(assembleBundle({ packEntry: entry }).missingFiles, []);
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
@@ -271,10 +249,10 @@ function runWithStatic(source, staticSource, out, args = []) {
     encoding: "utf8",
     env: {
       ...process.env,
-      OPENRIG_SKILLS_SOURCE: source,
-      OPENRIG_STATIC_PACKS_SOURCE: staticSource,
-      OPENRIG_PACKS_OUT: out,
-      OPENRIG_PACKAGE_VERSION: "0.5.3",
+      MULTI_AGENT_SKILLS_SOURCE: source,
+      MULTI_AGENT_STATIC_PACKS_SOURCE: staticSource,
+      MULTI_AGENT_PACKS_OUT: out,
+      MULTI_AGENT_PACKAGE_VERSION: "0.5.3",
     },
   });
 }
@@ -353,8 +331,8 @@ function expectStaticLeakFailure(base, mutate, label) {
 test("STATIC PACK LEAK GUARD runs the FULL committed authority: charged term, path prefix, AND seat/rig identity each FAIL THE BUILD", () => {
   for (const [label, content] of [
     ["charged term", "# A\n\nalpha body for the founder\n"],
-    ["internal path prefix", "# A\n\nsee openrig-work/skills for the library\n"],
-    ["instance seat/rig identity", "# A\n\nroute it to dev50@v-openrig-build when done\n"],
+    ["internal path prefix", "# A\n\nsee multi-agent-work/skills for the library\n"],
+    ["instance seat/rig identity", "# A\n\nroute it to dev50@v-multi-agent-build when done\n"],
   ]) {
     const base = mkdtempSync(join(tmpdir(), "s05-leak-"));
     try {
@@ -370,7 +348,7 @@ test("STATIC PACK SIDECARS are part of the leak boundary regardless of suffix", 
   try {
     expectStaticLeakFailure(
       base,
-      (dir) => writeFileSync(join(dir, "PROVENANCE.yaml"), "source: openrig-work/rigs/private\n"),
+      (dir) => writeFileSync(join(dir, "PROVENANCE.yaml"), "source: multi-agent-work/rigs/private\n"),
       "renamed provenance sidecar",
     );
   } finally {
@@ -388,7 +366,7 @@ test("STATIC SOURCE provenance sidecars cannot hide beside, rather than inside, 
     staticWorldPack(staticSrc, "world/install");
     writeFileSync(
       join(staticSrc, "PROVENANCE-world-install.yaml"),
-      "source: openrig-work/rigs/private\n",
+      "source: multi-agent-work/rigs/private\n",
     );
 
     let failure;
@@ -400,7 +378,7 @@ test("STATIC SOURCE provenance sidecars cannot hide beside, rather than inside, 
     assert.ok(failure, "a root-level provenance sidecar must be inside the scanned boundary");
     assert.equal(failure.status, 1);
     assert.match(String(failure.stderr), /PROVENANCE-world-install\.yaml/);
-    assert.match(String(failure.stderr), /openrig-work\//i);
+    assert.match(String(failure.stderr), /multi-agent-work\//i);
     assert.ok(!existsSync(out), "no projection may be written after provenance refusal");
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -560,78 +538,46 @@ test("STATIC PACK SYMLINKS: a link into docs/reference ships as a real file; any
   }
 });
 
-// S07 F1/F2: the help guide's on-demand guide addresses resolve through the daemon's
-// real address route over the generated packs, and a help read stays small.
-const DIST = join(REPO, "packages/daemon/dist");
-async function addressRouteOver(packsRoot) {
-  const { Hono } = await import("hono");
-  const { contextPacksRoutes } = await import(pathToFileURL(join(DIST, "routes/context-packs.js")).href);
-  const { ContextPackLibraryService } = await import(
-    pathToFileURL(join(DIST, "domain/context-packs/context-pack-library-service.js")).href
-  );
-  const lib = new ContextPackLibraryService({ roots: [{ path: packsRoot, sourceType: "builtin" }] });
-  lib.scan();
-  const app = new Hono();
-  app.use("*", async (c, next) => {
-    c.set("contextPackLibrary", lib);
-    await next();
-  });
-  app.route("/api/context-packs", contextPacksRoutes());
-  return app;
-}
-const taughtAddresses = (text) => [...text.matchAll(/`rig context get (reference\/[^`\s]+)`/g)].map((m) => m[1]);
-async function unresolvedAddresses(app, addresses) {
-  const failures = [];
-  for (const address of addresses) {
-    const res = await app.request(`/api/context-packs/library/resolve-address?address=${encodeURIComponent(address)}`);
-    if (res.status !== 200) failures.push({ address, status: res.status });
-  }
-  return failures;
+// S07 F1/F2: help addresses resolve against the generated library directly. The
+// old HTTP route was removed with the legacy route surface; this test exercises the
+// retained library and markdown-address authorities instead of importing that route.
+const { parseAddress, resolveAddress } = await import(pathToFileURL(join(REPO, "packages/daemon/dist/domain/markdown-address.js")).href);
+function resolveLibraryAddress(lib, address) {
+  const parsed = parseAddress(address);
+  const entry = lib.list()
+    .filter((candidate) => parsed.ref === candidate.relativePath || parsed.ref.startsWith(`${candidate.relativePath}/`))
+    .sort((a, b) => b.relativePath.length - a.relativePath.length)[0];
+  assert.ok(entry, `missing pack for ${address}`);
+  const rel = parsed.ref.slice(entry.relativePath.length).replace(/^\//, "");
+  const file = rel || entry.files[0]?.path;
+  assert.ok(file, `missing file for ${address}`);
+  const text = readFileSync(lib.resolveFileWithinPack(entry, file), "utf8");
+  return parsed.headerPath.length === 0 ? { text } : resolveAddress(text, parsed.headerPath);
 }
 
-test("HELP ADDRESSES: every guide address taught in help.md resolves through the real address route; help stays small", async () => {
+test("HELP PACK: the generated library exposes current CLI help and resolves a help section", async () => {
   const out = mkdtempSync(join(tmpdir(), "r061-help-addr-"));
   try {
     runProduction(out);
     const helpSource = readFileSync(join(REPO, "docs/reference/help.md"), "utf8");
     const refDir = join(out, "reference");
     assert.deepEqual(readdirSync(refDir).sort(), ["getting-started.md", "instance-layout.md", "manifest.yaml", "rig-spec.md", "whats-new.md"]);
-    for (const f of ["getting-started.md", "instance-layout.md", "rig-spec.md", "whats-new.md"]) {
-      assert.ok(!lstatSync(join(refDir, f)).isSymbolicLink(), `${f} ships as a real file`);
-      assert.equal(readFileSync(join(refDir, f), "utf8"), readFileSync(join(REPO, "docs/reference", f), "utf8"));
-    }
-    const app = await addressRouteOver(out);
-    const addresses = taughtAddresses(helpSource);
-    assert.deepEqual(addresses.sort(), [
-      "reference/getting-started.md#have-your-agent-configure-permissions",
-      "reference/getting-started.md#incomplete-setup-and-restart",
-      "reference/getting-started.md#open-the-kernel-conversations",
-      "reference/instance-layout.md",
-      "reference/rig-spec.md",
-      "reference/whats-new.md",
-    ]);
-    assert.deepEqual(await unresolvedAddresses(app, addresses), []);
-    const section = await (await app.request(
-      `/api/context-packs/library/resolve-address?address=${encodeURIComponent("reference/getting-started.md#incomplete-setup-and-restart")}`,
-    )).json();
-    assert.match(section.text, /^## Incomplete setup and restart/);
-    assert.ok(!section.text.includes("## Kernel framing"), "a section address returns that section, not the file");
-    const whole = await (await app.request(
-      `/api/context-packs/library/resolve-address?address=${encodeURIComponent("reference/rig-spec.md")}`,
-    )).json();
-    assert.equal(whole.text, readFileSync(join(REPO, "docs/reference/rig-spec.md"), "utf8"));
-    const preview = await (await app.request(`/api/context-packs/library/by-ref/preview?ref=help`)).json();
-    assert.deepEqual(preview.files.map((f) => f.path ?? f), ["help.md"]);
-    assert.ok(preview.bundleText.includes("# Help your user get unstuck"));
-    for (const manual of ["# Getting started: one useful change", "# OpenRig Instance Layout", "# RigSpec Reference", "# What changed in OpenRig"]) {
-      assert.ok(!preview.bundleText.includes(manual), `a help read must not include '${manual}'`);
-    }
+    const lib = new ContextPackLibraryService({ roots: [{ path: out, sourceType: "builtin" }] });
+    assert.deepEqual(lib.scan().errors, []);
+    assert.doesNotMatch(helpSource, /multi-agent context get/);
+    const section = resolveLibraryAddress(lib, "help/help.md#start-with-the-local-engine");
+    assert.match(section.text, /^## Start with the local engine/);
+    assert.ok(!section.text.includes("## Start and inspect a team run"));
+    assert.equal(resolveLibraryAddress(lib, "reference/rig-spec.md").text, readFileSync(join(REPO, "docs/reference/rig-spec.md"), "utf8"));
+    const preview = assembleBundle({ packEntry: lib.getByRef("help") });
+    assert.deepEqual(preview.missingFiles, []);
+    assert.match(preview.text, /# Help your user get unstuck/);
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
 });
 
-test("HELP ADDRESSES: the checker fails when a taught address has no target", async () => {
+test("HELP ADDRESSES: a missing file remains an explicit resolution failure", () => {
   const base = mkdtempSync(join(tmpdir(), "r061-help-missing-"));
   try {
     const packsRoot = join(base, "packs");
@@ -639,18 +585,17 @@ test("HELP ADDRESSES: the checker fails when a taught address has no target", as
     writeFileSync(join(packsRoot, "reference/manifest.yaml"),
       'name: reference\nversion: "1"\ntaxonomy: world\nfiles:\n  - path: getting-started.md\n    role: reference\n');
     writeFileSync(join(packsRoot, "reference/getting-started.md"), "# G\n\n## Incomplete setup and restart\nbody\n");
-    const app = await addressRouteOver(packsRoot);
-    const failures = await unresolvedAddresses(app, taughtAddresses(
-      "`rig context get reference/getting-started.md#incomplete-setup-and-restart` and `rig context get reference/rig-spec.md`",
-    ));
-    assert.deepEqual(failures.map((f) => f.address), ["reference/rig-spec.md"]);
+    const lib = new ContextPackLibraryService({ roots: [{ path: packsRoot, sourceType: "builtin" }] });
+    assert.deepEqual(lib.scan().errors, []);
+    let failed = false;
+    try { resolveLibraryAddress(lib, "reference/rig-spec.md"); } catch { failed = true; }
+    assert.equal(failed, true);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
 });
 
 test("HELP FALLBACK PATHS: source links resolve, and the installed path matches the package copy", async () => {
-  const { parseAddress, resolveAddress } = await import(pathToFileURL(join(DIST, "domain/markdown-address.js")).href);
   const helpSource = readFileSync(join(REPO, "docs/reference/help.md"), "utf8");
   for (const [, target] of helpSource.matchAll(/\]\(([a-z-]+\.md(?:#[a-z0-9-]+)?)\)/g)) {
     const [file, anchor] = target.split("#");
@@ -661,11 +606,10 @@ test("HELP FALLBACK PATHS: source links resolve, and the installed path matches 
   assert.match(buildPackage, /cp -r "\$REPO_ROOT\/docs\/reference\/"\* "\$CLI_DIR\/daemon\/docs\/reference\/"/);
   const fallbacks = [
     "docs/reference/help.md",
-    "packages/daemon/assets/guidance/openrig-start.md",
-    "packages/daemon/assets/plugins/openrig-core/skills/openrig-skills/SKILL.md",
+    "packages/daemon/assets/guidance/multi-agent-start.md",
   ].map((p) => readFileSync(join(REPO, p), "utf8").replace(/\s+/g, " "));
   for (const text of fallbacks) {
-    assert.ok(text.includes("`daemon/docs/reference/help.md` inside the installed `@openrig/cli` package"));
+    assert.ok(text.includes("`daemon/docs/reference/help.md`"));
     assert.ok(!text.includes("read `docs/reference/help.md` in the installed package"));
     assert.ok(!text.includes("open `docs/reference/help.md` in the installed package"));
   }

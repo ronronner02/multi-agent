@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { createInterfaceI18n } from "@openrig/i18n";
+import { createInterfaceI18n } from "@multi-agent/i18n";
 import { I18nextProvider } from "react-i18next";
 import { parsePatch } from "../diff-model.js";
 import { DiffView } from "../diff-view.js";

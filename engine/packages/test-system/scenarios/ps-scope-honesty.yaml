@@ -1,5 +1,5 @@
-# Defect class: the across-rigs trap (`rig ps` scope honesty).
-# Marathon origin: `rig ps` silently mixed seats from other rigs into the current-rig
+# Defect class: the across-rigs trap (`multi-agent ps` scope honesty).
+# Marathon origin: `multi-agent ps` silently mixed seats from other rigs into the current-rig
 #   view (or hid them), so operators mis-read who was running where.
 # SEED (class: across-rigs-leak): the seeded regression leaks rig-beta's seats into
 #   rig-alpha's DEFAULT (current-rig) ps view. The default-scope `expect ps` MUST catch
@@ -7,7 +7,7 @@
 #   {only rig-alpha} vs an observed alpha+beta, naming the leak.
 #
 # V1 SHAPE (endorsed, dev-driver + orch 2026-08-06): assert the current-rig-DEFAULT leg
-# LIVE (honest, shipped: default `rig ps` is current-rig). The all-rigs / per-rig
+# LIVE (honest, shipped: default `multi-agent ps` is current-rig). The all-rigs / per-rig
 # confirmatory legs (`ps --nodes -A` / `ps --nodes --rig <name>`) are R-16 VISIBLY-
 # DEFERRED: the daemon may SILENTLY IGNORE the scope selector in its projection, so
 # asserting them now risks a FALSE GREEN (selector dropped). They light up when R-16
@@ -21,7 +21,7 @@ steps:
   - up: {}
   - up: {topology: ./rig-beta-stub.yaml}   # R-12: bring up the second rig (dep)
   # DEFAULT ps = current rig only: rig-beta is UP but ABSENT from rig-alpha's default
-  # view. (Exact `rig ps --json` field shape verifies-at-source in the runtime pass.)
+  # view. (Exact `multi-agent ps --json` field shape verifies-at-source in the runtime pass.)
   - expect:
       surface: ps
       within: 20s

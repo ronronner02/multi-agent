@@ -305,7 +305,7 @@ export interface QueueCreateInput {
    *  that thread can't be used (e.g. a live human gate, see hasLiveHumanGate), it posts
    *  top-level and the row records why. */
   replyTo?: string | null;
-  /** #822 — Slack inbound only: the item whose OpenRig thread a person's reply was typed in.
+  /** #822 — Slack inbound only: the item whose Multi-Agent thread a person's reply was typed in.
    *  Stored as this row's replyTo, so an update that answers this row (--reply-to it) walks on
    *  to that thread. It never steers this row's own posts: delivery reads replyTo on updates
    *  only. An item that does not exist is dropped, never a reason to lose the message. */
@@ -372,7 +372,7 @@ export interface QueueUpdateInput {
   /**
    * OPR.0.4.4.19 FR-6 — park-time inputs. summary + evidence_ref are
    * updatable AT THE PARK MOMENT (state=blocked with a human-seat blocker),
-   * not create-only: `rig queue block --summary --evidence-ref` persists
+   * not create-only: `multi-agent queue block --summary --evidence-ref` persists
    * them onto the EXISTING item so the attention query + Packet 2 read
    * them. OPR.0.5.1 slice-51-06 D2: supplying them on a NON-park transition
    * is REJECTED (QueueRepositoryError "summary_evidence_not_persistable")
@@ -1311,7 +1311,7 @@ export class QueueRepository {
    *
    * V0.3.1 slice 23 queue-handoff-envelope: the nudge body
    * is now wrapped with the same From/To/---/body/---/↩ Reply envelope
-   * that `rig send` uses. `sourceSession` is the seat that triggered
+   * that `multi-agent send` uses. `sourceSession` is the seat that triggered
    * the create/handoff so the recipient pane shows where the nudge
    * came from + a reply hint. A queue nudge is the ONE non-refusable
    * sender — it has no seat to send an error back to — so when
@@ -1400,7 +1400,7 @@ export class QueueRepository {
       // decision text to the parked owner; default stays the handoff nudge.
       const bareBody = bodyOverride ?? renderQueueHandoffNudge(qitemId, null);
       // GHOST-STAGE (h): the single HG-5 baseline change deferred from g — the handoff nudge now carries
-      // a Sent: stamp (so it renders byte-parically with a rig send) plus the SOURCE seat's occupant
+      // a Sent: stamp (so it renders byte-parically with a multi-agent send) plus the SOURCE seat's occupant
       // generation (g's already-wired render, resolved here; absent=UNKNOWN=omit, never forged). The
       // stampISO also feeds the transport's delivered-latency flag so a nudge that waited on a busy /
       // mid-handover successor shows ' · delivered +Ns' for free.
@@ -2617,7 +2617,7 @@ export class QueueRepository {
       if (binding) {
         throw new QueueRepositoryError(
           "workflow_frontier_packet",
-          `qitem ${input.qitemId} is the LIVE frontier packet of workflow instance ${binding.instanceId} (${binding.workflowName}). Closing it out-of-band would strand the workflow. Use the workflow verbs instead: rig workflow project (advance) | rig workflow route (re-target the owner).`,
+          `qitem ${input.qitemId} is the LIVE frontier packet of workflow instance ${binding.instanceId} (${binding.workflowName}). Closing it out-of-band would strand the workflow. Use the workflow verbs instead: multi-agent workflow project (advance) | multi-agent workflow route (re-target the owner).`,
           { instanceId: binding.instanceId, workflowName: binding.workflowName, qitemId: input.qitemId },
         );
       }
@@ -2627,7 +2627,7 @@ export class QueueRepository {
     // enforce summary + evidence_ref at the park moment, evaluated on the
     // EFFECTIVE values (provided on this call, else already on the item) so
     // an item that carried them from create parks without re-entry. The
-    // enforcement is here at the write path — the `rig queue block` verb and
+    // enforcement is here at the write path — the `multi-agent queue block` verb and
     // raw `update --state blocked` hit the same validator (no verb-only
     // enforcement). Blocking on another qitem requires nothing new (BR-1).
     // A claimed item has no current gate, but re-parking without --blocked-on
@@ -2658,7 +2658,7 @@ export class QueueRepository {
         const flags = invalidFields.map((f) => (f === "summary" ? "--summary" : "--evidence-ref")).join(" / ");
         throw new QueueRepositoryError(
           "summary_evidence_not_persistable",
-          `${invalidFields.join(" + ")} persist only on a human-seat park (state=blocked on a human seat); the '${input.state}' transition cannot store them. Remove ${flags}, or park the item (rig queue block --on <human-seat> --summary … --evidence-ref …).`,
+          `${invalidFields.join(" + ")} persist only on a human-seat park (state=blocked on a human seat); the '${input.state}' transition cannot store them. Remove ${flags}, or park the item (multi-agent queue block --on <human-seat> --summary … --evidence-ref …).`,
           { invalidFields },
         );
       }
@@ -2698,7 +2698,7 @@ export class QueueRepository {
     if (input.blockedOn != null && input.state !== "blocked") {
       throw new QueueRepositoryError(
         "blocked_on_not_admitted",
-        `blocked_on persists only on state=blocked; the '${input.state}' transition cannot store it. Park the item (rig queue block --on …) or drop --blocked-on.`,
+        `blocked_on persists only on state=blocked; the '${input.state}' transition cannot store it. Park the item (multi-agent queue block --on …) or drop --blocked-on.`,
         {},
       );
     }
@@ -3563,7 +3563,7 @@ export class QueueRepository {
    * does NOT itself emit events — callers decide whether to nudge or escalate.
    *
    * Slice 15 (finding 2): optionally rig-scoped, limited, and compact — mirroring
-   * `list` — so `rig queue overdue` is bounded and body-free by default instead of
+   * `list` — so `multi-agent queue overdue` is bounded and body-free by default instead of
    * dumping every rig's full qitem bodies to a single caller. No args = the prior
    * behavior (all overdue, full rows) for the watchdog.
    */

@@ -32,7 +32,7 @@ measuring stick:
    first, records cited. The owner's ruling gates everything downstream —
    mechanically where possible (a blocked-on anchor), never by memory.
 4. **MINT SLICES AT PLAN TIME** with real one-paragraph intents
-   (`rig scope slice create <mission> <slug> --intent "..."`; without `--intent`
+   (`multi-agent scope slice create <mission> <slug> --intent "..."`; without `--intent`
    the SPEC.md intent defaults to the title).
 5. **DEPOSIT THE DESIGN — the fidelity law.** Every design-bearing slice's SPEC.md
    carries the full design contract INLINE: the owner's words verbatim, the settled

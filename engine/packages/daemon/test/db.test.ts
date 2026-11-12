@@ -19,7 +19,7 @@ describe("createDb", () => {
   });
 
   it("creates a file-backed database when path is given", () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rigged-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "removed-test-"));
     const dbPath = path.join(tmpDir, "test.sqlite");
     const db = createDb(dbPath);
     expect(fs.existsSync(dbPath)).toBe(true);

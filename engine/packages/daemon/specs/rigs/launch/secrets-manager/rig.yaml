@@ -9,7 +9,7 @@ summary: >
 services:
   kind: compose
   compose_file: secrets-manager.compose.yaml
-  project_name: openrig-secrets
+  project_name: multi-agent-secrets
   down_policy: down
   wait_for:
     - url: http://127.0.0.1:8200/v1/sys/health

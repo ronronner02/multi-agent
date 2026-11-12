@@ -112,7 +112,7 @@ describe("fresh team baseline", () => {
   });
 
   it("opens a fresh file with WAL and preserves marked data across reopen", () => {
-    const file = join(directory(), "openrig.sqlite");
+    const file = join(directory(), "multi-agent.sqlite");
     const db = open(file);
     expect(db.pragma("journal_mode", { simple: true })).toBe("wal");
     db.exec("INSERT INTO rigs (id, name) VALUES ('team', 'Project')");
@@ -124,7 +124,7 @@ describe("fresh team baseline", () => {
   });
 
   it.each(["DELETE", "WAL"])("refuses an unmarked %s database without changing its bytes", journal => {
-    const file = join(directory(), "openrig.sqlite");
+    const file = join(directory(), "multi-agent.sqlite");
     const legacy = new Database(file); connections.push(legacy);
     legacy.pragma("journal_mode = " + journal);
     legacy.exec("CREATE TABLE legacy (value TEXT); INSERT INTO legacy VALUES ('preserve me')");
@@ -138,7 +138,7 @@ describe("fresh team baseline", () => {
   });
 
   it("propagates legacy_database and the filename from daemon startup", async () => {
-    const file = join(directory(), "openrig.sqlite");
+    const file = join(directory(), "multi-agent.sqlite");
     const legacy = new Database(file);
     legacy.exec("CREATE TABLE schema_migrations (name TEXT); CREATE TABLE rigs (id TEXT)"); legacy.close();
     const before = fileHash(file);

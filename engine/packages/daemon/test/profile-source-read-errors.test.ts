@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { makeProfileReadFile } from "../src/domain/context-packs/profile-source-resolver.js";
 let root: string;
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), "openrig-source-errors-")); });
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), "multi-agent-source-errors-")); });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 function read(ref: string) { return makeProfileReadFile({ packDir: root, roots: {} })(ref); }
 it("reports a directory source as unreadable rather than a dangling symlink", () => {

@@ -102,7 +102,7 @@ the mission file first; the slice may narrow or override mission defaults.
 
 The reusable component catalog is repo
 `docs/reference/product-journey-sdlc.md` and installed
-`$OPENRIG_HOME/reference/product-journey-sdlc.md`. A catalog with
+`$MULTI_AGENT_HOME/reference/product-journey-sdlc.md`. A catalog with
 `root: repository` resolves from `git rev-parse --show-toplevel`; use the
 `loading-addressable-markdown` skill for addressed H2/H3 sections.
 
@@ -175,14 +175,14 @@ One install, one tree.
 The layers compose from surfaces that already exist; no new mechanism is required:
 
 - Pieces and contract: one `--mission` grant spans the mission and its slices —
-  `rig context profile <pack-ref> --situation <fresh|handover|post-compaction> --mission <mission>`
+  `multi-agent context profile <pack-ref> --situation <fresh|handover|post-compaction> --mission <mission>`
   composes addressed sections with per-piece provenance and content hashes. The
   `--situation` flag is required and is a SEPARATE input from the depth profile:
   situation says which composition menu applies (fresh boot, occupant handover,
   post-compaction restore); FULL vs HIGH-ALTITUDE says how much of each layer the
   seat class receives. Choose both, independently.
 - Named install profiles make that independent depth/ordering choice explicit.
-  `rig context profile world-public --situation fresh --runtime codex --profile codex-coverage
+  `multi-agent context profile world-public --situation fresh --runtime codex --profile codex-coverage
   --rig <rig> --seat <seat> --mission <mission> --slice <slice> --json` is
   delivery-free inspection: it reports the selected profile, ordered phases,
   exact pieces, token estimates, hashes, and source provenance before anything
@@ -193,9 +193,9 @@ The layers compose from surfaces that already exist; no new mechanism is require
 - Runtime: `context profile` and `context work-install` both accept
   `--runtime claude-code` (alias `claude`) or `--runtime codex`. Profile
   composition retains the `claude` manifest/output key; skill projection
-  retains `claude-code`. Profile defaults from `OPENRIG_RUNTIME`, otherwise
+  retains `claude-code`. Profile defaults from `MULTI_AGENT_RUNTIME`, otherwise
   Claude; work-install requires the flag to inspect or apply skills.
-- Delivery: `rig walk <seat> --through-profile world-public --profile <profile>
+- Delivery: `multi-agent walk <seat> --through-profile world-public --profile <profile>
   --situation <situation> ...` applies the already-inspected profile (walk's
   seat grant is `--seat-grant`, and its `--runtime` takes `claude` or `codex`,
   defaulting to `claude`, so a Codex profile needs `--runtime codex`);

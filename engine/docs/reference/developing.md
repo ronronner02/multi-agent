@@ -1,4 +1,4 @@
-# Developing OpenRig — gates and lanes
+# Developing Multi-Agent — gates and lanes
 
 This is the contributor-facing statement of which checks BLOCK a change and which are
 advisory. Every pull request to `main` runs `.github/workflows/tests.yml` on a clean GitHub

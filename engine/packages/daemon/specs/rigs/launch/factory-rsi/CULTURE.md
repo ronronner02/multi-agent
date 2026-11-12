@@ -43,5 +43,5 @@ run on codex for cross-runtime diversity against the builder.
 ## Deployment
 
 As a shipped starter this rig is workspace-agnostic — point
-`rig up factory-rsi --cwd <repo>` at whatever real repository the loop should
+`multi-agent up factory-rsi --cwd <repo>` at whatever real repository the loop should
 improve, and the planner's product-intent corpus is that repo's real specs.

@@ -237,7 +237,7 @@ export interface SettledRow {
 }
 
 /** The composed rig-agents read root (slice 22 FR-1..FR-4): NEEDS YOU +
- *  AGENTS (with coordination health) + SETTLED at rig scope. Pure
+ *  AGENTS (with coordination health) + SETTLED at multi-agent scope. Pure
  *  projection over queue + ps — agents author nothing for it. */
 export interface ComposedRigAgents {
   scope: "rig";

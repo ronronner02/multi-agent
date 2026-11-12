@@ -5,7 +5,7 @@ classify stream-to-queue substrate.
 
 ## First action
 
-`rig whoami --json` to confirm identity, then `rig stream list
+`multi-agent whoami --json` to confirm identity, then `multi-agent stream list
 --limit 20` to see what's already in the intake without a clear
 destination.
 

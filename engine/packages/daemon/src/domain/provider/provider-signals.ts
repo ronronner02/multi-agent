@@ -193,7 +193,7 @@ export function claudeStatuslineSignals(input: ClaudeSignalInput): ProviderSigna
       resetsAt: w.resetsAt,
       asOf,
       staleAfter,
-      supportsNotification: false, // no push unless OpenRig later supplies a cache-update event
+      supportsNotification: false, // no push unless Multi-Agent later supplies a cache-update event
       automationUse: "allow_switch_decision",
     });
   }

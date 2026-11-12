@@ -1,4 +1,4 @@
-# OpenRig 0.4.6 canonical single-rig RSI factory MVP (OPR.0.4.6.FAC2).
+# Multi-Agent 0.4.6 canonical single-rig RSI factory MVP (OPR.0.4.6.FAC2).
 #
 # ONE rig + ONE workflow = the recursive-self-improvement factory MVP. The
 # in-band INNER LOOP is a bounded, engine-routed SDLC:
@@ -37,29 +37,29 @@ workflow:
     orchestrator_role: orchestrator
   roles:
     planner:
-      skill_refs: [openrig-user, requirements-writer]
+      skill_refs: [agent-operated-software, requirements-writer]
       preferred_targets: [plan-planner@factory-rsi]
     implementer:
-      skill_refs: [openrig-user, development-team, test-driven-development]
+      skill_refs: [agent-operated-software, development-team, test-driven-development]
       preferred_targets: [build-implementer@factory-rsi]
     qa:
-      skill_refs: [openrig-user, verification-before-completion]
+      skill_refs: [agent-operated-software, verification-before-completion]
       preferred_targets: [check-qa@factory-rsi]
     reviewer:
-      skill_refs: [openrig-user, review-team, plan-review]
+      skill_refs: [agent-operated-software, review-team, plan-review]
       preferred_targets: [review-reviewer@factory-rsi]
     release_manager:
-      skill_refs: [openrig-user, release-manager]
+      skill_refs: [agent-operated-software, release-manager]
       preferred_targets: [release-manager@factory-rsi]
     orchestrator:
-      skill_refs: [openrig-user, orchestration-team]
+      skill_refs: [agent-operated-software, orchestration-team]
       preferred_targets: [orch-lead@factory-rsi]
     # The dogfood role is DECOUPLED from the inner loop: it runs out-of-band
     # against the SHIPPED product and feeds findings into the next plan (the RSI
     # edge). It is intentionally NOT an inner-loop step here; the continuous
     # out-of-band runtime mechanism is refined in a later release.
     dogfood:
-      skill_refs: [openrig-user, dogfood, systematic-debugging]
+      skill_refs: [agent-operated-software, dogfood, systematic-debugging]
       preferred_targets: [dogfood-tester@factory-rsi]
   steps:
     - id: plan

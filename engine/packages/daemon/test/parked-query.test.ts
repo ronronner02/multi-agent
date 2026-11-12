@@ -12,7 +12,7 @@ import type { ArbitratedSeatState } from "../src/domain/activity-taxonomy.js";
 // surface answers "are we parked?" — these pins define the derived diagnosis with
 // per-input confidence, named obligation scope, and the limit guard.
 
-const SEAT = { seatNodeId: "node-1", sessionName: "dev50-qa@v-openrig-build" };
+const SEAT = { seatNodeId: "node-1", sessionName: "dev50-qa@v-multi-agent-build" };
 
 function oracleState(overrides: Partial<ArbitratedSeatState>): ArbitratedSeatState {
   return {

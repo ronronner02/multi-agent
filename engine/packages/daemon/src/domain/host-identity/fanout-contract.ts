@@ -2,7 +2,7 @@
 //
 // ONE contract for the whole P4 packet (arch adjudication 2026-07-05,
 // cross-PRD interface cell): slice 15's aggregated For-You attention feed
-// AND slice 21's `rig ps --all-hosts` rollup both speak AggregatedPayload —
+// AND slice 21's `multi-agent ps --all-hosts` rollup both speak AggregatedPayload —
 // items plus a per-host structured status array. Slice 15 defines this
 // module (first lander, per the whichever-builds-first rule named in both
 // PRDs); slice 21 IMPORTS it. Any change here is a CROSS-PRD contract

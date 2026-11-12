@@ -19,7 +19,7 @@ const NOW = "2026-07-04T18:00:00.000Z";
 function agent(overrides: Partial<AgentInput> = {}): AgentInput {
   return {
     agentName: "driver1",
-    sessionName: "dev44-driver1@openrig-delivery",
+    sessionName: "dev44-driver1@multi-agent-delivery",
     runtime: "claude-code",
     parkedOn: null,
     idle: false,
@@ -87,7 +87,7 @@ describe("composeRigAgents — FR-1 rows + provenance", () => {
 
   it("scope negative: rows carry only the slices the agent holds work on — grouping input is per-agent slices, never rig co-residency", () => {
     const composed = composeRigAgents(inputs({
-      agents: [agent(), agent({ sessionName: "dev44-qa1@openrig-delivery", agentName: "qa1", slices: ["20-composer"] })],
+      agents: [agent(), agent({ sessionName: "dev44-qa1@multi-agent-delivery", agentName: "qa1", slices: ["20-composer"] })],
     }));
     expect(composed.agents.rows[0]!.slices).toEqual(["19-signal-layer"]);
     expect(composed.agents.rows[1]!.slices).toEqual(["20-composer"]);
@@ -198,7 +198,7 @@ describe("FR-4 — coordination health + SETTLED (same computation, two renders)
   });
 });
 
-describe("NEEDS YOU at rig scope — parks + one-count with provenance", () => {
+describe("NEEDS YOU at multi-agent scope — parks + one-count with provenance", () => {
   it("an agent-initiated park renders with its C6 summary and provenance names the window", () => {
     const composed = composeRigAgents(inputs({ attention: [park()] }));
     expect(composed.needsYou.items[0]!.summary).toBe("waiting on your follow-mode call");

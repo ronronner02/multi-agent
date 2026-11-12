@@ -68,15 +68,15 @@ const EXPECTED_PUBLIC_CLAIM_IDS = [
 
 const EXPECTED_COVERAGE_MAP_ROWS = [
   "| product | `world-public/boundaries.md#this-pack-does-not-cover` |",
-  "| topology | `skills/core/openrig-architect/SKILL.md` |",
+  "| topology | `skills/pods/orchestration-team/SKILL.md` |",
   "| context | `world-public/build-your-world.md#separate-kinds-tag-regions` |",
   "| skill | `onboarding-width/public-reference-material.md#the-one-you-read-rather-than-consult` |",
   "| queue/custody | `onboarding-width/public-what-you-can-do.md#making-work-outlive-you` |",
   "| source/worktree | `onboarding-width/public-reference-material.md#the-command-surface-docs-as-built-in-the-source-repo` |",
   "| proof/review | `skills/process/verification-before-completion/SKILL.md` |",
-  "| lifecycle/release | `skills/core/rig-lifecycle/SKILL.md` |",
+  "| lifecycle/release | `onboarding-width/public-what-you-can-do.md#starting-and-reviewing-a-team-run` |",
   "| continuity/recovery | `onboarding-width/public-what-you-can-do.md#when-something-is-broken` |",
-  "| host-boundary | `skills/core/cross-host-rig-commands/SKILL.md` |",
+  "| host-boundary | `onboarding-width/public-what-you-can-do.md#data-and-configuration` |",
 ] as const;
 
 const EXPECTED_MANIFEST_CLAIMS = [
@@ -86,13 +86,13 @@ const EXPECTED_MANIFEST_CLAIMS = [
   { id: "public-manifest-summary-boundaries", value: "What this public world covers, excludes, and cannot decide." },
   { id: "public-manifest-summary-claims", value: "Every authored claim mapped to a failing check or an explicit honesty flag." },
   { id: "public-manifest-summary-verify-world", value: "Portable named checks with loud failures and skips." },
-  { id: "public-manifest-probe-enter-the-world-prompt", value: "You just arrived in an unfamiliar OpenRig environment. What do you derive before acting?" },
+  { id: "public-manifest-probe-enter-the-world-prompt", value: "You just arrived in an unfamiliar Multi-Agent environment. What do you derive before acting?" },
   { id: "public-manifest-probe-enter-the-world-expect", value: "The agent derives its identity, live topology, available context, and command surface instead of guessing." },
   { id: "public-manifest-probe-author-a-world-prompt", value: "Create a world for a book-writing project without turning the eight regions into folders." },
   { id: "public-manifest-probe-author-a-world-expect", value: "The agent starts with a small manifest and authored files, tags atoms by region, and keeps other context kinds separate." },
   { id: "public-manifest-probe-know-the-edges-prompt", value: "Which gaps can this public world answer, and which still require local sources or human judgment?" },
   { id: "public-manifest-probe-know-the-edges-expect", value: "The agent distinguishes public structure from rig-local facts, current state, mission context, and irreversible judgment." },
-  { id: "example-manifest-purpose", value: "A fill-in template showing the anatomy of an OpenRig world pack." },
+  { id: "example-manifest-purpose", value: "A fill-in template showing the anatomy of an Multi-Agent world pack." },
   { id: "example-manifest-summary-your-world", value: "A minimal fill-in template for describing an agent's world." },
   { id: "example-manifest-probe-your-world-prompt", value: "Describe the operating world for a book-writing project." },
   { id: "example-manifest-probe-your-world-expect", value: "The agent fills one coherent world file and derives volatile state instead of creating a folder per region." },
@@ -136,7 +136,7 @@ function runVerifier(packDir: string, env: NodeJS.ProcessEnv = process.env) {
 }
 
 function runRig(rigPath: string, args: string[], env: NodeJS.ProcessEnv) {
-  return spawnSync(join(rigPath, "rig"), args, { env, encoding: "utf8" });
+  return spawnSync(join(rigPath, "multi-agent"), args, { env, encoding: "utf8" });
 }
 
 function writeRigFixture(options: {
@@ -177,7 +177,7 @@ function writeRigFixture(options: {
     { relativePath: "world/install", sourceType: "user_file", sourcePath: "/fixture/private-world" },
   ]);
   const configRoot = options.configRoot === undefined
-    ? '"${OPENRIG_CONTEXT_ROOT:-/fixture/context}"'
+    ? '"${MULTI_AGENT_CONTEXT_ROOT:-/fixture/context}"'
     : `'${options.configRoot}'`;
   writeFileSync(
     join(fixturePath, "world-public-get.txt"),
@@ -194,7 +194,7 @@ function writeRigFixture(options: {
   );
   writeFileSync(join(fixturePath, "world-public-show.json"), showJson);
   writeFileSync(join(fixturePath, "context-list.json"), listJson);
-  writeFileSync(join(fixturePath, "rig"), [
+  writeFileSync(join(fixturePath, "multi-agent"), [
     "#!/bin/sh",
     `fixture_dir=${JSON.stringify(fixturePath)}`,
     `install_state=${JSON.stringify(installState)}`,
@@ -223,13 +223,13 @@ function writeRigFixture(options: {
     "  fi",
     '  [ "$4" = "--name" ] || exit 64',
     `  if [ ${options.partialSync ? 1 : 0} -eq 1 ]; then`,
-    '    target="$OPENRIG_CONTEXT_ROOT/$5"',
+    '    target="$MULTI_AGENT_CONTEXT_ROOT/$5"',
     '    mkdir -p "$target"',
     '    printf \'%s\\n\' \'name: partial-sync-fixture\' > "$target/manifest.yaml"',
     '    printf \'{"installedAt":"%s","syncError":"HTTP 503"}\\n\' "$target"',
     "    exit 0",
     "  fi",
-    '  target="$OPENRIG_CONTEXT_ROOT/$5"',
+    '  target="$MULTI_AGENT_CONTEXT_ROOT/$5"',
     '  mkdir -p "$target"',
     '  cp -R "$3"/. "$target"/',
     '  printf \'%s\\n\' "$5" > "$install_state"',
@@ -238,7 +238,7 @@ function writeRigFixture(options: {
     '  if [ -f "$install_state" ]; then',
     '    installed_ref=$(sed -n \'1p\' "$install_state")',
     '    cat "$fixture_dir/context-list.json" | sed \'s/]$//\'',
-    "    printf ',{\"relativePath\":\"%s\",\"sourceType\":\"user_file\",\"sourcePath\":\"%s/%s\"}]\\n' \"$installed_ref\" \"$OPENRIG_CONTEXT_ROOT\" \"$installed_ref\"",
+    "    printf ',{\"relativePath\":\"%s\",\"sourceType\":\"user_file\",\"sourcePath\":\"%s/%s\"}]\\n' \"$installed_ref\" \"$MULTI_AGENT_CONTEXT_ROOT\" \"$installed_ref\"",
     "  else",
     '    cat "$fixture_dir/context-list.json"',
     "  fi",
@@ -246,7 +246,7 @@ function writeRigFixture(options: {
     `  [ ${options.partialSync ? 1 : 0} -eq 0 ] || exit 72`,
     '  [ -f "$install_state" ] || exit 1',
     '  [ "$(sed -n \'1p\' "$install_state")" = "$3" ] || exit 1',
-    '  rm -rf -- "$OPENRIG_CONTEXT_ROOT/$3"',
+    '  rm -rf -- "$MULTI_AGENT_CONTEXT_ROOT/$3"',
     '  rm -f "$install_state"',
     '  printf \'{"removed":true,"ref":"%s"}\\n\' "$3"',
     'elif [ "$1" = "config" ] && [ "$2" = "get" ] && [ "$3" = "context.root" ]; then',
@@ -261,7 +261,7 @@ function writeRigFixture(options: {
     "  exit 2",
     "fi",
   ].join("\n"));
-  chmodSync(join(fixturePath, "rig"), 0o755);
+  chmodSync(join(fixturePath, "multi-agent"), 0o755);
   return fixturePath;
 }
 
@@ -426,9 +426,8 @@ describe("public world pack", () => {
       const result = runVerifier(redPack, {
         ...process.env,
         PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-        OPENRIG_CONTEXT_ROOT: "/fixture/context",
-        OPENRIG_SESSION_NAME: "qa@fixture",
-        RIGGED_SESSION_NAME: "",
+        MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+        MULTI_AGENT_SESSION_NAME: "qa@fixture",
       });
 
       expect(result.status).toBe(1);
@@ -459,9 +458,8 @@ describe("public world pack", () => {
     const result = runVerifier(redPack, {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -506,9 +504,8 @@ describe("public world pack", () => {
     const result = runVerifier(redPack, {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -521,9 +518,8 @@ describe("public world pack", () => {
     const fixtureEnv = {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     };
     const green = runVerifier(packDir, fixtureEnv);
     expect(green.status, green.stdout + green.stderr).toBe(0);
@@ -548,9 +544,8 @@ describe("public world pack", () => {
     const wrongIdentity = runVerifier(packDir, {
       ...process.env,
       PATH: `${wrongIdentityPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
     expect(wrongIdentity.status).toBe(1);
     expect(wrongIdentity.stdout).toMatch(/FAIL.*derive-identity/i);
@@ -560,9 +555,8 @@ describe("public world pack", () => {
     const wrongTopology = runVerifier(packDir, {
       ...process.env,
       PATH: `${wrongTopologyPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
     expect(wrongTopology.status).toBe(1);
     expect(wrongTopology.stdout).toMatch(/ok.*derive-identity/i);
@@ -586,9 +580,8 @@ describe("public world pack", () => {
     const result = runVerifier(publicWorldDir(), {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -601,9 +594,8 @@ describe("public world pack", () => {
     const result = runVerifier(publicWorldDir(), {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/expected-context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/expected-context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -615,9 +607,8 @@ describe("public world pack", () => {
     const result = runVerifier(publicWorldDir(), {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -633,9 +624,8 @@ describe("public world pack", () => {
     const result = runVerifier(publicWorldDir(), {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: "/fixture/context",
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: "/fixture/context",
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -649,9 +639,8 @@ describe("public world pack", () => {
     const result = runVerifier(publicWorldDir(), {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: contextRoot,
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: contextRoot,
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     });
 
     expect(result.status).toBe(1);
@@ -659,22 +648,21 @@ describe("public world pack", () => {
     expect(readdirSync(contextRoot)).toEqual([]);
   });
 
-  it("lets a stranger in an empty OPENRIG_HOME follow the taught world journey and observe real content", () => {
+  it("lets a stranger in an empty MULTI_AGENT_HOME follow the taught world journey and observe real content", () => {
     const strangerRoot = mkdtempSync(join(tmpdir(), "public-world-stranger-"));
     temporaryRoots.push(strangerRoot);
-    const openrigHome = join(strangerRoot, "openrig-home");
-    const contextRoot = join(openrigHome, "context");
-    mkdirSync(openrigHome);
-    expect(readdirSync(openrigHome)).toEqual([]);
+    const multiAgentHome = join(strangerRoot, "multi-agent-home");
+    const contextRoot = join(multiAgentHome, "context");
+    mkdirSync(multiAgentHome);
+    expect(readdirSync(multiAgentHome)).toEqual([]);
 
     const rigPath = writeRigFixture({ configRoot: contextRoot });
     const env = {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_HOME: openrigHome,
-      OPENRIG_CONTEXT_ROOT: contextRoot,
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_HOME: multiAgentHome,
+      MULTI_AGENT_CONTEXT_ROOT: contextRoot,
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     };
 
     const publicGet = runRig(rigPath, ["context", "get", "world-public"], env);
@@ -722,9 +710,8 @@ describe("public world pack", () => {
     const env = {
       ...process.env,
       PATH: `${rigPath}:${process.env.PATH ?? ""}`,
-      OPENRIG_CONTEXT_ROOT: join(strangerRoot, "context"),
-      OPENRIG_SESSION_NAME: "qa@fixture",
-      RIGGED_SESSION_NAME: "",
+      MULTI_AGENT_CONTEXT_ROOT: join(strangerRoot, "context"),
+      MULTI_AGENT_SESSION_NAME: "qa@fixture",
     };
 
     const show = runRig(rigPath, ["context", "show", "world-public", "--json"], env);
@@ -745,10 +732,10 @@ describe("public world pack", () => {
     expect(example.taxonomy).toBe("world");
     expect(example.atoms?.length).toBeGreaterThan(0);
     expect(exercise).toContain("Book world");
-    expect(exercise).toContain("rig context get world-example");
-    expect(exercise).toContain("rig context add <pack-directory>");
-    expect(exercise).toContain("rig context list");
-    expect(exercise).toContain("rig config get context.root");
+    expect(exercise).toContain("multi-agent context get world-example");
+    expect(exercise).toContain("multi-agent context add <pack-directory>");
+    expect(exercise).toContain("multi-agent context list");
+    expect(exercise).toContain("multi-agent config get context.root");
     expect(exercise).not.toMatch(/identity\/|ontology\/|terrain\//);
 
     const packDir = publicWorldDir();
@@ -773,18 +760,18 @@ describe("public world pack", () => {
 
     expect(text).not.toMatch(/\/(?:Users|home|private|tmp|var)\//);
     expect(text).not.toMatch(/~\//);
-    expect(text).not.toMatch(/@v-openrig|openrig-work|shared-docs\//i);
+    expect(text).not.toMatch(/@v-multi-agent|multi-agent-work|shared-docs\//i);
     expect(text).not.toMatch(/\bworld model\b/i);
     expect(text).toMatch(/private world installs remain rig-local under their own refs and are never shadowed by this builtin/i);
     expect(text).toMatch(/AGENTS\.md.*repo instructions/i);
-    expect(text).toContain("rig whoami --json");
-    expect(text).toContain("rig ps --nodes --json");
-    expect(text).toContain("rig context list");
-    expect(text).toContain("rig context get world-public");
-    expect(text).toContain("rig context add <pack-directory>");
-    expect(text).toContain("rig context profile world-public --situation fresh");
+    expect(text).toContain("multi-agent whoami --json");
+    expect(text).toContain("multi-agent ps --nodes --json");
+    expect(text).toContain("multi-agent context list");
+    expect(text).toContain("multi-agent context get world-public");
+    expect(text).toContain("multi-agent context add <pack-directory>");
+    expect(text).toContain("multi-agent context profile world-public --situation fresh");
     expect(text).toMatch(/consumers may filter that metadata as data/i);
-    expect(text).toContain("rig --help");
+    expect(text).toContain("multi-agent --help");
 
   });
 });

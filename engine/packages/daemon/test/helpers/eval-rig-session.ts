@@ -3,20 +3,20 @@
  * wiring behind `run-evals.mjs --provider rig`. Drives ONE persistent real seat
  * through the supported rig CLI surfaces only:
  *
- *   spawn   — attach to a named seat (--seat) or `rig up` a scratch spec
+ *   spawn   — attach to a named seat (--seat) or `multi-agent up` a scratch spec
  *             (--seat-spec) and adopt its single launched seat; the seat's
- *             GENERATION comes from `rig whoami --session <seat> --json`.
- *   send    — `rig send <seat> <prompt>` (argv array, never a shell string).
+ *             GENERATION comes from `multi-agent whoami --session <seat> --json`.
+ *   send    — `multi-agent send <seat> <prompt>` (argv array, never a shell string).
  *             EXACTLY ONE submitted input per case — the natural prompt. Round 5
  *             (custody fix): no eval-sync marker send. Round 4 emitted a unique
- *             nonce as a SECOND `rig send` before the prompt to disambiguate the
+ *             nonce as a SECOND `multi-agent send` before the prompt to disambiguate the
  *             pane boundary; on a `claude-code` seat that is an extra user turn,
  *             a forbidden intervening input under Test-A's no-intervening-input
  *             custody contract. Removed.
  *   capture — the boundary is the seat's CURRENT-GENERATION APPEND-ONLY conversation
  *             record (the Claude generation JSONL), read OUT-OF-BAND via the injected
  *             readGenerationRecord (reading submits nothing to the seat). Round 6
- *             (desk ruling Option B): r2 HIGH-1 falsified round-5's `rig transcript`
+ *             (desk ruling Option B): r2 HIGH-1 falsified round-5's `multi-agent transcript`
  *             boundary — that CLI reads a bounded-OVERWRITE pane snapshot, not an
  *             append-only file, so a repeated command could erase current-turn
  *             evidence. sendPrompt binds the current generation identity explicitly
@@ -29,7 +29,7 @@
  *             (never a silent degrade, never a fall-back to the bounded pane). The
  *             leading-echo strip stays the PROVIDER's contract (eval-rig-provider.ts);
  *             this module only bounds "since the prompt".
- *   retire  — `rig down <rig>` exactly when THIS session spawned the rig;
+ *   retire  — `multi-agent down <rig>` exactly when THIS session spawned the rig;
  *             attaching never destroys someone else's seat.
  *
  * Every rig CLI invocation goes through an injectable exec, and the generation-record
@@ -45,7 +45,7 @@ export type RigExec = (args: string[]) => Promise<string>;
 export interface RigCliSessionOptions {
   /** Attach to an existing session (mutually exclusive with spec). */
   seat?: string;
-  /** `rig up` this spec and adopt its single launched seat. */
+  /** `multi-agent up` this spec and adopt its single launched seat. */
   spec?: string;
   rigBin?: string;
   exec?: RigExec;
@@ -58,7 +58,7 @@ export interface RigCliSessionOptions {
   /**
    * Round-6 boundary (desk ruling qitem-...-1117052f, Option B): read the seat's CURRENT-generation
    * APPEND-ONLY conversation record — the only monotonic, no-input boundary source. r2 HIGH-1
-   * falsified `rig transcript` (a bounded-OVERWRITE pane snapshot); the Claude generation JSONL is the
+   * falsified `multi-agent transcript` (a bounded-OVERWRITE pane snapshot); the Claude generation JSONL is the
    * measured append-only record. Returns { generationId, content }:
    *   - generationId: the record's generation identity (the Claude session id / rollout id). A re-prime
    *     rolls it — that is the generation-change tripwire signal.
@@ -141,7 +141,7 @@ function newLinesSince(pre: string, post: string): string[] {
  *  the pre-send transcript `preSendCapture`. Because the transcript only APPENDS (it never scrolls or
  *  redraws like a pane), an OLD identical command line sits in the matched common prefix and can never
  *  be mistaken for the current turn's re-emission — so no in-band marker need be submitted to the seat
- *  (round-4's eval-sync marker was a second `rig send`, a forbidden intervening input; round-5 removes
+ *  (round-4's eval-sync marker was a second `multi-agent send`, a forbidden intervening input; round-5 removes
  *  it entirely). Within the suffix the prompt echo (wrapped or TUI-truncated) is skipped so grading
  *  starts at the response; a later genuine quotation is kept (it is in the suffix, after the echo). */
 export function sliceAfterPrompt(rawCapture: string, prompt: string, preSendCapture: string): string {
@@ -283,7 +283,7 @@ export function createRigCliSession(options: RigCliSessionOptions): { spawn: () 
         }
         throw lastErr;
       };
-      // Once `rig up` returns, it may have CREATED a rig — record ownership
+      // Once `multi-agent up` returns, it may have CREATED a rig — record ownership
       // IMMEDIATELY (by rigId, which survives even if the attach line can't be
       // parsed) so EVERY later failure path can tear it down (review50-r2 QA
       // finding 2). Attach mode records nothing and tears nothing down.
@@ -301,7 +301,7 @@ export function createRigCliSession(options: RigCliSessionOptions): { spawn: () 
         const attach = up.attachCommand ?? "";
         const m = attach.match(/-t\s+(\S+)/);
         if (up.status !== "completed" || !m) {
-          await cleanupOnFailure(new Error(`rig up did not launch a seat (status=${up.status ?? "?"}, attach=${JSON.stringify(attach)})`));
+          await cleanupOnFailure(new Error(`multi-agent up did not launch a seat (status=${up.status ?? "?"}, attach=${JSON.stringify(attach)})`));
         }
         sessionName = m![1]!;
         spawnedRig = spawnedRig ?? sessionName.split("@").pop();
@@ -325,7 +325,7 @@ export function createRigCliSession(options: RigCliSessionOptions): { spawn: () 
           (identity["nodeId"] as string | undefined) ??
           (identity["node_id"] as string | undefined);
         if (typeof generation !== "string" || generation.length === 0) {
-          throw new Error(`cannot derive a stable seat generation from rig whoami for '${sessionName}' — got identity keys ${Object.keys(identity).join(",")}`);
+          throw new Error(`cannot derive a stable seat generation from multi-agent whoami for '${sessionName}' — got identity keys ${Object.keys(identity).join(",")}`);
         }
       } catch (err) {
         await cleanupOnFailure(err);

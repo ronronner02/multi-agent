@@ -13,7 +13,7 @@ import type {
   UsageWindowRow,
 } from "./provider-types.js";
 
-/** A reading is too old to claim current capacity after this (Ops' openrig.subscription-usage.v1 rule). */
+/** A reading is too old to claim current capacity after this (Ops' multi-agent.subscription-usage.v1 rule). */
 export const USAGE_FRESH_FOR_MS = 15 * 60_000;
 /** An observation up to this far in the future is clock skew within tolerance (same rule). */
 export const USAGE_CLOCK_TOLERANCE_MS = 60_000;
@@ -240,7 +240,7 @@ export class CodexUsageWindows {
         currentAvailability: "unknown",
         unavailableReason: failure
           ? `refresh failed at ${failure.at}: ${failure.reason}; no earlier reading since the daemon started at ${this.startedAt}`
-          : `no reading since the daemon started at ${this.startedAt}; refresh with rig provider status --refresh`,
+          : `no reading since the daemon started at ${this.startedAt}; refresh with multi-agent provider status --refresh`,
       }];
     }
     const rows: ProviderUsageAllowance[] = [];

@@ -2,7 +2,7 @@ version: "0.2"
 name: kernel
 summary: >
   Codex-only kernel variant: all three agents run on Codex. Selected
-  by rig daemon start when codex login status is green but claude auth
+  by multi-agent daemon start when codex login status is green but claude auth
   status fails.
 
 culture_file: culture/CULTURE.md

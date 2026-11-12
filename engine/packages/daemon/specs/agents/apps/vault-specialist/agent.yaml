@@ -14,7 +14,7 @@ profiles:
       skills: [systematic-debugging, verification-before-completion, vault-user]
       guidance: []
       subagents: []
-      plugins: [shared:openrig-core]
+      plugins: [shared:multi-agent-core]
       runtime_resources: [shared:claude-default-settings, shared:claude-default-mcp, shared:codex-default-config, shared:claude-activity-hooks]
 
 resources:

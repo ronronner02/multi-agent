@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createInterfaceI18n } from "@openrig/i18n";
+import { createInterfaceI18n } from "@multi-agent/i18n";
 import { I18nextProvider } from "react-i18next";
 import { OwnerReadError } from "../../hooks/useOwnerSession.js";
 import { CreateProject, ProjectsScreen } from "../create-project.js";

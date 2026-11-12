@@ -965,7 +965,7 @@ export class WorkflowSpecCache {
    * `<pkg>/dist/builtins/workflow-specs/` in production npm-published
    * daemons — without this guard the unscoped DELETE would nuke
    * every shipped built-in on every boot. Pass
-   * `getOpenRigInstallRoot()` from cwd-resolution at the call site.
+   * `getMultiAgentInstallRoot()` from cwd-resolution at the call site.
    * When omitted, no install-root preservation is applied (test-only
    * convenience for tests that operate fully outside any install).
    */
@@ -1015,7 +1015,7 @@ function warnLegacyRehydrationOnce(name: string, version: string): void {
   if (warnedLegacyRehydrations.has(key)) return;
   warnedLegacyRehydrations.add(key);
   console.warn(
-    `workflow spec ${key} rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (rig workflow validate <path>) to heal the cache row.`,
+    `workflow spec ${key} rehydrated WITHOUT full fidelity (pre-050 cache row: loop_guards/invariants/closure/entry unavailable at projection). Re-validate the spec file (multi-agent workflow validate <path>) to heal the cache row.`,
   );
 }
 

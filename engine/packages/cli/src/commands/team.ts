@@ -1,11 +1,10 @@
+import { resolveDataRoots } from "@multi-agent/daemon/data-paths";
 import { realpathSync } from "node:fs";
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve, win32 } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { DaemonClient } from "../client.js";
-import { readOpenRigEnv } from "../openrig-compat.js";
 
 /**
  * Owner actions and result reads use the daemon HTTP API.
@@ -27,7 +26,7 @@ interface StartReceipt { runId: string; rigId: string; taskId: string; seat: str
   /** U5 — `planning` until the owner approves the plan; `delivery` otherwise. */
   phase?: string }
 
-/** The team `rig team create` returns; the daemon keeps the seat names to itself. */
+/** The team `multi-agent team create` returns; the daemon keeps the seat names to itself. */
 interface Team {
   id: string; name: string; repository: string;
   seats: Array<{ role: "lead" | "implementer" | "reviewer"; client: "claude-code" | "codex"; model?: string }>;
@@ -44,9 +43,9 @@ const BASE = "/api/team-control";
 
 /** Read the owner credential from the per-user configuration. */
 export function readOwnerTokenFile(env: NodeJS.ProcessEnv = process.env): string | null {
-  const configHome = env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config");
+  const configHome = resolveDataRoots({ env }).config;
   try {
-    for (const line of readFileSync(join(configHome, "multi-agent", "owner.env"), "utf8").split("\n")) {
+    for (const line of readFileSync(join(configHome, "owner.env"), "utf8").split("\n")) {
       const match = /^\s*MULTI_AGENT_OWNER_TOKEN\s*=\s*(.*?)\s*$/.exec(line);
       if (match?.[1]) return match[1].replace(/^["']|["']$/g, "") || null;
     }
@@ -57,7 +56,7 @@ export function readOwnerTokenFile(env: NodeJS.ProcessEnv = process.env): string
 /** The one credential resolution every verb uses: explicit dep, then the environment, then setup's file. */
 function ownerToken(deps: TeamStartDeps): string | null {
   return deps.ownerToken === undefined
-    ? readOpenRigEnv("MULTI_AGENT_OWNER_TOKEN")?.trim() || readOwnerTokenFile() : deps.ownerToken;
+    ? process.env.MULTI_AGENT_OWNER_TOKEN?.trim() || readOwnerTokenFile() : deps.ownerToken;
 }
 
 class TeamCommandError extends Error {
@@ -128,10 +127,10 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       if (receipt.phase === "planning") {
         console.log("");
         console.log("Agree the plan with the lead in the chat:");
-        console.log(`  rig team chat ${receipt.runId} "your message"`);
-        console.log(`  rig team chat ${receipt.runId}        (the conversation so far)`);
+        console.log(`  multi-agent team chat ${receipt.runId} "your message"`);
+        console.log(`  multi-agent team chat ${receipt.runId}        (the conversation so far)`);
         console.log("Then approve it once, which starts the work:");
-        console.log(`  rig team approve ${receipt.runId}`);
+        console.log(`  multi-agent team approve ${receipt.runId}`);
         return;
       }
       console.log("");
@@ -222,7 +221,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
       console.log(`Repository: ${team.repository}`);
       for (const seat of team.seats) console.log(`  ${seat.role.padEnd(12)} ${seat.client}${seat.model ? "  " + seat.model : ""}`);
       console.log("");
-      console.log(`Next: rig team start "<goal>" --rig ${team.name}${named ? " --planning" : ""}`);
+      console.log(`Next: multi-agent team start "<goal>" --rig ${team.name}${named ? " --planning" : ""}`);
     });
 
   /**
@@ -248,7 +247,7 @@ export function teamCommand(depsOverride?: TeamStartDeps): Command {
     throw new TeamCommandError(code, message);
   }
 
-  /** The run's only implementer task, so `rig team diff <run-id>` needs no task id for a one-task run. */
+  /** The run's only implementer task, so `multi-agent team diff <run-id>` needs no task id for a one-task run. */
   async function firstTask(client: DaemonClient, runId: string, headers: Record<string, string>): Promise<string> {
     const response = await client.get<{ code?: string; error?: string; read?: { tasks: Array<{ taskId: string; role: string }> } }>(
       `${BASE}/runs/${encodeURIComponent(runId)}/read`, { headers });

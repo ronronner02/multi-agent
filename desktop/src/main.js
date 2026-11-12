@@ -186,13 +186,13 @@ async function startEngine() {
   // overrides below are the managed-mode contract only.
   const env = {
     ...process.env,
-    OPENRIG_HOME: dataDir,
+    MULTI_AGENT_HOME: dataDir,
     MULTI_AGENT_MODE: 'managed',
     // Loopback only: no LAN or Tailscale fallback (KTD7 / R8).
-    OPENRIG_BIND_HOST: '127.0.0.1',
+    MULTI_AGENT_BIND_HOST: '127.0.0.1',
     // The team UI is enabled by environment (settings-store ENV_MAP) instead of writing
     // config.json, which would overwrite the owner's settings.
-    OPENRIG_UI_ENABLED: 'true',
+    MULTI_AGENT_UI_ENABLED: 'true',
   };
   delete env.MULTI_AGENT_OWNER_TOKEN;
 

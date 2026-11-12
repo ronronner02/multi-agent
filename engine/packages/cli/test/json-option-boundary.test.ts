@@ -15,7 +15,7 @@ describe("JSON output selection respects the operand boundary", () => {
 });
 
 it("reports a real Commander action failure as text when --json is message content", async () => {
-  const program = new Command("rig");
+  const program = new Command("multi-agent");
   const messages: string[] = [];
   program.command("send").argument("<seat>").argument("<message>").option("--json")
     .action((_seat: string, message: string) => {
@@ -23,7 +23,7 @@ it("reports a real Commander action failure as text when --json is message conte
       throw new Error("fixture delivery failed");
     });
   const out: string[] = [], err: string[] = [], exits: number[] = [];
-  expect(await runProgram(program, ["node", "rig", "send", "seat@rig", "--", "--json"], {
+  expect(await runProgram(program, ["node", "multi-agent", "send", "seat@rig", "--", "--json"], {
     out: (text) => out.push(text), err: (text) => err.push(text), exit: (code) => { exits.push(code); },
   })).toBe(1);
   expect(messages).toEqual(["--json"]);

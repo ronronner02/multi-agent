@@ -15,14 +15,14 @@ inspectable in either case. See [scoped operating posture](scoped-operating-post
 for deliberate transitions, phase/source information and the shared health contract.
 
 ```sh
-rig health policy --json > effective-policy.json
+multi-agent health policy --json > effective-policy.json
 jq '.policy' effective-policy.json > health-policy.json
 # Edit health-policy.json: diagnosis.enabled=true and diagnosis.owner=<seat@rig>.
-rig health policy --file health-policy.json
-rig health diagnose                    # preview; no writes or wakes
-rig health diagnose --apply            # evaluate now and apply admitted actions
-rig health diagnosis list
-rig health diagnosis show <qitem-id>
+multi-agent health policy --file health-policy.json
+multi-agent health diagnose                    # preview; no writes or wakes
+multi-agent health diagnose --apply            # evaluate now and apply admitted actions
+multi-agent health diagnosis list
+multi-agent health diagnosis show <qitem-id>
 ```
 
 `diagnosis list` and `diagnosis show` default to summaries in both text and
@@ -41,8 +41,8 @@ compact JSON serialization without the trailing newline, not model token counts.
 For investigation or existing consumers that need the former complete JSON:
 
 ```sh
-rig health diagnosis show <qitem-id> --full --json > diagnosis.json
-rig health diagnosis list --full --json > diagnoses.json
+multi-agent health diagnosis show <qitem-id> --full --json > diagnosis.json
+multi-agent health diagnosis list --full --json > diagnoses.json
 ```
 
 `--full` without `--json` prints the complete record as formatted JSON. These
@@ -59,7 +59,7 @@ episode keeps one qitem, receives at most one additional presentation by default
 and shares an owner cooldown across episodes (one hour by default). A disposition
 stops re-presentation. Disabling policy stops automatic admission and presentation.
 Ownership changes do not silently reroute existing occurrences.
-Outside a managed seat, name the writer with `rig health --actor <name> ...`.
+Outside a managed seat, name the writer with `multi-agent health --actor <name> ...`.
 Managed-seat transport identity takes precedence over that declared name.
 Only the occurrence's assigned owner may record its disposition or request human
 notification. Other agents can advise the owner; a policy-owner change does not
@@ -71,9 +71,9 @@ observation window and freshness, diagnostic owner, cooldown, re-presentation
 bound, and human-escalation conditions. Edit plain JSON and apply it with the
 command; unknown keys and invalid values refuse without changing the policy.
 Applied proposals and their predecessors are retained under the configured
-OpenRig home in `health/policy-history/`. The effective version also includes
+Multi-Agent home in `health/policy-history/`. The effective version also includes
 the existing `health.context_pressure.warning_percent` and `critical_percent`
-settings, which remain configurable with `rig config`. Their defaults are 95
+settings, which remain configurable with `multi-agent config`. Their defaults are 95
 and 99. CLI/TUI finding explanations show the policy version used.
 
 ## Passive ceremony diagnosis
@@ -164,7 +164,7 @@ lineage so the passive source does not create a duplicate episode.
 
 ```json
 {
-  "schema": "openrig.health-checkpoint/v0alpha1",
+  "schema": "multi-agent.health-checkpoint/v0alpha1",
   "lineageQitemId": "<existing-product-qitem>",
   "includeHandoffs": true,
   "scope": {"type": "slice", "projectId": "<project>", "missionId": "<mission>", "sliceId": "<slice>"},
@@ -186,9 +186,9 @@ lineage so the passive source does not create a duplicate episode.
 ```
 
 ```sh
-rig queue transitions <existing-product-qitem>
-rig health checkpoint --file checkpoint.json
-rig health --instance --json
+multi-agent queue transitions <existing-product-qitem>
+multi-agent health checkpoint --file checkpoint.json
+multi-agent health --instance --json
 ```
 
 `transitionIds: "derive"` asks the existing submission command to collect the
@@ -308,8 +308,8 @@ not a closed evidence set.
 ```
 
 ```sh
-rig health diagnosis record <qitem-id> --file disposition.json
-rig health diagnosis show <qitem-id>
+multi-agent health diagnosis record <qitem-id> --file disposition.json
+multi-agent health diagnosis show <qitem-id>
 ```
 
 Verdicts are `false positive`, `early real condition`, `established pathology`,
@@ -353,7 +353,7 @@ assigns corrective work.
 An assigned agent may explicitly request human escalation:
 
 ```sh
-rig health diagnosis notify <qitem-id>
+multi-agent health diagnosis notify <qitem-id>
 ```
 
 It requires a registered `human.address` and an admitted `human.conditions`
@@ -375,14 +375,14 @@ Read-only list/explain/preview commands never send.
 ## Read-only consumers and calibration
 
 A consumer such as a later Herder plugin reads `GET /api/health` and
-`GET /api/health/:findingId`, or the identical `rig health --json` and
-`rig health explain <finding-id> --json` records. The record schema is
-`openrig.health/v0alpha1`; list metadata is `openrig.health-list/v0alpha1`.
+`GET /api/health/:findingId`, or the identical `multi-agent health --json` and
+`multi-agent health explain <finding-id> --json` records. The record schema is
+`multi-agent.health/v0alpha1`; list metadata is `multi-agent.health-list/v0alpha1`.
 For a source that bounds its input, list metadata also carries `coverage`
 (`source`, `evaluatedAt`, `unit`, `total`, `evaluated`, `omitted`, `limit`,
 `order`, `partial`). A source that failed or hit a limit appears instead as
 `status: "unavailable"` with its `reason`, and its findings are left out.
-`rig health policy` reports the scheduled evaluation's coverage under
+`multi-agent health policy` reports the scheduled evaluation's coverage under
 `engine.lastEvaluation.coverage`. Preserve ID, status, policy version, time window, freshness, evidence and
 threshold together. There is no health score or implicit remediation authority.
 The default list excludes cleared records; explicit cleared queries and exact

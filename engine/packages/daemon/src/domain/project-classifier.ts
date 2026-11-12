@@ -164,7 +164,7 @@ export class ProjectClassifier {
       if (!this.streamItemExists(input.streamItemId)) {
         throw new ProjectClassifierError(
           "unknown_stream_item",
-          `stream_item_id ${input.streamItemId} does not exist in stream_items; emit it first via 'rig stream emit' or check the id`,
+          `stream_item_id ${input.streamItemId} does not exist in stream_items; emit it first via 'multi-agent stream emit' or check the id`,
           { streamItemId: input.streamItemId },
         );
       }
@@ -391,7 +391,7 @@ function validateClassifyInput(input: ProjectClassifyInput): void {
   if (typeof input.leaseId !== "string" || input.leaseId.trim() === "") {
     throw new ProjectClassifierError(
       "lease_id_required",
-      "leaseId is required: bind the result to the lease it was computed under (rig project lease-acquire returns it)",
+      "leaseId is required: bind the result to the lease it was computed under (multi-agent project lease-acquire returns it)",
     );
   }
   for (const field of OPTIONAL_STRING_FIELDS) {

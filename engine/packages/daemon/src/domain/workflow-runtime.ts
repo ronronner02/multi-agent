@@ -1952,7 +1952,7 @@ export class WorkflowRuntime {
         const q = this.queueRepo.getById(row.qitem_id)!;
         return { qitemId: q.qitemId, ownerSession: q.destinationSession, state: q.state,
           evidenceRef: q.evidenceRef, tags: q.tags, handedOffFrom: q.handedOffFrom,
-          inspectCommand: "rig queue show " + q.qitemId + " --full --json" };
+          inspectCommand: "multi-agent queue show " + q.qitemId + " --full --json" };
       });
   }
 
@@ -2216,7 +2216,7 @@ export class WorkflowRuntime {
           "bound_rig_unknown",
           `cannot instantiate: target rig "${input.targetRig}" is not a registered rig on this daemon. Registered rigs: ${
             registered.length > 0 ? registered.join(", ") : "(none)"
-          }. Check \`rig ps\`, create/import the rig first, or instantiate with a different --rig.`,
+          }. Check \`multi-agent ps\`, create/import the rig first, or instantiate with a different --rig.`,
           { specPath: input.specPath, targetRig: input.targetRig, registeredRigs: registered },
         );
       }
@@ -2301,7 +2301,7 @@ export class WorkflowRuntime {
           if (!rigDeclaresRole(this.db, boundRig, roleName)) {
             throw new WorkflowProjectorError(
               "bound_rig_role_uncovered",
-              `cannot instantiate: step "${step.id}" needs role "${roleName}" but NO seat on rig "${boundRig}" declares that role (at any lifecycle state). Add a member with role ${roleName} to rig ${boundRig} (rig add), declare role: ${roleName} on an existing member, or add preferred_targets to the role in the spec. (A declared-but-not-yet-running seat is fine — liveness is checked when the step projects.)`,
+              `cannot instantiate: step "${step.id}" needs role "${roleName}" but NO seat on rig "${boundRig}" declares that role (at any lifecycle state). Add a member with role ${roleName} to rig ${boundRig} (multi-agent add), declare role: ${roleName} on an existing member, or add preferred_targets to the role in the spec. (A declared-but-not-yet-running seat is fine — liveness is checked when the step projects.)`,
               { specPath: input.specPath, stepId: step.id, role: roleName, boundRig },
             );
           }
@@ -2377,7 +2377,7 @@ export class WorkflowRuntime {
         advisories.push(
           `preferred target "${target}" names rig "${rig}" (registered) but NO member of that rig has this coordinate — declared by ${declares}. ` +
             `Work routed there will not be claimed; it will surface as a stuck exception. ` +
-            `Check the member name against \`rig ps\`, or add the member to rig "${rig}".`,
+            `Check the member name against \`multi-agent ps\`, or add the member to rig "${rig}".`,
         );
       }
     }
@@ -2890,7 +2890,7 @@ export class WorkflowRuntime {
             `step: ${step.id} (role ${step.actor_role}) — re-driven from the recorded failure; completed steps are NOT re-run\n` +
             `resumed by: ${input.actorSession} (redrive #${(instance.resumeCount ?? 0) + 1})\n` +
             (input.decision ? `decision: ${input.decision}\n` : "") +
-            `history: rig workflow trace ${instance.instanceId}`,
+            `history: multi-agent workflow trace ${instance.instanceId}`,
           instanceId: instance.instanceId,
           packetId: redrivePacketId,
           ownerSession: owner,

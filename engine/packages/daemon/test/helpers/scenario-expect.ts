@@ -40,8 +40,8 @@ export function structuralSubsetMatch(actual: unknown, expected: unknown): boole
  * The `contains` mode: substring match over a TEXT surface (pane/transcript).
  *
  * Both shipped text reads return an OBJECT carrying the text in `content` —
- * `rig capture --json` => {ok, sessionName, content, lines} and
- * `rig transcript --json` => {session, lines, content, ingestHealth} — so a
+ * `multi-agent capture --json` => {ok, sessionName, content, lines} and
+ * `multi-agent transcript --json` => {session, lines, content, ingestHealth} — so a
  * string-only matcher could never match the two surfaces this mode exists for.
  * Accept a bare string (unit/e2e symmetry) or that named field, and NOTHING
  * else: a blind stringify would happily match a needle inside `sessionName` or

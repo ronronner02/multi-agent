@@ -1,0 +1,7 @@
+name: orchestration-team
+version: "1"
+taxonomy: skills
+purpose: "(eval fixture) coordinate a native team run"
+files:
+  - path: content.md
+    role: source

@@ -55,12 +55,12 @@ describe("sender identity helpers keep provenance rules after canonicalization",
 
   for (const helper of [requireSenderIdentity, resolveActorWithDeferral]) {
     it(`${helper.name}: the origin-unknown marker survives the strip`, async () => {
-      expect(await derive(helper, { "X-OpenRig-Session": `qa@hc@${SELF}`, "X-OpenRig-Origin-Unknown": "true" }))
+      expect(await derive(helper, { "X-Multi-Agent-Session": `qa@hc@${SELF}`, "X-Multi-Agent-Origin-Unknown": "true" }))
         .toEqual({ session: "qa@hc", provenance: "origin-unknown:v1" });
     });
 
     it(`${helper.name}: the wire identity still supersedes a disagreeing body claim (P18)`, async () => {
-      expect(await derive(helper, { "X-OpenRig-Session": `qa@hc@${SELF}` }, "somebody-else@rig"))
+      expect(await derive(helper, { "X-Multi-Agent-Session": `qa@hc@${SELF}` }, "somebody-else@rig"))
         .toEqual({ session: "qa@hc", provenance: "transport:v1" });
     });
   }

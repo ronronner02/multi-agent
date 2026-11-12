@@ -2,7 +2,7 @@ import { TextPreview } from "./text-preview.js";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { TeamOwnerRead, TeamReviewView, TeamSystemHealth } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamReviewView, TeamSystemHealth } from "@multi-agent/daemon/team-control";
 import { TEAM_HEALTH_LIGHTS } from "../../../daemon/dist/contracts/team-control.js";
 import { ArrowRight, GitMerge } from "lucide-react";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";

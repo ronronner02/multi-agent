@@ -1,6 +1,6 @@
-# OpenRig Design
+# Multi-Agent Design
 
-This document captures the current OpenRig visual system so the product can be
+This document captures the current Multi-Agent visual system so the product can be
 recreated, extended, or translated into other media without reverse-engineering
 the UI from code.
 
@@ -10,7 +10,7 @@ It describes the web UI in `packages/ui`, which is in maintenance mode (see
 
 ## Essence
 
-OpenRig is a local control plane for multi-agent work. The interface should feel
+Multi-Agent is a local control plane for multi-agent work. The interface should feel
 like an operator's tactical dossier: precise, technical, calm, and legible under
 pressure. It is not a consumer SaaS dashboard and not a decorative terminal skin.
 It is a paper-and-glass workspace for watching work move through rigs, agents,
@@ -28,7 +28,7 @@ The brand should communicate:
 
 ## Design Language
 
-OpenRig currently uses two deliberate surface languages.
+Multi-Agent currently uses two deliberate surface languages.
 
 ### Vellum Paper
 
@@ -90,7 +90,7 @@ The values below are the light set (`:root`). A `.dark` block in the same file
 redeclares the same names for Vellum Dark. The theme selector offers Vellum
 Light, Vellum Dark and System (`packages/ui/src/lib/theme.ts`). With no stored
 choice the UI follows the operating system's color scheme (`system`); the choice
-is stored under the `openrig.theme` local-storage key.
+is stored under the `multi-agent.theme` local-storage key.
 
 Paper:
 
@@ -233,7 +233,7 @@ Preview and documents:
 
 ## Graphics System
 
-OpenRig uses a shared graphics package rather than scattering literal icon logic
+Multi-Agent uses a shared graphics package rather than scattering literal icon logic
 through product surfaces.
 
 Runtime marks:

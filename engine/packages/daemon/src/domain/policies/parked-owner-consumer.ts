@@ -3,7 +3,7 @@
 // A diagnosis with zero consumers is a gate beside an open door. This policy is
 // the ONE bounded consumer of the shipped parked derivation: ONE rig-level
 // supervisor job per rig (anchor `parked-owner-consumer@<rigName>`), diagnosing
-// the WHOLE rig through the same derivation `rig parked` serves and sending ONE
+// the WHOLE rig through the same derivation `multi-agent parked` serves and sending ONE
 // wake to the first eligible parked owner per evaluation. The S01 ladder owns
 // retries/escalation; the watchdog engine owns scheduling.
 //
@@ -359,7 +359,7 @@ export function makeParkedOwnerConsumerPolicy(deps: ParkedOwnerConsumerDeps): Po
           `Resume the work or update each row honestly (close, park-with-wake, or hand off). ` +
           `Once this wake is delivered, this check won't wake you again for these same rows until you update one of them or one changes state. ` +
           `After a wake that failed, was refused or has no recorded outcome, it wakes you again the next time you park. ` +
-          `Held rows stay listed in rig view show held; for a claimed in-progress row, the wake-or-escalate ladder also retries a failed wake.`;
+          `Held rows stay listed in multi-agent view show held; for a claimed in-progress row, the wake-or-escalate ladder also retries a failed wake.`;
         return {
           action: "send",
           target: { session: seat.sessionName },

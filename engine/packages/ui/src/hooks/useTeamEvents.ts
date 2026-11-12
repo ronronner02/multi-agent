@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TeamOwnerRead, TeamReadModel } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamReadModel } from "@multi-agent/daemon/team-control";
 import { OwnerReadError, useOwnerSession } from "./useOwnerSession.js";
 
 export function useTeamEvents(runId: string, snapshot?: TeamOwnerRead) {

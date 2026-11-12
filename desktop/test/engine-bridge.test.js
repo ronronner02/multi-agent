@@ -134,14 +134,14 @@ function bridgeContext(overrides) {
 
 test('startEngine forks utility process with correct entry and env', async () => {
   const bridge = bridgeContext();
-  const env = { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') };
+  const env = { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') };
 
   const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env });
 
   assert.ok(bridge.forkEntry(), 'utilityProcess.fork must be called');
   assert.ok(bridge.forkEntry().endsWith('engine-host.js'),
     `entry must end with engine-host.js, got ${bridge.forkEntry()}`);
-  assert.equal(bridge.forkOpts().env.OPENRIG_HOME, path.join('C:', 'tmp', 'rig-home'));
+  assert.equal(bridge.forkOpts().env.MULTI_AGENT_HOME, path.join('C:', 'tmp', 'rig-home'));
   assert.equal(bridge.forkOpts().serviceName, 'multi-agent-daemon');
 
   // Simulate ready message from child (as engine-host.js would do)
@@ -156,7 +156,7 @@ test('startEngine forks utility process with correct entry and env', async () =>
 
 test('startEngine reports crash when daemon fails', async () => {
   const bridge = bridgeContext();
-  const env = { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') };
+  const env = { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') };
 
   const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env });
 
@@ -169,7 +169,7 @@ test('startEngine reports crash when daemon fails', async () => {
 
 test('startEngine rejects when child exits before ready', async () => {
   const bridge = bridgeContext();
-  const env = { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') };
+  const env = { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') };
 
   const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env });
 
@@ -183,7 +183,7 @@ test('startEngine rejects when child exits before ready', async () => {
 
 test('shutdown sends shutdown message and waits for exit', async () => {
   const bridge = bridgeContext();
-  const env = { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') };
+  const env = { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') };
 
   const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env });
 
@@ -215,7 +215,7 @@ test('shutdown sends shutdown message and waits for exit', async () => {
 
 test('shutdown is idempotent', async () => {
   const bridge = bridgeContext();
-  const env = { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') };
+  const env = { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') };
 
   const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env });
   bridge.child.postMessage({ type: 'ready', port: 1111, pid: 222 });
@@ -244,7 +244,7 @@ test('shutdown is idempotent', async () => {
 
 test('killEngine kills the child immediately', async () => {
   const bridge = bridgeContext();
-  const env = { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') };
+  const env = { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') };
 
   bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env });
   bridge.child.postMessage({ type: 'ready', port: 1111, pid: 222 });
@@ -265,7 +265,7 @@ test('no LAN bind: engine bridge does not expose non-loopback port', () => {
 test('an unexpected exit reaches onExit and an expected one does not', async () => {
   const bridge = bridgeContext();
   const exits = [];
-  bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') },
+  bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') },
     onExit: exit => exits.push(exit) });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
@@ -278,7 +278,7 @@ test('an unexpected exit reaches onExit and an expected one does not', async () 
 test('an exit after shutdown is not reported as unexpected', async () => {
   const bridge = bridgeContext();
   const exits = [];
-  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') },
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') },
     onExit: exit => exits.push(exit) });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
@@ -297,7 +297,7 @@ test('an exit after shutdown is not reported as unexpected', async () => {
 
 test('dependencies posts the probe and resolves the daemon resolver output', async () => {
   const bridge = bridgeContext();
-  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') } });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
 
@@ -316,7 +316,7 @@ test('dependencies posts the probe and resolves the daemon resolver output', asy
 
 test('dependencies rejects with the daemon answer and when no daemon is running', async () => {
   const bridge = bridgeContext();
-  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') } });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
 
@@ -337,7 +337,7 @@ test('dependencies rejects with the daemon answer and when no daemon is running'
 
 test('mintPairing posts mint-pairing and resolves the daemon code', async () => {
   const bridge = bridgeContext();
-  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') } });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
 
@@ -356,7 +356,7 @@ test('mintPairing posts mint-pairing and resolves the daemon code', async () => 
 
 test('mintPairing rejects when the daemon reports a mint error', async () => {
   const bridge = bridgeContext();
-  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') } });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
 
@@ -371,7 +371,7 @@ test('mintPairing rejects when the daemon reports a mint error', async () => {
 
 test('mintPairing rejects when the daemon is not running', async () => {
   const bridge = bridgeContext();
-  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { OPENRIG_HOME: path.join('C:', 'tmp', 'rig-home') } });
+  const engine = bridge.startEngine({ dataDir: path.join('C:', 'tmp', 'engine-data'), env: { MULTI_AGENT_HOME: path.join('C:', 'tmp', 'rig-home') } });
   bridge.child.postMessage({ type: 'ready', port: 54321, pid: 12345 });
   await new Promise(r => setImmediate(r));
   bridge.killEngine();

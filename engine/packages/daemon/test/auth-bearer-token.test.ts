@@ -222,7 +222,7 @@ describe("auth-bearer-token middleware (PL-005 Phase B)", () => {
         const msg = (err as Error).message;
         expect(msg).toMatch(/loopback|127\.0\.0\.1|localhost/i);
         expect(msg).toMatch(/tailscale|100\.64\.0\.0\/10|fd7a/i);
-        expect(msg).toMatch(/OPENRIG_AUTH_BEARER_TOKEN|bearer/i);
+        expect(msg).toMatch(/MULTI_AGENT_AUTH_BEARER_TOKEN|bearer/i);
       }
     });
 

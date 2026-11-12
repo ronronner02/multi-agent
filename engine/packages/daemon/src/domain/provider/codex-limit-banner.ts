@@ -9,7 +9,7 @@ import {
  *
  * The reactive tap only accepts a typed `at_limit` hook row, and no hook
  * producer emits one for Codex — the limit surfaces solely as a pane banner.
- * This module matches that banner and records it, so `rig provider signals`
+ * This module matches that banner and records it, so `multi-agent provider signals`
  * and seat status report what the seat itself shows.
  */
 export interface CodexLimitBanner {

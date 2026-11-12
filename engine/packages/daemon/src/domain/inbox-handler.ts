@@ -69,7 +69,7 @@ function newInboxId(): string {
  * deny (record reason).
  *
  * P18 sender-provenance: `input.senderSession` is authoritative and MUST be a transport-derived
- * identity supplied by the caller route (the /inbox/drop route derives it from the X-OpenRig-Session
+ * identity supplied by the caller route (the /inbox/drop route derives it from the X-Multi-Agent-Session
  * header, refusing when absent). This handler no longer carries a pluggable `authenticate` predicate
  * or an `authenticatedSender` parameter — the prior allow-all default + body-forwarded principal were
  * the fabricated-authority surface (P18); identity verification now lives at the ONE transport

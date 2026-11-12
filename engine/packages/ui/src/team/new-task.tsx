@@ -5,13 +5,13 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { Caret, Close } from "./glyphs.js";
 import { runsKey, type TeamSummary } from "./hooks.js";
-import type { WorkflowSelection } from "@openrig/daemon/team-control";
+import type { WorkflowSelection } from "@multi-agent/daemon/team-control";
 import { WorkflowPicker } from "./workflows.js";
 
 /**
  * U10 — start a run from the UI.
  *
- * The same owner endpoint `rig team start` calls: the goal is the only required field, and the
+ * The same owner endpoint `multi-agent team start` calls: the goal is the only required field, and the
  * team it runs on is chosen from the teams the daemon lists, so nobody types an id. A refused
  * start shows the daemon's own reason.
  *

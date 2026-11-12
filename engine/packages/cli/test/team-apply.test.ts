@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createProgram } from "../src/index.js";
 import type { TeamStartDeps } from "../src/commands/team.js";
 
-// MVP slice 3 — `rig team apply` and `rig team diff` against a real temp repository.
+// MVP slice 3 — `multi-agent team apply` and `multi-agent team diff` against a real temp repository.
 //
 // The daemon is answered by an injected fetch; everything below it is real git, so the
 // assertions are about the bytes landing in a tree, not about a call being made. `apply` must
@@ -58,7 +58,7 @@ async function run(argv: string[], teamDeps: TeamStartDeps): Promise<string[]> {
   try {
     const program = createProgram({ teamStartDeps: teamDeps });
     program.exitOverride();
-    await program.parseAsync(["node", "rig", ...argv]);
+    await program.parseAsync(["node", "multi-agent", ...argv]);
     return lines;
   } finally {
     log.mockRestore(); error.mockRestore(); process.exitCode = saved;
@@ -74,7 +74,7 @@ let directory: string;
 beforeEach(() => { directory = realpathSync(mkdtempSync(join(tmpdir(), "mvp3-apply-"))); });
 afterEach(() => { vi.restoreAllMocks(); if (existsSync(directory)) rmSync(directory, { recursive: true, force: true }); });
 
-describe("rig team diff", () => {
+describe("multi-agent team diff", () => {
   it("prints the patch unchanged", async () => {
     const chunks: string[] = [];
     const write = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string) => {

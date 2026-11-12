@@ -3,17 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenRig</title>
+    <title>Multi-Agent</title>
     <link rel="icon" href="data:," />
     <!-- OPR.0.4.3.29 — pre-paint theme application (no flash-of-wrong-theme).
          Runs before the module script so the `.dark` class is on <html> before
-         first paint. Mirrors src/lib/theme.ts EXACTLY: key "openrig.theme";
+         first paint. Mirrors src/lib/theme.ts EXACTLY: key "multi-agent.theme";
          light/dark are explicit and win; "system" (and any unset/malformed
          value) follows prefers-color-scheme. Keep the two in sync. -->
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem("openrig.theme");
+          var stored = localStorage.getItem("multi-agent.theme");
           var choice = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
           var dark =
             choice === "dark" ||

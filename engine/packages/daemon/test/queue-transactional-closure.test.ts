@@ -1,6 +1,6 @@
 // W1 — TRANSACTIONAL CLOSURE (mission release-0.5.1, 51-06).
 //
-// Atom origin: workspace/missions/release-0.5.1/WAVE-CONVERSION-state-vs-truth-2026-08-07-pm-openrig.md
+// Atom origin: workspace/missions/release-0.5.1/WAVE-CONVERSION-state-vs-truth-2026-08-07-pm-multi-agent.md
 //   § "W1 — TRANSACTIONAL CLOSURE", sha-16 5c899ee14a693fdb.
 // Plan: workspace/artifacts/PLAN-W1-transactional-closure-dev50-planner.md sha-16 0738722b87e9e38b.
 //
@@ -521,7 +521,7 @@ describe("W1 MF4 — the intent freezes its emitting generation/envelope", () =>
     const successor = await repo.create({ nudge: false, sourceSession: "driver@rig", destinationSession: "reviewer@rig", body: "z" });
     // A committed-but-undelivered intent whose frozen envelope carries the ORIGINAL gen.
     const FROZEN =
-      `From: driver@rig\nTo: reviewer@rig\nSent: 08-08 19:44Z · gen 11111111\n---\nQueue handoff: ${successor.qitemId} - check your queue.\n---\n↩ Reply: rig send driver@rig \"...\"`;
+      `From: driver@rig\nTo: reviewer@rig\nSent: 08-08 19:44Z · gen 11111111\n---\nQueue handoff: ${successor.qitemId} - check your queue.\n---\n↩ Reply: multi-agent send driver@rig \"...\"`;
     outbox.record({ outboxId: `wake-intent-${successor.qitemId}`, senderSession: "driver@rig", destinationSession: "reviewer@rig", body: FROZEN, auditPointer: successor.qitemId });
     repo.attachTransport(transport); // tenure swap: transport now available
     outcome.mode = "verified";

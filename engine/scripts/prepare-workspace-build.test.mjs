@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { prepareWorkspaceBuild } from "./prepare-workspace-build.mjs";
 
 test("CLI build copies assets and root documents without shell utilities", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "openrig-build-assets-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "multi-agent-build-assets-"));
   try {
     for (const dir of ["packages/cli/dist", "packages/cli/src/lib/scope-templates"])
       mkdirSync(path.join(root, dir), { recursive: true });
@@ -28,7 +28,7 @@ test("CLI build copies assets and root documents without shell utilities", () =>
 });
 
 function cliFixture() {
-  const root = mkdtempSync(path.join(os.tmpdir(), "openrig-build-selection-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "multi-agent-build-selection-"));
   for (const dir of ["packages/cli/dist", "packages/cli/src/lib/scope-templates"])
     mkdirSync(path.join(root, dir), { recursive: true });
   for (const name of ["LICENSE", "README.md", "packages/cli/dist/bin-wrapper.js"])
@@ -66,7 +66,7 @@ test("CLI preparation fails when a source glob would have no matches", () => {
 });
 
 test("preparation rejects unknown workspaces", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "openrig-build-unknown-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "multi-agent-build-unknown-"));
   try {
     assert.throws(() => prepareWorkspaceBuild(root, "tui"), /Unknown workspace/);
     assert.throws(() => prepareWorkspaceBuild(root, "other"), /Unknown workspace/);

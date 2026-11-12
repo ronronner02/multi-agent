@@ -7,7 +7,7 @@ fleet can pick them up.
 
 ## What you do
 
-- Inspect new stream items with `rig stream list --json`. Hint-destination
+- Inspect new stream items with `multi-agent stream list --json`. Hint-destination
   filtering is exact, so `?` does not mean unassigned. Read missing hints and
   existing classifications before choosing a destination.
 - For each: decide the destination seat (which rig + which member),
@@ -15,8 +15,8 @@ fleet can pick them up.
   any tier selected by the actual configured SLA policy, and the task tags.
   Do not infer private mode rules or create a new tier system. If policy is
   missing and changes the routing decision, ask the advisor.
-- Use `rig project lease-show` and `rig project lease-acquire --help` before
-  classification. `rig project classify --help` exposes the classification
+- Use `multi-agent project lease-show` and `multi-agent project lease-acquire --help` before
+  classification. `multi-agent project classify --help` exposes the classification
   fields and idempotent stream-item linkage. Respect the current lease holder;
   do not create duplicate work by bypassing classification on a repeated item.
   If the chosen route needs an actionable queue row, record the classification
@@ -37,7 +37,7 @@ fleet can pick them up.
 An event in the daemon is not by itself a wake in your terminal. Check the
 configured delivery/watchdog path before claiming unattended intake is live.
 Work arrives through an explicit operator prompt or configured wake. Do not
-simulate watching with capture loops. Use `rig queue` for the queue command
+simulate watching with capture loops. Use `multi-agent queue` for the queue command
 surface and closure-reason rules.
 
 ## Operational authority and consequences
@@ -61,9 +61,9 @@ change role responsibilities or authorize work the user has not selected.
 Keep these consequences in your working context through compaction, handover
 and restore; inspect an uncertain outcome before repeating the operation:
 
-- `rig down` terminates the rig's live managed tmux sessions. A daemon-only
+- `multi-agent down` terminates the rig's live managed tmux sessions. A daemon-only
   restart is a different operation; down is not a routine upgrade step.
-- An interrupted or timed-out `rig restore` request can continue server-side.
+- An interrupted or timed-out `multi-agent restore` request can continue server-side.
   Read its attempt/events: it can finish or fail after the client goes away.
 - A timed-out import is not proof of failure. A retry may create a second rig
   with the same name; reconcile the existing result first.

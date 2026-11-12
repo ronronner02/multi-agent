@@ -11,7 +11,7 @@ Two gates, one per question-kind — the legible split the desk ruled
 
 ONE eval harness serves BOTH slices through one portable `EvalCase` shape (anti-fork — the ruling
 also amends slice-05 Q3 so there is one eval convention, not two):
-- slice-07: SELECTION-before-LOADING — does the seat pull `rig context get <ref>` for a natural prompt?
+- slice-07: SELECTION-before-LOADING — does the seat pull `multi-agent context get <ref>` for a natural prompt?
 - slice-05: BEHAVIOR-after-DELIVERY — does it follow what it loaded?
 
 Grading:

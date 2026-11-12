@@ -1,16 +1,16 @@
 # Finite telemetry metadata
 
-`rig telemetry` reads one bounded page of retained history from the daemon. It is
-useful for collectors and operators that need a cursor without reading OpenRig's
+`multi-agent telemetry` reads one bounded page of retained history from the daemon. It is
+useful for collectors and operators that need a cursor without reading Multi-Agent's
 private SQLite schema. It neither watches nor automatically drains history.
 
 ```sh
-rig telemetry events --json
-rig telemetry events --start retained --node NODE_ID --limit 128 --json
-rig telemetry events --start retained --rig RIG_ID --json
-rig telemetry events --cursor CURSOR --node NODE_ID --json
-rig telemetry transitions --start retained --qitem QUEUE_ITEM_ID --json
-rig telemetry tenures NODE_ID --json
+multi-agent telemetry events --json
+multi-agent telemetry events --start retained --node NODE_ID --limit 128 --json
+multi-agent telemetry events --start retained --rig RIG_ID --json
+multi-agent telemetry events --cursor CURSOR --node NODE_ID --json
+multi-agent telemetry transitions --start retained --qitem QUEUE_ITEM_ID --json
+multi-agent telemetry tenures NODE_ID --json
 ```
 
 Events and transitions initially return an empty checkpoint at the current high

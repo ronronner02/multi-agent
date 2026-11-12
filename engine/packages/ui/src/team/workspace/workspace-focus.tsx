@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TeamOwnerRead, TeamReviewView, TeamSeatView } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamReviewView, TeamSeatView } from "@multi-agent/daemon/team-control";
 import { useAttemptActivity } from "../../hooks/useAttemptActivity.js";
 import { isFinished, useTeamResult } from "../../hooks/useTeamResult.js";
 import { DiffView } from "../diff-view.js";

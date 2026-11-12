@@ -10,8 +10,9 @@ import {
   DEFAULT_SYSTEM_WORLD_RELATIVE_PATH,
 } from "./system-world.js";
 
-export interface OpenRigInstanceInitializationOptions {
+export interface MultiAgentInstanceInitializationOptions {
   home: string;
+  configHome?: string;
   workspaceRoot?: string;
   contextRoot?: string;
   skillsRoot?: string;
@@ -20,7 +21,7 @@ export interface OpenRigInstanceInitializationOptions {
   fs?: InitializationFsOps;
 }
 
-export interface OpenRigInstanceInitializationResult {
+export interface MultiAgentInstanceInitializationResult {
   ok: boolean;
   home: string;
   createdPaths: string[];
@@ -28,26 +29,28 @@ export interface OpenRigInstanceInitializationResult {
   dryRun: boolean;
 }
 
-export function openRigContextLibraryRoots(contextRoot: string): [string, string] {
+export function multiAgentContextLibraryRoots(contextRoot: string): [string, string] {
   return [contextRoot, join(contextRoot, "system")];
 }
 
-/** Reconcile one canonical OpenRig instance layout. This is the shared owner
+/** Reconcile one canonical Multi-Agent instance layout. This is the shared owner
  * for CLI setup and daemon first-start. It owns empty roots and config.json;
  * S01 owns workspace contents, S04 owns skill contents, and topology owns its
  * contents. */
-export function ensureOpenRigInstance(
-  options: OpenRigInstanceInitializationOptions,
-): OpenRigInstanceInitializationResult {
+export function ensureMultiAgentInstance(
+  options: MultiAgentInstanceInitializationOptions,
+): MultiAgentInstanceInitializationResult {
   const fs = options.fs ?? nodeInitializationFs();
   const dryRun = options.dryRun ?? false;
+  const configHome = options.configHome ?? options.home;
   const workspaceRoot = options.workspaceRoot ?? join(options.home, "workspace");
   const contextRoot = options.contextRoot ?? join(options.home, "context");
   const skillsRoot = options.skillsRoot ?? join(options.home, "skills");
   const topologyRoot = options.topologyRoot ?? join(options.home, "topology");
-  const [contextLibraryRoot, systemContextRoot] = openRigContextLibraryRoots(contextRoot);
+  const [contextLibraryRoot, systemContextRoot] = multiAgentContextLibraryRoots(contextRoot);
   const directories = [...new Set([
     options.home,
+    configHome,
     join(options.home, "state"),
     contextLibraryRoot,
     systemContextRoot,
@@ -61,7 +64,7 @@ export function ensureOpenRigInstance(
     join(options.home, "backups"),
     join(options.home, "secrets"),
   ])];
-  const configPath = join(options.home, "config.json");
+  const configPath = join(configHome, "config.json");
   const systemWorldPath = join(contextRoot, DEFAULT_SYSTEM_WORLD_RELATIVE_PATH);
   const conflicts: InitializationConflict[] = [];
 
@@ -107,7 +110,7 @@ export function ensureOpenRigInstance(
 }
 
 export function formatInstanceInitializationConflicts(
-  result: Pick<OpenRigInstanceInitializationResult, "conflicts">,
+  result: Pick<MultiAgentInstanceInitializationResult, "conflicts">,
 ): string {
   return result.conflicts
     .map((conflict) => `${conflict.path}: expected ${conflict.expected}, found ${conflict.actual}`)

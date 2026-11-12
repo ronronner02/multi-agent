@@ -261,7 +261,7 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
     // Nobody holds an undelivered obligation — it routes to the owner's orchestrator.
     expect(findings[0]!.destinationSession).toBe("orch@r");
     expect(findings[0]!.body).toContain(row.qitemId);
-    expect(findings[0]!.evidenceRef).toBe(`rig queue show ${row.qitemId}`);
+    expect(findings[0]!.evidenceRef).toBe(`multi-agent queue show ${row.qitemId}`);
   });
 
   it.each(["human@host", "human-owner@kernel"])("a finding for %s carries real source evidence, stays unroutable, dedupes, and resolves", async (destinationSession) => {
@@ -278,7 +278,7 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
     const source = await mkRow();
     const row = await repo.create({
       sourceSession: "sender@r", destinationSession, body: "An actual work row awaits a decision",
-      summary: "Fixture decision", evidenceRef: `rig queue show ${source.qitemId}`,
+      summary: "Fixture decision", evidenceRef: `multi-agent queue show ${source.qitemId}`,
     });
     expect(row.lastNudgeResult).toMatch(/^unroutable:/);
     const first = await runSweep();
@@ -287,8 +287,8 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
     const findings = await findingsFor(row.qitemId);
     expect(findings).toHaveLength(1);
     const finding = findings[0]!;
-    expect(finding.evidenceRef).toBe(`rig queue show ${row.qitemId}`);
-    expect(repo.getById(finding.evidenceRef!.slice("rig queue show ".length))?.body).toBe(row.body);
+    expect(finding.evidenceRef).toBe(`multi-agent queue show ${row.qitemId}`);
+    expect(repo.getById(finding.evidenceRef!.slice("multi-agent queue show ".length))?.body).toBe(row.body);
     expect(finding.destinationSession).toBe(destinationSession);
     expect(finding.lastNudgeResult).toMatch(/^unroutable:/);
     expect(sent).toEqual([]);
@@ -330,7 +330,7 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
     expect(findings).toHaveLength(1);
     expect(findings[0]!.body).toContain(missing);
     expect(findings[0]!.body).toMatch(/verification.required|indeterminate/i);
-    expect(findings[0]!.body).toContain("OPENRIG_URL=<registered-host> rig queue show");
+    expect(findings[0]!.body).toContain("MULTI_AGENT_URL=<registered-host> multi-agent queue show");
     expect(findings[0]!.body).not.toMatch(/does not exist|dangling/i);
     expect(findings[0]!.body).not.toMatch(/Resolve the underlying row|rewrite the historical row/i);
 
@@ -774,7 +774,7 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
     await repo.update({
       qitemId: row.qitemId,
       actorSession: "verifier@r",
-      transitionNote: `custody-verified: ${missing} confirmed on the parent host via OPENRIG_URL read`,
+      transitionNote: `custody-verified: ${missing} confirmed on the parent host via MULTI_AGENT_URL read`,
     });
     await runSweep();
     expect(await findingsFor(row.qitemId)).toHaveLength(0);
@@ -868,7 +868,7 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
     const mod = await sweepMod();
     expect(mod.DEFAULT_STUCK_SWEEP_INTERVAL_SECONDS).toBe(300);
     expect(mod.DEFAULT_STUCK_SWEEP_UNCLAIMED_AGE_MINUTES).toBe(60);
-    const missingConfig = `/tmp/openrig-s02-missing-${process.pid}-${Date.now()}.json`;
+    const missingConfig = `/tmp/multi-agent-s02-missing-${process.pid}-${Date.now()}.json`;
     const store = new SettingsStore(missingConfig);
     expect(store.resolveOne("queue.stuck_sweep_interval_seconds" as never)).toMatchObject({
       value: 300,
@@ -948,7 +948,7 @@ describe.each(["done", "handed-off"] as const)("#318 seat-target closure without
     });
     expect(findings[0]!.summary).toContain("successor-verification-required");
     expect(findings[0]!.body).toContain("- next@r");
-    expect(findings[0]!.body).toContain("OPENRIG_URL=<registered-host> rig queue list --destination next@r");
+    expect(findings[0]!.body).toContain("MULTI_AGENT_URL=<registered-host> multi-agent queue list --destination next@r");
     expect(findings[0]!.body).toContain("custody-verified: <target>");
     expect(findings[0]!.tags).toContain(`stuck-sweep:dangling-closure:${row.qitemId}`);
     await runSweep();
@@ -1041,7 +1041,7 @@ describe.each(["done", "handed-off"] as const)("#318 seat-target closure without
     await repo.update({
       qitemId: row.qitemId,
       actorSession: "verifier@r",
-      transitionNote: "custody-verified: next@r confirmed on parent host via OPENRIG_URL read",
+      transitionNote: "custody-verified: next@r confirmed on parent host via MULTI_AGENT_URL read",
     });
 
     const { result } = await runSweep();
@@ -1282,9 +1282,9 @@ describe.each(["done", "handed-off"] as const)("#318 seat-target closure without
 
   it("RECIPE COMMAND: verificationCommand generates --destination for seat targets", async () => {
     const { mod } = await runSweep();
-    expect(mod.verificationCommand("next@r")).toBe("OPENRIG_URL=<registered-host> rig queue list --destination next@r");
-    expect(mod.verificationCommand("qitem-123")).toBe("OPENRIG_URL=<registered-host> rig queue show qitem-123");
-    expect(mod.verificationCommand("(unspecified)")).toBe("OPENRIG_URL=<registered-host> rig queue list");
+    expect(mod.verificationCommand("next@r")).toBe("MULTI_AGENT_URL=<registered-host> multi-agent queue list --destination next@r");
+    expect(mod.verificationCommand("qitem-123")).toBe("MULTI_AGENT_URL=<registered-host> multi-agent queue show qitem-123");
+    expect(mod.verificationCommand("(unspecified)")).toBe("MULTI_AGENT_URL=<registered-host> multi-agent queue list");
   });
 });
 
@@ -1316,7 +1316,7 @@ describe("#514 unclaimed sweep and a pending ask posted to a registered human", 
 
   async function ask(destinationSession = "human-owner@external"): Promise<QueueItem> {
     return repo.create({ sourceSession: "asker@r", destinationSession, body: "Pick option A or B", summary: "A or B?",
-      evidenceRef: "rig queue show qitem-fixture", humanIntent: "decision" } as never);
+      evidenceRef: "multi-agent queue show qitem-fixture", humanIntent: "decision" } as never);
   }
   const currentKey = (id: string) => `${id}:${repo.transitionLog.latestOwnerNotificationForQitem(id)!.transitionId}`;
   const receipt = (id: string, kind: "posted" | "transport-failed", key = currentKey(id)) => repo.update({
@@ -1425,7 +1425,7 @@ describe("#514 unclaimed sweep and a pending ask posted to a registered human", 
 
   it("a registered alias without an intent (owner@kernel) is suppressed like its @external address", async () => {
     const row = await repo.create({ sourceSession: "asker@r", destinationSession: "owner@kernel", body: "Pick option A or B",
-      summary: "A or B?", evidenceRef: "rig queue show qitem-fixture" });
+      summary: "A or B?", evidenceRef: "multi-agent queue show qitem-fixture" });
     receipt(row.qitemId, "posted");
     age(row.qitemId);
     expect(repo.humanNotificationPostedThisEpisode(row.qitemId)).toBe(true);

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
 function tempDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openrig-slow-op-shutdown-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "multi-agent-slow-op-shutdown-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -109,11 +109,10 @@ describe("drainSlowOpRecorderOnShutdown — bounded shutdown drain", () => {
     const child = spawn(process.execPath, ["--import", "tsx", indexPath], {
       env: {
         ...process.env,
-        OPENRIG_NO_KERNEL: "1",
-        OPENRIG_HOME: home,
-        OPENRIG_DB: path.join(home, "openrig.sqlite"),
-        OPENRIG_PORT: String(port),
-        OPENRIG_URL: "",
+        MULTI_AGENT_HOME: home,
+        MULTI_AGENT_DB: path.join(home, "multi-agent.sqlite"),
+        MULTI_AGENT_PORT: String(port),
+        MULTI_AGENT_URL: "",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

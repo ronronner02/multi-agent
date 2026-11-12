@@ -2,8 +2,8 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
-import { createInterfaceI18n } from "@openrig/i18n";
-import type { ProjectDocumentVersion, ProjectDocumentWorkflow } from "@openrig/daemon/team-control";
+import { createInterfaceI18n } from "@multi-agent/i18n";
+import type { ProjectDocumentVersion, ProjectDocumentWorkflow } from "@multi-agent/daemon/team-control";
 import { DocumentsScreen } from "../documents.js";
 import { read, RUN_ID } from "./fixtures.js";
 

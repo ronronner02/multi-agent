@@ -201,8 +201,8 @@ describe("KTD14 paired owner authentication", () => {
 
   it("rejects remote Host and Origin exceptions even with a valid cookie", async () => {
     const paired = await pair();
-    vi.stubEnv("OPENRIG_ALLOWED_HOSTS", "remote.example");
-    vi.stubEnv("OPENRIG_ALLOWED_ORIGINS", "http://remote.example");
+    vi.stubEnv("MULTI_AGENT_ALLOWED_HOSTS", "remote.example");
+    vi.stubEnv("MULTI_AGENT_ALLOWED_ORIGINS", "http://remote.example");
     for (const headers of [{ Host: "remote.example" }, { Origin: "http://remote.example" }, { Origin: "null" },
       { Origin: "http://localhost:9999" }, { "Sec-Fetch-Site": "cross-site" }])
       expect((await request("/api/team-control/health", "GET", { ...browserHeaders(paired), ...headers })).status).toBe(403);

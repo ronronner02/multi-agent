@@ -24,7 +24,7 @@ export function writeTextAtomically(path: string, content: string, label = "file
   // Match direct writes: a writable directory must not bypass a read-only
   // target. Opening without truncation also checks native ACL permissions.
   if (existing) closeSync(openSync(target, constants.O_WRONLY));
-  const temporary = join(dirname(target), `.openrig.tmp-${randomUUID()}`);
+  const temporary = join(dirname(target), `.multi-agent.tmp-${randomUUID()}`);
   let owned = false;
   let canFallBack = true;
   try {

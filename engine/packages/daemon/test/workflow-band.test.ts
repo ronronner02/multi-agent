@@ -52,7 +52,7 @@ describe("WF-5 FR-3: deriveWorkflowExceptions", () => {
     expect(r.derived?.evidence).toContain("qitem-exc-1");
     expect(r.derived?.evidence).toContain("30m");
     expect(r.derived?.threshold).toContain("awareness");
-    expect(r.evidenceRef).toContain("rig workflow trace 01WFX");
+    expect(r.evidenceRef).toContain("multi-agent workflow trace 01WFX");
   });
 
   it("HUMAN-routed exception → NO row (the ● item IS the human's row — no double render)", () => {

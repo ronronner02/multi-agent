@@ -1,11 +1,11 @@
 // OPR.0.4.1.30 — static packaging gate (static-gate-mirrors-runtime doctrine).
 //
-// The published @openrig/cli VENDORS the built daemon: packages/cli `files` includes `daemon`, and
+// The published @multi-agent/cli VENDORS the built daemon: packages/cli `files` includes `daemon`, and
 // scripts/build-package.sh copies packages/daemon/dist into packages/cli/daemon. cli does NOT depend
-// on @openrig/daemon and cli/src imports no hono — so the vendored daemon resolves its runtime deps
+// on @multi-agent/daemon and cli/src imports no hono — so the vendored daemon resolves its runtime deps
 // from the GLOBAL install's node_modules. Therefore the published cli MUST declare every runtime
 // dependency the daemon declares; anything the daemon needs but cli omits will be missing on a fresh
-// `npm install -g @openrig/cli` (it only "works" in-repo via monorepo hoisting).
+// `npm install -g @multi-agent/cli` (it only "works" in-repo via monorepo hoisting).
 //
 // 0.4.0 shipped with @hono/node-ws declared by the daemon (it statically imports createNodeWebSocket
 // at packages/daemon/src/server.ts) but NOT by the cli — so a fresh global install could not start

@@ -31,11 +31,11 @@ export function resolveWorkflowHumanDestination(
     const address = resolveRegisteredHumanAddress(selected.trim(), loaded.entities);
     if (address) return address;
     throw new WorkflowHumanDestinationError({ state: "unregistered", selected, addresses },
-      "workspace.operator_seat_name does not select a registered human. Inspect rig gateway human list --json and select the intended registered address.");
+      "workspace.operator_seat_name does not select a registered human. Inspect multi-agent gateway human list --json and select the intended registered address.");
   }
   if (addresses.length === 1) return addresses[0]!;
   throw new WorkflowHumanDestinationError({ state: addresses.length ? "ambiguous" : "missing", addresses },
-    "Workflow human fallback needs one registered human. Inspect rig gateway human list --json; when several exist, explicitly select workspace.operator_seat_name. No human destination was invented.");
+    "Workflow human fallback needs one registered human. Inspect multi-agent gateway human list --json; when several exist, explicitly select workspace.operator_seat_name. No human destination was invented.");
 }
 
 /** Explicit injected destinations remain available to embedders and isolated fixtures. */

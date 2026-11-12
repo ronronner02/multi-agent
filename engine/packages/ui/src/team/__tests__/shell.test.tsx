@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInterfaceI18n } from "@openrig/i18n";
+import { createInterfaceI18n } from "@multi-agent/i18n";
 import { I18nextProvider } from "react-i18next";
 import { ShellFrame, TEAM_SECTIONS, teamSection, showsNewWork, type TeamSection } from "../shell.js";
 import { TEAM_THEME_KEY, useThemePreference } from "../theme.js";

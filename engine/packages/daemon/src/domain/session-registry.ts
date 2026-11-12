@@ -55,7 +55,7 @@ function launchedProcess(json: string | null | undefined): (ClaudeLaunchedProces
 }
 
 /** The rotation a Claude identity proof may accept besides the stored token (#1077): the token
- *  OpenRig launched this row's process to resume, when the first hook after that launch, sent by
+ *  Multi-Agent launched this row's process to resume, when the first hook after that launch, sent by
  *  that process, said Claude continued it as the stored token; and that process, the only one whose
  *  argv may name it. The hook's process must be the one the launch path itself observed starting on
  *  that token (`resume_launch_process`): a process that replaced it before its hook arrived is not.
@@ -350,10 +350,10 @@ export class SessionRegistry {
   /** Record a Claude SessionStart hook's session id, with the evidence of how it began (#1077).
    *
    * The write itself follows `updateResumeToken`'s hook rank. The first hook carrying the node's
-   * current occupant generation after OpenRig launched this row with `--resume <T1>` consumes that
+   * current occupant generation after Multi-Agent launched this row with `--resume <T1>` consumes that
    * launch, whatever its source: only that hook can name T1 as the token it replaced, and only when
-   * it reports `source: "resume"`, a different id, and the launch marker OpenRig put on that
-   * process's command (`OPENRIG_RESUME_LAUNCH=T1`), which a Claude started by hand in the pane does
+   * it reports `source: "resume"`, a different id, and the launch marker Multi-Agent put on that
+   * process's command (`MULTI_AGENT_RESUME_LAUNCH=T1`), which a Claude started by hand in the pane does
    * not carry, and when the caller observed that the hook came from the launched process itself
    * (`claudeHookFromLaunchedProcess`): a child `claude -p --resume` inherits the marker but is a
    * different process. The rotation keeps that process (pid and start time), and only it may later

@@ -14,7 +14,7 @@ import {
 // 51-02 delta D1 (guard rev-3 bindings) — per-seat stub scripts.
 //
 // The lock requires scenarios to resolve PER-SEAT scripts; the shipped stub reads
-// exactly `<cwd>/.openrig/stub/script.json`, so distinct scripts require distinct
+// exactly `<cwd>/.multi-agent/stub/script.json`, so distinct scripts require distinct
 // seat CWDs. A shared --cwd cannot honor that (resolveLaunchCwd makes the override
 // win for every seat), so the pipeline stages a SELF-CONTAINED topology root and
 // authors per-seat cwds in the staged copy. Staging a lone YAML would rebase the
@@ -159,8 +159,8 @@ describe("D1 — delivery writes each script to ITS OWN seat cwd; unmapped seats
 
     deliverStubScripts(staged, { "dev-alpha": join(scriptsDir, "a.json") }, scriptsDir);
 
-    const alphaScript = join(staged.seatCwds["dev-alpha"], ".openrig", "stub", "script.json");
-    const betaScript = join(staged.seatCwds["dev-beta"], ".openrig", "stub", "script.json");
+    const alphaScript = join(staged.seatCwds["dev-alpha"], ".multi-agent", "stub", "script.json");
+    const betaScript = join(staged.seatCwds["dev-beta"], ".multi-agent", "stub", "script.json");
     expect(existsSync(alphaScript)).toBe(true);
     expect(JSON.parse(readFileSync(alphaScript, "utf-8")).steps[0].text).toBe("[alpha]");
     // the unmapped seat has NO script file — 51-01's built-in default applies

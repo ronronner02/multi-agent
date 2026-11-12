@@ -12,7 +12,7 @@ async function run(args: string[], fetchImpl: typeof fetch) {
   let code = 0;
   try {
     await runProgram(createProgram({ teamStartDeps: { baseUrl, fetchImpl, ownerToken: "owner" },
-      daemonHttpDeps: { baseUrl, fetchImpl } }), ["node", "rig", ...args], {
+      daemonHttpDeps: { baseUrl, fetchImpl } }), ["node", "multi-agent", ...args], {
       out: line => out.push(line), err: line => err.push(line), exit: value => { code = value; },
     });
     return { out, err, code };
@@ -69,8 +69,8 @@ describe("thin CLI surface", () => {
     expect(JSON.parse(result.out[0]!)).toMatchObject({ error: { code: "owner_control_required" } });
   });
   it("never reads the local identity database for an owner command", async () => {
-    vi.stubEnv("OPENRIG_SESSION_NAME", "worker@team");
-    vi.stubEnv("OPENRIG_URL", baseUrl);
+    vi.stubEnv("MULTI_AGENT_SESSION_NAME", "worker@team");
+    vi.stubEnv("MULTI_AGENT_URL", baseUrl);
     const origin = vi.spyOn(localOrigin, "readLocalOrigin").mockImplementation(() => { throw new Error("No database reads allowed"); });
     const fetchImpl = vi.fn(async (url: string) => url.endsWith("/healthz") ? json({})
       : json({ result: { schema: "multi-agent-team-result/v1" } }));

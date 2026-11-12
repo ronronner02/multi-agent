@@ -125,7 +125,7 @@ function summarise(rigRepo: RigRepository, run: TeamRun): TeamRunSummary {
 /**
  * The seat a rig records for a role, when a start names none.
  *
- * U3 — `rig team create` records one lead and one reviewer, so a start that names the team's rig
+ * U3 — `multi-agent team create` records one lead and one reviewer, so a start that names the team's rig
  * already names every seat a run needs. A rig with no seat for the role keeps the pre-U3
  * behaviour: no lead, or no reviewer.
  */
@@ -179,7 +179,7 @@ export function teamStartRoutes(
       if (active.length !== 1) {
         return c.json({ code: active.length ? "rig_ambiguous" : "rig_required",
           error: active.length ? "More than one rig exists; name the rig to start work on."
-            : "No rig exists; create a team with `rig team create <repository>` first." }, 400);
+            : "No rig exists; create a team with `multi-agent team create <repository>` first." }, 400);
       }
       rig = active[0]!;
     } else {
@@ -195,7 +195,7 @@ export function teamStartRoutes(
     // manifest owner builds; the implementer seats then come from the lead's own proposal, so
     // this request names none and there is no single implementer seat to compare against.
     //
-// U3 — a rig created by `rig team create` records its seats, so naming the team is enough:
+// U3 — a rig created by `multi-agent team create` records its seats, so naming the team is enough:
     // the lead and the reviewer come from the roles it recorded unless this request names them.
     // U5 — a planning start is a lead start by definition: its first task is the conversation
     // with the owner, so it needs one of those seats to exist.
@@ -207,7 +207,7 @@ export function teamStartRoutes(
     const leadSeat = v.lead === undefined ? seatForRole(rigRepo, rig, "lead") : text(v.lead, "lead", 256);
     if (planning && leadSeat === null) {
       return c.json({ code: "lead_required",
-        error: "A planning run needs a lead seat: name one, or create a team with `rig team create`." }, 400);
+        error: "A planning run needs a lead seat: name one, or create a team with `multi-agent team create`." }, 400);
     }
     // The generated command header is not part of the owner's input limit.
     const initialWorkflowRequest = workflow && leadSeat !== null

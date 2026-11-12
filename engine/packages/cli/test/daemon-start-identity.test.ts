@@ -154,7 +154,7 @@ describe("child-bound startup", () => {
 
 describe("local startup reservation", () => {
   it("excludes the second launcher and releases after the owner completes", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "openrig-start-lock-"));
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "multi-agent-start-lock-"));
     try {
       const lock = acquireDaemonStartLock(home); lock.recordChild(1234);
       expect(fs.readFileSync(path.join(home, "daemon-start.lock"), "utf8")).toContain('"childPid":1234');
@@ -164,7 +164,7 @@ describe("local startup reservation", () => {
     } finally { fs.rmSync(home, { recursive: true, force: true }); }
   });
   it("preserves abandoned evidence and never releases a replacement owner's file", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "openrig-start-lock-"));
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "multi-agent-start-lock-"));
     try {
       const file = path.join(home, "daemon-start.lock"), archive = file + ".previous";
       const first = acquireDaemonStartLock(home); first.release(true);

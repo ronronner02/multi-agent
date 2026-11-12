@@ -2,8 +2,8 @@
  * Slice 51-02 delta D1 — TOPOLOGY STAGING + per-seat stub-script delivery.
  *
  * The lock requires scenarios to resolve PER-SEAT stub scripts, and the shipped
- * stub reads exactly `<cwd>/.openrig/stub/script.json` (stub-runner-protocol) —
- * so distinct scripts require distinct seat CWDs. `rig up --cwd` cannot express
+ * stub reads exactly `<cwd>/.multi-agent/stub/script.json` (stub-runner-protocol) —
+ * so distinct scripts require distinct seat CWDs. `multi-agent up --cwd` cannot express
  * that: `resolveLaunchCwd(authored, specRoot, override)` makes the override win
  * for EVERY seat, so one shared cwd means one shared script.
  *
@@ -24,7 +24,7 @@ import { parseStubScript } from "./stub-script.js";
 export interface StagedTopology {
   /** The staged root directory (a copy of the source topology directory). */
   root: string;
-  /** The staged rig-spec path to hand to `rig up`. */
+  /** The staged rig-spec path to hand to `multi-agent up`. */
   topologyPath: string;
   /** `<pod>-<member>` → that seat's absolute, existing staged cwd. */
   seatCwds: Record<string, string>;
@@ -141,7 +141,7 @@ export function stageTopologyRoot(sourceTopologyPath: string, destRoot: string):
       const memberId = (m as { id?: unknown }).id;
       if (typeof memberId !== "string") continue;
       const qualified = `${podId}-${memberId}`;
-      // Own dir per seat: the stub reads <cwd>/.openrig/stub/script.json, and the
+      // Own dir per seat: the stub reads <cwd>/.multi-agent/stub/script.json, and the
       // seat's managed writes (AGENTS.md, readiness sidecar) stay in scratch.
       const cwd = join(destRoot, "seat-cwd", qualified);
       mkdirSync(cwd, { recursive: true });
@@ -184,7 +184,7 @@ export function deliverStubScripts(
     // boot (it takes the raw JSON text), applied here so an authoring error
     // surfaces before any seat launches rather than as a dead seat.
     parseStubScript(raw);
-    const dir = join(staged.seatCwds[seat]!, ".openrig", "stub");
+    const dir = join(staged.seatCwds[seat]!, ".multi-agent", "stub");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "script.json"), raw, "utf-8");
   }

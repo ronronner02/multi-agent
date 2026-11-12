@@ -1,8 +1,8 @@
-# L3 — daemon-in-container (boots vs container-local sqlite; healthz on the PUBLISHED port; `rig up` settles a zero-token stub topology)
+# L3 — daemon-in-container (boots vs container-local sqlite; healthz on the PUBLISHED port; `multi-agent up` settles a zero-token stub topology)
 
 **Runs host-side, after L2.** This is the leg that exercises the stub payload — and where
 `docker/testbed/stub-assets.list` is finalized (L0.2): the exact stub `rig.yaml` + agent fixture +
-`culture.md` this `rig up` settles ARE the census scope. Zero tokens by construction (runtime: stub).
+`culture.md` this `multi-agent up` settles ARE the census scope. Zero tokens by construction (runtime: stub).
 
 ## THE PUBLISHED-DAEMON PROCEDURE (identical on both A/B arms)
 
@@ -13,14 +13,14 @@ port — unreachable by construction, so the probe failed on BOTH runtimes (oper
 below are the fix; all four are grounded at source and all four apply to BOTH arms verbatim.
 
 **(a) BIND ADDRESS — explicit, never the default.** `packages/daemon/src/index.ts:148` reads
-`OPENRIG_HOST` (alias `RIGGED_HOST`); when set, `:163` binds exactly that host; when UNSET, `:167`
+`MULTI_AGENT_HOST`; when set, `:163` binds exactly that host; when UNSET, `:167`
 defaults to `127.0.0.1` (+ tailscale when detected). A container reached through published ports
-MUST set `OPENRIG_HOST=0.0.0.0`.
+MUST set `MULTI_AGENT_HOST=0.0.0.0`.
 
 **(b) BEARER — required for the daemon to START on this bind, and separately PROVEN.**
 `assertBindAuthInvariant` (`packages/daemon/src/middleware/auth-bearer-token.ts:240-264`)
 short-circuits for loopback and tailscale binds; for any other bind it REFUSES TO START unless
-`OPENRIG_AUTH_BEARER_TOKEN` is non-empty. That refusal is the product being honest — the procedure
+`MULTI_AGENT_AUTH_BEARER_TOKEN` is non-empty. That refusal is the product being honest — the procedure
 satisfies it, never routes around it.
 **VERIFIED-AT-SOURCE CORRECTION (do not "fix" the probe to match a wrong expectation):**
 `/healthz` is registered directly on the app (`packages/daemon/src/server.ts:574`) and is
@@ -45,16 +45,16 @@ recorded; a runbook that records only probe 1 has not tested the bearer at all.
 ## Setup (both arms — only the runtime binary differs)
 
 ```bash
-GIT_SHA="$(git rev-parse HEAD)"; IMAGE="openrig-testbed:${GIT_SHA}"; EVID="dist/testbed-image/evidence/${GIT_SHA}"; mkdir -p "${EVID}"
+GIT_SHA="$(git rev-parse HEAD)"; IMAGE="multi-agent-testbed:${GIT_SHA}"; EVID="dist/testbed-image/evidence/${GIT_SHA}"; mkdir -p "${EVID}"
 NAME="orig-l3-${GIT_SHA:0:8}"
 HOSTPORT=19433                      # (c) EXPLICIT — never 0 (Apple 1.2.0 rejects ephemeral)
 TESTBEARER="l3-testbed-$(date +%s)" # (b) throwaway, container-scoped, never a real credential
 RUNTIME=docker                      # the Apple arm substitutes its CLI here; ALL ELSE IDENTICAL
 "${RUNTIME}" run -d -t --name "${NAME}" \
   -p "${HOSTPORT}:7433" \
-  -e OPENRIG_HOST=0.0.0.0 \
-  -e OPENRIG_AUTH_BEARER_TOKEN="${TESTBEARER}" \
-  -e OPENRIG_SELF_HOST_ID=testbed-l3 \
+  -e MULTI_AGENT_HOST=0.0.0.0 \
+  -e MULTI_AGENT_AUTH_BEARER_TOKEN="${TESTBEARER}" \
+  -e MULTI_AGENT_SELF_HOST_ID=testbed-l3 \
   "${IMAGE}"
 ```
 
@@ -66,7 +66,7 @@ input, not an Apple-only concession.*
 ## L3.1 — daemon boots vs a container-local sqlite + BOTH probes answer
 
 ```bash
-"${RUNTIME}" exec "${NAME}" bash -lc 'rig daemon start && sleep 2 && rig status || true' | tee "${EVID}/L3-start.txt"
+"${RUNTIME}" exec "${NAME}" bash -lc 'multi-agent daemon start && sleep 2 && rig status || true' | tee "${EVID}/L3-start.txt"
 # PROBE 1 — the BIND, unauthenticated by design:
 curl -fsS "http://127.0.0.1:${HOSTPORT}/healthz" | tee "${EVID}/L3-healthz.txt"; echo
 # PROBE 2 — the AUTH path, on a genuinely guarded router:
@@ -79,7 +79,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
   -X POST "http://127.0.0.1:${HOSTPORT}/api/transport/send" \
   -H 'Content-Type: application/json' -d '{"session":"nonexistent@testbed","text":"x"}' \
   | tee "${EVID}/L3-auth-negative.txt"
-"${RUNTIME}" exec "${NAME}" bash -lc 'ls -l "${OPENRIG_HOME:-$HOME/.openrig}"/*.sqlite* 2>/dev/null || find "$HOME" -name "*.sqlite*" 2>/dev/null' | tee "${EVID}/L3-db.txt"
+"${RUNTIME}" exec "${NAME}" bash -lc 'ls -l "${MULTI_AGENT_HOME:-$HOME/.multi-agent}"/*.sqlite* 2>/dev/null || find "$HOME" -name "*.sqlite*" 2>/dev/null' | tee "${EVID}/L3-db.txt"
 ```
 
 **PASS:** probe 1 returns healthy JSON on the PUBLISHED port; probe 2 is NOT 401 (the bearer is
@@ -89,16 +89,16 @@ the negative control IS 401; a container-local sqlite exists.
 negative control NOT 401 (the guard is not guarding) / DB outside the container / a mounted real
 HOME (fence breach).
 
-## L3.2 — `rig up` settles a zero-token stub topology
+## L3.2 — `multi-agent up` settles a zero-token stub topology
 
 Ship a minimal `runtime: stub` `rig.yaml` (+ agent fixture + culture.md) as the staged stub assets;
-copy it into a container-local workspace and `rig up` it BY EXPLICIT SOURCE.
+copy it into a container-local workspace and `multi-agent up` it BY EXPLICIT SOURCE.
 
 **STAGED PAYLOAD PATH — nested, and deliberately so.** The build verb stages each census entry
 preserving its full REPO-RELATIVE path (`scripts/build-testbed-image.sh:51-52`:
 `cp "${REPO_ROOT}/${rel}" "${CONTEXT}/stub-assets/${rel}"`), and the Dockerfile copies that context
 dir wholesale (`docker/testbed/Dockerfile:52`). So in-container the trio lands at
-`/opt/openrig-testbed/stub-assets/docker/testbed/stub-assets/`, NOT at the stub-assets root. That
+`/opt/multi-agent-testbed/stub-assets/docker/testbed/stub-assets/`, NOT at the stub-assets root. That
 nesting is load-bearing, not an accident: the same relative paths are what the manifest hashes into
 the byte-reproducible census receipt (`build-testbed-image.sh:101`), so flattening the staging would
 change the receipt bytes r1 verified. The RUNBOOK adapts to the staged reality; the staging stands.
@@ -106,7 +106,7 @@ change the receipt bytes r1 verified. The RUNBOOK adapts to the staged reality; 
 `51-04-STUB-ASSET-TRIO-REVIEW-VERDICT-review-r1.md` sha-16 5d4a8bb1d0a1605b, "Honest forward-flag";
 the note simply never reached the text until now.)
 
-**EXPLICIT SOURCE — never bare `rig up`.** `rig up` takes a REQUIRED positional
+**EXPLICIT SOURCE — never bare `multi-agent up`.** `multi-agent up` takes a REQUIRED positional
 (`packages/cli/src/commands/up.ts:77`: `.argument("<source>", "Path to a .yaml rig spec or
 .rigbundle, or a library name…")`); a bare invocation exits `missing required argument 'source'`,
 which is what the operator hit.
@@ -114,12 +114,12 @@ which is what the operator hit.
 ```bash
 "${RUNTIME}" exec "${NAME}" bash -lc '
   set -e
-  STAGED=/opt/openrig-testbed/stub-assets/docker/testbed/stub-assets
+  STAGED=/opt/multi-agent-testbed/stub-assets/docker/testbed/stub-assets
   # Pre-flight fence: assert the payload where the build actually stages it. A staging change must
   # fail LOUD here naming the path, never as a downstream "missing required argument".
-  [ -f "${STAGED}/rig.yaml" ] || { echo "L3.2 FAIL: no rig.yaml at ${STAGED} — staged payload moved; reconcile the runbook against scripts/build-testbed-image.sh"; ls -R /opt/openrig-testbed/stub-assets | head -40; exit 1; }
+  [ -f "${STAGED}/rig.yaml" ] || { echo "L3.2 FAIL: no rig.yaml at ${STAGED} — staged payload moved; reconcile the runbook against scripts/build-testbed-image.sh"; ls -R /opt/multi-agent-testbed/stub-assets | head -40; exit 1; }
   mkdir -p ~/work && cp -r "${STAGED}/." ~/work/
-  cd ~/work && rig up rig.yaml && sleep 3 && rig ps --json' | tee "${EVID}/L3-topology.txt"
+  cd ~/work && multi-agent up rig.yaml && sleep 3 && multi-agent ps --json' | tee "${EVID}/L3-topology.txt"
 ```
 
 **PASS:** the stub seat(s) reach a settled/ready state (zero LLM tokens consumed — `runtime: stub`).
@@ -128,7 +128,7 @@ which is what the operator hit.
 ## Teardown + evidence
 
 ```bash
-"${RUNTIME}" exec "${NAME}" bash -lc 'rig down || true' ; "${RUNTIME}" rm -f "${NAME}" >/dev/null
+"${RUNTIME}" exec "${NAME}" bash -lc 'multi-agent down || true' ; "${RUNTIME}" rm -f "${NAME}" >/dev/null
 { grep -qi 'health' "${EVID}/L3-healthz.txt" \
     && [ "$(cat "${EVID}/L3-auth-code.txt")" != "401" ] \
     && [ "$(cat "${EVID}/L3-auth-negative.txt")" = "401" ] \
@@ -142,5 +142,5 @@ Run this procedure on the **DOCKER** arm alone and prove it GREEN. A control tha
 not a control; the A/B stays blocked until the Docker baseline is green under this exact text.
 Only then does the Apple arm run the identical procedure with its CLI substituted.
 
-**Note:** the exact `rig ps` shape / ready predicate is grounded against the shipped stub adapter at
+**Note:** the exact `multi-agent ps` shape / ready predicate is grounded against the shipped stub adapter at
 execution time — do not assert a remembered field name; read the real `--json` output.

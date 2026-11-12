@@ -220,7 +220,7 @@ describeOnPosix("project creation through the owner route — GitHub push flow",
     remote = s.state.remote = join(directory, "remote.git");
     vi.stubEnv("GIT_CONFIG_GLOBAL", join(directory, "gitconfig"));
     vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
-    vi.stubEnv("OPENRIG_TEAM_LEAD_CLIENT", "");
+    vi.stubEnv("MULTI_AGENT_TEAM_LEAD_CLIENT", "");
     writeFileSync(join(directory, "gitconfig"), "");
     git(directory, "init", "--bare", "--quiet", "--initial-branch=main", remote);
     s.setupGithub();
@@ -505,7 +505,7 @@ describeOnWindows("project creation through the owner route — Windows paths an
     remote = join(directory, "remote.git");
     vi.stubEnv("GIT_CONFIG_GLOBAL", join(directory, "gitconfig"));
     vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
-    vi.stubEnv("OPENRIG_TEAM_LEAD_CLIENT", "");
+    vi.stubEnv("MULTI_AGENT_TEAM_LEAD_CLIENT", "");
     writeFileSync(join(directory, "gitconfig"), "");
     git(directory, "init", "--bare", "--quiet", "--initial-branch=main", remote);
     const src = fileURLToPath(new URL("./fixtures/stub-gh.mjs", import.meta.url));

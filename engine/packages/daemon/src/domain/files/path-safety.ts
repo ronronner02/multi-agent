@@ -4,13 +4,8 @@
 // file browser surface (item 3 + item 4). Reused by all four
 // /api/files/* routes.
 //
-// Allowlist source (driver pivot from PRD's suggested ConfigStore key
-// family — see handoff): OPENRIG_FILES_ALLOWLIST env var, comma-
-// separated `<name>:<absolute-path>` pairs. Operator sets via shell
-// (or via `~/.openrig` env file). Empty / unset → no allowlist roots
-// → routes return empty roots list with a structured "configure
-// OPENRIG_FILES_ALLOWLIST" hint. Default after fresh install: nothing
-// (the safe default per PRD § Item 3).
+// Allowlist values are supplied by typed callers after settings resolution.
+// An empty value yields no roots.
 //
 // Path-safety contract:
 //   - Each request resolves <relativePath> against <rootName>'s
@@ -47,15 +42,12 @@ export class FilePathSafetyError extends Error {
   }
 }
 
-const ENV_VAR = "OPENRIG_FILES_ALLOWLIST";
-const LEGACY_ENV_VAR = "RIGGED_FILES_ALLOWLIST";
 
 /**
  * Decodes a raw `name:/abs/path,name:/abs/path` allowlist string into
  * canonical AllowlistRoot[]. Whitespace around delimiters trimmed.
  * Invalid pairs (no colon, empty name, non-absolute path) silently
- * skipped. Duplicate names: last wins. Same shape both env-var and
- * settings-file-resolved values produce.
+ * skipped. Duplicate names: last wins. Supplied by settings-file resolution.
  */
 export function decodeAllowlist(raw: string): AllowlistRoot[] {
   if (!raw.trim()) return [];
@@ -80,17 +72,6 @@ export function decodeAllowlist(raw: string): AllowlistRoot[] {
   return Array.from(out.entries()).map(([name, canonicalPath]) => ({ name, canonicalPath }));
 }
 
-/**
- * Reads the allowlist env var directly and returns the parsed root list.
- * Preserved for backward-compat callers; v0 callers prefer the resolved
- * settings-store path which honors env > settings-file > empty.
- */
-export function readAllowlistFromEnv(env: NodeJS.ProcessEnv = process.env): AllowlistRoot[] {
-  // Use || (not ??) so an empty-string OPENRIG_FILES_ALLOWLIST falls
-  // back to the legacy var. ?? only handles null/undefined.
-  const raw = (env[ENV_VAR] || env[LEGACY_ENV_VAR] || "").toString();
-  return decodeAllowlist(raw);
-}
 
 /**
  * Resolves a relative path against an allowlist root. Throws

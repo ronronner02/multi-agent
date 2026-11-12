@@ -5,7 +5,7 @@
 // Replaces the activity-hook-injection-coupled upsertCodexHooksFeature()
 // being removed in Phase 3a slice 3.1. New shape:
 //
-// 1. OpenRig setting `runtime.codex.hooks_enabled` (default true)
+// 1. Multi-Agent setting `runtime.codex.hooks_enabled` (default true)
 // 2. CodexRuntimeAdapter exposes ensureCodexFeatureFlag(setting) that
 //    writes codex_hooks = true to ~/.codex/config.toml when setting=true
 // 3. Idempotent: running twice produces no duplication

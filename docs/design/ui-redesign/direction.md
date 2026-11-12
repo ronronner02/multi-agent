@@ -149,7 +149,7 @@ The owner's complaint is that the UI shows `task-1-review-1`, UUIDs and `impl@re
 | `plan.md` as the plan's identity | The plan's own title, **文本工具函数** | plan artifact |
 | `bindingDigest`, `qitemId`, digests | never rendered | — |
 | `P1` / `P2` / `P3` | **需修改** / **建议** / **轻微** | review semantics |
-| `rig team apply …` CLI line | removed; merge is a button | U7 |
+| `multi-agent team apply …` CLI line | removed; merge is a button | U7 |
 | `status.queue.in-progress` codes | **排队中 / 执行中 / 审查中 / 已完成 / 受阻** | i18n |
 
 Rules that make it hold:
@@ -207,7 +207,7 @@ own reason text. No global error bar.
 | Three themes (dark / light / ink) + video backdrop + paper grain | Three palettes multiply every visual decision by three; the video was decoration behind a diff. One light theme. |
 | `--ui-*` ink-skin tokens and `ink-style.test.ts` | Replaced by the token set above; the test becomes a token test for the new set. |
 | Every raw id in rendered text | See §8. |
-| `rig team apply …` command + copy button | Merge is a button (U7). |
+| `multi-agent team apply …` command + copy button | Merge is a button (U7). |
 | Run `<select>` in the command strip | Runs are reached through their team. |
 | Search field, ⌘K, notification bell, badge, “查看运行” button, “提议新增任务” second primary | Each was a second way to do what the screen already does; two primaries on one screen is one too many. |
 | Helper copy: `快照及后续重放中没有活动记录。`, `尚无验收检查证据`, `此快照没有尝试证据。`, `查看全部任务 →` | `docs/development-standards.md` §9: structure explains. Empty states are one state word, not a sentence. |

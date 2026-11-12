@@ -13,5 +13,5 @@ authority. This is orchestration over existing verbs, never a second scheduler o
    and apprentice to open a conversation grounded in real work.
 
 The successor packet carries `orienting-to-an-inherited-seat`; the incumbent notice carries
-`retiring-and-inheriting-a-seat`. Record delivery as staged, submitted, and consumed. No step in
+`claude-compaction-restore`. Record delivery as staged, submitted, and consumed. No step in
 this stack binds the successor into the live seat.

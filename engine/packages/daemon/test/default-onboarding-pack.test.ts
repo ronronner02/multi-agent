@@ -65,17 +65,14 @@ describe("default onboarding pack", () => {
   it("discovers an optional world pack without naming a dead default", () => {
     const text = packText();
     const stepTwo = readFileSync(PACK_PATHS[1]!, "utf8");
-    expect(text).toContain("rig context list");
-    expect(text).toContain("rig context profile <world-pack-ref> --situation fresh");
-    expect(text).toContain("complete default mental model");
-    expect(text).not.toContain("world/install");
-    expect(stepTwo).toContain("rig context get onboarding-width");
-    expect(stepTwo).toContain("rig context get world-example");
-    expect(stepTwo).toContain("public-what-you-can-do.md");
-    expect(stepTwo).toContain("public-reference-material.md");
-    expect(stepTwo).not.toContain("Read the sibling files");
-    expect(text).toContain("forming-an-openrig-mental-model");
-    expect(text).toContain("openrig-operating-model");
+    expect(text).toContain("multi-agent team");
+    expect(text).toContain("multi-agent daemon");
+    expect(text).toContain("multi-agent github");
+    expect(text).toContain("owner-governed team run");
+    expect(stepTwo).toContain("multi-agent team start");
+    expect(stepTwo).toContain("agent-operated-workflows");
+    expect(stepTwo).toContain("claude-compaction-restore");
+    expect(stepTwo).not.toContain("multi-agent context compose");
 
     const [capabilities, sources] = PUBLIC_REFERENCE_PATHS.map((path) => readFileSync(path, "utf8"));
     expect(capabilities).toContain("# What you can do here");
@@ -88,27 +85,27 @@ describe("default onboarding pack", () => {
     expect(sources).not.toContain("Everything above is this box. The corpus");
 
     const canonPaths = [
-      resolve(DAEMON_ROOT, "assets/plugins/openrig-core/skills/forming-an-openrig-mental-model/SKILL.md"),
-      resolve(DAEMON_ROOT, "assets/plugins/openrig-core/skills/openrig-operating-model/SKILL.md"),
+      resolve(DAEMON_ROOT, "assets/plugins/multi-agent-core/skills/agent-operated-software/SKILL.md"),
+      resolve(DAEMON_ROOT, "assets/plugins/multi-agent-core/skills/agent-operated-workflows/SKILL.md"),
     ];
     const canonicalParagraphs = new Set(canonPaths.flatMap((path) => paragraphs(readFileSync(path, "utf8"))));
     const copied = paragraphs(text).filter((paragraph) => canonicalParagraphs.has(paragraph));
     expect(copied).toEqual([]);
   });
 
-  it("keeps operator contact open without teaching a router hop", () => {
+  it("keeps owner contact open through the native team flow", () => {
     const pack = packText();
 
-    expect(pack).toContain("Any agent may contact them directly for");
-    expect(pack).toContain("use a durable surface");
-    expect(pack).toContain("orchestrators and PMs may also send updates");
-    expect(pack).not.toMatch(/other seats route through them|role-gated/i);
+    expect(pack).toContain("Use team chat for a question or progress update");
+    expect(pack).toContain("durable run state");
+    expect(pack).toContain("ask for the one decision that changes the work");
+    expect(pack).not.toMatch(/other seats route through them|role-gated|router hop/i);
   });
 
-  it("ships a no-shared-vocabulary selection probe that is red on blank and green on packed context", () => {
-    const prompt = "An open-ended cleanup request arrives. Name the physical-world question that prevents a chain of locally defensible improvements from solving the wrong problem.";
-    const expected = /how big is the dog\??/i;
-    expect(prompt).not.toMatch(/\bbig\b|\bdog\b/i);
+  it("ships a task-grounding probe that is red on blank and green on packed context", () => {
+    const prompt = "An open-ended cleanup request arrives. Name the task evidence and repository boundary that prevent a locally defensible change from solving the wrong problem.";
+    const expected = /assigned goal|acceptance evidence|repository guidance/i;
+    expect(prompt).not.toMatch(expected);
     expect("").not.toMatch(expected);
     expect(packText()).toMatch(expected);
   });

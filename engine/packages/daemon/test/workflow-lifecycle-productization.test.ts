@@ -195,7 +195,7 @@ describe("S06 lifecycle productization", () => {
       lifecycle: {
         operationKey: "opaque-release-operation",
         compiledInputDigest: "digest-a",
-        binding: { project: "openrig", mission: "release-0.5.9" },
+        binding: { project: "multi-agent", mission: "release-0.5.9" },
       },
     });
     const before = mutationCounts();
@@ -206,7 +206,7 @@ describe("S06 lifecycle productization", () => {
       lifecycle: {
         operationKey: "opaque-release-operation",
         compiledInputDigest: "digest-a",
-        binding: { project: "openrig", mission: "release-0.5.9" },
+        binding: { project: "multi-agent", mission: "release-0.5.9" },
       },
     });
     expect(replay.instance.instanceId).toBe(first.instance.instanceId);
@@ -221,7 +221,7 @@ describe("S06 lifecycle productization", () => {
       lifecycle: {
         operationKey: "opaque-release-operation",
         compiledInputDigest: "digest-b",
-        binding: { project: "openrig", mission: "release-0.5.9" },
+        binding: { project: "multi-agent", mission: "release-0.5.9" },
       },
     })).rejects.toMatchObject({ code: "lifecycle_operation_conflict" });
     expect(mutationCounts()).toEqual(before);
@@ -604,7 +604,7 @@ describe("S06 lifecycle productization", () => {
       occurrence_id: left.packetId,
       targeted_action: null,
     }]);
-    expect(JSON.stringify(projected)).not.toContain("rig workflow resume");
+    expect(JSON.stringify(projected)).not.toContain("multi-agent workflow resume");
     await expect(runtime.resume({
       instanceId: created.instance.instanceId,
       occurrenceId: left.packetId,

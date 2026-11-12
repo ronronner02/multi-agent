@@ -50,7 +50,7 @@ describe("FR-5 check #1 — workspace root reachable", () => {
     expect(result.status).toBe("fail");
     expect(result.message).toContain("does not exist");
     expect(result.message).toContain("env");
-    expect(result.fixHint).toContain("OPENRIG_WORKSPACE_ROOT");
+    expect(result.fixHint).toContain("MULTI_AGENT_WORKSPACE_ROOT");
     expect(result.evidence?.errorCode).toBe("ENOENT");
   });
 
@@ -74,11 +74,11 @@ describe("FR-5 check #1 — workspace root reachable", () => {
     const envResult = checkWorkspaceRootReachable({ workspaceRoot: missing, source: "env" });
     const fileResult = checkWorkspaceRootReachable({ workspaceRoot: missing, source: "file" });
     const defaultResult = checkWorkspaceRootReachable({ workspaceRoot: missing, source: "default" });
-    expect(envResult.fixHint).toContain("OPENRIG_WORKSPACE_ROOT");
+    expect(envResult.fixHint).toContain("MULTI_AGENT_WORKSPACE_ROOT");
     expect(envResult.fixHint).not.toContain("workspace.root in config.json");
     expect(fileResult.fixHint).toContain("workspace.root in config.json");
-    expect(fileResult.fixHint).not.toContain("OPENRIG_WORKSPACE_ROOT");
-    expect(defaultResult.fixHint).toContain("rig config init-workspace");
+    expect(fileResult.fixHint).not.toContain("MULTI_AGENT_WORKSPACE_ROOT");
+    expect(defaultResult.fixHint).toContain("multi-agent config init-workspace");
   });
 
   // Discriminator-flip: non-ENOENT IO error must still fail with a
@@ -121,7 +121,7 @@ describe("FR-5 check #2 — missions folder present", () => {
     const missing = path.join(dir, "missions");
     const result = checkMissionsFolder({ workspaceRoot: dir, slicesRoot: missing });
     expect(result.status).toBe("fail");
-    expect(result.fixHint).toContain("rig config init-workspace");
+    expect(result.fixHint).toContain("multi-agent config init-workspace");
     expect(result.evidence?.errorCode).toBe("ENOENT");
   });
 
@@ -133,7 +133,7 @@ describe("FR-5 check #2 — missions folder present", () => {
     const result = checkMissionsFolder({ workspaceRoot: dir, slicesRoot: custom });
     expect(result.status).toBe("fail");
     expect(result.fixHint).toContain("unset workspace.slices_root");
-    expect(result.fixHint).not.toContain("rig config init-workspace");
+    expect(result.fixHint).not.toContain("multi-agent config init-workspace");
   });
 
   // Discriminator-flip: file-at-missions-path. Without isDirectory()
@@ -169,8 +169,8 @@ describe("FR-5 check #3 — file allowlist sane", () => {
       allowlistSource: "default",
     });
     expect(result.status).toBe("fail");
-    expect(result.fixHint).toContain("OPENRIG_FILES_ALLOWLIST");
-    expect(result.fixHint).toContain("rig config set");
+    expect(result.fixHint).toContain("files.allowlist");
+    expect(result.fixHint).toContain("multi-agent config set");
     expect(result.evidence?.entryCount).toBe(0);
   });
 
@@ -302,8 +302,8 @@ describe("FR-5 check #4 — daemon points at this workspace", () => {
       expect(result.status).toBe("fail");
       expect(result.message).toContain(otherDir);
       expect(result.message).toContain(dir);
-      expect(result.fixHint).toContain("rig daemon restart");
-      expect(result.fixHint).toContain("OPENRIG_WORKSPACE_ROOT");
+      expect(result.fixHint).toContain("multi-agent daemon restart");
+      expect(result.fixHint).toContain("MULTI_AGENT_WORKSPACE_ROOT");
     } finally {
       fs.rmSync(otherDir, { recursive: true, force: true });
     }
@@ -343,7 +343,7 @@ describe("FR-5 check #5 — daemon reload needed", () => {
     const start = new Date(Date.now() - 60_000);
     const result = checkDaemonReload({ configFilePath: cfg, daemonStartTime: start });
     expect(result.status).toBe("warn");
-    expect(result.fixHint).toContain("rig daemon restart");
+    expect(result.fixHint).toContain("multi-agent daemon restart");
     expect(result.evidence?.staleMs).toBeGreaterThan(0);
   });
 
@@ -434,7 +434,7 @@ describe("FR-5 check #7 — mission notes presence", () => {
     expect(result.status).toBe("warn");
     const missing = result.evidence?.missing as Array<{ mission: string }>;
     expect(missing.map((m) => m.mission).sort()).toEqual(["no-notes-1", "no-notes-2"]);
-    expect(result.fixHint).toContain("rig scope mission create");
+    expect(result.fixHint).toContain("multi-agent scope mission create");
   });
 
   // Discriminator-flip: missions root absent should warn-only.

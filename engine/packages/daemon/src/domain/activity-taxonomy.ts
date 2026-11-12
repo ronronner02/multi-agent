@@ -1,6 +1,6 @@
 // OPR.0.5.5.19 — THE FORMAL ACTIVITY TAXONOMY: the declared state language every surface
-// renders from (TUI, `rig ps`, node-inventory). Three orthogonal axes plus derived
-// diagnoses, ratified at product/from-openrig.dev/taxonomy-agent-state-ADDENDUM-2026-08-26.md
+// renders from (TUI, `multi-agent ps`, node-inventory). Three orthogonal axes plus derived
+// diagnoses, ratified at product/from-multi-agent.dev/taxonomy-agent-state-ADDENDUM-2026-08-26.md
 // (founder ruling 22:00Z); reconciliation vs herdr/omnigent lives in
 // docs/reference/agent-state-taxonomy.md — the doc CITES the addendum, never forks it.
 //

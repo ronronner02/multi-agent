@@ -21,19 +21,19 @@ notes/*
 *.sqlite-shm
 *.sqlite-wal
 *.sqlite.pre-reboot-backup
-.openrig/
+.multi-agent/
 .claude/*
 !.claude/skills/
 .claude/skills/*
-!.claude/skills/developing-openrig/
+!.claude/skills/developing-multi-agent/
 # A launch provisions this file into the seat's own cwd, so a seat that sits inside this
 # repo (demo/team) writes one too; the rules above only cover the engine root.
 **/.claude/settings.local.json
 .agents/*
 !.agents/skills/
 .agents/skills/*
-!.agents/skills/developing-openrig/
-.openrig
+!.agents/skills/developing-multi-agent/
+.multi-agent
 .worktrees/
 
 # Local demo proof artifacts

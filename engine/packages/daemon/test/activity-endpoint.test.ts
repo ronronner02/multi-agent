@@ -10,7 +10,7 @@ describe("activity-endpoint (OPR.0.4.3.28 B2)", () => {
   let stateDir: string;
 
   beforeEach(() => {
-    stateDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "openrig-s28-"));
+    stateDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "multi-agent-s28-"));
   });
   afterEach(() => {
     try { fs.rmSync(stateDir, { recursive: true, force: true }); } catch { /* ignore */ }

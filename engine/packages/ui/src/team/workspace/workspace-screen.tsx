@@ -1,7 +1,7 @@
 import { TextPreview } from "../text-preview.js";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TeamOwnerRead } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead } from "@multi-agent/daemon/team-control";
 import { namedSeat } from "../display.js";
 import { attemptForSeat, SeatHeading, taskForSeat, WorkspaceView } from "./workspace-view.js";
 import { WorkspaceFocus } from "./workspace-focus.js";

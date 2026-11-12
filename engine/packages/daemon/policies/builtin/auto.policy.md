@@ -19,6 +19,6 @@ flag-surface opt-in. The `applying-a-permission-policy` skill does **NOT** trans
 this policy.
 
 **Selection and native enforcement are separate.** A member policy overrides the
-rig policy. A resolved config-surface selection chooses OpenRig's normal launch
+multi-agent policy. A resolved config-surface selection chooses Multi-Agent's normal launch
 mode and takes precedence over ambient YOLO. Native configuration and managed
 restrictions still matter; recording a policy does not translate config rules.

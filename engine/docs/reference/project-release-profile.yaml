@@ -1,4 +1,4 @@
-schema: openrig.project/v0alpha1
+schema: multi-agent.project/v0alpha1
 kind: project
 metadata: { id: example }
 missions: { root: missions }
@@ -20,7 +20,7 @@ lifecycle:
       workflow:
         entry: { role: orchestrator }
         # Entry/ordinary custody and exception selection are separate decisions.
-        # Replace the example target with a declared member (rig ps --nodes --json).
+        # Replace the example target with a declared member (multi-agent ps --nodes --json).
         # Inspect with workflow compile/show; adopt later corrections with workflow revise.
         exception_routing: { orchestrator_role: orchestrator }
         roles:

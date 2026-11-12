@@ -7,26 +7,26 @@ This rig runs HashiCorp Vault in dev mode as a managed environment service. Vaul
 ## Access
 
 - **Address:** `http://127.0.0.1:8200`
-- **Dev root token:** `openrig-dev-token`
+- **Dev root token:** `multi-agent-dev-token`
 - **UI:** `http://127.0.0.1:8200/ui`
 - **API:** `http://127.0.0.1:8200/v1`
 
 ## Ground Yourself First
 
-Before making topology or registration claims, ground yourself with OpenRig identity:
+Before making topology or registration claims, ground yourself with Multi-Agent identity:
 
 ```bash
-rig whoami --json
+multi-agent whoami --json
 ```
 
-Trust the startup identity context OpenRig gives you. Do not claim that the rig is unlaunched, unattached, or unregistered unless `rig whoami --json` or another direct OpenRig command proves it.
+Trust the startup identity context Multi-Agent gives you. Do not claim that the rig is unlaunched, unattached, or unregistered unless `multi-agent whoami --json` or another direct Multi-Agent command proves it.
 
 ## Checking Status
 
-Use OpenRig env surfaces first:
+Use Multi-Agent env surfaces first:
 
 ```bash
-rig env status <rig-name>
+multi-agent env status <rig-name>
 ```
 
 For direct Vault health checks:

@@ -33,7 +33,7 @@ export function resolveWorkspaceContext(opts: {
 
   // env override wins when it names a declared repo; otherwise fall through
   // to default_repo. Unknown override is honored verbatim per PL-007 PRD §
-  // Item 3 — operators set OPENRIG_TARGET_REPO consciously.
+  // Item 3 — operators set MULTI_AGENT_TARGET_REPO consciously.
   const repoNames = new Set(spec.repos.map((r) => r.name));
   let activeRepo: string | null = null;
   if (envOverride && envOverride.trim() !== "") {

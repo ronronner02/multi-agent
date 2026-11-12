@@ -207,7 +207,7 @@ test("each explicit mode refuses an empty generated rules object", () => {
 
 test("tree mode scans the actual packaging subtree, including an untracked seeded fixture", () => {
   requireGuard();
-  const root = mkdtempSync(join(tmpdir(), "openrig-guard-tree-"));
+  const root = mkdtempSync(join(tmpdir(), "multi-agent-guard-tree-"));
   const tree = join(root, "specs");
   const rules = join(root, "rules.json");
   try {
@@ -230,7 +230,7 @@ test("tree mode scans the actual packaging subtree, including an untracked seede
 
 test("full artifact mode scans exactly the packager manifest and reports its file set", () => {
   requireGuard();
-  const root = mkdtempSync(join(tmpdir(), "openrig-guard-artifact-"));
+  const root = mkdtempSync(join(tmpdir(), "multi-agent-guard-artifact-"));
   const tree = join(root, "package");
   const rules = join(root, "rules.json");
   const filesManifest = join(root, "artifact-files.json");
@@ -273,7 +273,7 @@ test("Plain B keeps guard enforcement out of root test:repo while fixture tests 
 });
 
 function withRepo(run) {
-  const root = mkdtempSync(join(tmpdir(), "openrig-guard-red-"));
+  const root = mkdtempSync(join(tmpdir(), "multi-agent-guard-red-"));
   const repo = join(root, "repo");
   const rules = join(root, "rules.json");
   mkdirSync(repo, { recursive: true });
@@ -315,7 +315,7 @@ function write(path, content) {
 
 function fixtureRules() {
   return {
-    path_prefixes: ["openrig-work/"],
+    path_prefixes: ["multi-agent-work/"],
     seat_and_rig_patterns: ["operator-agent@"],
     host_patterns: ["mm2-"],
     charged_terms: ["founder"],

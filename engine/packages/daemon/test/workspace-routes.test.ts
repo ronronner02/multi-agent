@@ -82,7 +82,7 @@ describe("workspace HTTP routes (PL-007)", () => {
 // Wires a stub SettingsStore via Hono middleware (matching production
 // pattern at server.ts:430 where `c.set("settingsStore", ...)`).
 // SettingsStore is constructed with a temp config-file path so the
-// suite doesn't touch ~/.openrig.
+// suite doesn't touch ~/.multi-agent.
 describe("workspace doctor HTTP route (slice-21 FR-5)", () => {
   let doctorDir: string;
   let doctorApp: Hono;
@@ -215,7 +215,7 @@ describe("workspace doctor HTTP route (slice-21 FR-5)", () => {
   });
 
   // GUARD/QA BLOCKING-A2 discriminator: when the CLI forwards an
-  // OPENRIG_FILES_ALLOWLIST overlay via body.filesAllowlistOverride,
+  // MULTI_AGENT_FILES_ALLOWLIST overlay via body.filesAllowlistOverride,
   // the daemon route MUST use that value for check #3 instead of the
   // daemon's own SettingsStore-resolved files.allowlist. Without the
   // override branch the operator's env-var would silently no-op.

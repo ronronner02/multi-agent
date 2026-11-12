@@ -6,20 +6,20 @@ import { validateEvalCase } from "./helpers/eval-schema.js";
 
 const VALID_SELECTION = {
   id: "sel-01",
-  name: "selects core/rig-lifecycle for a fleet bring-back",
+  name: "selects pods/orchestration-team for a fleet bring-back",
   category: "selection",
   prompt: "the box rebooted and everything's gone — bring the whole fleet back",
-  expectedPatterns: ["rig context get\\s+core/rig-lifecycle"],
+  expectedPatterns: ["multi-agent context get\\s+pods/orchestration-team"],
 };
 
 const VALID_LOADING = {
   id: "load-01",
-  name: "pulls core/rig-lifecycle before any bring-back action",
+  name: "pulls pods/orchestration-team before any bring-back action",
   category: "loading",
   prompt: "the box rebooted and everything's gone — bring the whole fleet back",
-  expectedPatterns: ["rig context get\\s+core/rig-lifecycle"],
+  expectedPatterns: ["multi-agent context get\\s+pods/orchestration-team"],
   order: {
-    getPattern: "rig context get\\s+core/rig-lifecycle",
+    getPattern: "multi-agent context get\\s+pods/orchestration-team",
     actionPattern: "rig (up|start|restore)",
   },
 };
@@ -43,7 +43,7 @@ describe("eval-schema — case validator", () => {
   });
 
   it("rejects a non-compilable expected pattern", () => {
-    expect(codes({ ...VALID_SELECTION, expectedPatterns: ["rig context get ("] })).toContain(
+    expect(codes({ ...VALID_SELECTION, expectedPatterns: ["multi-agent context get ("] })).toContain(
       "PATTERN_NOT_REGEX",
     );
   });

@@ -117,7 +117,7 @@ describe("WF-5 FR-2 class (b): detection-time stuck exception items", () => {
     const tags = String(item.tags);
     expect(tags).toContain(`occurrence:${f.packetId}`);
     expect(tags).toContain("step:produce");
-    expect(String(item.evidence_ref)).toContain("rig workflow trace");
+    expect(String(item.evidence_ref)).toContain("multi-agent workflow trace");
     expect(String(item.body)).toContain("packet age alone does not establish idle");
   });
 

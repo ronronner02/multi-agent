@@ -1,9 +1,9 @@
 # Family: delivery `send` (partial: rendered delivery, not consumption).
-# Defect class: `rig send` reports success but the message body never renders in the
+# Defect class: `multi-agent send` reports success but the message body never renders in the
 #   addressed seat's pane (receipt is not render), or the envelope names the wrong seat.
-# What this proves: RENDERED TEXT. A `rig send` to one seat of a two-seat stub rig puts
-#   the OpenRig envelope addressed to that seat, and the exact marker text, into that
-#   seat's pane, read back through the shipped `rig capture --json`.
+# What this proves: RENDERED TEXT. A `multi-agent send` to one seat of a two-seat stub rig puts
+#   the Multi-Agent envelope addressed to that seat, and the exact marker text, into that
+#   seat's pane, read back through the shipped `multi-agent capture --json`.
 # What this does NOT prove: that the seat read or acted on the message (the stub has no
 #   input channel, so an answer derived from a nonce needs the input-consuming stub),
 #   that the sibling seat received nothing (the runner has no negative form), or any

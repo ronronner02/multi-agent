@@ -1,7 +1,7 @@
 // #69 — Newer Codex attaches the interactive TUI to one machine-wide `codex app-server`
 // daemon, and tool shells run under that daemon's environment. A seat's tools can then
-// act under another seat's OpenRig identity. `--no-daemon` keeps the app-server inside the
-// seat's own process tree, but older Codex rejects the flag. So OpenRig asks the binary the
+// act under another seat's Multi-Agent identity. `--no-daemon` keeps the app-server inside the
+// seat's own process tree, but older Codex rejects the flag. So Multi-Agent asks the binary the
 // seat will actually run, once per launch: `codex --help` in the seat's working directory
 // with the launch PATH (a relative PATH entry then resolves exactly as it will in the pane).
 //   supported → Codex usage that lists a `--no-daemon` option: launch with it;
@@ -54,6 +54,6 @@ export function codexDaemonSupportProbe(launchPath?: string, timeoutMs = 10_000,
 export function unknownDaemonSupportMessage(detail: string): string {
   return `Cannot tell whether the installed Codex supports --no-daemon (${detail}). `
     + "Without it, a Codex that shares one app-server daemon across sessions may run this "
-    + "seat's tools under another seat's identity, so OpenRig did not launch it. Make sure "
+    + "seat's tools under another seat's identity, so Multi-Agent did not launch it. Make sure "
     + "`codex --help` runs in the seat's working directory with the daemon's PATH, then launch again.";
 }

@@ -1,7 +1,7 @@
-# OpenRig 0.4.6 spec-language example — the GATED STAGE shape.
+# Multi-Agent 0.4.6 spec-language example — the GATED STAGE shape.
 # A human sign-off gate on the final step (compiles to the shipped
 # human-route machinery: tier human-gate + summary + evidence_ref,
-# resolved by `rig queue resolve`), plus per-step harness pins.
+# resolved by `multi-agent queue resolve`), plus per-step harness pins.
 workflow:
   id: gated-release
   version: 1

@@ -83,9 +83,8 @@ import nodePath from "node:path";
 // can record diagnostic rows. SC-29 #10 declared verbatim in commit body.
 import { RigModeStore } from "./domain/rig-mode/rig-mode-store.js";
 import { OperatingPostureService, configuredCatalogPath } from "./domain/rig-mode/operating-posture.js";
-import { OPENRIG_HOME } from "./openrig-compat.js";
+import { MULTI_AGENT_HOME } from "./data-paths.js";
 import { ensureActivityHookToken, writeActivityEndpointFile, deriveActivityUrl, readActivityEndpointFile } from "./domain/activity-endpoint.js";
-import { readOpenRigEnv } from "./openrig-compat.js";
 
 interface DaemonOptions {
   dbPath?: string;
@@ -524,11 +523,11 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const eventBus = new EventBus(db);
   const streamStore = new StreamStore(db, eventBus);
   // Explicit source opt-in only. No sink I/O until a separate drain request.
-  const shadow = configureShadowCapture(process.env.OPENRIG_SHADOW_CAPTURE);
+  const shadow = configureShadowCapture(process.env.MULTI_AGENT_SHADOW_CAPTURE);
   const slowOpRecorder = opts?.slowOpRecorder ?? (dbPath === ":memory:"
     ? undefined
     : new SlowOpRecorder({
-        logPath: nodePath.join(OPENRIG_HOME, "logs", "slow-operations.jsonl"),
+        logPath: nodePath.join(MULTI_AGENT_HOME, "logs", "slow-operations.jsonl"),
       }));
   configureSyncSiteRecorder(slowOpRecorder);
   // Instrumentation wiring is observe-only: neither a throwing registration
@@ -670,7 +669,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // the daemon states the unisolated roots' revision instead of reading a policy file that
   // does not exist on such a host; dispatch then refuses a binding built for any other mode.
   const runPolicyCapability = teamControl.readPolicyCapability
-    ?? (unisolated ? () => unisolatedPolicyCapability(unisolatedWorkerRoots(OPENRIG_HOME).policyRevision) : undefined);
+    ?? (unisolated ? () => unisolatedPolicyCapability(unisolatedWorkerRoots(MULTI_AGENT_HOME).policyRevision) : undefined);
   // Governance checks each task against the same reader the start route approved the run with.
   const teamGovernance = new PlanGovernance(db, eventBus, queueRepoInstance, undefined, runPolicyCapability);
   // MVP — the roots in force for this daemon. Under `hardened` they are the installed policy's,
@@ -678,7 +677,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // state tree, so nothing in the launch path ever reads `/etc/multi-agent`.
   const rootsNow = unisolated
     ? (() => {
-        const roots = unisolatedWorkerRoots(OPENRIG_HOME);
+        const roots = unisolatedWorkerRoots(MULTI_AGENT_HOME);
         return () => roots;
       })()
     : managedWorkerRoots;
@@ -772,7 +771,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     recordProjection: (targetPath: string, content: string) => projectionManifestStore.record({ targetPath, lastHash: hashContent(content), writtenAt: new Date().toISOString() }) });
   const codexAdapter = new CodexRuntimeAdapter({ fsOps, ...workerLauncher });
   const { ContextUsageStore } = await import("./domain/context-usage-store.js");
-  const contextUsageStore = new ContextUsageStore(db, { stateDir: OPENRIG_HOME, codexHome: configuredCodexHome,
+  const contextUsageStore = new ContextUsageStore(db, { stateDir: MULTI_AGENT_HOME, codexHome: configuredCodexHome,
     resolveOccupantBootAt: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.bootAt ?? null });
   const agentActivityStore = new AgentActivityStore({ db, eventBus,
     resolveOccupantGeneration: (nodeId) => sessionRegistry.currentOccupantTenure(nodeId)?.generationUuid ?? null,
@@ -895,7 +894,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     deps.workflowRuntime = workflowRuntime;
     // U7 — the run's integration branch. The worktree root is the one U5's plan worktree lives
     // under, and the patch is the runtime's own candidate read, so what lands is exactly the
-    // work the reviewer approved and `rig team apply` would have applied.
+    // work the reviewer approved and `multi-agent team apply` would have applied.
     {
       const { composeIntegration } = await import("./domain/integration-branch.js");
       deps.integration = composeIntegration({
@@ -971,8 +970,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     // delete them on every boot (then loadStarterWorkflowSpecs re-seeds
     // — wasteful at best, broken if the loader ever skips re-seeding).
     // Pass the resolved install root so rows under it are preserved.
-    const { getOpenRigInstallRoot } = await import("./domain/cwd-resolution.js");
-    if (!managed) workflowRuntime.specCache.pruneNoiseDirRows(getOpenRigInstallRoot());
+    const { getMultiAgentInstallRoot } = await import("./domain/cwd-resolution.js");
+    if (!managed) workflowRuntime.specCache.pruneNoiseDirRows(getMultiAgentInstallRoot());
 
     if (starterResult && starterResult.errors.length > 0) {
       console.warn(

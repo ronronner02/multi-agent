@@ -7,7 +7,7 @@
 //      authority hashes;
 //   3. the COMPILED assembled startup boundary: invoking the assembled
 //      dist's exported createDaemon() (no listen) under a fresh temporary
-//      OPENRIG_HOME + isolated state materializes EXACTLY the four stable
+//      MULTI_AGENT_HOME + isolated state materializes EXACTLY the four stable
 //      files at reference/policies/builtin/ — byte-equal, mode 0444.
 // The probe NEVER touches the live daemon, its port, or the operator home.
 //
@@ -19,11 +19,11 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const AUTHORITY_SHA256 = {
-  "auto.policy.md": "ffd0347af4bc5d5fdb4e5f8208577ca72dcc085883ea4fa0b10e9c6ac3022bde",
+  "auto.policy.md": "446eb1b088324fe839b7f855ace3b65ab237532fc62ed7494fb8451c091c8f48",
   "locked.policy.md": "dcb38c372def7fe58ddfc9f1f3e97b9ba391ae79a99ef486e44f017cb39e57fe",
-  "standard.policy.md": "737d3f56e6d8275fe548a3a06e9b02ede8f328207ec2e6223cea6a83f40f5148",
+  "standard.policy.md": "40cb678a854c4d6bb69fa041e4d4796515312df0173eb9f1a9947da967798fbe",
   "open.policy.md": "bb5fbb18e1f3706bd0676a9e709e29b5754bb6b41b6f304453dd6d73e7a4d62b",
-  "yolo.policy.md": "1c34fff0b385426689fd26e20b8b431de6b688028d584924e7d5384fe5ff6d42",
+  "yolo.policy.md": "5d3c832cabd49467eae71150d881d9b05da4cf92c045c53f1d47ad430ae14e47",
 };
 
 const [cliDir, expectedSha] = process.argv.slice(2);
@@ -60,37 +60,14 @@ ok("assembled daemon/policies/builtin: exactly the known five, all authority has
 // ---- 3. compiled assembled startup boundary (guard finding 1) ----
 const home = mkdtempSync(join(tmpdir(), "builtins-probe-home-"));
 const state = mkdtempSync(join(tmpdir(), "builtins-probe-state-"));
-process.env.OPENRIG_HOME = home;
-// QA finding (qitem 03a6194b): createDaemon() fires the background kernel
-// bootstrap by default, which can create/replace tmux sessions on the SHARED
-// server — the probe must deterministically opt out BEFORE importing the
-// compiled startup, and PIN the skip so a regression fails loudly.
-process.env.OPENRIG_NO_KERNEL = "1";
-delete process.env.OPENRIG_URL;
-delete process.env.OPENRIG_PORT;
+process.env.MULTI_AGENT_HOME = home;
+delete process.env.MULTI_AGENT_URL;
+delete process.env.MULTI_AGENT_PORT;
 try {
   const startup = await import(pathToFileURL(join(cli, "daemon", "dist", "startup.js")).href);
   if (typeof startup.createDaemon !== "function") fail("assembled dist/startup.js does not export createDaemon");
-  // construct WITHOUT listening — isolated DB under the temp state dir; tee
-  // stdout/stderr during construction to pin the kernel-boot SKIP
-  const chunks = [];
-  const origOut = process.stdout.write.bind(process.stdout);
-  const origErr = process.stderr.write.bind(process.stderr);
-  process.stdout.write = (c, ...rest) => { chunks.push(String(c)); return origOut(c, ...rest); };
-  process.stderr.write = (c, ...rest) => { chunks.push(String(c)); return origErr(c, ...rest); };
-  let daemon;
-  try {
-    daemon = await startup.createDaemon({ dbPath: join(state, "probe.db") });
-  } finally {
-    process.stdout.write = origOut;
-    process.stderr.write = origErr;
-  }
-  const bootLog = chunks.join("");
-  if (!bootLog.includes("skipping kernel auto-boot"))
-    fail("kernel auto-boot skip NOT observed — the probe must never start the background kernel bootstrap");
-  if (bootLog.includes("kernel-boot: booting"))
-    fail("kernel-boot attempted to BOOT during the probe — shared tmux was at risk");
-  ok("kernel auto-boot deterministically SKIPPED (OPENRIG_NO_KERNEL=1 pinned in probe output)");
+  // Construct without listening, using an isolated database.
+  const daemon = await startup.createDaemon({ dbPath: join(state, "probe.db") });
   const refDir = join(home, "reference", "policies", "builtin");
   const files = readdirSync(refDir).sort();
   if (JSON.stringify(files) !== JSON.stringify(expectedFiles))

@@ -1,4 +1,4 @@
-// OPR.0.4.4.11 FR-7 — rig --version identity, CLI side.
+// OPR.0.4.4.11 FR-7 — multi-agent --version identity, CLI side.
 //
 // Stamped: `<semver> (<shortsha>)` + dirty marker when dirty. Unstamped dev
 // run: the semver alone EXACTLY as today (negative AC: no fake identity).

@@ -7,7 +7,7 @@ import { leadRosterPath } from "./lead-roster.js";
  *
  * The owner's outcome command needs evidence, and the owner cannot read a worker's tree: the
  * daemon can. This module states, from the candidate the runtime already computes for
- * `rig team apply` and the diff view, what the daemon can check for itself. `validated` is a
+ * `multi-agent team apply` and the diff view, what the daemon can check for itself. `validated` is a
  * derived fact, never a caller's claim, which is R18 read literally: an attempt that ended, or a
  * candidate that exists, is not by itself evidence the work was done where it was allowed.
  */
@@ -41,7 +41,7 @@ export interface CandidateFacts {
 /**
  * The paths a unified diff moves, from its own headers.
  *
- * The patch is the candidate's own computation — the same bytes `rig team apply` replays — so
+ * The patch is the candidate's own computation — the same bytes `multi-agent team apply` replays — so
  * this reads the deliverable rather than walking the tree a second time.
  */
 export function changedPaths(patch: string): string[] {

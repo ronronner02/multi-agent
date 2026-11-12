@@ -24,12 +24,12 @@ describe("queue sender identity — bare at local write, triple only from the fo
   afterEach(() => { setSelfHostId(prior); db.close(); });
 
   it("stores source_session BARE even with a reconciled self-id", async () => {
-    const row = await repo.create({ sourceSession: "dev50-driver@v-openrig-build", destinationSession: "b@r", body: "x" });
-    expect(row.sourceSession).toBe("dev50-driver@v-openrig-build");
+    const row = await repo.create({ sourceSession: "dev50-driver@v-multi-agent-build", destinationSession: "b@r", body: "x" });
+    expect(row.sourceSession).toBe("dev50-driver@v-multi-agent-build");
   });
 
   it("stores a forwarded ORIGIN triple verbatim (the not-bare guard: never re-stamped)", async () => {
-    const row = await repo.create({ sourceSession: "pm@other-rig@mm2-openrig1", destinationSession: "b@r", body: "x" });
-    expect(row.sourceSession).toBe("pm@other-rig@mm2-openrig1");
+    const row = await repo.create({ sourceSession: "pm@other-rig@mm2-multi-agent1", destinationSession: "b@r", body: "x" });
+    expect(row.sourceSession).toBe("pm@other-rig@mm2-multi-agent1");
   });
 });

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { closeHttpServer, createDaemonShutdown, DAEMON_SHUTDOWN_RECEIPT, trackHttpServerResponses } from "./daemon-shutdown.js";
-import { readOpenRigEnv, OPENRIG_HOME } from "./openrig-compat.js";
+import { MULTI_AGENT_HOME, resolveDataRoots } from "./data-paths.js";
 import { resolveDaemonDbPath } from "./daemon-db-path.js";
 import { createDaemon } from "./startup.js";
 import { resolveClientDependencies } from "./domain/executable-resolver.js";
@@ -32,7 +32,7 @@ import type { SlowOperationInstrumentation } from "./domain/slow-op-recorder.js"
 import type { ProviderService } from "./domain/provider/provider-service.js";
 import { SettingsStore } from "./domain/user-settings/settings-store.js";
 import {
-  ensureOpenRigInstance,
+  ensureMultiAgentInstance,
   formatInstanceInitializationConflicts,
 } from "./domain/instance-initialization.js";
 
@@ -219,20 +219,21 @@ export async function startServer(port?: number) {
   const hostedByDesktop = (process as { parentPort?: unknown }).parentPort !== undefined;
   const resolvedOwnerToken = ownerToken
     ?? (requestedMode === "managed" && hostedByDesktop ? randomBytes(32).toString("base64url") : null);
-  const p = port ?? parseInt(readOpenRigEnv("OPENRIG_PORT", "RIGGED_PORT") ?? "7433", 10);
-  // D15 — anchor the default db under OPENRIG_HOME, never a bare CWD-relative
-  // filename (which could open the shared fleet db). Explicit OPENRIG_DB wins.
-  const dbPath = resolveDaemonDbPath(readOpenRigEnv("OPENRIG_DB", "RIGGED_DB"), OPENRIG_HOME);
+  const p = port ?? parseInt(process.env.MULTI_AGENT_PORT ?? "7433", 10);
+  // D15 — anchor the default db under MULTI_AGENT_HOME, never a bare CWD-relative
+  // filename (which could open the shared fleet db). Explicit MULTI_AGENT_DB wins.
+  const dbPath = resolveDaemonDbPath(process.env.MULTI_AGENT_DB, MULTI_AGENT_HOME);
   const instanceConfig = new SettingsStore().resolveConfig();
-  const initialization = ensureOpenRigInstance({
-    home: OPENRIG_HOME,
+  const initialization = ensureMultiAgentInstance({
+    home: MULTI_AGENT_HOME,
+    configHome: resolveDataRoots().config,
     workspaceRoot: instanceConfig.workspaceRoot,
     contextRoot: instanceConfig.contextRoot,
     skillsRoot: instanceConfig.skillsRoot,
     topologyRoot: instanceConfig.topologyRoot,
   });
   if (!initialization.ok) {
-    throw new Error(`OpenRig instance initialization blocked: ${formatInstanceInitializationConflicts(initialization)}`);
+    throw new Error(`Multi-Agent instance initialization blocked: ${formatInstanceInitializationConflicts(initialization)}`);
   }
 
   // bug-fix slice auth-bearer-tailscale-trust: distinguish "explicit
@@ -241,28 +242,28 @@ export async function startServer(port?: number) {
   // bearer invariant applies to their chosen host). When default, the
   // daemon always binds loopback and ALSO binds the active tailscale
   // interface (if present) — both accepted paths in the invariant.
-  // OPR.0.5.5.20 — bind intent rides ONLY the dedicated OPENRIG_BIND_HOST surface.
-  // The overloaded routing env (OPENRIG_HOST/RIGGED_HOST) is observed for the
+  // OPR.0.5.5.20 — bind intent rides ONLY the dedicated MULTI_AGENT_BIND_HOST surface.
+  // The overloaded routing env (MULTI_AGENT_HOST) is observed for the
   // provenance line below and NEVER selects the bind branch: a managed environment's
   // injected endpoint is byte-indistinguishable from opt-in, and the parent daemon
   // silently lost its Tailscale listener to exactly that (operator baton
   // qitem-20260827070400). The auth-bearer-tailscale-trust ruling rides the new
   // surface unchanged.
   const bindPlan = resolveBindPlan({
-    bindHostEnv: process.env.OPENRIG_BIND_HOST,
-    routingHostEnv: readOpenRigEnv("OPENRIG_HOST", "RIGGED_HOST"),
+    bindHostEnv: process.env.MULTI_AGENT_BIND_HOST,
+    routingHostEnv: process.env.MULTI_AGENT_HOST,
     tailscaleIp: detectTailscaleInterface(),
   });
   if (bindPlan.ignoredRoutingHost) {
     console.error(
-      `[bind-provenance] OPENRIG_HOST=${bindPlan.ignoredRoutingHost} is ROUTING env and was ignored for bind policy — ` +
-      `binding default ${bindPlan.hosts.join(" + ")}. Declare bind intent via --host, the daemon.host config key (file), or OPENRIG_BIND_HOST.`,
+      `[bind-provenance] MULTI_AGENT_HOST=${bindPlan.ignoredRoutingHost} is ROUTING env and was ignored for bind policy — ` +
+      `binding default ${bindPlan.hosts.join(" + ")}. Declare bind intent via --host, the daemon.host config key (file), or MULTI_AGENT_BIND_HOST.`,
     );
   }
   const explicitHost = bindPlan.mode === "explicit" ? bindPlan.hosts[0] : undefined;
   // PL-005 Phase B: bearer token for Mission Control write verbs.
   // No legacy alias (this env var is new in Phase B).
-  const bearerToken = process.env.OPENRIG_AUTH_BEARER_TOKEN ?? null;
+  const bearerToken = process.env.MULTI_AGENT_AUTH_BEARER_TOKEN ?? null;
 
   let bindHosts: string[];
   if (explicitHost) {
@@ -302,7 +303,7 @@ export async function startServer(port?: number) {
   const managed = isManagedMode(deps.rigRepo.db);
   for (const host of bindHosts) {
     const srv = serve({ fetch: app.fetch, port: p, hostname: host }, (info) => {
-      console.log(`OpenRig daemon listening on http://${host}:${info.port}`);
+      console.log(`Multi-Agent daemon listening on http://${host}:${info.port}`);
       // U5 — report readiness to the Electron parent process over parentPort.
       // Only the loopback bind reports (not a secondary tailscale bind).
       if (host === "127.0.0.1") {
@@ -355,7 +356,7 @@ export async function startServer(port?: number) {
     }],
   ];
   const shutdown = createDaemonShutdown({
-    receiptPath: path.join(OPENRIG_HOME, DAEMON_SHUTDOWN_RECEIPT),
+    receiptPath: path.join(MULTI_AGENT_HOME, DAEMON_SHUTDOWN_RECEIPT),
     phases: shutdownPhases,
     // A service failure, open connection, or lost recorder drain is never clean.
     markClean: () => deps.daemonLifecycleStore.recordStop(deps.daemonBootEpoch, new Date().toISOString()),

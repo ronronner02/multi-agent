@@ -15,8 +15,8 @@
  *   CI-runnable path.
  * --provider rig: the LIVE-seat provider (the proof-contract door). Requires ONE of:
  *     --seat <session>      attach to an existing live seat (never torn down), or
- *     --seat-spec <rig.yaml> `rig up` a scratch rig and drive its single seat
- *                            (torn down via `rig down` at the end).
+ *     --seat-spec <rig.yaml> `multi-agent up` a scratch rig and drive its single seat
+ *                            (torn down via `multi-agent down` at the end).
  *   One persistent seat/generation serves every case; the boundary is the seat's
  *   append-only transcript (read out-of-band, no marker send — round-5 custody);
  *   the leading input echo is excluded from grading by the provider.
@@ -74,7 +74,7 @@ if (providerName === "rig") {
     console.error(
       "[REFUSED] --provider rig drives ONE persistent real seat and needs exactly one of:\n" +
         "  --seat <session>       attach to an existing live seat (never torn down)\n" +
-        "  --seat-spec <rig.yaml> spawn a scratch rig via `rig up` and drive its seat",
+        "  --seat-spec <rig.yaml> spawn a scratch rig via `multi-agent up` and drive its seat",
     );
     process.exit(2);
   }
@@ -99,12 +99,12 @@ try {
 } finally {
   // Retire the persistent seat exactly once (idempotent; no-op for fake/attach).
   // A teardown failure must NOT destroy the run's results — the grades are the
-  // product; a leftover rig is a named warning for manual `rig down`.
+  // product; a leftover rig is a named warning for manual `multi-agent down`.
   if (typeof provider.dispose === "function") {
     try {
       await provider.dispose();
     } catch (e) {
-      console.error(`[WARN] seat retirement failed — tear the scratch rig down manually with 'rig down': ${e.message}`);
+      console.error(`[WARN] seat retirement failed — tear the scratch multi-agent down manually with 'multi-agent down': ${e.message}`);
     }
   }
 }

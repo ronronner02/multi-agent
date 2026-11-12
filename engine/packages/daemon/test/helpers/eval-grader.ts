@@ -100,7 +100,7 @@ export function grade(evalCase: EvalCase, transcript: string): GradeResult {
     const reason = orderOk
       ? undefined
       : getIndex === -1
-        ? "domain action taken with no preceding `rig context get`"
+        ? "domain action taken with no preceding `multi-agent context get`"
         : "domain action precedes the context get";
     order = { getIndex, actionIndex, ok: orderOk, reason };
   }

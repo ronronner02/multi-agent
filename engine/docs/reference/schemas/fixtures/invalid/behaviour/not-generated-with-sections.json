@@ -1,60 +1,60 @@
 {
-  "schema": "openrig.bundle-behaviour/v1",
+  "schema": "multi-agent.bundle-behaviour/v1",
   "state": "not_generated",
   "identity": {
     "source": {
-      "repository": "https://github.com/mvschwarz/openrig-world",
-      "folder": "rigs/openrig-dev",
+      "repository": "https://github.com/mvschwarz/multi-agent-world",
+      "folder": "rigs/multi-agent-dev",
       "resolvedCommit": "894ad0e301ab46ac6ddd74dea784b7f6311d69a2",
       "requestedRef": "main",
-      "canonicalUrl": "https://github.com/mvschwarz/openrig-world/tree/894ad0e301ab46ac6ddd74dea784b7f6311d69a2/rigs/openrig-dev"
+      "canonicalUrl": "https://github.com/mvschwarz/multi-agent-world/tree/894ad0e301ab46ac6ddd74dea784b7f6311d69a2/rigs/multi-agent-dev"
     },
     "configurationId": "build.impl=pi,build.lead=claude-code,check.qa=codex,check.review=codex",
     "packageDigest": null,
     "assembler": null,
     "generator": {
-      "openrigVersion": "0.6.6",
+      "multiAgentVersion": "0.6.6",
       "commit": "910bf9f1"
     }
   },
   "reason": "No view has been generated for this combination.",
-  "localInspectCommand": "rig bundle inspect <the archive built for this combination> --json",
+  "localInspectCommand": "multi-agent bundle inspect <the archive built for this combination> --json",
   "team": [
     {
       "seat": "build.lead",
       "pod": "build",
       "member": "lead",
-      "agentRef": "local:agents/openrig-dev",
+      "agentRef": "local:agents/multi-agent-dev",
       "profile": "lead",
       "runtime": "claude-code",
-      "cwd": "--cwd (the user's openrig clone)"
+      "cwd": "--cwd (the user's multi-agent clone)"
     },
     {
       "seat": "build.impl",
       "pod": "build",
       "member": "impl",
-      "agentRef": "local:agents/openrig-dev",
+      "agentRef": "local:agents/multi-agent-dev",
       "profile": "implementer",
       "runtime": "claude-code",
-      "cwd": "--cwd (the user's openrig clone)"
+      "cwd": "--cwd (the user's multi-agent clone)"
     },
     {
       "seat": "check.review",
       "pod": "check",
       "member": "review",
-      "agentRef": "local:agents/openrig-dev",
+      "agentRef": "local:agents/multi-agent-dev",
       "profile": "reviewer",
       "runtime": "codex",
-      "cwd": "--cwd (the user's openrig clone)"
+      "cwd": "--cwd (the user's multi-agent clone)"
     },
     {
       "seat": "check.qa",
       "pod": "check",
       "member": "qa",
-      "agentRef": "local:agents/openrig-dev",
+      "agentRef": "local:agents/multi-agent-dev",
       "profile": "qa",
       "runtime": "codex",
-      "cwd": "--cwd (the user's openrig clone)"
+      "cwd": "--cwd (the user's multi-agent clone)"
     }
   ]
 }

@@ -2,7 +2,7 @@
 //
 // The daemon generates a per-install activity-hook token and derives its own
 // ingest URL so launched seats can reach /api/activity/hooks WITHOUT the
-// operator seeding OPENRIG_URL / OPENRIG_ACTIVITY_HOOK_TOKEN into their shell
+// operator seeding MULTI_AGENT_URL / MULTI_AGENT_ACTIVITY_HOOK_TOKEN into their shell
 // (the confirmed live break — see the slice-28 IMPL-SPEC §1.1).
 //
 // The token is a LOCALHOST internal-auth HANDLE, not a founder-secret: kept out
@@ -14,7 +14,7 @@
 //   authenticate after a restart.
 // - activity-endpoint.json : {baseUrl, token} snapshot, re-written each boot,
 //   read by the relay's file-discovery fallback for reconcile/restored seats
-//   whose frozen process env carries no OpenRig activity vars (B3).
+//   whose frozen process env carries no Multi-Agent activity vars (B3).
 
 import fs from "node:fs";
 import nodePath from "node:path";
@@ -28,7 +28,7 @@ const DEFAULT_DAEMON_PORT = "7433";
 
 /** OPR.0.4.3.28 B2 — derive the activity ingest URL the daemon injects into seats
  *  from its OWN bound host+port, so the seat's relay posts to an address the
- *  daemon is actually listening on. When OPENRIG_HOST is an explicit host
+ *  daemon is actually listening on. When MULTI_AGENT_HOST is an explicit host
  *  (loopback, localhost, a tailnet IP, a hostname) the daemon binds ONLY that
  *  host, so the URL MUST use it — a hardcoded 127.0.0.1 would be unreachable.
  *  Wildcard/bind-all hosts (0.0.0.0 / ::) are not connectable addresses and the

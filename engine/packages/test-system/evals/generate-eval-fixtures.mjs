@@ -16,19 +16,17 @@ const ROOT = join(HERE, "fixtures");
 
 // ref = library path (ns/name); the pack dir sits at fixtures/<ref>/, served at that ref.
 const ENTRIES = [
-  { ref: "skills/core/rig-lifecycle", purpose: "bring rigs and the whole fleet up/down/back", teaches: "For a whole-box bring-back after a reboot, use `rig start` (not per-rig `rig up`)." },
-  { ref: "skills/core/topology-mutation-and-seat-management", purpose: "replace a seat's occupant without losing the address", teaches: "Swap an occupant with `rig handover <seat>` — the seat, name, edges and queue stay put." },
-  { ref: "skills/core/agent-startup-and-context-ingestion", purpose: "orient a freshly-woken seat", teaches: "Run `rig whoami --json` first; it is ground truth for who and where you are." },
-  { ref: "skills/core/watchdog", purpose: "arm a wake you cannot perform yourself", teaches: "You cannot wake yourself; arm `rig watchdog register --spec <yaml>` before you stop." },
-  { ref: "skills/core/cross-host-rig-commands", purpose: "reach agents on other machines", teaches: "Address a remote seat bare plus `--host <id>` (see `rig host ls`)." },
-  { ref: "skills/core/rig-bundles-and-shareable-artifacts", purpose: "package a rig for a machine that never had the source", teaches: "Build a portable rig with `rig bundle create`; install with `rig bundle install`." },
-  { ref: "skills/core/openrig-upgrade", purpose: "upgrade a running daemon without downtime", teaches: "Use the sidecar-operator upgrade path so the rig stays up while the daemon upgrades." },
+  { ref: "skills/pods/orchestration-team", purpose: "coordinate a native team run", teaches: "Start a run with `multi-agent team start`, keep the owner decision in team chat, and approve it before work begins." },
+  { ref: "skills/pods/development-team", purpose: "implement an assigned native team task", teaches: "Read the assigned goal and proof contract, make the smallest change, and report evidence through the team run." },
+  { ref: "skills/pods/review-team", purpose: "review a native team result", teaches: "Read the task result and diff, verify acceptance conditions, and send a finding through team chat when evidence is missing." },
+  { ref: "skills/process/context-engineering", purpose: "shape the context an agent needs", teaches: "Keep the smallest high-signal context set, retrieve details at the step that needs them, and write durable decisions to files." },
   { ref: "skills/process/systematic-debugging", purpose: "chase a failure methodically", teaches: "Instrument every boundary once and read where it actually breaks — one run beats five hypotheses." },
-  { ref: "skills/openrig-operating-model", purpose: "place durable knowledge at the right context altitude", teaches: "Put context at the narrowest scope that needs it, and trace one filename toward the root." },
-  { ref: "skills/queue-handoff", purpose: "pass active work durably before a turn ends", teaches: "Active work ends by handing off a queue baton, not by going idle at the prompt." },
+  { ref: "skills/process/verification-before-completion", purpose: "verify a result before claiming completion", teaches: "Run the check that proves the claim, read its complete output, and name any remaining limit." },
   // distractors — present so selection is a real choice, not a singleton
-  { ref: "skills/core/human-in-the-loop", purpose: "when and how to reach the human", teaches: "Reach the human by exception; orchestrators use discretion, others route through them." },
   { ref: "skills/pm/requirements-writer", purpose: "turn intent into requirements", teaches: "Proportional structured requirements — three capture points, elastic middle." },
+  { ref: "skills/pm/plan-review", purpose: "review a proposed plan", teaches: "Check scope, sequencing, evidence, and the approval boundary before work starts." },
+  { ref: "skills/pm/office-hours", purpose: "surface an unresolved product question", teaches: "Bring the owner the observed evidence, the remaining choices, and the consequence of each choice." },
+  { ref: "skills/agent-operated-workflows", purpose: "follow a bounded repeatable workflow", teaches: "State inputs, outputs, permissions, and the check that proves the workflow completed." },
   { ref: "skills/process/test-driven-development", purpose: "red-first discipline", teaches: "A failing test per chunk; if you cannot show it red, it is not a check." },
 ];
 

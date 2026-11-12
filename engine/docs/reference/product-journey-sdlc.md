@@ -297,8 +297,8 @@ platform rewrite.
 
 On a fresh start, restore, or new assignment:
 
-1. Derive identity with `rig whoami --json`. Resolve the project's work root from
-   the assignment/workspace binding; `rig config get workspace.root` locates the
+1. Derive identity with `multi-agent whoami --json`. Resolve the project's work root from
+   the assignment/workspace binding; `multi-agent config get workspace.root` locates the
    configured work tree, which may differ from the seat's code checkout.
 2. Read `project.yaml` and its project-authority context. Follow its mission root
    to the assigned `mission.yaml`, then its composition ref to the active
@@ -312,11 +312,11 @@ On a fresh start, restore, or new assignment:
 4. Read only the selected components and additional addressed context. Repository
    references resolve from the Git root of the repository that holds the YAML
    declaring the catalog, which may not be the code checkout; installed references from
-   `$OPENRIG_HOME/reference`; context-pack refs use `rig context get`. For a
+   `$MULTI_AGENT_HOME/reference`; context-pack refs use `multi-agent context get`. For a
    Markdown `#section` address, use `loading-addressable-markdown` rather than
    loading an entire unrelated manual. Expand the investigation when the task's
    evidence requires it: the address map is a starting point, not a search limit.
-   For work running as a workflow instance, `rig workflow guidance <instance>`
+   For work running as a workflow instance, `multi-agent workflow guidance <instance>`
    reads the effective selection, the selected catalog sections and the original
    intent; add `--component <id>` or `--full` to expand.
 5. State briefly the user outcome, current role, candidate, selected path and

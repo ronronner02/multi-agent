@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AttemptActivity, TeamAttemptView, ToolActivityRecord } from "@openrig/daemon/team-control";
+import type { AttemptActivity, TeamAttemptView, ToolActivityRecord } from "@multi-agent/daemon/team-control";
 import { useOwnerSession } from "./useOwnerSession.js";
 
 export function mergeToolCalls(previous: readonly ToolActivityRecord[], incoming: readonly ToolActivityRecord[]): ToolActivityRecord[] {

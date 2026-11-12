@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 // These are tool allowances, not containment: node/npm/python/ssh can themselves run arbitrary code.
 export const KERNEL_CLAUDE_ALLOW = [
   "Skill", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch",
-  ...["rig", "tmux", "node", "npm", "git", "ssh", "scp", "rsync", "curl",
+  ...["multi-agent", "tmux", "node", "npm", "git", "ssh", "scp", "rsync", "curl",
     "uname", "ps", "pgrep", "lsof", "df", "du", "ls", "cat", "head", "tail", "rg", "grep",
     "find", "stat", "date", "sleep", "mkdir", "cp", "mv", "chmod", "tar", "shasum",
     "cd", "pwd", "echo", "printf", "wc", "sort", "python", "python3"]
@@ -23,7 +23,7 @@ export const KERNEL_CLAUDE_ALLOW = [
 // Native deny/ask rules remain in force. The session hook owns generated lifecycle
 // asks so that a help invocation is not caught by an unconditional ask prefix.
 export const TEAM_CLAUDE_ALLOW = [
-  "Skill", "Read(./**)", "Glob", "Grep", "Bash(rig:*)",
+  "Skill", "Read(./**)", "Glob", "Grep", "Bash(multi-agent:*)",
   ...["pwd", "ls", "cat", "head", "tail", "rg", "grep", "find"].map(command => `Bash(${command}:*)`),
   ...["npm test", "npm run test", "pnpm test", "pnpm run test", "yarn test", "yarn run test",
     "bun test", "bun run test", "node --test", "npx vitest", "npx jest", "pytest", "python -m pytest",
@@ -36,7 +36,7 @@ export const TEAM_CLAUDE_ASK = [
   "policy apply", "config set", "config reset",
   "daemon start", "daemon stop", "bundle install", "seat launch", "seat continue", "seat stop",
   "seat clean", "seat handover", "seat switch-client", "seat set-permissions", "seat set-model",
-].map(command => `Bash(rig ${command}:*)`);
+].map(command => `Bash(multi-agent ${command}:*)`);
 
 type LaunchChoice = Pick<NodeBinding, "kernelAuthority" | "teamPermissionDefault" | "nonInterruptive" | "launchPosture" | "permissionMode">;
 

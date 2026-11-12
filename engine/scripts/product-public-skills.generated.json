@@ -5,50 +5,19 @@
     "clean": [
       "agent-operated-software",
       "agent-operated-workflows",
-      "mission-slice-sop",
-      "openrig-cmux",
-      "openrig-herdr",
-      "loading-addressable-markdown",
-      "messaging-the-human",
-      "software-for-agents",
-      "openrig-skills",
-      "openrig-operating-model",
-      "refocusing",
-      "delegating-work",
-      "context-engineering",
-      "openrig-software-factory"
-    ],
-    "ship_after_fix": [
-      "openrig-user",
-      "forming-an-openrig-mental-model",
-      "queue-handoff",
-      "seat-continuity-and-handover",
-      "claude-compaction-restore",
-      "openrig-architect",
-      "agent-startup-and-context-ingestion",
       "applying-a-permission-policy",
-      "retiring-and-inheriting-a-seat",
-      "oversight-team",
-      "orienting-to-an-inherited-seat"
+      "claude-compaction-restore",
+      "context-engineering",
+      "delegating-work",
+      "messaging-the-human",
+      "software-for-agents"
     ],
-    "ship_misses_add": [
-      "topology-mutation-and-seat-management",
-      "rig-lifecycle",
-      "session-compaction-and-restore"
-    ],
-    "sanitize_borderlines_ship": [
-      "rig-bundles-and-shareable-artifacts",
-      "cross-host-rig-commands",
-      "openrig-upgrade",
-      "agent-starters",
-      "specification-system",
-      "human-in-the-loop",
-      "watchdog",
-      "session-source-fork"
-    ],
+    "ship_after_fix": [],
+    "ship_misses_add": [],
+    "sanitize_borderlines_ship": [],
     "restored_role_pm_selected": [
-      "orchestration-team",
       "development-team",
+      "orchestration-team",
       "review-team",
       "office-hours",
       "context-builder",
@@ -69,7 +38,7 @@
   ],
   "not_public": {
     "reclass_host_only": [
-      "openrig-operator"
+      "multi-agent-operator"
     ],
     "obsolete_internal": [
       "attention-queue"
@@ -79,7 +48,7 @@
     ]
   },
   "pending_author_public": [
-    "openrig-operator",
+    "multi-agent-operator",
     "foot-guns"
   ]
 }

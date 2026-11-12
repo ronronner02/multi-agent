@@ -11,23 +11,23 @@ Supply the authored relationships no inventory can discover, point at commands f
 Derive the volatile edges first:
 
 ```bash
-rig whoami --json
-rig ps --nodes --json
-rig context list
-rig --help
+multi-agent whoami --json
+multi-agent ps --nodes --json
+multi-agent context list
+multi-agent --help
 ```
 
 <!-- world-claim: derive-identity -->
-Use rig whoami --json to derive the identity of the seat you actually occupy.
+Use multi-agent whoami --json to derive the identity of the seat you actually occupy.
 
 <!-- world-claim: derive-topology -->
-Use rig ps --nodes --json to derive which seats exist in the rig you occupy now.
+Use multi-agent ps --nodes --json to derive which seats exist in the rig you occupy now.
 
 <!-- world-claim: discover-context -->
-Use rig context list to discover the context packs available on this installation.
+Use multi-agent context list to discover the context packs available on this installation.
 
 <!-- world-claim: discover-commands -->
-Use rig --help before inventing a command or wrapper.
+Use multi-agent --help before inventing a command or wrapper.
 
 ## What to trust
 

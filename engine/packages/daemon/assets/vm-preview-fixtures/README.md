@@ -1,6 +1,6 @@
 # VM Preview Fixtures
 
-Sample data used by the Tart preview environment to give one OpenRig daemon
+Sample data used by the Tart preview environment to give one Multi-Agent daemon
 representative content while a second daemon remains empty for comparison.
 
 ## Contents

@@ -35,7 +35,7 @@ import { parseSessionName } from "../src/domain/session-name.js";
  * VENDORED EXAMPLES updated to the new form: skills cross-host-rig-commands
  * (canonical + specs-materialized) — the "Sender identity is ASYMMETRIC" block
  * that taught "the sender carries NO @host suffix" is superseded by the
- * always-suffix rule. (openrig-user's `--from` line already names the origin.)
+ * always-suffix rule. (agent-operated-software's `--from` line already names the origin.)
  *
  * C5 HONEST SCOPE: the 3-part shape is safe + teaches; the D10 2-part same-name
  * silent-mint is closed by the envelope + sender-side stripping (incr 3) + the

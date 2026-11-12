@@ -18,16 +18,16 @@ function writeSkill(catalog: string, dir: string, id = dir, body = `# ${id}\n`):
 }
 
 function fixture(system: string[] = []): { root: string; catalog: string; project: string } {
-  const root = mkdtempSync(join(tmpdir(), "openrig-skill-catalog-"));
+  const root = mkdtempSync(join(tmpdir(), "multi-agent-skill-catalog-"));
   roots.push(root);
   const catalog = join(root, "skills");
   const project = join(root, "project");
   mkdirSync(catalog, { recursive: true });
   mkdirSync(project, { recursive: true });
   git(root, "init", "-q");
-  git(root, "config", "user.email", "test@openrig.invalid");
-  git(root, "config", "user.name", "OpenRig Test");
-  writeFileSync(join(catalog, "catalog.yaml"), `schema: openrig.skill-catalog/v1\nsystem:\n${system.map((id) => `  - ${id}`).join("\n")}${system.length ? "\n" : "  []\n"}`);
+  git(root, "config", "user.email", "test@multi-agent.invalid");
+  git(root, "config", "user.name", "Multi-Agent Test");
+  writeFileSync(join(catalog, "catalog.yaml"), `schema: multi-agent.skill-catalog/v1\nsystem:\n${system.map((id) => `  - ${id}`).join("\n")}${system.length ? "\n" : "  []\n"}`);
   return { root, catalog, project };
 }
 
@@ -144,7 +144,7 @@ describe("managed skill catalog and composable loadouts", () => {
     const f = fixture([]);
     writeSkill(f.catalog, "known");
     commit(f.root);
-    writeFileSync(join(f.catalog, "catalog.yaml"), "schema: openrig.skill-catalog/v1\nsystem: [known]\n");
+    writeFileSync(join(f.catalog, "catalog.yaml"), "schema: multi-agent.skill-catalog/v1\nsystem: [known]\n");
     const dirty = resolveSkillLoadout({ catalogRoot: f.catalog, projectSkills: ["known"] });
     expect(dirty).toMatchObject({ ok: false, errors: [{ code: "catalog_unavailable" }] });
     if (!dirty.ok) expect(dirty.errors[0]!.message).toContain(join(f.catalog, "catalog.yaml"));
@@ -388,7 +388,7 @@ describe("managed skill catalog and composable loadouts", () => {
     expect(result).toMatchObject({ ok: false, applied: false, errors: [{ code: "git_exclusion_failed" }] });
     expect(repeated).toMatchObject({ ok: false, applied: false, errors: [{ code: "git_exclusion_failed" }] });
     expect(existsSync(join(f.project, ".agents", "skills", "managed"))).toBe(false);
-    expect(existsSync(join(f.project, ".openrig", "skill-loadouts", "codex.json"))).toBe(false);
+    expect(existsSync(join(f.project, ".multi-agent", "skill-loadouts", "codex.json"))).toBe(false);
     expect(readFileSync(ignorePath, "utf8")).toBe("/managed/SKILL.md\n");
     expect(git(f.root, "status", "--porcelain=v1", "--untracked-files=all")).toBe("");
   });
@@ -397,7 +397,7 @@ describe("managed skill catalog and composable loadouts", () => {
     const f = fixture([]);
     writeSkill(f.catalog, "managed");
     commit(f.root);
-    const sibling = mkdtempSync(join(tmpdir(), "openrig-skill-loadout-linked-"));
+    const sibling = mkdtempSync(join(tmpdir(), "multi-agent-skill-loadout-linked-"));
     roots.push(sibling);
     rmSync(sibling, { recursive: true, force: true });
     git(f.root, "worktree", "add", "-q", "--detach", sibling, "HEAD");
@@ -432,9 +432,9 @@ describe("managed skill catalog and composable loadouts", () => {
     expect(reconcileSkillLoadout({ loadout: selected.loadout, runtime: "codex", cwd: f.project, apply: true }))
       .toMatchObject({ ok: true, applied: false });
 
-    const manifestIgnore = readFileSync(join(f.project, ".openrig", "skill-loadouts", ".gitignore"), "utf8");
-    expect(manifestIgnore).toContain("# BEGIN OpenRig managed skill loadout codex");
-    expect(manifestIgnore).toContain("# BEGIN OpenRig managed skill loadout claude-code");
+    const manifestIgnore = readFileSync(join(f.project, ".multi-agent", "skill-loadouts", ".gitignore"), "utf8");
+    expect(manifestIgnore).toContain("# BEGIN Multi-Agent managed skill loadout codex");
+    expect(manifestIgnore).toContain("# BEGIN Multi-Agent managed skill loadout claude-code");
     expect(git(f.root, "status", "--porcelain=v1", "--untracked-files=all")).toBe("");
   });
 
@@ -442,7 +442,7 @@ describe("managed skill catalog and composable loadouts", () => {
     const f = fixture([]);
     writeSkill(f.catalog, "managed");
     commit(f.root);
-    const cwd = mkdtempSync(join(tmpdir(), "openrig-skill-loadout-no-git-"));
+    const cwd = mkdtempSync(join(tmpdir(), "multi-agent-skill-loadout-no-git-"));
     roots.push(cwd);
     const selected = resolveSkillLoadout({ catalogRoot: f.catalog, projectSkills: ["managed"] });
     expect(selected.ok).toBe(true);
@@ -633,8 +633,8 @@ describe("managed skill catalog and composable loadouts", () => {
 
     rmSync(join(f.project, ".agents"), { recursive: true, force: true });
     mkdirSync(join(f.project, ".agents", "skills"), { recursive: true });
-    mkdirSync(join(f.project, ".openrig"), { recursive: true });
-    writeFileSync(join(f.project, ".openrig", "skill-loadouts"), "not a directory\n");
+    mkdirSync(join(f.project, ".multi-agent"), { recursive: true });
+    writeFileSync(join(f.project, ".multi-agent", "skill-loadouts"), "not a directory\n");
     const failed = reconcileSkillLoadout({ loadout: selected.loadout, runtime: "codex", cwd: f.project, apply: true });
     expect(failed).toMatchObject({ ok: false, applied: false, errors: [{ code: "projection_failed" }] });
     expect(failed.receipts).toMatchObject([{
@@ -643,8 +643,8 @@ describe("managed skill catalog and composable loadouts", () => {
       detail: "selected skill is not projected",
     }]);
     expect(existsSync(join(f.project, ".agents", "skills", "selected"))).toBe(false);
-    expect(existsSync(join(f.project, ".openrig", "skill-loadouts", "codex.json"))).toBe(false);
-    expect(readFileSync(join(f.project, ".openrig", "skill-loadouts"), "utf8")).toBe("not a directory\n");
+    expect(existsSync(join(f.project, ".multi-agent", "skill-loadouts", "codex.json"))).toBe(false);
+    expect(readFileSync(join(f.project, ".multi-agent", "skill-loadouts"), "utf8")).toBe("not a directory\n");
     expect(existsSync(join(f.project, ".agents", "skills", ".gitignore"))).toBe(false);
 
     const prior = fixture([]);
@@ -662,7 +662,7 @@ describe("managed skill catalog and composable loadouts", () => {
     expect(replacement.ok).toBe(true);
     if (!replacement.ok) return;
 
-    const manifestDirectory = join(prior.project, ".openrig", "skill-loadouts");
+    const manifestDirectory = join(prior.project, ".multi-agent", "skill-loadouts");
     chmodSync(manifestDirectory, 0o555);
     let rolledBack;
     try {
@@ -726,7 +726,7 @@ describe("managed skill catalog and composable loadouts", () => {
     expect(unsafeOwner).toMatchObject({ ok: false, errors: [{ code: "topology_owner_invalid" }] });
 
     expect(reconcileSkillLoadout({ loadout: selected.loadout, runtime: "codex", cwd: f.project, apply: true }).ok).toBe(true);
-    const manifestPath = join(f.project, ".openrig", "skill-loadouts", "codex.json");
+    const manifestPath = join(f.project, ".multi-agent", "skill-loadouts", "codex.json");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { skills: Array<{ target: string }> };
     const external = join(f.root, "must-survive");
     mkdirSync(external);
@@ -798,7 +798,7 @@ describe("plugin skills in the managed loadout", () => {
       expect(readFileSync(join(f.project, harnessDir, "skills", id, "SKILL.md"), "utf8"))
         .toBe(readFileSync(join(plugin, "skills", id, "SKILL.md"), "utf8"));
     }
-    const manifest = JSON.parse(readFileSync(join(f.project, ".openrig", "skill-loadouts", `${runtime}.json`), "utf8")) as {
+    const manifest = JSON.parse(readFileSync(join(f.project, ".multi-agent", "skill-loadouts", `${runtime}.json`), "utf8")) as {
       skills: Array<{ id: string; revision: string }>;
     };
     expect(manifest.skills.map((skill) => [skill.id, skill.revision])).toEqual([
@@ -809,7 +809,7 @@ describe("plugin skills in the managed loadout", () => {
       .toMatchObject({ ok: true, applied: false });
   });
 
-  it("keeps a same-name skill OpenRig does not own and records no ownership or selection for it", () => {
+  it("keeps a same-name skill Multi-Agent does not own and records no ownership or selection for it", () => {
     const f = fixture([]);
     const plugin = writePlugin(f.root, [".codex-plugin"], ["queue-handoff", "delegating-work"]);
     const own = join(f.project, ".agents", "skills", "queue-handoff");
@@ -827,7 +827,7 @@ describe("plugin skills in the managed loadout", () => {
       detail: expect.stringMatching(/^kept: .*does not own/),
     });
     expect(existsSync(join(f.project, ".agents", "skills", "delegating-work", "SKILL.md"))).toBe(true);
-    const manifest = JSON.parse(readFileSync(join(f.project, ".openrig", "skill-loadouts", "codex.json"), "utf8")) as {
+    const manifest = JSON.parse(readFileSync(join(f.project, ".multi-agent", "skill-loadouts", "codex.json"), "utf8")) as {
       skills: Array<{ id: string }>;
       topologySelections: Record<string, string[]>;
     };
@@ -857,7 +857,7 @@ describe("plugin skills in the managed loadout", () => {
     const plugin = writePlugin(f.root, [".claude-plugin"], ["queue-handoff"]);
     const resolve = () => loadoutOf(resolvePluginSkills({ pluginId: "core", pluginRoot: plugin, runtime: "claude-code" }).entries, f.root);
     expect(reconcileSkillLoadout({ loadout: resolve(), runtime: "claude-code", cwd: f.project, apply: true }).ok).toBe(true);
-    const manifestPath = join(f.project, ".openrig", "skill-loadouts", "claude-code.json");
+    const manifestPath = join(f.project, ".multi-agent", "skill-loadouts", "claude-code.json");
     const ownedBefore = readFileSync(manifestPath, "utf8");
     const target = join(f.project, ".claude", "skills", "queue-handoff", "SKILL.md");
     writeFileSync(target, "operator edit\n");
@@ -865,7 +865,7 @@ describe("plugin skills in the managed loadout", () => {
     writeSkill(join(plugin, "skills"), "queue-handoff", "queue-handoff", "# newer plugin bytes\n");
     const kept = reconcileSkillLoadout({ loadout: resolve(), runtime: "claude-code", cwd: f.project, apply: true });
     expect(kept).toMatchObject({ ok: true, errors: [] });
-    expect(kept.receipts[0]).toMatchObject({ id: "queue-handoff", status: "shadowed", detail: expect.stringMatching(/^kept: .*changed after OpenRig projected it/) });
+    expect(kept.receipts[0]).toMatchObject({ id: "queue-handoff", status: "shadowed", detail: expect.stringMatching(/^kept: .*changed after Multi-Agent projected it/) });
     expect(readFileSync(target, "utf8")).toBe("operator edit\n");
     expect(JSON.parse(readFileSync(manifestPath, "utf8")).skills).toEqual(JSON.parse(ownedBefore).skills);
   });
@@ -897,7 +897,7 @@ describe("plugin skills in the managed loadout", () => {
     expect(deselected.receipts.find((receipt) => receipt.id === "queue-handoff")).toMatchObject({ status: "shadowed", detail: expect.stringMatching(/^kept: /) });
     expect(readFileSync(edited, "utf8")).toBe("operator edit\n");
     expect(existsSync(join(f.project, ".claude", "skills", "delegating-work"))).toBe(false);
-    const manifest = JSON.parse(readFileSync(join(f.project, ".openrig", "skill-loadouts", "claude-code.json"), "utf8")) as { skills: unknown[] };
+    const manifest = JSON.parse(readFileSync(join(f.project, ".multi-agent", "skill-loadouts", "claude-code.json"), "utf8")) as { skills: unknown[] };
     expect(manifest.skills).toEqual([]);
   });
 
@@ -941,7 +941,7 @@ describe("plugin skills in the managed loadout", () => {
     const plugin = writePlugin(f.root, [".claude-plugin"], ["queue-handoff"]);
     const resolve = () => loadoutOf(resolvePluginSkills({ pluginId: "core", pluginRoot: plugin, runtime: "claude-code" }).entries, f.root);
     expect(reconcileSkillLoadout({ loadout: resolve(), runtime: "claude-code", cwd: f.project, topologyOwner: "dev-a", apply: true }).ok).toBe(true);
-    const manifestPath = join(f.project, ".openrig", "skill-loadouts", "claude-code.json");
+    const manifestPath = join(f.project, ".multi-agent", "skill-loadouts", "claude-code.json");
     const ownedBefore = JSON.parse(readFileSync(manifestPath, "utf8")).skills;
     // An upgrade changes the plugin's bytes, and the ignored copy is cleaned away.
     writeSkill(join(plugin, "skills"), "queue-handoff", "queue-handoff", "# newer plugin bytes\n");

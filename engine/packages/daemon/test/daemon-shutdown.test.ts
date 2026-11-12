@@ -189,7 +189,7 @@ it("enforces the whole-shutdown deadline with no other referenced handles", asyn
   const result = await promisify(execFile)(process.execPath,
     ["--import", "tsx", "--input-type=module", "--eval", source], {
       timeout: 5000,
-      env: { PATH: process.env.PATH, HOME: dir, OPENRIG_HOME: dir, OPENRIG_DB: path.join(dir, "unused.sqlite"),
+      env: { PATH: process.env.PATH, HOME: dir, MULTI_AGENT_HOME: dir, MULTI_AGENT_DB: path.join(dir, "unused.sqlite"),
         CODEX_HOME: dir, CLAUDE_CONFIG_DIR: dir, XDG_CONFIG_HOME: dir, XDG_CACHE_HOME: dir, XDG_DATA_HOME: dir },
     }).catch(error => error);
   expect(result.code).toBe(1);

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { createInterfaceI18n, type InterfaceI18n, type MessageKey } from "@openrig/i18n";
+import { createInterfaceI18n, type InterfaceI18n, type MessageKey } from "@multi-agent/i18n";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import { Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
-import type { TeamOwnerRead } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead } from "@multi-agent/daemon/team-control";
 import { useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
 import { DocumentsScreen } from "./documents.js";
 import { ProjectHome } from "./project-home.js";
@@ -28,7 +28,7 @@ import { CommandPalette } from "./command-palette.js";
 import "./fonts.js";
 import "./team.css";
 
-export const INTERFACE_LANGUAGE_KEY = "openrig.interfaceLanguage";
+export const INTERFACE_LANGUAGE_KEY = "multi-agent.interfaceLanguage";
 export const TEAM_SECTIONS = ["overview", "documents", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
 export type TeamSection = (typeof TEAM_SECTIONS)[number];
 type TeamDestination = TeamSection;

@@ -6,7 +6,7 @@
 //   working              — claimed AND (substantive motion since the claim OR still inside
 //                          the threshold — the anti-noise direction);
 //   stalled-after-claim  — claimed, past threshold, zero substantive motion; evidence named;
-//   parked               — state=blocked only. Wake health is a separate `rig parked`
+//   parked               — state=blocked only. Wake health is a separate `multi-agent parked`
 //                          diagnosis; a wakeless blocked row still projects as parked;
 //   terminal             — the obligation is closed (done/handed-off/failed/denied/canceled):
 //                          no pickup question is outstanding, regardless of claim age.
@@ -20,7 +20,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { ViewProjector } from "../src/domain/view-projector.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 
-const THRESHOLD_ENV = "OPENRIG_QUEUE_PICKUP_STALL_THRESHOLD_MINUTES";
+const THRESHOLD_ENV = "MULTI_AGENT_QUEUE_PICKUP_STALL_THRESHOLD_MINUTES";
 
 interface PickupShape {
   state: "unclaimed" | "working" | "stalled-after-claim" | "parked" | "terminal";
@@ -97,7 +97,7 @@ describe("S04 pickup receipts — derived, visible, threshold-honest", () => {
   });
 
   it("FOUNDER DEFAULT: the daemon config surface defaults the pickup stall threshold to 3 minutes", () => {
-    const missingConfig = `/tmp/openrig-s04-missing-${process.pid}-${Date.now()}.json`;
+    const missingConfig = `/tmp/multi-agent-s04-missing-${process.pid}-${Date.now()}.json`;
     const setting = new SettingsStore(missingConfig).resolveOne(
       "queue.pickup_stall_threshold_minutes" as never,
     );

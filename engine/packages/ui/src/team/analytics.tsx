@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { TeamAnalytics, TeamSeatView } from "@openrig/daemon/team-control";
+import type { TeamAnalytics, TeamSeatView } from "@multi-agent/daemon/team-control";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { TokenChart, ModelTokenChart } from "./analytics-charts.js";
 import { ANALYTICS_RANGES, cachedTokens, count, duration, percent, type AnalyticsRange } from "./analytics-model.js";

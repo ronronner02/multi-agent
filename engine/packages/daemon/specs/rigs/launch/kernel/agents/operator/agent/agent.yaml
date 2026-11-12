@@ -1,6 +1,6 @@
 name: operator.agent
 version: "1.0"
-description: Operator agent — runs OpenRig itself; brings rigs up/down/back-online after reboot; shepherds install + upgrade + migration ceremonies
+description: Operator agent — runs Multi-Agent itself; brings rigs up/down/back-online after reboot; shepherds install + upgrade + migration ceremonies
 
 defaults:
   runtime: codex
@@ -11,10 +11,10 @@ imports:
 profiles:
   default:
     uses:
-      skills: [rig-lifecycle, openrig-upgrade, systematic-debugging, verification-before-completion]
+      skills: [rig-lifecycle, multi-agent-upgrade, systematic-debugging, verification-before-completion]
       guidance: []
       subagents: []
-      plugins: [shared:openrig-core]
+      plugins: [shared:multi-agent-core]
       runtime_resources: [shared:claude-default-settings, shared:claude-default-mcp, shared:codex-default-config, shared:claude-activity-hooks]
 
 startup:

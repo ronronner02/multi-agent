@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ContextPackLibraryService } from "../src/domain/context-packs/context-pack-library-service.js";
 import { ContextPackError } from "../src/domain/context-packs/context-pack-types.js";
-import { openRigContextLibraryRoots } from "../src/domain/instance-initialization.js";
+import { multiAgentContextLibraryRoots } from "../src/domain/instance-initialization.js";
 
 function writePackAt(root: string, refPath: string, name: string, version = "1") {
   const dir = join(root, refPath);
@@ -65,7 +65,7 @@ describe("ATOM 2 — recursive path-addressed discovery (spec §2 refs)", () => 
   it("assigns one identity to a System World pack through the actual overlapping startup roots", () => {
     writePackAt(root, "system/baseline", "system-baseline");
     const service = new ContextPackLibraryService({
-      roots: openRigContextLibraryRoots(root).map((path) => ({ path, sourceType: "user_file" })),
+      roots: multiAgentContextLibraryRoots(root).map((path) => ({ path, sourceType: "user_file" })),
     });
 
     const result = service.scan();
@@ -79,7 +79,7 @@ describe("ATOM 2 — recursive path-addressed discovery (spec §2 refs)", () => 
     writePackAt(root, "baseline", "operator-baseline");
     writePackAt(root, "system/baseline", "system-baseline");
     const service = new ContextPackLibraryService({
-      roots: openRigContextLibraryRoots(root).map((path) => ({ path, sourceType: "user_file" })),
+      roots: multiAgentContextLibraryRoots(root).map((path) => ({ path, sourceType: "user_file" })),
     });
 
     const result = service.scan();

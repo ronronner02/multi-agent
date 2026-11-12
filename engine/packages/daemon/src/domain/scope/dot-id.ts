@@ -1,5 +1,5 @@
 // release-0.3.2 slice 12 — dot-ID grammar per
-// `openrig-work/conventions/scope-and-versioning/README.md` §1.
+// `multi-agent-work/conventions/scope-and-versioning/README.md` §1.
 //
 // Grammar (v0 single-project):
 //   project  = <PFX>            (2-3 letter; v0 hardcodes "OPR")
@@ -18,7 +18,7 @@
 import type { DotId } from "./types.js";
 import { ScopeCliError } from "./types.js";
 
-/** Default project prefix for the OpenRig single-project workspace.
+/** Default project prefix for the Multi-Agent single-project workspace.
  *  Multi-project work waits for a real second project (convention §1). */
 export const DEFAULT_PROJECT_PREFIX = "OPR";
 

@@ -90,8 +90,8 @@ boundary, verify the event before recording expiry, then stop citing the expired
 delta. Do not create a successor merely to make the condition true. Candidate
 absorption is not proof of publication or served production adoption. The delta is
 `CAPABILITY-DELTA-v<version>.md` in the release mission folder (scaffolded by
-`rig scope mission create release-X.Y.Z`); its `expiry.canon_path` and
-`expiry.successor_path` name the two inputs, and `rig scope audit --mission <name>`
+`multi-agent scope mission create release-X.Y.Z`); its `expiry.canon_path` and
+`expiry.successor_path` name the two inputs, and `multi-agent scope audit --mission <name>`
 reports `expired_capability_delta` once both hold.
 
 Private project topology, host practice, and release ownership go to the versioned

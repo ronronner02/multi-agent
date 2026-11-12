@@ -32,30 +32,30 @@ function genReader(state: { generationId: string; content: string }): (seat: str
 describe("sliceAfterPrompt — the since-the-prompt anchor", () => {
   it("wrapped echo: the prompt broken across pane lines still anchors, output follows", () => {
     const prompt = "What can I do here in this world?";
-    const capture = "old scroll\n> What can I do\nhere in this world?\nI will check rig context profile now.\n";
+    const capture = "old scroll\n> What can I do\nhere in this world?\nI will check multi-agent context profile now.\n";
     const since = sliceAfterPrompt(capture, prompt, "old scroll\n");
-    expect(since).toContain("I will check rig context profile now.");
+    expect(since).toContain("I will check multi-agent context profile now.");
     expect(since).not.toContain("old scroll");
   });
 
   it("truncated echo: a TUI-elided prompt anchors on the prompt head", () => {
     const prompt = "What can I do here in this world? Please be thorough about it.";
-    const capture = "> What can I do here in th…\nrunning rig context get now\n";
-    expect(sliceAfterPrompt(capture, prompt, "")).toBe("running rig context get now\n");
+    const capture = "> What can I do here in th…\nrunning multi-agent context get now\n";
+    expect(sliceAfterPrompt(capture, prompt, "")).toBe("running multi-agent context get now\n");
   });
 
   it("REPEATED prompt (r2 QA finding 1): the SAME prompt from an earlier case does NOT leak its response into the current one", () => {
     // The real corpus repeats prompts across loading.yaml + selection.yaml. The
-    // earlier case's response contained `rig context get`; the current case did
+    // earlier case's response contained `multi-agent context get`; the current case did
     // NOT pull context. Anchoring on the current SEND boundary must return only
     // the current response.
     const prompt = "the box rebooted and everything's gone — bring the whole fleet back";
-    const earlier = `> ${prompt}\nI ran rig context get skills/core/rig-lifecycle first.\n`;
+    const earlier = `> ${prompt}\nI ran multi-agent context get skills/pods/orchestration-team first.\n`;
     const preSend = earlier; // the pane BEFORE the current send holds the earlier case
     const rawCapture = earlier + `> ${prompt}\nI'll just restart it directly, no context needed.\n`;
     const since = sliceAfterPrompt(rawCapture, prompt, preSend);
     expect(since).toContain("no context needed");
-    expect(since).not.toContain("rig context get");
+    expect(since).not.toContain("multi-agent context get");
   });
 
   it("REDRAWN footer (r2 QA finding, redraw residual): a repeated input/status footer at the bottom is NOT the boundary; the response is retained", () => {
@@ -65,14 +65,14 @@ describe("sliceAfterPrompt — the since-the-prompt anchor", () => {
     const prompt = "What can I do here?";
     const footer = "────────\n> \n  esc to interrupt · gpt-5.6\n";
     const preSend = `prior scrollback line\n${footer}`;
-    const rawCapture = `prior scrollback line\n> ${prompt}\nNEW RESPONSE: rig context get skills/x\n${footer}`;
+    const rawCapture = `prior scrollback line\n> ${prompt}\nNEW RESPONSE: multi-agent context get skills/x\n${footer}`;
     const since = sliceAfterPrompt(rawCapture, prompt, preSend);
-    expect(since).toContain("NEW RESPONSE: rig context get skills/x");
+    expect(since).toContain("NEW RESPONSE: multi-agent context get skills/x");
     expect(since).not.toBe("");
   });
 
   // PERMANENT RED (review-r2 round-5 HIGH-1, required before the round-6 replacement): the shipped
-  // `rig transcript` is a BOUNDED-OVERWRITE pane snapshot (transcript-rotation.ts overwrites the file
+  // `multi-agent transcript` is a BOUNDED-OVERWRITE pane snapshot (transcript-rotation.ts overwrites the file
   // each tick, default 1000 trailing lines), NOT append-only. So the pre-send text is not guaranteed
   // a prefix of the post-send text: when an OLD identical command has rotated toward/out of the tail,
   // LCS matches the current turn's re-emission to the older occurrence and DELETES current-turn
@@ -80,7 +80,7 @@ describe("sliceAfterPrompt — the since-the-prompt anchor", () => {
   // boundary binds to a source that is actually monotonic for the exact seat generation.
   it.fails("BOUNDED-ROTATION repeated command (r2 HIGH-1): the current-turn command survives — RED until a monotonic boundary source", () => {
     const prompt = "the box rebooted — bring the fleet back";
-    const command = "rig context get skills/core/rig-lifecycle";
+    const command = "multi-agent context get skills/pods/orchestration-team";
     const preRotation = `${command}\n`;                 // the older occurrence, still in the bounded tail
     const postRotation = `> ${prompt}\n${command}\n`;   // the current turn re-emits it
     expect(sliceAfterPrompt(postRotation, prompt, preRotation)).toContain(command);
@@ -92,10 +92,10 @@ describe("sliceAfterPrompt — the since-the-prompt anchor", () => {
     // transcript (it never scrolls off), so LCS matches THAT occurrence and the current turn's
     // re-emission is the new suffix. This append-only property is exactly why round-5 needs no in-band
     // marker (round-4's marker was a forbidden second send).
-    const preSend = `> ${prompt}\nrig context get skills/core/rig-lifecycle\n`;
-    const post = `${preSend}> ${prompt}\nrig context get skills/core/rig-lifecycle\n`;
+    const preSend = `> ${prompt}\nmulti-agent context get skills/pods/orchestration-team\n`;
+    const post = `${preSend}> ${prompt}\nmulti-agent context get skills/pods/orchestration-team\n`;
     const since = sliceAfterPrompt(post, prompt, preSend);
-    expect(since).toContain("rig context get skills/core/rig-lifecycle");
+    expect(since).toContain("multi-agent context get skills/pods/orchestration-team");
   });
 
   it("scrolled-off echo: falls back to the pre-send snapshot tail", () => {
@@ -147,10 +147,10 @@ describe("captureSince — Claude-JSONL output-only + native-turn completion (RE
       userMsg("earlier turn") + "\n",
       "the case prompt",
       userMsg("the case prompt") + "\n",
-      asstMsg("rig context get skills/core/rig-lifecycle", "end_turn") + "\n" + '{"type":"system","subtype":"turn_duration","isMeta":false}' + "\n",
+      asstMsg("multi-agent context get skills/pods/orchestration-team", "end_turn") + "\n" + '{"type":"system","subtype":"turn_duration","isMeta":false}' + "\n",
     );
     const since = await session.captureSince("the case prompt");
-    expect(since).toContain("rig context get skills/core/rig-lifecycle"); // assistant output kept
+    expect(since).toContain("multi-agent context get skills/pods/orchestration-team"); // assistant output kept
     expect(since).not.toContain("the case prompt");                       // the user prompt is not graded
     expect(since).not.toContain('"role":"user"');                          // no user-message envelope
     expect(since).not.toContain('"role":"assistant"');                     // no assistant-message envelope either — TEXT only
@@ -221,7 +221,7 @@ describe("captureSince — Claude-JSONL output-only + native-turn completion (RE
     // The runtime writes tool_result records with role "user" — they are the assistant's own tool
     // cycle in progress, not an intervening input; and stop_reason "tool_use" is NOT terminal, so
     // the capture must keep waiting for the closing assistant message and return the whole turn.
-    const toolUse = `{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"tool_use","content":[{"type":"tool_use","name":"Bash","input":{"command":"rig context get skills/core/rig-lifecycle"}}]}}`;
+    const toolUse = `{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"tool_use","content":[{"type":"tool_use","name":"Bash","input":{"command":"multi-agent context get skills/pods/orchestration-team"}}]}}`;
     const toolResult = `{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"served 1618 tokens"}]}}`;
     const { session } = await driveOne(
       userMsg("earlier turn") + "\n",
@@ -230,7 +230,7 @@ describe("captureSince — Claude-JSONL output-only + native-turn completion (RE
       toolResult + "\n" + asstMsg("done: the lifecycle entry is served", "end_turn") + "\n" + '{"type":"system","subtype":"turn_duration","isMeta":false}' + "\n",
     );
     const since = await session.captureSince("the case prompt");
-    expect(since).toContain("rig context get skills/core/rig-lifecycle"); // the tool command the DOOR grader matches
+    expect(since).toContain("multi-agent context get skills/pods/orchestration-team"); // the tool command the DOOR grader matches
     expect(since).toContain("done: the lifecycle entry is served");        // the whole turn, not the pre-tool fragment
     expect(since).not.toContain("tool_result");                            // no envelope
     expect(since).not.toContain("the case prompt");                        // still output-only
@@ -245,10 +245,10 @@ describe("captureSince — Claude-JSONL output-only + native-turn completion (RE
     // assistant end_turn text -> system turn_duration. A role+content-type classifier counts the skill
     // body as a second user input and voids a legitimate tool cycle.
     const promptRec = `{"type":"user","message":{"role":"user","content":"the case prompt"}}`;
-    const skillUse = `{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"tool_use","content":[{"type":"tool_use","name":"Skill","input":{"command":"forming-an-openrig-mental-model"}}]}}`;
+    const skillUse = `{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"tool_use","content":[{"type":"tool_use","name":"Skill","input":{"command":"context-engineering"}}]}}`;
     const toolResult = `{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"Launching skill"}]}}`;
-    const skillBody = `{"type":"user","isMeta":true,"sourceToolUseID":"toolu_01QpK4","message":{"role":"user","content":[{"type":"text","text":"# Skill body — forming an openrig mental model"}]}}`;
-    const finalText = `{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"final answer: rig whoami then rig context list"}]}}`;
+    const skillBody = `{"type":"user","isMeta":true,"sourceToolUseID":"toolu_01QpK4","message":{"role":"user","content":[{"type":"text","text":"# Skill body — forming an multi-agent mental model"}]}}`;
+    const finalText = `{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"final answer: multi-agent whoami then multi-agent context list"}]}}`;
     const turnEnd = `{"type":"system","subtype":"turn_duration","isMeta":false}`;
     const { session } = await driveOne(
       "",
@@ -257,7 +257,7 @@ describe("captureSince — Claude-JSONL output-only + native-turn completion (RE
       toolResult + "\n" + skillBody + "\n" + finalText + "\n" + turnEnd + "\n",
     );
     const since = await session.captureSince("the case prompt"); // must NOT throw CASE INVALID
-    expect(since).toContain("final answer: rig whoami then rig context list");
+    expect(since).toContain("final answer: multi-agent whoami then multi-agent context list");
   });
 
   it("HIGH-2 — a terminal THINKING record first does not end the turn: capture waits for the turn-closure record and returns the final TEXT [GREEN — closure-boundary completion]", async () => {
@@ -295,7 +295,7 @@ describe("captureSince — Claude-JSONL output-only + native-turn completion (RE
 });
 
 describe("createRigCliSession — spawn/attach, polling, retirement", () => {
-  it("CUSTODY (Test-A no-intervening-input, round 6): sendPrompt submits EXACTLY ONE rig send — the natural prompt, never a marker", async () => {
+  it("CUSTODY (Test-A no-intervening-input, round 6): sendPrompt submits EXACTLY ONE multi-agent send — the natural prompt, never a marker", async () => {
     const { exec, calls } = scriptedExec((args) => {
       if (args[0] === "whoami") return WHOAMI;
       if (args[0] === "send") return "sent";
@@ -313,7 +313,7 @@ describe("createRigCliSession — spawn/attach, polling, retirement", () => {
     expect(calls.some((c) => c[0] === "send" && c.slice(1).some((a) => /eval-sync/.test(a ?? "")))).toBe(false);
   });
 
-  it("SPAWN: rig up -> adopt the attach session, generation from whoami, retire tears the spawned rig down ONCE", async () => {
+  it("SPAWN: multi-agent up -> adopt the attach session, generation from whoami, retire tears the spawned multi-agent down ONCE", async () => {
     const { exec, calls } = scriptedExec((args) => {
       if (args[0] === "up") return UP;
       if (args[0] === "whoami") return WHOAMI;
@@ -323,7 +323,7 @@ describe("createRigCliSession — spawn/attach, polling, retirement", () => {
     const session = await createRigCliSession({ spec: "/tmp/eval-rig.yaml", exec }).spawn();
     expect(session.generation).toBe("gen-1234");
     await session.retire();
-    // teardown targets the rigId from `rig up` (survives even an unparseable attach line)
+    // teardown targets the rigId from `multi-agent up` (survives even an unparseable attach line)
     expect(calls.filter((c) => c[0] === "down")).toEqual([["down", "01RIG"]]);
   });
 
@@ -349,7 +349,7 @@ describe("createRigCliSession — spawn/attach, polling, retirement", () => {
     expect(calls.filter((c) => c[0] === "down")).toEqual([["down", "01RIGX"]]);
   });
 
-  it("CLEANUP on unparseable attach (r2 QA finding 2): rig up completed but no attach session -> the rig (by rigId) is torn DOWN", async () => {
+  it("CLEANUP on unparseable attach (r2 QA finding 2): multi-agent up completed but no attach session -> the rig (by rigId) is torn DOWN", async () => {
     const { exec, calls } = scriptedExec((args) => {
       if (args[0] === "up") return JSON.stringify({ status: "completed", rigId: "01RIGY", attachCommand: "" }); // no -t session
       if (args[0] === "down") return "torn down";
@@ -375,13 +375,13 @@ describe("createRigCliSession — spawn/attach, polling, retirement", () => {
     // The append-only record grows across reads: the seat appends its completed turn.
     const readGenerationRecord = async () => {
       const out = { generationId: state.generationId, content: state.content };
-      if (sent && !state.content.includes("DONE")) state.content = state.content + '{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"DONE rig context get skills/x"}]}}\n{"type":"system","subtype":"turn_duration","isMeta":false}\n';
+      if (sent && !state.content.includes("DONE")) state.content = state.content + '{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"DONE multi-agent context get skills/x"}]}}\n{"type":"system","subtype":"turn_duration","isMeta":false}\n';
       return out;
     };
     const session = await createRigCliSession({ seat: "ops-eval@evalrig", exec, pollMs: 1, stablePolls: 2, sleep: async () => {}, readGenerationRecord }).spawn();
     await session.sendPrompt("the natural prompt");
     const since = await session.captureSince("the natural prompt");
-    expect(since).toContain("DONE rig context get skills/x");
+    expect(since).toContain("DONE multi-agent context get skills/x");
     expect(since).not.toContain("prior record line"); // pre-send content is the sliced-off prefix, not the turn
   });
 
@@ -412,13 +412,13 @@ describe("createRigCliSession — spawn/attach, polling, retirement", () => {
       readCall++;
       // sendPrompt's read is #1; fail a couple of capture polls transiently, then complete the turn
       if (readCall === 2 || readCall === 3) throw new Error("Daemon did not respond in time");
-      if (sent && !state.content.includes("DONE")) state.content = state.content + '{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"DONE rig context get skills/x"}]}}\n{"type":"system","subtype":"turn_duration","isMeta":false}\n';
+      if (sent && !state.content.includes("DONE")) state.content = state.content + '{"type":"assistant","message":{"role":"assistant","model":"claude-x","stop_reason":"end_turn","content":[{"type":"text","text":"DONE multi-agent context get skills/x"}]}}\n{"type":"system","subtype":"turn_duration","isMeta":false}\n';
       return { generationId: state.generationId, content: state.content };
     };
     const session = await createRigCliSession({ seat: "s@r", exec, pollMs: 1, stablePolls: 2, sleep: async () => {}, readGenerationRecord }).spawn();
     await session.sendPrompt("the prompt");
     const since = await session.captureSince("the prompt");
-    expect(since).toContain("DONE rig context get skills/x");
+    expect(since).toContain("DONE multi-agent context get skills/x");
   });
 
   it("SUSTAINED record-read failure IS a dead daemon — surfaces loud after the consecutive bound", async () => {

@@ -25,7 +25,7 @@ describe("S8a — a note is not a state write", () => {
     app.post("/api/queue/:id/update", async c => {
       try {
         const body = await c.req.json() as Record<string, unknown>;
-        return c.json(repo.update({ qitemId: c.req.param("id"), actorSession: c.req.header("X-OpenRig-Session") ?? "auditor@rig", identityProvenance: "transport:v1", ...body } as never));
+        return c.json(repo.update({ qitemId: c.req.param("id"), actorSession: c.req.header("X-Multi-Agent-Session") ?? "auditor@rig", identityProvenance: "transport:v1", ...body } as never));
       } catch (error) {
         const code = (error as { code?: string }).code;
         const status = code === "terminal_reopen_requires_ack" ? 409 : code === "qitem_not_found" ? 404 : 400;
@@ -53,7 +53,7 @@ describe("S8a — a note is not a state write", () => {
   function update(qitemId: string, body: Record<string, unknown>) {
     return app.request(`/api/queue/${qitemId}/update`, {
       method: "POST",
-      headers: { "content-type": "application/json", "X-OpenRig-Session": "auditor@rig" },
+      headers: { "content-type": "application/json", "X-Multi-Agent-Session": "auditor@rig" },
       body: JSON.stringify(body),
     });
   }

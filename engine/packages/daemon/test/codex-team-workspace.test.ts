@@ -9,7 +9,7 @@ afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursiv
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "team-workspace-")); roots.push(root);
   const home = path.join(root, "home"); fs.mkdirSync(home);
-  return { root, home, workspace: path.join(root, "custom workspace"), shared: path.join(home, ".openrig", "shared-docs") };
+  return { root, home, workspace: path.join(root, "custom workspace"), shared: path.join(home, ".multi-agent", "shared-docs") };
 }
 describe("Codex team workspace preparation", () => {
   it("creates missing ancestors before granting exactly the configured workspace and pod state", () => {

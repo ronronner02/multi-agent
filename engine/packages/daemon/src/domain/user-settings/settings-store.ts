@@ -1,7 +1,7 @@
 // User Settings v0 — daemon-side settings store.
 //
-// The CLI's @openrig/cli ConfigStore is the canonical write surface
-// (operator + agent edit via `rig config`). The daemon needs read+write
+// The CLI's @multi-agent/cli ConfigStore is the canonical write surface
+// (operator + agent edit via `multi-agent config`). The daemon needs read+write
 // access too — for the UI's System drawer Settings panel + the daemon
 // HTTP route at /api/config. Rather than depend on the CLI package
 // (which would require workspace exports + a dist build), this module
@@ -9,7 +9,7 @@
 // (VALID_KEYS, ENV_MAP, KEY_TO_PATH) are kept in lockstep with
 // cli/src/config-store.ts via cross-package tests.
 //
-// Storage: same single source of truth at ~/.openrig/config.json.
+// Storage: the canonical configuration root shared with the CLI.
 // Resolution: same env > file > default precedence. Decoded helpers
 // (parseNamedPairs / resolveAllowlist / resolveProgressScanRoots /
 // resolveWorkspacePaths) project the raw strings into structured data
@@ -19,14 +19,12 @@ import { readFileSync, writeFileSync, mkdirSync, unlinkSync, existsSync, lstatSy
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import * as os from "node:os";
+import { getMultiAgentHome, getConfigPath } from "../../data-paths.js";
 
-const DEFAULT_CONFIG_PATH = path.join(
-  process.env["OPENRIG_HOME"] || process.env["RIGGED_HOME"] || path.join(os.homedir(), ".openrig"),
-  "config.json",
-);
+const DEFAULT_CONFIG_PATH = getConfigPath("config.json");
 
 const DEFAULT_WORKSPACE_ROOT = path.join(
-  process.env["OPENRIG_HOME"] || process.env["RIGGED_HOME"] || path.join(os.homedir(), ".openrig"),
+  getMultiAgentHome(),
   "workspace",
 );
 
@@ -34,32 +32,24 @@ const DEFAULT_WORKSPACE_ROOT = path.join(
 // altitude is the TOP of this root: <root>/<CHAIN>.md, then
 // <root>/rigs/<rig>/<CHAIN>.md, then <root>/rigs/<rig>/seats/<seat>/<CHAIN>.md.
 const DEFAULT_TOPOLOGY_ROOT = path.join(
-  process.env["OPENRIG_HOME"] || process.env["RIGGED_HOME"] || path.join(os.homedir(), ".openrig"),
+  getMultiAgentHome(),
   "topology",
 );
 
 // OPR.0.5.9.5 Wave B — canonical addressable context library.
 const DEFAULT_CONTEXT_ROOT = path.join(
-  process.env["OPENRIG_HOME"] || process.env["RIGGED_HOME"] || path.join(os.homedir(), ".openrig"),
+  getMultiAgentHome(),
   "context",
 );
 
 const DEFAULT_SKILLS_ROOT = path.join(
-  process.env["OPENRIG_HOME"] || process.env["RIGGED_HOME"] || path.join(os.homedir(), ".openrig"),
+  getMultiAgentHome(),
   "skills",
 );
 
-/** OPR.0.5.3.6 — the LEGACY topology location, ruled an arbitrary folder
- *  (founder, 2026-08-14) but kept readable so pre-convention rigs migrate
- *  instead of flag-daying. Resolves where legacy code ACTUALLY wrote —
- *  mirroring the codex adapter's shared-docs precedent (OPENRIG_SHARED_DOCS_ROOT
- *  env, else the literal ~/.openrig/shared-docs), NOT $OPENRIG_HOME: boxes with
- *  a non-default home still carry their legacy tree at ~/.openrig/shared-docs.
- *  This helper is the ONE home for the literal: walkers call it for their
- *  fallback and must emit the named advisory when a read resolves here. */
+/** Retained topology helpers use the current state root only. */
 export function resolveLegacyTopologyRigsRoot(): string {
-  const sharedDocsRoot = process.env["OPENRIG_SHARED_DOCS_ROOT"]?.trim()
-    || path.join(os.homedir(), ".openrig", "shared-docs");
+  const sharedDocsRoot = path.join(getMultiAgentHome(), "shared-docs");
   return path.join(sharedDocsRoot, "rigs");
 }
 
@@ -69,7 +59,7 @@ export const SETTINGS_VALID_KEYS = [
   // OPR.0.4.6.MH1 FR-1 — the persisted host-selection pointer, ONE
   // static key, lockstep with cli/src/config-store.ts VALID_KEYS (the
   // twins parity test pins both). Default "local" (unset ≡ local host).
-  // Value registry-validation lives at the `rig host select` verb.
+  // Value registry-validation lives at the `multi-agent host select` verb.
   "host.selected",
   // OPR.0.4.6.MH1 FR-4 — the own-host display name (arch Ruling 1: home =
   // the settings twins, never hosts.yaml). Default "localhost".
@@ -94,8 +84,8 @@ export const SETTINGS_VALID_KEYS = [
   "workspace.projects_root",
   "workspace.catalog_path",
   // OPR.0.5.3.6 D1 — the TOPOLOGY tree root (instance altitude at its top,
-  // rigs/<rig>/seats/<seat> beneath). Derived default $OPENRIG_HOME/topology;
-  // keying to the home makes the ~/.openrig-vs-$OPENRIG_HOME split a
+  // rigs/<rig>/seats/<seat> beneath). Derived default $MULTI_AGENT_HOME/topology;
+  // keying to the home makes the ~/.multi-agent-vs-$MULTI_AGENT_HOME split a
   // non-question (a box with two homes is two instances, each with its own
   // topology tree). Legacy shared-docs/rigs stays readable as a fallback WITH
   // a named advisory — resolveLegacyTopologyRigsRoot below is the one home
@@ -190,7 +180,7 @@ export const SETTINGS_VALID_KEYS = [
   "retention.usage_samples_days",
   "retention.watchdog_keep_per_job",
   "retention.batch_size",
-  // S04 (OPR.0.5.5.4) — pickup-receipt stall threshold; net-new key, OPENRIG_* only,
+  // S04 (OPR.0.5.5.4) — pickup-receipt stall threshold; net-new key, MULTI_AGENT_* only,
   // CLI-settable twin lockstep with cli/src/config-store.ts VALID_KEYS. Fresh-read per
   // derivation (a flip applies to the next projection read; never retroactive).
   "queue.pickup_stall_threshold_minutes",
@@ -223,95 +213,87 @@ export const SETTINGS_VALID_KEYS = [
 
 export type SettingsValidKey = typeof SETTINGS_VALID_KEYS[number];
 
-const ENV_MAP: Record<SettingsValidKey, { primary: string; legacy?: string }> = {
-  // Only the original runtime keys keep RIGGED_* aliases for upgrade
-  // compatibility. New typed keys use OPENRIG_* only.
-  "daemon.port": { primary: "OPENRIG_PORT", legacy: "RIGGED_PORT" },
-  "daemon.host": { primary: "OPENRIG_HOST", legacy: "RIGGED_HOST" },
-  "db.path": { primary: "OPENRIG_DB", legacy: "RIGGED_DB" },
-  "transcripts.enabled": { primary: "OPENRIG_TRANSCRIPTS_ENABLED", legacy: "RIGGED_TRANSCRIPTS_ENABLED" },
-  "transcripts.path": { primary: "OPENRIG_TRANSCRIPTS_PATH", legacy: "RIGGED_TRANSCRIPTS_PATH" },
-  "transcripts.lines": { primary: "OPENRIG_TRANSCRIPTS_LINES" },
-  "transcripts.poll_interval_seconds": { primary: "OPENRIG_TRANSCRIPTS_POLL_INTERVAL_SECONDS" },
-  "workspace.root": { primary: "OPENRIG_WORKSPACE_ROOT" },
-  "workspace.slices_root": { primary: "OPENRIG_WORKSPACE_SLICES_ROOT" },
-  "workspace.steering_path": { primary: "OPENRIG_WORKSPACE_STEERING_PATH" },
-  "workspace.specs_root": { primary: "OPENRIG_WORKSPACE_SPECS_ROOT" },
-  "workspace.projects_root": { primary: "OPENRIG_WORKSPACE_PROJECTS_ROOT" },
-  "workspace.catalog_path": { primary: "OPENRIG_WORKSPACE_CATALOG_PATH" },
-  "topology.root": { primary: "OPENRIG_TOPOLOGY_ROOT" },
-  "context.root": { primary: "OPENRIG_CONTEXT_ROOT" },
-  "context.system_world": { primary: "OPENRIG_CONTEXT_SYSTEM_WORLD" },
-  "skills.root": { primary: "OPENRIG_SKILLS_ROOT" },
-  "onboarding.default_pack.enabled": { primary: "OPENRIG_ONBOARDING_DEFAULT_PACK_ENABLED" },
-  "launch.non_interruptive": { primary: "OPENRIG_LAUNCH_NON_INTERRUPTIVE" },
-  "health.context_pressure.warning_percent": { primary: "OPENRIG_HEALTH_CONTEXT_PRESSURE_WARNING_PERCENT" },
-  "health.context_pressure.critical_percent": { primary: "OPENRIG_HEALTH_CONTEXT_PRESSURE_CRITICAL_PERCENT" },
-  "files.allowlist": { primary: "OPENRIG_FILES_ALLOWLIST" },
-  "progress.scan_roots": { primary: "OPENRIG_PROGRESS_SCAN_ROOTS" },
-  "ui.preview.refresh_interval_seconds": { primary: "OPENRIG_UI_PREVIEW_REFRESH_INTERVAL_SECONDS" },
-  "ui.preview.max_pins": { primary: "OPENRIG_UI_PREVIEW_MAX_PINS" },
-  "ui.timezone": { primary: "OPENRIG_UI_TIMEZONE" },
-  "ui.enabled": { primary: "OPENRIG_UI_ENABLED" },
-  "ui.preview.default_lines": { primary: "OPENRIG_UI_PREVIEW_DEFAULT_LINES" },
-  "recovery.auto_drive_provider_prompts": { primary: "OPENRIG_RECOVERY_AUTO_DRIVE_PROVIDER_PROMPTS" },
-  "recovery.provider_auth_env_allowlist": { primary: "OPENRIG_RECOVERY_PROVIDER_AUTH_ENV_ALLOWLIST" },
-  "agents.advisor_session": { primary: "OPENRIG_AGENTS_ADVISOR_SESSION" },
-  "host.selected": { primary: "OPENRIG_HOST_SELECTED" },
-  "host.name": { primary: "OPENRIG_HOST_NAME" },
-  // OPR.0.4.6.WF5 FR-2 — new key, OPENRIG_* only.
-  "workflow.exception_routing": { primary: "OPENRIG_WORKFLOW_EXCEPTION_ROUTING" },
-  "agents.operator_session": { primary: "OPENRIG_AGENTS_OPERATOR_SESSION" },
-  "workspace.operator_seat_name": { primary: "OPENRIG_WORKSPACE_OPERATOR_SEAT_NAME" },
-  "feed.subscriptions.action_required": { primary: "OPENRIG_FEED_SUBSCRIPTIONS_ACTION_REQUIRED" },
-  "feed.subscriptions.approvals": { primary: "OPENRIG_FEED_SUBSCRIPTIONS_APPROVALS" },
-  "feed.subscriptions.shipped": { primary: "OPENRIG_FEED_SUBSCRIPTIONS_SHIPPED" },
-  "feed.subscriptions.progress": { primary: "OPENRIG_FEED_SUBSCRIPTIONS_PROGRESS" },
-  "feed.subscriptions.audit_log": { primary: "OPENRIG_FEED_SUBSCRIPTIONS_AUDIT_LOG" },
+const ENV_MAP: Partial<Record<SettingsValidKey, { primary: string }>> = {
+  "daemon.port": { primary: "MULTI_AGENT_PORT" },
+  "daemon.host": { primary: "MULTI_AGENT_HOST" },
+  "db.path": { primary: "MULTI_AGENT_DB" },
+  "workspace.root": { primary: "MULTI_AGENT_WORKSPACE_ROOT" },
+  "workspace.slices_root": { primary: "MULTI_AGENT_WORKSPACE_SLICES_ROOT" },
+  "workspace.steering_path": { primary: "MULTI_AGENT_WORKSPACE_STEERING_PATH" },
+  "workspace.specs_root": { primary: "MULTI_AGENT_WORKSPACE_SPECS_ROOT" },
+  "workspace.projects_root": { primary: "MULTI_AGENT_WORKSPACE_PROJECTS_ROOT" },
+  "workspace.catalog_path": { primary: "MULTI_AGENT_WORKSPACE_CATALOG_PATH" },
+  "context.root": { primary: "MULTI_AGENT_CONTEXT_ROOT" },
+  "context.system_world": { primary: "MULTI_AGENT_CONTEXT_SYSTEM_WORLD" },
+  "skills.root": { primary: "MULTI_AGENT_SKILLS_ROOT" },
+  "onboarding.default_pack.enabled": { primary: "MULTI_AGENT_ONBOARDING_DEFAULT_PACK_ENABLED" },
+  "launch.non_interruptive": { primary: "MULTI_AGENT_LAUNCH_NON_INTERRUPTIVE" },
+  "health.context_pressure.warning_percent": { primary: "MULTI_AGENT_HEALTH_CONTEXT_PRESSURE_WARNING_PERCENT" },
+  "health.context_pressure.critical_percent": { primary: "MULTI_AGENT_HEALTH_CONTEXT_PRESSURE_CRITICAL_PERCENT" },
+  "progress.scan_roots": { primary: "MULTI_AGENT_PROGRESS_SCAN_ROOTS" },
+  "ui.preview.refresh_interval_seconds": { primary: "MULTI_AGENT_UI_PREVIEW_REFRESH_INTERVAL_SECONDS" },
+  "ui.preview.max_pins": { primary: "MULTI_AGENT_UI_PREVIEW_MAX_PINS" },
+  "ui.timezone": { primary: "MULTI_AGENT_UI_TIMEZONE" },
+  "ui.enabled": { primary: "MULTI_AGENT_UI_ENABLED" },
+  "ui.preview.default_lines": { primary: "MULTI_AGENT_UI_PREVIEW_DEFAULT_LINES" },
+  "recovery.auto_drive_provider_prompts": { primary: "MULTI_AGENT_RECOVERY_AUTO_DRIVE_PROVIDER_PROMPTS" },
+  "recovery.provider_auth_env_allowlist": { primary: "MULTI_AGENT_RECOVERY_PROVIDER_AUTH_ENV_ALLOWLIST" },
+  "agents.advisor_session": { primary: "MULTI_AGENT_AGENTS_ADVISOR_SESSION" },
+  "host.selected": { primary: "MULTI_AGENT_HOST_SELECTED" },
+  "host.name": { primary: "MULTI_AGENT_HOST_NAME" },
+  // OPR.0.4.6.WF5 FR-2 — new key, MULTI_AGENT_* only.
+  "workflow.exception_routing": { primary: "MULTI_AGENT_WORKFLOW_EXCEPTION_ROUTING" },
+  "agents.operator_session": { primary: "MULTI_AGENT_AGENTS_OPERATOR_SESSION" },
+  "workspace.operator_seat_name": { primary: "MULTI_AGENT_WORKSPACE_OPERATOR_SEAT_NAME" },
+  "feed.subscriptions.action_required": { primary: "MULTI_AGENT_FEED_SUBSCRIPTIONS_ACTION_REQUIRED" },
+  "feed.subscriptions.approvals": { primary: "MULTI_AGENT_FEED_SUBSCRIPTIONS_APPROVALS" },
+  "feed.subscriptions.shipped": { primary: "MULTI_AGENT_FEED_SUBSCRIPTIONS_SHIPPED" },
+  "feed.subscriptions.progress": { primary: "MULTI_AGENT_FEED_SUBSCRIPTIONS_PROGRESS" },
+  "feed.subscriptions.audit_log": { primary: "MULTI_AGENT_FEED_SUBSCRIPTIONS_AUDIT_LOG" },
   // plugin-primitive Phase 3a slice 3.5 — net-new key post-rename;
-  // OPENRIG_X primary only per the post-rename 5-key boundary doctrine
-  // (no RIGGED_X legacy on net-new keys).
-  "runtime.codex.hooks_enabled": { primary: "OPENRIG_RUNTIME_CODEX_HOOKS_ENABLED" },
-  "runtime.readiness_timeout_seconds": { primary: "OPENRIG_RUNTIME_READINESS_TIMEOUT_SECONDS" },
-  // Slice 27 — Claude auto-compaction policy. Net-new keys; OPENRIG_X
+  // MULTI_AGENT_X primary only per the post-rename 5-key boundary doctrine
+  // Each setting has one environment name.
+  "runtime.codex.hooks_enabled": { primary: "MULTI_AGENT_RUNTIME_CODEX_HOOKS_ENABLED" },
+  "runtime.readiness_timeout_seconds": { primary: "MULTI_AGENT_RUNTIME_READINESS_TIMEOUT_SECONDS" },
+  // Slice 27 — Claude auto-compaction policy. Net-new keys; MULTI_AGENT_X
   // primary only.
-  "policies.claude_compaction.enabled": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_ENABLED" },
-  "policies.claude_compaction.threshold_percent": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_THRESHOLD_PERCENT" },
-  "policies.claude_compaction.pre_compact_instruction": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_PRE_COMPACT_INSTRUCTION" },
-  "policies.claude_compaction.compact_instruction": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_COMPACT_INSTRUCTION" },
-  "policies.claude_compaction.message_inline": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_MESSAGE_INLINE" },
-  "policies.claude_compaction.message_file_path": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_MESSAGE_FILE_PATH" },
-  "policies.claude_compaction.post_restore_audit_instruction": { primary: "OPENRIG_POLICIES_CLAUDE_COMPACTION_POST_RESTORE_AUDIT_INSTRUCTION" },
-  "policies.idle_gate_qitem.scan_interval_seconds": { primary: "OPENRIG_POLICIES_IDLE_GATE_QITEM_SCAN_INTERVAL_SECONDS" },
-  "policies.idle_gate_qitem.active_wake_interval_seconds": { primary: "OPENRIG_POLICIES_IDLE_GATE_QITEM_ACTIVE_WAKE_INTERVAL_SECONDS" },
-  "policies.idle_gate_qitem.auto_register": { primary: "OPENRIG_POLICIES_IDLE_GATE_QITEM_AUTO_REGISTER" },
-  "policies.idle_gate_qitem.opt_in_sessions": { primary: "OPENRIG_POLICIES_IDLE_GATE_QITEM_OPT_IN_SESSIONS" },
-  "snapshots.periodic.enabled": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_ENABLED" },
-  "snapshots.periodic.interval_seconds": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_INTERVAL_SECONDS" },
-  "snapshots.periodic.retention_keep": { primary: "OPENRIG_SNAPSHOTS_PERIODIC_RETENTION_KEEP" },
-  "output.compact": { primary: "OPENRIG_OUTPUT_COMPACT" },
-  "provider.usage_windows": { primary: "OPENRIG_PROVIDER_USAGE_WINDOWS" },
-  // OPR.0.4.6.FS-1 W2 — retention knobs; net-new keys, OPENRIG_* primary only.
-  "retention.enabled": { primary: "OPENRIG_RETENTION_ENABLED" },
-  "retention.transitions_days": { primary: "OPENRIG_RETENTION_TRANSITIONS_DAYS" },
-  "retention.watchdog_days": { primary: "OPENRIG_RETENTION_WATCHDOG_DAYS" },
-  "retention.usage_samples_days": { primary: "OPENRIG_RETENTION_USAGE_SAMPLES_DAYS" },
-  "retention.watchdog_keep_per_job": { primary: "OPENRIG_RETENTION_WATCHDOG_KEEP_PER_JOB" },
-  "retention.batch_size": { primary: "OPENRIG_RETENTION_BATCH_SIZE" },
-  // S04 — net-new key; OPENRIG_* primary only.
-  "queue.pickup_stall_threshold_minutes": { primary: "OPENRIG_QUEUE_PICKUP_STALL_THRESHOLD_MINUTES" },
-  "queue.stuck_sweep_interval_seconds": { primary: "OPENRIG_QUEUE_STUCK_SWEEP_INTERVAL_SECONDS" },
-  "queue.stuck_sweep_unclaimed_age_minutes": { primary: "OPENRIG_QUEUE_STUCK_SWEEP_UNCLAIMED_AGE_MINUTES" },
-  "queue.wake_retry_interval_seconds": { primary: "OPENRIG_QUEUE_WAKE_RETRY_INTERVAL_SECONDS" },
-  "queue.wake_retry_cap": { primary: "OPENRIG_QUEUE_WAKE_RETRY_CAP" },
-  "queue.wake_unconfirmed_window_minutes": { primary: "OPENRIG_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES" },
-  "queue.wake_human_rung": { primary: "OPENRIG_QUEUE_WAKE_HUMAN_RUNG" },
-  "queue.wake_swap_grace_seconds": { primary: "OPENRIG_QUEUE_WAKE_SWAP_GRACE_SECONDS" },
-  "workers.isolation": { primary: "OPENRIG_WORKERS_ISOLATION" },
-  "team.leadClient": { primary: "OPENRIG_TEAM_LEAD_CLIENT" },
-  "team.maxSeats": { primary: "OPENRIG_TEAM_MAX_SEATS" },
-  "team.maxConcurrentAgents": { primary: "OPENRIG_TEAM_MAX_CONCURRENT_AGENTS" },
-  "github.proxy": { primary: "OPENRIG_GITHUB_PROXY" },
+  "policies.claude_compaction.enabled": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_ENABLED" },
+  "policies.claude_compaction.threshold_percent": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_THRESHOLD_PERCENT" },
+  "policies.claude_compaction.pre_compact_instruction": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_PRE_COMPACT_INSTRUCTION" },
+  "policies.claude_compaction.compact_instruction": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_COMPACT_INSTRUCTION" },
+  "policies.claude_compaction.message_inline": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_MESSAGE_INLINE" },
+  "policies.claude_compaction.message_file_path": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_MESSAGE_FILE_PATH" },
+  "policies.claude_compaction.post_restore_audit_instruction": { primary: "MULTI_AGENT_POLICIES_CLAUDE_COMPACTION_POST_RESTORE_AUDIT_INSTRUCTION" },
+  "policies.idle_gate_qitem.scan_interval_seconds": { primary: "MULTI_AGENT_POLICIES_IDLE_GATE_QITEM_SCAN_INTERVAL_SECONDS" },
+  "policies.idle_gate_qitem.active_wake_interval_seconds": { primary: "MULTI_AGENT_POLICIES_IDLE_GATE_QITEM_ACTIVE_WAKE_INTERVAL_SECONDS" },
+  "policies.idle_gate_qitem.auto_register": { primary: "MULTI_AGENT_POLICIES_IDLE_GATE_QITEM_AUTO_REGISTER" },
+  "policies.idle_gate_qitem.opt_in_sessions": { primary: "MULTI_AGENT_POLICIES_IDLE_GATE_QITEM_OPT_IN_SESSIONS" },
+  "snapshots.periodic.enabled": { primary: "MULTI_AGENT_SNAPSHOTS_PERIODIC_ENABLED" },
+  "snapshots.periodic.interval_seconds": { primary: "MULTI_AGENT_SNAPSHOTS_PERIODIC_INTERVAL_SECONDS" },
+  "snapshots.periodic.retention_keep": { primary: "MULTI_AGENT_SNAPSHOTS_PERIODIC_RETENTION_KEEP" },
+  "output.compact": { primary: "MULTI_AGENT_OUTPUT_COMPACT" },
+  "provider.usage_windows": { primary: "MULTI_AGENT_PROVIDER_USAGE_WINDOWS" },
+  // OPR.0.4.6.FS-1 W2 — retention knobs; net-new keys, MULTI_AGENT_* primary only.
+  "retention.enabled": { primary: "MULTI_AGENT_RETENTION_ENABLED" },
+  "retention.transitions_days": { primary: "MULTI_AGENT_RETENTION_TRANSITIONS_DAYS" },
+  "retention.watchdog_days": { primary: "MULTI_AGENT_RETENTION_WATCHDOG_DAYS" },
+  "retention.usage_samples_days": { primary: "MULTI_AGENT_RETENTION_USAGE_SAMPLES_DAYS" },
+  "retention.watchdog_keep_per_job": { primary: "MULTI_AGENT_RETENTION_WATCHDOG_KEEP_PER_JOB" },
+  "retention.batch_size": { primary: "MULTI_AGENT_RETENTION_BATCH_SIZE" },
+  // S04 — net-new key; MULTI_AGENT_* primary only.
+  "queue.pickup_stall_threshold_minutes": { primary: "MULTI_AGENT_QUEUE_PICKUP_STALL_THRESHOLD_MINUTES" },
+  "queue.stuck_sweep_interval_seconds": { primary: "MULTI_AGENT_QUEUE_STUCK_SWEEP_INTERVAL_SECONDS" },
+  "queue.stuck_sweep_unclaimed_age_minutes": { primary: "MULTI_AGENT_QUEUE_STUCK_SWEEP_UNCLAIMED_AGE_MINUTES" },
+  "queue.wake_retry_interval_seconds": { primary: "MULTI_AGENT_QUEUE_WAKE_RETRY_INTERVAL_SECONDS" },
+  "queue.wake_retry_cap": { primary: "MULTI_AGENT_QUEUE_WAKE_RETRY_CAP" },
+  "queue.wake_unconfirmed_window_minutes": { primary: "MULTI_AGENT_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES" },
+  "queue.wake_human_rung": { primary: "MULTI_AGENT_QUEUE_WAKE_HUMAN_RUNG" },
+  "queue.wake_swap_grace_seconds": { primary: "MULTI_AGENT_QUEUE_WAKE_SWAP_GRACE_SECONDS" },
+  "workers.isolation": { primary: "MULTI_AGENT_WORKERS_ISOLATION" },
+  "team.leadClient": { primary: "MULTI_AGENT_TEAM_LEAD_CLIENT" },
+  "team.maxSeats": { primary: "MULTI_AGENT_TEAM_MAX_SEATS" },
+  "team.maxConcurrentAgents": { primary: "MULTI_AGENT_TEAM_MAX_CONCURRENT_AGENTS" },
+  "github.proxy": { primary: "MULTI_AGENT_GITHUB_PROXY" },
 };
 
 const KEY_TO_PATH: Record<SettingsValidKey, string[]> = {
@@ -408,7 +390,6 @@ export function isSettingsValidKey(key: string): key is SettingsValidKey {
 }
 
 const REMOVED_CONTEXT_KEY = "context.packs_root";
-const REMOVED_CONTEXT_ENV = "OPENRIG_CONTEXT_PACKS_ROOT";
 
 export function removedContextSettingMessage(key: string): string | null {
   return key === REMOVED_CONTEXT_KEY
@@ -417,11 +398,6 @@ export function removedContextSettingMessage(key: string): string | null {
 }
 
 function assertNoRemovedContextSetting(fileConfig: Record<string, unknown>): void {
-  if (process.env[REMOVED_CONTEXT_ENV]?.trim()) {
-    throw new Error(
-      "OPENRIG_CONTEXT_PACKS_ROOT was removed; use OPENRIG_CONTEXT_ROOT (config key context.root).",
-    );
-  }
   if (getNestedValue(fileConfig, ["context", "packsRoot"]) !== undefined) {
     throw new Error(
       'Config file contains removed key "context.packs_root" (context.packsRoot); replace it with "context.root" (context.root).',
@@ -472,15 +448,7 @@ function coerceFeedHostSubscriptionValue(key: string, raw: string): boolean {
   throw new Error(`Invalid value for ${key}: expected "true" or "false", got "${raw}"`);
 }
 
-function readEnv(primary: string, legacy?: string): string | undefined {
-  const p = process.env[primary];
-  if (p !== undefined && p !== "") return p;
-  if (legacy) {
-    const l = process.env[legacy];
-    if (l !== undefined && l !== "") return l;
-  }
-  return undefined;
-}
+
 
 function getNestedValue(obj: Record<string, unknown>, parts: string[]): unknown {
   let current: unknown = obj;
@@ -550,7 +518,7 @@ const DEFAULT_CLAUDE_COMPACTION_EXTRA_INSTRUCTION_RELATIVE_PATH = path.join(
   "post-compact-extra.md",
 );
 
-export const DEFAULT_CLAUDE_COMPACTION_EXTRA_INSTRUCTION_FILE_CONTENT = `# OpenRig Post-Compact Extra Instructions
+export const DEFAULT_CLAUDE_COMPACTION_EXTRA_INSTRUCTION_FILE_CONTENT = `# Multi-Agent Post-Compact Extra Instructions
 
 No mission-specific extra restore instructions are configured yet.
 
@@ -559,12 +527,12 @@ when this session needs more context than the canonical claude-compaction-restor
 skill provides.
 `;
 
-export function defaultClaudeCompactionExtraInstructionFilePath(openrigHome = path.dirname(DEFAULT_CONFIG_PATH)): string {
-  return path.join(openrigHome, DEFAULT_CLAUDE_COMPACTION_EXTRA_INSTRUCTION_RELATIVE_PATH);
+export function defaultClaudeCompactionExtraInstructionFilePath(multiAgentHome = getMultiAgentHome()): string {
+  return path.join(multiAgentHome, DEFAULT_CLAUDE_COMPACTION_EXTRA_INSTRUCTION_RELATIVE_PATH);
 }
 
-export function ensureDefaultClaudeCompactionFiles(openrigHome = path.dirname(DEFAULT_CONFIG_PATH)): string {
-  const filePath = defaultClaudeCompactionExtraInstructionFilePath(openrigHome);
+export function ensureDefaultClaudeCompactionFiles(multiAgentHome = getMultiAgentHome()): string {
+  const filePath = defaultClaudeCompactionExtraInstructionFilePath(multiAgentHome);
   if (!existsSync(filePath)) {
     mkdirSync(path.dirname(filePath), { recursive: true });
     writeFileSync(filePath, DEFAULT_CLAUDE_COMPACTION_EXTRA_INSTRUCTION_FILE_CONTENT, "utf-8");
@@ -579,9 +547,9 @@ function getDefaultValue(key: SettingsValidKey, workspaceRoot: string): string |
   switch (key) {
     case "daemon.port": return 7433;
     case "daemon.host": return "127.0.0.1";
-    case "db.path": return path.join(path.dirname(DEFAULT_CONFIG_PATH), "openrig.sqlite");
+    case "db.path": return path.join(getMultiAgentHome(), "multi-agent.sqlite");
     case "transcripts.enabled": return true;
-    case "transcripts.path": return path.join(path.dirname(DEFAULT_CONFIG_PATH), "transcripts");
+    case "transcripts.path": return path.join(getMultiAgentHome(), "transcripts");
     // V1 pre-release CLI/daemon Item 1 — capture-pane rotation defaults.
     case "transcripts.lines": return 1000;
     case "transcripts.poll_interval_seconds": return 2;
@@ -592,7 +560,7 @@ function getDefaultValue(key: SettingsValidKey, workspaceRoot: string): string |
     // OPR.0.4.6.MH1 FR-4 — the own-host display-name default (PRD-named).
     case "host.name": return "localhost";
     case "workspace.root": return DEFAULT_WORKSPACE_ROOT;
-    // OPR.0.5.3.6 D1 — derived under $OPENRIG_HOME, never a shared-docs literal.
+    // OPR.0.5.3.6 D1 — derived under $MULTI_AGENT_HOME, never a shared-docs literal.
     case "topology.root": return DEFAULT_TOPOLOGY_ROOT;
     case "context.root": return DEFAULT_CONTEXT_ROOT;
     case "context.system_world": return "default";
@@ -744,10 +712,10 @@ const KEY_CONSTRAINTS: Partial<Record<SettingsValidKey, (raw: string, coerced: s
     }
   },
   // Constraint gap fix — lockstep with cli/src/config-store.ts KEY_CONSTRAINTS.
-  // daemon.port had no entry, so `rig config set daemon.port 99999` stored
+  // daemon.port had no entry, so `multi-agent config set daemon.port 99999` stored
   // 99999 and the next daemon start died with a raw ERR_SOCKET_BAD_PORT
   // from serve(). The check range-validates the value the runtime actually
-  // consumes — the same parseInt the boot path runs on OPENRIG_PORT
+  // consumes — the same parseInt the boot path runs on MULTI_AGENT_PORT
   // (startServer) — rather than the raw input format, so everything that
   // resolves today keeps resolving: 7433abc, 7433.5 and +7433 resolve to
   // 7433, 1e4 to 1, 0x1D11 to 0, and a quoted in-range port in config.json
@@ -971,7 +939,7 @@ export class SettingsStore {
       return { [warningKey]: warning, [criticalKey]: critical };
     }
     process.stderr.write(
-      `[openrig-settings] context-pressure policy rejected: warning (${warning.value}) must be less than critical (${critical.value}); falling back to 95/99 defaults\n`,
+      `[multi-agent-settings] context-pressure policy rejected: warning (${warning.value}) must be less than critical (${critical.value}); falling back to 95/99 defaults\n`,
     );
     return {
       [warningKey]: { value: 95, source: "default", defaultValue: 95 },
@@ -985,14 +953,15 @@ export class SettingsStore {
     // env, drop the override + warn so the operator sees the
     // misconfiguration on daemon stderr (which captures-pane / log
     // surfaces). Bad env never poisons the resolved value.
-    const envVal = readEnv(ENV_MAP[key].primary, ENV_MAP[key].legacy);
+    const envKey = ENV_MAP[key]?.primary;
+    const envVal = envKey ? process.env[envKey] : undefined;
     if (envVal !== undefined && envVal !== "") {
       try {
         return { value: coerceAndValidate(key, envVal, wr), source: "env", defaultValue };
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         process.stderr.write(
-          `[openrig-settings] env override for ${key} rejected: ${reason}; falling back to file/default\n`,
+          `[multi-agent-settings] env override for ${key} rejected: ${reason}; falling back to file/default\n`,
         );
       }
     }
@@ -1011,7 +980,7 @@ export class SettingsStore {
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         process.stderr.write(
-          `[openrig-settings] file value for ${key} rejected: ${reason}; falling back to default\n`,
+          `[multi-agent-settings] file value for ${key} rejected: ${reason}; falling back to default\n`,
         );
       }
     }
@@ -1056,7 +1025,7 @@ export class SettingsStore {
 
   /**
    * Slice 27 — read the Claude auto-compaction policy as a typed snapshot.
-   * Called per-poll by ContextMonitor so live edits to ~/.openrig/config.json
+   * Called per-poll by ContextMonitor so live edits to ~/.multi-agent/config.json
    * take effect within one polling interval without daemon restart.
    */
   resolveClaudeCompactionPolicy(): ClaudeCompactionPolicy {
@@ -1223,13 +1192,13 @@ export class SettingsStore {
       if (node === null || typeof node !== "object" || Array.isArray(node)) continue; // flat toggle leaves — not host nodes
       if (FEED_HOST_RESERVED_SEGMENTS.has(segment) || !/^[A-Za-z0-9_-]+$/.test(segment)) {
         process.stderr.write(
-          `[openrig-settings] feed.subscriptions.${segment} ignored as a host subscription: segment is ${FEED_HOST_RESERVED_SEGMENTS.has(segment) ? "a reserved toggle name" : "not a valid host id segment ([A-Za-z0-9_-]+)"}\n`,
+          `[multi-agent-settings] feed.subscriptions.${segment} ignored as a host subscription: segment is ${FEED_HOST_RESERVED_SEGMENTS.has(segment) ? "a reserved toggle name" : "not a valid host id segment ([A-Za-z0-9_-]+)"}\n`,
         );
         continue;
       }
       const enabled = (node as Record<string, unknown>)["enabled"];
       if (typeof enabled !== "boolean") {
-        process.stderr.write(`[openrig-settings] feed.subscriptions.${segment}.enabled ignored: expected boolean, got ${JSON.stringify(enabled)}\n`);
+        process.stderr.write(`[multi-agent-settings] feed.subscriptions.${segment}.enabled ignored: expected boolean, got ${JSON.stringify(enabled)}\n`);
         continue;
       }
       out.push({ hostId: segment, enabled });
@@ -1281,7 +1250,7 @@ export class SettingsStore {
   }
 
   private resolveWorkspaceRootRaw(fileConfig: Record<string, unknown>): string {
-    const envVal = readEnv(ENV_MAP["workspace.root"].primary, ENV_MAP["workspace.root"].legacy);
+    const envVal = process.env[ENV_MAP["workspace.root"]!.primary];
     if (envVal) return envVal;
     const fileVal = getNestedValue(fileConfig, KEY_TO_PATH["workspace.root"]) as string | undefined;
     if (fileVal) return fileVal;
@@ -1296,7 +1265,7 @@ export class SettingsStore {
         parsed = JSON.parse(raw) as Record<string, unknown>;
       } catch {
         throw new Error(
-          `Config file at ${this.configPath} is malformed. Fix the JSON or reset with: rig config reset`,
+          `Config file at ${this.configPath} is malformed. Fix the JSON or reset with: multi-agent config reset`,
         );
       }
     }

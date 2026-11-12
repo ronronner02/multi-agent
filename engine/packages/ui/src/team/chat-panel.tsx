@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import { FileText, X } from "lucide-react";
 import { TextPreview } from "./text-preview.js";
-import type { TeamOwnerRead, WorkflowSelection } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, WorkflowSelection } from "@multi-agent/daemon/team-control";
 import { WorkflowOutcomes, WorkflowPicker } from "./workflows.js";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { approvePlan, confirmDocument, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";

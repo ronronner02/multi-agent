@@ -214,7 +214,7 @@ export type RigEvent =
   | { type: "bundle.created"; bundleName: string; bundleVersion: string; archiveHash: string }
   // Teardown events
   | { type: "rig.stopped"; rigId: string }
-  // OPR.0.3.3.19 - rig archive affordance (soft, reversible; NOT a delete)
+  // OPR.0.3.3.19 - multi-agent archive affordance (soft, reversible; NOT a delete)
   | { type: "rig.archived"; rigId: string }
   | { type: "rig.unarchived"; rigId: string }
   // AgentSpec reboot events — pods + startup + continuity
@@ -246,7 +246,7 @@ export type RigEvent =
   // Emitted exactly once by KernelBootTracker when the kernel rig fails to
   // reach ready / partial_ready within the configurable degraded-timer
   // window (default 90s). Observability signal that healthz bound cleanly
-  // but the kernel itself is stuck — operator triage with `rig ps --rig kernel`.
+  // but the kernel itself is stuck — operator triage with `multi-agent ps --rig kernel`.
   | { type: "kernel.agent.degraded"; agents: Array<{ sessionName: string; runtime: string; startupStatus: string }>; firstUnreadySince: string | null; detail: string | null }
   // Chat events
   | { type: "chat.message"; rigId: string; messageId: string; sender: string; kind: string; body: string; topic?: string }
@@ -512,7 +512,7 @@ export type RestoreOutcome =
 // L3 extends with `attention_required` (Claude resume-selection prompt proxy)
 // and `operator_recovered` (terminal post-reconciliation outcome — never produced
 // directly by restore, only emitted via `restore.outcome_reconciled`).
-// OPR.0.3.4.2 - carries the five-term restore vocabulary into `rig ps`.
+// OPR.0.3.4.2 - carries the five-term restore vocabulary into `multi-agent ps`.
 export type NodeRestoreOutcome = "resumed" | "rebuilt" | "fresh" | "fresh-primed" | "awaiting-decision" | "failed" | "attention_required" | "operator_recovered" | "n-a";
 
 // OPR.0.4.3.06 — challenge-verified startup orientation, DISTINCT from
@@ -1325,7 +1325,7 @@ export type InstantiateOutcome =
   | { ok: false; code: "generation_unconfirmed"; message: string }
   // OPR.0.3.2.CT (conveyor-trust-minimal-fix):
   // When every launched node reaches a recoverable attention_required
-  // state (e.g., workspace-trust prompt), do NOT tear the rig down.
+  // state (e.g., workspace-trust prompt), do NOT tear the multi-agent down.
   // The rig + sessions are preserved, listable, and approvable; the
   // operator's path is "approve trust → resume". `attentionNodes`
   // carries the actionable per-node detail for the route's 3-part
@@ -1355,7 +1355,7 @@ export interface InstantiateResult {
   // terminal states; `attention_required` (OPR.0.3.2.CT) marks a
   // recoverable parked node awaiting operator action (e.g., trust
   // approval). The session row's startup_status carries the same
-  // signal so `rig ps` surfaces it.
+  // signal so `multi-agent ps` surfaces it.
   //
   // `sessionName` + `evidence` carry runtime detail needed by
   // BootstrapOrchestrator to construct AttentionNode[] for the mixed
@@ -1425,7 +1425,7 @@ export interface ExpansionNodeOutcome {
   nodeId: string;
   // OPR.0.3.2.CT — `attention_required` is a recoverable parked state
   // (e.g., workspace-trust prompt awaiting operator action). The
-  // session row's startup_status carries the same signal so `rig ps`
+  // session row's startup_status carries the same signal so `multi-agent ps`
   // surfaces it. Distinct from `failed` (terminal).
   status: "launched" | "failed" | "attention_required";
   error?: string;

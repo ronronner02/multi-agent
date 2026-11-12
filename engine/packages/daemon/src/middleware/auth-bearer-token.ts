@@ -54,7 +54,7 @@ export function constantTimeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Three-part error body shape per OpenRig honest-error-reporting
+ * Three-part error body shape per Multi-Agent honest-error-reporting
  * convention. Renders inside the route's c.json call.
  */
 function unauthorizedBody(reason: string): {
@@ -71,7 +71,7 @@ function unauthorizedBody(reason: string): {
     why_it_matters:
       "Mission Control write verbs require a bearer token because the daemon may be bound on a non-loopback interface (tailnet) where unauthenticated mutation would be unsafe.",
     what_to_do:
-      "Set the auth.bearerToken field in daemon config (or OPENRIG_AUTH_BEARER_TOKEN env), restart the daemon, and resend the request with `Authorization: Bearer <token>`.",
+      "Set the auth.bearerToken field in daemon config (or MULTI_AGENT_AUTH_BEARER_TOKEN env), restart the daemon, and resend the request with `Authorization: Bearer <token>`.",
   };
 }
 
@@ -260,9 +260,9 @@ export async function assertBindAuthInvariant(opts: {
   if (opts.bearerToken && opts.bearerToken.length > 0) return;
   throw new AuthBearerTokenStartupError(
     `daemon refusing to start: bind host '${opts.host}'${resolvedIp ? ` (resolves to ${resolvedIp})` : ""} is not loopback or tailscale, ` +
-      `and auth.bearerToken (env OPENRIG_AUTH_BEARER_TOKEN) is empty. ` +
+      `and auth.bearerToken (env MULTI_AGENT_AUTH_BEARER_TOKEN) is empty. ` +
       `Either: (a) bind to 127.0.0.1 / localhost, (b) bind to a tailscale interface (100.64.0.0/10 IPv4 or fd7a:115c:a1e0::/48 IPv6), ` +
-      `or (c) set OPENRIG_AUTH_BEARER_TOKEN to a non-empty value before starting the daemon.`,
+      `or (c) set MULTI_AGENT_AUTH_BEARER_TOKEN to a non-empty value before starting the daemon.`,
   );
 }
 

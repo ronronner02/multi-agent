@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { TeamQueueState, TeamReviewView, TeamSeatView, TeamTaskNameParts, TeamTaskStage } from "@openrig/daemon/team-control";
+import type { TeamQueueState, TeamReviewView, TeamSeatView, TeamTaskNameParts, TeamTaskStage } from "@multi-agent/daemon/team-control";
 
 /**
  * U10 — how the team surface names things.

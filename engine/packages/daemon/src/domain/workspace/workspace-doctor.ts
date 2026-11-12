@@ -1,4 +1,4 @@
-// Slice-21 FR-5 — workspace doctor readiness checks for `rig workspace doctor`.
+// Slice-21 FR-5 — workspace doctor readiness checks for `multi-agent workspace doctor`.
 //
 // 7 checks (this file ships pure check helpers; daemon route + CLI
 // subcommand wiring land in follow-on commits):
@@ -12,7 +12,7 @@
 //
 // Per-check return shape is `{check, status: "ok"|"warn"|"fail",
 // message, fixHint?, evidence?}` per FR-5 IMPL-PRD §76-78. The shape
-// diverges intentionally from the install-health `rig doctor`'s
+// diverges intentionally from the install-health `multi-agent doctor`'s
 // DoctorCheck shape (pass|warn|fail|skipped, reason/fix) — different
 // concerns warrant different schemas (workspace-readiness vs install-
 // health); the divergence is orch-marshal-accepted per cont.43-followup.
@@ -40,11 +40,11 @@ export interface CheckWorkspaceRootInput {
 }
 
 const ENV_FIX_HINT =
-  "unset OPENRIG_WORKSPACE_ROOT or set it to an existing directory; run `rig config init-workspace` to scaffold a fresh one";
+  "unset MULTI_AGENT_WORKSPACE_ROOT or set it to an existing directory; run `multi-agent config init-workspace` to scaffold a fresh one";
 const FILE_FIX_HINT =
-  "update workspace.root in config.json to an existing directory; run `rig config init-workspace` to scaffold a fresh one";
+  "update workspace.root in config.json to an existing directory; run `multi-agent config init-workspace` to scaffold a fresh one";
 const DEFAULT_FIX_HINT =
-  "run `rig config init-workspace` to scaffold the default workspace at the configured root";
+  "run `multi-agent config init-workspace` to scaffold the default workspace at the configured root";
 
 function fixHintForSource(source: WorkspaceRootSource): string {
   switch (source) {
@@ -131,7 +131,7 @@ export function checkMissionsFolder(opts: CheckMissionsFolderInput): DoctorCheck
         : `missions folder '${slicesRoot}' is not reachable: ${(err as Error).message}`,
       fixHint:
         slicesRoot === path.join(workspaceRoot, "missions")
-          ? "run `rig config init-workspace` to scaffold the default missions/ folder"
+          ? "run `multi-agent config init-workspace` to scaffold the default missions/ folder"
           : "create the configured missions folder or unset workspace.slices_root to use the default `<workspaceRoot>/missions/`",
       evidence: { slicesRoot, workspaceRoot, errorCode: code ?? "unknown" },
     };
@@ -142,7 +142,7 @@ export function checkMissionsFolder(opts: CheckMissionsFolderInput): DoctorCheck
       status: "fail",
       message: `missions folder '${slicesRoot}' exists but is not a directory`,
       fixHint:
-        "remove or rename the conflicting file and run `rig config init-workspace` to scaffold the missions folder",
+        "remove or rename the conflicting file and run `multi-agent config init-workspace` to scaffold the missions folder",
       evidence: { slicesRoot, workspaceRoot, kind: "not_a_directory" },
     };
   }
@@ -187,9 +187,9 @@ export interface CheckFileAllowlistInput {
 /**
  * Check #3 — file allowlist sane.
  *
- * IMPL-PRD §43 references `<workspace-root>/.openrig/file-allowlist`
+ * IMPL-PRD §43 references `<workspace-root>/.multi-agent/file-allowlist`
  * as a file — the shipped surface (ConfigStore `files.allowlist` key,
- * env OPENRIG_FILES_ALLOWLIST, default `workspace:${workspaceRoot}`)
+ * env files.allowlist, default `workspace:${workspaceRoot}`)
  * is a CONFIGSTORE STRING KEY holding comma-separated `name:/abs/path`
  * pairs. There is no per-workspace file. Check #3 verifies the
  * resolved value decodes to at least one USABLE entry (canonical,
@@ -213,7 +213,7 @@ export function checkFileAllowlist(opts: CheckFileAllowlistInput): DoctorCheck {
       status: "fail",
       message: `files.allowlist resolved to no usable entries (raw='${allowlistValue}', source=${allowlistSource}); non-absolute or malformed pairs are silently dropped to match the shipped file API`,
       fixHint:
-        "set OPENRIG_FILES_ALLOWLIST or run `rig config set files.allowlist workspace:<absoluteWorkspaceRoot>` so the file surface has a readable root (absolute paths only)",
+        "set files.allowlist or run `multi-agent config set files.allowlist workspace:<absoluteWorkspaceRoot>` so the file surface has a readable root (absolute paths only)",
       evidence: { allowlistValue, allowlistSource, entryCount: 0 },
     };
   }
@@ -224,7 +224,7 @@ export function checkFileAllowlist(opts: CheckFileAllowlistInput): DoctorCheck {
       status: "warn",
       message: `files.allowlist has ${entries.length} usable entr${entries.length === 1 ? "y" : "ies"} but none cover workspace root '${workspaceRoot}'`,
       fixHint:
-        "add a `workspace:<absoluteWorkspaceRoot>` entry to files.allowlist (or set OPENRIG_FILES_ALLOWLIST) so workspace files are read-allowed",
+        "add a `workspace:<absoluteWorkspaceRoot>` entry to files.allowlist (or set files.allowlist) so workspace files are read-allowed",
       evidence: {
         allowlistValue,
         allowlistSource,
@@ -275,7 +275,7 @@ export interface CheckDaemonWorkspaceInput {
  * Reports divergence between the workspace.root the daemon resolved at
  * start-time vs the workspace.root the doctor caller expects. The
  * common cause is the daemon being started in a shell with a different
- * OPENRIG_WORKSPACE_ROOT than the operator's current shell.
+ * MULTI_AGENT_WORKSPACE_ROOT than the operator's current shell.
  */
 export function checkDaemonWorkspace(opts: CheckDaemonWorkspaceInput): DoctorCheck {
   const { daemonResolvedRoot, expectedRoot } = opts;
@@ -294,7 +294,7 @@ export function checkDaemonWorkspace(opts: CheckDaemonWorkspaceInput): DoctorChe
     status: "fail",
     message: `daemon resolved workspace root '${normDaemon}' but caller expected '${normExpected}'`,
     fixHint:
-      "restart the daemon (`rig daemon restart`) in a shell where OPENRIG_WORKSPACE_ROOT matches the expected workspace, or unset OPENRIG_WORKSPACE_ROOT to fall through to config + default",
+      "restart the daemon (`multi-agent daemon restart`) in a shell where MULTI_AGENT_WORKSPACE_ROOT matches the expected workspace, or unset MULTI_AGENT_WORKSPACE_ROOT to fall through to config + default",
     evidence: { daemonResolvedRoot: normDaemon, expectedRoot: normExpected },
   };
 }
@@ -350,7 +350,7 @@ export function checkDaemonReload(opts: CheckDaemonReloadInput): DoctorCheck {
       check: "daemon_reload_needed",
       status: "warn",
       message: `config file mtime ${stat.mtime.toISOString()} is newer than daemon start ${daemonStartTime.toISOString()}`,
-      fixHint: "run `rig daemon restart` to pick up the latest config",
+      fixHint: "run `multi-agent daemon restart` to pick up the latest config",
       evidence: {
         configFilePath,
         configMtime: stat.mtime.toISOString(),
@@ -469,7 +469,7 @@ interface SliceMissingSections {
  * Walks each mission's slices and reports work-node files missing any of the
  * convention sections (`## Intent` / `## Mini-requirements` /
  * `## Proof contract`). Warn-only (advisory /
- * fail-open — the deep per-slice audit is `rig scope audit`; this row is
+ * fail-open — the deep per-slice audit is `multi-agent scope audit`; this row is
  * the workspace-level pointer). Slices with no work-node file are check #6's
  * concern, not double-reported here.
  */
@@ -536,7 +536,7 @@ export function checkSdlcConventionSections(opts: CheckSliceDocsInput): DoctorCh
     status: "warn",
     message: `${offenders.length} slice work-node file${offenders.length === 1 ? " is" : "s are"} missing SDLC convention sections (Intent / Mini-requirements / Proof contract)`,
     fixHint:
-      "add the missing sections per docs/reference/sdlc-conventions.md (installed: $OPENRIG_HOME/reference/sdlc-conventions.md) (rig scope slice create scaffolds them); run rig scope audit <mission> for per-slice findings — advisory only, nothing is blocked",
+      "add the missing sections per docs/reference/sdlc-conventions.md (installed: $MULTI_AGENT_HOME/reference/sdlc-conventions.md) (multi-agent scope slice create scaffolds them); run multi-agent scope audit <mission> for per-slice findings — advisory only, nothing is blocked",
     evidence: { missionsRoot, slicesChecked, offenders },
   };
 }
@@ -596,7 +596,7 @@ export function checkMissionNotesPresence(opts: CheckMissionNotesInput): DoctorC
     status: "warn",
     message: `${missing.length} mission${missing.length === 1 ? " has" : "s have"} no NOTES.md or readable legacy MISSION_NOTES.md`,
     fixHint:
-      "run `rig scope mission repair <id>` for an existing mission, or `rig scope mission create <id>` for a new one",
+      "run `multi-agent scope mission repair <id>` for an existing mission, or `multi-agent scope mission create <id>` for a new one",
     evidence: { missionsRoot, missing },
   };
 }

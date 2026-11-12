@@ -1,6 +1,6 @@
-# OpenRig default culture
+# Multi-Agent default culture
 
-This is the universal operating floor for every OpenRig team. A rig's own culture may add role- or domain-specific guidance on top of it.
+This is the universal operating floor for every Multi-Agent team. A rig's own culture may add role- or domain-specific guidance on top of it.
 
 ## Pragmatic truth-seeking
 

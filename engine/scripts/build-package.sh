@@ -7,7 +7,7 @@ DAEMON_DIR="$REPO_ROOT/packages/daemon"
 UI_DIR="$REPO_ROOT/packages/ui"
 SUBSTANCE_SURFACE_ROOTS=()
 
-echo "=== OpenRig Package Build ==="
+echo "=== Multi-Agent Package Build ==="
 echo "Repo root: $REPO_ROOT"
 echo ""
 
@@ -102,7 +102,7 @@ fi
 # OPR.0.5.3.7 R2 — the shipped context-pack projection (generated above). The daemon
 # registers this as a `builtin` discovery root resolved RELATIVE TO THE BINARY
 # (startup.ts: import.meta.dirname/../context-packs -> <cli>/daemon/context-packs),
-# so `rig context get` serves bytes that match `rig --version` by construction.
+# so `multi-agent context get` serves bytes that match `multi-agent --version` by construction.
 if [ -d "$DAEMON_DIR/context-packs" ]; then
   cp -r "$DAEMON_DIR/context-packs" "$CLI_DIR/daemon/context-packs"
   SUBSTANCE_SURFACE_ROOTS+=("daemon/context-packs")
@@ -120,7 +120,7 @@ node -e '
 
 # Built-in policies (OPR.0.4.8.3): canonical source packages/daemon/policies/builtin/
 # ships with the daemon; startup materializes read-only inspection copies at
-# $OPENRIG_HOME/reference/policies/builtin/ (same chain as reference docs below).
+# $MULTI_AGENT_HOME/reference/policies/builtin/ (same chain as reference docs below).
 if [ -d "$DAEMON_DIR/policies" ]; then
   cp -r "$DAEMON_DIR/policies" "$CLI_DIR/daemon/policies"
 fi
@@ -131,16 +131,16 @@ if [ -d "$REPO_ROOT/docs/reference" ]; then
   cp -r "$REPO_ROOT/docs/reference/"* "$CLI_DIR/daemon/docs/reference/"
 fi
 
-# Earlier builds assembled a bundled copy of the unpublished @openrig/daemon here. The package now
+# Earlier builds assembled a bundled copy of the unpublished @multi-agent/daemon here. The package now
 # imports the shipped daemon/dist directly (rewrite step below), so remove any stale copy: it would
 # otherwise shadow the development workspace link for code under packages/cli.
-rm -rf "$CLI_DIR/node_modules/@openrig/daemon"
+rm -rf "$CLI_DIR/node_modules/@multi-agent/daemon"
 
 # UI: dist
 mkdir -p "$CLI_DIR/ui/dist"
 cp -r "$UI_DIR/dist/"* "$CLI_DIR/ui/dist/"
 
-# The CLI imports daemon code as @openrig/daemon/<subpath>. That package is not published, so
+# The CLI imports daemon code as @multi-agent/daemon/<subpath>. That package is not published, so
 # rewrite those specifiers in the staged JS to the daemon/dist copy shipped above (#66). Fails the
 # build on an unmapped or unstaged subpath and on any daemon import left afterwards.
 node "$REPO_ROOT/scripts/rewrite-daemon-imports.mjs"

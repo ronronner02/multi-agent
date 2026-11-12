@@ -1,6 +1,6 @@
 import { TextPreview } from "./text-preview.js";
 import { useRef, useState } from "react";
-import type { TeamOwnerRead, TeamReviewView } from "@openrig/daemon/team-control";
+import type { TeamOwnerRead, TeamReviewView } from "@multi-agent/daemon/team-control";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { assignedSeat, TASK_STAGE_LABELS, taskName } from "./display.js";

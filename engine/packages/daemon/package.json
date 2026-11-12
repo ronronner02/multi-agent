@@ -1,20 +1,38 @@
 {
-  "name": "@openrig/daemon",
+  "name": "@multi-agent/daemon",
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    "./team-control": { "types": "./dist/team-control-surface.d.ts", "import": "./dist/team-control-surface.js" },
-    "./bundle-behaviour": { "types": "./dist/bundle-behaviour-surface.d.ts", "import": "./dist/bundle-behaviour-surface.js" },
+    "./team-control": {
+      "types": "./dist/team-control-surface.d.ts",
+      "import": "./dist/team-control-surface.js"
+    },
+    "./bundle-behaviour": {
+      "types": "./dist/bundle-behaviour-surface.d.ts",
+      "import": "./dist/bundle-behaviour-surface.js"
+    },
     "./spec-validation": {
       "types": "./dist/spec-validation-surface.d.ts",
       "import": "./dist/spec-validation-surface.js"
     },
-    "./bundle-identity": { "types": "./dist/bundle-identity-surface.d.ts", "import": "./dist/bundle-identity-surface.js" },
-    "./stream-classifier": { "types": "./dist/stream-classifier-surface.d.ts", "import": "./dist/stream-classifier-surface.js" },
-    "./attention": { "types": "./dist/attention-surface.d.ts", "import": "./dist/attention-surface.js" },
-    "./project-catalog": { "types": "./dist/project-catalog-surface.d.ts", "import": "./dist/project-catalog-surface.js" },
+    "./bundle-identity": {
+      "types": "./dist/bundle-identity-surface.d.ts",
+      "import": "./dist/bundle-identity-surface.js"
+    },
+    "./stream-classifier": {
+      "types": "./dist/stream-classifier-surface.d.ts",
+      "import": "./dist/stream-classifier-surface.js"
+    },
+    "./attention": {
+      "types": "./dist/attention-surface.d.ts",
+      "import": "./dist/attention-surface.js"
+    },
+    "./project-catalog": {
+      "types": "./dist/project-catalog-surface.d.ts",
+      "import": "./dist/project-catalog-surface.js"
+    },
     "./daemon-shutdown": {
       "types": "./dist/daemon-shutdown.d.ts",
       "import": "./dist/daemon-shutdown.js"
@@ -62,6 +80,10 @@
     "./local-reading": {
       "types": "./dist/local-reading-surface.d.ts",
       "import": "./dist/local-reading-surface.js"
+    },
+    "./data-paths": {
+      "types": "./dist/data-paths.d.ts",
+      "import": "./dist/data-paths.js"
     }
   },
   "scripts": {

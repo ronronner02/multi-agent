@@ -3,9 +3,9 @@
 #   replacing the team, so the team comes back with duplicated seats in that row; or a relaunch
 #   that silently comes back stopped / partial instead of a two-seat team.
 # What this proves: STUB PLUMBING plus the daemon's recorded lifecycle across a full round
-#   trip. `rig up <spec>` brings the two-seat stub team up; `rig down` records it stopped with
+#   trip. `multi-agent up <spec>` brings the two-seat stub team up; `multi-agent down` records it stopped with
 #   both seats still members; the SAME spec then starts a new team in place of the stopped one
-#   (the documented up contract) and the shipped `rig ps --json` reports that name running with
+#   (the documented up contract) and the shipped `multi-agent ps --json` reports that name running with
 #   exactly two seats, both running, not archived.
 # What this does NOT prove: that the seats' conversations survive the round trip (that is the
 #   `--existing` restore path and needs an input-consuming stub), that any message is consumed

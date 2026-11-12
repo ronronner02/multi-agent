@@ -4,9 +4,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OWNER_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/multi-agent/owner.env"
 # shellcheck source=node-env.sh
 . "$REPO_ROOT/scripts/node-env.sh"
+
+OWNER_ENV="$(cd "$REPO_ROOT/engine" && node --input-type=module -e 'import { getConfigPath } from "./packages/daemon/dist/data-paths.js"; console.log(getConfigPath("owner.env"))')"
 
 [ -f "$OWNER_ENV" ] || {
   echo "error: $OWNER_ENV is missing. Run ./setup.sh first." >&2
@@ -19,4 +20,4 @@ set -a
 set +a
 
 # A managed daemon refuses any listener that is not loopback, so ask for loopback.
-exec "$REPO_ROOT/engine/node_modules/.bin/rig" daemon start --host 127.0.0.1
+exec "$REPO_ROOT/engine/node_modules/.bin/multi-agent" daemon start --host 127.0.0.1

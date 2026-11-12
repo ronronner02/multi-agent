@@ -61,7 +61,7 @@ function makeBinding(cwd: string): NodeBinding {
 
 function makePlan(absolutePath: string): ProjectionPlan {
   const entry: ProjectionEntry = {
-    category: "plugin", effectiveId: "openrig-core", sourceSpec: "test-spec",
+    category: "plugin", effectiveId: "multi-agent-core", sourceSpec: "test-spec",
     sourcePath: "/specs/test-spec", resourcePath: absolutePath, absolutePath,
     classification: "safe_projection",
   };
@@ -70,12 +70,12 @@ function makePlan(absolutePath: string): ProjectionPlan {
 
 // Build a real plugin source tree: an executable nested helper (0755) + a non-exec neighbor (0644).
 function seedPluginTree(root: string) {
-  const skillDir = nodePath.join(root, "openrig-core", "skills", "compaction-restore");
+  const skillDir = nodePath.join(root, "multi-agent-core", "skills", "compaction-restore");
   fs.mkdirSync(nodePath.join(skillDir, "scripts"), { recursive: true });
-  fs.mkdirSync(nodePath.join(root, "openrig-core", ".claude-plugin"), { recursive: true });
-  fs.mkdirSync(nodePath.join(root, "openrig-core", ".codex-plugin"), { recursive: true });
-  fs.writeFileSync(nodePath.join(root, "openrig-core", ".claude-plugin", "plugin.json"), "{}");
-  fs.writeFileSync(nodePath.join(root, "openrig-core", ".codex-plugin", "plugin.json"), "{}");
+  fs.mkdirSync(nodePath.join(root, "multi-agent-core", ".claude-plugin"), { recursive: true });
+  fs.mkdirSync(nodePath.join(root, "multi-agent-core", ".codex-plugin"), { recursive: true });
+  fs.writeFileSync(nodePath.join(root, "multi-agent-core", ".claude-plugin", "plugin.json"), "{}");
+  fs.writeFileSync(nodePath.join(root, "multi-agent-core", ".codex-plugin", "plugin.json"), "{}");
   const hook = nodePath.join(skillDir, "scripts", "precompact-hook.mjs");
   const skillMd = nodePath.join(skillDir, "SKILL.md");
   fs.writeFileSync(hook, "#!/usr/bin/env node\nconsole.log('hook');\n");
@@ -95,10 +95,10 @@ describe("CWD plugin projection preserves executable mode (skills-vendoring QA b
     const cwd = nodePath.join(base, "cwd");
     const adapter = new ClaudeCodeAdapter({ tmux: mockTmux(), fsOps: realFsOps() as unknown as ClaudeAdapterFsOps });
 
-    await adapter.project(makePlan(nodePath.join(src, "openrig-core")), makeBinding(cwd));
+    await adapter.project(makePlan(nodePath.join(src, "multi-agent-core")), makeBinding(cwd));
 
-    const outHook = nodePath.join(cwd, ".claude/plugins/openrig-core", rel.hookRel);
-    const outSkill = nodePath.join(cwd, ".claude/plugins/openrig-core", rel.skillRel);
+    const outHook = nodePath.join(cwd, ".claude/plugins/multi-agent-core", rel.hookRel);
+    const outSkill = nodePath.join(cwd, ".claude/plugins/multi-agent-core", rel.skillRel);
     expect(fs.existsSync(outHook)).toBe(true);
     expect(perm(outHook)).toBe(0o755);
     expect(perm(outSkill)).toBe(0o644);
@@ -111,10 +111,10 @@ describe("CWD plugin projection preserves executable mode (skills-vendoring QA b
     const cwd = nodePath.join(base, "cwd");
     const adapter = new CodexRuntimeAdapter({ tmux: mockTmux(), fsOps: realFsOps() as unknown as CodexAdapterFsOps });
 
-    await adapter.project(makePlan(nodePath.join(src, "openrig-core")), makeBinding(cwd));
+    await adapter.project(makePlan(nodePath.join(src, "multi-agent-core")), makeBinding(cwd));
 
-    const outHook = nodePath.join(cwd, ".codex/plugins/openrig-core", rel.hookRel);
-    const outSkill = nodePath.join(cwd, ".codex/plugins/openrig-core", rel.skillRel);
+    const outHook = nodePath.join(cwd, ".codex/plugins/multi-agent-core", rel.hookRel);
+    const outSkill = nodePath.join(cwd, ".codex/plugins/multi-agent-core", rel.skillRel);
     expect(fs.existsSync(outHook)).toBe(true);
     expect(perm(outHook)).toBe(0o755);
     expect(perm(outSkill)).toBe(0o644);
@@ -128,13 +128,13 @@ describe("CWD plugin projection preserves executable mode (skills-vendoring QA b
     const adapter = new ClaudeCodeAdapter({ tmux: mockTmux(), fsOps: realFsOps() as unknown as ClaudeAdapterFsOps });
 
     // Pre-place a byte-identical projected helper with the WRONG (0644) mode — the exact QA state.
-    const outHook = nodePath.join(cwd, ".claude/plugins/openrig-core", rel.hookRel);
+    const outHook = nodePath.join(cwd, ".claude/plugins/multi-agent-core", rel.hookRel);
     fs.mkdirSync(nodePath.dirname(outHook), { recursive: true });
-    fs.copyFileSync(nodePath.join(src, "openrig-core", rel.hookRel), outHook);
+    fs.copyFileSync(nodePath.join(src, "multi-agent-core", rel.hookRel), outHook);
     fs.chmodSync(outHook, 0o644);
     expect(perm(outHook)).toBe(0o644);
 
-    await adapter.project(makePlan(nodePath.join(src, "openrig-core")), makeBinding(cwd));
+    await adapter.project(makePlan(nodePath.join(src, "multi-agent-core")), makeBinding(cwd));
 
     // Content unchanged (write skipped) but mode must be reconciled to the source 0755.
     expect(perm(outHook)).toBe(0o755);

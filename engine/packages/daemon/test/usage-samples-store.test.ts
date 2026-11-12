@@ -19,7 +19,7 @@ function freshDb(): Database {
 
 const ctx = (over: Partial<ContextSampleInput> = {}): ContextSampleInput => ({
   nodeId: "node-1",
-  seatSession: "dev50-qa@v-openrig-build",
+  seatSession: "dev50-qa@v-multi-agent-build",
   source: "claude_statusline_json",
   sampledAt: "2026-08-07T09:00:00.000Z",
   totalInputTokens: 1000,
@@ -29,7 +29,7 @@ const ctx = (over: Partial<ContextSampleInput> = {}): ContextSampleInput => ({
 });
 
 const win = (over: Partial<ProviderWindowSampleInput> = {}): ProviderWindowSampleInput => ({
-  seatSession: "dev50-qa@v-openrig-build",
+  seatSession: "dev50-qa@v-multi-agent-build",
   window: "five_hour",
   usedPercent: 40,
   resetsAt: "2026-08-07T12:00:00.000Z",
@@ -70,7 +70,7 @@ describe("062 usage_samples — append-only series (contract item 1)", () => {
 
   it("advance detection is per SEAT: another seat's identical values append independently", () => {
     store.appendContextSample(ctx(), "t1");
-    expect(store.appendContextSample(ctx({ seatSession: "dev-qa@v-openrig-build", nodeId: "node-2" }), "t1")).toBe(true);
+    expect(store.appendContextSample(ctx({ seatSession: "dev-qa@v-multi-agent-build", nodeId: "node-2" }), "t1")).toBe(true);
     expect(count()).toBe(2);
     // and the first seat's unchanged sample still refuses growth
     expect(store.appendContextSample(ctx(), "t2")).toBe(false);

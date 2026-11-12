@@ -3,7 +3,7 @@ id: {{id}}
 mission: {{mission}}
 release: {{release_version}}
 stage: wip
-verified: {{created_date}} against scaffold (rig scope create)
+verified: {{created_date}} against scaffold (multi-agent scope create)
 created: {{created_date}}
 intent: {{intent_yaml}}
 depends_on: {{depends_on}}
@@ -31,6 +31,6 @@ depends_on: {{depends_on}}
 
 > Work from this `SPEC.md`; keep durable acceptance state in `PROGRESS.md`
 > and context that does not belong in the contract in `NOTES.md`. Load the
-> `mission-slice-sop` skill for the operating procedure. Conventions SSOT:
+> `agent-operated-workflows` skill for the operating procedure. Conventions SSOT:
 > `docs/reference/sdlc-conventions.md` (installed:
-> `$OPENRIG_HOME/reference/sdlc-conventions.md`).
+> `$MULTI_AGENT_HOME/reference/sdlc-conventions.md`).

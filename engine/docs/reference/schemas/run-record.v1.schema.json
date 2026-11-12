@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openrig.dev/schemas/run-record.v1.json",
+  "$id": "https://multi-agent.dev/schemas/run-record.v1.json",
   "title": "Run record v1 (private; kept beside its receipt)",
   "type": "object",
   "required": [
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "openrig.run-record/v1"
+      "const": "multi-agent.run-record/v1"
     },
     "id": {
       "type": "string",
@@ -38,16 +38,16 @@
               "const": "team"
             },
             "source": {
-              "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/source"
+              "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/source"
             },
             "configurationId": {
-              "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/configurationId"
+              "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/configurationId"
             },
             "packageDigest": {
-              "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
+              "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/packageDigest"
             },
             "assembler": {
-              "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/assembler"
+              "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/assembler"
             }
           },
           "additionalProperties": false
@@ -63,7 +63,7 @@
               "const": "harness_check"
             },
             "harness": {
-              "$ref": "https://openrig.dev/schemas/bundle-common.v1.json#/$defs/runtime"
+              "$ref": "https://multi-agent.dev/schemas/bundle-common.v1.json#/$defs/runtime"
             }
           },
           "description": "A harness check never upgrades a team label.",
@@ -99,13 +99,13 @@
     "environment": {
       "type": "object",
       "required": [
-        "openrig",
+        "multi-agent",
         "platform",
         "arch",
         "harnesses"
       ],
       "properties": {
-        "openrig": {
+        "multi-agent": {
           "type": "object",
           "required": [
             "version"

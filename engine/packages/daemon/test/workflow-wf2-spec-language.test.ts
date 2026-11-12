@@ -595,17 +595,17 @@ describe("OPR.0.4.6.WF2 — spec language", () => {
         "      allowed_exits: [handoff, waiting, done, failed]\n      host: vps-1\n    - id: verify",
       );
       const specPath = writeSpec(tmp, "remote.yaml", remote);
-      // Synthetic OPENRIG_HOME registry (never a real remote): vps-1 IS
+      // Synthetic MULTI_AGENT_HOME registry (never a real remote): vps-1 IS
       // registered, so registry-membership validation PASSES and the
       // MH-3 execution boundary is what fires — proving no qitem is
       // ever minted into a queue that cannot route it, and no silent
       // local fallback happens.
-      const prevHome = process.env.OPENRIG_HOME;
+      const prevHome = process.env.MULTI_AGENT_HOME;
       writeFileSync(
         join(tmp, "hosts.yaml"),
         "hosts:\n  - id: vps-1\n    transport: ssh\n    target: vps-1.invalid\n",
       );
-      process.env.OPENRIG_HOME = tmp;
+      process.env.MULTI_AGENT_HOME = tmp;
       try {
         const qitemsBefore = db.prepare(`SELECT COUNT(*) as c FROM queue_items`).get() as { c: number };
         await expect(
@@ -625,8 +625,8 @@ describe("OPR.0.4.6.WF2 — spec language", () => {
           expect((e as Error).message).toContain("local");
         }
       } finally {
-        if (prevHome === undefined) delete process.env.OPENRIG_HOME;
-        else process.env.OPENRIG_HOME = prevHome;
+        if (prevHome === undefined) delete process.env.MULTI_AGENT_HOME;
+        else process.env.MULTI_AGENT_HOME = prevHome;
       }
     });
   });

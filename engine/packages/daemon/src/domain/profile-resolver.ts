@@ -1,3 +1,4 @@
+import { resolveDataRoots } from "../data-paths.js";
 import nodePath from "node:path";
 import { readFileSync, realpathSync } from "node:fs";
 import { canonicalCompactionStrategy, canonicalContinuityMechanic } from "./agent-manifest.js";
@@ -72,7 +73,7 @@ export interface ResolutionContext {
   rig: RigSpec;
   operatorStartup?: StartupBlock;
   /** V0.3.0 daemon-skill-discovery (SC-29 #7): operator home directory
-   *  used to scan filesystem-discovered skills (~/.openrig/skills/,
+   *  used to scan filesystem-discovered skills (~/.multi-agent/skills/,
    *  ~/.claude/skills/, ~/.agents/skills/). Defaults to os.homedir()
    *  in production; tests inject a fixture root. */
   homedir?: string;
@@ -113,7 +114,7 @@ const RESTORE_POLICY_LEVEL: Record<string, number> = {
 // -- Public API --
 
 /**
- * Resolve effective node configuration from agent spec, profile, and rig context.
+ * Resolve effective node configuration from agent spec, profile, and multi-agent context.
  * @param ctx - resolution context with all inputs
  * @returns resolved config or errors
  */
@@ -161,7 +162,7 @@ export function resolveNodeConfig(ctx: ResolutionContext): ResolutionResult {
   // resources.skills (already in the pool from buildResourcePool) win
   // over discovered same-id entries. Most-specific-wins precedence:
   // rig-local agent.yaml > rig-bundled cwd > spec-install-dir >
-  // runtime-specific user library > shared ~/.openrig/skills/. The
+  // runtime-specific user library > shared ~/.multi-agent/skills/. The
   // internal ordering among discovery roots lives in
   // skill-discovery.listScanRoots; here we only enforce that
   // rig-local declarations are not overwritten by discovery.
@@ -197,7 +198,7 @@ export function resolveNodeConfig(ctx: ResolutionContext): ResolutionResult {
   // topology selector (profile.uses.skills). System comes from catalog.yaml;
   // project comes from project.yaml install.skills. Topology resources that
   // are not catalog-managed retain the established AgentSpec/local behavior.
-  const catalogRoot = ctx.skillsRoot ?? nodePath.join(ctx.homedir ?? osHomedir(), ".openrig", "skills");
+  const catalogRoot = ctx.skillsRoot ?? nodePath.join(resolveDataRoots({ home: ctx.homedir ?? osHomedir(), env: ctx.homedir ? {} : process.env }).state, "skills");
   const catalogResult = resolveSkillLoadout({
     catalogRoot,
     ...(ctx.systemSkills !== undefined ? { systemSkills: ctx.systemSkills } : {}),
@@ -236,7 +237,7 @@ export function resolveNodeConfig(ctx: ResolutionContext): ResolutionResult {
   const skillWarnings: string[] = skips.map((skip) => skip.message);
   // Filesystem discovery scans the catalog's working tree too, and a profile may declare a source inside a catalog
   // folder, so a skipped folder's bytes could still reach the adapter through the profile's selection. Drop a
-  // selection whose source is a skipped folder or inside one; a source elsewhere, such as a rig bundle, keeps it.
+  // selection whose source is a skipped folder or inside one; a source elsewhere, such as a multi-agent bundle, keeps it.
   const skippedDirs = skips.map((skip) => ({ real: realDir(skip.sourceDir), dir: skip.sourceDir }));
   for (let i = selectedResult!.skills.length - 1; i >= 0 && skippedDirs.length > 0; i--) {
     const entry = selectedResult!.skills[i]!;

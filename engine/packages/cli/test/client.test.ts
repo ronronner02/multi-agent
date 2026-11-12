@@ -167,24 +167,24 @@ describe("DaemonClient", () => {
     expect(res.data.url).toContain("/api/rigs");
   });
 
-  // Test 5: Client uses OPENRIG_URL env, falls back to http://127.0.0.1:7433
-  it("uses OPENRIG_URL env when set, falls back to http://127.0.0.1:7433", () => {
+  // Test 5: Client uses MULTI_AGENT_URL env, falls back to http://127.0.0.1:7433
+  it("uses MULTI_AGENT_URL env when set, falls back to http://127.0.0.1:7433", () => {
     // Default (no env)
-    const saved = process.env["OPENRIG_URL"];
-    delete process.env["OPENRIG_URL"];
+    const saved = process.env["MULTI_AGENT_URL"];
+    delete process.env["MULTI_AGENT_URL"];
     const defaultClient = new DaemonClient();
     expect(defaultClient.baseUrl).toBe("http://127.0.0.1:7433");
 
     // With env
-    process.env["OPENRIG_URL"] = "http://custom:9000";
+    process.env["MULTI_AGENT_URL"] = "http://custom:9000";
     const envClient = new DaemonClient();
     expect(envClient.baseUrl).toBe("http://custom:9000");
 
     // Cleanup
     if (saved !== undefined) {
-      process.env["OPENRIG_URL"] = saved;
+      process.env["MULTI_AGENT_URL"] = saved;
     } else {
-      delete process.env["OPENRIG_URL"];
+      delete process.env["MULTI_AGENT_URL"];
     }
   });
 

@@ -37,7 +37,7 @@ describe("sender identity helpers canonicalize the transport header", () => {
       const r = helper(c, { bodyClaim: "ignored@r" });
       return c.json(r.ok ? { session: r.session, provenance: r.provenance } : { error: true });
     });
-    return (await app.request("/", { headers: { "X-OpenRig-Session": header } })).json();
+    return (await app.request("/", { headers: { "X-Multi-Agent-Session": header } })).json();
   }
   for (const helper of [requireSenderIdentity, resolveActorWithDeferral]) {
     it(`${helper.name}: self suffix → bare seat, still transport:v1; foreign preserved`, async () => {

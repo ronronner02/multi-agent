@@ -14,7 +14,7 @@ import { L3_HOST_PORT, BIND_ENV, BIND_VALUE, BEARER_ENV } from "./helpers/testbe
 // The docker invoker is INJECTED (mirrors runRig's `node <rigBin>` seam) so this unit
 // runs with NO real docker — the real-docker leg is the host-side L6 runbook.
 //
-// The load-bearing property: the adapter self-sets readEnv.OPENRIG_URL to ITS OWN
+// The load-bearing property: the adapter self-sets readEnv.MULTI_AGENT_URL to ITS OWN
 // container's published URL (the injectClockNow precedent — never a foreign target),
 // and the fail-closed guard still refuses an inherited foreign target BEFORE it runs
 // any docker (the container is not an excuse to weaken the DAEMON_TARGET guard — L4).
@@ -40,14 +40,14 @@ function fakeScaffold(env: Record<string, string | undefined> = {}): HermeticSca
   return {
     root: "/scratch/root",
     home: "/scratch/root/home",
-    openrigHome: "/scratch/root/openrig",
+    multiAgentHome: "/scratch/root/multi-agent",
     stateDir: "/scratch/root/state",
     env: { HOME: "/scratch/root/home", PATH: "/usr/bin", ...env },
     cleanup: vi.fn(),
   };
 }
 
-const IMAGE = "openrig-testbed:deadbeef";
+const IMAGE = "multi-agent-testbed:deadbeef";
 
 describe("spawnContainerDaemon — docker-run the testbed image by identity", () => {
   it("runs the named image, publishing the container port to a host port", async () => {
@@ -79,11 +79,11 @@ describe("spawnContainerDaemon — docker-run the testbed image by identity", ()
     // the -e env flags appear BEFORE the container id (docker exec -e … <id> …).
     const idIdx = startExec.indexOf(CONTAINER_ID);
     const envPart = startExec.slice(0, idIdx);
-    expect(envPart).toContain(`${BIND_ENV}=${BIND_VALUE}`);        // OPENRIG_HOST=0.0.0.0
-    expect(envPart).toContain(`${BEARER_ENV}=tok-abc123`);         // OPENRIG_AUTH_BEARER_TOKEN=<token>
+    expect(envPart).toContain(`${BIND_ENV}=${BIND_VALUE}`);        // MULTI_AGENT_HOST=0.0.0.0
+    expect(envPart).toContain(`${BEARER_ENV}=tok-abc123`);         // MULTI_AGENT_AUTH_BEARER_TOKEN=<token>
     expect(envPart.filter((a) => a === "-e").length).toBe(2);
     // host-side reads carry the TERMINAL token (same value) so they authenticate to the guarded routes.
-    expect(daemon.readEnv.OPENRIG_TERMINAL_BEARER_TOKEN).toBe("tok-abc123");
+    expect(daemon.readEnv.MULTI_AGENT_TERMINAL_BEARER_TOKEN).toBe("tok-abc123");
   });
 
   it("starts the daemon INSIDE the started container and waits for it before returning", async () => {
@@ -94,8 +94,8 @@ describe("spawnContainerDaemon — docker-run the testbed image by identity", ()
       hostPort: 34567,
       containerPort: 7433,
     });
-    // The daemon is started via `docker exec <id> rig daemon start …` against the id
-    // captured from `docker run` — using the SAME shipped `rig daemon start` that
+    // The daemon is started via `docker exec <id> multi-agent daemon start …` against the id
+    // captured from `docker run` — using the SAME shipped `multi-agent daemon start` that
     // blocks on its own /healthz (readiness for free), same as host-mode.
     const startExec = calls.find((c) => c[0] === "exec" && c.includes("start"));
     expect(startExec).toBeDefined();
@@ -115,16 +115,16 @@ describe("spawnContainerDaemon — docker-run the testbed image by identity", ()
     expect(startIdx).toBeGreaterThan(runIdx);
   });
 
-  it("self-sets readEnv.OPENRIG_URL to its OWN published container URL (not foreign)", async () => {
+  it("self-sets readEnv.MULTI_AGENT_URL to its OWN published container URL (not foreign)", async () => {
     const { docker } = fakeDocker();
     const daemon = await spawnContainerDaemon(fakeScaffold({ RIG_SCRATCH: "keep-me" }), {
       image: IMAGE,
       docker,
       hostPort: 34567,
     });
-    // readEnv = { ...scaffold.env, OPENRIG_URL: <its own published url> } — the exact
+    // readEnv = { ...scaffold.env, MULTI_AGENT_URL: <its own published url> } — the exact
     // scenario-daemon.ts:148 shape, so the host-side `rig` reads hit THIS container.
-    expect(daemon.readEnv.OPENRIG_URL).toBe("http://127.0.0.1:34567");
+    expect(daemon.readEnv.MULTI_AGENT_URL).toBe("http://127.0.0.1:34567");
     expect(daemon.readEnv.RIG_SCRATCH).toBe("keep-me");
     expect(daemon.readEnv.HOME).toBe("/scratch/root/home");
   });
@@ -200,7 +200,7 @@ describe("spawnContainerDaemon — fail-closed + loud failures", () => {
   it("refuses an inherited FOREIGN daemon target before running any docker", async () => {
     const { docker, calls } = fakeDocker();
     await expect(
-      spawnContainerDaemon(fakeScaffold({ OPENRIG_URL: "http://foreign-daemon.invalid:9999" }), {
+      spawnContainerDaemon(fakeScaffold({ MULTI_AGENT_URL: "http://foreign-daemon.invalid:9999" }), {
         image: IMAGE,
         docker,
         hostPort: 1,

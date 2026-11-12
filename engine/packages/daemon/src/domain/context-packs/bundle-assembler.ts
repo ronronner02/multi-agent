@@ -83,14 +83,14 @@ export function assemblePlainFiles(opts: { files: PlainFileInput[] }): PlainFile
   };
 }
 
-const PACK_HEADER_PREFIX = "# OpenRig Context Pack:";
+const PACK_HEADER_PREFIX = "# Multi-Agent Context Pack:";
 const FILE_HEADER_PREFIX = "## File:";
 
 /**
  * Assembles a context pack into a single paste-ready string.
  *
  * Frame:
- *   # OpenRig Context Pack: <name> v<version>
+ *   # Multi-Agent Context Pack: <name> v<version>
  *   <purpose, if any>
  *
  *   ## File: <path> (role: <role>)

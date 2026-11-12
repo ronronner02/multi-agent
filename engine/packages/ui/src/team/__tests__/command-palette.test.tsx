@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInterfaceI18n } from "@openrig/i18n";
+import { createInterfaceI18n } from "@multi-agent/i18n";
 import { I18nextProvider } from "react-i18next";
 import { CommandPalette } from "../command-palette.js";
 import { task } from "./fixtures.js";

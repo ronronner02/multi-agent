@@ -1,6 +1,6 @@
 # Defect class: the one-view-state invariant (PIN-1) as a standing machine-checked
 #   assertion — ps == queue must express the SAME truth.
-# Marathon origin: the view state, `rig ps`, and `rig queue` drifted out of sync
+# Marathon origin: the view state, `multi-agent ps`, and `multi-agent queue` drifted out of sync
 #   after a burst of activity, so the surfaces told different stories of one system.
 # SEED (class: view-state-divergence): the seeded regression makes one surface
 #   lag/omit after the storm. The `equals` cross-surface leg MUST catch it

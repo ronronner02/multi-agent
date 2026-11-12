@@ -31,13 +31,13 @@ export function nonInterruptiveArg(runtime: string, choice: LaunchChoice): strin
 
 export function nonInterruptiveNotice(runtime: string, choice: LaunchChoice): string | undefined {
   if (!nonInterruptiveArgs(runtime, choice).length) return undefined;
-  return `Non-interruptive: OpenRig ${runtime === "claude-code"
+  return `Non-interruptive: Multi-Agent ${runtime === "claude-code"
     ? "accepted Claude's bypass-permissions warning"
     : "hid Codex's full-access and GPT-5.1 migration notices"} for this seat using launch flags. The saved choice applies to this rig's launches only; no warning-acceptance settings were written.`;
 }
 
 export function nonInterruptiveSummary(enabled: boolean): string {
   return enabled
-    ? "Non-interruptive mode is saved for this rig and remains in effect on later launches and restores. Only full-bypass Claude and Codex seats receive warning flags; other seats are unchanged. To clear this rig's choice, first run rig down <rig-name>, then rig up <rig-name> --existing --no-non-interruptive."
-    : "Non-interruptive mode is off for this rig's launches; OpenRig will not pass warning-acceptance flags. This does not erase warnings you previously accepted in the harness.";
+    ? "Non-interruptive mode is saved for this rig and remains in effect on later launches and restores. Only full-bypass Claude and Codex seats receive warning flags; other seats are unchanged. To clear this rig's choice, first run multi-agent down <rig-name>, then multi-agent up <rig-name> --existing --no-non-interruptive."
+    : "Non-interruptive mode is off for this rig's launches; Multi-Agent will not pass warning-acceptance flags. This does not erase warnings you previously accepted in the harness.";
 }

@@ -351,7 +351,7 @@ export class WorkflowValidator {
           if (!probe.registered) {
             issues.push({
               code: "host_not_registered",
-              message: `step "${step.id}" pins host "${step.host}" which is not in the hosts registry (~/.openrig/hosts.yaml). Registered ids: ${probe.registeredIds.length > 0 ? `[${probe.registeredIds.join(", ")}]` : "(none)"}. Register the host with rig host add, use "local", or remove the pin.`,
+              message: `step "${step.id}" pins host "${step.host}" which is not in the hosts registry (~/.multi-agent/hosts.yaml). Registered ids: ${probe.registeredIds.length > 0 ? `[${probe.registeredIds.join(", ")}]` : "(none)"}. Register the host with multi-agent host add, use "local", or remove the pin.`,
               field: `workflow.steps[${idx}].host`,
               severity: "error",
             });

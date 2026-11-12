@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { TeamTaskResult } from "@openrig/daemon/team-control";
+import type { TeamTaskResult } from "@multi-agent/daemon/team-control";
 import { useOwnerSession } from "./useOwnerSession.js";
 
 /** A finished candidate is cached by digest so rework never reuses an earlier diff. */

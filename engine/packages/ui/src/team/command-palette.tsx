@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import { Search, X } from "lucide-react";
-import type { TeamReviewView } from "@openrig/daemon/team-control";
+import type { TeamReviewView } from "@multi-agent/daemon/team-control";
 import { taskName } from "./display.js";
 
 export function CommandPalette({ open, onOpenChange, tasks, onChoose, opener }: {

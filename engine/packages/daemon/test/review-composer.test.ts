@@ -204,7 +204,7 @@ describe("FR-2 — pass-mapping + recorded verdicts", () => {
       "Closed by: OPEN — build handed to QA   Date: 2026-07-04   Verdict: PENDING",
       "",
       "- walk the claimed-PASS fixture",
-      "- rig scope audit PASS",
+      "- multi-agent scope audit PASS",
     ].join("\n");
     expect(proofClaimsPass(pending)).toBe(false);
     const r = composeSliceReview(baseInputs({ proofMd: pending }));
@@ -557,7 +557,7 @@ describe("candidate derivation", () => {
 //
 // Fixtures are TEMPLATE-DERIVED: rendered with the REAL CLI renderers
 // (dynamic-imported exactly like scope-audit-parity.test.ts does) so a
-// template drift breaks these tests honestly. A pristine `rig scope slice
+// template drift breaks these tests honestly. A pristine `multi-agent scope slice
 // create` output is the canonical intent-stage fixture.
 // ---------------------------------------------------------------------------
 

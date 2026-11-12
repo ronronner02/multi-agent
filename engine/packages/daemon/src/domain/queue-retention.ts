@@ -7,7 +7,7 @@ import { TERMINAL_QUEUE_STATES } from "./queue-repository.js";
  * Two tables, two CONTRACTS (arch D3 — never collapsed into one policy):
  *
  *  1. `queue_transitions` = an AUDIT surface with product meaning (chain of
- *     record; `rig queue resolve` decision text). Contract: ARCHIVE, never
+ *     record; `multi-agent queue resolve` decision text). Contract: ARCHIVE, never
  *     plain-delete. A terminal qitem whose LAST transition is older than the
  *     retention window is MOVED (INSERT..SELECT + DELETE in ONE txn) into the
  *     `queue_transitions_archive` sibling (migration 054) — the trail is

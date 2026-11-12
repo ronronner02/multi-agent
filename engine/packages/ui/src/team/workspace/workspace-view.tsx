@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Circle, CircleCheck, CircleX, MinusCircle } from "lucide-react";
-import type { AttemptActivity, TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamSeatView, ToolActivityRecord } from "@openrig/daemon/team-control";
+import type { AttemptActivity, TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamSeatView, ToolActivityRecord } from "@multi-agent/daemon/team-control";
 import { useAttemptActivity } from "../../hooks/useAttemptActivity.js";
 import { clockTime, namedSeat, TASK_STAGE_LABELS, taskName } from "../display.js";
 import { observedTokens } from "../hooks.js";

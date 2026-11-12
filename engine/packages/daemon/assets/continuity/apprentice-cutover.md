@@ -11,7 +11,7 @@ the named owner remains the gate.
 3. Record gate receipts G0–G3—gate, evidence, and worder—or the policy's declared simpler model.
 4. Create or identify one accountable mechanic baton. Record one-active-walker ownership and
    staged/submitted/consumed delivery boundaries.
-5. The mechanic follows `seat-continuity-and-handover/references/apprentice-successor-seat-cutover.md`:
+5. The mechanic follows `claude-compaction-restore/references/apprentice-successor-seat-cutover.md`:
    fence, derive, quiesce, realize the exact token, commit provenance, self-check READY, then
    unfreeze only after the effect receipt.
 6. Preserve the predecessor's verbatim reach-back handle and pre-formed questions. Report

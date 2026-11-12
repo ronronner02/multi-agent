@@ -44,7 +44,7 @@ function scenarioDir(): string {
     'const args = process.argv.slice(2);',
     // record the clock the pipeline actually handed the child — the caller-boundary
     // pin that catches the pipeline DROPPING the option (the false-green guard found)
-    `appendFileSync(${JSON.stringify(join(d, "clock.log"))}, String(process.env.OPENRIG_TEST_CLOCK_NOW) + "\\n");`,
+    `appendFileSync(${JSON.stringify(join(d, "clock.log"))}, String(process.env.MULTI_AGENT_TEST_CLOCK_NOW) + "\\n");`,
     'if (args[0] === "up") { process.stdout.write(JSON.stringify({ rigId: "r1", rigName: "scn-det" })); }',
     'else if (args[0] === "queue") { process.stdout.write(JSON.stringify([{ qitemId: "fixed-1", state: "pending" }])); }',
     'else { process.stdout.write("{}"); }',
@@ -90,11 +90,11 @@ async function runOnce(d: string, records: RunRecord[], file = "s.yaml") {
     // the claim is "under the injected clock" — so actually inject it
     injectClockNow: INJECTED_CLOCK,
     // Mirror the REAL spawner: readEnv derives from the scaffold the pipeline
-    // built (scenario-daemon.ts:155 = {...scaffold.env, OPENRIG_URL}). A fake
+    // built (scenario-daemon.ts:155 = {...scaffold.env, MULTI_AGENT_URL}). A fake
     // that fabricates its own env would pin the fake, not the pipeline — which
     // is how the dropped clock stayed invisible.
     daemon: (async (scaffold: { env: Record<string, string | undefined> }) => ({
-      readEnv: { ...scaffold.env, OPENRIG_URL: "http://127.0.0.1:1" },
+      readEnv: { ...scaffold.env, MULTI_AGENT_URL: "http://127.0.0.1:1" },
       baseUrl: "http://127.0.0.1:1",
       sigterm: async () => {}, restart: async () => {}, stop: async () => {},
     })) as never,
@@ -180,10 +180,10 @@ describe("D8 — the same scenario twice under the injected clock is byte-identi
     const d = scenarioDir();
     const { prepareHermeticEnv, AmbientClockHazardError } = await import("./helpers/hermetic-env.js");
     expect(() =>
-      prepareHermeticEnv({ baseEnv: { HOME: d, PATH: process.env.PATH, OPENRIG_TEST_CLOCK_NOW: INJECTED_CLOCK } }),
+      prepareHermeticEnv({ baseEnv: { HOME: d, PATH: process.env.PATH, MULTI_AGENT_TEST_CLOCK_NOW: INJECTED_CLOCK } }),
     ).toThrow(AmbientClockHazardError);
     const s = prepareHermeticEnv({ baseEnv: { HOME: d, PATH: process.env.PATH }, injectClockNow: INJECTED_CLOCK });
-    expect(s.env.OPENRIG_TEST_CLOCK_NOW).toBe(INJECTED_CLOCK);
+    expect(s.env.MULTI_AGENT_TEST_CLOCK_NOW).toBe(INJECTED_CLOCK);
     s.cleanup();
   });
 });

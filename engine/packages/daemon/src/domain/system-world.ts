@@ -2,13 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
-export const SYSTEM_WORLD_SCHEMA = "openrig.system-world/v0alpha1";
+export const SYSTEM_WORLD_SCHEMA = "multi-agent.system-world/v0alpha1";
 export const DEFAULT_SYSTEM_WORLD_SELECTION = "default";
 export const DISABLED_SYSTEM_WORLD_SELECTION = "disabled";
 export const DEFAULT_SYSTEM_WORLD_RELATIVE_PATH = "system/system-world.yaml";
 
 export const DEFAULT_SYSTEM_WORLD_MANIFEST = `schema: ${SYSTEM_WORLD_SCHEMA}
-id: openrig-default
+id: multi-agent-default
 version: "0.5.9"
 context:
   - ref: onboarding-width

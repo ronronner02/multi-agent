@@ -2,13 +2,13 @@
 //
 // The Node test suites MUST NOT inherit the seat's live-daemon connection. Two holes:
 //
-// 1. Connection-redirect env (OPENRIG_URL / OPENRIG_PORT / OPENRIG_HOST + RIGGED_*
-//    aliases) — honored as a real operator override in production, but ambient inside
+// 1. Connection-redirect env (MULTI_AGENT_URL / MULTI_AGENT_PORT / MULTI_AGENT_HOST)
+//    is honored as a real operator override in production, but ambient inside
 //    a seat it bypasses each test's injected mock daemon (up.test.ts: 29 fails ambient
 //    vs 1 hermetic). Scrubbed below. Production behavior is untouched.
 //
-// 2. The DEFAULT STATE_FILE discovery — `OPENRIG_HOME/daemon.json` (daemon-lifecycle
-//    `OPENRIG_DIR = OPENRIG_HOME`). Scrubbing the env is NOT enough: with URL/PORT
+// 2. The DEFAULT STATE_FILE discovery — `MULTI_AGENT_HOME/daemon.json` (daemon-lifecycle
+//    `MULTI_AGENT_DIR = MULTI_AGENT_HOME`). Scrubbing the env is NOT enough: with URL/PORT
 //    unset, the CLI falls back to the live daemon's state file. This is exactly how
 //    `broadcast.test.ts` emitted REAL 'System maintenance' broadcasts to 14 seats.
 //    The READ direction (results pollution) was known; the WRITE direction (emitting
@@ -17,12 +17,12 @@
 // FORCE + ASSERT (unwritable-by-omission — the guarantee lives where it cannot be
 // skipped, so a new test file inherits safety from the setup that runs first, not
 // from a runner or a per-file convention that 145/164 files already omit):
-//   FORCE  — establish a fixture-scoped OPENRIG_HOME (a fresh temp dir carrying the
-//            `.openrig-fixture` marker) BEFORE any daemon-resolving module loads and
-//            captures the eager `OPENRIG_HOME` const, so default discovery finds no
+//   FORCE  — establish a fixture-scoped MULTI_AGENT_HOME (a fresh temp dir carrying the
+//            `.multi-agent-fixture` marker) BEFORE any daemon-resolving module loads and
+//            captures the eager `MULTI_AGENT_HOME` const, so default discovery finds no
 //            live daemon.
 //   ASSERT — `assertFixtureScopedHome` throws LOUD if the home is NOT fixture-scoped
-//            (mkdtemp failure, or OPENRIG_HOME captured before this ran via an
+//            (mkdtemp failure, or MULTI_AGENT_HOME captured before this ran via an
 //            import-order regression). Forcing alone silently fixes and proves
 //            nothing; the assert makes it evidence. Its known-negative lives in
 //            live-daemon-guard.test.ts.
@@ -45,35 +45,33 @@ for (const key of [
   // Slice 01: a seat with usage windows on must not change what the suite reads.
   "PROVIDER_USAGE_WINDOWS",
 ]) {
-  delete process.env[`OPENRIG_${key}`];
-  delete process.env[`RIGGED_${key}`];
+  delete process.env[`MULTI_AGENT_${key}`];
 }
 
-// (2) FORCE a fixture-scoped home — BEFORE importing openrig-compat (whose
-// OPENRIG_HOME const is eager). Node builtins above do not load it; the dynamic
+// (2) FORCE a fixture-scoped home — BEFORE importing data-paths (whose
+// MULTI_AGENT_HOME const is eager). Node builtins above do not load it; the dynamic
 // imports below run only AFTER this assignment, so the const captures the fixture.
 // ONE stable fixture home per worker. setupFiles runs per test FILE, but
-// openrig-compat's OPENRIG_HOME const is captured ONCE per worker — a fresh per-file
+// data-paths's MULTI_AGENT_HOME const is captured ONCE per worker — a fresh per-file
 // home would diverge from that captured const (env says home N, the const holds home
 // 1), which flakes any test reading one vs the other under suite ordering. So reuse a
-// fixture home already established in this worker. Named as a realistic `.openrig`-style
+// fixture home already established in this worker. Named as a realistic `.multi-agent`-style
 // home (still fixture-scoped via the marker) so path-shape assertions hold against it.
-const existingHome = process.env["OPENRIG_HOME"];
+const existingHome = process.env["MULTI_AGENT_HOME"];
 const fixtureHome =
-  existingHome && fs.existsSync(path.join(existingHome, ".openrig-fixture"))
+  existingHome && fs.existsSync(path.join(existingHome, ".multi-agent-fixture"))
     ? existingHome
     : (() => {
-        const h = fs.mkdtempSync(path.join(os.tmpdir(), ".openrig-test-fixture-home-"));
-        fs.writeFileSync(path.join(h, ".openrig-fixture"), "");
+        const h = fs.mkdtempSync(path.join(os.tmpdir(), ".multi-agent-test-fixture-home-"));
+        fs.writeFileSync(path.join(h, ".multi-agent-fixture"), "");
         return h;
       })();
-process.env["OPENRIG_HOME"] = fixtureHome;
-delete process.env["RIGGED_HOME"];
-// Legacy ~/.rigged discovery and ordinary home-based config must also stay local
-// to this fixture. Merely changing HOME would not override OPENRIG_HOME or DB.
+process.env["MULTI_AGENT_HOME"] = fixtureHome;
+// Ordinary home-based configuration must also stay local
+// to this fixture. Merely changing HOME would not override MULTI_AGENT_HOME or DB.
 // Keep ordinary user files outside the state root, as in a real installation.
-// Otherwise file-transfer correctly rejects every ~/ path as OpenRig state.
-if (process.env["OPENRIG_E2E_REAL_CODEX"] !== "1") {
+// Otherwise file-transfer correctly rejects every ~/ path as Multi-Agent state.
+if (process.env["MULTI_AGENT_E2E_REAL_CODEX"] !== "1") {
   const userHome = `${fixtureHome}-user-home`;
   fs.mkdirSync(userHome, { recursive: true });
   process.env["HOME"] = userHome;
@@ -85,9 +83,9 @@ if (process.env["OPENRIG_E2E_REAL_CODEX"] !== "1") {
 }
 
 // (3) ASSERT — capture the resolved home + fail loud if it is not fixture-scoped.
-const { OPENRIG_HOME } = await import("../packages/cli/src/openrig-compat.js");
+const { MULTI_AGENT_HOME } = await import("@multi-agent/daemon/data-paths");
 const { assertFixtureScopedHome } = await import("../packages/cli/test/live-daemon-guard.js");
-assertFixtureScopedHome(OPENRIG_HOME);
+assertFixtureScopedHome(MULTI_AGENT_HOME);
 
 // (4) P37 REQUEST-LAYER GUARD — the universal outbound-request chokepoint. The two
 // guards above close the DISCOVERY paths (connection env, state-file home); this closes

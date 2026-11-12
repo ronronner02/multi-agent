@@ -69,8 +69,8 @@ describe("OPR.0.4.0.32 — queue list grammar revision", () => {
   });
   afterEach(() => { db.close(); });
 
-  // -- AC-2: current-rig scope covers source OR destination --
-  it("AC-2: rig scope surfaces items where rig is source OR destination", () => {
+  // -- AC-2: current-multi-agent scope covers source OR destination --
+  it("AC-2: multi-agent scope surfaces items where rig is source OR destination", () => {
     seed(db, "q-dest", { source: "seat-a@other-rig", destination: "seat-b@demo-rig", state: "pending" });
     seed(db, "q-src", { source: "seat-c@demo-rig", destination: "seat-d@other-rig", state: "in-progress" });
     seed(db, "q-unrelated", { source: "seat-e@unrelated", destination: "seat-f@unrelated", state: "pending" });

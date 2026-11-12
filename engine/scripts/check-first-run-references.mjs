@@ -4,36 +4,35 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
-import { parse as parseYaml } from "yaml";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RIGS = "packages/daemon/specs/rigs";
 const SHARED_SKILLS = "packages/daemon/specs/agents/shared/skills";
-const PLUGIN_SKILLS = "packages/daemon/assets/plugins/openrig-core/skills";
+const PLUGIN_SKILLS = "packages/daemon/assets/plugins/multi-agent-core/skills";
 // The daemon installs these into the global skill roots; skills/ at the repository
 // root carries the same skills for skills.sh.
 const GLOBAL_SKILLS = "packages/daemon/assets/skills";
 const SKILL_ROOTS = [SHARED_SKILLS, PLUGIN_SKILLS, GLOBAL_SKILLS];
 
-// These are shipped via agent startup.files, rig/member startup.files,
-// builtin-startup-files.ts and rigspec-instantiator.ts; setup prints the function
-// below, and build-package.sh ships docs/reference. Add new first-run surfaces here.
+// Check the current help, onboarding, and native-team skills against the thin CLI.
 export const SCOPE = [
-  { file: `${RIGS}/launch/kernel/agents/operator/agent/guidance/role.md`, team: "kernel" },
-  { file: `${RIGS}/launch/kernel/agents/operator/agent/startup/context.md`, team: "kernel" },
-  { file: `${RIGS}/launch/starter/guidance/lead-first-move.md`, team: "starter" },
-  { file: `${RIGS}/launch/factory/guidance/lead-first-move.md`, team: "factory" },
-  { file: `${RIGS}/launch/factory/guidance/advisor-role.md`, team: "factory" },
-  { file: "docs/reference/getting-started.md" },
-  { file: "packages/cli/src/commands/setup.ts", function: "goldenPathNextSteps" },
+  { file: "docs/reference/help.md" },
+  { file: "packages/daemon/assets/guidance/multi-agent-start.md" },
   { file: "packages/daemon/assets/onboarding/01-world-and-purpose.md" },
   { file: "packages/daemon/assets/onboarding/02-self-and-competent-action.md" },
+  ...["development-team", "orchestration-team", "review-team"].map((skill) => ({
+    file: `${SHARED_SKILLS}/pods/${skill}/SKILL.md`,
+  })),
+  ...[
+    "agent-operated-software", "agent-operated-workflows", "applying-a-permission-policy",
+    "claude-compaction-restore", "delegating-work", "messaging-the-human", "software-for-agents",
+  ].map((skill) => ({ file: `${PLUGIN_SKILLS}/${skill}/SKILL.md` })),
 ];
 
 // Not a builtin alias or an existence assertion. External bundles need their own
 // pinned-repository check; every occurrence is reported as unchecked below.
 const EXTERNAL_TEAMS = new Map([
-  ["workshop", "https://github.com/mvschwarz/openrig-world (external bundle)"],
+  ["workshop", "https://github.com/mvschwarz/multi-agent-world (external bundle)"],
 ]);
 const placeholder = (s) => /[<>$…]|\.\.\./.test(s);
 const literalName = (s) => /^[a-z][a-z0-9-]*$/.test(s);
@@ -74,11 +73,11 @@ export function references(text, { printed = false, team } = {}) {
   const spans = [...text.matchAll(/(?<!`)`([^`]+)`(?!`)/g)].map((m) => ({ value: m[1], offset: m.index + 1 }));
   for (const block of text.matchAll(/^```(?:sh|bash|zsh|shell|console)\s*\n([\s\S]*?)^```/gm)) {
     const start = block.index + block[0].indexOf("\n") + 1;
-    for (const m of block[1].matchAll(/^[ \t]*(rig\s+[^\n#]+)/gm)) spans.push({ value: m[1], offset: start + m.index + m[0].indexOf(m[1]) });
+    for (const m of block[1].matchAll(/^[ \t]*(multi-agent\s+[^\n#]+)/gm)) spans.push({ value: m[1], offset: start + m.index + m[0].indexOf(m[1]) });
   }
   if (printed) spans.push({ value: text, offset: 0 });
   for (const { value, offset } of spans) {
-    for (const m of value.matchAll(/\brig\s+(?=[a-z-])([^;`]+)/g)) {
+    for (const m of value.matchAll(/\bmulti-agent\s+(?=[a-z-])([^;`]+)/g)) {
       add("command", m[0].trim(), offset + m.index, { printed });
     }
     for (const m of value.matchAll(/\b([a-z][a-z0-9-]*@[a-z][a-z0-9-]*)\b/g)) add("seat", m[1], offset + m.index);
@@ -86,7 +85,7 @@ export function references(text, { printed = false, team } = {}) {
       // Unqualified seat names are only meaningful inside their own team's guidance.
       if (!/skill|old name/.test(text.slice(offset + value.length, offset + value.length + 30))) add("local-seat", value, offset, { team });
     }
-    for (const m of value.matchAll(/(?:^|\s)((?:packages|docs|scripts|reference|specs\/rigs|daemon\/docs|daemon\/assets|@openrig\/cli\/daemon\/assets|skills)\/[\w./-]+)(?:#[\w/-]+)?/g)) {
+    for (const m of value.matchAll(/(?:^|\s)((?:packages|docs|scripts|reference|specs\/rigs|daemon\/docs|daemon\/assets|@multi-agent\/cli\/daemon\/assets|skills)\/[\w./-]+)(?:#[\w/-]+)?/g)) {
       add("path", m[1], offset + m.index + m[0].indexOf(m[1]));
     }
     const before = text.slice(Math.max(0, offset - 85), offset - 1);
@@ -139,7 +138,7 @@ export function commandReference(value, program, { prose = false } = {}) {
   const words = tokens(value).slice(1);
   let cmd = program;
   let i = 0;
-  const verbs = ["rig"];
+  const verbs = ["multi-agent"];
   for (; i < words.length; i++) {
     const word = words[i];
     if (!cmd.commands.length) break;
@@ -169,39 +168,24 @@ export function commandReference(value, program, { prose = false } = {}) {
 
 export async function loadAuthorities(root) {
   const from = (p) => import(pathToFileURL(path.join(root, p)).href);
-  const [{ createProgram }, { resolveLibrarySpec }, { SpecLibraryService }, { SpecReviewService }] = await Promise.all([
-    from("packages/cli/src/index.ts"), from("packages/cli/src/commands/specs.ts"),
-    from("packages/daemon/src/domain/spec-library-service.ts"), from("packages/daemon/src/domain/spec-review-service.ts"),
-  ]);
-  const library = new SpecLibraryService({ roots: [{ path: path.join(root, "packages/daemon/specs"), sourceType: "builtin" }], specReviewService: new SpecReviewService() });
-  library.scan();
-  const entries = library.list({ kind: "rig" });
-  if (!entries.length) throw new Error(`empty builtin rig library: ${RIGS}`);
+  const { createProgram } = await from("packages/cli/src/index.ts");
   const skills = new Map();
   for (const dir of SKILL_ROOTS) {
+    if (!fs.existsSync(path.join(root, dir))) continue;
     for (const file of walk(path.join(root, dir)).filter((p) => p.endsWith("/SKILL.md"))) {
       skills.set(path.basename(path.dirname(file)), path.relative(root, file));
     }
   }
   if (!skills.size) throw new Error("empty shipped skill catalog");
-  const resolved = new Map();
   return {
     program: createProgram(), skills,
-    async team(name) {
-      if (!resolved.has(name)) {
-        resolved.set(name, resolveLibrarySpec({ get: async () => ({ data: entries }) }, name, { kind: "rig" }).then((entry) => {
-          const spec = parseYaml(fs.readFileSync(entry.sourcePath, "utf8"));
-          const seats = (spec.pods ?? []).flatMap((pod) => (pod.members ?? []).map((m) => `${pod.id}-${m.id}`));
-          return { seats, source: path.relative(root, entry.sourcePath) };
-        }).catch(() => null));
-      }
-      return resolved.get(name);
-    },
+    // Native teams are created from repositories; no named legacy rig template is a CLI authority.
+    async team() { return null; },
   };
 }
 
 function repositoryPath(value) {
-  return value.replace(/^@openrig\/cli\/daemon\/assets\//, "packages/daemon/assets/")
+  return value.replace(/^@multi-agent\/cli\/daemon\/assets\//, "packages/daemon/assets/")
     .replace(/^daemon\/assets\//, "packages/daemon/assets/").replace(/^daemon\/docs\//, "docs/")
     .replace(/^reference\//, "docs/reference/")
     .replace(/^specs\//, "packages/daemon/specs/");
@@ -217,7 +201,7 @@ export async function checkReferences(root, scope, authority) {
       const against = "packages/cli/src/index.ts:createProgram() command tree";
       if (result.error) return fail(against, result.error);
       const first = result.args?.[0];
-      if (["rig up", "rig specs preview", "rig specs show"].includes(result.verbs) && literalName(first ?? "")) {
+      if (["multi-agent up", "multi-agent specs preview", "multi-agent specs show"].includes(result.verbs) && literalName(first ?? "")) {
         await check({ ...ref, kind: "team", value: first });
       }
       const words = tokens(ref.value), rigOption = words.indexOf("--rig");

@@ -244,7 +244,7 @@ const STATUS_TO_BUCKET: Record<string, SliceStatus> = {
   "draft-pending-orch-ratification": "draft",
   draft: "draft",
   // VM-005 (release-0.4.7): the scaffold-template frontmatter status TOKEN —
-  // a fresh `rig scope` slice is honestly a draft, not active (it previously
+  // a fresh `multi-agent scope` slice is honestly a draft, not active (it previously
   // fell through to mapStatus's terminal default). Distinct grammar from the
   // scaffold-placeholder twin modules, which classify bracket-wrapped body
   // TEXT — a cousin of, not a home for, this frontmatter token literal.

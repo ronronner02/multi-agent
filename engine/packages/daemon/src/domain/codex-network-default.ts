@@ -1,8 +1,8 @@
-// #275 — Codex seats get network access inside OpenRig's workspace-write floor by default, with an
+// #275 — Codex seats get network access inside Multi-Agent's workspace-write floor by default, with an
 // easy opt-out. Codex itself says whether anyone opted out: before a launch on the plain
 // `-s workspace-write` floor, a one-shot `codex app-server` started with the seat's executable,
 // PATH, HOME, CODEX_HOME and cwd answers `config/read` and `configRequirements/read`, then exits on
-// stdin EOF. OpenRig adds `-c sandbox_workspace_write.network_access=true` to that one launch only
+// stdin EOF. Multi-Agent adds `-c sandbox_workspace_write.network_access=true` to that one launch only
 // when both answers positively show the plain floor, no network choice at any layer, and no
 // requirement that could restrict it. Every other outcome (deadline, RPC error, unknown shape,
 // policy or selection) adds nothing and the original launch continues, so network may stay off.
@@ -50,7 +50,7 @@ export function decideCodexNetworkDefault(configRead: unknown, requirementsRead:
   const sandboxOrigin = origins["sandbox_mode"];
   if (config.sandbox_mode !== "workspace-write" || !isRecord(sandboxOrigin) || !isRecord(sandboxOrigin.name)
     || sandboxOrigin.name.type !== "sessionFlags") {
-    return no("the effective sandbox is not OpenRig's workspace-write launch flag");
+    return no("the effective sandbox is not Multi-Agent's workspace-write launch flag");
   }
   if (config.profile != null) return no("a Codex configuration profile is selected");
   if (config.default_permissions != null) return no("a Codex permission profile is selected");
@@ -100,7 +100,7 @@ export async function codexNetworkDefaultArg(
   } catch (error) {
     result = { ...no(`the reader failed: ${firstLine(error)}`), elapsedMs: 0 };
   }
-  console.log(`[openrig] codex network default for ${session}: ${result.apply ? "applied" : `not applied (${result.reason})`}, ${result.elapsedMs} ms`);
+  console.log(`[multi-agent] codex network default for ${session}: ${result.apply ? "applied" : `not applied (${result.reason})`}, ${result.elapsedMs} ms`);
   return result.apply ? ` -c ${shellQuote(CODEX_NETWORK_DEFAULT_OVERRIDE)}` : "";
 }
 
@@ -194,7 +194,7 @@ function converse(child: ReturnType<typeof spawn>, cwd: string, deadlineMs: numb
         }
       }
     });
-    send({ id: 1, method: "initialize", params: { clientInfo: { name: "openrig_network_default", version: "1.0.0" }, capabilities: { experimentalApi: true } } });
+    send({ id: 1, method: "initialize", params: { clientInfo: { name: "multi-agent_network_default", version: "1.0.0" }, capabilities: { experimentalApi: true } } });
   });
 }
 

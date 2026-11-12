@@ -3,7 +3,7 @@ import { createProgram } from "../src/index.js";
 import type { TeamStartDeps } from "../src/commands/team.js";
 
 /**
- * U5 — `rig team chat` and `rig team approve`.
+ * U5 — `multi-agent team chat` and `multi-agent team approve`.
  *
  * The verbs are thin: the conversation, the turn and the approval are the daemon's work. What is
  * worth pinning is the contract — the owner credential, the exact paths, the control request a
@@ -25,7 +25,7 @@ async function run(argv: string[], startDeps: TeamStartDeps): Promise<{ lines: s
   try {
     const program = createProgram({ teamStartDeps: startDeps });
     program.exitOverride();
-    await program.parseAsync(["node", "rig", ...argv]);
+    await program.parseAsync(["node", "multi-agent", ...argv]);
     return { lines, code: process.exitCode };
   } catch (thrown) {
     return { lines: [...lines, (thrown as Error).message], code: process.exitCode ?? 1 };
@@ -48,7 +48,7 @@ const calls = (fetchImpl: typeof fetch) => (fetchImpl as unknown as { mock: { ca
 
 afterEach(() => { vi.restoreAllMocks(); });
 
-describe("rig team chat", () => {
+describe("multi-agent team chat", () => {
   it("sends the owner's message as one control request and reports the turn it starts", async () => {
     const fetchImpl = answering(
       { status: 200, body: { run: { entityVersion: 4 } } },
@@ -100,7 +100,7 @@ describe("rig team chat", () => {
   });
 });
 
-describe("rig team approve", () => {
+describe("multi-agent team approve", () => {
   it("posts the owner's approval and reports the run in delivery", async () => {
     const fetchImpl = answering({ status: 200, body: { run: { entityVersion: 7, phase: "planning" } } },
       { status: 200, body: { status: "accepted", value: { phase: "delivery", planRef: "plan.md" } } });

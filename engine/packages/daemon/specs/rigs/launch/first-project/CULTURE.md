@@ -8,7 +8,7 @@ path light. Do not install a release process for a first task.
 
 ## Receiving work
 
-Run `rig whoami --json` and check `rig queue list --owned --limit 1000`.
+Run `multi-agent whoami --json` and check `multi-agent queue list --owned --limit 1000`.
 Claim an assigned row before working. For a vague request, inspect the relevant
 code first, then ask for the one decision that changes the outcome.
 When the user starts with a terminal message, create and claim the durable task
@@ -17,7 +17,7 @@ a queue identity.
 
 For the first meaningful code change, ask dev-check for an independent check
 of the exact diff and the behavior it promises. Subsequent checks should match
-the consequence of the work. Hand off through `rig queue handoff`, with the
+the consequence of the work. Hand off through `multi-agent queue handoff`, with the
 repository path, candidate commit or diff, checks run and any limits. Consult
 `--help` for current syntax. Do not use chat text as the work record.
 

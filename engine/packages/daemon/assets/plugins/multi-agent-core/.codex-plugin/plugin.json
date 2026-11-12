@@ -1,0 +1,31 @@
+{
+  "name": "multi-agent-core",
+  "version": "0.1.9",
+  "description": "Native Multi-Agent team skills and worker activity hooks.",
+  "author": {
+    "name": "Mike Schwarz",
+    "url": "https://github.com/mvschwarz"
+  },
+  "homepage": "https://github.com/mvschwarz/multi-agent-plugins",
+  "repository": "github:mvschwarz/multi-agent-plugins",
+  "license": "Apache-2.0",
+  "keywords": [
+    "multi-agent",
+    "agent",
+    "team",
+    "coordination"
+  ],
+  "skills": "./skills",
+  "hooks": "./hooks/codex.json",
+  "interface": {
+    "displayName": "Multi-Agent Core",
+    "shortDescription": "Canonical Multi-Agent skills and hooks",
+    "longDescription": "Cross-runtime native-team plugin shipping coordination, continuity, and operating-discipline skills, plus activity-tracking hooks. Use as the baseline plugin for any Multi-Agent-managed agent.",
+    "developerName": "Mike Schwarz",
+    "category": "Productivity",
+    "capabilities": [
+      "Read"
+    ],
+    "websiteURL": "https://github.com/mvschwarz/multi-agent-plugins"
+  }
+}

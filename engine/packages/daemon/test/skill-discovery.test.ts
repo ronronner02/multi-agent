@@ -4,14 +4,14 @@
 //
 // Skill discovery scans 5 path classes per the effective spec
 // (status.md 2026-05-10):
-//   1. ~/.openrig/skills/                                     (per-runtime user-spec library)
+//   1. ~/.multi-agent/skills/                                     (per-runtime user-spec library)
 //   2. ~/.claude/skills/                                      (Claude-runtime user library)
 //   3. ~/.agents/skills/                                      (Codex-runtime user library)
 //   4. <cwd>/.claude/skills/<name>/ + <cwd>/.agents/skills/<name>/   (rig-bundled at cwd)
 //   5. <spec-install-dir>/skills/<name>/                      (rig-spec install dir)
 //
 // Per-runtime filtering: claude-code targets Claude paths;
-// codex targets Codex paths; ~/.openrig/skills/ is shared.
+// codex targets Codex paths; ~/.multi-agent/skills/ is shared.
 //
 // Per-skill structural validation: parse SKILL.md frontmatter; require
 // `name` + `description` fields; reject the rest as "not actually a
@@ -106,17 +106,17 @@ describe("parseSkillFrontmatter — structural validation", () => {
 
 describe("discoverSkillsForRuntime — Claude-runtime path scanning", () => {
   it("discovers a skill from ~/.claude/skills/<name>/", () => {
-    writeSkill(join(homedir, ".claude/skills/openrig-architect"), {
-      name: "openrig-architect",
+    writeSkill(join(homedir, ".claude/skills/orchestration-team"), {
+      name: "orchestration-team",
       description: "Architect rigs",
     });
     const result = discoverSkillsForRuntime(pathsFor("claude-code"));
     const ids = result.skills.map((s) => s.id);
-    expect(ids).toContain("openrig-architect");
+    expect(ids).toContain("orchestration-team");
   });
 
-  it("discovers a skill from ~/.openrig/skills/<name>/ (shared user-spec library)", () => {
-    writeSkill(join(homedir, ".openrig/skills/alignment-trace"), {
+  it("discovers a skill from ~/.multi-agent/skills/<name>/ (shared user-spec library)", () => {
+    writeSkill(join(homedir, ".multi-agent/skills/alignment-trace"), {
       name: "alignment-trace",
       description: "Trace alignment",
     });
@@ -158,13 +158,13 @@ describe("discoverSkillsForRuntime — Claude-runtime path scanning", () => {
 
 describe("discoverSkillsForRuntime — Codex-runtime path scanning", () => {
   it("discovers a skill from ~/.agents/skills/<name>/", () => {
-    writeSkill(join(homedir, ".agents/skills/openrig-architect"), {
-      name: "openrig-architect",
+    writeSkill(join(homedir, ".agents/skills/orchestration-team"), {
+      name: "orchestration-team",
       description: "Architect rigs",
     });
     const result = discoverSkillsForRuntime(pathsFor("codex"));
     const ids = result.skills.map((s) => s.id);
-    expect(ids).toContain("openrig-architect");
+    expect(ids).toContain("orchestration-team");
   });
 
   it("discovers a skill from rig-bundled <cwd>/.agents/skills/<name>/", () => {
@@ -210,19 +210,19 @@ describe("discoverSkillsForRuntime — structural rejection at scan time", () =>
 
 describe("discoverSkillsForRuntime — SkillResource shape", () => {
   it("returns each discovered skill as { id, path } with id from frontmatter and path pointing at the skill directory", () => {
-    writeSkill(join(homedir, ".claude/skills/openrig-architect"), {
-      name: "openrig-architect",
+    writeSkill(join(homedir, ".claude/skills/orchestration-team"), {
+      name: "orchestration-team",
       description: "Architect rigs",
     });
     const result = discoverSkillsForRuntime(pathsFor("claude-code"));
-    const found = result.skills.find((s) => s.id === "openrig-architect");
+    const found = result.skills.find((s) => s.id === "orchestration-team");
     expect(found).toBeDefined();
-    expect(found!.path).toBe(join(homedir, ".claude/skills/openrig-architect"));
+    expect(found!.path).toBe(join(homedir, ".claude/skills/orchestration-team"));
   });
 
   it("is robust to missing top-level scan directories (returns an empty list, not a throw)", () => {
     // homedir + cwd + specInstallDir all exist but the .claude/skills /
-    // .agents/skills / .openrig/skills / skills subdirs don't.
+    // .agents/skills / .multi-agent/skills / skills subdirs don't.
     const result = discoverSkillsForRuntime(pathsFor("claude-code"));
     expect(result.skills).toEqual([]);
     expect(result.rejected).toEqual([]);

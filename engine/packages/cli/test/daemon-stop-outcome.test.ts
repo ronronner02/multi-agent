@@ -13,7 +13,7 @@ function fixture(opts: { survives?: boolean; unknownProbe?: boolean; receipt?: s
     exists: (p: string) => p === STATE_FILE && !removed,
     readFile: (p: string) => p === STATE_FILE ? (removed ? null : JSON.stringify(state))
       : p === path.join(path.dirname(STATE_FILE), "daemon-shutdown.json") ? opts.receipt !== undefined ? opts.receipt : JSON.stringify({
-        schema: "openrig.daemon-shutdown/v1", pid: 987, startedAt: new Date().toISOString(),
+        schema: "multi-agent.daemon-shutdown/v1", pid: 987, startedAt: new Date().toISOString(),
         completedAt: new Date().toISOString(), outcome: "clean", phase: "complete", failures: [],
       }) : null,
     removeFile: () => { removed = true; },
@@ -32,7 +32,7 @@ async function stop(deps: LifecycleDeps) {
   process.exitCode = undefined;
   const out = vi.spyOn(console, "log").mockImplementation(() => {}).mockClear();
   const err = vi.spyOn(console, "error").mockImplementation(() => {}).mockClear();
-  const p = new Command().addCommand(daemonCommand(deps)).parseAsync(["node", "rig", "daemon", "stop"]);
+  const p = new Command().addCommand(daemonCommand(deps)).parseAsync(["node", "multi-agent", "daemon", "stop"]);
   await vi.runAllTimersAsync(); await p;
   return { out: out.mock.calls.flat().join(" "), err: err.mock.calls.flat().join(" "), code: process.exitCode };
 }
@@ -54,13 +54,13 @@ it("an unavailable final probe cannot certify shutdown", async () => {
 });
 it.each(["failed", "timed-out"])("a %s drain is not success even after process and listener exit", async (outcome) => {
   vi.useFakeTimers(); const now = new Date().toISOString();
-  const result = await stop(fixture({ receipt: JSON.stringify({ schema: "openrig.daemon-shutdown/v1", pid: 987,
+  const result = await stop(fixture({ receipt: JSON.stringify({ schema: "multi-agent.daemon-shutdown/v1", pid: 987,
     startedAt: now, completedAt: now, outcome, phase: "watchdog", failures: [{ phase: "watchdog", error: "incomplete" }] }) }));
   expect(result.code).toBe(1); expect(result.err).toContain(outcome); expect(result.err).toContain("phase=watchdog");
 });
 it.each([null, { pid: 123 }, { pid: 987, startedAt: "2020-01-01T00:00:00Z" }])("rejects absent, mismatched or stale completion evidence: %s", async (override) => {
   vi.useFakeTimers(); const now = new Date().toISOString();
-  const receipt = override === null ? null : { schema: "openrig.daemon-shutdown/v1", pid: 987,
+  const receipt = override === null ? null : { schema: "multi-agent.daemon-shutdown/v1", pid: 987,
     startedAt: now, completedAt: now, outcome: "clean", phase: "complete", failures: [], ...override };
   const result = await stop(fixture({ receipt: JSON.stringify(receipt) }));
   expect(result.code).toBe(1); expect(result.err).toMatch(/unverified.*receipt/i);
@@ -68,7 +68,7 @@ it.each([null, { pid: 123 }, { pid: 987, startedAt: "2020-01-01T00:00:00Z" }])("
 
 it.each(["failed", "timed-out"])("retains an already-exited %s outcome and identity on repeated stop", async outcome => {
   vi.useFakeTimers(); const now = new Date().toISOString();
-  const deps = fixture({ exited: true, receipt: JSON.stringify({ schema: "openrig.daemon-shutdown/v1", pid: 987,
+  const deps = fixture({ exited: true, receipt: JSON.stringify({ schema: "multi-agent.daemon-shutdown/v1", pid: 987,
     startedAt: now, completedAt: now, outcome, phase: "health-diagnosis", failures: [{ phase: "health-diagnosis", error: "incomplete" }] }) });
   for (let i = 0; i < 2; i++) {
     const result = await stop(deps);
@@ -87,7 +87,7 @@ it("a missing receipt stays unverified across status and retry without another s
   expect(deps.kill).toHaveBeenCalledTimes(1);
 });
 it("clean completion permits a truthful no-target repeat", async () => {
-  vi.useFakeTimers(); vi.stubEnv("OPENRIG_URL", "http://127.0.0.1:17433");
+  vi.useFakeTimers(); vi.stubEnv("MULTI_AGENT_URL", "http://127.0.0.1:17433");
   const deps = fixture(); const first = await stop(deps);
   expect(first.code).not.toBe(1); expect(first.out).toContain("Daemon stopped");
   expect(deps.exists(STATE_FILE)).toBe(false);
@@ -96,21 +96,21 @@ it("clean completion permits a truthful no-target repeat", async () => {
   expect(deps.kill).toHaveBeenCalledTimes(1);
 });
 it("no recorded target or receipt is a useful no-op, not clean-drain certification", async () => {
-  vi.useFakeTimers(); vi.stubEnv("OPENRIG_URL", "http://127.0.0.1:17433");
+  vi.useFakeTimers(); vi.stubEnv("MULTI_AGENT_URL", "http://127.0.0.1:17433");
   const deps = fixture({ noState: true, exited: true, receipt: null });
   const result = await stop(deps);
   expect(result.code).not.toBe(1); expect(result.out).toContain("No daemon target recorded");
   expect(result.out).toContain("prior drain not certified"); expect(deps.kill).not.toHaveBeenCalled();
 });
 it.each(["malformed", JSON.stringify({ outcome: "failed", pid: 123 })])("no-state does not silently discard unbound incomplete evidence: %s", async receipt => {
-  vi.useFakeTimers(); vi.stubEnv("OPENRIG_URL", "http://127.0.0.1:17433");
+  vi.useFakeTimers(); vi.stubEnv("MULTI_AGENT_URL", "http://127.0.0.1:17433");
   const deps = fixture({ noState: true, exited: true, receipt }); const result = await stop(deps);
   expect(result.code).toBe(1); expect(result.err).toContain("unverified");
   expect(result.err).toContain("cannot attribute"); expect(deps.kill).not.toHaveBeenCalled();
 });
 it.each([{pid: 123}, {startedAt: "2020-01-01T00:00:00Z"}])("an exited target cannot borrow unrelated clean evidence: %s", async override => {
   vi.useFakeTimers(); const now = new Date().toISOString();
-  const deps = fixture({ exited: true, receipt: JSON.stringify({ schema: "openrig.daemon-shutdown/v1", pid: 987,
+  const deps = fixture({ exited: true, receipt: JSON.stringify({ schema: "multi-agent.daemon-shutdown/v1", pid: 987,
     startedAt: now, completedAt: now, outcome: "clean", phase: "complete", failures: [], ...override }) });
   const result = await stop(deps); expect(result.code).toBe(1); expect(result.err).toContain("unverified");
   expect(deps.exists(STATE_FILE)).toBe(true); expect(deps.kill).not.toHaveBeenCalled();
@@ -132,7 +132,7 @@ it.each(["stop", "status"])("%s cannot remove a concurrently rebound state file"
 });
 
 it("an unreadable target file is not a never-recorded no-target control", async () => {
-  vi.useFakeTimers(); vi.stubEnv("OPENRIG_URL", "http://127.0.0.1:17433");
+  vi.useFakeTimers(); vi.stubEnv("MULTI_AGENT_URL", "http://127.0.0.1:17433");
   const deps = fixture({ exited: true, receipt: null }); const read = deps.readFile;
   deps.readFile = p => p === STATE_FILE ? "{malformed" : read(p);
   const result = await stop(deps);

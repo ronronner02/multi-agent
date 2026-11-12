@@ -94,7 +94,7 @@ export type PrecheckInput = PrecheckBase &
 export function precheckSwitch(input: PrecheckInput): PrecheckResult {
   const reasons: PrecheckReason[] = [];
 
-  // rig auth is codex-only at the current switch substrate → a claude target can't be rebound.
+  // multi-agent auth is codex-only at the current switch substrate → a claude target can't be rebound.
   if (input.targetProvider === "claude") reasons.push("rebind_unsupported_for_runtime");
 
   // Validate-at-use: only a confirmed-active target is safe. needs_reauth and unknown each fail

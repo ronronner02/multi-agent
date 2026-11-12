@@ -1,26 +1,25 @@
-# OpenRig Skills
+# Multi-Agent Skills
 
 This folder is the **publicly-visible mirror** of the canonical skills that
-ship with OpenRig — the set of progressive-disclosure context manifests
-that OpenRig agents load on demand to do their work well.
+ship with Multi-Agent — the set of progressive-disclosure context manifests
+that Multi-Agent agents load on demand to do their work well.
 
 The skills are **mirrored** from the daemon's bundled-skills folder at
 `packages/daemon/specs/agents/shared/skills/` into `_canonical/` here, so
-that anyone reading the openrig repo can find the skills at the repo root
+that anyone reading the multi-agent repo can find the skills at the repo root
 without spelunking through `packages/daemon/specs/`.
 
 ## What you'll find
 
 | Path | Contents |
 |---|---|
-| `_canonical/` | The mirrored skills, organized by category (`core/`, `pm/`, `pods/`, `process/`) plus a few uncategorized at the root. Do not edit files here directly — see "Authoring" below. |
-| `rigs/` | The `rigs` skill: a route into OpenRig for an ordinary Claude Code or Codex session. It isn't mirrored; see "Using these skills". |
+| `_canonical/` | The 17 mirrored skills, organized under `pm/`, `pods/`, and `process/`. Do not edit files here directly — see "Authoring" below. |
 | `CHANGELOG.md` | Append-only log of skill changes per curation cycle close. Hand-authored. |
 | `LICENSE` | Apache-2.0, matching the parent project. |
 
 ## What a skill is
 
-A skill in OpenRig is a **primitive for progressive-disclosure context
+A skill in Multi-Agent is a **primitive for progressive-disclosure context
 injection**, not a unit of capability in the dictionary sense. Frontmatter
 sits in the agent's hot tier (cheap pattern-matching against the trigger
 description); body loads on activation; references in the folder load on
@@ -28,47 +27,35 @@ demand. Read a few `_canonical/*/SKILL.md` files to see the shape — the
 frontmatter `description` is the trigger, and the body is what the agent
 loads when the trigger matches.
 
-OpenRig agents discover skills automatically; you generally don't invoke a
+Multi-Agent agents discover skills automatically; you generally don't invoke a
 skill explicitly. Authoring a skill is about naming a recurring need with
 a precise enough trigger that the agent reaches for it at the right moment.
 
 ## Using these skills
 
-If you're running OpenRig (`npm install -g @openrig/cli` or via tarball),
-these skills ship in the package, and each seat gets the ones its profile
-selects. You don't have to do anything.
+If you're running Multi-Agent (`npm install -g @multi-agent/cli` or via tarball),
+these skills ship in the package and the daemon projects the selected native-team
+skills into the worker runtime. The owner-facing command surface is the
+`multi-agent team`, `multi-agent daemon`, and `multi-agent github` command groups; agents should
+load the skill that matches the current team task and use the team-control surface
+for coordination.
 
-The `rigs` skill is the exception: it's for a Claude Code or Codex session
-that isn't part of a team yet, so no seat's profile selects it. Add it with
-`npx skills add mvschwarz/openrig --skill rigs`. Once OpenRig is installed, its
-daemon also installs `rigs` into `~/.claude/skills` and `~/.agents/skills`, and
-refreshes it on each upgrade. A copy you added with skills.sh stays as it is.
-The package carries `rigs` at `packages/daemon/assets/skills/rigs`, kept
-identical to `skills/rigs` by a test; edit `skills/rigs` and copy it there.
-
-If you're reading this folder for reference (without OpenRig installed),
+If you're reading this folder for reference (without Multi-Agent installed),
 the SKILL.md files are pure markdown with YAML frontmatter; they're
 human-readable and self-describing. Each `description` field in the
 frontmatter says when to reach for the skill.
 
 ## Authoring
 
-Skills live in two places during their lifecycle:
-
-1. **Substrate factory** at `substrate/shared-docs/openrig-work/skills/`
-   — where new skills are authored, audited, and refined through curation
-   cycles. Includes `feedback.md` per skill (curation bookkeeping) and
-   `evals/` per skill (eval-pilot infrastructure). This is the source of
-   truth for the skill team's ongoing work.
-
-2. **Product source** at `packages/daemon/specs/agents/shared/skills/`
-   — the subset of skills that ship with the daemon. Once a skill graduates
-   to product source, that's what gets bundled into the npm package.
+The categorized product source is `packages/daemon/specs/agents/shared/skills/`.
+The seven plugin-only skills and their helpers are authored separately under
+`packages/daemon/assets/plugins/multi-agent-core/skills/`, beside the plugin manifests.
 
 `<repo-root>/skills/_canonical/` (this folder's `_canonical/`) is mirrored
 **from** product source via `npm run mirror-skills`. The mirror is
 strictly a copy — never edit `_canonical/` directly; edits in product
-source must be propagated by re-running the mirror script before commit.
+source must be propagated by re-running the mirror script. Plugin-only files are
+checked against their recorded edge digests without replacing their source tree.
 
 ## Drift detection
 

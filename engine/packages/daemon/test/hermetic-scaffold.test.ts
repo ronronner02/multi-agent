@@ -9,7 +9,7 @@ import {
 } from "./helpers/hermetic-env.js";
 
 // Slice 51-02 — the hermetic scaffold layer on top of the fail-closed guard.
-// prepareHermeticEnv() builds a per-run scratch HOME/OPENRIG_HOME scaffold and a
+// prepareHermeticEnv() builds a per-run scratch HOME/MULTI_AGENT_HOME scaffold and a
 // CLEAN child-process env (scrubbed daemon-target vars + scratch paths), WITHOUT
 // mutating the runner process's own environment. It fails closed FIRST (a foreign
 // daemon target aborts before any scaffold is created).
@@ -27,18 +27,18 @@ describe("prepareHermeticEnv scaffold", () => {
   it("fails closed BEFORE creating any scaffold when a foreign daemon target is present", () => {
     let thrown: unknown;
     try {
-      prepareHermeticEnv({ baseEnv: { OPENRIG_URL: "http://foreign:9999", HOME: "/real" } });
+      prepareHermeticEnv({ baseEnv: { MULTI_AGENT_URL: "http://foreign:9999", HOME: "/real" } });
     } catch (e) {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(HermeticEnvError);
-    expect((thrown as Error).message).toContain("OPENRIG_URL");
+    expect((thrown as Error).message).toContain("MULTI_AGENT_URL");
   });
 
-  it("creates an isolated scratch scaffold (root + home + openrigHome + stateDir all exist under root)", () => {
+  it("creates an isolated scratch scaffold (root + home + multiAgentHome + stateDir all exist under root)", () => {
     const s = make({ HOME: "/real-home", PATH: "/usr/bin" });
     expect(existsSync(s.root)).toBe(true);
-    for (const dir of [s.home, s.openrigHome, s.stateDir]) {
+    for (const dir of [s.home, s.multiAgentHome, s.stateDir]) {
       expect(existsSync(dir)).toBe(true);
       expect(statSync(dir).isDirectory()).toBe(true);
       expect(dir.startsWith(s.root)).toBe(true);
@@ -49,19 +49,18 @@ describe("prepareHermeticEnv scaffold", () => {
     const base = {
       HOME: "/real-home",
       PATH: "/usr/bin",
-      OPENRIG_URL: undefined, // absent -> fine
-      OPENRIG_AUTH_BEARER_TOKEN: "secret",
+      MULTI_AGENT_URL: undefined, // absent -> fine
+      MULTI_AGENT_AUTH_BEARER_TOKEN: "secret",
     };
     const s = make(base);
     for (const v of DAEMON_TARGET_ENV_VARS) {
       expect(s.env[v]).toBeUndefined();
     }
     // credential also scrubbed
-    expect(s.env.OPENRIG_AUTH_BEARER_TOKEN).toBeUndefined();
+    expect(s.env.MULTI_AGENT_AUTH_BEARER_TOKEN).toBeUndefined();
     // scratch paths point INTO the scaffold
     expect(s.env.HOME).toBe(s.home);
-    expect(s.env.OPENRIG_HOME).toBe(s.openrigHome);
-    expect(s.env.OPENRIG_NO_KERNEL).toBe("1");
+    expect(s.env.MULTI_AGENT_HOME).toBe(s.multiAgentHome);
     // The private tmux wrapper wins command resolution; the caller's PATH is
     // preserved after it so every non-tmux executable resolves as before.
     expect(s.env.PATH).toBe(`${join(s.root, "bin")}${delimiter}/usr/bin`);
@@ -70,18 +69,12 @@ describe("prepareHermeticEnv scaffold", () => {
   it("does NOT mutate the caller's env object nor process.env", () => {
     const base: Record<string, string | undefined> = { HOME: "/real-home", PATH: "/usr/bin" };
     const beforeHome = process.env.HOME;
-    // Capture BEFORE — the invariant is "process.env is UNCHANGED", not an absolute value. A bare
-    // `not.toBe("1")` was env-SENSITIVE: it false-fails when the ambient seat env already carries
-    // OPENRIG_NO_KERNEL="1" (the scaffold copies baseEnv via {...baseEnv} and never touches process.env;
-    // the old assertion assumed a clean ambient env — the very env-sensitivity this scaffold exists to cure).
-    const beforeNoKernel = process.env.OPENRIG_NO_KERNEL;
     const s = make(base);
     // caller's base object untouched
     expect(base.HOME).toBe("/real-home");
-    expect(base.OPENRIG_HOME).toBeUndefined();
+    expect(base.MULTI_AGENT_HOME).toBeUndefined();
     // process.env untouched (compared to its OWN before-value → insensitive to the ambient env)
     expect(process.env.HOME).toBe(beforeHome);
-    expect(process.env.OPENRIG_NO_KERNEL).toBe(beforeNoKernel);
     // the scaffold's env is a distinct object
     expect(s.env).not.toBe(base);
   });
@@ -96,7 +89,7 @@ describe("prepareHermeticEnv scaffold", () => {
 
   it("the scratch child env is itself hermetic (no foreign target survives)", () => {
     // The clean env must pass its own fail-closed guard — proving the scrub is complete.
-    const s = make({ OPENRIG_HOST: undefined, HOME: "/real", RIGGED_URL: undefined });
+    const s = make({ MULTI_AGENT_HOST: undefined, HOME: "/real", });
     expect(() => {
       // re-run the guard over the produced env
       for (const v of DAEMON_TARGET_ENV_VARS) {

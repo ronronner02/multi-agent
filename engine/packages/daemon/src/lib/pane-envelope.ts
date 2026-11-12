@@ -1,7 +1,7 @@
 // V0.3.1 slice 23 founder-walk-queue-handoff-envelope.
 //
 // Daemon-side renderer for the email-style envelope the recipient's
-// tmux pane shows when a peer sends them a message (`rig send`) or
+// tmux pane shows when a peer sends them a message (`multi-agent send`) or
 // when a queue handoff/create nudges them. Wrapping the body with
 // From / To / --- / body / --- / ↩ Reply gives both a sender
 // identity and a copy-pasteable reply hint.
@@ -15,7 +15,7 @@
 //   2. `packages/daemon/test/pane-envelope.test.ts` mirroring the
 //      assertions in `packages/cli/test/send-header.test.ts`
 //   3. Live integration parity (HG-5): a queue handoff nudge and a
-//      rig send to the same destination render byte-identical
+//      multi-agent send to the same destination render byte-identical
 //      output except for the body content
 // If you update this function, update wrapSendBody in lockstep.
 
@@ -115,7 +115,7 @@ export function wrapPaneEnvelope(
     header.push(`Sent: ${renderShortStamp(meta.stampISO)}${genSuffix}`);
   }
   const reply = senderLabel.endsWith("@external")
-    ? `↩ Reply if needed: rig queue create --destination ${senderLabel} --body "..." --verify`
-    : `↩ Reply: rig send ${senderLabel} "..."`;
+    ? `↩ Reply if needed: multi-agent queue create --destination ${senderLabel} --body "..." --verify`
+    : `↩ Reply: multi-agent send ${senderLabel} "..."`;
   return [...header, "---", body, "---", reply].join("\n");
 }

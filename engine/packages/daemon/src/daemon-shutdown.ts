@@ -5,7 +5,7 @@ export const DAEMON_STOP_WAIT_MS = DAEMON_SHUTDOWN_TIMEOUT_MS + 2_000;
 export const DAEMON_HTTP_CONNECTION_GRACE_MS = 250;
 export const DAEMON_SHUTDOWN_RECEIPT = "daemon-shutdown.json";
 export interface DaemonShutdownReceipt {
-  schema: "openrig.daemon-shutdown/v1";
+  schema: "multi-agent.daemon-shutdown/v1";
   pid: number;
   startedAt: string;
   completedAt: string;
@@ -132,7 +132,7 @@ export function createDaemonShutdown(options: {
       clearTimeout(timer);
       let code = outcome === "clean" ? 0 : 1;
       const receipt: DaemonShutdownReceipt = {
-        schema: "openrig.daemon-shutdown/v1", pid: process.pid, startedAt,
+        schema: "multi-agent.daemon-shutdown/v1", pid: process.pid, startedAt,
         completedAt: new Date().toISOString(), outcome,
         phase: outcome === "clean" ? "complete" : phase, failures,
       };
@@ -152,7 +152,7 @@ export function createDaemonShutdown(options: {
       fail(`whole-shutdown budget exhausted (${timeoutMs}ms); pending effects are unverified`);
       finish("timed-out");
     }, timeoutMs);
-    log(`OpenRig daemon received ${signal}; shutting down (budget ${timeoutMs}ms)`);
+    log(`Multi-Agent daemon received ${signal}; shutting down (budget ${timeoutMs}ms)`);
     void (async () => {
       for (const [name, run] of options.phases) {
         if (finished) return;

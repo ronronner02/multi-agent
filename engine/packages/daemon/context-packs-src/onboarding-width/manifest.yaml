@@ -6,7 +6,7 @@ purpose: "The public capability map and source map referenced by the default onb
 files:
   - path: public-what-you-can-do.md
     role: reference
-    summary: "The public OpenRig capability map."
+    summary: "The public Multi-Agent capability map."
   - path: public-reference-material.md
     role: reference
     summary: "The public source map and trust guidance."

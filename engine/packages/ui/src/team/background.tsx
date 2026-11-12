@@ -5,8 +5,8 @@ const ASSET = "/skins/shuimo-danqing/shuimo-danqing";
 // Seek to the revealed portrait keyframe, avoiding a decode from the entrance on every loop.
 const PORTRAIT_START = 250 / 24;
 const PORTRAIT_END = 23;
-const ENTRANCE_KEY = "openrig.shuimoDanqingEntered";
-export const BACKGROUND_MOTION_KEY = "openrig.teamBackgroundMotion";
+const ENTRANCE_KEY = "multi-agent.shuimoDanqingEntered";
+export const BACKGROUND_MOTION_KEY = "multi-agent.teamBackgroundMotion";
 
 export function useBackgroundPreference() {
   const [motion, setMotion] = useState(() => {

@@ -1,7 +1,7 @@
 /**
  * U4 / R5 — a seat is the durable role identity; the process is a replaceable occupant.
  *
- * OpenRig's seat identity and occupant truth pattern (Apache-2.0) is the idea, and this
+ * Multi-Agent's seat identity and occupant truth pattern (Apache-2.0) is the idea, and this
  * module is our own implementation. Keep it thin: the resident process is `resolved`,
  * a seat with no process is `none`, and an unobservable state is `ambiguous`. Never guess.
  *

@@ -17,7 +17,7 @@ import { buildExecutionView, type ExecutionViewDeps } from "./execution-view.js"
  * - Sub-100 ms latency target (per PRD § Acceptance Criteria); achieved by
  *   leaning on Phase A's existing indexes.
  * - Fixture rig exclusion default: rig names matching `^test-` or `^fixture-`
- *   are excluded; opt-in via OPENRIG_VIEW_INCLUDE_FIXTURES=1.
+ *   are excluded; opt-in via MULTI_AGENT_VIEW_INCLUDE_FIXTURES=1.
  *
  * Custom views in views_custom store a SQL string (`definition`) that the
  * projector executes verbatim. Operator-defined; no taxonomy enforced.
@@ -88,10 +88,10 @@ export class ViewProjectorError extends Error {
 /**
  * Detect fixture rigs by session name suffix `@<rig>` where <rig> starts
  * with `test-` or `fixture-`. Used to filter views by default; opt-in via
- * OPENRIG_VIEW_INCLUDE_FIXTURES=1.
+ * MULTI_AGENT_VIEW_INCLUDE_FIXTURES=1.
  */
 function fixtureExclusionClause(): string {
-  if (process.env.OPENRIG_VIEW_INCLUDE_FIXTURES === "1") return "1=1";
+  if (process.env.MULTI_AGENT_VIEW_INCLUDE_FIXTURES === "1") return "1=1";
   // Exclude qitems whose source_session OR destination_session has a rig
   // name starting with test- or fixture-.
   return `(

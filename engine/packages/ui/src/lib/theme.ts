@@ -13,7 +13,7 @@
 // <html> before first paint (no flash-of-wrong-theme).
 
 /** localStorage key. Shared verbatim with the index.html pre-paint script. */
-export const THEME_STORAGE_KEY = "openrig.theme";
+export const THEME_STORAGE_KEY = "multi-agent.theme";
 
 /** The dashboard-scoped OS color-scheme query used by `system`. */
 export const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)";

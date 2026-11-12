@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
-import type { MessageKey } from "@openrig/i18n";
+import type { MessageKey } from "@multi-agent/i18n";
 import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { FolderBrowser } from "./folder-browser.js";
 import { latestRunFor, teamsKey, type TeamSummary, type RunSummary } from "./hooks.js";

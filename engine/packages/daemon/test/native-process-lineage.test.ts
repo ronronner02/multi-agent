@@ -9,7 +9,7 @@ const startedAt = "Sat Jan  1 12:00:00 2000";
 function rows(): NativeProcessRow[] {
   return [
     { pid: 10, ppid: 1, pgid: 10, tpgid: 11, executableName: "zsh", command: "-zsh", startedAt },
-    { pid: 11, ppid: 10, pgid: 11, tpgid: 11, executableName: "bash", command: "/bin/sh /tmp/openrig-tmux-send.txt", startedAt },
+    { pid: 11, ppid: 10, pgid: 11, tpgid: 11, executableName: "bash", command: "/bin/sh /tmp/multi-agent-tmux-send.txt", startedAt },
     { pid: 12, ppid: 11, pgid: 11, tpgid: 11, executableName: "node", command: `node /opt/bin/codex resume ${token}`, startedAt },
     { pid: 13, ppid: 12, pgid: 11, tpgid: 11, executableName: "codex", command: `/opt/native/codex -p resume resume --add-dir /tmp/state ${token}`, startedAt },
   ];
@@ -199,9 +199,9 @@ describe("Claude identity with inline settings in ps output", () => {
     expect(await verifyClaudePaneProcess({ ...input(args), expectedToken: "different" })).toBeNull();
   });
   it.each([
-    `--remote-control orch.lead@rig --session-id ${token}`,
+    `--remote-control orch.lead@multi-agent --session-id ${token}`,
     `--session-id ${token} --remote-control orch.lead@rig`,
-    `--remote-control=orch.lead@rig --resume ${token}`,
+    `--remote-control=orch.lead@multi-agent --resume ${token}`,
   ])("proves the exact Claude identity with the launch-only Remote Control option: %s", async args => {
     const actual = input(args);
     expect((await verifyClaudePaneProcess(actual))?.process.pid).toBe(21);
@@ -287,7 +287,7 @@ describe("observeClaudeDelivery's idle-shell policy: delivery versus launch", ()
 describe("Codex behind a spawning launcher", () => {
   const launcherRows = (launcher = "", middle = "", native = ""): NativeProcessRow[] => [
     { pid: 10, ppid: 1, pgid: 10, tpgid: 11, executableName: "zsh", command: "-zsh", startedAt },
-    { pid: 11, ppid: 10, pgid: 11, tpgid: 11, executableName: "sh", command: "sh /tmp/openrig-tmux-send.txt", startedAt },
+    { pid: 11, ppid: 10, pgid: 11, tpgid: 11, executableName: "sh", command: "sh /tmp/multi-agent-tmux-send.txt", startedAt },
     { pid: 12, ppid: 11, pgid: 11, tpgid: 11, executableName: "codex", command: `codex ${launcher}--no-daemon -s workspace-write -c check_for_update_on_startup=false`, startedAt },
     { pid: 13, ppid: 12, pgid: 11, tpgid: 11, executableName: "codex", command: `codex ${middle}--no-daemon -s workspace-write`, startedAt },
     { pid: 14, ppid: 13, pgid: 11, tpgid: 11, executableName: "codex", command: `codex ${native}-c model_provider=local`, startedAt },

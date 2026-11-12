@@ -1,3 +1,4 @@
+import { resolveDataRoots } from "../data-paths.js";
 // V0.3.0 daemon-skill-discovery — filesystem skill scan + structural
 // validation. Closes the gap where profile-resolver only saw skills
 // declared in `agent.yaml`'s `resources.skills` + imports, not skills
@@ -30,7 +31,7 @@ export interface SkillDiscoveryPaths {
    *  rig was installed in-place and no separate install-dir applies. */
   specInstallDir?: string;
   /** Config-resolved managed catalog root. Defaults to the legacy
-   *  <homedir>/.openrig/skills path when omitted for compatibility. */
+   *  <homedir>/.multi-agent/skills path when omitted for compatibility. */
   skillsRoot?: string;
 }
 
@@ -187,7 +188,7 @@ export function discoverSkillsForRuntime(paths: SkillDiscoveryPaths): SkillDisco
  *  Earlier entries win on collision (most-specific-wins): rig-bundled
  *  at cwd > spec-install-dir > user libraries. Within user libraries,
  *  the runtime-specific dir is preferred over the shared
- *  ~/.openrig/skills/ pool so an operator who explicitly installed a
+ *  ~/.multi-agent/skills/ pool so an operator who explicitly installed a
  *  Claude-only or Codex-only version takes precedence over the
  *  cross-runtime one. */
 function listScanRoots(paths: SkillDiscoveryPaths): string[] {
@@ -202,7 +203,7 @@ function listScanRoots(paths: SkillDiscoveryPaths): string[] {
   roots.push(join(cwd, runtimeDir, "skills"));
 
   // 2. Spec-install-dir bundled (bundled-with-rig but installed at a
-  // separate path; e.g., from `rig up <bundle>` extraction).
+  // separate path; e.g., from `multi-agent up <bundle>` extraction).
   if (specInstallDir) roots.push(join(specInstallDir, "skills"));
 
   // 3. Runtime-specific user library (Claude-only or Codex-only
@@ -210,8 +211,8 @@ function listScanRoots(paths: SkillDiscoveryPaths): string[] {
   roots.push(join(homedir, runtimeDir, "skills"));
 
   // 4. Shared user-spec library (cross-runtime operator install via
-  // `rig specs add`).
-  roots.push(paths.skillsRoot ?? join(homedir, ".openrig", "skills"));
+  // `multi-agent specs add`).
+  roots.push(paths.skillsRoot ?? join(resolveDataRoots({ home: homedir, env: paths.homedir ? {} : process.env }).state, "skills"));
 
   return roots;
 }

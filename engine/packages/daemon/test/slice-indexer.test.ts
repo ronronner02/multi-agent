@@ -244,13 +244,13 @@ describe("PL-slice-story-view-v0 SliceIndexer", () => {
   describe("workflow_spec frontmatter", () => {
     it("parses workflow_spec: <name>@<version> from frontmatter onto SliceRecord + SliceListEntry", () => {
       writeSlice(slicesRoot, "topo-slice", {
-        "README.md": "---\nstatus: active\nworkflow_spec: openrig-velocity@1.0\n---\n# Topo\n",
+        "README.md": "---\nstatus: active\nworkflow_spec: multi-agent-velocity@1.0\n---\n# Topo\n",
       });
       const indexer = new SliceIndexer({ slicesRoot, dogfoodEvidenceRoot: null, db });
       const list = indexer.list();
-      expect(list[0]!.workflowSpec).toEqual({ name: "openrig-velocity", version: "1.0" });
+      expect(list[0]!.workflowSpec).toEqual({ name: "multi-agent-velocity", version: "1.0" });
       const record = indexer.get("topo-slice")!;
-      expect(record.workflowSpec).toEqual({ name: "openrig-velocity", version: "1.0" });
+      expect(record.workflowSpec).toEqual({ name: "multi-agent-velocity", version: "1.0" });
     });
 
     it("returns workflowSpec: null when the frontmatter field is absent", () => {

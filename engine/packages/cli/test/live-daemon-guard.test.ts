@@ -1,7 +1,7 @@
 // Hermeticity guard — WRITE-direction sibling of the gate's hermetic checker.
 // A cli TEST process must not be able to reach the LIVE daemon by default STATE_FILE
-// discovery; an unscoped WRITE (e.g. `rig broadcast`) would then leak into the live
-// topology. The guard fails LOUD when the resolved OpenRig home is not fixture-scoped.
+// discovery; an unscoped WRITE (e.g. `multi-agent broadcast`) would then leak into the live
+// topology. The guard fails LOUD when the resolved Multi-Agent home is not fixture-scoped.
 //
 // This is the KNOWN-NEGATIVE: a check that can only pass is not a check — so we prove
 // the guard FIRES on a deliberately-live home, and passes on a fixture home.
@@ -10,7 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { assertFixtureScopedHome } from "./live-daemon-guard.js";
-import { FIXTURE_HOME_MARKER } from "../src/openrig-compat.js";
+import { FIXTURE_HOME_MARKER } from "./fixture-home.js";
 
 describe("live-daemon hermeticity guard", () => {
   it("KNOWN-NEGATIVE: THROWS on a live (non-fixture) home — the guard fires", () => {

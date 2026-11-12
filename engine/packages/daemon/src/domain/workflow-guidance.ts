@@ -42,7 +42,7 @@ export function readWorkflowGuidance(input: GuidanceInput) {
   let catalogPath: string | null = null, catalogHash: string | null = null;
   let selected = false, selectionInvalid = false;
   let rawComponents: unknown, rawEdges: unknown = [];
-  const command = "rig workflow guidance " + quote(input.instanceId) + (input.packetId ? " --packet " + quote(input.packetId) : "");
+  const command = "multi-agent workflow guidance " + quote(input.instanceId) + (input.packetId ? " --packet " + quote(input.packetId) : "");
   const readManifest = (kind: string, path: string) => {
     const text = readFileSync(path, "utf8"), sha256 = hash(text), prior = bound.find(s => resolve(s.path) === resolve(path));
     sources.push({kind, path, sha256, binding: !prior ? "not-bound" : prior.sha256 === sha256 ? "matches-bound" : "differs-from-bound"});
@@ -121,9 +121,9 @@ export function readWorkflowGuidance(input: GuidanceInput) {
       if (catalog.root === "repository") {
         const repository = execFileSync("git", ["-C", dirname(catalogSource), "rev-parse", "--show-toplevel"], {encoding:"utf8", stdio:["ignore","pipe","pipe"], timeout:2000}).trim();
         catalogPath = resolve(repository, ref);
-      } else if (ref.startsWith("$OPENRIG_HOME/")) {
-        if (!process.env.OPENRIG_HOME) throw Error("OPENRIG_HOME is unavailable for " + ref);
-        catalogPath = join(process.env.OPENRIG_HOME, ref.slice("$OPENRIG_HOME/".length));
+      } else if (ref.startsWith("$MULTI_AGENT_HOME/")) {
+        if (!process.env.MULTI_AGENT_HOME) throw Error("MULTI_AGENT_HOME is unavailable for " + ref);
+        catalogPath = join(process.env.MULTI_AGENT_HOME, ref.slice("$MULTI_AGENT_HOME/".length));
       } else if (isAbsolute(ref) || ref.startsWith("./") || ref.startsWith("../")) {
         catalogPath = resolve(dirname(catalogSource), ref);
       } else {
@@ -157,13 +157,13 @@ export function readWorkflowGuidance(input: GuidanceInput) {
   const blocks = [
     ...unknowns.map(u => "UNKNOWN: " + u),
     selected ? "Selected SDLC advice from " + selectionSource + "; catalog from " + catalogSource + ": " + catalog?.address : "No SDLC composition selected in the available authored context.",
-    ...(selected ? ["Current authored advice; component prose is not an adopted executable snapshot. Binding status: " + sources.map(s => s.kind + "=" + s.binding).join(", ") + ". Inspect/adopt YAML changes with rig workflow revise " + quote(input.instanceId) + ".", "Original story:", ...stories.map(s => s.address + "\n" + s.text),
+    ...(selected ? ["Current authored advice; component prose is not an adopted executable snapshot. Binding status: " + sources.map(s => s.kind + "=" + s.binding).join(", ") + ". Inspect/adopt YAML changes with multi-agent workflow revise " + quote(input.instanceId) + ".", "Original story:", ...stories.map(s => s.address + "\n" + s.text),
       position,
       "Selected components" + (components.length > 20 && !input.full ? " (first 20 of " + components.length + ")" : "") + ": " + (input.full ? components : components.slice(0,20)).map(c => c.id + (c.owner ? " owner=" + c.owner : " owner=unknown") + (c.admission ? " admission=" + c.admission : "")).join("; "),
       ...(expanded.length ? expanded.map(c => "Selected teaching preview " + c.id + (input.component ? " (explicit component choice), " : owned.length ? " (owner match; not process position), " : " (menu preview; owner relevance unknown), ") + c.address + "\n" + c.text) : ["No exact owner match for " + (input.ownerSession ?? "unknown owner") + "; choose a selected component explicitly to expand."]),
       "Authored edges: " + (edges.length ? (input.full ? edges : edges.slice(0,20)).map(e => e.from + " -> " + e.to + (e.when ? " when " + e.when : "")).join("; ") : "none; do not infer dependencies"),
       "Selection sources: " + sources.map(s => s.path + " sha256=" + s.sha256 + " " + s.binding).join("; "),
-      "Referenced teaching: " + catalogPath + " sha256=" + catalogHash + ". Current authored advice, not a bound executable snapshot. YAML edits require inspection/adoption with rig workflow revise " + quote(input.instanceId) + "; catalog prose refreshes on read and does not revise the graph."] : []),
+      "Referenced teaching: " + catalogPath + " sha256=" + catalogHash + ". Current authored advice, not a bound executable snapshot. YAML edits require inspection/adoption with multi-agent workflow revise " + quote(input.instanceId) + "; catalog prose refreshes on read and does not revise the graph."] : []),
   ];
   // Omit whole blocks, never cut a Stop/Skip caveat into a misleading fragment.
   const lines: string[] = []; let omitted = false, size = 0;

@@ -1,5 +1,5 @@
 // TYPED dummy fixtures = the drift guard. Every fixture is typed against the
-// REAL exported @openrig/ui hook interface, so a real-interface change breaks
+// REAL exported @multi-agent/ui hook interface, so a real-interface change breaks
 // the twin build (compile-time drift detection). Data is a believable rig
 // family (multiple pods/seats, mixed agent states) so the twin reads like the
 // real product. Identifiers are fictional demo data, not live operator state.
@@ -35,7 +35,7 @@ export const specLibrary: SpecLibraryEntry[] = [
   { id: "spec_review_flow", kind: "workflow", name: "review-changes", version: "1.0.0", sourceType: "builtin", sourcePath: "/specs/workflows/review.yaml", relativePath: "workflows/review.yaml", updatedAt: "2025-08-29T09:30:00.000Z", summary: "Dimension review with verification", stepsCount: 3, status: "valid" },
 ];
 
-// Per-rig node inventory (seeded for when a twin surface navigates into a rig's topology).
+// Per-multi-agent node inventory (seeded for when a twin surface navigates into a rig's topology).
 const buildNodes: NodeInventoryEntry[] = [
   { rigId: "rig_alpha", rigName: "acme-build", logicalId: "lead.coordinator", podId: "pod_lead", podNamespace: "lead", canonicalSessionName: "coordinator@acme-build", nodeKind: "agent", runtime: "claude-code", sessionStatus: "running", startupStatus: "ready", restoreOutcome: "clean", tmuxAttachCommand: "tmux attach -t coordinator", resumeCommand: null, latestError: null, contextUsage: { usedPercentage: 58, remainingPercentage: 42, contextWindowSize: 1000000, availability: "ok", sampledAt: "2025-09-01T01:39:00.000Z", fresh: true }, agentActivity: { state: "running", reason: "tool_use", evidenceSource: "tmux", sampledAt: "2025-09-01T01:39:00.000Z" }, terminalActive: true, hasAssignedWork: true, pendingWorkCount: 2 },
   { rigId: "rig_alpha", rigName: "acme-build", logicalId: "builders.builder2", podId: "pod_builders", podNamespace: "builders", canonicalSessionName: "builder2@acme-build", nodeKind: "agent", runtime: "claude-code", sessionStatus: "running", startupStatus: "ready", restoreOutcome: "clean", tmuxAttachCommand: "tmux attach -t builder2", resumeCommand: null, latestError: null, contextUsage: { usedPercentage: 81, remainingPercentage: 19, contextWindowSize: 1000000, availability: "ok", sampledAt: "2025-09-01T01:39:00.000Z", fresh: true }, agentActivity: { state: "running", reason: "building", evidenceSource: "tmux", sampledAt: "2025-09-01T01:39:00.000Z" }, terminalActive: true, hasAssignedWork: true, pendingWorkCount: 1 },
@@ -124,7 +124,7 @@ export const nodeDetailByKey: Record<string, NodeDetailData> = {
       { path: "CLAUDE.md", deliveryHint: "context", required: true },
       { path: "MISSION_NOTES.md", deliveryHint: "context", required: false },
     ],
-    startupActions: [{ type: "skill", value: "openrig-user" }],
+    startupActions: [{ type: "skill", value: "agent-operated-software" }],
     recentEvents: [
       { type: "node.ready", createdAt: "2025-08-31T21:28:00.000Z" },
       { type: "queue.handoff", createdAt: "2025-09-01T01:22:00.000Z" },
@@ -138,7 +138,7 @@ export const nodeDetailByKey: Record<string, NodeDetailData> = {
       outgoing: [{ kind: "delegates_to", to: { logicalId: "builders.builder2", sessionName: "builder2@acme-build" } }],
       incoming: [{ kind: "collaborates_with", from: { logicalId: "builders.builder1", sessionName: "builder1@acme-build" } }],
     },
-    transcript: { enabled: true, path: "/Users/x/.openrig/transcripts/acme-build/coordinator@acme-build.log", tailCommand: "rig transcript coordinator@acme-build --tail 100" },
+    transcript: { enabled: true, path: "/Users/x/.multi-agent/transcripts/acme-build/coordinator@acme-build.log", tailCommand: "multi-agent transcript coordinator@acme-build --tail 100" },
     compactSpec: { name: "coordinator", version: "1.0.0", profile: "orchestrator", skillCount: 6, guidanceCount: 3 },
     agentActivity: act("running", "coordinating") as NodeDetailData["agentActivity"],
     currentQitems: [{ qitemId: "wf-demo-002", bodyExcerpt: "Example fold-in: hook-path follow-up on the next iteration…", tier: "build" }],
@@ -158,12 +158,12 @@ export const sessionPreviewByName: Record<string, NodePreviewResponse> = {
     lines: 100,
     capturedAt: "2025-09-01T01:40:12.000Z",
     content: [
-      "coordinator@acme-build $ rig queue list --destination builder2 --state pending",
+      "coordinator@acme-build $ multi-agent queue list --destination builder2 --state pending",
       "  wf-demo-002  Example queue item (follow-up build)  pending",
       "coordinator@acme-build $ # routing the follow-up to builder2",
       "Sent to builder2@acme-build",
       "  Verified: yes  Delivery: rendered",
-      "coordinator@acme-build $ rig ps --nodes --rig acme-build",
+      "coordinator@acme-build $ multi-agent ps --nodes --rig acme-build",
       "  acme-build   11 nodes   6 active   3 has-work",
       "  lead.coordinator  running   builders.builder2  building   builders.reviewer1  idle",
       "coordinator@acme-build $ _",

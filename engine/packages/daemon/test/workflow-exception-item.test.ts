@@ -148,8 +148,8 @@ describe("WF-5 FR-2 class (a): born-in-txn exception item", () => {
     expect(tags).toContain(`occurrence:${packetId}`);
     // actionable: summary + evidence pointer + resolution affordance
     expect(String(item.summary)).toContain("no remediation branch");
-    expect(String(item.evidence_ref)).toContain("rig workflow trace");
-    expect(String(item.body)).toContain("rig workflow resume");
+    expect(String(item.evidence_ref)).toContain("multi-agent workflow trace");
+    expect(String(item.body)).toContain("multi-agent workflow resume");
   });
 
   it("ATOMICITY: an injected failure during item creation rolls back the ENTIRE close — no failed-without-item window, no item-without-failure", async () => {

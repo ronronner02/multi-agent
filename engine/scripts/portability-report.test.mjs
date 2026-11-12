@@ -43,14 +43,14 @@ test("placeholders, loopback, documentation ranges and product names are not rep
     "docs address 192.0.2.10",
     "noreply@anthropic.com",
     "dev@example.com",
-    "send to operator-agent@kernel and orch-lead@v-openrig-build",
+    "send to operator-agent@kernel and orch-lead@v-multi-agent-build",
     "token = process.env.GITHUB_TOKEN",
     'const token = "00000000-0000-7000-8000-000000000001";',
     'resume_token : "other-thread"',
     "edit .claude/settings.local.json",
     "id: OPR.99.0.1.1",
     "release v2.0.0.1",
-    "maintainers at conduct@openrig.dev",
+    "maintainers at conduct@multi-agent.dev",
   ]) {
     assert.deepEqual(categories(text), [], text);
   }
@@ -103,7 +103,7 @@ test("the CLI executes through a script path containing spaces and a hash", asyn
   const { join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const { spawnSync } = await import("node:child_process");
-  const temp = mkdtempSync(join(tmpdir(), "openrig script # "));
+  const temp = mkdtempSync(join(tmpdir(), "multi-agent script # "));
   try {
     const script = join(temp, "portability report.mjs");
     symlinkSync(fileURLToPath(new URL("./portability-report.mjs", import.meta.url)), script);
@@ -120,7 +120,7 @@ test("the CLI executes with preserve-symlinks-main and imports without argv rema
   const { join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const { spawnSync } = await import("node:child_process");
-  const temp = mkdtempSync(join(tmpdir(), "openrig preserved # "));
+  const temp = mkdtempSync(join(tmpdir(), "multi-agent preserved # "));
   const source = new URL("./portability-report.mjs", import.meta.url);
   try {
     const script = join(temp, "report.mjs");

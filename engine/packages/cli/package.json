@@ -1,32 +1,21 @@
 {
-  "name": "@openrig/cli",
+  "name": "@multi-agent/cli",
   "version": "0.1.0",
   "type": "module",
-  "description": "Build your own network of agents from Claude Code, Codex and Pi: persistent teams with roles, shared context and owned work.",
+  "description": "Manage Multi-Agent teams through the local engine HTTP API",
   "keywords": [
-    "ai",
-    "agents",
     "multi-agent",
-    "topology",
+    "teams",
     "claude-code",
-    "codex",
-    "tmux",
-    "control-plane",
-    "rig",
-    "agentspec"
+    "codex"
   ],
-  "homepage": "https://openrig.dev",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/mvschwarz/openrig"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "mvschwarz",
     "url": "https://esoteric.run"
   },
   "bin": {
-    "rig": "dist/bin-wrapper.js"
+    "multi-agent": "dist/bin-wrapper.js"
   },
   "files": [
     "LICENSE",

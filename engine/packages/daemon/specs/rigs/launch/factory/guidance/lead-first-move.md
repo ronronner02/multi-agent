@@ -4,16 +4,16 @@ The person's goal usually reaches you from the kernel operator as a queue row: t
 how to reach them. Claim that row and start from the goal; don't ask the opening question again. If the goal is
 unclear, ask the one question that changes what you would do.
 
-Read the row with `rig queue show <id> --full`, which prints it as JSON (the goal is its `body` field), then run
-`rig queue claim <id>` on its own. Keep these and later commands plain, as the team culture's "Commands that don't stop
+Read the row with `multi-agent queue show <id> --full`, which prints it as JSON (the goal is its `body` field), then run
+`multi-agent queue claim <id>` on its own. Keep these and later commands plain, as the team culture's "Commands that don't stop
 the person" says, so they don't stop for the person's approval.
 
 **When the goal is real continuing work** (something to build or change that takes more than one exchange), record it
 lightly before you start:
-- Run `rig scope mission ls` first. If the goal belongs to an existing mission, add to it instead of starting another.
-- Otherwise run `rig scope mission create <name>` with a short kebab-case name for the outcome, then
-  `rig scope slice create <mission> <slug> --intent "<the goal in one sentence>"` for the first piece.
-- These records live in OpenRig's workspace (`workspace.slices_root`), not in the person's repository. They need no
+- Run `multi-agent scope mission ls` first. If the goal belongs to an existing mission, add to it instead of starting another.
+- Otherwise run `multi-agent scope mission create <name>` with a short kebab-case name for the outcome, then
+  `multi-agent scope slice create <mission> <slug> --intent "<the goal in one sentence>"` for the first piece.
+- These records live in Multi-Agent's workspace (`workspace.slices_root`), not in the person's repository. They need no
   approval and they are not a planning phase: one mission, one slice, then work.
 
 Then tell the person in one or two lines what you recorded and what you propose, and offer to plan and build.
@@ -25,26 +25,26 @@ When the goal is done, close the operator's row with the result.
 
 **If a seat you're waiting on stops at a prompt,** for example a reviewer asking to run a command, tell the person in
 your own pane which seat is waiting, exactly what it asks and how to reach it. In
-`rig ps --nodes --json --fields canonicalSessionName,agentActivity,tmuxAttachCommand` that seat shows `needs_input`;
-`rig capture <session>` with its `canonicalSessionName` shows the prompt, and its `tmuxAttachCommand` is the command to
+`multi-agent ps --nodes --json --fields canonicalSessionName,agentActivity,tmuxAttachCommand` that seat shows `needs_input`;
+`multi-agent capture <session>` with its `canonicalSessionName` shows the prompt, and its `tmuxAttachCommand` is the command to
 give (if it has none, give its name). Don't answer another seat's prompt yourself.
 
-`rig down` and `rig seat stop` end agents' sessions and any work in progress, and `rig up <spec>` on a stopped team's
-name replaces it with a new team. Don't run them unless the person asked; check `rig ps --nodes` first.
+`multi-agent down` and `multi-agent seat stop` end agents' sessions and any work in progress, and `multi-agent up <spec>` on a stopped team's
+name replaces it with a new team. Don't run them unless the person asked; check `multi-agent ps --nodes` first.
 
 ## Publish the team's roster
 
-A roster tells anyone who uses `rig roster find` who to ask on this team and why. Write one the first time you start,
+A roster tells anyone who uses `multi-agent roster find` who to ask on this team and why. Write one the first time you start,
 alongside the goal, and never replace one that exists:
 
-1. Take the rig's name from `rig whoami --json` (`identity.rigName`). It is `factory` unless this team was launched
+1. Take the rig's name from `multi-agent whoami --json` (`identity.rigName`). It is `factory` unless this team was launched
    under another name; `<rig>` below means that name. If it is null, the rig name is unavailable: skip the roster
    for now and try again when identity is available.
-2. Run `rig roster list`. If it shows a roster with id `<rig>`, or warns about `<rig>.json` (a roster file it
+2. Run `multi-agent roster list`. If it shows a roster with id `<rig>`, or warns about `<rig>.json` (a roster file it
    couldn't read), stop here: never replace that file.
-3. The file is `<workspace.root>/rosters/<rig>.json`; `rig config get workspace.root` gives the root. Step 2 already
+3. The file is `<workspace.root>/rosters/<rig>.json`; `multi-agent config get workspace.root` gives the root. Step 2 already
    told you whether this rig has a roster, so don't check the folder from the shell.
-4. Run `rig ps --nodes --rig <rig> --json --fields canonicalSessionName,hostSelfId`. It gives each seat's exact address
+4. Run `multi-agent ps --nodes --rig <rig> --json --fields canonicalSessionName,hostSelfId`. It gives each seat's exact address
    and the host that serves it.
 5. Match `orch-lead` (you) to lead, `orch-advisor` to advisor, `dev-build` to builder, `dev-qa` to QA,
    `dev-design` to designer, and `review-r1` and `review-r2` to the two reviewers, using the actual addresses from step 4.
@@ -87,10 +87,10 @@ alongside the goal, and never replace one that exists:
    }
    ```
 
-6. Run `rig roster list` to see it listed, then tell the person in one line.
+6. Run `multi-agent roster list` to see it listed, then tell the person in one line.
 
-Running this again, after `rig seat continue` or a restore, changes nothing. When a seat takes on a capability worth
+Running this again, after `multi-agent seat continue` or a restore, changes nothing. When a seat takes on a capability worth
 asking it about, add it to that seat's `capabilities` and set `updated_at` to today; starting again never replaces the
 file.
 
-Need expertise your team lacks? `rig roster find <topic>` lists who to ask and why.
+Need expertise your team lacks? `multi-agent roster find <topic>` lists who to ask and why.

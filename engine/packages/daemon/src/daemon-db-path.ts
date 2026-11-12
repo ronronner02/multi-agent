@@ -9,7 +9,7 @@ function resolveForContainment(path: string, seen = new Set<string>()): string {
   if (seen.has(absolute)) throw new Error(`symlink cycle while resolving ${path}`);
   seen.add(absolute);
   try {
-    return realpathSync(absolute);
+    return realpathSync.native(absolute);
   } catch (realpathError) {
     let stat: ReturnType<typeof lstatSync>;
     try {
@@ -41,27 +41,27 @@ function isWithin(root: string, candidate: string): boolean {
 }
 
 /**
- * D15 — resolve the daemon's SQLite path. An explicit OPENRIG_DB / RIGGED_DB wins
+ * D15 — resolve the daemon's SQLite path. An explicit MULTI_AGENT_DB wins
  * (the operator takes responsibility for that path); otherwise the db is anchored
- * under OPENRIG_HOME, NEVER a bare CWD-relative filename.
+ * under MULTI_AGENT_HOME, NEVER a bare CWD-relative filename.
  *
- * Incident 2026-08-07: the entrypoint defaulted `dbPath` to a bare "openrig.sqlite"
+ * Incident 2026-08-07: the entrypoint defaulted `dbPath` to a bare "multi-agent.sqlite"
  * which resolves against the process CWD — so a daemon launched with an isolated
- * OPENRIG_HOME could still open the SHARED fleet db (whatever sat in its CWD).
- * Anchoring the default to OPENRIG_HOME makes an isolated-home daemon isolate its
- * db too, which is the whole point of setting OPENRIG_HOME.
+ * MULTI_AGENT_HOME could still open the SHARED fleet db (whatever sat in its CWD).
+ * Anchoring the default to MULTI_AGENT_HOME makes an isolated-home daemon isolate its
+ * db too, which is the whole point of setting MULTI_AGENT_HOME.
  */
-export function resolveDaemonDbPath(explicitDb: string | undefined | null, openrigHome: string): string {
+export function resolveDaemonDbPath(explicitDb: string | undefined | null, multiAgentHome: string): string {
   if (explicitDb && explicitDb.length > 0) {
     return explicitDb;
   }
-  const dbPath = join(openrigHome, "openrig.sqlite");
-  const resolvedHome = resolveForContainment(openrigHome);
+  const dbPath = join(multiAgentHome, "multi-agent.sqlite");
+  const resolvedHome = resolveForContainment(multiAgentHome);
   const resolvedDb = resolveForContainment(dbPath);
   if (!isWithin(resolvedHome, resolvedDb)) {
     throw new Error(
-      `Refusing implicit database outside resolved OPENRIG_HOME: ${dbPath} resolves to ${resolvedDb}, ` +
-      `outside ${resolvedHome}. Set OPENRIG_DB explicitly to authorize a deliberate split-path configuration.`,
+      `Refusing implicit database outside resolved MULTI_AGENT_HOME: ${dbPath} resolves to ${resolvedDb}, ` +
+      `outside ${resolvedHome}. Set MULTI_AGENT_DB explicitly to authorize a deliberate split-path configuration.`,
     );
   }
   return dbPath;

@@ -2,7 +2,7 @@
 // queryKeys the real hooks use (grounded from packages/ui/src/hooks), so the real App
 // renders fully from dummy data with NO daemon and NO fetch. Mutations are inert.
 //
-// Gate-0 scope: the Dashboard surface (rigs/summary + ps + spec-library). Per-rig node
+// Gate-0 scope: the Dashboard surface (rigs/summary + ps + spec-library). Per-multi-agent node
 // inventory is also seeded so a topology surface works without new wiring. The FULL build
 // (post Gate-0) extends this to the complete queryKey enumeration (D-4).
 

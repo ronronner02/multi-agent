@@ -1,6 +1,6 @@
+import { resolveDataRoots } from "../data-paths.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { canonicalPath, isWindows, samePath } from "./platform.js";
 
@@ -42,9 +42,6 @@ export const WORKTREE_PATH_CEILING = process.platform === "win32" ? 215 : null;
  */
 export const WORKTREE_ADMIN_CEILING = process.platform === "win32" ? 249 : null;
 
-/** The marker that makes the default root short enough for the ceiling above. */
-const WINDOWS_STATE_DIRECTORY = "Multi-Agent";
-
 /**
  * Where the daemon's per-run and per-task worktrees live.
  *
@@ -53,6 +50,7 @@ const WINDOWS_STATE_DIRECTORY = "Multi-Agent";
  * 40 characters so a run id and a task id still fit under the ceiling. Elsewhere the default
  * stays `~/.multi-agent/wt`, which is where the existing plan worktrees already are.
  *
+ * `MULTI_AGENT_HOME` also relocates the default state root.
  * `MULTI_AGENT_WORKTREE_ROOT` overrides both, because a host whose repository sits under a
  * deep checkout may need a root on another volume; the override is resolved against the
  * daemon's own working directory, so a relative value names one place rather than drifting
@@ -61,11 +59,7 @@ const WINDOWS_STATE_DIRECTORY = "Multi-Agent";
 export function defaultWorktreeRoot(environment: NodeJS.ProcessEnv = process.env): string {
   const configured = environment.MULTI_AGENT_WORKTREE_ROOT?.trim();
   if (configured) return resolve(configured);
-  if (isWindows()) {
-    const localAppData = environment.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local");
-    return join(localAppData, WINDOWS_STATE_DIRECTORY, "wt");
-  }
-  return join(homedir(), ".multi-agent", "wt");
+  return join(resolveDataRoots({ env: environment, platform: isWindows() ? "win32" : "linux" }).state, "wt");
 }
 
 /** A refusal the owner can act on: the requested worktree path cannot exist on this host. */

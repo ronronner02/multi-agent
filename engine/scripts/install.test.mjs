@@ -13,16 +13,16 @@ const nodeAdvice = [
   "Distribution packages can be older; check node --version.",
   "official Node installer",
   "Linux route (NodeSource or nvm)",
-  "https://github.com/mvschwarz/openrig/blob/main/docs/reference/getting-started.md",
+  "https://github.com/ronronner02/multi-agent/blob/main/docs/reference/getting-started.md",
 ];
 
 function fixture(t, overrides = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openrig-install-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "multi-agent-install-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const bin = path.join(dir, "tools");
   const prefix = path.join(dir, "npm prefix with spaces");
   const modules = path.join(dir, "global modules with spaces");
-  const checker = path.join(modules, "@openrig", "cli", "scripts", "check-abi.mjs");
+  const checker = path.join(modules, "@multi-agent", "cli", "scripts", "check-abi.mjs");
   fs.mkdirSync(bin);
   fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
   fs.mkdirSync(path.dirname(checker), { recursive: true });
@@ -38,22 +38,22 @@ process.exitCode = Number(process.env.ABI_EXIT || 0);
 printf 'npm:%s\n' "$*" >>"$TEST_LOG"
 case "$*" in
   --version) printf '%s\n' "$TEST_NPM_VERSION" ;;
-  'install -g @openrig/cli')
+  'install -g @multi-agent/cli')
     if [ "$SKIP_POSTINSTALL" = 1 ]; then printf 'npm warn install-scripts postinstall skipped\n' >&2; fi
     printf 'npm native output\n'; printf 'npm native error\n' >&2; exit "\${INSTALL_EXIT:-0}" ;;
   'prefix -g') printf '%s\n' "$TEST_PREFIX"; exit "\${PREFIX_EXIT:-0}" ;;
   'root -g') printf '%s\n' "$TEST_MODULES"; exit "\${ROOT_EXIT:-0}" ;;
   *) exit 90 ;;
 esac`);
-  write(path.join(bin, "rig"), 'printf "STALE\\n" >>"$TEST_LOG"; exit 91');
-  write(path.join(prefix, "bin", "rig"), `
+  write(path.join(bin, "multi-agent"), 'printf "STALE\\n" >>"$TEST_LOG"; exit 91');
+  write(path.join(prefix, "bin", "multi-agent"), `
 printf 'installed:%s\n' "$*" >>"$TEST_LOG"
 # Any available stdin would be an implicit answer or unconsumed script bytes.
 if read -r answer; then printf 'unexpected stdin\n' >&2; exit 92; fi
 case "$*" in
   'setup --dry-run') printf 'setup preview\n'; exit "\${PREVIEW_EXIT:-0}" ;;
   setup) printf 'setup native output\n'; printf 'setup native error\n' >&2
-    printf 'Next steps: choose providers, then rig up\n'; exit "\${SETUP_EXIT:-0}" ;;
+    printf 'Next steps: choose providers, then multi-agent up\n'; exit "\${SETUP_EXIT:-0}" ;;
   *) exit 93 ;;
 esac`);
   const env = { PATH: bin, HOME: dir, TEST_PREFIX: prefix, TEST_MODULES: modules, TEST_NODE: process.execPath, TEST_NPM_VERSION: "10.9.4", TEST_LOG: path.join(dir, "calls"), ...overrides };
@@ -70,7 +70,7 @@ test("dry run needs no tools and only prints the complete plan", t => {
   f.env.PATH = path.join(f.dir, "absent");
   const r = f.run("--dry-run");
   assert.equal(r.status, 0, r.stderr);
-  for (const text of ["[1/4]", "npm install -g @openrig/cli", "npm root -g", "scripts/check-abi.mjs", "even if npm skipped postinstall", "rig setup --dry-run", "[4/4] rig setup", "both Claude Code and Codex", "rig setup installs herdr by default", "unavailable herdr install is a warning", "Existing cmux settings stay unchanged", "rig setup --ghostty attempts it after acceptance", "launch a team or open a kernel conversation", "Dry run:", ...nodeAdvice]) assert.ok(r.stdout.includes(text), text);
+  for (const text of ["[1/4]", "npm install -g @multi-agent/cli", "npm root -g", "scripts/check-abi.mjs", "even if npm skipped postinstall", "multi-agent setup --dry-run", "[4/4] multi-agent setup", "both Claude Code and Codex", "multi-agent setup installs herdr by default", "unavailable herdr install is a warning", "Existing cmux settings stay unchanged", "multi-agent setup --ghostty attempts it after acceptance", "launch a team or open a kernel conversation", "Dry run:", ...nodeAdvice]) assert.ok(r.stdout.includes(text), text);
   assert.deepEqual(f.calls(), []);
 });
 
@@ -86,7 +86,7 @@ for (const tool of ["node", "npm"]) test(`missing ${tool} reports the prerequisi
 });
 
 for (const [variable, code, step, command] of [
-  ["INSTALL_EXIT", 37, 2, "npm install -g @openrig/cli"],
+  ["INSTALL_EXIT", 37, 2, "npm install -g @multi-agent/cli"],
   ["PREFIX_EXIT", 38, 2, "npm prefix -g"],
   ["ROOT_EXIT", 45, 2, "npm root -g"],
   ["ABI_EXIT", 44, 2, "check-abi.mjs"],
@@ -111,12 +111,12 @@ for (const [variable, code, step, command] of [
   }
 });
 
-test("installed rig wins over stale PATH and a prefix containing spaces works", t => {
+test("installed multi-agent wins over stale PATH and a prefix containing spaces works", t => {
   const f = fixture(t);
   const r = f.run();
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(f.calls(), ["node:--version", "npm:--version", "npm:install -g @openrig/cli", "npm:prefix -g", "npm:root -g", `node:${f.checker}`, "abi:check", "installed:setup --dry-run", "installed:setup"]);
-  assert.match(r.stdout, /choose providers, then rig up/);
+  assert.deepEqual(f.calls(), ["node:--version", "npm:--version", "npm:install -g @multi-agent/cli", "npm:prefix -g", "npm:root -g", `node:${f.checker}`, "abi:check", "installed:setup --dry-run", "installed:setup"]);
+  assert.match(r.stdout, /choose providers, then multi-agent up/);
   assert.match(r.stderr, /setup native error/);
 });
 
@@ -142,12 +142,12 @@ test("missing installed checker is explicitly skipped without claiming success",
   assert.ok(f.calls().includes("installed:setup"));
 });
 
-test("missing installed executable never falls back to a stale rig", t => {
+test("missing installed executable never falls back to a stale multi-agent", t => {
   const f = fixture(t);
-  fs.unlinkSync(path.join(f.prefix, "bin", "rig"));
+  fs.unlinkSync(path.join(f.prefix, "bin", "multi-agent"));
   const r = f.run();
   assert.equal(r.status, 127);
-  assert.match(r.stderr, /FAILED \[2\/4\] locate installed rig/);
+  assert.match(r.stderr, /FAILED \[2\/4\] locate installed multi-agent/);
   assert.ok(!f.calls().includes("STALE"));
 });
 

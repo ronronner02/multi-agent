@@ -17,8 +17,8 @@ import nodePath from "node:path";
 import { parse as parseYaml } from "yaml";
 import { parseSkillFrontmatter } from "./skill-discovery.js";
 
-const CATALOG_SCHEMA = "openrig.skill-catalog/v1";
-const MANIFEST_SCHEMA = "openrig.skill-loadout/v1";
+const CATALOG_SCHEMA = "multi-agent.skill-catalog/v1";
+const MANIFEST_SCHEMA = "multi-agent.skill-loadout/v1";
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SAFE_TOPOLOGY_OWNER = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -35,7 +35,7 @@ export interface CatalogSkill {
   files: Record<string, string>;
   selectedBy: SkillSelectionSource[];
   /** Set when the skill comes from a selected plugin. Such a skill never displaces
-   *  a same-name skill OpenRig does not own (see reconcileSkillLoadout). */
+   *  a same-name skill Multi-Agent does not own (see reconcileSkillLoadout). */
   pluginId?: string;
 }
 
@@ -453,7 +453,7 @@ export function resolveSkillLoadout(input: {
 }
 
 /** A selected plugin's skills as loadout entries for one runtime. Neither Claude Code
- *  nor Codex reads skills from the plugin folder OpenRig projects into a seat's working
+ *  nor Codex reads skills from the plugin folder Multi-Agent projects into a seat's working
  *  directory, so they travel in the managed loadout instead. A plugin applies to a
  *  runtime as the adapters decide: an explicit pluginType, otherwise the runtime's own
  *  manifest (.claude-plugin/ or .codex-plugin/). */
@@ -531,7 +531,7 @@ function pluginIdOf(revision: string): string | undefined {
   return /^plugin:([^@]+)/.exec(revision)?.[1];
 }
 
-/** A plugin skill left out because a skill OpenRig does not own already has its name. */
+/** A plugin skill left out because a skill Multi-Agent does not own already has its name. */
 export function isKeptPluginSkill(receipt: SkillProjectionReceipt): boolean {
   return receipt.status === "shadowed" && receipt.detail.startsWith(KEPT_DETAIL);
 }
@@ -541,7 +541,7 @@ function targetRootFor(runtime: SkillRuntime, cwd: string): string {
 }
 
 function ownershipManifestPath(cwd: string, runtime: SkillRuntime): string {
-  return nodePath.join(cwd, ".openrig", "skill-loadouts", `${runtime}.json`);
+  return nodePath.join(cwd, ".multi-agent", "skill-loadouts", `${runtime}.json`);
 }
 
 function readOwnershipManifest(path: string, runtime: SkillRuntime, targetRoot: string): OwnershipManifest {
@@ -708,8 +708,8 @@ function planGitIgnoreFile(input: {
   const originalContent = originalExists ? readFileSync(input.path, "utf8") : "";
   const hasManagedBlock = originalContent.includes(input.begin) || originalContent.includes(input.end);
   const hasOtherManagedBlock = (["claude-code", "codex"] as const).some((runtime) =>
-    originalContent.includes(`# BEGIN OpenRig managed skill loadout ${runtime}`)
-    && originalContent.includes(`# END OpenRig managed skill loadout ${runtime}`));
+    originalContent.includes(`# BEGIN Multi-Agent managed skill loadout ${runtime}`)
+    && originalContent.includes(`# END Multi-Agent managed skill loadout ${runtime}`));
   if (!hasManagedBlock && !hasOtherManagedBlock) {
     if (input.coveragePaths.every((path) => isGitIgnored(input.repoRoot, path))) return null;
     if (originalExists) {
@@ -756,8 +756,8 @@ function planGitIgnores(input: {
   const canonicalTargetRoot = fromCanonicalCwd(input.targetRoot);
   const canonicalManifestPath = fromCanonicalCwd(input.manifestPath);
   const key = input.runtime;
-  const begin = `# BEGIN OpenRig managed skill loadout ${key}`;
-  const end = `# END OpenRig managed skill loadout ${key}`;
+  const begin = `# BEGIN Multi-Agent managed skill loadout ${key}`;
+  const end = `# END Multi-Agent managed skill loadout ${key}`;
   const plans = [
     planGitIgnoreFile({
       repoRoot: canonicalRepoRoot,
@@ -826,7 +826,7 @@ function classifySkillProjectionTarget(
     return {
       status: "conflicting",
       detail: prior
-        ? "target differs from both the selected source and OpenRig's last owned projection; refusing to overwrite an operator edit"
+        ? "target differs from both the selected source and Multi-Agent's last owned projection; refusing to overwrite an operator edit"
         : "unowned target differs from the selected skill source; move it aside or reconcile its bytes explicitly",
     };
   } catch (err) {
@@ -858,7 +858,7 @@ export function reconcileSkillLoadout(input: {
   }
   const owned = new Map(manifest.skills.map((skill) => [skill.id, skill]));
 
-  // A plugin's skill never displaces one OpenRig does not own: that target keeps its
+  // A plugin's skill never displaces one Multi-Agent does not own: that target keeps its
   // bytes, and the selection is not recorded, so no seat sharing this folder later
   // depends on an ownership record that was never written.
   // Names that differ only in ASCII letter case count as the same name, because Git may
@@ -886,7 +886,7 @@ export function reconcileSkillLoadout(input: {
       status: "shadowed",
       detail: observed.status === "shadowed"
         ? observed.detail
-        : `${KEPT_DETAIL}a skill with this name that OpenRig does not own is already here; plugin ${entry.pluginId}'s copy was not projected`,
+        : `${KEPT_DETAIL}a skill with this name that Multi-Agent does not own is already here; plugin ${entry.pluginId}'s copy was not projected`,
     });
     return false;
   });
@@ -1021,7 +1021,7 @@ export function reconcileSkillLoadout(input: {
   }
   effectiveEntries.sort((a, b) => compareBytes(a.id, b.id));
 
-  // An edit to OpenRig's own copy of a plugin skill is kept too, under the same record.
+  // An edit to Multi-Agent's own copy of a plugin skill is kept too, under the same record.
   const keptOwned = new Set<string>();
   for (const skill of effectiveEntries) {
     const target = nodePath.join(targetRoot, skill.id);
@@ -1030,7 +1030,7 @@ export function reconcileSkillLoadout(input: {
     if (status === "conflicting" && skill.pluginId && prior) {
       keptOwned.add(skill.id);
       status = "shadowed";
-      detail = `${KEPT_DETAIL}this copy was changed after OpenRig projected it; plugin ${skill.pluginId}'s copy was not projected`;
+      detail = `${KEPT_DETAIL}this copy was changed after Multi-Agent projected it; plugin ${skill.pluginId}'s copy was not projected`;
     }
     receipts.push({
       id: skill.id,
@@ -1057,12 +1057,12 @@ export function reconcileSkillLoadout(input: {
         receipts[receipts.length - 1]!.status = status;
         receipts[receipts.length - 1]!.detail = detail;
       }
-      // A plugin copy OpenRig owns whose source moved on (an upgrade, or a moved plugin
+      // A plugin copy Multi-Agent owns whose source moved on (an upgrade, or a moved plugin
       // folder) keeps its record and waits for a seat that selects the plugin to refresh it.
       if (status === "conflicting" && skill.pluginId && prior && pluginIdOf(prior.revision) === skill.pluginId) {
         keptOwned.add(skill.id);
         status = "shadowed";
-        detail = `${KEPT_DETAIL}plugin ${skill.pluginId} changed or moved since OpenRig projected this copy; a seat that selects the plugin refreshes it at its next launch`;
+        detail = `${KEPT_DETAIL}plugin ${skill.pluginId} changed or moved since Multi-Agent projected this copy; a seat that selects the plugin refreshes it at its next launch`;
         receipts[receipts.length - 1]!.status = status;
         receipts[receipts.length - 1]!.detail = detail;
       }
@@ -1090,7 +1090,7 @@ export function reconcileSkillLoadout(input: {
       safeRemovals.push(prior);
       continue;
     }
-    // A deselected plugin copy that was changed stays where it is and stops being OpenRig's.
+    // A deselected plugin copy that was changed stays where it is and stops being Multi-Agent's.
     const pluginId = pluginIdOf(prior.revision);
     if (!pluginId) {
       errors.push(failure);
@@ -1104,7 +1104,7 @@ export function reconcileSkillLoadout(input: {
       digest: prior.digest,
       target: prior.target,
       status: "shadowed",
-      detail: `${KEPT_DETAIL}plugin ${pluginId} is no longer selected and this copy differs from what OpenRig projected; left in place and no longer managed by OpenRig`,
+      detail: `${KEPT_DETAIL}plugin ${pluginId} is no longer selected and this copy differs from what Multi-Agent projected; left in place and no longer managed by Multi-Agent`,
     });
   }
 
@@ -1158,7 +1158,7 @@ export function reconcileSkillLoadout(input: {
   const appliedGitIgnores: GitIgnorePlan[] = [];
   try {
     mkdirSync(nodePath.dirname(targetRoot), { recursive: true });
-    stagingRoot = nodePath.join(nodePath.dirname(targetRoot), `.openrig-skill-stage-${randomUUID()}`);
+    stagingRoot = nodePath.join(nodePath.dirname(targetRoot), `.multi-agent-skill-stage-${randomUUID()}`);
     mkdirSync(stagingRoot, { recursive: true });
     const staged = nodePath.join(stagingRoot, "new");
     const backups = nodePath.join(stagingRoot, "old");

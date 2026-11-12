@@ -1,9 +1,9 @@
 // OPR.0.5.3.6 — THE DOOR (proof item 3, and the check that would have caught
-// r2-B1 the first time): a REAL spawned daemon, the REAL `rig up` verb, a
-// clean scratch OPENRIG_HOME — then find the installed chain files at all
+// r2-B1 the first time): a REAL spawned daemon, the REAL `multi-agent up` verb, a
+// clean scratch MULTI_AGENT_HOME — then find the installed chain files at all
 // four altitudes under the derived topology.root. Not a unit proof: the unit
 // suite was green while the shipped door installed nothing, because the
-// installer was wired into materializeValidatedSpec and `rig up` takes the
+// installer was wired into materializeValidatedSpec and `multi-agent up` takes the
 // bootstrap → instantiate() path. This test drives the user's actual command.
 //
 // The rig has ONE terminal-runtime member (builtin:terminal, zero startup
@@ -39,7 +39,7 @@ pods:
     edges: []
 `;
 
-describe("topology defaults DOOR (real daemon, real rig up)", () => {
+describe("topology defaults DOOR (real daemon, real multi-agent up)", () => {
   let scaffold: HermeticScaffold | undefined;
   let daemon: ScenarioDaemon | undefined;
 
@@ -50,7 +50,7 @@ describe("topology defaults DOOR (real daemon, real rig up)", () => {
     scaffold = undefined;
   });
 
-  it("rig up rejects an unknown topology key before daemon or filesystem topology mutation", async () => {
+  it("multi-agent up rejects an unknown topology key before daemon or filesystem topology mutation", async () => {
     scaffold = prepareHermeticEnv({ baseEnv: realBaseEnv() });
     daemon = await spawnScenarioDaemon(scaffold, { rigBin: RIG_BIN });
 
@@ -71,10 +71,10 @@ describe("topology defaults DOOR (real daemon, real rig up)", () => {
     const ps = await runRig(["ps", "--json"], daemon.readEnv, RIG_BIN);
     expect(ps.code).toBe(0);
     expect(JSON.parse(ps.stdout).some((rig: { name?: string }) => rig.name === "typo-rig")).toBe(false);
-    expect(fs.existsSync(join(scaffold.openrigHome, "topology", "rigs", "typo-rig"))).toBe(false);
+    expect(fs.existsSync(join(scaffold.multiAgentHome, "topology", "rigs", "typo-rig"))).toBe(false);
   }, 120_000);
 
-  it("rig up then context trace walks runtime-matching instance, rig, pod, and seat defaults", async () => {
+  it("multi-agent up then context trace walks runtime-matching instance, rig, pod, and seat defaults", async () => {
     scaffold = prepareHermeticEnv({ baseEnv: realBaseEnv() });
     daemon = await spawnScenarioDaemon(scaffold, { rigBin: RIG_BIN });
 
@@ -86,23 +86,23 @@ describe("topology defaults DOOR (real daemon, real rig up)", () => {
     fs.mkdirSync(join(specDir, "topology", "seats", "ops-term"), { recursive: true });
     fs.writeFileSync(join(specDir, "rig.yaml"), DOOR_RIG_YAML, "utf-8");
     fs.writeFileSync(join(specDir, "topology", "instance", "CRAFT.md"), "instance default (door)", "utf-8");
-    fs.writeFileSync(join(specDir, "topology", "rig", "CRAFT.md"), "rig default (door)", "utf-8");
+    fs.writeFileSync(join(specDir, "topology", "rig", "CRAFT.md"), "multi-agent default (door)", "utf-8");
     fs.writeFileSync(join(specDir, "topology", "pods", "ops", "CRAFT.md"), "pod ops default (door)", "utf-8");
     fs.writeFileSync(join(specDir, "topology", "seats", "ops-term", "CRAFT.md"), "seat default (door)", "utf-8");
 
     // THE DOOR: the user's actual command against the scenario-local daemon.
     const up = await runRig(["up", join(specDir, "rig.yaml"), "--json"], daemon.readEnv, RIG_BIN);
-    expect(up.code, `rig up failed: ${up.stdout} ${up.stderr}`).toBe(0);
+    expect(up.code, `multi-agent up failed: ${up.stdout} ${up.stderr}`).toBe(0);
 
     // The find receipt: all four altitudes populated, instance at the TOP of the root.
-    const topoRoot = join(scaffold.openrigHome, "topology");
+    const topoRoot = join(scaffold.multiAgentHome, "topology");
     expect(fs.readFileSync(join(topoRoot, "CRAFT.md"), "utf-8")).toBe("instance default (door)");
-    expect(fs.readFileSync(join(topoRoot, "rigs", "door-rig", "CRAFT.md"), "utf-8")).toBe("rig default (door)");
+    expect(fs.readFileSync(join(topoRoot, "rigs", "door-rig", "CRAFT.md"), "utf-8")).toBe("multi-agent default (door)");
     expect(fs.readFileSync(join(topoRoot, "rigs", "door-rig", "pods", "ops", "CRAFT.md"), "utf-8")).toBe("pod ops default (door)");
     expect(fs.readFileSync(join(topoRoot, "rigs", "door-rig", "seats", "ops-term", "CRAFT.md"), "utf-8")).toBe("seat default (door)");
 
     const ps = await runRig(["ps", "--nodes", "--rig", "door-rig", "--json", "--fields", "rigName,podNamespace,logicalId"], daemon.readEnv, RIG_BIN);
-    expect(ps.code, `rig ps failed: ${ps.stdout} ${ps.stderr}`).toBe(0);
+    expect(ps.code, `multi-agent ps failed: ${ps.stdout} ${ps.stderr}`).toBe(0);
     expect(JSON.parse(ps.stdout)).toMatchObject({
       entries: [{ rigName: "door-rig", podNamespace: "ops", logicalId: "ops.term" }],
       totalNodes: 1,
@@ -110,10 +110,10 @@ describe("topology defaults DOOR (real daemon, real rig up)", () => {
     });
 
     const trace = await runRig(["context", "trace", "--rig", "door-rig", "--pod", "ops", "--seat", "ops-term", "--name", "CRAFT.md", "--json"], daemon.readEnv, RIG_BIN);
-    expect(trace.code, `rig context trace failed: ${trace.stdout} ${trace.stderr}`).toBe(0);
+    expect(trace.code, `multi-agent context trace failed: ${trace.stdout} ${trace.stderr}`).toBe(0);
     expect(JSON.parse(trace.stdout).levels.map((level: { altitude: string; content: string }) => [level.altitude, level.content])).toEqual([
       ["instance", "instance default (door)"],
-      ["rig", "rig default (door)"],
+      ["rig", "multi-agent default (door)"],
       ["pod", "pod ops default (door)"],
       ["seat", "seat default (door)"],
     ]);
@@ -122,7 +122,7 @@ describe("topology defaults DOOR (real daemon, real rig up)", () => {
   it("source discriminator: shipped factory topology bytes install through the real door", async () => {
     // r2 residual: the synthetic door proved the MECHANISM; this case proves
     // the factory spec's actual topology/ folder from source lands
-    // byte-identical through the real `rig up`. It is deliberately separate
+    // byte-identical through the real `multi-agent up`. It is deliberately separate
     // from the clean-checkout packaging discriminator in check-packing.test.mjs;
     // neither test is labeled as the whole locked proof item by itself.
     // DISCLOSED STAND-IN: the member set is one terminal seat, not the real
@@ -142,9 +142,9 @@ describe("topology defaults DOOR (real daemon, real rig up)", () => {
     fs.writeFileSync(join(specDir, "rig.yaml"), DOOR_RIG_YAML.replace("name: door-rig", "name: factory"), "utf-8");
 
     const up = await runRig(["up", join(specDir, "rig.yaml"), "--json"], daemon.readEnv, RIG_BIN);
-    expect(up.code, `rig up failed: ${up.stdout} ${up.stderr}`).toBe(0);
+    expect(up.code, `multi-agent up failed: ${up.stdout} ${up.stderr}`).toBe(0);
 
-    const topoRoot = join(scaffold.openrigHome, "topology");
+    const topoRoot = join(scaffold.multiAgentHome, "topology");
     const shipped = (rel: string) => fs.readFileSync(join(shippedTopology, rel), "utf-8");
     expect(fs.readFileSync(join(topoRoot, "CRAFT.md"), "utf-8")).toBe(shipped("instance/CRAFT.md"));
     expect(fs.readFileSync(join(topoRoot, "rigs", "factory", "CRAFT.md"), "utf-8")).toBe(shipped("rig/CRAFT.md"));

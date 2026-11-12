@@ -11,7 +11,7 @@
 // D3 forward-design (Q-e), as settled on #192: the channel map does not change
 // who owns transport, so it is not a class here. Its one resolver is
 // slack/channel-map.ts, shared by every channel decision (outbound posting,
-// `rig slack verify` and human delivery readiness); inbound channel routing
+// `multi-agent slack verify` and human delivery readiness); inbound channel routing
 // belongs in slack/thread-routing.ts, in front of thread → seat, through that
 // same module. Neither may become a third resolver beside this function — this
 // is deliberately the single classification site the wake path consults.
@@ -64,6 +64,6 @@ export function classifyDestination(destination: string, deps: ClassifyDeps): De
     teaching:
       `unroutable: '${destination}' has no terminal transport on this daemon and names no registered human — ` +
       `no transport can hold this address (checked: tmux bindings + the human registry). ` +
-      `Fix the address, or register the human with \`rig gateway human add\`.`,
+      `Fix the address, or register the human with \`multi-agent gateway human add\`.`,
   };
 }

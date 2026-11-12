@@ -9,8 +9,8 @@ const within = (root: string, file: string): boolean => {
 const patternFor = (relative: string) => `/${relative.split(path.sep).join("/").replace(/([\\*?\[\] !#])/g, "\\$1")}`;
 // Git's ignore-case comparison folds ASCII bytes, not Unicode filenames.
 const foldCase = (value: string) => value.replace(/[A-Z]/g, c => c.toLowerCase());
-// The bundled plugin is imported as shared:openrig-core; keep the unqualified projection too.
-const corePluginDirectories = [".codex/plugins/openrig-core", ".codex/plugins/shared:openrig-core"];
+// The bundled plugin is imported as shared:multi-agent-core; keep the unqualified projection too.
+const corePluginDirectories = [".codex/plugins/multi-agent-core", ".codex/plugins/shared:multi-agent-core"];
 
 /** Only pass files this projection created. Existing names/bytes are not ownership. */
 export function excludeNewGeneratedFiles(cwd: string, createdFiles: string[]): string[] {
@@ -18,7 +18,7 @@ export function excludeNewGeneratedFiles(cwd: string, createdFiles: string[]): s
   const warn = (file: string, reason: string) => {
     const message = `generated_file_exclude_skipped: ${file}: ${reason}`;
     warnings.push(message);
-    console.warn(`[openrig] ${message}`);
+    console.warn(`[multi-agent] ${message}`);
   };
   const deadline = performance.now() + 5000;
   const remaining = () => {
@@ -70,9 +70,9 @@ export function excludeNewGeneratedFiles(cwd: string, createdFiles: string[]): s
       if (own.some(item => item.tracked && item.name === relative) || ignored.has(file)) continue;
       const fromCwd = path.relative(path.resolve(cwd), canonical).split(path.sep).join("/");
       if (!corePluginDirectories.some(directory => fromCwd.startsWith(`${directory}/`))) {
-        const message = `${file} was created by OpenRig and is untracked. If you do not want to commit it, add this line to ${exclude}: ${patternFor(relative)} (shared by linked worktrees).`;
+        const message = `${file} was created by Multi-Agent and is untracked. If you do not want to commit it, add this line to ${exclude}: ${patternFor(relative)} (shared by linked worktrees).`;
         warnings.push(message);
-        console.warn(`[openrig] ${message}`);
+        console.warn(`[multi-agent] ${message}`);
         continue;
       }
       candidates.push({ file, relative });
@@ -117,7 +117,7 @@ export function excludeNewGeneratedFiles(cwd: string, createdFiles: string[]): s
     if (!added.length) return warnings;
     remaining();
     const separator = original.length && original.at(-1) !== 10 ? "\n" : "";
-    fs.appendFileSync(exclude, `${separator}# BEGIN OpenRig generated files\n${added.join("\n")}\n# END OpenRig generated files\n`);
+    fs.appendFileSync(exclude, `${separator}# BEGIN Multi-Agent generated files\n${added.join("\n")}\n# END Multi-Agent generated files\n`);
   } catch (error) { warn(cwd, (error as Error).message); }
   return warnings;
 }

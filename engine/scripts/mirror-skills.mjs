@@ -148,6 +148,17 @@ export function shipSetFromMembership(membership) {
     .sort();
 }
 
+function resolveCanonicalSkillRoot(canonRoot, skill) {
+  const direct = join(canonRoot, skill);
+  if (existsSync(direct)) return direct;
+  for (const entry of readdirSync(canonRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const categorized = join(canonRoot, entry.name, skill);
+    if (existsSync(categorized)) return categorized;
+  }
+  return null;
+}
+
 export async function stagePublicSkills({
   canonRoot,
   stagingRoot,
@@ -158,8 +169,8 @@ export async function stagePublicSkills({
   mkdirSync(stagingRoot, { recursive: true });
 
   for (const skill of shipSetFromMembership(membership)) {
-    const sourceRoot = join(canonRoot, skill);
-    if (!existsSync(sourceRoot) || isInternalPath(skill, rules)) continue;
+    const sourceRoot = resolveCanonicalSkillRoot(canonRoot, skill);
+    if (!sourceRoot || isInternalPath(skill, rules)) continue;
 
     for (const sourcePath of walkFiles(sourceRoot)) {
       const skillRelative = relative(sourceRoot, sourcePath).replaceAll("\\", "/");
@@ -207,7 +218,7 @@ export async function stagePublicSkills({
 // LOUD (a future accidental deletion is never silently blessed), and a name that reappears on disk is
 // flagged `external-canon-allowlist-stale` so this list self-destructs. Same self-policing shape as the
 // P6(A) chain gate. Layout = authority, disk = reality; the digest regen touches only reality.
-// (Currently empty: oversight-team and retiring-and-inheriting-a-seat landed via the 2026-08-24
+// (Currently empty: oversight-team and claude-compaction-restore landed via the 2026-08-24
 // mirror-apply, so their exemptions self-destructed.)
 const EXTERNAL_CANON_PENDING = new Set([]);
 
@@ -317,7 +328,11 @@ export async function regeneratePublicSkills({
   validateAuthoringLayout(layout);
   const shipping = shipSetFromMembership(membership);
   for (const skill of shipping) {
-    if (!existsSync(join(canonRoot, skill))) {
+    const skillLayout = layout.skills[skill];
+    if (!skillLayout) throw new Error(`Missing shipping skill in edge layout: ${skill}`);
+    const edges = skillLayout.edges;
+    if (!edges.includes("canonical") && !edges.includes("spec")) continue;
+    if (!resolveCanonicalSkillRoot(canonRoot, skill)) {
       throw new Error(`Missing shipping skill in canon: ${skill}`);
     }
     if (!layout.skills[skill]?.edges?.length) {
@@ -325,7 +340,7 @@ export async function regeneratePublicSkills({
     }
   }
 
-  const temporaryRoot = mkdtempSync(join(tmpdir(), "openrig-public-skills-"));
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "multi-agent-public-skills-"));
   try {
     const stagingRoot = join(temporaryRoot, "staging");
     await stagePublicSkills({
@@ -337,6 +352,10 @@ export async function regeneratePublicSkills({
 
     const changes = [];
     for (const [edge, edgeConfig] of Object.entries(layout.edges).sort()) {
+      // Plugin-only skills and helpers are authored beside the runtime manifests. Their digest is
+      // checked, but the canonical mirror must not overwrite that separate source tree.
+      const edgeRoot = join(repoRoot, edgeConfig.path);
+      if (edge === "plugin" && existsSync(join(edgeRoot, "../.claude-plugin/plugin.json"))) continue;
       const projectedRoot = join(temporaryRoot, `edge-${edge}`);
       mkdirSync(projectedRoot, { recursive: true });
 
@@ -354,7 +373,6 @@ export async function regeneratePublicSkills({
         copyTree(join(stagingRoot, skill), destination);
       }
 
-      const edgeRoot = join(repoRoot, edgeConfig.path);
       mkdirSync(edgeRoot, { recursive: true });
       const output = runRsyncAbsolute(projectedRoot, edgeRoot, exec);
       for (const line of parseChanges(output)) {
@@ -443,7 +461,7 @@ function readJson(path) {
 function defaultGenerateControlPlaneJson() {
   const repoRoot = process.cwd();
   // Membership, rules and layout come from the product JSON. Only skill content
-  // still comes from OPENRIG_SKILL_CANON_ROOT; old YAML selectors are ignored.
+  // comes from the repository source; external YAML selectors are ignored.
   execFileSync(
     process.execPath,
     [
@@ -459,12 +477,7 @@ function defaultGenerateControlPlaneJson() {
 
 function defaultReadAuthoringInputs() {
   const repoRoot = process.cwd();
-  const canonRoot = process.env.OPENRIG_SKILL_CANON_ROOT;
-  if (!canonRoot) {
-    throw new Error(
-      "The mirror apply requires OPENRIG_SKILL_CANON_ROOT — set it to the skill-canon root to run the real apply. This is an explicit-path authoring guard (the apply reads the canon from that path), not an authorization gate.",
-    );
-  }
+  const canonRoot = join(repoRoot, "packages/daemon/specs/agents/shared/skills");
   return {
     repoRoot,
     canonRoot: resolve(canonRoot),

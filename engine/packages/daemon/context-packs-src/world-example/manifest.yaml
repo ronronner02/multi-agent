@@ -1,7 +1,7 @@
 name: world-example
 version: "0"
 taxonomy: world
-purpose: "A fill-in template showing the anatomy of an OpenRig world pack."
+purpose: "A fill-in template showing the anatomy of an Multi-Agent world pack."
 files:
   - path: your-world.md
     role: world

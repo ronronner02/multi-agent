@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-// P9 — repo build-order encoding. The cli tsc resolves `@openrig/daemon/crash-cart` via the daemon's
+// P9 — repo build-order encoding. The cli tsc resolves `@multi-agent/daemon/crash-cart` via the daemon's
 // BUILT dist .d.ts (packaging ruling A + the paths mapping). So the typecheck-all path must build the
 // daemon dist BEFORE it runs the cli tsc — else a clean checkout fails cli tsc with TS2307. This guard
 // pins that ordering in the repo (self-carrying, not only desk-side).

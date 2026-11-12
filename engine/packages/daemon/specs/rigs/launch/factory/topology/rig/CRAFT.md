@@ -1,16 +1,16 @@
 # Rig Craft — shipped defaults (factory)
 
-<!-- Shipped by the factory rig spec (copy-if-absent; append freely — a
+<!-- Shipped by the factory multi-agent spec (copy-if-absent; append freely — a
      later rig-up never overwrites). Rig-wide norms every member holds. -->
 
 - **If another seat must ACT, it needs a queue row.** A send informs; only a
-  row creates an auditable obligation. Pass work with `rig queue handoff` so
+  row creates an auditable obligation. Pass work with `multi-agent queue handoff` so
   the close and the create are one transaction.
 - **A turn holding work ends by handing off or naming a live blocker.**
   Ending a turn with a summary in your own terminal is going dark: from
   outside, a clean finish and a crash are identical.
 - **Triage your board by baton, never by count.** A claimed row with an owner
-  is work; an informational row is not. `rig queue transitions <id>` tells a
+  is work; an informational row is not. `multi-agent queue transitions <id>` tells a
   deliberate park from a strand — the row's face cannot.
 - **Transport negatives lie.** A timeout is INDETERMINATE, not failed:
   reconcile by ID before any retry, or you fork the row. Never re-send on a

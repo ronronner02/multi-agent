@@ -10,7 +10,7 @@
 #
 # Delivery is at `up`: the pipeline stages a self-contained topology root, authors
 # a distinct cwd per seat in the staged copy, and writes each mapped seat's script
-# to <that seat's cwd>/.openrig/stub/script.json — the shipped stub's own contract.
+# to <that seat's cwd>/.multi-agent/stub/script.json — the shipped stub's own contract.
 scenario: per-seat-stub-scripts
 topology: ./topo-stub-scripts.yaml
 env:

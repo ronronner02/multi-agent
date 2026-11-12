@@ -38,7 +38,7 @@ export const CHECKS = [
   {
     category: "Machine path",
     why: "temporary or instance-specific directory tied to one machine",
-    pattern: /\/private\/tmp\/[A-Za-z0-9._-]+|\/var\/folders\/[A-Za-z0-9_]+\/|\/tmp\/claude-\d+|\.openrig-[a-z0-9-]*-[0-9a-f]{6,}/,
+    pattern: /\/private\/tmp\/[A-Za-z0-9._-]+|\/var\/folders\/[A-Za-z0-9_]+\/|\/tmp\/claude-\d+|\.multi-agent-[a-z0-9-]*-[0-9a-f]{6,}/,
   },
   {
     category: "Network address",
@@ -48,7 +48,7 @@ export const CHECKS = [
   {
     category: "Email address",
     why: "contact details belong in project documentation, not in code",
-    pattern: /\b(?![A-Za-z0-9._%+-]*noreply)[A-Za-z0-9._%+-]+@(?!(?:example|test|localhost|openrig)\b)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/,
+    pattern: /\b(?![A-Za-z0-9._%+-]*noreply)[A-Za-z0-9._%+-]+@(?!(?:example|test|localhost|multi-agent)\b)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/,
   },
 ];
 

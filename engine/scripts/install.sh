@@ -31,26 +31,26 @@ install_main() {
   esac
 
   printf '%s\n' \
-    'OpenRig install plan (macOS or Linux):' \
+    'Multi-Agent install plan (macOS or Linux):' \
     '  [1/4] Check node and npm on PATH; print their versions.' \
-    '  [2/4] npm install -g @openrig/cli' \
+    '  [2/4] npm install -g @multi-agent/cli' \
     '        Installs the published CLI and dependencies into your npm global prefix.' \
-    '        npm prefix -g locates that installation; its bin/rig is used below.' \
-    '        Run node "$(npm root -g)/@openrig/cli/scripts/check-abi.mjs" if present.' \
+    '        npm prefix -g locates that installation; its bin/multi-agent is used below.' \
+    '        Run node "$(npm root -g)/@multi-agent/cli/scripts/check-abi.mjs" if present.' \
     '        Check Node/SQLite explicitly even if npm skipped postinstall; report if unavailable.' \
-    '  [3/4] rig setup --dry-run' \
+    '  [3/4] multi-agent setup --dry-run' \
     "        Show the installed version's setup plan without applying it." \
-    '  [4/4] rig setup' \
+    '  [4/4] multi-agent setup' \
     '        Checks both Claude Code and Codex; may install missing tools.' \
-    '        Checks tmux and writes its defaults. rig setup installs herdr by default;' \
+    '        Checks tmux and writes its defaults. multi-agent setup installs herdr by default;' \
     '        an unavailable herdr install is a warning. Existing cmux settings stay unchanged.' \
-    '        On macOS, an installing agent offers Ghostty; rig setup --ghostty attempts it after acceptance.' \
+    '        On macOS, an installing agent offers Ghostty; multi-agent setup --ghostty attempts it after acceptance.' \
     'This broader setup is optional for the manual selected-provider path.' \
     'The wrapper does not log in, choose a permission policy, launch a team or open a kernel conversation.' \
     'Node advice: Node.js 22 or 24 with npm; use 22 on Apple silicon.' \
     'Distribution packages can be older; check node --version.' \
     'Use the official Node installer, or the Linux route (NodeSource or nvm):' \
-    'https://github.com/mvschwarz/openrig/blob/main/docs/reference/getting-started.md' \
+    'https://github.com/ronronner02/multi-agent/blob/main/docs/reference/getting-started.md' \
     'The installed package checker owns compatibility checks: below 22 and odd majors' \
     'are rejected; later even majors warn as untested. No automatic Node or permission repair.'
 
@@ -60,27 +60,27 @@ install_main() {
   fi
   for install_tool in node npm; do
     if ! command -v "$install_tool" >/dev/null 2>&1; then
-      printf 'Missing prerequisite: %s. Install Node.js 22 or 24 with npm, then retry.\nDistribution packages can be older; check node --version.\nUse the official Node installer, or the Linux route (NodeSource or nvm):\nhttps://github.com/mvschwarz/openrig/blob/main/docs/reference/getting-started.md\n' "$install_tool" >&2
+      printf 'Missing prerequisite: %s. Install Node.js 22 or 24 with npm, then retry.\nDistribution packages can be older; check node --version.\nUse the official Node installer, or the Linux route (NodeSource or nvm):\nhttps://github.com/ronronner02/multi-agent/blob/main/docs/reference/getting-started.md\n' "$install_tool" >&2
       install_failed 127 '[1/4] prerequisite check'
     fi
   done
   install_step 1/4 node --version
   install_step 1/4 npm --version
-  install_step 2/4 npm install -g @openrig/cli
+  install_step 2/4 npm install -g @multi-agent/cli
   if install_prefix=$(npm prefix -g); then :; else
     install_failed "$?" '[2/4] npm prefix -g'
   fi
-  install_rig="$install_prefix/bin/rig"
+  install_rig="$install_prefix/bin/multi-agent"
   if [ ! -x "$install_rig" ]; then
-    printf 'Installed rig is not executable: %s\n' "$install_rig" >&2
-    install_failed 127 '[2/4] locate installed rig'
+    printf 'Installed multi-agent is not executable: %s\n' "$install_rig" >&2
+    install_failed 127 '[2/4] locate installed multi-agent'
   fi
   PATH="$install_prefix/bin:$PATH"
   export PATH
   if install_modules=$(npm root -g); then :; else
     install_failed "$?" '[2/4] npm root -g'
   fi
-  install_checker="$install_modules/@openrig/cli/scripts/check-abi.mjs"
+  install_checker="$install_modules/@multi-agent/cli/scripts/check-abi.mjs"
   if [ -f "$install_checker" ]; then
     install_step 2/4 node "$install_checker"
     printf '\n%s\n' 'Node/SQLite compatibility check passed.'
@@ -89,7 +89,7 @@ install_main() {
   fi
   install_step 3/4 "$install_rig" setup --dry-run
   install_step 4/4 "$install_rig" setup
-  printf '\n%s\n' 'Follow the next steps printed by rig setup: start the daemon, open the OpenRig view, then tell the operator what you want to build.'
+  printf '\n%s\n' 'Follow the next steps printed by multi-agent setup: start the daemon, open the Multi-Agent view, then tell the operator what you want to build.'
 }
 
 # Setup prints policy guidance, not an input prompt. EOF keeps children from

@@ -20,8 +20,8 @@ const passingOnly = Object.hasOwn(PASSING_CASES, caseName);
 const selected = passingOnly ? PASSING_CASES[caseName] : CASES[caseName];
 assert.ok(selected, 'unknown scenario case');
 assert.ok(!passingOnly || mode === 'healthy', 'a passing-only case runs healthy only');
-const rigBin = realpathSync('/usr/local/bin/rig');
-const scenario = join('/opt/openrig-testbed', selected.file);
+const rigBin = realpathSync('/usr/local/bin/multi-agent');
+const scenario = join('/opt/multi-agent-testbed', selected.file);
 const records = [];
 const report = {
   mode, caseName, records, fault: null,
@@ -53,7 +53,7 @@ try {
           await assert.rejects(fetch(`${daemon.baseUrl}/healthz`),
             error => error.cause?.code === 'ECONNREFUSED', 'daemon must be stopped before fault injection');
           // Seed the named durability fault ONLY in this scenario's stopped scratch DB.
-          // Observation is still the unchanged shipped `rig queue list` path.
+          // Observation is still the unchanged shipped `multi-agent queue list` path.
           const Database = createRequire(rigBin)('better-sqlite3');
           const db = new Database(join(scaffold.stateDir, 'scenario.db'), { fileMustExist: true });
           try {

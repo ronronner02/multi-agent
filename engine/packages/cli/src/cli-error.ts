@@ -107,14 +107,14 @@ export function renderDaemonTransportError(
       fact: e.message,
       consequence: "The command's outcome is UNKNOWN — it may or may not have been applied.",
       action:
-        "Re-check current state in the team dashboard; if it repeats, inspect daemon health with 'rig daemon status' and the daemon logs. This is a bad response, not a stopped daemon.",
+        "Re-check current state in the team dashboard; if it repeats, inspect daemon health with 'multi-agent daemon status' and the daemon logs. This is a bad response, not a stopped daemon.",
     };
   } else if (e instanceof DaemonTimeoutError) {
     parts = {
       fact: e.message,
       consequence: "The command's outcome is UNKNOWN — the daemon did not answer in time.",
       action:
-        "Check the command's effect before any retry, then inspect daemon load with 'rig daemon status' and the daemon logs if it remains slow. This is a slow response, not a stopped daemon.",
+        "Check the command's effect before any retry, then inspect daemon load with 'multi-agent daemon status' and the daemon logs if it remains slow. This is a slow response, not a stopped daemon.",
     };
   } else if (e instanceof DaemonConnectionError) {
     const unknownWrite = e.writeOutcome === "unknown";
@@ -130,8 +130,8 @@ export function renderDaemonTransportError(
       action: blocked
         ? (unknownWrite ? `${blocked.action} ${reconcile}` : blocked.action)
         : unknownWrite
-          ? `Check 'rig daemon status' on the affected host; if it is down, start it with 'rig daemon start'. ${reconcile}`
-          : "Confirm the daemon is reachable with 'rig daemon status'; if it is down, start it with 'rig daemon start'.",
+          ? `Check 'multi-agent daemon status' on the affected host; if it is down, start it with 'multi-agent daemon start'. ${reconcile}`
+          : "Confirm the daemon is reachable with 'multi-agent daemon status'; if it is down, start it with 'multi-agent daemon start'.",
       ...(e.causeCode ? { causeCode: e.causeCode } : {}),
     };
   }

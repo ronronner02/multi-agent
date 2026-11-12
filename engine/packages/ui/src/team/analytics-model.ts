@@ -1,4 +1,4 @@
-import type { TeamAnalytics } from "@openrig/daemon/team-control";
+import type { TeamAnalytics } from "@multi-agent/daemon/team-control";
 
 export const ANALYTICS_RANGES = [7, 30] as const;
 export type AnalyticsRange = typeof ANALYTICS_RANGES[number];

@@ -5,7 +5,7 @@ import { runProgram } from "../src/cli-error.js";
 async function runCli(args: string[]) {
   const out: string[] = [], err: string[] = [];
   let exitCode = 0;
-  await runProgram(createProgram(), ["node", "rig", ...args], {
+  await runProgram(createProgram(), ["node", "multi-agent", ...args], {
     out: line => out.push(line), err: line => err.push(line), exit: code => { exitCode = code; },
   });
   return { out: out.join("\n"), err: err.join("\n"), exitCode };

@@ -47,13 +47,13 @@ describe("managed blocks keep authored $ sequences literal", () => {
     }
   });
 
-  it("replaces a legacy-marker block with the OpenRig form, literally", () => {
-    const legacy = "<!-- BEGIN RIGGED MANAGED BLOCK: core -->\nold guidance\n<!-- END RIGGED MANAGED BLOCK: core -->";
+  it("replaces a legacy-marker block with the Multi-Agent form, literally", () => {
+    const legacy = "<!-- BEGIN REMOVED MANAGED BLOCK: core -->\nold guidance\n<!-- END REMOVED MANAGED BLOCK: core -->";
     const before = "Before $$ text\n\n";
     const after = "\n\nAfter $' text\n";
     const fs = memoryFs({ [FILE]: `${before}${legacy}${after}` });
     mergeManagedBlock(fs, FILE, "core", DOLLAR_TEXT);
     expect(fs.store[FILE]!.trimEnd()).toBe(`${before}${managedBlock("core", DOLLAR_TEXT)}${after}`.trimEnd());
-    expect(fs.store[FILE]).not.toContain("RIGGED MANAGED BLOCK");
+    expect(fs.store[FILE]).not.toContain("REMOVED MANAGED BLOCK");
   });
 });

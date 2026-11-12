@@ -1,11 +1,11 @@
 {
-  "schema": "openrig.health-replay/v0alpha1",
+  "schema": "multi-agent.health-replay/v0alpha1",
   "sourceCut": "dbf05f9d59ef3b0ae14fc00174c643df4858d45a",
   "cases": {
     "staleConductor": {
       "origin": "release-0.5.9-recorded-incident",
       "productOutcomeCensus": { "availability": "unavailable", "reason": "This full-day window includes real slice advances but retains no sourced product-outcome census. Transition and auto-unpark identity do not establish a ceremony ratio." },
-      "scope": { "type": "mission", "projectId": "openrig", "missionId": "release-0.5.9" },
+      "scope": { "type": "mission", "projectId": "multi-agent", "missionId": "release-0.5.9" },
       "lineage": "qitem-r059-mission-conductor-20260903",
       "window": {
         "startedAt": "2026-09-03T05:31:55.887Z",
@@ -113,7 +113,7 @@
     },
     "signedQuiescence": {
       "origin": "release-0.5.9-recorded-counterexample",
-      "scope": { "type": "instance", "instanceId": "openrig-build-vm" },
+      "scope": { "type": "instance", "instanceId": "multi-agent-build-vm" },
       "window": { "startedAt": "2026-09-04T05:10:58Z", "endedAt": null },
       "authority": {
         "receiptId": "r059-s05-f82397698-signed-quiescence",
@@ -132,7 +132,7 @@
     },
     "scopeAdmissionCandidate": {
       "origin": "release-0.5.9-s13-reviewed-technical-subject",
-      "scope": { "type": "slice", "projectId": "openrig", "missionId": "release-0.5.9", "sliceId": "OPR.0.5.9.13" },
+      "scope": { "type": "slice", "projectId": "multi-agent", "missionId": "release-0.5.9", "sliceId": "OPR.0.5.9.13" },
       "technicalReview": {
         "candidate": "857d05a0dc91b0eb0793a475820b55255783ed48",
         "base": "128e87deb9121e0bc038747f3b50a798c50186f2",

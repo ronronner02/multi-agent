@@ -6,8 +6,8 @@ send targeted rework back to build or clear the packet for close.
 
 ## Skills Loaded
 
-- `openrig-user`
-- `mission-slice-sop`
+- `agent-operated-software`
+- `agent-operated-workflows`
 - `review-team`
 - `plan-review`
 - `systematic-debugging`

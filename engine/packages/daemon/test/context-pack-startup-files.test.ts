@@ -1,5 +1,5 @@
 // Slice-03 V3 delivery-free noun gate: context packs are composed and managed
-// by `rig context`; startup_files must never turn one into a send_text action.
+// by `multi-agent context`; startup_files must never turn one into a send_text action.
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

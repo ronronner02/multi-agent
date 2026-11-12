@@ -50,10 +50,10 @@ describe("S01 wake-or-escalate — retry ladder, named rungs, derived suspension
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     calls = [];
     outcomes = {};
-    delete process.env.OPENRIG_WAKE_SUSPEND;
+    delete process.env.MULTI_AGENT_WAKE_SUSPEND;
   });
   afterEach(() => {
-    delete process.env.OPENRIG_WAKE_SUSPEND;
+    delete process.env.MULTI_AGENT_WAKE_SUSPEND;
     db.close();
   });
 
@@ -291,10 +291,10 @@ describe("S01 wake-or-escalate — retry ladder, named rungs, derived suspension
     expect(calls).toEqual([{ qitemId: baton.qitemId, target: "worker@r" }]);
   });
 
-  it("DECLARED WINDOW IS OPERATOR OVERRIDE ONLY: OPENRIG_WAKE_SUSPEND suspends a destination with no swap in sight", async () => {
+  it("DECLARED WINDOW IS OPERATOR OVERRIDE ONLY: MULTI_AGENT_WAKE_SUSPEND suspends a destination with no swap in sight", async () => {
     const baton = await mkBaton();
     setNudgeResult(baton.qitemId, "failed:tmux session not found", 60);
-    process.env.OPENRIG_WAKE_SUSPEND = `worker@r:${new Date(Date.now() + 3600_000).toISOString()}`;
+    process.env.MULTI_AGENT_WAKE_SUSPEND = `worker@r:${new Date(Date.now() + 3600_000).toISOString()}`;
     await tick();
     expect(calls).toHaveLength(0);
     expect(markersOf(baton.qitemId, "ladder-suspend:")).toHaveLength(1);
@@ -516,16 +516,16 @@ describe("S01 wake-or-escalate — retry ladder, named rungs, derived suspension
 
   it("HUMAN RUNG SETTING: defaults to always; explicit-only resolves from the env; other values are refused", async () => {
     const mod = await ladderMod();
-    const missingConfig = `/tmp/openrig-811-missing-${process.pid}-${Date.now()}.json`;
+    const missingConfig = `/tmp/multi-agent-811-missing-${process.pid}-${Date.now()}.json`;
     const store = new SettingsStore(missingConfig);
     expect(store.resolveOne("queue.wake_human_rung" as never)).toMatchObject({ value: "always", source: "default" });
     expect(mod.DEFAULT_WAKE_HUMAN_RUNG).toBe("always");
-    process.env.OPENRIG_QUEUE_WAKE_HUMAN_RUNG = "explicit-only";
+    process.env.MULTI_AGENT_QUEUE_WAKE_HUMAN_RUNG = "explicit-only";
     try {
       expect(store.resolveOne("queue.wake_human_rung" as never)).toMatchObject({ value: "explicit-only", source: "env" });
       expect(() => store.set("queue.wake_human_rung" as never, "never")).toThrow(/always.*explicit-only/);
     } finally {
-      delete process.env.OPENRIG_QUEUE_WAKE_HUMAN_RUNG;
+      delete process.env.MULTI_AGENT_QUEUE_WAKE_HUMAN_RUNG;
     }
   });
 

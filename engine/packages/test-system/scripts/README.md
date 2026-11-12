@@ -11,7 +11,7 @@ scenario names none.
   steps. The FOUR behaviors {compaction, slow_output, mid_turn_death, restore} now exist,
   but only inside a per-seat launch script: a JSON `{steps: [...]}` file of `say` and
   `emit` steps that a scenario maps to a seat with `env.stub_scripts` and that the stub
-  reads from `<seat cwd>/.openrig/stub/script.json` at launch (host mode only). A
+  reads from `<seat cwd>/.multi-agent/stub/script.json` at launch (host mode only). A
   step-time `emit` throws `UnboundActionError`. No behavior scripts are authored here
   yet, so #6 and #8 stop at their first `emit` step (R-01/R-02).
 - No script names `usage_limit` — it is real-runtime-only and must fail validation loud

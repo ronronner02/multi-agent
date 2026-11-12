@@ -52,22 +52,22 @@ All edges are rendered in the UI topology graph. They create visual connections 
 
 ### Identity projection
 
-All edges appear in `rig whoami --json` output under `edges.outgoing` and `edges.incoming`, with their kind and the connected peer's identity. This lets an agent know its relationship to other members — but the agent interprets this information, it's not enforced by the runtime.
+All edges appear in `multi-agent whoami --json` output under `edges.outgoing` and `edges.incoming`, with their kind and the connected peer's identity. This lets an agent know its relationship to other members — but the agent interprets this information, it's not enforced by the runtime.
 
 ### Attach hint heuristic
 
-The post-command handoff (the "Attach:" line after `rig up` and `rig restore`) doesn't use edges. It names the first
+The post-command handoff (the "Attach:" line after `multi-agent up` and `multi-agent restore`) doesn't use edges. It names the first
 node, in creation order, whose session is running, or else the first node with a session name.
 
 ## What Edges Do NOT Do Today
 
 Edges do NOT currently:
 
-- **Route messages** — `rig send` can target any session, regardless of edges (queue escalation, above, is the one
+- **Route messages** — `multi-agent send` can target any session, regardless of edges (queue escalation, above, is the one
   daemon path that follows `delegates_to`)
 - **Enforce delegation** — an agent can communicate with any peer, not just its edge targets
 - **Control permissions** — there's no edge-based access control
-- **Affect transport** — `rig capture`, `rig broadcast`, etc. work based on session identity, not edge topology
+- **Affect transport** — `multi-agent capture`, `multi-agent broadcast`, etc. work based on session identity, not edge topology
 
 These are aspirational capabilities. The edge vocabulary is intentionally richer than the current runtime behavior so that the topology captures design intent even before the runtime enforces it.
 
@@ -75,11 +75,11 @@ These are aspirational capabilities. The edge vocabulary is intentionally richer
 
 The five kinds represent a taxonomy of how agents relate to each other in a working team:
 
-**`delegates_to`** — the most common edge. An orchestrator delegates to an implementer. A lead delegates to a worker. This is the primary workflow direction. When an orchestrator sends a task, it uses `rig send` to the session it `delegates_to`.
+**`delegates_to`** — the most common edge. An orchestrator delegates to an implementer. A lead delegates to a worker. This is the primary workflow direction. When an orchestrator sends a task, it uses `multi-agent send` to the session it `delegates_to`.
 
 **`spawned_by`** — for hierarchical launch relationships. A subagent spawned by a parent process. Less common in current topologies.
 
-**`can_observe`** — the review/oversight relationship. A reviewer observes an implementer's work. The reviewer can `rig capture` and `rig transcript` the implementation session. This edge communicates intent: "I'm watching your output."
+**`can_observe`** — the review/oversight relationship. A reviewer observes an implementer's work. The reviewer can `multi-agent capture` and `multi-agent transcript` the implementation session. This edge communicates intent: "I'm watching your output."
 
 **`collaborates_with`** — peer relationships. Two agents working side-by-side at the same level of the hierarchy. Neither delegates to the other.
 

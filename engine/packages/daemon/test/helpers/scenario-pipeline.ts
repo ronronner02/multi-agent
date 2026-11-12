@@ -80,7 +80,7 @@ export function extractStubScripts(env: Record<string, unknown> | undefined): Re
 
 /**
  * A queue-baton precondition (fixture level). The scenario asserts observables;
- * `env.queue` establishes a claimed baton via the SHIPPED `rig queue create|claim`
+ * `env.queue` establishes a claimed baton via the SHIPPED `multi-agent queue create|claim`
  * writes BEFORE the steps run — there is no queue action verb, so the baton lives
  * outside the scenario grammar (per the locked verb set), visibly documented in
  * the scenario file. Queue state is daemon-side, independent of any seat process.
@@ -133,11 +133,11 @@ export interface PreconditionContext {
 }
 
 /**
- * Apply the queue-baton preconditions via shipped `rig queue` writes. Fail-closed.
+ * Apply the queue-baton preconditions via shipped `multi-agent queue` writes. Fail-closed.
  *
  * Identity (post-P21): `--source` was RETIRED by P21 I3 (c4fad7b39, 2026-08-07 —
  * deprecated + IGNORED; queue-spine verbs stop sending body identity). The sender
- * now rides the transport header, which the CLI derives from OPENRIG_SESSION_NAME.
+ * now rides the transport header, which the CLI derives from MULTI_AGENT_SESSION_NAME.
  * The fixture's declared provenance therefore travels as the per-call ENV identity
  * — creator = `source`, claimant = `destination` — the same transport-not-body
  * doctrine the product enforces, converging with it rather than working around it.
@@ -151,7 +151,7 @@ export async function applyQueuePreconditions(
     const create = await runRig(
       ["queue", "create", "--id", p.id, "--destination", p.destination,
         "--summary", p.summary ?? p.id, "--body", p.body ?? `51-02 precondition baton ${p.id}`, "--json"],
-      { ...ctx.readEnv, OPENRIG_SESSION_NAME: p.source }, ctx.rigBin,
+      { ...ctx.readEnv, MULTI_AGENT_SESSION_NAME: p.source }, ctx.rigBin,
     );
     if (create.code !== 0) {
       throw new ScenarioPreconditionError(`queue create ${p.id} (exit ${create.code}): ${create.stderr || create.stdout}`);
@@ -159,7 +159,7 @@ export async function applyQueuePreconditions(
     if (p.claim) {
       const claim = await runRig(
         ["queue", "claim", p.id, "--destination", p.destination, "--json"],
-        { ...ctx.readEnv, OPENRIG_SESSION_NAME: p.destination }, ctx.rigBin,
+        { ...ctx.readEnv, MULTI_AGENT_SESSION_NAME: p.destination }, ctx.rigBin,
       );
       if (claim.code !== 0) {
         throw new ScenarioPreconditionError(`queue claim ${p.id} (exit ${claim.code}): ${claim.stderr || claim.stdout}`);
@@ -227,7 +227,7 @@ export interface RunScenarioFileOptions {
   imageId?: string;
   /**
    * D8: the A3-R3 injected clock (an ISO instant) for this run. Threaded into the
-   * hermetic scaffold, which sets OPENRIG_TEST_CLOCK_NOW for every child — the
+   * hermetic scaffold, which sets MULTI_AGENT_TEST_CLOCK_NOW for every child — the
    * daemon, the `rig` CLI, and the stub runner — so compaction-asset stamps and
    * the stub's own stamps are deterministic. ABSENT => unset => real wall clock
    * (production behavior). A determinism claim that does not pass this is
@@ -314,7 +314,7 @@ export async function runScenarioFile(
     // L6 STEP-0 — container-mode translates the HOST topology path to the in-container staged path
     // (host-mode has no stageTopology → the host path passes through unchanged). A stage/fence
     // failure throws here (loud, named) and the finally tears the container down — never a mystery
-    // "Source not found" from `rig up` reading a host path it cannot see inside the container.
+    // "Source not found" from `multi-agent up` reading a host path it cannot see inside the container.
     // D1 per-seat scripts (host-mode only). Container mode translates host paths
     // into the container; composing that with host-side per-seat staging is not
     // proven, so a scripted scenario there fails LOUD and named (routed to 51-04)
@@ -362,7 +362,7 @@ export async function runScenarioFile(
     });
 
     // Fixture-level preconditions (the baton) are applied RIGHT AFTER the topology
-    // is up: `rig queue create` rejects a destination whose rig is not yet up
+    // is up: `multi-agent queue create` rejects a destination whose rig is not yet up
     // (unknown_destination_rig), so the baton cannot precede `up`. It is still setup,
     // not an asserted observable — visibly declared in the scenario `env` block.
     let batonApplied = preconditions.length === 0;

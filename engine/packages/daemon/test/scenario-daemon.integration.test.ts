@@ -11,7 +11,7 @@ import {
 
 // Slice 51-02 — the forced-local daemon SPAWN (the last hermetic-helper unit).
 // Integration: the helper spawns a REAL scenario-local daemon (the built `rig`
-// bin) under the scrubbed scratch env, the shipped `rig ps --json` read works
+// bin) under the scrubbed scratch env, the shipped `multi-agent ps --json` read works
 // against it, and stop() tears it down. This is the foundation of proof item 2
 // (live round-trip) proven at a real process boundary — the whole point of the
 // fail-closed helper (a direct method call would not be a transport proof).
@@ -67,7 +67,7 @@ describe("scenario-daemon forced-local spawn (integration)", () => {
   it("readEnv points at the helper's own daemon, never a foreign target", async () => {
     scaffold = prepareHermeticEnv({ baseEnv: realBaseEnv() });
     daemon = await spawnScenarioDaemon(scaffold, { rigBin: RIG_BIN });
-    expect(daemon.readEnv.OPENRIG_URL).toBe(daemon.baseUrl);
+    expect(daemon.readEnv.MULTI_AGENT_URL).toBe(daemon.baseUrl);
     expect(daemon.baseUrl).toContain("127.0.0.1");
   }, 60_000);
 

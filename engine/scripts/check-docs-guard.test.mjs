@@ -34,7 +34,7 @@ test("buildDocsGuardMessage explains the policy and offending files", () => {
 // 572bc477 — docs/DESIGN.md is RATIFIED doctrine, and the guard failed to encode it.
 //
 // `docs/as-built/ui/library-specs-and-design-system.md` §4 states it outright: "The canonical
-// OpenRig visual/design system is `docs/DESIGN.md` (at the repo `docs/` root, NOT under
+// Multi-Agent visual/design system is `docs/DESIGN.md` (at the repo `docs/` root, NOT under
 // `docs/as-built/`). Q1 is ratified: DESIGN.md stays at root, byte-identical."
 //
 // Root placement is therefore a deliberate, recorded decision — not drift to be tidied away.
@@ -42,7 +42,7 @@ test("buildDocsGuardMessage explains the policy and offending files", () => {
 //   docs/as-built/  — all 24 files there carry `last-verified-against-source`; DESIGN.md is not
 //                     source-derived, and Q1 explicitly rules this out anyway
 //   docs/reference/ — that directory SHIPS (build-package.sh stages it into the package and the
-//                     daemon materializes it to $OPENRIG_HOME/reference/), so moving there would
+//                     daemon materializes it to $MULTI_AGENT_HOME/reference/), so moving there would
 //                     start distributing the brand spec to every operator
 //   docs/releases/  — not a release note
 // So this one file is named explicitly rather than relocated, and the directory allowlist is
@@ -92,7 +92,7 @@ test("the real tracked-path reader preserves unusual documentation filenames", a
   const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
-  const repo = mkdtempSync(join(tmpdir(), "openrig-docs-guard-"));
+  const repo = mkdtempSync(join(tmpdir(), "multi-agent-docs-guard-"));
   try {
     const paths = ["docs/notes\nextra.md", "docs/équipe.md", "docs/reference/topic\tname.md"];
     execFileSync("git", ["init", "--quiet", repo]);

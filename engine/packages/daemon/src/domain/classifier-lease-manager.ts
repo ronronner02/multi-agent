@@ -17,7 +17,7 @@ import type { PersistedEvent } from "./types.js";
  * - Deadness detection: caller of `evaluateDeadness` is the project verb path
  *   OR a watchdog. The manager itself does NOT auto-reclaim — only marks
  *   `expired` when heartbeat is stale.
- * - Reclaim is OPERATOR-VERB ONLY: `rig project --reclaim-classifier
+ * - Reclaim is OPERATOR-VERB ONLY: `multi-agent project --reclaim-classifier
  *   [--if-dead]`. Daemon does NOT auto-reclaim. The reclaim path takes the
  *   active lease away from the previous holder and emits classifier.reclaimed.
  *
@@ -136,7 +136,7 @@ export class ClassifierLeaseManager {
       }
       throw new ClassifierLeaseError(
         "lease_held",
-        `classifier lease is held by ${active.classifierSession} until ${active.expiresAt}; reclaim via 'rig project --reclaim-classifier' if needed`,
+        `classifier lease is held by ${active.classifierSession} until ${active.expiresAt}; reclaim via 'multi-agent project --reclaim-classifier' if needed`,
         { holder: active.classifierSession, expiresAt: active.expiresAt },
       );
     }

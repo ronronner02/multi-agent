@@ -1,7 +1,7 @@
 import { mkdirSync, appendFileSync, existsSync, openSync, readSync, closeSync, statSync, fstatSync, readFileSync } from "node:fs";
 import { join, dirname, relative, isAbsolute, sep } from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { getCompatibleOpenRigPath } from "../openrig-compat.js";
+import { getStatePath } from "../data-paths.js";
 const DEFAULT_TRANSCRIPT_STALE_AFTER_MS = 60_000;
 const getLastCaptureAt = (_sessionName: string): number | null => null;
 
@@ -19,7 +19,7 @@ export interface TranscriptIngestHealth {
   lastCapturedAt: string | null;
 }
 
-const DEFAULT_ROOT = getCompatibleOpenRigPath("transcripts");
+const DEFAULT_ROOT = getStatePath("transcripts");
 export { DEFAULT_TRANSCRIPT_STALE_AFTER_MS };
 
 function applyBackspaces(text: string): string {

@@ -70,7 +70,7 @@ function localMailboxRoot(home: string): string {
 }
 
 /**
- * `home` is the daemon's per-user state directory (`$OPENRIG_HOME`).
+ * `home` is the daemon's per-user state directory (`$MULTI_AGENT_HOME`).
  *
  * Setup installs the pinned workflow source per user. An explicit source override can
  * point to an existing verified package without copying it into each attempt.

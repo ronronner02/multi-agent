@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://openrig.dev/schemas/bundle-common.v1.json",
+  "$id": "https://multi-agent.dev/schemas/bundle-common.v1.json",
   "title": "Shared bundle identity definitions (v1)",
   "description": "Source identity, configuration ID, package digest and assembler, shared by every bundle format. See docs/reference/bundle-formats.md.",
   "$defs": {
@@ -68,7 +68,7 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "coverage": {
-          "const": "openrig.package-digest/v1"
+          "const": "multi-agent.package-digest/v1"
         }
       },
       "additionalProperties": false
@@ -76,10 +76,10 @@
     "assembler": {
       "type": "object",
       "required": [
-        "openrigVersion"
+        "multiAgentVersion"
       ],
       "properties": {
-        "openrigVersion": {
+        "multiAgentVersion": {
           "type": "string",
           "minLength": 1
         },

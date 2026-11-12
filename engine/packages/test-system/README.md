@@ -11,7 +11,7 @@ admitted CI passes.
 
 ## Historical 51-03 seed contract — the ten (+ one)
 
-Compose-only L2 scenario set for the OpenRig containerized test system (mission
+Compose-only L2 scenario set for the Multi-Agent containerized test system (mission
 release-0.5.1). Each scenario pins a NAMED defect class from the 0.4.8/0.5.0 marathon
 and becomes standing infrastructure instead of a hand-built probe.
 
@@ -27,14 +27,14 @@ and becomes standing infrastructure instead of a hand-built probe.
   loud in a stub topology — no scenario here names it.
 - Assertions ride the shipped-observable surface set ONLY: `ps` · `queue` · `stream` ·
   `scope` · `pane` · `transcript` · `tui_socket` · `policy_provenance`. `proof` is
-  reserved: the scenario runner has no read binding for it (`rig proof show` exists, but
+  reserved: the scenario runner has no read binding for it (`multi-agent proof show` exists, but
   no scenario surface reads it), and the validator rejects it. No internal DB pokes.
 
 ## Layout
 - `scenarios/` — the fifteen scenarios (§6 ten, the A1 eleventh, and four later ones:
   `capture-returns-addressed-seat`, `down-stops-every-seat`,
   `send-renders-in-addressed-pane`, `transcript-reads-addressed-seat`), one YAML file
-  each, the scenario name naming its defect class. Beside them: the topology rig specs
+  each, the scenario name naming its defect class. Beside them: the topology multi-agent specs
   they bring up (`*-stub.yaml`, seats `runtime: stub`) and the `agents/` and
   `culture.md` those specs reference.
 - `scenarios/scripts/` — four per-seat stub scripts (JSON). A scenario names them with

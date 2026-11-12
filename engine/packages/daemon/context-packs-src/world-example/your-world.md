@@ -3,7 +3,7 @@
 <!-- world-claim: world-example-purpose -->
 A world pack situates an agent: it describes where the agent is, what exists there, and how to act.
 <!-- world-claim: world-example-install -->
-Use `rig context add <pack-directory>` to install a world pack, confirm its ref with `rig context list`, and derive the configured store with `rig config get context.root` only when a path is needed.
+Use `multi-agent context add <pack-directory>` to install a world pack, confirm its ref with `multi-agent context list`, and derive the configured store with `multi-agent config get context.root` only when a path is needed.
 
 <!-- world-claim: world-example-authoring -->
 Copy this pack, update its manifest, and replace each prompt below with your world's facts.
@@ -11,7 +11,7 @@ Copy this pack, update its manifest, and replace each prompt below with your wor
 ## Exercise: Book world
 
 <!-- world-claim: world-example-book-exercise -->
-Run `rig context get world-example`, copy this pack, and make the project a book world by describing the writer, manuscript, sources, editorial rules, decisions, current draft state, and next useful actions in a few coherent files.
+Run `multi-agent context get world-example`, copy this pack, and make the project a book world by describing the writer, manuscript, sources, editorial rules, decisions, current draft state, and next useful actions in a few coherent files.
 
 <!-- world-claim: world-example-regions -->
 The region names below are atom metadata, not a required directory layout.

@@ -2,7 +2,7 @@
 
 # The only optional surface is rig itself. Skip before using any external command so the
 # missing-command case is honest even under an empty PATH.
-if ! command -v rig >/dev/null 2>&1; then
+if ! command -v multi-agent >/dev/null 2>&1; then
   printf '%s\n' '[skip] rig-command-surface — rig is unavailable; command claims were not evaluated'
   printf '%s\n' '0 passed · 0 failed · 1 skipped'
   exit 0
@@ -190,7 +190,7 @@ has_manifest_block_line "$root/manifest.yaml" '  - path: build-your-world.md' ' 
 has_manifest_block_line "$root/manifest.yaml" '  - path: boundaries.md' '    summary: "What this public world covers, excludes, and cannot decide."' || public_manifest_ok=0
 has_manifest_block_line "$root/manifest.yaml" '  - path: claims.yaml' '    summary: "Every authored claim mapped to a failing check or an explicit honesty flag."' || public_manifest_ok=0
 has_manifest_block_line "$root/manifest.yaml" '  - path: verify-world.sh' '    summary: "Portable named checks with loud failures and skips."' || public_manifest_ok=0
-has_manifest_block_line "$root/manifest.yaml" '  - id: enter-the-world' '      prompt: "You just arrived in an unfamiliar OpenRig environment. What do you derive before acting?"' || public_manifest_ok=0
+has_manifest_block_line "$root/manifest.yaml" '  - id: enter-the-world' '      prompt: "You just arrived in an unfamiliar Multi-Agent environment. What do you derive before acting?"' || public_manifest_ok=0
 has_manifest_block_line "$root/manifest.yaml" '  - id: enter-the-world' '      expect: "The agent derives its identity, live topology, available context, and command surface instead of guessing."' || public_manifest_ok=0
 has_manifest_block_line "$root/manifest.yaml" '  - id: author-a-world' '      prompt: "Create a world for a book-writing project without turning the eight regions into folders."' || public_manifest_ok=0
 has_manifest_block_line "$root/manifest.yaml" '  - id: author-a-world' '      expect: "The agent starts with a small manifest and authored files, tags atoms by region, and keeps other context kinds separate."' || public_manifest_ok=0
@@ -203,7 +203,7 @@ else
 fi
 
 example_manifest_ok=1
-grep -Fqx 'purpose: "A fill-in template showing the anatomy of an OpenRig world pack."' "$example/manifest.yaml" || example_manifest_ok=0
+grep -Fqx 'purpose: "A fill-in template showing the anatomy of an Multi-Agent world pack."' "$example/manifest.yaml" || example_manifest_ok=0
 has_manifest_block_line "$example/manifest.yaml" '  - path: your-world.md' '    summary: "A minimal fill-in template for describing an agent'"'"'s world."' || example_manifest_ok=0
 has_manifest_block_line "$example/manifest.yaml" '  - id: your-world' '      prompt: "Describe the operating world for a book-writing project."' || example_manifest_ok=0
 has_manifest_block_line "$example/manifest.yaml" '  - id: your-world' '      expect: "The agent fills one coherent world file and derives volatile state instead of creating a folder per region."' || example_manifest_ok=0
@@ -271,19 +271,19 @@ else
   fail authoring-convention 'the public authoring convention drifted'
 fi
 
-if rig --help >/dev/null 2>&1 &&
-   rig context list --help >/dev/null 2>&1 &&
-   rig context show --help >/dev/null 2>&1 &&
-   rig context get --help >/dev/null 2>&1 &&
-   rig context profile --help >/dev/null 2>&1 &&
-   rig context add --help >/dev/null 2>&1 &&
-   rig context rm --help >/dev/null 2>&1; then
+if multi-agent --help >/dev/null 2>&1 &&
+   multi-agent context list --help >/dev/null 2>&1 &&
+   multi-agent context show --help >/dev/null 2>&1 &&
+   multi-agent context get --help >/dev/null 2>&1 &&
+   multi-agent context profile --help >/dev/null 2>&1 &&
+   multi-agent context add --help >/dev/null 2>&1 &&
+   multi-agent context rm --help >/dev/null 2>&1; then
   pass rig-command-surface 'every taught rig command exists on the live CLI'
 else
   fail rig-command-surface 'a taught rig command is absent from the live CLI'
 fi
 
-public_get_output=$(rig context get world-public 2>/dev/null)
+public_get_output=$(multi-agent context get world-public 2>/dev/null)
 public_get_status=$?
 public_get_ok=1
 [ "$public_get_status" -eq 0 ] || public_get_ok=0
@@ -296,7 +296,7 @@ else
   fail retrieve-public-pack 'context get did not return the assembled public world content'
 fi
 
-profile_output=$(rig context profile world-public --situation fresh --json 2>/dev/null)
+profile_output=$(multi-agent context profile world-public --situation fresh --json 2>/dev/null)
 profile_status=$?
 profile_tokens=$(printf '%s\n' "$profile_output" | sed -n 's/.*"totalEstimatedTokens"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | sed -n '1p')
 profile_ok=1
@@ -311,7 +311,7 @@ else
   fail compose-fresh-profile 'context profile did not return the fresh atom graph and derived token total'
 fi
 
-example_get_output=$(rig context get world-example 2>/dev/null)
+example_get_output=$(multi-agent context get world-example 2>/dev/null)
 example_get_status=$?
 example_get_ok=1
 [ "$example_get_status" -eq 0 ] || example_get_ok=0
@@ -324,7 +324,7 @@ else
   fail retrieve-world-example 'context get did not return the worked book-world template'
 fi
 
-pack_output=$(rig context show world-public --json 2>/dev/null)
+pack_output=$(multi-agent context show world-public --json 2>/dev/null)
 pack_status=$?
 pack_source_path=$(printf '%s\n' "$pack_output" | sed -n 's/.*"sourcePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')
 pack_source_root=$(CDPATH= cd "$pack_source_path" 2>/dev/null && pwd)
@@ -345,7 +345,7 @@ else
   fail run-public-verifier 'the directory returned by context show does not contain this verifier'
 fi
 
-list_output=$(rig context list --json 2>/dev/null)
+list_output=$(multi-agent context list --json 2>/dev/null)
 list_status=$?
 namespace_ok=1
 [ "$list_status" -eq 0 ] || namespace_ok=0
@@ -356,7 +356,7 @@ grep -Fq 'This pack is `world-public`.' "$root/boundaries.md" || namespace_ok=0
 grep -Fq 'A local world may use a different ref and carry instance-specific' "$root/boundaries.md" || namespace_ok=0
 grep -Fq 'substance without inheriting or being replaced by these public bytes.' "$root/boundaries.md" || namespace_ok=0
 if printf '%s\n' "$list_output" | grep -Eq '"relativePath"[[:space:]]*:[[:space:]]*"world/install"'; then
-  private_output=$(rig context show world/install --json 2>/dev/null)
+  private_output=$(multi-agent context show world/install --json 2>/dev/null)
   private_status=$?
   [ "$private_status" -eq 0 ] || namespace_ok=0
   printf '%s\n' "$private_output" | grep -Eq '"relativePath"[[:space:]]*:[[:space:]]*"world/install"' || namespace_ok=0
@@ -368,23 +368,23 @@ else
   fail private-ref-boundary 'the world-public or local-world namespace projection is false'
 fi
 
-configured_context_root=$(rig config get context.root 2>/dev/null)
+configured_context_root=$(multi-agent config get context.root 2>/dev/null)
 configured_context_status=$?
 example_install_ok=1
 [ "$configured_context_status" -eq 0 ] || example_install_ok=0
 [ -n "$configured_context_root" ] || example_install_ok=0
-if [ -n "${OPENRIG_CONTEXT_ROOT:-}" ] && [ "$configured_context_root" != "$OPENRIG_CONTEXT_ROOT" ]; then
+if [ -n "${MULTI_AGENT_CONTEXT_ROOT:-}" ] && [ "$configured_context_root" != "$MULTI_AGENT_CONTEXT_ROOT" ]; then
   example_install_ok=0
 fi
-rig context add --help >/dev/null 2>&1 || example_install_ok=0
-rig context list --help >/dev/null 2>&1 || example_install_ok=0
+multi-agent context add --help >/dev/null 2>&1 || example_install_ok=0
+multi-agent context list --help >/dev/null 2>&1 || example_install_ok=0
 
 probe_ref="world-public-verify-$$"
 probe_target="$configured_context_root/$probe_ref"
 probe_installed=0
 cleanup_probe() {
   [ "$probe_installed" -eq 1 ] || return 0
-  if rig context rm "$probe_ref" --json >/dev/null 2>&1; then
+  if multi-agent context rm "$probe_ref" --json >/dev/null 2>&1; then
     probe_installed=0
     return 0
   fi
@@ -401,13 +401,13 @@ else
   trap 'cleanup_probe >/dev/null 2>&1 || :' 0
   trap 'cleanup_probe >/dev/null 2>&1 || :; exit 130' 1 2 15
 
-  probe_add_output=$(rig context add "$example" --name "$probe_ref" --json 2>/dev/null)
+  probe_add_output=$(multi-agent context add "$example" --name "$probe_ref" --json 2>/dev/null)
   probe_add_status=$?
   probe_installed_at=$(printf '%s\n' "$probe_add_output" | sed -n 's/.*"installedAt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')
   [ "$probe_add_status" -eq 0 ] || example_install_ok=0
   [ "$probe_installed_at" = "$probe_target" ] || example_install_ok=0
 
-  probe_list_output=$(rig context list --json 2>/dev/null)
+  probe_list_output=$(multi-agent context list --json 2>/dev/null)
   probe_list_status=$?
   if [ -d "$probe_target" ] || printf '%s\n' "$probe_list_output" | grep -Eq "\"relativePath\"[[:space:]]*:[[:space:]]*\"$probe_ref\""; then
     probe_installed=1
@@ -418,7 +418,7 @@ else
   if [ "$probe_installed" -eq 1 ]; then
     cleanup_probe || example_install_ok=0
   fi
-  probe_cleanup_output=$(rig context list --json 2>/dev/null)
+  probe_cleanup_output=$(multi-agent context list --json 2>/dev/null)
   probe_cleanup_status=$?
   [ "$probe_cleanup_status" -eq 0 ] || example_install_ok=0
   if [ -d "$probe_target" ] || printf '%s\n' "$probe_cleanup_output" | grep -Eq "\"relativePath\"[[:space:]]*:[[:space:]]*\"$probe_ref\""; then
@@ -431,8 +431,8 @@ else
   fail world-example-install 'the typed context store or taught add/list effect is false'
 fi
 
-expected_session=${OPENRIG_SESSION_NAME:-${RIGGED_SESSION_NAME:-}}
-identity_output=$(rig whoami --json 2>/dev/null)
+expected_session=${MULTI_AGENT_SESSION_NAME:-}
+identity_output=$(multi-agent whoami --json 2>/dev/null)
 identity_status=$?
 identity_ok=1
 [ "$identity_status" -eq 0 ] || identity_ok=0
@@ -443,12 +443,12 @@ if [ -n "$expected_session" ]; then
   printf '%s\n' "$identity_output" | grep -Fq "\"sessionName\":\"$expected_session\"" || identity_ok=0
 fi
 if [ "$identity_ok" -eq 1 ]; then
-  pass derive-identity 'rig whoami returned a complete managed-seat identity'
+  pass derive-identity 'multi-agent whoami returned a complete managed-seat identity'
 else
-  fail derive-identity 'rig whoami did not return a complete managed-seat identity'
+  fail derive-identity 'multi-agent whoami did not return a complete managed-seat identity'
 fi
 
-topology_output=$(rig ps --nodes --json 2>/dev/null)
+topology_output=$(multi-agent ps --nodes --json 2>/dev/null)
 topology_status=$?
 topology_ok=1
 [ "$topology_status" -eq 0 ] || topology_ok=0
@@ -456,15 +456,15 @@ topology_ok=1
 printf '%s\n' "$topology_output" | grep -Eq "\"canonicalSessionName\"[[:space:]]*:[[:space:]]*\"$expected_session\"" || topology_ok=0
 printf '%s\n' "$topology_output" | grep -Eq '"rigName"[[:space:]]*:[[:space:]]*"[^\"]+"' || topology_ok=0
 if [ "$topology_ok" -eq 1 ]; then
-  pass derive-topology 'rig ps node detail returned this seat under its canonical session identity'
+  pass derive-topology 'multi-agent ps node detail returned this seat under its canonical session identity'
 else
-  fail derive-topology 'rig ps node detail did not include this seat under its canonical session identity'
+  fail derive-topology 'multi-agent ps node detail did not include this seat under its canonical session identity'
 fi
 
-if grep -Fq 'rig whoami --json' "$root/start-here.md" &&
-   grep -Fq 'rig ps --nodes --json' "$root/start-here.md" &&
-   grep -Fq 'rig context list' "$root/start-here.md" &&
-   grep -Fq 'rig --help' "$root/start-here.md"; then
+if grep -Fq 'multi-agent whoami --json' "$root/start-here.md" &&
+   grep -Fq 'multi-agent ps --nodes --json' "$root/start-here.md" &&
+   grep -Fq 'multi-agent context list' "$root/start-here.md" &&
+   grep -Fq 'multi-agent --help' "$root/start-here.md"; then
   pass taught-commands 'volatile facts point at their deriving commands'
 else
   fail taught-commands 'one or more deriving commands are not taught'
@@ -488,7 +488,7 @@ else
   fail derived-reading-cost 'the live composer did not report a positive reading cost'
 fi
 
-profile_help=$(rig context profile --help 2>/dev/null)
+profile_help=$(multi-agent context profile --help 2>/dev/null)
 profile_help_status=$?
 if [ "$profile_help_status" -eq 0 ] &&
    ! printf '%s\n' "$profile_help" | grep -Eq -- '--region([[:space:]=]|$)' &&
@@ -514,12 +514,12 @@ for region in identity ontology terrain actors laws history state affordances; d
 done
 if [ "$example_regions_ok" -eq 1 ] &&
    grep -Fq 'Book world' "$example/your-world.md" &&
-   grep -Fq 'rig context get world-example' "$example/your-world.md" &&
-   grep -Fq 'rig context add <pack-directory>' "$example/your-world.md" &&
-   grep -Fq 'rig context list' "$example/your-world.md" &&
-   grep -Fq 'rig config get context.root' "$example/your-world.md" &&
+   grep -Fq 'multi-agent context get world-example' "$example/your-world.md" &&
+   grep -Fq 'multi-agent context add <pack-directory>' "$example/your-world.md" &&
+   grep -Fq 'multi-agent context list' "$example/your-world.md" &&
+   grep -Fq 'multi-agent config get context.root' "$example/your-world.md" &&
    grep -Fq "Copy this pack, update its manifest, and replace each prompt below with your world's facts." "$example/your-world.md" &&
-   grep -Fq 'Run `rig context get world-example`, copy this pack, and make the project a book world by describing the writer, manuscript, sources, editorial rules, decisions, current draft state, and next useful actions in a few coherent files.' "$example/your-world.md" &&
+   grep -Fq 'Run `multi-agent context get world-example`, copy this pack, and make the project a book world by describing the writer, manuscript, sources, editorial rules, decisions, current draft state, and next useful actions in a few coherent files.' "$example/your-world.md" &&
    grep -Fq "Name the world and the agent's place in it." "$example/your-world.md" &&
    grep -Fq 'Define the important kinds of things and what each is for.' "$example/your-world.md" &&
    grep -Fq 'Name who else is present, what they own, and how to reach them.' "$example/your-world.md" &&

@@ -83,7 +83,7 @@ advance, by posture.
 Everything that protects you is something you set up **while you were still awake.** That is the
 whole reason the coordination machinery exists, and why none of it is optional decoration:
 
-- **`rig watchdog`** — an alarm you set for yourself, because you have no way to wake on your own.
+- **`multi-agent watchdog`** — an alarm you set for yourself, because you have no way to wake on your own.
 - **`claude loop` / `Monitor`, or your runtime's equivalent** — stay awake, or arrange to be woken by an event rather than a clock.
 - **queue handoff** — wake *someone else* and give them the thread, so the work continues while you
   are out. If everyone does this, the rig runs without a supervisor.
@@ -107,7 +107,7 @@ watching. Attention costs them almost nothing.
 
 **You are inside one terminal, reaching into others, in discontinuous time.** Which means:
 
-- **You cannot watch. You can only glance.** `rig capture` is a still frame, not a video feed.
+- **You cannot watch. You can only glance.** `multi-agent capture` is a still frame, not a video feed.
 - **Every glance costs**, and it is an action — it consumes the turn you are spending on it.
 - **Waiting is not something you can do.** Time does not pass for you while nothing happens.
 
@@ -124,11 +124,11 @@ terminal, a watchdog wakes you. **Do not simulate continuity — arrange to be t
 yourself checking whether something has changed yet, the move is not a faster loop, it is a
 mechanism that will wake you when it does.
 
-## What `rig send` actually is
+## What `multi-agent send` actually is
 
 It types into another agent's terminal and presses enter. That is all. The session name is the
-address; the message is a prompt in their input box. Everything else — `rig capture` reading their
-screen, `rig walk` pacing text in — is the same primitive with better ergonomics.
+address; the message is a prompt in their input box. Everything else — `multi-agent capture` reading their
+screen, `multi-agent walk` pacing text in — is the same primitive with better ergonomics.
 
 Which means: **you are a user of every other agent here, and every one of them is a user of you.**
 You can unblock them, reconfigure them, wake them, compact them. They can do it to you. If you are

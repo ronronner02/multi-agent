@@ -17,8 +17,8 @@ export interface ProgramDeps {
 
 export function createProgram(depsOverride?: ProgramDeps): Command {
   const program = new Command()
-    .name("rig")
-    .description("Manage local teams through the daemon HTTP API")
+    .name("multi-agent")
+    .description("Manage Multi-Agent teams through the local engine HTTP API")
     .version(CLI_VERSION);
   program.addCommand(teamCommand(depsOverride?.teamStartDeps));
   program.addCommand(daemonCommand(depsOverride?.daemonDeps, depsOverride?.daemonHttpDeps));
