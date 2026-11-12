@@ -280,4 +280,71 @@ describe("the owner retry reads the recorded classification", () => {
     expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)).toEqual(before);
   });
 
+  it("asks once for a launch the owner must decide, and never again at the same run version", async () => {
+    // The live defect: a scope stage that refused an untouched candidate said
+    // `plan-change-required: outside-write-paths` on every dispatch tick, so the event log filled
+    // with `node.startup_failed` and the daemon log repeated the same line once a second. The
+    // refusal is the owner's to answer, so it must be recorded once and then left alone — and an
+    // owner action, which moves the run's entity version, is exactly what may ask once more.
+    const { composeTaskDispatch, ownerActionRefusal } = await import("../src/domain/task-dispatch.js");
+    expect(ownerActionRefusal("plan-change-required: outside-write-paths")).toBe(true);
+    expect(ownerActionRefusal("extension-pending: owner-decision")).toBe(true);
+    expect(ownerActionRefusal("listen EACCES: permission denied")).toBe(false);
+    expect(ownerActionRefusal("Managed attempt task is not recorded")).toBe(false);
+    const seat = sessions.findResumeContextByName("builder@rig-1")!;
+    sessions.updateBinding(seat.nodeId, { attachmentType: "external_cli", tmuxSession: null, tmuxPane: null, tmuxWindow: null });
+    sessions.updateStartupStatus(seat.sessionId, "pending");
+    const startNode = vi.fn(async () => ({ ok: false as const, startupStatus: "failed" as const,
+      errors: ["plan-change-required: outside-write-paths"] }));
+    const dispatch = composeTaskDispatch({ rigRepo: new RigRepository(db), sessions, startupOrchestrator: { startNode } as never,
+      runtimeAdapters: { "claude-code": { runtime: "claude-code", managedTransport: "direct" } } as never,
+      maxSessions: () => 2, liveSessions: () => 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      for (const _ of [1, 2, 3]) await dispatch("run-1", "task-1");
+      expect(startNode).toHaveBeenCalledTimes(1);
+      // The seat is left for the owner rather than re-armed for the next tick.
+      expect(sessions.getSessionsForRig("rig-1").find(row => row.id === seat.sessionId)?.startupStatus)
+        .toBe("attention_required");
+      // An owner action moves the run's entity version, and only then is one more attempt spent.
+      db.prepare("UPDATE team_runs SET entity_version = entity_version + 1 WHERE id = 'run-1'").run();
+      await dispatch("run-1", "task-1");
+      expect(startNode).toHaveBeenCalledTimes(2);
+    } finally { warn.mockRestore(); }
+  });
+
+  it("retries a launch that failed for another reason on a doubling interval, not every tick", async () => {
+    // The same loop with a non-governance cause: an endpoint this host cannot bind failed every
+    // second and each refusal wrote a `node.startup_failed`. A failure that may be transient is
+    // still retried, but on a bounded backoff rather than the sweep's cadence.
+    const { composeTaskDispatch } = await import("../src/domain/task-dispatch.js");
+    const seat = sessions.findResumeContextByName("builder@rig-1")!;
+    sessions.updateBinding(seat.nodeId, { attachmentType: "external_cli", tmuxSession: null, tmuxPane: null, tmuxWindow: null });
+    sessions.updateStartupStatus(seat.sessionId, "pending");
+    let clock = Date.parse("2026-10-14T00:00:00.000Z");
+    const startNode = vi.fn(async () => ({ ok: false as const, startupStatus: "failed" as const,
+      errors: ["listen EACCES: permission denied mailbox.sock"] }));
+    const dispatch = composeTaskDispatch({ rigRepo: new RigRepository(db), sessions, now: () => new Date(clock),
+      startupOrchestrator: { startNode } as never,
+      runtimeAdapters: { "claude-code": { runtime: "claude-code", managedTransport: "direct" } } as never,
+      maxSessions: () => 2, liveSessions: () => 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await dispatch("run-1", "task-1");
+      expect(startNode).toHaveBeenCalledTimes(1);
+      // Inside the first interval nothing is asked again, however often the sweep calls.
+      for (let tick = 0; tick < 9; tick++) { clock += 100; await dispatch("run-1", "task-1"); }
+      expect(startNode).toHaveBeenCalledTimes(1);
+      clock += 1_000;
+      await dispatch("run-1", "task-1");
+      expect(startNode).toHaveBeenCalledTimes(2);
+      // The second wait is twice the first, and the cap is a minute.
+      for (let tick = 0; tick < 10; tick++) { clock += 100; await dispatch("run-1", "task-1"); }
+      expect(startNode).toHaveBeenCalledTimes(2);
+      clock += 2_000;
+      await dispatch("run-1", "task-1");
+      expect(startNode).toHaveBeenCalledTimes(3);
+    } finally { warn.mockRestore(); }
+  });
+
 });

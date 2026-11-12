@@ -53,6 +53,7 @@ const tables = [
   "team_queue_authority",
   "team_runs",
   "team_scope_extensions",
+  "team_seat_mailbox_capabilities",
   "team_soul_versions",
   "team_worker_credentials",
   "team_workflow_outcomes",
@@ -89,7 +90,7 @@ describe("fresh team baseline", () => {
       .all().map(row => (row as {name: string}).name)).toEqual(tables);
     // Captured from the replaced chain, restricted to the retained tables and their objects.
     // This also pins every column type, default, CHECK, UNIQUE and FK declaration.
-    expect(hash(JSON.stringify(schema(db)))).toBe("f1fe6faaf7060e34bc1efee19931c5ce5d2ca46dba9b69db3356344d8fb62694");
+    expect(hash(JSON.stringify(schema(db)))).toBe("0736d1a3fadb03a62f74bbd3283b8f06c4272edb2975ef21601d22fc24cb7a26");
     expect(schema(db).filter(row => (row as {type: string}).type === "index")).toHaveLength(80);
     expect(schema(db).filter(row => (row as {type: string}).type === "trigger")).toHaveLength(1);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -123,6 +124,16 @@ describe("fresh team baseline", () => {
     expect(reopened.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION);
   });
 
+  it("refuses a database marked with an earlier baseline", () => {
+    const file = join(directory(), "multi-agent.sqlite");
+    const earlier = new Database(file); connections.push(earlier);
+    earlier.exec("CREATE TABLE rigs (id TEXT PRIMARY KEY)");
+    earlier.pragma(`user_version = ${BASELINE_VERSION - 1}`);
+    expect(() => initializeDatabase(earlier, file)).toThrow(LegacyDatabaseError);
+    expect(earlier.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION - 1);
+    expect(earlier.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toEqual([{ name: "rigs" }]);
+  });
+
   it.each(["DELETE", "WAL"])("refuses an unmarked %s database without changing its bytes", journal => {
     const file = join(directory(), "multi-agent.sqlite");
     const legacy = new Database(file); connections.push(legacy);
@@ -151,7 +162,7 @@ describe("fresh team baseline", () => {
     const db = createDb(join(directory(), "failed.sqlite"));
     connections.push(db);
     expect(() => initializeDatabase(db, db.name, { injectFailure: () => {
-      expect(schema(db)).toHaveLength(137);
+      expect(schema(db)).toHaveLength(138);
       expect(db.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION);
       throw new Error("injected baseline failure");
     } })).toThrow("injected baseline failure");
@@ -164,7 +175,7 @@ describe("fresh team baseline", () => {
     expect(schema(reopened)).toEqual([]);
     expect(reopened.pragma("user_version", { simple: true })).toBe(0);
     initializeDatabase(reopened);
-    expect(schema(reopened)).toHaveLength(137);
+    expect(schema(reopened)).toHaveLength(138);
     expect(reopened.pragma("foreign_key_check")).toEqual([]);
   });
 });
