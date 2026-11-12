@@ -95,7 +95,7 @@ const DAEMON_GIT_ENV = { GIT_AUTHOR_NAME: "multi-agent", GIT_AUTHOR_EMAIL: "mult
   GIT_COMMITTER_NAME: "multi-agent", GIT_COMMITTER_EMAIL: "multi-agent@localhost" };
 
 function git(cwd: string, args: readonly string[], input?: string): string {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", input,
+  return execFileSync("git", ["-C", cwd, ...args], { windowsHide: true, encoding: "utf8", input,
     stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], timeout: 120_000,
     env: { ...process.env, ...DAEMON_GIT_ENV } });
 }

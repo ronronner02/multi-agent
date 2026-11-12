@@ -61,7 +61,7 @@ export function createProcessLiveness(deps: {
   };
 }
 
-type ExecFile = (file: string, args: string[], options: { encoding: "utf-8" }) => string;
+type ExecFile = (file: string, args: string[], options: { encoding: "utf-8"; windowsHide?: boolean }) => string;
 
 // Windows has no ps(1) and no zombie state, so the signal probe alone decides liveness there.
 export function readProcessState(
@@ -71,7 +71,7 @@ export function readProcessState(
 ): string | null {
   if (platform === "win32") return "R";
   try {
-    return run("ps", ["-o", "state=", "-p", String(pid)], { encoding: "utf-8" });
+    return run("ps", ["-o", "state=", "-p", String(pid)], { encoding: "utf-8", windowsHide: true });
   } catch {
     return null;
   }
@@ -91,7 +91,7 @@ export function realDeps(): LifecycleDeps {
     processLiveness,
     platform: process.platform,
     acquireStartLock: () => acquireDaemonStartLock(MULTI_AGENT_DIR),
-    spawn: (cmd, args, opts) => spawn(cmd, args, opts as Parameters<typeof spawn>[2]),
+    spawn: (cmd, args, opts) => spawn(cmd, args, { ...opts, windowsHide: true } as Parameters<typeof spawn>[2]),
     fetch: async (url) => {
       const res = await fetchWithTimeout(globalThis.fetch, url, {}, {
         timeoutMs: 1_500,

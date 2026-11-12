@@ -31,6 +31,7 @@ export async function readNativeExecutablePaths(requested: number[]): Promise<Ma
       entries = await Promise.all(pids.map(async pid => [pid, await readlink(`/proc/${pid}/exe`).catch(() => null)]));
     } else if (process.platform === "darwin") {
       const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_PROCESS_PATHS, ...pids.map(String)], {
+        windowsHide: true,
         encoding: "utf-8", timeout: 2000, maxBuffer: 1024 * 1024,
       });
       entries = JSON.parse(stdout);

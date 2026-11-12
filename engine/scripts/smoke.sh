@@ -9,6 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 # managed boot no longer needs the provisioned /etc/multi-agent policy.
 npm run test -w packages/daemon -- \
   test/source-brand.test.ts \
+  test/windows-hide-child-processes.test.ts \
   test/data-paths.test.ts \
   test/scenario-daemon-mode.test.ts \
   test/team-control-auth.test.ts \

@@ -164,6 +164,7 @@ export interface LifecycleDeps {
     env: Record<string, string>;
     stdio: unknown;
     detached: boolean;
+    windowsHide?: boolean;
   }) => ChildProcess;
   // OPR.0.4.3.21 — optional `json` lets getDaemonStatus read the enriched
   // /healthz body (event-loop evidence). Optional so existing mocks that
@@ -594,6 +595,7 @@ async function startOwnedDaemon(opts: StartOptions, deps: LifecycleDeps, lock: D
   let child: ChildProcess;
   try {
     child = deps.spawn(process.execPath, [daemonEntry], {
+    windowsHide: true,
     env: buildDaemonEnv(process.env as Record<string, string>, {
       port,
       host: explicitHost,
@@ -977,6 +979,7 @@ export function tailLogs(deps: LifecycleDeps, opts: { follow: boolean }): void {
 
   const args = opts.follow ? ["-f", logFile] : [logFile];
   const child = deps.spawn("tail", args, {
+    windowsHide: true,
     env: process.env as Record<string, string>,
     stdio: "inherit" as unknown,
     detached: false,

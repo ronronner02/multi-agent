@@ -75,6 +75,7 @@ function findLatestJsonl(cwd) {
 
   for (const root of roots) {
     const result = spawnSync("find", [root, "-name", "*.jsonl", "-maxdepth", root === projectsRoot ? "4" : "2"], {
+      windowsHide: true,
       encoding: "utf8",
     });
     if (result.status !== 0 && !result.stdout) continue;
@@ -239,6 +240,7 @@ function discoverDocs(cwd) {
     if (stat.isFile()) docs.add(full);
     if (stat.isDirectory()) {
       const result = spawnSync("find", [full, "-maxdepth", candidate === "docs" ? "2" : "1", "-type", "f", "-name", "*.md"], {
+        windowsHide: true,
         encoding: "utf8",
       });
       for (const file of result.stdout.split(/\r?\n/).filter(Boolean)) {

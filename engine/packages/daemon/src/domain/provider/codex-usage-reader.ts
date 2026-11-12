@@ -66,7 +66,7 @@ export function codexUsageReader(options: CodexUsageReaderOptions = {}): CodexUs
     try {
       // Its own process group, so cleanup reaches the reader's descendants and nothing else.
       // Plugins and apps off, as the #275 network reader starts it: no plugin sync during a usage read.
-      child = spawn("codex", CODEX_USAGE_READER_ARGS, { cwd: options.home, env, stdio: ["pipe", "pipe", "ignore"], detached: true });
+      child = spawn("codex", CODEX_USAGE_READER_ARGS, { windowsHide: true, cwd: options.home, env, stdio: ["pipe", "pipe", "ignore"], detached: true });
     } catch (error) {
       return { ok: false, at: now(), reason: "spawn_failed", detail: `codex app-server could not start: ${firstLine(error)}` };
     }

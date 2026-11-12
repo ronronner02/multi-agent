@@ -59,7 +59,7 @@ export function bindingForGoal(input: { root: string; planRef: string; writePath
   const root = realpathSync(input.root);
   const planDigest = hashBytes(readFileSync(join(root, input.planRef)));
   const head = execFileSync("git", ["-C", root, "rev-parse", "--verify", "HEAD^{commit}"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   return {
     artifactContract: "spec-unified-plan/v1", artifactReadiness: "implementation-ready", execution: "code", status: "active",
     planRef: input.planRef, planDigest, repository: { root, identity: "git:" + head },

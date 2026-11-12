@@ -69,6 +69,7 @@ export function installPinnedFramework(home: string): string {
   }
   const stage = mkdtempSync(join(dirname(root), ".framework-install-"));
   const git = (...args: string[]) => execFileSync("git", ["-C", stage, ...args], {
+    windowsHide: true,
     encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 120_000,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
   }).trim();

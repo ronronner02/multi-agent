@@ -94,7 +94,7 @@ interface QueueRowLite {
 const execFileAsync = promisify(execFile);
 
 async function defaultExec(cmd: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync(cmd, args, { encoding: "utf8", timeout: 5000 });
+  const { stdout } = await execFileAsync(cmd, args, { windowsHide: true, encoding: "utf8", timeout: 5000 });
   return stdout.trim();
 }
 

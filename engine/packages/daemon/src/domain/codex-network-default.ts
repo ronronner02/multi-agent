@@ -138,7 +138,7 @@ export function codexNetworkDefaultReader(options: CodexNetworkReaderOptions = {
     let child: ReturnType<typeof spawn>;
     try {
       // Its own process group, so cleanup reaches the reader's descendants and nothing else.
-      child = spawn("codex", args, { cwd, env, stdio: ["pipe", "pipe", "ignore"], detached: true });
+      child = spawn("codex", args, { windowsHide: true, cwd, env, stdio: ["pipe", "pipe", "ignore"], detached: true });
     } catch (error) {
       return { ...no(`codex app-server could not start: ${firstLine(error)}`), elapsedMs: Math.round(performance.now() - started) };
     }
