@@ -14,7 +14,7 @@ vi.mock("../../hooks/useOwnerSession.js", () => ({
   OwnerReadError: class OwnerReadError extends Error {
     constructor(readonly status: number, readonly code: string) { super(code); }
   },
-  useOwnerSession: () => ({ paired: true, request, pair: vi.fn(), revoke: vi.fn(), openTerminal: vi.fn(), terminalAvailable: false }),
+  useOwnerSession: () => ({ paired: true, request, pair: vi.fn(), revoke: vi.fn() }),
   OwnerSessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 

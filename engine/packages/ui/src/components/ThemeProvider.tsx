@@ -35,10 +35,9 @@ interface ThemeContextValue {
   setTheme: (theme: ThemeId) => void;
 }
 
-// Functional standalone default so a bare <ThemeSelector/> (e.g. AppShell rendered
-// in a test without the root provider) still persists + applies rather than
-// throwing. Production always wraps <App/> in <ThemeProvider> (main.tsx), which
-// supplies the reactive value below.
+// Functional standalone default keeps isolated consumers and tests useful without
+// a root provider. Production always wraps <App/> in <ThemeProvider> (main.tsx),
+// which supplies the reactive value below.
 const ThemeContext = createContext<ThemeContextValue>({
   theme: DEFAULT_THEME,
   resolved: "light",

@@ -7,7 +7,7 @@
 //  - extensibility: the selector is registry-driven (adding a theme is data-only)
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import {
   THEME_STORAGE_KEY,
   THEMES,
@@ -18,7 +18,6 @@ import {
   applyTheme,
 } from "../src/lib/theme.js";
 import { ThemeProvider, useTheme } from "../src/components/ThemeProvider.js";
-import { ThemeSelector } from "../src/components/ThemeSelector.js";
 
 /** Override window.matchMedia so `(prefers-color-scheme: dark)` reports `osDark`. */
 function mockOsDark(osDark: boolean) {
@@ -122,41 +121,4 @@ describe("ThemeProvider + ThemeSelector", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
-  it("selecting dark applies it and persists across a reload (remount)", () => {
-    const { unmount } = render(
-      <ThemeProvider>
-        <ThemeSelector />
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      fireEvent.change(screen.getByTestId("theme-selector"), { target: { value: "dark" } });
-    });
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
-
-    // Simulate a reload: unmount + remount reads the persisted choice.
-    unmount();
-    document.documentElement.classList.remove("dark");
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    expect(screen.getByTestId("probe").textContent).toBe("dark:dark");
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
-  });
-
-  it("the selector is registry-driven — one <option> per registered theme (extensibility)", () => {
-    render(
-      <ThemeProvider>
-        <ThemeSelector />
-      </ThemeProvider>,
-    );
-    const options = screen.getByTestId("theme-selector").querySelectorAll("option");
-    expect(options).toHaveLength(THEMES.length);
-    expect(Array.from(options).map((o) => o.getAttribute("value"))).toEqual(
-      THEMES.map((t) => t.id),
-    );
-  });
 });

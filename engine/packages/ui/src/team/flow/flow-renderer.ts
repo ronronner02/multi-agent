@@ -74,23 +74,12 @@ const TOKEN_NAMES: Record<keyof FlowRendererColors, FlowColorToken> = {
   divider: "--ui-divider",
 };
 
-const DEFAULT_COLORS: FlowRendererColors = {
-  accent: "var(--ui-accent)",
-  accentPress: "var(--ui-accent-press)",
-  ok: "var(--ui-ok)",
-  warn: "var(--ui-warn)",
-  error: "var(--ui-error)",
-  text: "var(--ui-text)",
-  muted: "var(--ui-muted)",
-  divider: "var(--ui-divider)",
-};
-
-/** Pattern-only density formula inspired by openspawn PR #155; no openspawn code is copied. */
+/** Pattern-only density formula inspired by openspawn PR 155; no openspawn code is copied. */
 export function edgeWidthForCount(count: number): number {
   return Math.min(1.25 + Math.log(Math.max(0, count) + 1) * 0.8, 5.5);
 }
 
-/** Pattern-only particle tiers inspired by openspawn PR #155. */
+/** Pattern-only particle tiers inspired by openspawn PR 155. */
 export function particleTierForCount(count: number): 0 | 1 | 2 | 3 {
   if (count <= 0) return 0;
   if (count < 5) return 1;
@@ -98,7 +87,7 @@ export function particleTierForCount(count: number): 0 | 1 | 2 | 3 {
   return 3;
 }
 
-/** Pattern-only heat thresholds inspired by openspawn PR #155. */
+/** Pattern-only heat thresholds inspired by openspawn PR 155. */
 export function heatLevelForActivity(count: number): "idle" | "cool" | "warm" | "hot" {
   if (count >= 24) return "hot";
   if (count >= 8) return "warm";
