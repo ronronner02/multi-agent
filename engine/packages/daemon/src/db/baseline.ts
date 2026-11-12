@@ -1,7 +1,11 @@
 import type Database from "better-sqlite3";
 
-/** Marker written to PRAGMA user_version in the same transaction as the fresh team schema. */
-export const BASELINE_VERSION = 1;
+/**
+ * Marker written to PRAGMA user_version in the same transaction as the fresh team schema.
+ * Any change to BASELINE_SQL bumps it: a file marked with an earlier value is refused like an
+ * unmarked one, because the daemon never migrates. 2 adds team_seat_mailbox_capabilities.
+ */
+export const BASELINE_VERSION = 2;
 
 /**
  * The one-shot schema for the retained team product. The statements are kept as one SQL
@@ -568,6 +572,14 @@ CREATE TABLE team_worker_credentials (
       session_id TEXT NOT NULL,
       token_digest TEXT NOT NULL,
       issued_at TEXT NOT NULL,
+      PRIMARY KEY (run_id, session_id)
+    );
+-- team_seat_mailbox_capabilities
+CREATE TABLE team_seat_mailbox_capabilities (
+      run_id TEXT NOT NULL REFERENCES team_runs(id),
+      session_id TEXT NOT NULL,
+      capability TEXT NOT NULL,
+      created_at TEXT NOT NULL,
       PRIMARY KEY (run_id, session_id)
     );
 -- team_runs

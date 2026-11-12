@@ -566,6 +566,21 @@ function removeAttemptRoot(root: string): void {
 }
 
 /**
+ * Remove a mailbox directory this production created but never published an endpoint for.
+ *
+ * The directory is created before `listen` so the endpoint has somewhere to bind, and a listen
+ * that fails leaves nothing worth keeping: the attempt id is fresh, so no later caller can adopt
+ * the directory or find the missing endpoint either. Without this, a host whose socket bind fails
+ * accumulates one directory per retry — measured on a Windows host whose AF_UNIX bind is refused,
+ * where a day of retries would have been tens of thousands of directories.
+ */
+function removeMailboxDirectory(directory: string): void {
+  if (!existsSync(directory)) return;
+  try { rmSync(directory, { recursive: true, force: true }); }
+  catch { /* A directory that cannot be removed is evidence, not a second failure. */ }
+}
+
+/**
  * The projection root, created below the worker's own context directory.
  *
  * Group searchable for the worker and grouped to it, because the manifest requires both;
@@ -1309,6 +1324,9 @@ export class WorkflowRuntime {
     // Declared outside the try because the failure path needs it: only a projection this
     // call created may be removed.
     let resumed = false;
+    // The mailbox directory is created before `listen`, so the failure path needs the same
+    // "did this call create it" answer the projection has.
+    let mailboxDirectory = "";
     try {
       // Read before anything else can throw. The failure path below removes only a
       // projection this call created, and an earlier attempt's projection is run
@@ -1339,12 +1357,16 @@ export class WorkflowRuntime {
       // per attempt, so the run segment is what an unisolated endpoint can leave out — nothing
       // else reaches this directory, and the launcher that requires the four-segment shape is
       // not composed on this host.
-      const mailboxDirectory = this.sameIdentity
+      const mailboxDirectoryPath = this.sameIdentity
         ? resolve(roots.mailboxRoot, worker, attemptId)
         : resolve(roots.mailboxRoot, worker, runId, attemptId);
-      const socketPath = resolve(mailboxDirectory, "mailbox.sock");
-      ensureMailboxDirectory(mailboxDirectory,
+      const mailboxAtStart = existsSync(mailboxDirectoryPath);
+      const socketPath = resolve(mailboxDirectoryPath, "mailbox.sock");
+      ensureMailboxDirectory(mailboxDirectoryPath,
         { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir }, this.sameIdentity);
+      // Named only once this call has established the directory: the failure path removes it
+      // only when this production created it.
+      mailboxDirectory = mailboxAtStart ? "" : mailboxDirectoryPath;
       // A socket left by a daemon that died is still a file; the bridge refuses to
       // listen over one, so it is removed first. It can only ever be this attempt's,
       // because the path is built from the attempt id.
@@ -1385,6 +1407,12 @@ export class WorkflowRuntime {
       // owner-writable root. Only a projection this call created is removed; one that
       // was already there belongs to an earlier attempt and is left as evidence.
       if (!resumed) removeAttemptRoot(root);
+      // The mailbox directory is created before `listen`, and a failed listen leaves it behind.
+      // Every attempt id is fresh, so a host that cannot bind the socket — as measured on this
+      // one, where an AF_UNIX bind in a temp directory is refused — accumulated one directory
+      // per retry and would have grown without bound. Only a directory this call created is
+      // removed: an earlier attempt's is evidence, exactly as its projection is.
+      if (mailboxDirectory !== "") removeMailboxDirectory(mailboxDirectory);
       // A credential for an attempt that never started is revoked here: the attempt has no
       // endpoint and no retirement path, so nothing else would ever bound it. The helper only
       // revokes when no sibling attempt of the seat remains, which is what keeps this from

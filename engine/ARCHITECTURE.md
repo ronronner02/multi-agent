@@ -158,9 +158,10 @@ the authority.
 ### The database baseline
 
 `packages/daemon/src/db/baseline.ts` creates the retained schema in one transaction and
-records `PRAGMA user_version = 1` in that transaction. Startup inspects existing files
-read-only before configuring their journal or opening application repositories. Files
-with tables and no baseline marker fail with `legacy_database` and their filename;
+records `BASELINE_VERSION` in `PRAGMA user_version` in that transaction; any schema change
+bumps it. Startup inspects existing files read-only before configuring their journal or opening
+application repositories. Files with tables and no current baseline marker (including an earlier
+baseline) fail with `legacy_database` and their filename;
 the daemon does not migrate their data. Empty files are initialized, and marked files
 reopen normally. `createFullTestDb()` uses the same initializer.
 

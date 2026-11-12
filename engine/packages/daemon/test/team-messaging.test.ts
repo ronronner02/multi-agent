@@ -15,6 +15,7 @@ import { SessionRegistry } from "../src/domain/session-registry.js";
 import { createFullTestDb } from "./helpers/test-app.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
+import { SeatMailboxCapabilities } from "../src/domain/seat-mailbox-capability.js";
 
 /** A well-formed test capability: `mailbox:` plus 32 bytes in base64url. */
 function cap(label: string): string {
@@ -166,6 +167,27 @@ describe("addressed mailbox delivery", () => {
     expect(() => mailbox.consume({ ...scope, capability: cap("foreign"), messageId: "mail-foreign", consumedBy: "worker@team" })).toThrowError(expect.objectContaining({ code: "mailbox_scope_mismatch" }));
     expect(() => mailbox.send({ ...scope, sender: "lead@team", body: "weak", messageId: "mail-weak", capability: "x" })).toThrowError(expect.objectContaining({ code: "invalid_mailbox_input" }));
     expect(() => mailbox.poll({ ...scope, capability: cap("owner"), state: "bogus" as never })).toThrowError(expect.objectContaining({ code: "invalid_mailbox_state" }));
+  });
+
+  it("mints one capability per seat, and a managed send reuses the seat's value", () => {
+    // The tmux removal deleted the minting owner and left the composition returning "". The
+    // producer then refused every managed attempt with `Invalid mailbox capability`, so no seat
+    // could launch at all. Two properties make this the right owner: one value per (run, seat),
+    // and a send that names none stores under the value the seat's own poll will match.
+    const capabilities = new SeatMailboxCapabilities(db);
+    db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at)
+      VALUES ('run-cap', ?, '{}', 'digest', 'approved', '2026-10-23T00:00:00.000Z', '2026-10-23T00:00:00.000Z')`).run(rigId);
+    const first = capabilities.forSeat("run-cap", "worker@team");
+    expect(first).toMatch(/^mailbox:[A-Za-z0-9_-]{43}$/);
+    expect(capabilities.forSeat("run-cap", "worker@team")).toBe(first);
+    expect(capabilities.find("run-cap", "worker@team")).toBe(first);
+    // A seat with no record is null rather than a fresh value: a send must never mint.
+    expect(capabilities.find("run-cap", "other@team")).toBeNull();
+    // The managed send stores under the recorded value, so the seat's poll finds it.
+    const managed = new MailboxDelivery(chatRepo, () => "ready", () => null,
+      (runId, sessionId) => capabilities.find(runId, sessionId));
+    managed.send({ rigId, sender: "lead@team", recipient: "worker@team", taskId: "T009", runId: "run-cap", body: "managed" });
+    expect(managed.poll({ rigId, recipient: "worker@team", taskId: "T009", runId: "run-cap", capability: first }).pendingCount).toBe(1);
   });
 
   it("rejects a missing capability and never turns peer data into approval", () => {

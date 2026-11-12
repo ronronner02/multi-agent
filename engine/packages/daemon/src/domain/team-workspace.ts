@@ -289,6 +289,40 @@ function controlGitEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 }
 
 /**
+ * The source repository's own `core.autocrlf`, as its checkouts already applied it.
+ *
+ * Git for Windows installs `core.autocrlf=true` system-wide, and that value is what wrote the
+ * candidate worktree: `git worktree add` checks out `README.md\n` as `README.md\r\n` and commits
+ * it back as `README.md\n`. The commit lane copies the worktree's bytes and stages them, so
+ * without this value `add -A` records every CRLF worktree file as a modification of its LF blob.
+ * The manifest then described edits nobody made, and the scope check refused the first one
+ * outside the write paths — `plan-change-required: outside-write-paths` on the untouched
+ * `README.md` of a fresh project, for every task's first launch on a Windows host.
+ *
+ * Staging the copy under the same value makes the lane's reading what the owner's repository
+ * would record for that tree, which is the property the manifest claims. The value is read from
+ * the source repository's own configuration — system, global and local, exactly as checkout
+ * read it — rather than from this process, because the daemon's environment is not the owner's.
+ */
+function sourceAutocrlf(sourceRoot: string): string {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  // Only the location directives are dropped: a `GIT_CONFIG_SYSTEM` or `GIT_CONFIG_GLOBAL`
+  // inherited by the daemon would otherwise substitute another host's answer for the one that
+  // wrote this worktree, and the local file is already named by `-C`.
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("GIT_")) delete env[key];
+  }
+  try {
+    const value = execFileSync("git", ["-C", sourceRoot, "config", "--get", "core.autocrlf"],
+      { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 10_000, env }).trim();
+    return value === "" ? "false" : value;
+  } catch {
+    // Unset is `false`, which is git's own default and the value this lane had before.
+    return "false";
+  }
+}
+
+/**
  * Decode bytes that must be UTF-8, refusing instead of substituting U+FFFD.
  *
  * Every name this module handles becomes a path in the patch and in the manifest, so a
@@ -339,12 +373,15 @@ function controlGit(args: readonly string[], cwd: string, extraEnv: NodeJS.Proce
  * entry and closes a class of program execution rather than an instance.
  */
 function storeGit(store: string, workTree: string | null, args: readonly string[],
-  options: { input?: Buffer; env?: NodeJS.ProcessEnv } = {}): Buffer {
+  options: { input?: Buffer; env?: NodeJS.ProcessEnv; autocrlf?: string } = {}): Buffer {
   return execFileSync("git", [
     "-c", "core.excludesFile=/dev/null",
     "-c", "core.attributesFile=/dev/null",
     "-c", "core.hooksPath=/dev/null",
     "-c", "core.fsmonitor=false",
+    // The line-ending value the candidate's own checkout used, so staging the copy measures the
+    // same conversion the source worktree received (see `sourceAutocrlf`).
+    ...(options.autocrlf === undefined ? [] : ["-c", `core.autocrlf=${options.autocrlf}`]),
     // Git decides whether to record a mode change from the work tree's bits only when
     // `core.filemode` is on. The copy's bits are set explicitly, so pinning it keeps the
     // executable bit portable instead of inheriting a host that reports no modes.
@@ -778,12 +815,14 @@ function refuseCandidateRules(copied: ReadonlyMap<string, SnapshotEntry>, base: 
  * copy, so `add -A` sees exactly the rules the base commit gives a fresh checkout — no more, no
  * less. The copy is otherwise the candidate's, minus the candidate's rule files.
  */
-function writeBaseRules(store: string, destination: string, base: ReadonlyMap<string, IndexEntry>): void {
+function writeBaseRules(store: string, destination: string, base: ReadonlyMap<string, IndexEntry>, autocrlf: string): void {
   const paths = [...base.keys()].filter(path => isRulePath(path) && base.get(path)!.mode !== GITLINK_MODE);
   if (paths.length === 0) return;
   mkdirSync(destination, { recursive: true });
+  // The same line-ending value the candidate's checkout used, so a rule file's checkout form
+  // here is the form the candidate's copy holds and the comparison below is like for like.
   storeGit(store, destination, ["checkout-index", "--force", "--prefix=./", "--", ...paths],
-    { env: { GIT_LITERAL_PATHSPECS: "1" } });
+    { env: { GIT_LITERAL_PATHSPECS: "1" }, autocrlf });
 }
 
 /**
@@ -868,6 +907,8 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
   const commit = workspace.base.commit;
   const scratch = mkdtempSync(join(tmpdir(), "candidate-manifest-"));
   try {
+    // What the source's own checkouts converted, stated before any git call reads the copy.
+    const autocrlf = sourceAutocrlf(workspace.sourceRoot);
     const snapshot = join(scratch, "candidate");
     mkdirSync(snapshot, { recursive: true });
     const candidateEntries = snapshotCandidate(workspace.root, snapshot);
@@ -899,7 +940,7 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
     // candidate's copy is a comparison of like with like.
     const baseRulePaths = [...base.keys()].filter(path => isRulePath(path) && base.get(path)!.mode !== GITLINK_MODE);
     const baseRuleTree = join(scratch, "base-rules");
-    writeBaseRules(store, baseRuleTree, base);
+    writeBaseRules(store, baseRuleTree, base, autocrlf);
     const baseRules = new Map<string, Buffer>();
     for (const path of baseRulePaths) {
       const checkedOut = join(baseRuleTree, path);
@@ -922,8 +963,8 @@ function commitLaneManifest(workspace: CandidateWorkspace & { base: { kind: "com
       if (!isRulePath(path)) continue;
       rmSync(join(snapshot, path), { force: true });
     }
-    writeBaseRules(store, snapshot, base);
-    storeGit(store, snapshot, ["add", "-A"]);
+    writeBaseRules(store, snapshot, base, autocrlf);
+    storeGit(store, snapshot, ["add", "-A"], { autocrlf });
 
     const staged = readIndex(store);
     // A gitlink names a submodule directory: it is part of the tree the patch must reproduce, but

@@ -57,6 +57,7 @@ import { planningRosterRequired } from "./domain/lead-roster.js";
 import { composeLeadTurnEnd } from "./domain/lead-chat.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
+import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
 import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
 import { resolveTeamSoul } from "./domain/team-souls.js";
@@ -738,7 +739,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // twice: one owner, one seat table.
   // The mailbox owner `createApp` builds reads this slot (through `deps`), so a managed send
   // reuses the seat's recorded value instead of minting a second one.
-  const readSeatMailboxCapability = (_runId: string, _sessionId: string) => null;
+  const seatCapabilities = new SeatMailboxCapabilities(db);
+  const readSeatMailboxCapability = (runId: string, sessionId: string) => seatCapabilities.find(runId, sessionId);
   // T052 — the managed owner read projection, composed over the same owners the
   // daemon already built. A caller that supplied one keeps it: that is the
   // injection seam the tests and any embedding host use.
@@ -794,7 +796,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   const deps: AppDeps = {
     teamControl: teamControlOptions,
     teamGovernance,
-    readSeatMailboxCapability: () => null,
+    readSeatMailboxCapability,
     ...(managedLaunch ? { managedLaunch } : {}),
     rigRepo, sessionRegistry, daemonLifecycleStore, daemonBootEpoch, eventBus,
     startupOrchestrator,
@@ -851,6 +853,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         const policy = rootsNow();
         return { workerRoot: policy.workerRoot, assignmentRoot: policy.assignmentRoot, identities: policy.workerIdentities };
       }, undefined, unisolated),
+      capabilities: seatCapabilities,
       credentials: workerControl,
     } : undefined;
     workflowRuntime = new WorkflowRuntime({
@@ -884,7 +887,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
             // A read, never a mint: the endpoint authenticates every request through this, and a
             // request against a revoked seat must not bring its credential back.
             readCredentials: () => managedInputs.credentials.readCredentials(),
-            mailboxCapability: (_runId: string, _sessionId: string) => "",
+            mailboxCapability: (runId: string, sessionId: string) => managedInputs.capabilities.forSeat(runId, sessionId),
             workerIdentity: (worker: string) => managedInputs.identities.resolve(worker),
           },
           onManagedAttemptRetired: (attempt: { runId: string; sessionId: string }) =>
