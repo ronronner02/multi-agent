@@ -8,20 +8,20 @@
  */
 
 /**
- * Whether a `/healthz` body is this product's daemon. A bare 200 is not proof: any local process
- * can listen on a port, and the window is about to load and trust whatever answers there.
+ * Whether a `/healthz` body comes from the engine this app forked. A bare 200 is not proof: any
+ * local process can listen on a port, and the window is about to load and trust whatever answers
+ * there. The engine reported its pid over the private parent channel, so the body must name it.
  */
-function isDaemonHealth(body) {
+function isDaemonHealth(body, expectedPid) {
   if (typeof body !== 'string' || body.length === 0) return false;
+  if (!Number.isInteger(expectedPid) || expectedPid <= 0) return false;
   let parsed;
   try {
     parsed = JSON.parse(body);
   } catch {
     return false;
   }
-  return !!parsed && typeof parsed === 'object' && parsed.status === 'ok'
-    && typeof parsed.selfHostId === 'string' && parsed.selfHostId.length > 0
-    && Number.isInteger(parsed.pid) && parsed.pid > 0;
+  return !!parsed && typeof parsed === 'object' && parsed.status === 'ok' && parsed.pid === expectedPid;
 }
 
 /**
