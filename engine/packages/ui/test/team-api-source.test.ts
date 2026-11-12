@@ -19,4 +19,15 @@ describe("team UI API boundary", () => {
         ? [`${file.slice(sourceRoot.length + 1)}:${index + 1}`] : []));
     expect(violations).toEqual([]);
   });
+
+  it("loads nothing from the network outside the daemon's own origin", () => {
+    // The desktop window waits for every stylesheet in index.html; an unreachable host keeps it on the
+    // first-run page, so the shipped page and stylesheets reference no external URL.
+    const styles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+      entry.isDirectory() ? styles(join(dir, entry.name)) : entry.name.endsWith(".css") ? [join(dir, entry.name)] : []);
+    const pages = [resolve(process.cwd(), "index.html"), ...styles(sourceRoot)];
+    const external = pages.flatMap(file => /(?:src|href)=["']https?:\/\/|@import\s+url\(["']?https?:\/\//.test(readFileSync(file, "utf8"))
+      ? [file] : []);
+    expect(external).toEqual([]);
+  });
 });
