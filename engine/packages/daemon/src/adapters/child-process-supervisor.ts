@@ -296,7 +296,10 @@ export class ChildProcessSupervisor implements SupervisedTurn {
     this.output.push(Buffer.from(line + "\n"));
     // The sidecar observations want the provider record itself; the normalizer owns the contract.
     try { this.telemetry?.observe(JSON.parse(line)); } catch { /* A malformed line is the normalizer's fact. */ }
-    for (const event of this.normalizer.normalizeLine(line)) {
+    const events = this.normalizer.normalizeLine(line);
+    // A stream event invalidates readers immediately, so its sidecar must already be readable.
+    if (events.length) this.telemetry?.flush();
+    for (const event of events) {
       this.events.push(event);
       // A Codex turn's identity arrives in its first thread event, and the receipt must not
       // invent one, so it is captured as soon as it is seen.

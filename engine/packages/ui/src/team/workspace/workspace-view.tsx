@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Circle, CircleCheck, CircleX, MinusCircle } from "lucide-react";
 import type { AttemptActivity, TeamAttemptView, TeamOwnerRead, TeamReviewView, TeamSeatView, ToolActivityRecord } from "@multi-agent/daemon/team-control";
 import { useAttemptActivity } from "../../hooks/useAttemptActivity.js";
+import { useAttemptStatus } from "../../hooks/useAttemptStatus.js";
 import { clockTime, namedSeat, TASK_STAGE_LABELS, taskName } from "../display.js";
 import { observedTokens } from "../hooks.js";
 
@@ -58,11 +59,14 @@ function AgentCard({ read, seat, selected, onSelect }: {
   read: TeamOwnerRead; seat: TeamSeatView; selected: boolean; onSelect: (seat: string) => void;
 }) {
   const { t } = useTranslation();
-  const activity = useAttemptActivity(read.runId, attemptForSeat(read, seat));
+  const attempt = attemptForSeat(read, seat);
+  const activity = useAttemptActivity(read.runId, attempt);
+  const status = useAttemptStatus(read.runId, attempt, !!activity.data?.records.length || activity.data?.usage.status === "available");
   return <article ref={activity.ref} className="ui-card ui-agent-card" aria-label={namedSeat(seat, t)} data-retired={seat.retired}>
     <button className="ui-agent-select" aria-pressed={selected} onClick={() => onSelect(seat.seat)}>
       <SeatHeading seat={seat} task={taskForSeat(read, seat)} />
     </button>
+    {attempt?.state === "running" && status && <span role="status">{t(`status.attempt.${status}`)}</span>}
     <ActivityFacts activity={activity.data} /><ToolCalls activity={activity.data} error={activity.isError} recent />
   </article>;
 }

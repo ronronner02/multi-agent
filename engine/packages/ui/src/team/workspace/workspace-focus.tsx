@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TeamOwnerRead, TeamReviewView, TeamSeatView } from "@multi-agent/daemon/team-control";
 import { useAttemptActivity } from "../../hooks/useAttemptActivity.js";
+import { useAttemptStatus } from "../../hooks/useAttemptStatus.js";
 import { isFinished, useTeamResult } from "../../hooks/useTeamResult.js";
 import { DiffView } from "../diff-view.js";
 import { TaskProgress } from "../task-progress.js";
@@ -23,10 +24,13 @@ export function WorkspaceFocus({ read, seat }: { read: TeamOwnerRead; seat: Team
   const { t } = useTranslation();
   const [tab, setTab] = useState<"execution" | "changes" | "output">("execution");
   const task = taskForSeat(read, seat);
-  const activity = useAttemptActivity(read.runId, attemptForSeat(read, seat));
+  const attempt = attemptForSeat(read, seat);
+  const activity = useAttemptActivity(read.runId, attempt);
+  const status = useAttemptStatus(read.runId, attempt, !!activity.data?.records.length || activity.data?.usage.status === "available");
   const logs = read.logs.filter(log => log.taskId === task?.taskId);
   return <section ref={activity.ref} className="ui-card ui-agent-detail" aria-label={t("workspace.identity")}>
     <header className="ui-agent-detail-head"><SeatHeading seat={seat} task={task} /></header>
+    {attempt?.state === "running" && status && <span role="status">{t(`status.attempt.${status}`)}</span>}
     <ActivityFacts activity={activity.data} />
     <div className="ui-detail-tabs" role="group" aria-label={t("workspace.tabs")}>
       {(["execution", "changes", "output"] as const).map(name => <button key={name} aria-pressed={tab === name} onClick={() => setTab(name)}>

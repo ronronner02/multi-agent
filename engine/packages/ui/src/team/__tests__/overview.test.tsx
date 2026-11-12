@@ -133,7 +133,7 @@ describe("Overview", () => {
     const snapshot = read();
     snapshot.run = { ...snapshot.run, state: "blocked", stateReasonKey: "team.reason.activeWallClockBudget",
       binding: { ...snapshot.run.binding, limits: { ...snapshot.run.binding.limits, maxActiveMs: 4 * 24 * 60 * 60_000 } } };
-    await show(snapshot);
+    const view = await show(snapshot);
     expect(screen.getByText("Resuming adds 60 minutes to the active-time budget.")).toBeTruthy();
     const resume = screen.getByRole("button", { name: "Resume" });
     fireEvent.click(resume);
@@ -143,6 +143,10 @@ describe("Overview", () => {
     expect(path).toBe("/runs/" + RUN_ID + "/resume");
     expect(body).toMatchObject({ actionId: RUN_ID, expectedEntityVersion: snapshot.run.entityVersion, payload: { addMinutes: 60 } });
     expect(body.idempotencyKey).toEqual(expect.any(String));
+    fireEvent.click(resume);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(resume).toHaveProperty("disabled", true);
+    view.rerenderRead({ ...snapshot, run: { ...snapshot.run, entityVersion: snapshot.run.entityVersion + 1 } });
     fireEvent.click(resume);
     await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     expect(JSON.parse(request.mock.calls[1]![1].body).idempotencyKey).not.toBe(body.idempotencyKey);

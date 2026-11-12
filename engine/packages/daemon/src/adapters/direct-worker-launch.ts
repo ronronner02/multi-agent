@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync } from "node:fs";
 import { parseAttemptIdentity } from "../contracts/team-control.js";
-import type { WorkerEvent } from "../contracts/worker-events.js";
+import { WORKER_TURN_START_WINDOW_MS, type WorkerEvent } from "../contracts/worker-events.js";
 import { agentTurnPromptPath, agentTurnOutputPaths, isNativeSessionToken, readAgentTurnThreadId } from "../domain/agent-turn.js";
 import { hashBytes } from "../domain/plan-governance.js";
 import { resolveExecutable } from "../domain/executable-resolver.js";
@@ -84,8 +84,6 @@ export interface DirectLaunchFacts {
   processStart?: string;
 }
 
-/** How long a launch waits for its turn to reach the first provider event before it is ready. */
-const TURN_START_WINDOW_MS = 30_000;
 /** How often readiness re-reads the turn's observed events. */
 const READINESS_POLL_MS = 50;
 
@@ -298,7 +296,7 @@ export class DirectWorkerLauncher implements WorkerLauncher {
    * own answer, or for the turn to end.
    */
   private async waitForTurn(turn: SupervisedTurn, deadline: number, threadIdPath?: string): Promise<boolean> {
-    const limit = Math.min(deadline, this.now() + TURN_START_WINDOW_MS);
+    const limit = Math.min(deadline, this.now() + WORKER_TURN_START_WINDOW_MS);
     for (;;) {
       if (turn.observedEvents.length > 0) {
         if (!threadIdPath || turn.observedEvents.some(event => event.type === "session.started")) return true;

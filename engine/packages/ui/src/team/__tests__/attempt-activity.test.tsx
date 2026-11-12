@@ -54,7 +54,7 @@ function tree(current?: TeamAttemptView) {
 }
 
 describe("visible attempt activity", () => {
-  it("refreshes active chat increments at 500 ms and returns to the history cadence when stopped", async () => {
+  it("refreshes active chat from event invalidations without polling", async () => {
     let state = "running";
     session.request.mockImplementation(async () => ({ phase: "planning", messages: [], pendingDecision: null,
       liveTurn: { attemptId: "lead-live", state, progress: null, activity: null } }));
@@ -62,12 +62,15 @@ describe("visible attempt activity", () => {
     const view = render(<QueryClientProvider client={client}><ChatProbe /></QueryClientProvider>);
     await advance(); expect(screen.getByText("running")).toBeTruthy();
     const initial = session.request.mock.calls.length;
-    await advance(500); await advance(); expect(session.request.mock.calls.length).toBe(initial + 1);
+    await advance(5_000); expect(session.request.mock.calls.length).toBe(initial);
+    await act(async () => { await client.invalidateQueries({ queryKey: ["team", RUN_ID] }); });
+    await advance(); expect(session.request.mock.calls.length).toBe(initial + 1);
     state = "stopped";
-    await advance(500); await advance(); expect(screen.getByText("stopped")).toBeTruthy();
+    await act(async () => { await client.invalidateQueries({ queryKey: ["team", RUN_ID] }); });
+    await advance(); expect(screen.getByText("stopped")).toBeTruthy();
     const stopped = session.request.mock.calls.length;
     await advance(1000); expect(session.request.mock.calls.length).toBe(stopped);
-    await advance(2000); await advance(); expect(session.request.mock.calls.length).toBe(stopped + 1);
+    await advance(2000); await advance(); expect(session.request.mock.calls.length).toBe(stopped);
     view.unmount(); const unmounted = session.request.mock.calls.length;
     await advance(4000); expect(session.request.mock.calls.length).toBe(unmounted);
   });
@@ -89,7 +92,8 @@ describe("visible attempt activity", () => {
       { ...frame.records[0]!, seq: 3, at: "2026-11-07T10:00:02.000Z", status: "completed" },
       { ...frame.records[1]!, id: "call-3", seq: 4, tool: "Write" },
     ] };
-    await advance(2000); await advance();
+    await advance(2000); expect(screen.queryByText("1,400")).toBeNull();
+    await act(async () => { await client.invalidateQueries({ queryKey: ["team", RUN_ID] }); }); await advance();
     expect(screen.getByText("1,400")).toBeTruthy();
     expect(view.container.querySelector('[data-call="call-1"]')).toBe(first);
     expect(first?.textContent).toBe(firstText);

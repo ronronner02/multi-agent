@@ -9,6 +9,7 @@
 export const WORKER_EVENT_PROTOCOL_VERSION = "1.0" as const;
 export const WORKER_EVENT_SCHEMA = "multi-agent-worker-events/v1" as const;
 export const WORKER_EVENT_SUMMARY_LIMIT = 512 as const;
+export const WORKER_TURN_START_WINDOW_MS = 30_000;
 
 export type WorkerProvider = "claude" | "codex";
 

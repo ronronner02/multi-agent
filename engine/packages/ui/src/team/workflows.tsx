@@ -30,7 +30,7 @@ export function WorkflowPicker({ value, onChange, disabled }: {
 
 export function WorkflowOutcomes({ runId }: { runId: string }) {
   const { t } = useTranslation(), { paired, request } = useOwnerSession();
-  const history = useQuery({ queryKey: ["team", "workflow-outcomes", runId], enabled: paired && !!runId, retry: false, refetchInterval: 5_000,
+  const history = useQuery({ queryKey: ["team", runId, "workflow-outcomes"], enabled: paired && !!runId, retry: false,
     queryFn: ({ signal }) => request<{ workflows: Array<{ taskId: string; attemptId: string | null; generation: number | null; workflow: TaskWorkflow; outcome: FrameworkOutcome | null }> }>(
       `/runs/${encodeURIComponent(runId)}/workflows`, { signal }) });
   if (!history.data?.workflows.length) return history.isError ? <p role="status" className="muted">{t("workflows.unavailable")}</p> : null;

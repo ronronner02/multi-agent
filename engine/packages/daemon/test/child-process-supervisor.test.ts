@@ -189,6 +189,26 @@ describe("U3 the supervisor runs one turn", () => {
     expect(await supervisor.wait()).toMatchObject({ acknowledged: false, noResponse: true, exitCode: 0 });
   });
 
+  it.each(["claude", "codex"] as const)("publishes %s public progress before a provider event invalidates live projections", async provider => {
+    const lines = provider === "codex" ? ['{"type":"thread.started","thread_id":"t-1"}',
+      '{"type":"item.completed","item":{"id":"first","type":"agent_message","text":"First"}}',
+      '{"type":"item.completed","item":{"id":"second","type":"agent_message","text":"Second"}}']
+      : ['{"type":"system","subtype":"init","session_id":"s-1"}',
+        '{"type":"assistant","message":{"id":"first","content":[{"type":"text","text":"First"}]}}',
+        '{"type":"assistant","message":{"id":"second","content":[{"type":"text","text":"Second"}]}}'];
+    const script = stubScript(root, lines);
+    const output = agentTurnOutputPaths(join(root, "state"), "attempt-1");
+    const snapshots: string[][] = [];
+    const supervisor = new ChildProcessSupervisor(launchFor(root, script, { provider }), { onEvent: event => {
+      if (event.type !== "message.agent") return;
+      const progress = JSON.parse(readFileSync(join(output.directory, "progress.json"), "utf8")) as { blocks: { text: string }[] };
+      snapshots.push(progress.blocks.map(block => block.text));
+    } });
+    await supervisor.start();
+    await supervisor.wait();
+    expect(snapshots).toEqual([["First"], ["First", "Second"]]);
+  });
+
   it("bounds stderr and the rendered output while keeping the newest bytes", async () => {
     const script = join(root, "flood.cjs");
     writeFileSync(script, `const line = '{"type":"item.completed","item":{"id":"a","type":"agent_message","text":"' + 'x'.repeat(4096) + '"}}';

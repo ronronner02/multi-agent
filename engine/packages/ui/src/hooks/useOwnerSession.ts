@@ -76,6 +76,18 @@ function usePairedBrowser() {
         Array.isArray(body.oversizedPaths) ? { oversizedPaths: body.oversizedPaths.filter((path: unknown): path is string => typeof path === "string") } : {});
     }
   }, [clearSession, reconnect]);
+  const openStream = useCallback(async (path: string, init: RequestInit): Promise<Response> => {
+    init.signal?.throwIfAborted();
+    const token = credential.current;
+    const headers = new Headers(init.headers);
+    if (token) headers.set("X-Multi-Agent-CSRF", token);
+    const response = await fetch(`/api/team-control${path}`, { ...init, credentials: "include", headers });
+    if (response.ok) return response;
+    // A rejected live connection stops here; the existing pairing screen owns recovery.
+    if ([401, 403].includes(response.status) && credential.current === token) clearSession();
+    const body = await response.json().catch(() => ({}));
+    throw new OwnerReadError(response.status, body.code ?? "read_failed");
+  }, [clearSession]);
   const pair = useCallback(async (code: string) => {
     const result = await request<{ antiForgeryToken: string }>("/owner-session/exchange", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
@@ -94,7 +106,7 @@ function usePairedBrowser() {
       throw error;
     }
   }, [request, clearSession]);
-  return { paired, request, pair, revoke, reconnect, canReconnect: !!nativeReconnect };
+  return { paired, request, openStream, pair, revoke, reconnect, canReconnect: !!nativeReconnect };
 }
 
 const OwnerSessionContext = createContext<ReturnType<typeof usePairedBrowser> | null>(null);

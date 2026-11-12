@@ -3,6 +3,7 @@ import { TextPreview } from "./text-preview.js";
 import { useTranslation } from "react-i18next";
 import type { ProjectDocumentKind, ProjectDocumentStage, ProjectDocumentWorkflow, TeamOwnerRead } from "@multi-agent/daemon/team-control";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
+import { usePendingAction } from "../hooks/usePendingAction.js";
 import { confirmDocument, selectDocumentStage, type ChatState } from "./clients.js";
 
 const kinds = ["brainstorm", "requirements", "plan"] as const;
@@ -19,8 +20,10 @@ export function DocumentStages({ read, chat, onChanged }: { read?: TeamOwnerRead
   const { t, i18n } = useTranslation();
   const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
-  const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const state = chat?.documentWorkflow;
+  const pending = usePendingAction(`${read?.run.entityVersion}:${state?.stage}:${state?.pendingStage}`);
+  const { busy } = pending;
+  const [error, setError] = useState<string | null>(null);
   if (!state || !read) return null;
   const requirements = current(state, "requirements");
   const confirmedRequirements = requirements && requirements.id === state.confirmed.requirements;
@@ -32,10 +35,10 @@ export function DocumentStages({ read, chat, onChanged }: { read?: TeamOwnerRead
       aria-current={planning && stage === state.stage ? "step" : undefined}
       disabled={busy || closed || waiting || (stage === "plan" && (!confirmedRequirements || !!state.error))}
       onClick={async () => {
-        setBusy(true); setError(null);
-        try { await selectDocumentStage(request, read.run.id, read.run.entityVersion, stage, undefined, responseLanguage); onChanged?.(); }
-        catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); }
-        finally { setBusy(false); }
+        if (!pending.begin()) return;
+        setError(null);
+        try { await selectDocumentStage(request, read.run.id, read.run.entityVersion, stage, undefined, responseLanguage); pending.complete(); onChanged?.(); }
+        catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); pending.fail(); }
       }}>{t(!planning ? `documents.revise.${stage}` : `documents.stage.${stage}`)}</button>)}</div>
     {!planning && <p className="muted">{t("documents.revisionConsequence")}</p>}
     {state.pendingStage && <p role="status">{t("documents.pendingRevision")}</p>}
@@ -61,6 +64,7 @@ export function DocumentsScreen({ read, chat, onDiscuss, onChanged, failed = fal
   const compared = versions.find(version => version.id === comparison && version.id !== selected?.id);
   const isCurrent = !!selected && selected.id === versions[0]?.id;
   const isConfirmed = !!selected && state?.confirmed[kind] === selected.id;
+  const confirming = usePendingAction(`${selected?.id}:${state?.confirmed[kind]}`);
   const requirements = state && current(state, "requirements");
   const lineageReady = kind !== "plan" || !!requirements && state?.confirmed.requirements === requirements.id
     && selected?.requirementsVersionId === requirements.id;
@@ -135,12 +139,11 @@ export function DocumentsScreen({ read, chat, onDiscuss, onChanged, failed = fal
             <details className="ui-document-evidence"><summary>{t("documents.evidence")}</summary>
               <p className="mono">{selected.path}</p><p className="mono">{selected.hash}</p><p className="mono">{selected.id}</p>
             </details>
-            <div className="plate-foot"><button className="btn btn-primary" disabled={busy || !canConfirm} onClick={async () => {
-              if (!read) return;
-              setBusy(true); setError(null);
-              try { await confirmDocument(request, read.run.id, read.run.entityVersion, selected, undefined, responseLanguage); onChanged?.(); }
-              catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); }
-              finally { setBusy(false); }
+            <div className="plate-foot"><button className="btn btn-primary" disabled={busy || confirming.busy || !canConfirm} onClick={async () => {
+              if (!read || !confirming.begin()) return;
+              setError(null);
+              try { await confirmDocument(request, read.run.id, read.run.entityVersion, selected, undefined, responseLanguage); confirming.complete(); onChanged?.(); }
+              catch (cause) { setError(cause instanceof Error ? cause.message : t("web.error")); confirming.fail(); }
             }}>{t("documents.confirmVersion", { version: selected.version })}</button></div>
             {kind === "plan" && !lineageReady && <p className="muted">{t("documents.stalePlan")}</p>}
             {error && <p role="alert">{error}</p>}
