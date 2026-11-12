@@ -165,13 +165,19 @@ test('the window may navigate only to the current dynamic origin', () => {
   assert.equal(allowed.isAllowedNavigation('', ORIGIN), false);
 });
 
-test('only a body that is this daemon is trusted, not any 200', () => {
-  const body = JSON.stringify({ status: 'ok', pid: 42, selfHostId: 'host-1', eventLoop: {} });
-  assert.equal(originRules.isDaemonHealth(body), true);
-  assert.equal(originRules.isDaemonHealth('{"status":"ok"}'), false);
-  assert.equal(originRules.isDaemonHealth('{"status":"ok","pid":0,"selfHostId":"host-1"}'), false);
-  assert.equal(originRules.isDaemonHealth('<html>hello</html>'), false);
-  assert.equal(originRules.isDaemonHealth(''), false);
+test('only the engine this app forked is trusted, not any 200', () => {
+  // The daemon's real /healthz shape: no host identity, only its own pid.
+  const body = JSON.stringify({
+    status: 'ok', pid: 42, eventLoop: { healthy: true }, routeTimings: {}, slowOperations: { healthy: true },
+    bind: { mode: 'explicit', hosts: ['127.0.0.1'], tailscaleDetected: false },
+  });
+  assert.equal(originRules.isDaemonHealth(body, 42), true);
+  assert.equal(originRules.isDaemonHealth(body, 43), false, 'another daemon on the port is refused');
+  assert.equal(originRules.isDaemonHealth(body), false, 'no reported pid means nothing to match');
+  assert.equal(originRules.isDaemonHealth('{"status":"ok"}', 42), false);
+  assert.equal(originRules.isDaemonHealth('{"status":"starting","pid":42}', 42), false);
+  assert.equal(originRules.isDaemonHealth('<html>hello</html>', 42), false);
+  assert.equal(originRules.isDaemonHealth('', 42), false);
 });
 
 test('dependency rows carry the resolved Windows path or one install line', () => {

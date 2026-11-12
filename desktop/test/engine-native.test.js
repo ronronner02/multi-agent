@@ -112,7 +112,7 @@ function nativeDesktop(opts = {}) {
     killEngine: () => {},
   };
 
-  const defaultText = JSON.stringify({ status: 'ok', selfHostId: 'host-x', pid: 4321, runningAttempts });
+  const defaultText = JSON.stringify({ status: 'ok', pid: 4321, runningAttempts });
   const exchangeRequests = [];
   const defaultFetch = async (url, init) => {
     const href = String(url);

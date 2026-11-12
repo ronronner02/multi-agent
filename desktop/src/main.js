@@ -319,7 +319,7 @@ async function openTeamView() {
   try {
     const response = await fetch(`${allowedOrigin}/healthz`, { signal: AbortSignal.timeout(2_500) });
     if (!response.ok) throw new Error(`health check failed: ${response.status}`);
-    if (!isDaemonHealth(await response.text())) throw new Error('not the expected daemon');
+    if (!isDaemonHealth(await response.text(), enginePid)) throw new Error('not the expected daemon');
   } catch (error) {
     publish({ phase: 'connection-failed', message: `The local engine did not answer: ${error.message}`, connected: false });
     return;
