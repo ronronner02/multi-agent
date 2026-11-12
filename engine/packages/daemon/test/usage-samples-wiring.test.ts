@@ -8,8 +8,7 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { ContextUsageStore } from "../src/domain/context-usage-store.js";
@@ -28,7 +27,7 @@ describe("51-08 A1 wiring — the series accrues from the real poll tick", () =>
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const rigRepo = new RigRepository(db);
     const sessionRegistry = new SessionRegistry(db);
     tmpDir = join(tmpdir(), `usage-samples-wiring-${process.pid}-${Math.random().toString(36).slice(2)}`);

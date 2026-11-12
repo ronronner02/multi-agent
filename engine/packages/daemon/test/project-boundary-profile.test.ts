@@ -5,8 +5,7 @@ import { join, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { compileProjectLifecycle } from "../src/domain/project-lifecycle-compiler.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
@@ -141,7 +140,7 @@ describe("project-owned boundary profile", () => {
     save();
     const db = createDb();
     try {
-      migrate(db, ALL_MIGRATIONS);
+      initializeDatabase(db);
       const bus = new EventBus(db);
       const queue = new QueueRepository(db, bus, { validateRig: () => true });
       const runtime = new WorkflowRuntime({ db, eventBus: bus, queueRepo: queue });

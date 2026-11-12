@@ -14,23 +14,13 @@
 // evidence in trail + event — and specs under budget see ZERO guard
 // observability.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
-import { workflowInstanceVersionSchema } from "../src/db/migrations/049_workflow_instance_version.js";
-import { workflowSpecJsonSchema } from "../src/db/migrations/050_workflow_spec_json.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository, type QueueItem } from "../src/domain/queue-repository.js";
@@ -233,18 +223,7 @@ describe("FR-2 named test: claimed → unclaimed → overdue (the arch third sta
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      outboxEntriesSchema,
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-    ]);
+    initializeDatabase(db);
     const bus = new EventBus(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });
@@ -352,18 +331,7 @@ describe("FR-6: loop_guards.max_hops enforced at projection (G4 — migration 03
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      outboxEntriesSchema,
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-    ]);
+    initializeDatabase(db);
     const bus = new EventBus(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });
@@ -513,51 +481,5 @@ describe("FR-6: loop_guards.max_hops enforced at projection (G4 — migration 03
     // Guarded-under-budget: the cyclic fixture's hops 1..3 in the trip
     // test above already assert closureReason handoff with no guard
     // evidence until the budget is exceeded.
-  });
-});
-
-// ── the arch-named honest-degrade test (mid-build contract fold #2) ──
-
-import {
-  WorkflowSpecCache,
-  resetLegacyRehydrationWarnings,
-} from "../src/domain/workflow-spec-cache.js";
-
-describe("legacy pre-050 rehydration degrades VISIBLY, never a silent no-guards run", () => {
-  it("a pre-050 cache row resolved via getByNameVersion warns once naming the missing fidelity + the heal path", () => {
-    const legacyDb = createDb();
-    // Deliberately WITHOUT migration 050 — the legacy fixture shape.
-    migrate(legacyDb, [
-      outboxEntriesSchema,
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-    ]);
-    const cache = new WorkflowSpecCache(legacyDb);
-    const legacyTmp = mkdtempSync(join(tmpdir(), "wf-legacy-"));
-    const legacySpecPath = join(legacyTmp, "legacy.yaml");
-    writeFileSync(legacySpecPath, CYCLIC_SPEC);
-    try {
-      resetLegacyRehydrationWarnings();
-      cache.readThrough(legacySpecPath);
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const row = cache.getByNameVersion("fr6-cycle", "1");
-      // Honest degrade: guards absent AND the advisory fired.
-      expect(row?.spec.loop_guards).toBeUndefined();
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(String(warnSpy.mock.calls[0]![0])).toContain("WITHOUT full fidelity");
-      expect(String(warnSpy.mock.calls[0]![0])).toContain("fr6-cycle@1");
-      // Once per spec per process — a second read stays quiet.
-      cache.getByNameVersion("fr6-cycle", "1");
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      warnSpy.mockRestore();
-    } finally {
-      legacyDb.close();
-      rmSync(legacyTmp, { recursive: true, force: true });
-    }
   });
 });

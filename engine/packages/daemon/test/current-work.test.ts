@@ -4,12 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deriveCurrentWork } from "../src/domain/current-work.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 
@@ -242,7 +237,7 @@ describe("deriveCurrentWork — ambiguity is counted on RESOLVED nodes", () => {
     // Deriving from that projection turned the ambiguity refusal into a confident answer.
     const missions = tree();
     const db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, outboxEntriesSchema]);
+    initializeDatabase(db);
     const repo = new QueueRepository(db, new EventBus(db));
     const SEAT = "dev-driver@rig";
 

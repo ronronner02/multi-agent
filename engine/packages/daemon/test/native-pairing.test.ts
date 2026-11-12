@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { OwnerSessions, OWNER_COOKIE, OWNER_CSRF_HEADER, PAIRING_TTL_MS } from "../src/domain/owner-session.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { replyToMintPairing } from "../src/index.js";
@@ -38,7 +37,7 @@ describe("U6 native pairing over the private parent port", () => {
   };
 
   beforeEach(() => {
-    db = createDb(); migrate(db, ALL_MIGRATIONS); fixDaemonMode(db, true);
+    db = createDb(); initializeDatabase(db); fixDaemonMode(db, true);
     at = 1_700_000_000_000;
     sessions = new OwnerSessions(db, () => at);
     app = createTestApp(db, { appDeps: { teamControl: { credentials: { ownerToken: OWNER } }, ownerSessions: sessions } }).app;

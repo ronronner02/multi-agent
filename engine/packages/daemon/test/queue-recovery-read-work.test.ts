@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { findQueueRecovery, recoveryTag } from "../src/domain/queue-recovery.js";
@@ -17,7 +16,7 @@ describe("recovery lookup work and fresh disposition", () => {
   function transition(id: string, ts = at) {
     db.prepare("INSERT INTO queue_transitions(qitem_id,ts,state,actor_session,transition_note) VALUES (?,?,'pending','owner@r','actual owner change')").run(id, ts);
   }
-  beforeEach(() => { db = new Database(":memory:"); migrate(db, ALL_MIGRATIONS); repo = new QueueRepository(db, new EventBus(db)); });
+  beforeEach(() => { db = new Database(":memory:"); initializeDatabase(db); repo = new QueueRepository(db, new EventBus(db)); });
   afterEach(() => { vi.restoreAllMocks(); db.close(); });
 
   it("reads a complete queue row once without a second unused recovery scan for its delivery receipt", () => {
@@ -84,7 +83,7 @@ describe("recovery lookup work and fresh disposition", () => {
   it("keeps independent handles fresh and propagates lookup errors through the queue face", () => {
     row("source"); row("disposition", "pending", JSON.stringify([recoveryTag("source")]));
     const other = new Database(":memory:");
-    try { migrate(other, ALL_MIGRATIONS); expect(findQueueRecovery(other, "source")).toBeNull(); } finally { other.close(); }
+    try { initializeDatabase(other); expect(findQueueRecovery(other, "source")).toBeNull(); } finally { other.close(); }
     expect(findQueueRecovery(db, "source")?.qitemId).toBe("disposition");
     const prepare = db.prepare.bind(db);
     vi.spyOn(db, "prepare").mockImplementation(sql => {

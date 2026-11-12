@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
 import { OwnerSessions, OWNER_CSRF_HEADER } from "../src/domain/owner-session.js";
@@ -27,7 +26,7 @@ describe("owner team settings", () => {
     directory = mkdtempSync(join(tmpdir(), "team-settings-"));
     store = new SettingsStore(join(directory, "config.json"));
     store.set("daemon.port", "7433");
-    db = createDb(); migrate(db, ALL_MIGRATIONS); fixDaemonMode(db, true);
+    db = createDb(); initializeDatabase(db); fixDaemonMode(db, true);
     app = createTestApp(db, { appDeps: { settingsStore: store, ownerSessions: new OwnerSessions(db),
       teamControl: { credentials: { ownerToken, workers: [
         { token: "worker-settings-fixture", sessionId: "dev@fixture", runId: "other" },

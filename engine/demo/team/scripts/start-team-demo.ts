@@ -13,9 +13,7 @@ import type Database from "better-sqlite3";
 import { realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createDb } from "../../../packages/daemon/src/db/connection.js";
-import { migrate } from "../../../packages/daemon/src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../../../packages/daemon/src/db/all-migrations.js";
+import { openDatabase } from "../../../packages/daemon/src/db/connection.js";
 import { resolveDaemonDbPath } from "../../../packages/daemon/src/daemon-db-path.js";
 import { OPENRIG_HOME } from "../../../packages/cli/src/openrig-compat.js";
 import { RigRepository } from "../../../packages/daemon/src/domain/rig-repository.js";
@@ -38,9 +36,8 @@ export function seedDemoRig(db: Database.Database): { rigId: string; created: bo
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const db = createDb(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
+  const db = openDatabase(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
   try {
-    migrate(db, ALL_MIGRATIONS);
     const { rigId, created } = seedDemoRig(db);
     console.log(created ? `Created rig "${DEMO_RIG_NAME}" (${rigId}) at ${demoRoot()}.`
       : `Rig "${DEMO_RIG_NAME}" already exists (${rigId}); leaving it as it is.`);

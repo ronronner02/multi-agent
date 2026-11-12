@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
@@ -34,7 +33,7 @@ describe("the structured task report boundary", () => {
   let root: string, db: Database.Database, runtime: WorkflowRuntime;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "task-report-"));
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     db.prepare("INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, created_at, updated_at) VALUES ('run', 'rig', '{}', 'binding', 'approved', 'now', 'now')").run();
     db.prepare("INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, state, usage_json, active_ms, created_at, updated_at) VALUES ('attempt', 'run', NULL, 'reviewer', 'claude', '{}', 'stopped', '{}', 0, 'now', 'now')").run();

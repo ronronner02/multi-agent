@@ -5,16 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { inboxEntriesSchema } from "../src/db/migrations/026_inbox_entries.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { queueTargetRepoSchema } from "../src/db/migrations/039_queue_target_repo.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 
@@ -27,7 +18,7 @@ describe("51-06 D2 — non-park queue update metadata reject", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, inboxEntriesSchema, outboxEntriesSchema, queueTargetRepoSchema, queueItemSummarySchema, queueItemEvidenceRefSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus, { validateRig: () => true });
   });

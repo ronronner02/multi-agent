@@ -4,17 +4,7 @@
 // reported never-posted after the post window.
 import { describe, it, expect, beforeEach } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { bindingsSessionsSchema } from "../src/db/migrations/002_bindings_sessions.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { queueTransitionsArchiveSchema } from "../src/db/migrations/054_queue_transitions_archive.js";
-import { ownerNotificationLevelsSchema } from "../src/db/migrations/076_owner_notification_levels.js";
-import { externalCliAttachmentSchema } from "../src/db/migrations/019_external_cli_attachment.js";
-import { humanNotificationIntentSchema } from "../src/db/migrations/081_human_notification_intent.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -27,8 +17,7 @@ describe("delivery outcome: a resolved notice on a closed row opens no delivery 
   let db: ReturnType<typeof createDb>, repo: QueueRepository;
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, bindingsSessionsSchema, externalCliAttachmentSchema, eventsSchema, queueItemsSchema,
-      queueTransitionsSchema, outboxEntriesSchema, queueTransitionsArchiveSchema, ownerNotificationLevelsSchema, humanNotificationIntentSchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { transport: { send: async () => ({ ok: true, verified: true }) },
       loadHumanRegistry: () => ({ ok: true as const, entities: [FOUNDER] }) });
     repo.attachOutbox(new OutboxHandler(db));

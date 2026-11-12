@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { classifierLeasesSchema } from "../src/db/migrations/029_classifier_leases.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import {
   ClassifierLeaseManager,
@@ -20,7 +17,7 @@ describe("ClassifierLeaseManager (PL-004 Phase B; L2 lease lifecycle)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, classifierLeasesSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     mgr = new ClassifierLeaseManager(db, bus, { ttlMs: 1000 });
     captured = [];

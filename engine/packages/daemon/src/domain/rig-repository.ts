@@ -1,6 +1,5 @@
 import type Database from "better-sqlite3";
 import type { EventBus } from "./event-bus.js";
-import { resolveActiveOccupantRow } from "./active-occupant.js";
 import { resolve } from "node:path";
 import { ulid } from "ulid";
 import { deriveComposeProjectName } from "./compose-project-name.js";
@@ -14,86 +13,8 @@ import type {
   RigWithRelations,
   RigServicesRecord,
   RigServicesRecordInput,
-  Snapshot,
-  SnapshotData,
   SessionSourceSpec,
 } from "./types.js";
-
-/**
- * Free helper: returns the latest snapshot for a rig whose data carries non-null
- * `resume_token` for at least one persisted session, or null otherwise.
- *
- * Used by node-inventory and ps-projection to derive `lifecycleState=recoverable`
- * post-L1 cold-start. Distinct from `findLatestAutoPreDown`, which filters by kind.
- */
-interface SnapshotRow { id: string; rig_id: string; kind: string; status: string; data: string; created_at: string }
-
-/** Shared row → usable-Snapshot mapping (single source of truth for the parse +
- *  the ≥1-resume-token usability rule), used by both the single-rig and the
- *  FS-1 W1.2 all-rigs batched reads so their semantics are byte-identical. */
-function snapshotFromRowIfUsable(row: SnapshotRow): Snapshot | null {
-  let data: SnapshotData;
-  try {
-    data = JSON.parse(row.data) as SnapshotData;
-  } catch {
-    return null;
-  }
-
-  // OPR.0.5.7.1 — usability is OCCUPANT truth, not any-historical-row truth:
-  // a snapshot is usable iff at least one node RESOLVES to an active occupant
-  // carrying a token (the same four-way ladder execution consumes). A
-  // present-null/missing-key/dangling relation never counts — a historical
-  // token on a non-occupant row must not read as recoverable.
-  const sessions = data.sessions ?? [];
-  const nodeIds = [...new Set(sessions.map((s) => s.nodeId))];
-  const hasResolvedOccupantToken = nodeIds.some((nodeId) => {
-    const resolution = resolveActiveOccupantRow(sessions, data.activeSessionIdByNode, nodeId);
-    return resolution.kind === "resolved"
-      && typeof resolution.session.resumeToken === "string"
-      && resolution.session.resumeToken.length > 0;
-  });
-  if (!hasResolvedOccupantToken) return null;
-
-  return {
-    id: row.id,
-    rigId: row.rig_id,
-    kind: row.kind,
-    status: row.status,
-    data,
-    createdAt: row.created_at,
-  };
-}
-
-export function findLatestUsableSnapshot(db: Database.Database, rigId: string): Snapshot | null {
-  const row = db.prepare(
-    "SELECT * FROM snapshots WHERE rig_id = ? ORDER BY created_at DESC, id DESC LIMIT 1"
-  ).get(rigId) as SnapshotRow | undefined;
-  if (!row) return null;
-  return snapshotFromRowIfUsable(row);
-}
-
-/**
- * FS-1 W1.2 — the all-rigs batched form of `findLatestUsableSnapshot`: the
- * latest snapshot per rig in ONE query (same `created_at DESC, id DESC` order),
- * each mapped through the shared `snapshotFromRowIfUsable`. Rigs with no usable
- * snapshot are simply absent from the map (callers default to null). Rides the
- * arch-D1.1 sibling-audit `snapshots(rig_id, created_at)` index candidate.
- */
-export function findLatestUsableSnapshotsForAllRigs(db: Database.Database): Map<string, Snapshot> {
-  const rows = db.prepare(`
-    SELECT s.* FROM snapshots s
-    WHERE s.id = (
-      SELECT s2.id FROM snapshots s2 WHERE s2.rig_id = s.rig_id
-      ORDER BY s2.created_at DESC, s2.id DESC LIMIT 1
-    )
-  `).all() as SnapshotRow[];
-  const out = new Map<string, Snapshot>();
-  for (const row of rows) {
-    const snap = snapshotFromRowIfUsable(row);
-    if (snap) out.set(row.rig_id, snap);
-  }
-  return out;
-}
 
 /**
  * OPR.0.3.3.19 - rig archive read filter. Default daemon reads EXCLUDE archived
@@ -596,15 +517,6 @@ export class RigRepository {
     return rows.map((r) => this.rowToRig(r));
   }
 
-  /**
-   * Returns the latest snapshot for this rig with at least one non-null resume token,
-   * or null if no usable snapshot exists. Used by the lifecycle projection to derive
-   * `recoverable` state.
-   */
-  findLatestUsableSnapshot(rigId: string): Snapshot | null {
-    return findLatestUsableSnapshot(this.db, rigId);
-  }
-
   findRigsByName(name: string): Rig[] {
     const rows = this.db
       .prepare("SELECT * FROM rigs WHERE name = ? ORDER BY created_at")
@@ -630,34 +542,26 @@ export class RigRepository {
         r.name,
         r.archived_at AS archived_at,
         (SELECT COUNT(*) FROM nodes n WHERE n.rig_id = r.id) AS node_count,
-        EXISTS(SELECT 1 FROM rig_services rs WHERE rs.rig_id = r.id) AS has_services,
-        ls.id AS latest_snapshot_id,
-        ls.created_at AS latest_snapshot_at
+        EXISTS(SELECT 1 FROM rig_services rs WHERE rs.rig_id = r.id) AS has_services
       FROM rigs r
-      LEFT JOIN snapshots ls ON ls.id = (
-        SELECT s2.id FROM snapshots s2
-        WHERE s2.rig_id = r.id
-        ORDER BY s2.created_at DESC, s2.id DESC
-        LIMIT 1
-      )
       ${where}
       ORDER BY r.created_at
-    `).all() as Array<{ id: string; name: string; archived_at: string | null; node_count: number; has_services: number; latest_snapshot_id: string | null; latest_snapshot_at: string | null }>;
+    `).all() as Array<{ id: string; name: string; archived_at: string | null; node_count: number; has_services: number }>;
 
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       nodeCount: r.node_count,
       hasServices: r.has_services === 1,
-      latestSnapshotAt: r.latest_snapshot_at,
-      latestSnapshotId: r.latest_snapshot_id,
+      latestSnapshotAt: null,
+      latestSnapshotId: null,
       archivedAt: r.archived_at,
     }));
   }
 
   /**
    * OPR.0.3.3.19 - soft-archive a rig: sets `archived_at`. The rigs row,
-   * topology rows, and snapshots are all RETAINED (this is NOT the delete
+   * topology rows are all RETAINED (this is NOT the delete
    * path - contrast deleteRig). Returns false if the rig was already archived.
    */
   archiveRig(rigId: string): boolean {

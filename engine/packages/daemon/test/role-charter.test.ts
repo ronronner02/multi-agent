@@ -4,8 +4,7 @@ import { REVIEW_SEVERITIES, parseFindings, recordReview, type ReviewFinding } fr
 import { coreInstructions, instructionVersion, roleCharters, roleConfiguration, roleInstructionEntries } from "../src/integrations/framework/context-manifest.js";
 import type { TeamRole } from "../src/contracts/team-control.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { leadActivation, leadInstructions, planningInstructions } from "../src/domain/lead-proposal.js";
 import { leadProtocol, LEAD_PROTOCOL_VERSION } from "../src/integrations/framework/context-manifest.js";
 
@@ -51,7 +50,7 @@ describe("role charters", () => {
   it.each([6, 64])("keeps a %i-seat planning activation within both instruction and composed-prompt budgets", seatCount => {
     const db = createDb();
     try {
-      migrate(db, ALL_MIGRATIONS);
+      initializeDatabase(db);
       const teamName = "x".repeat(100);
       db.prepare("INSERT INTO rigs (id, name) VALUES ('budget-rig', ?)").run(teamName);
       for (let index = 0; index < seatCount; index++) {

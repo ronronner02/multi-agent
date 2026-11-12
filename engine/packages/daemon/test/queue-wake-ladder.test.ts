@@ -14,8 +14,7 @@
 // forgotten-ladder and reset-count are both REDs below.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueRepository, type QueueItem } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
@@ -47,7 +46,7 @@ describe("S01 wake-or-escalate — retry ladder, named rungs, derived suspension
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     calls = [];
     outcomes = {};

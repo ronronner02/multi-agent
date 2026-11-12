@@ -5,8 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBytes } from "../src/domain/plan-governance.js";
@@ -92,7 +91,7 @@ describe("project document workflow", () => {
     writeFileSync(join(repo, "README.md"), "Project fixture\n");
     execFileSync("git", ["-C", repo, "add", "README.md"]);
     execFileSync("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
-    db = createDb(join(root, "state.sqlite")); migrate(db, ALL_MIGRATIONS);
+    db = createDb(join(root, "state.sqlite")); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'documents')").run();
     for (const role of ["lead", "implementer", "reviewer"]) {
       db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES (?, 'rig', ?, ?, 'codex', ?)").run(role, role, role, repo);
@@ -185,7 +184,7 @@ describe("project document workflow", () => {
     });
     await observe().sweep();
     expect(governance.getAttempt(attemptId)?.state).toBe(edge === "after" ? "stopped" : "running");
-    db.close(); db = createDb(join(root, "state.sqlite")); migrate(db, ALL_MIGRATIONS);
+    db.close(); db = createDb(join(root, "state.sqlite")); initializeDatabase(db);
     const events = new EventBus(db);
     governance = new PlanGovernance(db, events, new QueueRepository(db, events), undefined, () => policy);
     put(path, "# Later mutable bytes\nThese do not belong to the interrupted turn.");
@@ -274,7 +273,7 @@ describe("project document workflow", () => {
   it("retains content, versions and confirmations after reopening the database", async () => {
     const runId = await ready();
     const before = state(runId);
-    db.close(); db = createDb(join(root, "state.sqlite")); migrate(db, ALL_MIGRATIONS);
+    db.close(); db = createDb(join(root, "state.sqlite")); initializeDatabase(db);
     const events = new EventBus(db);
     governance = new PlanGovernance(db, events, new QueueRepository(db, events), undefined, () => policy);
     expect(state(runId)).toEqual(before);

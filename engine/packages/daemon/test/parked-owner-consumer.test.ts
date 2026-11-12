@@ -25,8 +25,7 @@ import {
 } from "../src/domain/policies/parked-owner-consumer.js";
 import type { WatchdogHistoryEntry } from "../src/domain/watchdog-history-log.js";
 import type { PolicyJob } from "../src/domain/policies/types.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueRepository, isBlockerLive } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { WatchdogHistoryLog } from "../src/domain/watchdog-history-log.js";
@@ -510,7 +509,7 @@ describe("parked-owner-consumer — R2 integration hard checks (OPR.0.5.6.24)", 
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true } as never);
   });
   afterEach(() => db.close());

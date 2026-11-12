@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import BetterSqlite3, { type Database } from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { ContextUsageStore, FRESHNESS_THRESHOLD_MS } from "../src/domain/context-usage-store.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 
 
 describe("ContextUsageStore", () => {
@@ -17,7 +16,7 @@ describe("ContextUsageStore", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     rigRepo = new RigRepository(db);
     store = new ContextUsageStore(db, { stateDir: "/tmp/openrig-test" });
   });

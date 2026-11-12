@@ -5,8 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -60,7 +59,7 @@ describe("task-local scope extensions at candidate staging", () => {
   });
   const open = () => {
     db = createDb(join(directory, "control.db"));
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const bus = new EventBus(db), queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, () => new Date("2026-10-28T08:00:00.000Z"), () => ({
       policyRevision: binding.policyRevision, policyFingerprint: binding.policyFingerprint, verifiedProviders: ["claude", "codex"],

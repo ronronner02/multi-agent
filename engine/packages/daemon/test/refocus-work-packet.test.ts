@@ -6,9 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deriveWorkCandidates, frontmatterIntent, type WorkCandidateLookups } from "../src/domain/current-work.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { queueTransitionsQitemIdOrderSchema } from "../src/db/migrations/098_queue_transitions_qitem_id_order.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueTransitionLog } from "../src/domain/queue-transition-log.js";
 
 // OPR.0.7.0.12 — refocus knows the seat's work. The candidates sit beside the strict
@@ -161,7 +159,7 @@ describe("deriveWorkCandidates — labelled evidence beside the strict derivatio
 describe("currentParkContinuation — the held row's recorded plan, bounded", () => {
   function log(states: Array<[string, string]>) {
     const db = createDb();
-    migrate(db, [queueTransitionsSchema, queueTransitionsQitemIdOrderSchema]);
+    initializeDatabase(db);
     const transitions = new QueueTransitionLog(db);
     for (const [state, transitionNote] of states) transitions.append({ qitemId: "q-1", state, transitionNote, actorSession: "seat@rig" } as never);
     return transitions;
@@ -198,7 +196,7 @@ describe("currentParkContinuation — the held row's recorded plan, bounded", ()
 
   it("reads newest-first through the (qitem_id, transition_id) index without sorting the history (F2)", () => {
     const db = createDb();
-    migrate(db, [queueTransitionsSchema, queueTransitionsQitemIdOrderSchema]);
+    initializeDatabase(db);
     // The exact statement currentParkContinuation prepares.
     const plan = (db.prepare("EXPLAIN QUERY PLAN SELECT state, transition_note FROM queue_transitions WHERE qitem_id = ? ORDER BY transition_id DESC")
       .all("q-1") as Array<{ detail: string }>).map((row) => row.detail).join(" | ");

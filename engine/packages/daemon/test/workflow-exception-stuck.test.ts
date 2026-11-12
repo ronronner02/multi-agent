@@ -10,7 +10,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -20,7 +19,7 @@ import { runWorkflowBootSweep } from "../src/domain/workflow-boot-sweep.js";
 import { makeEnsureStuckExceptionItem } from "../src/domain/workflow-exception-escalation.js";
 import { makeWorkflowKeepalivePolicy } from "../src/domain/policies/workflow-keepalive.js";
 import { WORKFLOW_STEP_STUCK_THRESHOLD_SECONDS } from "../src/domain/workflow-deadline.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 
 const SPEC = `workflow:
   id: wf5-stuck-pipeline
@@ -60,7 +59,7 @@ describe("WF-5 FR-2 class (b): detection-time stuck exception items", () => {
 
   const build = async (spec = SPEC) => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const bus = new EventBus(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     const queueRepo = new QueueRepository(db, bus, { validateRig: () => true });

@@ -1,10 +1,10 @@
+import { initializeDatabase } from "../src/db/baseline.js";
 // 51-08 A1 (plan-lock 2026-08-07, PM rev-1: README d606b9cbe2e5f4e8) — the append-only
 // per-seat usage series. RED-first: this file imported the migration + store before they
 // existed. Locked decisions bound here: dedicated table (not events), advance-only rows
 // (zero idle growth), Option-A bar (no account identity anywhere in the new lane).
 import { describe, it, expect, beforeEach } from "vitest";
 import BetterSqlite3, { type Database } from "better-sqlite3";
-import { usageSamplesSchema } from "../src/db/migrations/062_usage_samples.js";
 import {
   UsageSamplesStore,
   type ContextSampleInput,
@@ -13,7 +13,7 @@ import {
 
 function freshDb(): Database {
   const db = new BetterSqlite3(":memory:");
-  db.exec(usageSamplesSchema.sql);
+  initializeDatabase(db);
   return db;
 }
 
@@ -133,7 +133,7 @@ describe("context identity across same-name rig histories", () => {
   it("deduplicates idle samples independently for each node sharing a seat name", () => {
     const db = new BetterSqlite3(":memory:");
     try {
-      db.exec(usageSamplesSchema.sql);
+      initializeDatabase(db);
       const store = new UsageSamplesStore(db);
       const sample = {
         seatSession: "dev.qa@reused-rig", source: "codex_token_count_jsonl",

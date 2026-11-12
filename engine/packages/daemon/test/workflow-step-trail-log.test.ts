@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { WorkflowInstanceStore } from "../src/domain/workflow-instance-store.js";
 import { WorkflowStepTrailLog } from "../src/domain/workflow-step-trail-log.js";
 
@@ -17,7 +13,7 @@ describe("WorkflowStepTrailLog (PL-004 Phase D; append-only)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, queueItemsSchema, workflowInstancesSchema, workflowStepTrailsSchema]);
+    initializeDatabase(db);
     log = new WorkflowStepTrailLog(db);
     store = new WorkflowInstanceStore(db);
     instanceId = store.create({

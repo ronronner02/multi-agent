@@ -4,20 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
 import { WorkflowProjectorError } from "../src/domain/workflow-projector.js";
 import { WorkflowInstanceStore } from "../src/domain/workflow-instance-store.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 
 // OPR.0.4.6.FAC1 commit 2 — the instance is bound to a rig at
 // instantiation (AC-1; ARCH Q4; migration 052).
@@ -80,7 +72,7 @@ describe("FAC-1 C2: workflow instance bound rig (migration 052)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     bus = new EventBus(db);
     // Registered rigs: the spec default (factory-a), the override target
     // (factory-b), and the queue-destination rig for worker@rig.
@@ -230,27 +222,5 @@ describe("FAC-1 C2: workflow instance bound rig (migration 052)", () => {
     // The instance WAS created (degrade, not fail).
     const after = db.prepare(`SELECT COUNT(*) as c FROM workflow_instances`).get() as { c: number };
     expect(after.c).toBe(before.c + 1);
-  });
-
-  it("legacy-fixture degrade: without migration 052 the store's column probe keeps the legacy INSERT (boundRig reads null, nothing crashes)", () => {
-    const legacyDb = createDb();
-    migrate(legacyDb, [
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-    ]);
-    const store = new WorkflowInstanceStore(legacyDb);
-    const instance = store.create({
-      workflowName: "legacy",
-      workflowVersion: "1",
-      createdBySession: "orch@rig",
-      boundRig: "factory-a", // silently untracked pre-052 — the probe degrades
-    });
-    expect(instance.boundRig).toBeNull();
-    legacyDb.close();
   });
 });

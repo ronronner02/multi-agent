@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import {
   WorkflowInstanceError,
   WorkflowInstanceStore,
@@ -15,7 +13,7 @@ describe("WorkflowInstanceStore (PL-004 Phase D)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, workflowInstancesSchema]);
+    initializeDatabase(db);
     store = new WorkflowInstanceStore(db);
   });
 

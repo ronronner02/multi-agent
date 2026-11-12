@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -58,7 +57,7 @@ describe("owner-approved run growth", () => {
     execFileSync("git", ["-C", root, "add", "plan.md"]);
     execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
     binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src/A.ts"], policy });
-    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = createDb(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id,name) VALUES ('rig','fixture')").run();
     const bus = new EventBus(db);
     governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);

@@ -5,11 +5,7 @@ import { configureShadowCapture } from "./domain/shadow-capture.js";
 import { queueRecoveryOwnsWake } from "./domain/queue-wake-ladder.js";
 import type { Hono } from "hono";
 import type Database from "better-sqlite3";
-import { createDb } from "./db/connection.js";
-import { migrate } from "./db/migrate.js";
-// P8: apply the CANONICAL migration list — the single source of truth (db/all-migrations.ts),
-// never an inline copy that can drift out of sync with the daemon's schema.
-import { ALL_MIGRATIONS } from "./db/all-migrations.js";
+import { openDatabase } from "./db/connection.js";
 import { RigRepository } from "./domain/rig-repository.js";
 import { SessionRegistry } from "./domain/session-registry.js";
 import { deriveCanonicalSessionName, isHumanSeatSessionRef, parseSessionName } from "./domain/session-name.js";
@@ -20,7 +16,6 @@ import { codexDaemonSupportProbe } from "./domain/codex-daemon-support.js";
 import { codexNetworkDefaultReader } from "./domain/codex-network-default.js";
 import { codexUsageReader } from "./domain/provider/codex-usage-reader.js";
 import { prepareCodexTeamWorkspace } from "./domain/codex-team-workspace.js";
-import { DiscoveryRepository } from "./domain/discovery-repository.js";
 // TODO: AS-T12 — migrate to pod-aware bundle source resolver
 import { setSelfHostId, setSelfHostIdSource } from "./domain/host-identity/fanout-contract.js";
 import { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
@@ -497,8 +492,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
   // Only the explicit selection overrides a pane rc or the legacy PID-home
   // reader. The resolved default remains the writer/network-reader/session root.
   const dbPath = opts?.dbPath ?? ":memory:";
-  const db = createDb(dbPath);
-  migrate(db, ALL_MIGRATIONS);
+  const db = openDatabase(dbPath);
   // KTD22: fixed before any service is built. Managed mode runs no legacy boot effect below.
   const managed = fixDaemonMode(db, opts?.managedMode === true) === "managed";
   // MVP — how a managed worker runs: as this daemon's own user (`none`, the default), or
@@ -590,7 +584,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const rigs = rigRepo.findUnarchivedRigsByName(parsed.rig);
     if (rigs.length === 0) return null;
     // Membership needs only registered names and logical seat coordinates,
-    // not the full ps projection (snapshots, activity and lifecycle history).
+    // not the full inventory projection (activity and lifecycle history).
     for (const rig of rigs) {
       if (db.prepare(`SELECT 1 FROM sessions s JOIN nodes n ON n.id = s.node_id
         WHERE n.rig_id = ? AND s.session_name = ? LIMIT 1`).get(rig.id, sessionRef)) return null;
@@ -789,7 +783,6 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     readSeatMailboxCapability: () => null,
     ...(managedLaunch ? { managedLaunch } : {}),
     rigRepo, sessionRegistry, daemonLifecycleStore, daemonBootEpoch, eventBus,
-    discoveryRepo: new DiscoveryRepository(db),
     startupOrchestrator,
     runtimeAdapters: { "claude-code": claudeAdapter, codex: codexAdapter },
     chatRepo: new ChatRepository(db),

@@ -8,7 +8,6 @@ import type { RigRepository } from "./domain/rig-repository.js";
 import type { SessionRegistry } from "./domain/session-registry.js";
 import type { DaemonLifecycleStore } from "./domain/daemon-lifecycle-store.js";
 import type { EventBus } from "./domain/event-bus.js";
-import type { DiscoveryRepository } from "./domain/discovery-repository.js";
 import { teamEventsRoutes } from "./routes/events.js";
 import type { TranscriptStore } from "./domain/transcript-store.js";
 import type { AgentActivityStore } from "./domain/agent-activity-store.js";
@@ -88,7 +87,6 @@ export interface AppDeps {
   daemonBootEpoch: string;
   eventBus: EventBus;
   /** Retained route dependencies are composed by startup; the old seat/terminal launch services are gone. */
-  discoveryRepo?: DiscoveryRepository;
   runtimeAdapters?: Record<string, import("./domain/runtime-adapter.js").RuntimeAdapter>;
   startupOrchestrator?: import("./domain/startup-orchestrator.js").StartupOrchestrator;
   transcriptStore?: TranscriptStore;
@@ -260,9 +258,6 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.rigRepo.db !== deps.sessionRegistry.db) {
     throw new Error("createApp: rigRepo and sessionRegistry must share the same db handle");
   }
-  if (deps.discoveryRepo && deps.rigRepo.db !== deps.discoveryRepo.db) {
-    throw new Error("createApp: discoveryRepo must share the same db handle");
-  }
 
   const pairedOwners = daemonModeOf(deps.rigRepo.db) === "managed";
   const teamOptions: TeamControlOptions = deps.teamControl ?? { credentials: { ownerToken: null } };
@@ -306,7 +301,6 @@ export function createApp(deps: AppDeps): Hono {
     c.set("rigRepo" as never, deps.rigRepo);
     c.set("sessionRegistry" as never, deps.sessionRegistry);
     c.set("eventBus" as never, deps.eventBus);
-    c.set("discoveryRepo" as never, deps.discoveryRepo);
     c.set("runtimeAdapters" as never, deps.runtimeAdapters ?? {});
     c.set("transcriptStore" as never, deps.transcriptStore);
     c.set("chatRepo" as never, deps.chatRepo);

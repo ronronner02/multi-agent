@@ -6,8 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createConnection } from "node:net";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { MailboxDelivery, type MailboxPromptState, type NativeChannelSeatState } from "../src/domain/mailbox-delivery.js";
 import { WorkerMailboxBridge } from "../src/adapters/worker-mailbox-bridge.js";
@@ -123,7 +122,7 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
   const ownScope = { rigId: "rig", recipient: worker.sessionId, taskId: "task", runId: "run", capability };
   beforeEach(async () => {
     directory = mkdtempSync(join(tmpdir(), "t010-mailbox-"));
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'mailbox fixture')").run();
     chat = new ChatRepository(db); current = true; prompt = "clear"; active = credentials;
     channel = null; promptReader = () => prompt;

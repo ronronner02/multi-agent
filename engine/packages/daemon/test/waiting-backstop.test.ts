@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
@@ -18,7 +17,7 @@ describe("waiting face names the next action the existing ladder can actually ta
     vi.stubEnv("OPENRIG_QUEUE_WAKE_RETRY_INTERVAL_SECONDS", "300");
     vi.stubEnv("OPENRIG_QUEUE_WAKE_RETRY_CAP", "3");
     vi.stubEnv("OPENRIG_QUEUE_WAKE_UNCONFIRMED_WINDOW_MINUTES", "30");
-    db = new Database(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = new Database(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id,name) VALUES ('r','rig')").run(); sends = [];
     queue = new QueueRepository(db, new EventBus(db), { validateRig: () => true, transport: { send: async target => {
       sends.push(target); return target === "healthy@rig" ? { ok: true, verified: true } : { ok: false, error: "synthetic unavailable" };

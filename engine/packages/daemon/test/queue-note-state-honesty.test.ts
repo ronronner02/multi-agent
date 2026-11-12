@@ -2,15 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { streamItemsSchema } from "../src/db/migrations/023_stream_items.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { inboxEntriesSchema } from "../src/db/migrations/026_inbox_entries.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { i3IdentityProvenanceSchema } from "../src/db/migrations/067_i3_identity_provenance.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, type QueueState } from "../src/domain/queue-repository.js";
 
@@ -21,16 +13,7 @@ describe("S8a — a note is not a state write", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      coreSchema,
-      eventsSchema,
-      streamItemsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      inboxEntriesSchema,
-      outboxEntriesSchema,
-      i3IdentityProvenanceSchema,
-    ]);
+    initializeDatabase(db);
     const eventBus = new EventBus(db);
     repo = new QueueRepository(db, eventBus);
     app = new Hono();

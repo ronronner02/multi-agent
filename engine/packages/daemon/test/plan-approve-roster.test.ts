@@ -5,8 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBytes } from "../src/domain/plan-governance.js";
@@ -57,7 +56,7 @@ describe("planning roster approval", () => {
     git(repository, "config", "user.name", "Fixture"); git(repository, "config", "user.email", "fixture@example.invalid");
     writeFileSync(join(repository, "src/base.ts"), "export const base = 1;\n");
     git(repository, "add", "src/base.ts"); git(repository, "commit", "--quiet", "-m", "base");
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     createTeam(db, { repository, name: "demo" });
     const bus = new EventBus(db), queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, undefined, () => policy);

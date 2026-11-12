@@ -13,8 +13,7 @@ import { commitPlan, ensurePlanWorktree, planWorktreePath, runSlug } from "../sr
 import { createCandidateWorkspace, resolveWorkspaceBase } from "../src/domain/team-workspace.js";
 import { createTeam } from "../src/domain/team-setup.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode } from "../src/domain/plan-governance.js";
@@ -239,7 +238,7 @@ describe("the start route refuses a worktree that cannot fit", () => {
     const repo = repository(directory);
     const db: Database.Database = createDb();
     try {
-      migrate(db, ALL_MIGRATIONS);
+      initializeDatabase(db);
       fixDaemonMode(db, true);
       const bus = new EventBus(db), queue = new QueueRepository(db, bus);
       const governance = new PlanGovernance(db, bus, queue, undefined, () => unisolatedPolicyCapability(4));

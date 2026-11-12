@@ -1,20 +1,10 @@
+import { initializeDatabase } from "../src/db/baseline.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createFullTestDb } from "./helpers/test-app.js";
-import { migrate } from "../src/db/migrate.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
-import { workflowInstanceVersionSchema } from "../src/db/migrations/049_workflow_instance_version.js";
-import { workflowSpecJsonSchema } from "../src/db/migrations/050_workflow_spec_json.js";
-import { workflowResumeSchema } from "../src/db/migrations/051_workflow_resume.js";
-import { workflowInstanceBoundRigSchema } from "../src/db/migrations/052_workflow_instance_bound_rig.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -224,18 +214,7 @@ describe("FAC-1 C3: the six owner-resolution call sites on a bound rig", () => {
     // load-bearing for the human-gate park path (summary/evidence_ref
     // columns — VM-caught: without them the gate item's create-carried
     // summary silently drops and validateHumanPark fails at park).
-    migrate(db, [
-      outboxEntriesSchema,
-      queueItemSummarySchema,
-      queueItemEvidenceRefSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-      workflowResumeSchema,
-      workflowInstanceBoundRigSchema,
-    ]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });
     // P34: the W1 seam is fail-closed (MF2) — a nudge-intended terminal

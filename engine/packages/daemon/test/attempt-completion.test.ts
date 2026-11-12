@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest } from "../src/contracts/team-control.js";
 import { composeAttemptCompletion, extractReviewerReport } from "../src/domain/attempt-completion.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
@@ -55,7 +54,7 @@ describe("U4 daemon-recorded outcomes", () => {
     binding = { ...bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy }),
       limits: { maxSessions: 2, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 } };
     db = createDb(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     const bus = new EventBus(db);
     governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-06T00:00:00.000Z"), () => policy);

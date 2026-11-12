@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { GithubCli, GithubCliError } from "../src/domain/github-cli.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { setHostPlatformForTests } from "../src/domain/platform.js";
@@ -36,7 +35,7 @@ describe("project bootstrap size, mode, and responsiveness", () => {
   }, { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
   const openApp = () => {
     db = createDb(join(directory, "bootstrap.db"));
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     fixDaemonMode(db, true);
     app = createTestApp(db, { appDeps: { github, settingsStore: settings,
       teamControl: { credentials: { ownerToken: "owner-bootstrap-fixture" } } } }).app;

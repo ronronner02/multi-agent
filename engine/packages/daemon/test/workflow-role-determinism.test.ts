@@ -1,3 +1,4 @@
+import { initializeDatabase } from "../src/db/baseline.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -5,15 +6,6 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
 import { createFullTestDb } from "./helpers/test-app.js";
-import { migrate } from "../src/db/migrate.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
-import { workflowInstanceVersionSchema } from "../src/db/migrations/049_workflow_instance_version.js";
-import { workflowSpecJsonSchema } from "../src/db/migrations/050_workflow_spec_json.js";
-import { workflowResumeSchema } from "../src/db/migrations/051_workflow_resume.js";
-import { workflowInstanceBoundRigSchema } from "../src/db/migrations/052_workflow_instance_bound_rig.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -273,16 +265,6 @@ describe("FAC-1 C4: replay pins — zero role-resolution inventory reads on BOTH
 
   beforeEach(() => {
     db = createFullTestDb();
-    migrate(db, [
-      outboxEntriesSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-      workflowResumeSchema,
-      workflowInstanceBoundRigSchema,
-    ]);
     bus = new EventBus(db);
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });
     // P34: the W1 seam is fail-closed (MF2) — a nudge-intended terminal

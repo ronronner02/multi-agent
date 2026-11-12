@@ -10,13 +10,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { bindingsSessionsSchema } from "../src/db/migrations/002_bindings_sessions.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { queueTargetRepoSchema } from "../src/db/migrations/039_queue_target_repo.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
@@ -25,7 +19,7 @@ import { setSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
 
 function setup(): { repo: QueueRepository; db: Database.Database } {
   const db = createDb();
-  migrate(db, [coreSchema, bindingsSessionsSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueTargetRepoSchema]);
+  initializeDatabase(db);
   const bus = new EventBus(db);
   const rigRepo = new RigRepository(db);
   rigRepo.createRig("known-rig");

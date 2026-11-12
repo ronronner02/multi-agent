@@ -6,8 +6,7 @@ import { join } from "node:path";
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -73,7 +72,7 @@ describe("C3 — the lead's decomposition is an owner decision", () => {
     execFileSync("git", ["-C", root, "add", "plan.md"]);
     execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
     binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy });
-    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = createDb(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     seat("lead-node", "lead", "lead@rig"); seat("a-node", "implementer", "a@rig");
     seat("b-node", "implementer", "b@rig"); seat("rev-node", "reviewer", "reviewer@rig");

@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import type { RigEvent, PersistedEvent } from "../src/domain/types.js";
 import { createFullTestDb } from "./helpers/test-app.js";

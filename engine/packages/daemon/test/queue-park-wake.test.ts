@@ -1,16 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { watchdogJobsSchema } from "../src/db/migrations/031_watchdog_jobs.js";
-import { watchdogHistorySchema } from "../src/db/migrations/032_watchdog_history.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository, type QueueNudgeTransport } from "../src/domain/queue-repository.js";
@@ -18,26 +9,6 @@ import { USAGE_LIMIT_BLOCKER_TAG } from "../src/domain/queue-wake-repository.js"
 import { isDue } from "../src/domain/watchdog-due.js";
 import type { PersistedEvent } from "../src/domain/types.js";
 import { WatchdogJobsRepository } from "../src/domain/watchdog-jobs-repository.js";
-
-// S03 R25 RED-FIRST fixture: this is the contract shape migration 073 will ship.
-// Keeping the table local in the RED commit lets every behavior fail on its own
-// assertion at the old base instead of one missing-module error masking the set.
-function createWakeContractTable(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE queue_transition_wakes (
-      transition_id INTEGER PRIMARY KEY,
-      qitem_id TEXT NOT NULL,
-      phase TEXT NOT NULL,
-      wake_kind TEXT NOT NULL,
-      wake_ref TEXT NOT NULL,
-      delivery_status TEXT
-    );
-    CREATE INDEX idx_queue_transition_wakes_qitem
-      ON queue_transition_wakes(qitem_id, transition_id);
-    CREATE INDEX idx_queue_transition_wakes_ref
-      ON queue_transition_wakes(wake_ref, phase);
-  `);
-}
 
 describe("S03 R25 — a park records its wake on the append-only transition", () => {
   let db: Database.Database;
@@ -49,18 +20,7 @@ describe("S03 R25 — a park records its wake on the append-only transition", ()
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      outboxEntriesSchema,
-      watchdogJobsSchema,
-      watchdogHistorySchema,
-      queueItemSummarySchema,
-      queueItemEvidenceRefSchema,
-    ]);
-    createWakeContractTable(db);
+    initializeDatabase(db);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus);
     repo.attachOutbox(new OutboxHandler(db));

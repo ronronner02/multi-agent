@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { bindingsSessionsSchema } from "../src/db/migrations/002_bindings_sessions.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { chatMessagesSchema } from "../src/db/migrations/016_chat_messages.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 
@@ -17,7 +13,7 @@ describe("ChatRepository", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, bindingsSessionsSchema, eventsSchema, chatMessagesSchema]);
+    initializeDatabase(db);
     rigRepo = new RigRepository(db);
     chatRepo = new ChatRepository(db);
     const rig = rigRepo.createRig("test-rig");

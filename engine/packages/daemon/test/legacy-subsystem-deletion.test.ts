@@ -6,8 +6,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { createDaemon } from "../src/startup.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { createTestApp } from "./helpers/test-app.js";
 
 describe("legacy subsystem deletion", () => {
@@ -112,7 +111,7 @@ describe("legacy subsystem deletion", () => {
     ["GET", "/api/workflow"],
   ])("returns 404 for deleted route %s %s", async (method, path) => {
     const db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     try {
       const { app } = createTestApp(db);
       const response = await app.request(`http://localhost${path}`, {

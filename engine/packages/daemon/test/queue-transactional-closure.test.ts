@@ -22,9 +22,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
@@ -75,7 +73,7 @@ function makeMockTransport(): {
 
 function makeHarness(opts?: { deferTransport?: boolean; resolveOccupantGeneration?: () => string | null }) {
   const db = createDb();
-  migrate(db, ALL_MIGRATIONS);
+  initializeDatabase(db);
   const bus = new EventBus(db);
   const outbox = new OutboxHandler(db);
   const { transport, calls, outcome } = makeMockTransport();
@@ -102,9 +100,9 @@ function makeHarness(opts?: { deferTransport?: boolean; resolveOccupantGeneratio
 describe("W1 MF2 — the atomic seam is mandatory and single-DB", () => {
   it("attachOutbox REJECTS an outbox backed by a different DB connection (split-DB)", () => {
     const db1 = createDb();
-    migrate(db1, ALL_MIGRATIONS);
+    initializeDatabase(db1);
     const db2 = createDb();
-    migrate(db2, [outboxEntriesSchema]);
+    initializeDatabase(db2);
     const repo = new QueueRepository(db1, new EventBus(db1), { validateRig: () => true });
     const foreignOutbox = new OutboxHandler(db2); // different connection
     expect(() => repo.attachOutbox(foreignOutbox)).toThrow(/db|connection|same/i);
@@ -114,7 +112,7 @@ describe("W1 MF2 — the atomic seam is mandatory and single-DB", () => {
 
   it("a nudge-intended terminal handoff with NO outbox attached FAILS CLOSED (no silent close-without-intent)", async () => {
     const db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const { transport } = makeMockTransport();
     const repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     repo.attachTransport(transport);
@@ -132,7 +130,7 @@ describe("W1 MF2 — the atomic seam is mandatory and single-DB", () => {
 
   it("a nudge:false terminal handoff with NO outbox is allowed (no wake intended ⇒ no store needed)", async () => {
     const db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     const source = await repo.create({ nudge: false,
       sourceSession: "planner@rig", destinationSession: "driver@rig", body: "x",
@@ -489,7 +487,7 @@ describe("W1 MF3 — overlapping drains send the external wake exactly once", ()
 describe("W1 MF4 — the intent freezes its emitting generation/envelope", () => {
   it("freeze: the staged intent carries the SOURCE generation resolved at STAGE time", async () => {
     const db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const { transport } = makeMockTransport();
     const repo = new QueueRepository(db, new EventBus(db), {
       validateRig: () => true,
@@ -510,7 +508,7 @@ describe("W1 MF4 — the intent freezes its emitting generation/envelope", () =>
 
   it("no relabel: recovery delivers the FROZEN envelope verbatim after a tenure swap", async () => {
     const db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const { transport, calls, outcome } = makeMockTransport();
     // A resolver that would relabel to the CURRENT occupant if delivery re-resolved.
     const repo = new QueueRepository(db, new EventBus(db), {
@@ -623,7 +621,7 @@ describe("W1 re-seal #3 — real file-backed close/reopen crash boundary", () =>
     try {
       // --- process 1: real handoff, claim the intent, then CRASH (close the db) ---
       const db1 = createDb(dbPath);
-      migrate(db1, ALL_MIGRATIONS);
+      initializeDatabase(db1);
       const outbox1 = new OutboxHandler(db1);
       const repo1 = new QueueRepository(db1, new EventBus(db1), { validateRig: () => true });
       repo1.attachOutbox(outbox1); // no transport ⇒ immediate deliver skipped ⇒ intent pending
@@ -692,7 +690,7 @@ describe("ordinary create wake durability", () => {
     let db: ReturnType<typeof createDb> | undefined;
     try {
       db = createDb(dbPath);
-      migrate(db, ALL_MIGRATIONS);
+      initializeDatabase(db);
       const outbox = new OutboxHandler(db);
       const repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
       repo.attachOutbox(outbox); // no transport: retain pending work for startup

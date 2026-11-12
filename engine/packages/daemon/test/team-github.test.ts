@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { GithubCli } from "../src/domain/github-cli.js";
 import { OwnerSessions, OWNER_COOKIE, OWNER_CSRF_HEADER } from "../src/domain/owner-session.js";
 import { isLargeFileRejection, isAuthFailure, isNetworkFailure, redactCredentials } from "../src/domain/github-cli.js";
@@ -57,7 +56,7 @@ describe("owner GitHub sign-in", () => {
     github = new GithubCli({ executable, execArgv: extraArgs,
       env: { ...process.env, GH_STUB_DIR: directory, GH_TOKEN: "ghp_fixture_INHERITED" } });
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     fixDaemonMode(db, true);
     app = createTestApp(db, { appDeps: { github, legacyBearerToken: legacyToken,
       teamControl: { credentials: { ownerToken, workers: [

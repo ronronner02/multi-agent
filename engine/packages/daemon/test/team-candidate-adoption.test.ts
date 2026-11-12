@@ -5,8 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
@@ -89,7 +88,7 @@ describe("candidate adoption and release use control-owned provenance", () => {
     recordsRoot = join(directory, "control", "candidates");
     mkdirSync(join(assignmentRoot, "ma-worker1"), { recursive: true });
     db = createDb(join(directory, "t048.db"));
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus, { now: () => new Date("2026-10-27T00:00:00.000Z") } as never);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();

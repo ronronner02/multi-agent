@@ -1,16 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { watchdogJobsSchema } from "../src/db/migrations/031_watchdog_jobs.js";
-import { watchdogHistorySchema } from "../src/db/migrations/032_watchdog_history.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { occupantGenerationStampsSchema } from "../src/db/migrations/063_occupant_generation_stamps.js";
-import { watchdogTargetGenerationSchema } from "../src/db/migrations/066_watchdog_target_generation.js";
-import { contextUsageWatchdogSchema } from "../src/db/migrations/074_context_usage_watchdog.js";
-import { contextUsageWatchdogGenerationSchema } from "../src/db/migrations/075_context_usage_watchdog_generation.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import {
   PHASE_C_POLICIES,
   WatchdogJobsError,
@@ -24,14 +15,7 @@ describe("WatchdogJobsRepository (PL-004 Phase C)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      coreSchema,
-      eventsSchema,
-      watchdogJobsSchema,
-      watchdogHistorySchema,
-      contextUsageWatchdogSchema,
-      contextUsageWatchdogGenerationSchema,
-    ]);
+    initializeDatabase(db);
     repo = new WatchdogJobsRepository(db);
   });
 
@@ -241,7 +225,7 @@ describe("WatchdogJobsRepository — generation stamps (Class-B)", () => {
   beforeEach(() => {
     db = createDb();
     // 063 ALTERs BOTH queue_items + watchdog_jobs (one migration), so both tables must exist first.
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, watchdogJobsSchema, watchdogHistorySchema, occupantGenerationStampsSchema]);
+    initializeDatabase(db);
     genBySession = new Map();
     repo = new WatchdogJobsRepository(db, undefined, (s) => genBySession.get(s) ?? null);
   });
@@ -289,16 +273,6 @@ describe("WatchdogJobsRepository — generation stamps (Class-B)", () => {
     expect(repo.dropArmedByRegisteringGeneration("gen-anything")).toBe(0);
     expect(repo.getById(job.jobId)!.state).toBe("active");
   });
-
-  it("pre-063 db (no gen column) degrades: register succeeds, gen NULL, drop no-ops (blast-radius containment)", () => {
-    const bareDb = createDb();
-    migrate(bareDb, [coreSchema, eventsSchema, watchdogJobsSchema, watchdogHistorySchema]); // NO 063
-    const bareRepo = new WatchdogJobsRepository(bareDb, undefined, () => "gen-x");
-    const job = bareRepo.register(input());
-    expect(job.registeredByGeneration).toBeNull();
-    expect(bareRepo.dropArmedByRegisteringGeneration("gen-x")).toBe(0);
-    bareDb.close();
-  });
 });
 
 // ── GHOST-STAGE (i-c): opt-in TARGET-generation stamp (fire-time gen-gate input) ──
@@ -308,7 +282,7 @@ describe("WatchdogJobsRepository — target-generation stamp (i-c, opt-in)", () 
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, watchdogJobsSchema, watchdogHistorySchema, occupantGenerationStampsSchema, watchdogTargetGenerationSchema]);
+    initializeDatabase(db);
     repo = new WatchdogJobsRepository(db);
   });
   afterEach(() => db.close());
@@ -338,15 +312,6 @@ describe("WatchdogJobsRepository — target-generation stamp (i-c, opt-in)", () 
     const genBound = repo.register(input({ targetGenerationUuid: "gen-9" }));
     expect(repo.getById(roleBound.jobId)!.targetGeneration).toBeNull();
     expect(repo.getById(genBound.jobId)!.targetGeneration).toBe("gen-9");
-  });
-
-  it("pre-066 db (no target-gen column) degrades: register succeeds, targetGeneration NULL", () => {
-    const bareDb = createDb();
-    migrate(bareDb, [coreSchema, eventsSchema, watchdogJobsSchema, watchdogHistorySchema]); // NO 066
-    const bareRepo = new WatchdogJobsRepository(bareDb);
-    const job = bareRepo.register(input({ targetGenerationUuid: "gen-x" }));
-    expect(job.targetGeneration).toBeNull(); // column absent → opt-in silently degrades to role-bound
-    bareDb.close();
   });
 });
 

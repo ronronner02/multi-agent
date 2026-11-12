@@ -1,18 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { streamItemsSchema } from "../src/db/migrations/023_stream_items.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { inboxEntriesSchema } from "../src/db/migrations/026_inbox_entries.js";
-import { classifierLeasesSchema } from "../src/db/migrations/029_classifier_leases.js";
-import { projectClassificationsSchema } from "../src/db/migrations/028_project_classifications.js";
-import { classificationFieldsAndAttemptsSchema } from "../src/db/migrations/086_classification_fields_and_attempts.js";
-import { classificationIdentityProvenanceSchema } from "../src/db/migrations/089_classification_identity_provenance.js";
-import { viewsCustomSchema } from "../src/db/migrations/030_views_custom.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { InboxHandler } from "../src/domain/inbox-handler.js";
@@ -44,11 +33,7 @@ describe("view-event-bridge (PL-004 Phase B R1; BLOCKER 2 fix)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      coreSchema, eventsSchema,
-      streamItemsSchema, queueItemsSchema, queueTransitionsSchema, inboxEntriesSchema,
-      classifierLeasesSchema, projectClassificationsSchema, classificationFieldsAndAttemptsSchema, classificationIdentityProvenanceSchema, viewsCustomSchema,
-    ]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     queueRepo = new QueueRepository(db, bus);
     inbox = new InboxHandler(db, bus, queueRepo);

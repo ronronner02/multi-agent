@@ -28,11 +28,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { streamItemsSchema } from "../src/db/migrations/023_stream_items.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { SliceIndexer, parseFrontmatter } from "../src/domain/slices/slice-indexer.js";
 
 function makeTempDirs(): { slicesRoot: string; dogfoodRoot: string } {
@@ -78,7 +74,7 @@ describe("PL-slice-story-view-v0 SliceIndexer", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     const dirs = makeTempDirs();
     slicesRoot = dirs.slicesRoot;
@@ -455,7 +451,7 @@ describe("PL-slice-story-view-v0 SliceIndexer", () => {
     it("returns empty qitem set when queue_items table is absent", () => {
       // Re-create db without queue_items to simulate the test-harness gap.
       const bareDb = createDb();
-      migrate(bareDb, [coreSchema]);
+      initializeDatabase(bareDb);
       writeSlice(slicesRoot, "x", { "README.md": "---\nrail-item: PL-005\n---\n" });
       const indexer = new SliceIndexer({ slicesRoot, dogfoodEvidenceRoot: null, db: bareDb });
       expect(indexer.list()[0]!.qitemCount).toBe(0);
@@ -604,7 +600,7 @@ describe("qitem-ccf87c0d — mission-index load contract + membership pins", () 
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-load-"));
     missionsRoot = path.join(cleanup, "missions");
@@ -769,7 +765,6 @@ describe("qitem-ccf87c0d — mission-index load contract + membership pins", () 
 
   it("PIN: tags-column-missing degradation — fallback still matches by body (tier-1 failure is caught)", () => {
     const bareDb = createDb();
-    migrate(bareDb, [coreSchema]);
     bareDb.exec(`CREATE TABLE queue_items (
       qitem_id TEXT PRIMARY KEY, ts_created TEXT NOT NULL, ts_updated TEXT NOT NULL,
       source_session TEXT NOT NULL, destination_session TEXT NOT NULL, state TEXT NOT NULL,
@@ -794,7 +789,7 @@ describe("qitem-ccf87c0d — LIKE byte-equivalence + fallback-order pins (guard 
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-eqv-"));
   });
@@ -850,7 +845,7 @@ describe("qitem-ccf87c0d — LIKE '_' Unicode code-point parity (guard blocker p
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-cp-"));
   });
@@ -883,7 +878,7 @@ describe("qitem-18f3300d — NUL parity + cross-operation membership freshness (
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-gate2-"));
   });
@@ -962,7 +957,7 @@ describe("qitem-ccf87c0d — withMembershipBatch scope API (RED: API missing)", 
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-scope-"));
   });
@@ -1096,7 +1091,7 @@ describe("qitem-render-driver #3 — modern mission: mission-only rows must not 
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-leak-"));
     missionsRoot = path.join(cleanup, "missions");
@@ -1240,7 +1235,7 @@ describe("qitem-18110994 — membership build integrity + scoping", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, queueItemsSchema]);
+    initializeDatabase(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     cleanup = fs.mkdtempSync(path.join(os.tmpdir(), "slice-indexer-harden-"));
     missionsRoot = path.join(cleanup, "missions");

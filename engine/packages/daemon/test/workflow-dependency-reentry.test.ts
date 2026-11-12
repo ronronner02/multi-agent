@@ -3,8 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -75,7 +74,7 @@ describe("dependency graph re-entry through a routed exit", () => {
   // Unset means real time. A test sets it to move the workflow clock by hand.
   let clock: Date | undefined;
   beforeEach(() => {
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     db.prepare("INSERT INTO rigs(id,name) VALUES('rig','rig')").run();
     const bus = new EventBus(db);
     const queue = new QueueRepository(db, bus, { validateRig: () => true, transport: {

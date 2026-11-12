@@ -1,20 +1,9 @@
+import { initializeDatabase } from "../src/db/baseline.js";
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { eventsNodeTypeIndexSchema } from "../src/db/migrations/047_events_node_type_index.js";
 import { deriveOriented } from "../src/domain/startup-proof.js";
 
-/**
- * OPR.0.4.3 hotfix proof — the daemon /healthz-wedge cure (migration 047).
- *
- * The wedge (root-caused from a live 98-100% CPU sample) was a per-node reverse
- * scan of the append-only `events` table with no supporting index — a full
- * backward table walk per node on every 3s `GET /api/ps` poll. These tests
- * prove that migration 047 turns the two hot derive queries from a full-table
- * SCAN (the wedge) into a BOUNDED INDEXED SEEK, and that the query behaviour is
- * unchanged (index-only fix — no logic change to the derive functions).
- */
+/** Prove startup-event reads use bounded indexes and retain their semantics. */
 
 // The two hot queries, VERBATIM from the derive functions (must stay in sync).
 const ORIENTED_SQL =
@@ -24,7 +13,12 @@ const RESTORE_SQL =
 
 function mkDb(withIndex: boolean): Database.Database {
   const db = new Database(":memory:");
-  migrate(db, withIndex ? [eventsSchema, eventsNodeTypeIndexSchema] : [eventsSchema]);
+  initializeDatabase(db);
+  if (!withIndex) {
+    for (const row of db.prepare("PRAGMA index_list(events)").all() as Array<{name: string}>) {
+      db.exec(`DROP INDEX "${row.name}"`);
+    }
+  }
   return db;
 }
 
@@ -45,7 +39,7 @@ function planFor(db: Database.Database, sql: string, param: string): string {
   return rows.map((r) => r.detail).join(" | ");
 }
 
-describe("OPR.0.4.3 healthz-wedge — migration 047 events indexes", () => {
+describe("startup event indexes", () => {
   describe("query plan: full SCAN (the wedge) → bounded indexed SEEK", () => {
     it("WITHOUT the index, deriveOriented's query is a full-table SCAN of events (the wedge)", () => {
       const db = mkDb(false);
@@ -55,18 +49,18 @@ describe("OPR.0.4.3 healthz-wedge — migration 047 events indexes", () => {
       db.close();
     });
 
-    it("WITH migration 047, deriveOriented's query uses idx_events_node_type_seq (no full SCAN)", () => {
+    it("WITH the baseline, deriveOriented's query uses a node index (no full SCAN)", () => {
       const db = mkDb(true);
       const plan = planFor(db, ORIENTED_SQL, "node-x");
-      expect(plan).toMatch(/idx_events_node_type_seq/);
+      expect(plan).toMatch(/idx_events_(node_type_seq|startup_node_seq)/);
       expect(plan).not.toMatch(/SCAN events/i); // a SEARCH via index, never a full-table SCAN
       db.close();
     });
 
-    it("deriveRestoreOutcome is rig-scoped — it rides the existing idx_events_rig_seq (rig-bounded, NOT the full-table wedge); a (rig_id,type,seq) index goes unused (planner prefers rig_seq for the seq ordering), so it is second-order, addressed by the follow-on N+1 collapse, not this hotfix", () => {
+    it("keeps restore outcome reads bounded by rig", () => {
       const db = mkDb(true);
       const plan = planFor(db, RESTORE_SQL, "rig-x");
-      expect(plan).toMatch(/idx_events_rig_seq/); // rig-bounded seek, not a full-table SCAN
+      expect(plan).toMatch(/idx_events_restore_rig_seq/); // rig-bounded seek, not a full-table SCAN
       expect(plan).not.toMatch(/SCAN events/i);
       db.close();
     });

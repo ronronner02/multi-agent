@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { managedModelRefusal, readTeamModelSettings, rosterModelRefusal, saveTeamModelSettings } from "../src/domain/team-model-policy.js";
 import type { WorkerLaunchInput } from "../src/adapters/worker-launch.js";
 
@@ -17,7 +16,7 @@ const launch = (role: "lead" | "implementer" | "reviewer", client: "claude-code"
 describe("project model policy persistence and launch authority", () => {
   let directory: string, db: Database.Database;
   beforeEach(() => {
-    directory = mkdtempSync(join(tmpdir(), "model-policy-")); db = createDb(join(directory, "state.sqlite")); migrate(db, ALL_MIGRATIONS);
+    directory = mkdtempSync(join(tmpdir(), "model-policy-")); db = createDb(join(directory, "state.sqlite")); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('project', 'fixture')").run();
     db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime) VALUES ('lead', 'project', 'lead', 'lead', 'claude-code')").run();
     db.prepare("INSERT INTO sessions (id, node_id, session_name, resume_type, resume_token) VALUES ('session', 'lead', 'lead@fixture', 'claude_id', 'old-native-identity')").run();

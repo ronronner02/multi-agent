@@ -19,8 +19,7 @@
 //                          shape across ALL states, never by tag.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueRepository, deriveCrossHostSuccessorId, type QueueItem } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
@@ -36,7 +35,7 @@ describe("S02 standing stuck sweep — both halves, routed findings, quiet-but-o
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus, { validateRig: () => true });
   });
@@ -892,7 +891,7 @@ describe.each(["done", "handed-off"] as const)("#318 seat-target closure without
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
   });
   afterEach(() => {
@@ -1306,7 +1305,7 @@ describe("#514 unclaimed sweep and a pending ask posted to a registered human", 
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), {
       validateRig: () => true,
       loadHumanRegistry: () => ({ ok: true as const, entities: [OWNER, ALPHA, BETA, PLAIN] }),

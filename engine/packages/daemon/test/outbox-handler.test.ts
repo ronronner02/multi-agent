@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 
 describe("OutboxHandler", () => {
@@ -11,7 +10,7 @@ describe("OutboxHandler", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [outboxEntriesSchema]);
+    initializeDatabase(db);
     outbox = new OutboxHandler(db);
   });
 

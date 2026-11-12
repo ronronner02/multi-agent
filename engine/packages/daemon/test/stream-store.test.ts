@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { streamItemsSchema } from "../src/db/migrations/023_stream_items.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { StreamStore } from "../src/domain/stream-store.js";
 import type { PersistedEvent } from "../src/domain/types.js";
@@ -17,7 +14,7 @@ describe("StreamStore", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     store = new StreamStore(db, bus);
     captured = [];

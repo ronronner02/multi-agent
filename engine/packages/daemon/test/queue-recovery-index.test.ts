@@ -2,8 +2,7 @@
 // and parsing every queue row, and still choose exactly the row the unindexed queries chose.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { findQueueRecovery, recoveryTag } from "../src/domain/queue-recovery.js";
@@ -34,7 +33,7 @@ describe("recovery and dedup lookups use the partial tag index (migration 099)",
   const isRecoveryLookup = (sql: string) => sql.includes("json_each(tags) WHERE value = ?") && sql.includes("qitem_id DESC LIMIT 1");
 
   beforeEach(() => {
-    db = new Database(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = new Database(":memory:"); initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
   });
   afterEach(() => { vi.restoreAllMocks(); db.close(); });

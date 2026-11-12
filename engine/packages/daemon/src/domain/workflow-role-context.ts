@@ -130,7 +130,7 @@ export function rigDeclaresRole(
  * participates). Sync SQL only; an unknown rig name returns false (the
  * caller's registered-rig skip runs first, so that case never reaches
  * an advisory here). MAY THROW on a partial-schema DB (the inventory
- * projection reads tables like `snapshots`) — the FR-5 sweep treats a
+ * projection reads inventory tables) — the FR-5 sweep treats a
  * throw as cannot-vouch and skips (advisory-never-throw; VM-caught run-1).
  */
 export function rigMemberExists(

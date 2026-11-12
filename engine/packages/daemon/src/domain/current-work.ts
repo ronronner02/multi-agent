@@ -43,7 +43,6 @@ import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
 import { parseFrontmatter } from "./slices/slice-indexer.js";
-import { reanchorBuiltinStartupFile } from "./builtin-startup-files.js";
 
 export interface RoleOrientation {
   state: "unknown" | "no-record" | "not-declared" | "missing" | "present";
@@ -60,43 +59,10 @@ export interface RoleOrientation {
   }>;
 }
 
-/** Read the caller's explicit role bindings, not startup content or a guessed basename. */
+/** Startup-context persistence was removed with the legacy launch path. */
 export function deriveRole(db: Database.Database | undefined, nodeId: string | null): RoleOrientation {
-  const unknown = (reason: string): RoleOrientation => ({ state: "unknown", reason, files: [] });
-  if (!db || !nodeId) return unknown("calling node unavailable");
-  try {
-    const row = db.prepare("SELECT resolved_files_json, created_at FROM node_startup_context WHERE node_id = ?")
-      .get(nodeId) as { resolved_files_json: string; created_at: string } | undefined;
-    if (!row) return { state: "no-record", files: [] };
-    const entries: unknown = JSON.parse(row.resolved_files_json);
-    if (!Array.isArray(entries) || entries.some(entry => !entry || typeof entry !== "object"
-      || Array.isArray(entry) || (entry.orientation !== undefined && entry.orientation !== "role"))) {
-      return unknown("malformed startup record");
-    }
-    const marked = entries.filter(entry => entry.orientation === "role");
-    if (marked.some(entry => [entry.path, entry.absolutePath, entry.ownerRoot]
-      .some(value => typeof value !== "string" || !value.trim())
-      || !path.isAbsolute(entry.absolutePath) || !path.isAbsolute(entry.ownerRoot))) {
-      return unknown("malformed role binding");
-    }
-    const files: RoleOrientation["files"] = marked.map(entry => {
-      const resolved = reanchorBuiltinStartupFile(entry);
-      let state: "present" | "missing" | "unknown";
-      try { state = fs.statSync(resolved.absolutePath).isFile() ? "present" : "missing"; }
-      catch (error) {
-        state = ["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "") ? "missing" : "unknown";
-      }
-      return { path: entry.path, absolutePath: entry.absolutePath, ownerRoot: entry.ownerRoot,
-        resolvedPath: resolved.absolutePath, resolvedOwnerRoot: resolved.ownerRoot, state };
-    });
-    return {
-      state: files.some(file => file.state === "unknown") ? "unknown"
-        : files.some(file => file.state === "missing") ? "missing" : files.length ? "present" : "not-declared",
-      recordedAt: row.created_at,
-      note: "Timestamp is the startup-context record write/attempt, not verified successful launch or current-byte equivalence to the spec.",
-      files,
-    };
-  } catch { return unknown("startup record unavailable or malformed"); }
+  if (!db || !nodeId) return { state: "unknown", reason: "calling node unavailable", files: [] };
+  return { state: "no-record", files: [] };
 }
 
 const MISSION_TAG = "mission:";
