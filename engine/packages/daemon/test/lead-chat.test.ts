@@ -5,8 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -75,7 +74,7 @@ describe("U5 — lead chat and plan approval", () => {
     worktrees = mkdtempSync(join(tmpdir(), "u5-worktrees-"));
     candidates = mkdtempSync(join(tmpdir(), "u5-candidates-"));
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     fixDaemonMode(db, true);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'demo')").run();
     for (const [id, role, seat] of [["lead-node", "lead", "lead@demo"], ["impl-node", "implementer", "impl@demo"],
@@ -556,7 +555,7 @@ describe("U5 — the lead turn's end is its reply", () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "u5-turn-end-"));
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'demo')").run();
     const bus = new EventBus(db);
     governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-05T00:00:00.000Z"), () => policy);

@@ -9,7 +9,6 @@ import type { RuntimeAdapter } from "./runtime-adapter.js";
 import type { ContextUsageStore } from "./context-usage-store.js";
 import type { TranscriptStore } from "./transcript-store.js";
 import type { AgentActivityStore } from "./agent-activity-store.js";
-import { findLatestUsableSnapshot, findLatestUsableSnapshotsForAllRigs } from "./rig-repository.js";
 import { resolveNodeWorkspace } from "./workspace/workspace-resolver.js";
 import { deriveCanonicalSessionName } from "./session-name.js";
 import { buildNativeResumeCommand, buildCodexResumeCore } from "./native-resume-probe.js";
@@ -61,14 +60,6 @@ interface EventRow {
   type: string;
   payload: string;
   created_at: string;
-}
-
-interface StartupContextRow {
-  node_id: string;
-  projection_entries_json: string;
-  resolved_files_json: string;
-  startup_actions_json: string;
-  runtime: string;
 }
 
 interface BindingRow {
@@ -430,22 +421,6 @@ function getLatestError(db: Database.Database, rigId: string, nodeId: string): s
 }
 
 /**
- * Map persisted projection entries to the installedResources shape.
- * The startup-orchestrator persists: { category, effectiveId, sourceSpec, sourcePath, resourcePath, absolutePath, mergeStrategy, target }
- * We normalize to: { id, category, targetPath }
- */
-function mapProjectionEntries(entries: unknown[]): Array<{ id: string; category: string; targetPath: string }> {
-  return entries.map((e: unknown) => {
-    const entry = e as Record<string, string>;
-    return {
-      id: entry.effectiveId ?? entry.id ?? "",
-      category: entry.category ?? "",
-      targetPath: entry.target ?? entry.targetPath ?? "",
-    };
-  });
-}
-
-/**
  * OPR.0.4.3.19 rev1-r2 B1 — gate a durable identity verdict to the CURRENT
  * binding. The verdict table is keyed only by node_id, so on rebind/relaunch
  * (same node_id, new session + new pane) the stored verdict describes a pane
@@ -491,9 +466,7 @@ function applicableVerdict(
  * Single source of truth consumed by CLI, UI, and MCP.
  */
 export function getNodeInventory(db: Database.Database, rigId: string): NodeInventoryEntry[] {
-  // Resolve the rig's latest usable snapshot once for the whole projection so per-node
-  // recoverability checks share the same source of truth without N extra queries.
-  const usableSnapshot = findLatestUsableSnapshot(db, rigId);
+  const usableSnapshot = null;
   // PL-007: rig's typed workspace block (if declared) loaded once per
   // projection so per-node kind resolution shares one parse.
   const workspaceSpec = readRigWorkspaceJson(db, rigId);
@@ -744,8 +717,7 @@ function readAllRigWorkspaceJson(db: Database.Database): Map<string, WorkspaceSp
 
 /**
  * FS-1 W1.2 — the rig-level N+1 collapse. Builds inventory for ALL rigs in a
- * bounded, rig-count-INDEPENDENT set of queries: 3 batched setup reads
- * (snapshots / workspaces / identity verdicts) + 1 all-rigs node SELECT, grouped
+ * bounded, rig-count-INDEPENDENT set of queries: batched workspace reads + 1 all-rigs node SELECT, grouped
  * by rig_id. Every entry is built through the SAME `buildInventoryEntry` that the
  * per-rig `getNodeInventory` uses, so `getNodeInventoryForAllRigs(db).get(rigId)`
  * is byte-identical to `getNodeInventory(db, rigId)` — the collapse changes only
@@ -761,7 +733,6 @@ function readAllRigWorkspaceJson(db: Database.Database): Map<string, WorkspaceSp
 // `rows` decides the scope (all rigs vs a selected rig set); entry derivation is
 // identical, so a rig's entries are byte-identical regardless of which caller ran.
 function buildInventoryMapFromRows(db: Database.Database, rows: InventoryRow[]): Map<string, NodeInventoryEntry[]> {
-  const snapshotByRig = findLatestUsableSnapshotsForAllRigs(db);
   const workspaceByRig = readAllRigWorkspaceJson(db);
   const verdictsByRig = new Map<string, Map<string, SeatIdentityVerdict>>();
   // FS-1 W1.3 S1/S2 — the per-node reads built ONCE (O(1) queries, not O(nodes)).
@@ -772,7 +743,7 @@ function buildInventoryMapFromRows(db: Database.Database, rows: InventoryRow[]):
   const out = new Map<string, NodeInventoryEntry[]>();
   for (const row of rows) {
     const entry = buildInventoryEntry(db, row, {
-      usableSnapshot: snapshotByRig.get(row.rig_id) ?? null,
+      usableSnapshot: null,
       workspaceSpec: workspaceByRig.get(row.rig_id) ?? null,
       identityVerdicts: verdictsByRig.get(row.rig_id) ?? new Map(),
       restoreOutcomes,
@@ -857,16 +828,7 @@ export function getNodeDetail(
     updatedAt: bindingRow.updated_at,
   } : null;
 
-  // Startup context
-  const ctxRow = db.prepare(
-    "SELECT * FROM node_startup_context WHERE node_id = ?"
-  ).get(nodeId) as StartupContextRow | undefined;
-
-  const startupFiles = ctxRow ? JSON.parse(ctxRow.resolved_files_json) : [];
-  const startupActions = ctxRow ? JSON.parse(ctxRow.startup_actions_json) : [];
-  const projectionEntries = ctxRow ? JSON.parse(ctxRow.projection_entries_json) : [];
-
-  // Installed resources: override (from async adapter call) > projection fallback
+  // Installed resources can come from an explicit override or a retained adapter.
   let installedResources: NodeDetailEntry["installedResources"];
   if (opts?.installedResourcesOverride) {
     installedResources = opts.installedResourcesOverride;
@@ -885,15 +847,15 @@ export function getNodeDetail(
           targetPath: r.installedPath,
         }));
       } else {
-        // Async — fall through to projection
-        installedResources = mapProjectionEntries(projectionEntries);
+        // Async callers provide the explicit override.
+        installedResources = [];
       }
     } catch {
-      installedResources = mapProjectionEntries(projectionEntries);
+      installedResources = [];
     }
   } else {
-    // Projection fallback
-    installedResources = mapProjectionEntries(projectionEntries);
+    // No installed-resource observation.
+    installedResources = [];
   }
 
   // Recent events (last 20 for this node)
@@ -910,15 +872,6 @@ export function getNodeDetail(
       payload,
     };
   });
-
-  // Infrastructure startup command
-  let infrastructureStartupCommand: string | null = null;
-  if (entry.nodeKind === "infrastructure" && startupActions.length > 0) {
-    const sendTextAction = startupActions.find((a: { type: string }) => a.type === "send_text");
-    if (sendTextAction) {
-      infrastructureStartupCommand = sendTextAction.value;
-    }
-  }
 
   // Peers: other nodes in the same rig
   const peers: NodeDetailPeer[] = allEntries
@@ -973,11 +926,11 @@ export function getNodeDetail(
       codexConfigProfile: entry.codexConfigProfile,
     }),
     binding,
-    startupFiles,
-    startupActions,
+    startupFiles: [],
+    startupActions: [],
     installedResources,
     recentEvents,
-    infrastructureStartupCommand,
+    infrastructureStartupCommand: null,
     peers,
     edges: { outgoing, incoming },
     transcript: { enabled: false, path: null, tailCommand: null }, // populated by route handler

@@ -4,8 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { generatedReplyTitle } from "../src/domain/display-names.js";
 import { EventBus } from "../src/domain/event-bus.js";
@@ -44,7 +43,7 @@ describe("lead turn title persistence", () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "generated-titles-"));
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'demo')").run();
     const policy = unisolatedPolicyCapability(2);
     const binding = { artifactContract: "spec-unified-plan/v1" as const, artifactReadiness: "implementation-ready" as const,

@@ -4,11 +4,7 @@ import { createHash } from "node:crypto";
 import { parse as parseToml } from "smol-toml";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { bindingsSessionsSchema } from "../src/db/migrations/002_bindings_sessions.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { chatMessagesSchema } from "../src/db/migrations/016_chat_messages.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import {
@@ -62,7 +58,7 @@ describe("KTD19 mailbox delivery through a native channel", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, bindingsSessionsSchema, eventsSchema, chatMessagesSchema]);
+    initializeDatabase(db);
     rigId = new RigRepository(db).createRig("channel-rig").id;
     chatRepo = new ChatRepository(db);
     promptState = "clear";

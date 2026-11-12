@@ -1,14 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { rigArchiveSchema } from "../src/db/migrations/042_rig_archive.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueTransitionsArchiveSchema } from "../src/db/migrations/054_queue_transitions_archive.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 
@@ -19,7 +12,7 @@ describe("RECENT queue transition projection", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, rigArchiveSchema, queueItemSummarySchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
     nextTransitionId = 1;
   });
@@ -143,7 +136,7 @@ describe("RECENT queue transition projection", () => {
   });
 
   it("qualifies complete live/archive histories before selecting the newest twenty", () => {
-    migrate(db, [queueTransitionsArchiveSchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
     const archived = db.prepare(`INSERT INTO queue_transitions_archive
       (transition_id, qitem_id, ts, state, actor_session, archived_at)
@@ -173,7 +166,7 @@ describe("RECENT queue transition projection", () => {
   });
 
   it("orders by timestamp then ID while deriving state from interleaved ID order", () => {
-    migrate(db, [queueTransitionsArchiveSchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
     for (const id of ["a", "b", "c"]) item(id, "rig-a", "in-progress");
     const add = (id: number, qitem: string, ts: string, state: string, archive = false) => {

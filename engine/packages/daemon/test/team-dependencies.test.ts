@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
@@ -38,7 +37,7 @@ describe("managed dependency eligibility", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus);
@@ -215,7 +214,7 @@ describe("handoff custody never satisfies a dependency by itself", () => {
   /** Real queue rows, so the resolver walks the same tables production does. */
   function fixture(rows: Record<string, { state: string; destination?: string; handedOffTo?: string | null; handedOffFrom?: string | null }>, authorities: Array<[string, string]>, validated: string[]) {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();
     for (const [id, row] of Object.entries(rows)) {
       db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state,

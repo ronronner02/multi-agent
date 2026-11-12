@@ -4,9 +4,10 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { composeCancellation } from "../src/domain/team-cancellation.js";
+import { BASELINE_VERSION } from "../src/db/baseline.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode } from "../src/domain/plan-governance.js";
@@ -81,14 +82,16 @@ describe("U3 — the owner creates a team", () => {
   beforeEach(() => {
     directory = realpathSync.native(mkdtempSync(join(tmpdir(), "u3-team-")));
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     fixDaemonMode(db, true);
     const bus = new EventBus(db), queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, undefined, () => policy);
     dispatch = vi.fn(async () => {});
     app = createTestApp(db, { appDeps: { eventBus: bus, queueRepo: queue, teamGovernance: governance,
       teamControl: { credentials: { ownerToken, workers: [{ token: workerToken, sessionId: "dev@demo", runId: "other" }] },
-        readPolicyCapability: () => policy, planWorktreeRoot: () => join(directory, "plans"),
+        readPolicyCapability: () => policy, cancellation: composeCancellation({ db, governance,
+          terminate: async () => { throw new Error("No process was launched in this route fixture"); }, log: () => {} }),
+        planWorktreeRoot: () => join(directory, "plans"),
         dispatch: dispatch as unknown as (runId: string, taskId: string) => Promise<void> } } }).app;
   });
 
@@ -196,38 +199,38 @@ describe("U3 — the owner creates a team", () => {
     expect(db.prepare("SELECT count(*) AS count FROM rigs").get()).toEqual({ count: 0 });
   });
 
-  it("preserves recorded conversations and their constraints when adding workflow header storage", async () => {
+  it("preserves recorded conversations and their constraints when reopening the baseline", async () => {
     const team = createTeam(db, { repository: repository(directory), seats: defaultSeats as import("../src/domain/team-setup.js").TeamSeatInput[] });
     const { runId } = await (await start({ rig: team.id, goal: "Preserve the conversation" })).json() as { runId: string };
-    const legacy = createDb();
+    const reopened = createDb();
     try {
-      migrate(legacy, ALL_MIGRATIONS.slice(0, ALL_MIGRATIONS.findIndex(migration => migration.name === "121_workflow_souls.sql")));
-      legacy.prepare("INSERT INTO rigs (id, name) VALUES (?, 'project')").run(team.id);
-      const historicalColumns = (legacy.prepare("PRAGMA table_info(team_runs)").all() as Array<{ name: string }>).map(column => column.name);
+      initializeDatabase(reopened);
+      reopened.prepare("INSERT INTO rigs (id, name) VALUES (?, 'project')").run(team.id);
+      const columns = (reopened.prepare("PRAGMA table_info(team_runs)").all() as Array<{ name: string }>).map(column => column.name);
       const current = db.prepare("SELECT * FROM team_runs WHERE id = ?").get(runId) as Record<string, unknown>;
-      legacy.prepare(`INSERT INTO team_runs (${historicalColumns.join(", ")}) VALUES (${historicalColumns.map(() => "?").join(", ")})`)
-        .run(...historicalColumns.map(column => current[column]));
-      const insert = legacy.prepare(`INSERT INTO team_chat_messages
+      reopened.prepare(`INSERT INTO team_runs (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`)
+        .run(...columns.map(column => current[column]));
+      const insert = reopened.prepare(`INSERT INTO team_chat_messages
         (rowid, id, run_id, sender, body, attempt_id, delivered_attempt, created_at, kind, options_json, answered_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       insert.run(7, "owner-message", runId, "owner", "Consider these constraints", null, "lead-turn", "2026-01-01T00:00:00Z", "text", null, null);
       insert.run(19, "decision", runId, "lead", "Choose an approach", "lead-turn", null, "2026-01-01T00:00:01Z", "decision", '["A","B"]', "answer");
       insert.run(23, "answer", runId, "owner", "Use A", null, null, "2026-01-01T00:00:02Z", "confirmation", null, null);
-      const before = legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all();
-      migrate(legacy, ALL_MIGRATIONS);
-      expect(legacy.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all()).toEqual((before as Record<string, unknown>[]).map(row => ({ ...row, response_language: null })));
-      expect(legacy.prepare("SELECT response_language FROM team_runs WHERE id = ?").get(runId)).toEqual({ response_language: null });
-      expect(() => legacy.prepare("UPDATE team_runs SET response_language = 'invalid' WHERE id = ?").run(runId)).toThrow(/CHECK/);
-      expect(() => legacy.prepare("UPDATE team_chat_messages SET response_language = 'invalid'").run()).toThrow(/CHECK/);
-      expect(legacy.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-      const append = legacy.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, attempt_id, created_at)
+      const before = reopened.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all();
+      initializeDatabase(reopened);
+      expect(reopened.prepare("SELECT rowid, * FROM team_chat_messages ORDER BY rowid").all()).toEqual(before);
+      expect(reopened.prepare("SELECT response_language FROM team_runs WHERE id = ?").get(runId)).toEqual({ response_language: null });
+      expect(() => reopened.prepare("UPDATE team_runs SET response_language = 'invalid' WHERE id = ?").run(runId)).toThrow(/CHECK/);
+      expect(() => reopened.prepare("UPDATE team_chat_messages SET response_language = 'invalid'").run()).toThrow(/CHECK/);
+      expect(reopened.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      const append = reopened.prepare(`INSERT INTO team_chat_messages (id, run_id, sender, body, attempt_id, created_at)
         VALUES (?, ?, ?, ?, ?, '2026-01-01T00:00:03Z')`);
       expect(() => append.run("duplicate", runId, "lead", "Repeated", "lead-turn")).toThrow(/UNIQUE/);
       expect(() => append.run("too-long", runId, "owner", "x".repeat(65_537), null)).toThrow(/CHECK/);
       expect(() => append.run(runId + ":initial", runId, "lead", "x".repeat(65_537), "another-turn")).toThrow(/CHECK/);
       expect(() => append.run(runId + ":initial", runId, "owner", "x".repeat(65_793), null)).toThrow(/CHECK/);
       expect(() => append.run(runId + ":initial", runId, "owner", "/spec-pov\n" + "x".repeat(65_536), null)).not.toThrow();
-    } finally { legacy.close(); }
+    } finally { reopened.close(); }
   });
 
   it("creates one rig with the requested seats, and returns roles and clients rather than seat names", async () => {
@@ -365,6 +368,30 @@ describe("U3 — the owner creates a team", () => {
     expect(governance.findTask(receipt.runId!, "task-1")!.assignment.role).toBe("lead");
     // The repository the run approves is the team's own, not a guess: nothing was passed here.
     expect(governance.getRun(receipt.runId!).binding.repository.root).toBe(created.team.repository);
+  });
+
+  it("completes the owner create, start, read and cancel flow on a fresh baseline", async () => {
+    expect(db.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION);
+    const created = await create({ repository: repository(directory), seats: defaultSeats });
+    expect(created.status).toBe(201);
+    const { team } = await created.json() as Created;
+    const listed = await call("/api/team-control/teams");
+    expect((await listed.json() as { teams: Array<{id: string}> }).teams.map(value => value.id)).toEqual([team.id]);
+    const started = await start({ goal: "Exercise the fresh schema", rig: team.id });
+    expect(started.status).toBe(201);
+    const { runId } = await started.json() as { runId: string };
+    expect(dispatch).toHaveBeenCalledWith(runId, "task-1");
+    expect((await call(`/api/team-control/runs/${runId}/read`)).status).toBe(200);
+    const canceled = await call(`/api/team-control/runs/${runId}/cancel`, { method: "POST", body: JSON.stringify({
+      protocolVersion: "1.0", runId, actionId: "run", expectedEntityVersion: governance.getRun(runId).entityVersion,
+      idempotencyKey: "baseline-cancel", payload: { reason: "Flow complete" },
+    }) });
+    expect(canceled.status, await canceled.clone().text()).toBe(200);
+    expect(await canceled.json()).toMatchObject({ status: "observed", value: { state: "canceled" } });
+    const runs = await call("/api/team-control/runs");
+    expect((await runs.json() as { runs: Array<{id: string; state: string}> }).runs)
+      .toEqual([expect.objectContaining({ id: runId, state: "canceled" })]);
+    expect(db.pragma("foreign_key_check")).toEqual([]);
   });
 
   it("selects the active replacement reviewer for a future run and retains retired history", async () => {

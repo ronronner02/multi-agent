@@ -11,8 +11,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { CLAUDE_RESUME_ROTATION_COLUMNS, SessionRegistry, claudeResumeRotation } from "../src/domain/session-registry.js";
 import { verifyClaudePaneProcess, observeClaudeDelivery, type NativeProcessRow } from "../src/domain/native-process-lineage.js";
@@ -33,7 +32,7 @@ afterEach(() => { for (const db of databases.splice(0)) db.close(); });
 
 function seat(opts: { armed?: boolean; launchWrite?: boolean; launchObserved?: typeof launchedClaude | null } = {}) {
   const db = createDb(); databases.push(db);
-  migrate(db, ALL_MIGRATIONS);
+  initializeDatabase(db);
   const rigRepo = new RigRepository(db), registry = new SessionRegistry(db);
   const rig = rigRepo.createRig("rotation");
   const node = rigRepo.addNode(rig.id, "dev.impl", { runtime: "claude-code" });

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
-import { usageSamplesSchema } from "../src/db/migrations/062_usage_samples.js";
 import {
   archiveAgedTerminalTransitions,
   pruneWatchdogHistory,
@@ -37,9 +36,21 @@ function makeDb(): Database.Database {
       history_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, evaluated_at TEXT NOT NULL
     );
   `);
-  // 51-08 A2: the sweep now drains a usage_samples pass — the fixture installs
-  // the REAL migration (the module contract is "runs post-migration").
-  db.exec(usageSamplesSchema.sql);
+  db.exec(`CREATE TABLE usage_samples (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lane TEXT NOT NULL CHECK (lane IN ('context', 'provider_window')),
+      seat_session TEXT NOT NULL,
+      node_id TEXT,
+      source TEXT,
+      sampled_at TEXT,
+      captured_at TEXT NOT NULL,
+      total_input_tokens INTEGER,
+      total_output_tokens INTEGER,
+      used_percentage REAL,
+      window TEXT CHECK (window IN ('five_hour', 'weekly') OR window IS NULL),
+      window_used_percent REAL,
+      resets_at TEXT
+    );`);
   return db;
 }
 

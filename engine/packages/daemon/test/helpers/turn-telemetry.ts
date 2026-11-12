@@ -4,8 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../../src/db/connection.js";
-import { migrate } from "../../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../../src/db/all-migrations.js";
+import { initializeDatabase } from "../../src/db/baseline.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest } from "../../src/contracts/team-control.js";
 import { EventBus } from "../../src/domain/event-bus.js";
 import { PlanGovernance, hashBinding } from "../../src/domain/plan-governance.js";
@@ -30,7 +29,7 @@ export function turnTelemetryFixture() {
   execFileSync("git", ["-C", repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
     "commit", "-qm", "fixture"], { stdio: "ignore" });
   const db = createDb(dbPath);
-  migrate(db, ALL_MIGRATIONS);
+  initializeDatabase(db);
   db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
   db.prepare("INSERT INTO nodes (id, rig_id, logical_id, runtime, cwd) VALUES ('node', 'rig', 'implementer', 'claude-code', ?)").run(repository);
   const events = new EventBus(db), queue = new QueueRepository(db, events), policy = unisolatedPolicyCapability(1);

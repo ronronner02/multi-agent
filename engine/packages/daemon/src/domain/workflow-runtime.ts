@@ -2349,7 +2349,7 @@ export class WorkflowRuntime {
           } catch {
             // ADVISORY-NEVER-THROW (VM-caught, run-1): the probe rides the
             // full inventory projection, which can error on a
-            // partial-schema DB (e.g. a test fixture without the snapshots
+            // partial-schema DB (e.g. a test fixture without the inventory
             // table). A probe error means the inventory cannot vouch
             // EITHER way — skip silently; an advisory path must never be
             // able to fail the instantiate.

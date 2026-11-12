@@ -1,19 +1,10 @@
+import { initializeDatabase } from "../src/db/baseline.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createFullTestDb } from "./helpers/test-app.js";
-import { migrate } from "../src/db/migrate.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
-import { workflowInstanceVersionSchema } from "../src/db/migrations/049_workflow_instance_version.js";
-import { workflowSpecJsonSchema } from "../src/db/migrations/050_workflow_spec_json.js";
-import { workflowResumeSchema } from "../src/db/migrations/051_workflow_resume.js";
-import { workflowInstanceBoundRigSchema } from "../src/db/migrations/052_workflow_instance_bound_rig.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
@@ -269,17 +260,6 @@ describe("FAC-3 C2: FR-5 member-exists instantiate advisory", () => {
     db = createFullTestDb();
     // 044/048 ride along defensively (the WF-3 fixture-migration lesson:
     // gate parks need the summary/evidence_ref columns).
-    migrate(db, [
-      queueItemSummarySchema,
-      queueItemEvidenceRefSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-      workflowResumeSchema,
-      workflowInstanceBoundRigSchema,
-    ]);
     bus = new EventBus(db);
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });
     rigRepo = new RigRepository(db);
@@ -491,40 +471,16 @@ describe("FAC-3 C2: FR-5 member-exists instantiate advisory", () => {
 
   // ---------- advisory-never-throw (VM-caught, run-1) ----------
 
-  it("advisory-never-throw: a probe error on a partial-schema DB skips silently — instantiate NEVER fails", async () => {
-    // The exact run-1 shape: a fixture DB with the workflow tables but
-    // WITHOUT the inventory projection's tables (no `snapshots`) — the
-    // untouched workflow-bound-rig suite's migration set. Pre-fix, the
-    // sweep's probe threw SqliteError out of instantiate; the rail is
-    // that an ADVISORY path can never fail the instantiate.
+  it("advisory-never-throw: an inventory query failure skips silently — instantiate NEVER fails", async () => {
     const { createDb } = await import("../src/db/connection.js");
-    const { coreSchema } = await import("../src/db/migrations/001_core_schema.js");
-    const { eventsSchema } = await import("../src/db/migrations/003_events.js");
-    const { queueItemsSchema } = await import("../src/db/migrations/024_queue_items.js");
-    const { queueTransitionsSchema } = await import("../src/db/migrations/025_queue_transitions.js");
     const minimalDb = createDb();
-    migrate(minimalDb, [
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-      workflowResumeSchema,
-      workflowInstanceBoundRigSchema,
-    ]);
-    // A REGISTERED rig so the sweep reaches the member probe (skip (c)
-    // passes) — and the probe then errors on the missing snapshots table.
+    initializeDatabase(minimalDb);
+    minimalDb.exec("DROP TABLE bindings");
     minimalDb.prepare(`INSERT INTO rigs (id, name) VALUES ('r-min', 'acme-build')`).run();
     const minimalBus = new EventBus(minimalDb);
     const minimalRepo = new QueueRepository(minimalDb, minimalBus, { validateRig: () => true });
     const minimalRuntime = new WorkflowRuntime({ db: minimalDb, eventBus: minimalBus, queueRepo: minimalRepo });
-    // The probe itself DOES throw on this schema (the precondition that
-    // makes this regression meaningful — if it ever stops throwing, the
-    // test still passes but the precondition assert documents the seam).
+    // Prove the injected inventory fault is reached before exercising the advisory rail.
     expect(() => rigMemberExists(minimalDb, "acme-build", "dev-typo1@acme-build")).toThrow();
     const result = await minimalRuntime.instantiate({
       specPath: writeSpec("never-throw.yaml", TYPO_SPEC),

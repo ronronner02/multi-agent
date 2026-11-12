@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { watchdogJobsSchema } from "../src/db/migrations/031_watchdog_jobs.js";
-import { watchdogHistorySchema } from "../src/db/migrations/032_watchdog_history.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { WatchdogJobsRepository } from "../src/domain/watchdog-jobs-repository.js";
 import { WatchdogHistoryLog } from "../src/domain/watchdog-history-log.js";
 
@@ -17,7 +13,7 @@ describe("WatchdogHistoryLog (PL-004 Phase C; append-only audit)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, watchdogJobsSchema, watchdogHistorySchema]);
+    initializeDatabase(db);
     jobsRepo = new WatchdogJobsRepository(db);
     log = new WatchdogHistoryLog(db);
     jobId = jobsRepo.register({

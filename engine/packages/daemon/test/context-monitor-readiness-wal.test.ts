@@ -4,8 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { ContextMonitor } from "../src/domain/context-monitor.js";
@@ -19,7 +18,7 @@ describe("ContextMonitor readiness write reservation", () => {
   let sessionId: string;
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "readiness-wal-"));
-    db = createDb(join(home, "state.sqlite")); migrate(db, ALL_MIGRATIONS);
+    db = createDb(join(home, "state.sqlite")); initializeDatabase(db);
     writer = createDb(join(home, "state.sqlite"));
     // These connections share an event loop: never wait for the fixture itself.
     db.pragma("busy_timeout = 0"); writer.pragma("busy_timeout = 0");

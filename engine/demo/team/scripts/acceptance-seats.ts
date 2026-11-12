@@ -13,9 +13,7 @@
  */
 import type Database from "better-sqlite3";
 import { realpathSync } from "node:fs";
-import { createDb } from "../../../packages/daemon/src/db/connection.js";
-import { migrate } from "../../../packages/daemon/src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../../../packages/daemon/src/db/all-migrations.js";
+import { openDatabase } from "../../../packages/daemon/src/db/connection.js";
 import { resolveDaemonDbPath } from "../../../packages/daemon/src/daemon-db-path.js";
 import { OPENRIG_HOME } from "../../../packages/cli/src/openrig-compat.js";
 import { RigRepository } from "../../../packages/daemon/src/domain/rig-repository.js";
@@ -43,9 +41,8 @@ export function seedAcceptanceSeats(db: Database.Database, repository: string,
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(new URL(import.meta.url).pathname)) {
   const repository = process.argv[2];
   if (!repository) throw new Error("usage: acceptance-seats.ts <repository> [rig-name]");
-  const db = createDb(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
+  const db = openDatabase(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
   try {
-    migrate(db, ALL_MIGRATIONS);
     const { rigId, created } = seedAcceptanceSeats(db, repository, process.argv[3]);
     console.log(created ? `Created rig "${ACCEPTANCE_RIG_NAME}" (${rigId}).` : `Rig already exists (${rigId}); left alone.`);
     for (const seat of ACCEPTANCE_SEATS) console.log(`  ${seat.role.padEnd(12)} ${seat.client}`);

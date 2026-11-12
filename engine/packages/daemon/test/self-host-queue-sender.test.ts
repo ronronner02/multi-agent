@@ -5,8 +5,7 @@
 // this file keeps the original suite's seam (repo-level create) under the new contract.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
@@ -17,7 +16,7 @@ describe("queue sender identity — bare at local write, triple only from the fo
   let prior: string | null;
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     prior = getSelfHostId();
     setSelfHostId("mars-01");

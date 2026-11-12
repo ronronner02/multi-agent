@@ -7,13 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 import {
@@ -68,7 +62,7 @@ describe("QueueRepository human-route enforcement wiring (FR-4/FR-5)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueItemSummarySchema, queueItemEvidenceRefSchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
   });
 
@@ -187,7 +181,7 @@ describe("FR-6 park-on-human (leg-1) — enforcement + persistence + attention",
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueItemSummarySchema, queueItemEvidenceRefSchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
   });
 

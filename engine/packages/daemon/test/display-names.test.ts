@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { BASELINE_VERSION, initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding } from "../src/domain/plan-governance.js";
@@ -103,7 +102,7 @@ describe("display names", () => {
 
     beforeEach(() => {
       db = createDb();
-      migrate(db, ALL_MIGRATIONS);
+      initializeDatabase(db);
       fixDaemonMode(db, true);
       db.prepare("INSERT INTO rigs (id, name) VALUES ('demo-rig', 'demo')").run();
       // The rig a demo run starts on: a Claude Code lead, two implementers on Codex and one on
@@ -165,12 +164,12 @@ describe("display names", () => {
         { role: "reviewer", reviewOf: "task-1", seat: "reviewer@demo" });
     }
 
-    it("adds the name column to runs and tasks at migration 112", () => {
+    it("includes run and task names in the baseline", () => {
       const columns = (table: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>)
         .map((column) => column.name);
       expect(columns("team_runs")).toContain("display_name");
       expect(columns("team_queue_authority")).toContain("display_name");
-      expect(db.prepare("SELECT name FROM schema_migrations WHERE name = '112_display_names.sql'").get()).toBeDefined();
+      expect(db.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION);
     });
 
     it("stores each name on the row it names when the row is created", () => {

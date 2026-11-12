@@ -5,8 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
@@ -67,7 +66,7 @@ describe("delivery roster changes", () => {
     const git = (...args: string[]) => execFileSync("git", ["-C", root, ...args], { stdio: "ignore" });
     git("init", "-q"); writeFileSync(join(root, "plan.md"), "Approved goal.\n");
     git("add", "plan.md"); git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "base");
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     rigId = createTeam(db, { repository: root, name: "demo", seats: [{ role: "lead", client: "claude-code" }, implementer, reviewer] }).id;
     const policy = unisolatedPolicyCapability(2), bus = new EventBus(db);
     governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), undefined, () => policy);

@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { inboxEntriesSchema } from "../src/db/migrations/026_inbox_entries.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { InboxHandler, InboxHandlerError } from "../src/domain/inbox-handler.js";
@@ -21,13 +16,7 @@ describe("InboxHandler", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      inboxEntriesSchema,
-    ]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     queueRepo = new QueueRepository(db, bus);
     inbox = new InboxHandler(db, bus, queueRepo);

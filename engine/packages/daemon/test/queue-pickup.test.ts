@@ -14,8 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueRepository, type QueueItem } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { ViewProjector } from "../src/domain/view-projector.js";
@@ -39,7 +38,7 @@ describe("S04 pickup receipts — derived, visible, threshold-honest", () => {
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     priorEnv = process.env[THRESHOLD_ENV];
     delete process.env[THRESHOLD_ENV];

@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -43,7 +42,7 @@ describe("versioned owner task edits", () => {
     return [name, db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all()];
   });
   beforeEach(() => {
-    serial = 0; db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    serial = 0; db = createDb(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id,name) VALUES ('rig','fixture')").run();
     const bus = new EventBus(db); queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, () => new Date("2026-10-30T00:00:00.000Z"), () => ({

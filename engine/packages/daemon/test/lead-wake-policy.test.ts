@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
@@ -60,7 +59,7 @@ describe("KTD21 Lead wake admission", () => {
   beforeEach(() => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-17T00:00:00.000Z"));
     directory = mkdtempSync(join(tmpdir(), "lead-wake-")); dbPath = join(directory, "state.db");
-    db = createDb(dbPath); migrate(db, ALL_MIGRATIONS); db.prepare("INSERT INTO rigs(id,name) VALUES ('rig','fixture')").run();
+    db = createDb(dbPath); initializeDatabase(db); db.prepare("INSERT INTO rigs(id,name) VALUES ('rig','fixture')").run();
     bus = new EventBus(db); queue = new QueueRepository(db, bus, { transport: { send } });
     now = new Date("2026-10-17T00:00:00.000Z"); serial = 0; send.mockClear(); governance = makeGovernance();
     governance.createRun({ id: "run", rigId: "rig", binding });
@@ -173,9 +172,9 @@ describe("KTD21 Lead wake admission", () => {
     expect(governance.getRun("run").stateReason).toBe("lead-wake:hourly");
     await expect(queue.drainPendingWakeIntents()).rejects.toMatchObject({ code: "managed_control_required" });
   });
-  it.each(["current", "pre-governance"])("does not change an unbound legacy nudge (%s schema)", async schema => {
-    const legacyDb = createDb(); migrate(legacyDb, schema === "current" ? ALL_MIGRATIONS : ALL_MIGRATIONS.filter(m => m.name < "104"));
-    expect(legacyDb.prepare("SELECT 1 FROM sqlite_master WHERE name = 'team_queue_authority'").get() !== undefined).toBe(schema === "current");
+  it("does not change an unbound nudge", async () => {
+    const legacyDb = createDb(); initializeDatabase(legacyDb);
+    expect(legacyDb.prepare("SELECT 1 FROM sqlite_master WHERE name = 'team_queue_authority'").get() !== undefined).toBe(true);
     const legacyQueue = new QueueRepository(legacyDb, new EventBus(legacyDb), { transport: { send } });
     try { const item = await legacyQueue.create({ sourceSession: "sender@rig", destinationSession: "lead@rig", body: "legacy", nudge: false });
       await legacyQueue.maybeNudge(item.qitemId, "lead@rig", true); expect(send).toHaveBeenCalledTimes(1);

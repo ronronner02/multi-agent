@@ -2,15 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WatchdogJobsRepository } from "../src/domain/watchdog-jobs-repository.js";
 import { escalationDedupTag, runWakeLadderTick } from "../src/domain/queue-wake-ladder.js";
 
-// Both SQL writers are supported by QueueRepository's generation-column detection.
-describe.each(["current", "without generation stamps"])("claim park exit (%s schema)", (schema) => {
+describe("claim park exit (baseline)", () => {
   let db: Database.Database;
   let repo: QueueRepository;
   let jobs: WatchdogJobsRepository;
@@ -18,7 +16,7 @@ describe.each(["current", "without generation stamps"])("claim park exit (%s sch
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, schema === "current" ? ALL_MIGRATIONS : ALL_MIGRATIONS.filter((m) => m.name !== "063_occupant_generation_stamps.sql"));
+    initializeDatabase(db);
     const bus = new EventBus(db);
     repo = new QueueRepository(db, bus, { validateRig: () => true, resolveOccupantGeneration: () => "owned-generation" });
     jobs = new WatchdogJobsRepository(db);
@@ -71,7 +69,7 @@ describe.each(["current", "without generation stamps"])("claim park exit (%s sch
     expect(repo.waitingView(row.qitemId)).toMatchObject({ blocker: null, liveness: { subject: "worker@rig" } });
     expect(repo.listTransitions(row.qitemId).at(-1)).toMatchObject({ transitionNote: "claimed", closureTarget: blocker.qitemId });
     expect(repo.waitingView(sibling.qitemId)).toMatchObject({ blocker: { ref: blocker.qitemId }, liveness: { subject: "gate@rig" } });
-    if (schema === "current") expect(db.prepare("SELECT claimed_by_generation_uuid AS generation FROM queue_items WHERE qitem_id = ?").get(row.qitemId)).toEqual({ generation: "owned-generation" });
+    expect(db.prepare("SELECT claimed_by_generation_uuid AS generation FROM queue_items WHERE qitem_id = ?").get(row.qitemId)).toEqual({ generation: "owned-generation" });
   });
 
   it("clears a typed gate and retires only its generated park timer", async () => {

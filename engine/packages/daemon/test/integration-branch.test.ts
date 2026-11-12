@@ -5,8 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest, type PlanBinding } from "../src/contracts/team-control.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -84,7 +83,7 @@ describe("U7 integration branch and merge", () => {
 
   const open = () => {
     db = createDb(dbPath);
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, undefined, () => policy);

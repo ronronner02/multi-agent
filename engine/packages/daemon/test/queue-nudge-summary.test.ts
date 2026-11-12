@@ -5,8 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import type { QueueNudgeTransport } from "../src/domain/queue-repository.js";
@@ -18,7 +17,7 @@ import {
 
 function makeHarness() {
   const db = createDb();
-  migrate(db, ALL_MIGRATIONS);
+  initializeDatabase(db);
   const calls: Array<{ session: string; text: string }> = [];
   const transport: QueueNudgeTransport = {
     async send(session: string, text: string) {

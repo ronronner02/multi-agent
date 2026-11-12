@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { createTestApp } from "./helpers/test-app.js";
 import { attemptsFromManagedWorkerEvidence, createSystemHealthReader, readSystemHealth, readSystemHealthBounded,
   SYSTEM_HEALTH_TOTAL_TIMEOUT_MS } from "../src/domain/system-health.js";
@@ -81,7 +80,7 @@ describe("KTD26 system health", () => {
   });
   it("bounds a hanging owner route reader at the whole-check limit", async () => {
     const db = createDb(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const { app } = createTestApp(db, { appDeps: {
       teamControl: { credentials: { ownerToken: "owner-health" },
         readSystemHealth: () => new Promise(() => undefined) },
@@ -105,14 +104,14 @@ describe("KTD26 system health", () => {
   });
   it("does not mutate the database while reading a health result", async () => {
     const db = createDb(":memory:");
-    migrate(db, ALL_MIGRATIONS);
-    const before = db.prepare("SELECT name, applied_at FROM schema_migrations ORDER BY name").all();
+    initializeDatabase(db);
+    const before = db.serialize();
     const health = await readSystemHealth({
       database: () => ok("database-read-only"), queueMailbox: () => ok("queue-read-only"),
       controlTmux: () => ok("tmux-read-only"), workerBoundary: () => ok("worker-read-only"),
       sandboxNetwork: () => ok("network-read-only"), clients: () => ok("clients-read-only"),
     });
-    const after = db.prepare("SELECT name, applied_at FROM schema_migrations ORDER BY name").all();
+    const after = db.serialize();
     expect(after).toEqual(before);
     expect(health.lights.database.evidenceRef).toBe("database-read-only");
     db.close();
@@ -138,7 +137,7 @@ describe("KTD26 system health", () => {
   });
   it("exposes only the owner-authenticated query", async () => {
     const db = createDb(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const readHealth = vi.fn(createSystemHealthReader({
       database: () => ok("db"), queueMailbox: () => ok("queue"), controlTmux: () => ok("tmux"),
       workerBoundary: () => ok("worker"), sandboxNetwork: () => ok("network"), clients: () => ok("clients"),

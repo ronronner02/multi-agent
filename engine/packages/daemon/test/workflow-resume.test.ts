@@ -15,12 +15,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 
 const SPEC = `workflow:
   id: wf5-resume-pipeline
@@ -100,7 +99,7 @@ describe("WF-5 FR-4: resume (redrive)", () => {
 
   const build = () => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     const bus = new EventBus(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     queueRepo = new QueueRepository(db, bus, { validateRig: () => true });

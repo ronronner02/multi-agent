@@ -5,8 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -109,7 +108,7 @@ describe("T017 — the owner's cancel stops the work", () => {
       policyRevision: 4, policyFingerprint: hashBytes("policy"),
       limits: { maxSessions: 3, maxActiveMs: 600_000, maxRetries: 1, maxReviewRounds: 2 },
     };
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     const bus = new EventBus(db), queue = new QueueRepository(db, bus);
     const capability = () => ({ policyRevision: 4, policyFingerprint: binding.policyFingerprint, verifiedProviders: ["claude", "codex"] as const });
     governance = new PlanGovernance(db, bus, queue, undefined, capability);

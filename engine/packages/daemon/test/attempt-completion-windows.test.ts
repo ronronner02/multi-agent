@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { TEAM_CONTROL_VERSION, type ControlRequest } from "../src/contracts/team-control.js";
 import { composeAttemptCompletion, identityAlive } from "../src/domain/attempt-completion.js";
 import { observeIdentity } from "../src/domain/process-termination.js";
@@ -77,7 +76,7 @@ describe("U1 Windows liveness never fabricates an end", () => {
   it("leaves a running attempt open when the recorded process cannot be proved ended", async () => {
     directory = mkdtempSync(join(tmpdir(), "u1-attempt-"));
     db = createDb(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     const bus = new EventBus(db);
     const queue = new QueueRepository(db, bus);

@@ -1,11 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { bindingsSessionsSchema } from "../src/db/migrations/002_bindings_sessions.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { chatMessagesSchema } from "../src/db/migrations/016_chat_messages.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import {
   MailboxDelivery,
@@ -27,7 +23,7 @@ function cap(label: string): string {
 
 function createTestDb(): Database.Database {
   const db = createDb();
-  migrate(db, [coreSchema, bindingsSessionsSchema, eventsSchema, chatMessagesSchema]);
+  initializeDatabase(db);
   return db;
 }
 

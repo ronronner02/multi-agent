@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueTransitionLog } from "../src/domain/queue-transition-log.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
@@ -11,10 +10,10 @@ const OLD = "2026-01-01T00:00:00.000Z";
 const NOW = "2026-09-11T00:00:00.000Z";
 const databases: ReturnType<typeof createDb>[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
-function database(previous = false) {
+function database() {
   const db = createDb();
   databases.push(db);
-  migrate(db, previous ? ALL_MIGRATIONS.filter((m) => m.name < "082") : ALL_MIGRATIONS);
+  initializeDatabase(db);
   return db;
 }
 function seed(db: ReturnType<typeof createDb>, id: string, state = "done", parent: string | null = null) {
@@ -32,20 +31,7 @@ function seed(db: ReturnType<typeof createDb>, id: string, state = "done", paren
   return log;
 }
 
-describe("archived audit identity — real migration, writer and history readers", () => {
-  it("upgrades the previous schema additively without relabeling old archive rows", () => {
-    const db = database(true);
-    db.prepare(`INSERT INTO queue_transitions_archive (transition_id, qitem_id, ts, state,
-      actor_session, archived_at) VALUES (1, 'legacy', ?, 'done', 'owner@rig-a', ?)`).run(OLD, OLD);
-    const before = db.prepare("SELECT * FROM queue_transitions_archive").get() as object;
-    migrate(db, ALL_MIGRATIONS);
-    const column = (db.prepare("PRAGMA table_info(queue_transitions_archive)").all() as Array<{name: string; notnull: number}>)
-      .find((c) => c.name === "identity_provenance");
-    expect(column).toMatchObject({ notnull: 0 });
-    expect(db.prepare("SELECT * FROM queue_transitions_archive").get()).toEqual({ ...before, identity_provenance: null });
-    migrate(db, ALL_MIGRATIONS);
-    expect(new QueueTransitionLog(db).listForQitem("legacy")[0]?.identityProvenance).toBeNull();
-  });
+describe("archived audit identity — baseline, writer and history readers", () => {
 
   it("retains complete transition values through archival, public history and bounded readers", async () => {
     const db = database();
@@ -95,15 +81,6 @@ describe("archived audit identity — real migration, writer and history readers
     const before = db.prepare("SELECT * FROM queue_transitions").all();
     db.exec("CREATE TRIGGER fail_delete BEFORE DELETE ON queue_transitions BEGIN SELECT RAISE(ABORT, 'fixture delete failure'); END");
     expect(() => archiveAgedTerminalTransitions(db, { nowIso: NOW })).toThrow("fixture delete failure");
-    expect(db.prepare("SELECT * FROM queue_transitions").all()).toEqual(before);
-    expect(db.prepare("SELECT * FROM queue_transitions_archive").all()).toEqual([]);
-  });
-
-  it("refuses a pre-upgrade archive that cannot carry live provenance", () => {
-    const db = database(true);
-    seed(db, "old-schema");
-    const before = db.prepare("SELECT * FROM queue_transitions").all();
-    expect(() => archiveAgedTerminalTransitions(db, { nowIso: NOW })).toThrow(/identity_provenance/);
     expect(db.prepare("SELECT * FROM queue_transitions").all()).toEqual(before);
     expect(db.prepare("SELECT * FROM queue_transitions_archive").all()).toEqual([]);
   });

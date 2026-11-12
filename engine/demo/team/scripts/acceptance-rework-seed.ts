@@ -184,16 +184,13 @@ export function seedRepository(target: string, variant: TaskVariant = "truncate"
 
 /** The two seats as rows only: nothing is started here, exactly as a fresh install leaves it. */
 export async function seedSeats(repository: string, rigName = REWORK_RIG_NAME): Promise<{ rigId: string; created: boolean }> {
-  const { createDb } = await import("../../../packages/daemon/src/db/connection.js");
-  const { migrate } = await import("../../../packages/daemon/src/db/migrate.js");
-  const { ALL_MIGRATIONS } = await import("../../../packages/daemon/src/db/all-migrations.js");
+  const { openDatabase } = await import("../../../packages/daemon/src/db/connection.js");
   const { resolveDaemonDbPath } = await import("../../../packages/daemon/src/daemon-db-path.js");
   const { OPENRIG_HOME } = await import("../../../packages/cli/src/openrig-compat.js");
   const { RigRepository } = await import("../../../packages/daemon/src/domain/rig-repository.js");
   const { createTeam } = await import("../../../packages/daemon/src/domain/team-setup.js");
-  const db = createDb(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
+  const db = openDatabase(resolveDaemonDbPath(process.env.OPENRIG_DB, OPENRIG_HOME));
   try {
-    migrate(db, ALL_MIGRATIONS);
     const existing = new RigRepository(db).findRigsByName(rigName)[0];
     if (existing) return { rigId: existing.id, created: false };
     const team = createTeam(db, { repository, name: rigName, seats: reworkSeats() });

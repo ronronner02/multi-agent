@@ -6,8 +6,7 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { GithubCli } from "../src/domain/github-cli.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { SettingsStore } from "../src/domain/user-settings/settings-store.js";
@@ -160,7 +159,7 @@ function createSetup() {
 
   const openApp = () => {
     state.db = createDb(join(state.directory, "bootstrap.db"));
-    migrate(state.db, ALL_MIGRATIONS);
+    initializeDatabase(state.db);
     fixDaemonMode(state.db, true);
     state.app = createTestApp(state.db, { appDeps: { github: state.github, settingsStore: state.settings,
       teamControl: { credentials: { ownerToken: "owner-bootstrap-fixture" } } } }).app;
@@ -519,7 +518,7 @@ describeOnWindows("project creation through the owner route — Windows paths an
         GH_TOKEN: "ghp_fixture_INHERITED" } });
     settings = new SettingsStore(join(directory, "settings.json"));
     db = createDb(join(directory, "bootstrap.db"));
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     fixDaemonMode(db, true);
     app = createTestApp(db, { appDeps: { github, settingsStore: settings,
       teamControl: { credentials: { ownerToken: "owner-bootstrap-fixture" } } } }).app;

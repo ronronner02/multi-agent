@@ -1,14 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { streamItemsSchema } from "../src/db/migrations/023_stream_items.js";
-import { classifierLeasesSchema } from "../src/db/migrations/029_classifier_leases.js";
-import { projectClassificationsSchema } from "../src/db/migrations/028_project_classifications.js";
-import { classificationFieldsAndAttemptsSchema } from "../src/db/migrations/086_classification_fields_and_attempts.js";
-import { classificationIdentityProvenanceSchema } from "../src/db/migrations/089_classification_identity_provenance.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { StreamStore } from "../src/domain/stream-store.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { ClassifierLeaseManager } from "../src/domain/classifier-lease-manager.js";
@@ -41,7 +34,7 @@ describe("ProjectClassifier (PL-004 Phase B; L2 classifier write path)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, streamItemsSchema, classifierLeasesSchema, projectClassificationsSchema, classificationFieldsAndAttemptsSchema, classificationIdentityProvenanceSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     leaseMgr = new ClassifierLeaseManager(db, bus);
     classifier = new ProjectClassifier(db, bus, leaseMgr);

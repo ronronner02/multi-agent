@@ -6,8 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository, QUEUE_STATES, isTerminalState } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -110,7 +109,7 @@ describe("transactional plan governance", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus);
@@ -280,7 +279,7 @@ describe("transactional plan governance", () => {
     directories.push(directory);
     const file = path.join(directory, "control.db");
     db.close();
-    db = createDb(file); migrate(db, ALL_MIGRATIONS);
+    db = createDb(file); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();
     bus = new EventBus(db); queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
@@ -986,7 +985,7 @@ describe("transactional plan governance", () => {
     directories.push(directory);
     const file = path.join(directory, "control.db");
     db.close();
-    db = createDb(file); migrate(db, ALL_MIGRATIONS);
+    db = createDb(file); initializeDatabase(db);
     bus = new EventBus(db); queue = new QueueRepository(db, bus);
     governance = new PlanGovernance(db, bus, queue, () => now, verifiedPolicy);
     const repository = new RigRepository(db);

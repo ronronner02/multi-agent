@@ -11,11 +11,10 @@
 // producers are deleted.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { OutboxHandler, WAKE_INTENT_PREFIX } from "../src/domain/outbox-handler.js";
 // P8: the canonical migration list — never a hand-curated inline subset.
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { wrapPaneEnvelope } from "../src/lib/pane-envelope.js";
 import { setSelfHostId, getSelfHostId } from "../src/domain/host-identity/fanout-contract.js";
@@ -30,7 +29,7 @@ describe("local bare identity — no self-host suffix on any intra-instance surf
 
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
     outbox = new OutboxHandler(db);
     repo.attachOutbox(outbox);

@@ -7,18 +7,12 @@
 //   - handoff inherits source's targetRepo when not overridden
 //   - handoff-and-complete inherits source's targetRepo when not
 //     overridden; explicit override wins
-//   - migration 038 column present after migrate runs
+//   - target_repo column present in the baseline
 
 import { describe, it, expect, beforeEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { queueTargetRepoSchema } from "../src/db/migrations/039_queue_target_repo.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
@@ -28,14 +22,14 @@ let repo: QueueRepository;
 
 beforeEach(() => {
   db = createDb();
-  migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueTargetRepoSchema, outboxEntriesSchema]);
+  initializeDatabase(db);
   repo = new QueueRepository(db, new EventBus(db));
   // W1 MF2: a nudge-intended terminal handoff requires an attached wake-intent store.
   repo.attachOutbox(new OutboxHandler(db));
 });
 
 describe("queue target_repo (PL-007)", () => {
-  it("migration 038 adds target_repo column", () => {
+  it("baseline includes target_repo column", () => {
     const cols = db.prepare("PRAGMA table_info(queue_items)").all() as Array<{ name: string }>;
     expect(cols.some((c) => c.name === "target_repo")).toBe(true);
   });
@@ -115,20 +109,5 @@ describe("queue target_repo (PL-007)", () => {
     });
     expect(result.created.targetRepo).toBe("openrig");
     expect(result.closed.state).toBe("done");
-  });
-
-  it("legacy fixture without migration 038: degrades gracefully (target_repo NOT persisted, no throws)", async () => {
-    const legacyDb = createDb();
-    migrate(legacyDb, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema]);
-    const legacyRepo = new QueueRepository(legacyDb, new EventBus(legacyDb));
-    // The schema-detect should be false; INSERTs should run the legacy
-    // statement; targetRepo input is silently dropped.
-    const created = await legacyRepo.create({
-      sourceSession: "a@r",
-      destinationSession: "b@r",
-      body: "x",
-      targetRepo: "openrig",
-    });
-    expect(created.targetRepo).toBeNull();
   });
 });

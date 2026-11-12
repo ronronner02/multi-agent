@@ -1,16 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
-import { watchdogJobsSchema } from "../src/db/migrations/031_watchdog_jobs.js";
-import { occupantGenerationStampsSchema } from "../src/db/migrations/063_occupant_generation_stamps.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import {
@@ -29,7 +20,7 @@ describe("QueueRepository", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, outboxEntriesSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus);
     // W1 MF2: a nudge-intended terminal handoff now requires an attached wake-intent
@@ -810,7 +801,7 @@ describe("QueueRepository summary column (OPR.0.4.1.18)", () => {
     db = createDb();
     // Includes migration 044 so the summary column exists. (The main suite
     // deliberately omits it, proving the pre-044 degrade path via the guard.)
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueItemSummarySchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
   });
 
@@ -876,7 +867,7 @@ describe("queue.* event payloads carry summary (OPR.0.4.4.19 FR-1)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueItemSummarySchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus);
     captured = [];
@@ -960,25 +951,6 @@ describe("queue.* event payloads carry summary (OPR.0.4.4.19 FR-1)", () => {
     expect(eventOf("queue.handed_off")!.summary).toBe("Source summary.");
     expect(eventOf("queue.created")!.summary).toBe("New owner summary.");
   });
-
-  it("legacy pre-044 schema (no summary column): events still carry summary key with null", async () => {
-    const legacyDb = createDb();
-    migrate(legacyDb, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema]);
-    const legacyBus = new EventBus(legacyDb);
-    const legacyRepo = new QueueRepository(legacyDb, legacyBus);
-    const legacyCaptured: PersistedEvent[] = [];
-    legacyBus.subscribe((e) => legacyCaptured.push(e));
-    await legacyRepo.create({
-      sourceSession: "alice@rig",
-      destinationSession: "bob@rig",
-      body: "legacy",
-      nudge: false,
-    });
-    const ev = legacyCaptured.find((e) => e.type === "queue.created") as Record<string, unknown>;
-    expect("summary" in ev).toBe(true);
-    expect(ev.summary).toBeNull();
-    legacyDb.close();
-  });
 });
 
 describe("queue_items.evidence_ref column (OPR.0.4.4.19 FR-5 storage)", () => {
@@ -987,7 +959,7 @@ describe("queue_items.evidence_ref column (OPR.0.4.4.19 FR-5 storage)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, queueItemSummarySchema, queueItemEvidenceRefSchema]);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db));
   });
 
@@ -1054,21 +1026,6 @@ describe("queue_items.evidence_ref column (OPR.0.4.4.19 FR-5 storage)", () => {
     expect(attention).toHaveLength(1);
     expect(attention[0]!.evidenceRef).toBe("proof/PROOF.md");
   });
-
-  it("legacy pre-048 schema: evidenceRef input degrades silently; reads are null", async () => {
-    const legacyDb = createDb();
-    migrate(legacyDb, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema]);
-    const legacyRepo = new QueueRepository(legacyDb, new EventBus(legacyDb));
-    const item = await legacyRepo.create({
-      sourceSession: "a@rig",
-      destinationSession: "b@rig",
-      body: "legacy",
-      evidenceRef: "proof/x.md",
-      nudge: false,
-    });
-    expect(item.evidenceRef).toBeNull();
-    legacyDb.close();
-  });
 });
 
 // ── GHOST-STAGE (e/Class-B): queue_items generation stamps + release-to-pending at swap ──
@@ -1081,7 +1038,7 @@ describe("QueueRepository — generation stamps (Class-B)", () => {
   beforeEach(() => {
     db = createDb();
     // 063 ALTERs BOTH queue_items + watchdog_jobs (one migration), so watchdog_jobs must exist too.
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, watchdogJobsSchema, occupantGenerationStampsSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     genBySession = new Map();
     repo = new QueueRepository(db, bus, { resolveOccupantGeneration: (s) => genBySession.get(s) ?? null });
@@ -1152,7 +1109,7 @@ describe("QueueRepository — S26 blocker-actuation unification (OPR.0.5.6.26)",
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, eventsSchema, queueItemsSchema, queueTransitionsSchema, outboxEntriesSchema]);
+    initializeDatabase(db);
     bus = new EventBus(db);
     repo = new QueueRepository(db, bus);
     repo.attachOutbox(new OutboxHandler(db));
@@ -1313,7 +1270,7 @@ describe("QueueRepository — S26 blocker-actuation unification (OPR.0.5.6.26)",
 
   it("recordClosureOverdue with minimal schema (no transitions table) dedups one event per claim across timestamp formats and exact json_extract match", async () => {
     const minDb = createDb();
-    migrate(minDb, [coreSchema, eventsSchema, queueItemsSchema, outboxEntriesSchema]);
+    initializeDatabase(minDb);
     const minBus = new EventBus(minDb);
     const minRepo = new QueueRepository(minDb, minBus);
     minRepo.attachOutbox(new OutboxHandler(minDb));

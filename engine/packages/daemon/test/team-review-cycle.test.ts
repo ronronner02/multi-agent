@@ -5,8 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WorkflowRuntime } from "../src/domain/workflow-runtime.js";
@@ -44,7 +43,7 @@ describe("review bound to the exact candidate", () => {
   let deltaFiles: string[] | null = null;
 
   const open = () => {
-    db = createDb(join(directory, "review.db")); migrate(db, ALL_MIGRATIONS); bus = new EventBus(db);
+    db = createDb(join(directory, "review.db")); initializeDatabase(db); bus = new EventBus(db);
     // Limits, the remaining run clock and the fix delta come from the ledger's own
     // deps, so the fixture supplies them the way the runtime does rather than per request.
     ledger = new ReviewEvidenceLedger({ db, events: bus, resolveAssignee: (_runId, qitemId) => assignees.get(qitemId) ?? null,
@@ -620,7 +619,7 @@ describe("the runtime is the production path to review state", () => {
   beforeEach(() => {
     directory = mkdtempSync(join(tmpdir(), "t012-runtime-"));
     db = createDb(join(directory, "runtime.db"));
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig-1', 'test')").run();
     bus = new EventBus(db);
     queue = new QueueRepository(db, bus);

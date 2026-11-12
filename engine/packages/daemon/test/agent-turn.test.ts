@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
@@ -177,7 +176,7 @@ describe("what a continuation is told", () => {
     execFileSync("git", ["-C", root, "add", "plan.md"]);
     execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
     binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy });
-    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = createDb(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     for (const [nodeId, role, seatName] of [["lead-node", "lead", "lead@rig"], ["a-node", "implementer", "a@rig"],
       ["rev-node", "reviewer", "reviewer@rig"]] as const) {
@@ -340,7 +339,7 @@ describe("a freed slot dispatches the run's next task", () => {
     execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
     // Two seats and two slots: the second task must wait for the first attempt to stop.
     binding = bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy });
-    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = createDb(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     for (const [nodeId, seatName] of [["a-node", "a@rig"], ["b-node", "b@rig"]] as const) {
       db.prepare("INSERT INTO nodes (id, rig_id, logical_id, role, runtime, cwd) VALUES (?, 'rig', ?, 'implementer', 'claude-code', ?)")

@@ -5,8 +5,7 @@
 // the rejected value as `rejectedBlocker`; `blockedOn` appears in an error payload never.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { QueueRepository, QueueRepositoryError } from "../src/domain/queue-repository.js";
 import { EventBus } from "../src/domain/event-bus.js";
 
@@ -15,7 +14,7 @@ describe("F1 — blocker refusal payloads carry rejectedBlocker, never the succe
   let repo: QueueRepository;
   beforeEach(() => {
     db = new Database(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     repo = new QueueRepository(db, new EventBus(db), { validateRig: () => true });
   });
   afterEach(() => db.close());

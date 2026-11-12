@@ -8,8 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TeamControlOptions } from "../src/routes/team-control.js";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding } from "../src/domain/plan-governance.js";
@@ -37,7 +36,7 @@ describe("managed control authority on the shared application", () => {
   let key: number;
   let options: TeamControlOptions;
   beforeEach(() => {
-    db = createDb(); migrate(db, ALL_MIGRATIONS);
+    db = createDb(); initializeDatabase(db);
     fixDaemonMode(db, true);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('managed-rig', 'managed')").run();
     const bus = new EventBus(db);
@@ -167,7 +166,7 @@ describe("managed control authority on the shared application", () => {
 
   it.each(["managed", "legacy"] as const)("serves legacy pages only in a legacy-mode daemon: %s", async (mode) => {
     const dir = mkdtempSync(join(tmpdir(), "team-control-ui-"));
-    const localDb = createDb(); migrate(localDb, ALL_MIGRATIONS);
+    const localDb = createDb(); initializeDatabase(localDb);
     try {
       mkdirSync(join(dir, "assets"));
       writeFileSync(join(dir, "index.html"), "<html><head></head><body>Legacy administration</body></html>");

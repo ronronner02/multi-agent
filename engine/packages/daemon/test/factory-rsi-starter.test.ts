@@ -17,20 +17,10 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { outboxEntriesSchema } from "../src/db/migrations/027_outbox_entries.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 // The human release gate parks a packet on human@kernel, which requires the
 // queue-item summary + evidence_ref columns (migrations 044 + 048) — without
 // them the park silently no-ops the fields and fails honestly.
-import { queueItemSummarySchema } from "../src/db/migrations/044_queue_item_summary.js";
-import { queueItemEvidenceRefSchema } from "../src/db/migrations/048_queue_item_evidence_ref.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { OutboxHandler } from "../src/domain/outbox-handler.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
@@ -49,18 +39,7 @@ describe("OPR.0.4.6.FAC2 factory-rsi factory workflow", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      outboxEntriesSchema,
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      queueItemSummarySchema,
-      queueItemEvidenceRefSchema,
-    ]);
+    initializeDatabase(db);
     eventBus = new EventBus(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-factory-rsi', 'factory-rsi')`).run();
     queueRepo = new QueueRepository(db, eventBus, { validateRig: () => true });

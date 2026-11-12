@@ -3,8 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { endRunningWorkerTrees } from "../src/domain/process-termination.js";
 
 /**
@@ -21,7 +20,7 @@ describe("U12 ending the worker trees of a desktop-owned daemon", () => {
   beforeEach(() => {
     directory = fs.mkdtempSync(path.join(os.tmpdir(), "u12-worker-trees-"));
     db = createDb();
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     // One rig and one run: every attempt row references them.
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     db.prepare(`INSERT INTO team_runs (id, rig_id, binding_json, binding_digest, state, phase, created_at, updated_at)

@@ -17,17 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { queueTransitionsSchema } from "../src/db/migrations/025_queue_transitions.js";
-import { watchdogJobsSchema } from "../src/db/migrations/031_watchdog_jobs.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
-import { workflowStepTrailsSchema } from "../src/db/migrations/035_workflow_step_trails.js";
-import { workflowInstanceVersionSchema } from "../src/db/migrations/049_workflow_instance_version.js";
-import { workflowSpecJsonSchema } from "../src/db/migrations/050_workflow_spec_json.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { WatchdogJobsRepository } from "../src/domain/watchdog-jobs-repository.js";
@@ -73,18 +63,7 @@ describe("runWorkflowBootSweep (FR-4)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [
-      coreSchema,
-      eventsSchema,
-      queueItemsSchema,
-      queueTransitionsSchema,
-      watchdogJobsSchema,
-      workflowSpecsSchema,
-      workflowInstancesSchema,
-      workflowStepTrailsSchema,
-      workflowInstanceVersionSchema,
-      workflowSpecJsonSchema,
-    ]);
+    initializeDatabase(db);
     const bus = new EventBus(db);
     db.prepare(`INSERT INTO rigs (id, name) VALUES ('r-1', 'rig')`).run();
     sentNudges = [];

@@ -82,7 +82,7 @@ and fails the build on a specifier with no `exports` entry. To share new daemon 
 - **`adapters/`.** The outside world. `tmux.ts` wraps tmux. The six `RuntimeAdapter`
   implementations (OMP's extends Pi's) launch each runtime and project skills and files into it. `cmux.ts` and
   `compose-services-adapter.ts` cover other integrations.
-- **`db/`.** `connection.ts`, `migrate.ts`, `all-migrations.ts` and `migrations/`.
+- **`db/`.** `connection.ts` and the atomic fresh schema in `baseline.ts`.
 - **`middleware/auth-bearer-token.ts`.** The bearer-token check for operator write routes, plus
   the loopback and Tailscale bind detection used at startup.
 - **Live updates** go out as server-sent events: `routes/events.ts` uses Hono's `streamSSE`.
@@ -153,25 +153,20 @@ the authority.
    `server.ts`, and its construction in `createDaemon()` in `packages/daemon/src/startup.ts`.
 5. Test it the way `packages/daemon/test/whoami-routes.test.ts` does: build a small Hono app,
    `c.set` the service, mount the router and call `app.request(...)`. `createFullTestDb()` in
-   `packages/daemon/test/helpers/test-app.ts` gives you an in-memory database migrated with the
-   test fixture list (`migrationsForFullTestDb`).
+   `packages/daemon/test/helpers/test-app.ts` gives you an in-memory database initialized with the same baseline as startup.
 
-### A database migration
+### The database baseline
 
-1. Create `packages/daemon/src/db/migrations/<NNN>_<name>.ts` exporting a `Migration`
-   (`{ name: "<NNN>_<name>.sql", sql: "..." }`; the type is in `packages/daemon/src/db/migrate.ts`).
-   `089_classification_identity_provenance.ts` is a one-line example.
-2. Take the next number after the highest on `main` (095 at this commit). Parallel pull requests
-   often pick the same number, so check again and renumber if `main` moved before you merge.
-3. Import it in `packages/daemon/src/db/all-migrations.ts` and append it to `ALL_MIGRATIONS`.
-   Startup runs exactly that list (`startup-migrations-mirror.test.ts` pins this).
-4. Add it to `migrationsForFullTestDb` in `packages/daemon/test/helpers/test-app.ts`, or list it in
-   `migrationsForFullTestDbExclusions` with a reason. `migration-fixture-parity.test.ts` fails
-   otherwise.
-5. `migrate()` sorts migrations by name and records each applied name in `schema_migrations`, so
-   an install that already applied a migration never runs it again. Editing a migration that has
-   shipped changes nothing for those installs; add a new one instead. A long-lived install applies
-   every new migration on its next start, against real data.
+`packages/daemon/src/db/baseline.ts` creates the retained schema in one transaction and
+records `PRAGMA user_version = 1` in that transaction. Startup inspects existing files
+read-only before configuring their journal or opening application repositories. Files
+with tables and no baseline marker fail with `legacy_database` and their filename;
+the daemon does not migrate their data. Empty files are initialized, and marked files
+reopen normally. `createFullTestDb()` uses the same initializer.
+
+Schema changes must update the baseline and its focused tests. There is no upgrade
+runner or migration registry; any future persisted-schema compatibility contract
+requires an explicit decision.
 
 ### A runtime adapter
 

@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
@@ -87,7 +86,7 @@ describe("MVP slice C2 — the review loop", () => {
     // declares two implementer paths and two tasks can each spend it.
     binding = { ...bindingForGoal({ root, planRef: "plan.md", writePaths: ["src/a.ts", "src/b.ts"], policy }),
       limits: { maxSessions: 1, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 } };
-    db = createDb(":memory:"); migrate(db, ALL_MIGRATIONS);
+    db = createDb(":memory:"); initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id,name) VALUES ('rig','fixture')").run();
     const bus = new EventBus(db);
     governance = new PlanGovernance(db, bus, new QueueRepository(db, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);
@@ -125,7 +124,7 @@ describe("MVP slice C2 — the review loop", () => {
     expect(governance.findTask("run", reviewerTaskId("A", 1))).toBeNull();
     expect(dispatch).not.toHaveBeenCalled();
     // A run that named no reviewer seat keeps the pre-C2 behaviour exactly.
-    const second = createDb(":memory:"); migrate(second, ALL_MIGRATIONS);
+    const second = createDb(":memory:"); initializeDatabase(second);
     second.prepare("INSERT INTO rigs (id,name) VALUES ('rig','fixture')").run();
     const bus = new EventBus(second);
     const plain = new PlanGovernance(second, bus, new QueueRepository(second, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);
@@ -137,7 +136,7 @@ describe("MVP slice C2 — the review loop", () => {
   it("refuses a reviewer seat that is the implementer's own seat", async () => {
     // The loop's own refusal, reached through a run created with one seat for both roles: the
     // completion stands (a task did finish) but no reviewer task is admitted.
-    const second = createDb(":memory:"); migrate(second, ALL_MIGRATIONS);
+    const second = createDb(":memory:"); initializeDatabase(second);
     second.prepare("INSERT INTO rigs (id,name) VALUES ('rig','fixture')").run();
     const bus = new EventBus(second);
     const selfReview = new PlanGovernance(second, bus, new QueueRepository(second, bus), () => new Date("2026-11-04T00:00:00.000Z"), () => policy);

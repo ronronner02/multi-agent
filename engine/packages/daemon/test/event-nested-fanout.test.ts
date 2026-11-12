@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { eventsSchema } from "../src/db/migrations/003_events.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { EventBus } from "../src/domain/event-bus.js";
 import { eventsRoute } from "../src/routes/events.js";
 
@@ -11,7 +11,7 @@ describe("subscriber-generated events", () => {
   let bus: EventBus;
   beforeEach(() => {
     db = createDb();
-    db.exec(eventsSchema.sql);
+    initializeDatabase(db);
     bus = new EventBus(db);
   });
   afterEach(() => db.close());

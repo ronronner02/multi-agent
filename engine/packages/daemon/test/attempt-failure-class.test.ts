@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { TEAM_CONTROL_VERSION, type PlanBinding } from "../src/contracts/team-control.js";
 import { classificationFor, classifyAttemptFailure, parseAttemptClassification, OWNER_ACTIONS } from "../src/domain/attempt-failure.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
@@ -101,7 +100,7 @@ describe("U11 persistent retry scheduling", () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "retry-schedule-"));
-    db = createDb(join(root, "state.db")); migrate(db, ALL_MIGRATIONS);
+    db = createDb(join(root, "state.db")); initializeDatabase(db);
     now = new Date("2026-11-07T00:00:00.000Z"); serial = 0; tail = "API Error: 429 rate_limit_error";
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run(); setupGovernance();
     governance.createRun({ id: "run", rigId: "rig", binding });

@@ -4,9 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { workflowSpecsSchema } from "../src/db/migrations/033_workflow_specs.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { WorkflowSpecCache, WorkflowSpecError, parseWorkflowSpec } from "../src/domain/workflow-spec-cache.js";
 
 const SAMPLE_SPEC = `workflow:
@@ -57,7 +55,7 @@ describe("WorkflowSpecCache (PL-004 Phase D)", () => {
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, workflowSpecsSchema]);
+    initializeDatabase(db);
     cache = new WorkflowSpecCache(db);
     tmp = mkdtempSync(join(tmpdir(), "wf-spec-"));
   });

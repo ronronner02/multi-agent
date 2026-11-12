@@ -6,8 +6,7 @@ import { browserBoundary } from "../src/middleware/browser-boundary.js";
 import { resolvePairedOwnerCookie, teamControlAuthentication } from "../src/middleware/auth-bearer-token.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { OwnerSessions, OWNER_COOKIE, OWNER_CSRF_HEADER, OWNER_IDLE_MS, OWNER_ABSOLUTE_MS, PAIRING_TTL_MS } from "../src/domain/owner-session.js";
 import { fixDaemonMode } from "../src/domain/plan-governance.js";
 import { createTestApp } from "./helpers/test-app.js";
@@ -19,7 +18,7 @@ describe("KTD14 paired owner authentication", () => {
   let sessions: OwnerSessions;
   let options: { credentials: { ownerToken: string | null; workers: { token: string; sessionId: string; runId: string }[] } };
   beforeEach(() => {
-    db = createDb(); migrate(db, ALL_MIGRATIONS); fixDaemonMode(db, true);
+    db = createDb(); initializeDatabase(db); fixDaemonMode(db, true);
     at = 1_700_000_000_000;
     sessions = new OwnerSessions(db, () => at);
     options = { credentials: { ownerToken: "owner-pairing-fixture",

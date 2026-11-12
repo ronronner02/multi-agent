@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { coreSchema } from "../src/db/migrations/001_core_schema.js";
-import { queueItemsSchema } from "../src/db/migrations/024_queue_items.js";
-import { workflowInstancesSchema } from "../src/db/migrations/034_workflow_instances.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { makeWorkflowKeepalivePolicy } from "../src/domain/policies/workflow-keepalive.js";
 import type { PolicyJob } from "../src/domain/policies/types.js";
 
@@ -29,7 +26,7 @@ describe("workflow-keepalive policy (PL-004 Phase D; POC parity, SQLite source-o
 
   beforeEach(() => {
     db = createDb();
-    migrate(db, [coreSchema, queueItemsSchema, workflowInstancesSchema]);
+    initializeDatabase(db);
     // Seed a workflow_instance + frontier qitems.
     db.prepare(
       `INSERT INTO workflow_instances (instance_id, workflow_name, workflow_version, created_by_session, created_at, status, current_frontier_json)

@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { createDb } from "../src/db/connection.js";
-import { migrate } from "../src/db/migrate.js";
-import { ALL_MIGRATIONS } from "../src/db/all-migrations.js";
+import { initializeDatabase } from "../src/db/baseline.js";
 import { TEAM_CONTROL_VERSION, TeamContractError, type ControlRequest } from "../src/contracts/team-control.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
 import { agentTurnOutputPaths, continuationNote } from "../src/domain/agent-turn.js";
@@ -77,7 +76,7 @@ describe("U6 — the lead as manager", () => {
     binding = { ...bindingForGoal({ root, planRef: "plan.md", writePaths: ["src"], policy }),
       limits: { maxSessions: 2, maxActiveMs: 3_600_000, maxRetries: 1, maxReviewRounds: 2 } };
     db = createDb(":memory:");
-    migrate(db, ALL_MIGRATIONS);
+    initializeDatabase(db);
     db.prepare("INSERT INTO rigs (id, name) VALUES ('rig', 'fixture')").run();
     for (const [id, role, seat] of [["lead-node", "lead", "lead@rig"], ["a-node", "implementer", "a@rig"],
       ["b-node", "implementer", "b@rig"], ["rev-node", "reviewer", "reviewer@rig"]] as const) {
