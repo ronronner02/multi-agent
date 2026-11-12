@@ -6,6 +6,7 @@ import type { TeamOwnerRead, TeamReviewView, TeamSystemHealth } from "@multi-age
 import { TEAM_HEALTH_LIGHTS } from "../../../daemon/dist/contracts/team-control.js";
 import { ArrowRight, GitMerge } from "lucide-react";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
+import { usePendingAction } from "../hooks/usePendingAction.js";
 import { mergeBranch, type ChatState, type IntegrationState } from "./clients.js";
 import { pendingOwnerDecisions, ResumePlate } from "./chat-panel.js";
 import { clockTime, namedSeat, taskName } from "./display.js";
@@ -47,7 +48,8 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
   const { t } = useTranslation();
   const { request } = useOwnerSession();
   const cache = useQueryClient();
-  const [busy, setBusy] = useState(false);
+  const pending = usePendingAction(`${read?.runId}:${read?.run.entityVersion}:${integration?.merge.merged}`);
+  const { busy } = pending;
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const closed = read?.run.state === "canceled" || read?.run.state === "cancel_requested";
   const merged = integration?.available === true && integration.merge.merged === true;
@@ -55,11 +57,14 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
   const act = async (action: "merge" | "cancel") => {
     if (!read || busy || (action === "merge" && !canMerge)) return;
     if (!window.confirm(t(action === "merge" ? "overview.mergeConsequence" : "team.cancelPrompt"))) return;
-    setBusy(true); setMessage(null);
+    if (!pending.begin()) return;
+    setMessage(null);
+    let accepted = true;
     try {
       if (action === "merge") {
         const result = await mergeBranch(request, read.runId, read.run.entityVersion);
         const code = result.code;
+        accepted = result.status === "merged";
         const knownCode = ["merge_tasks_open", "merge_checkout_dirty", "merge_detached_head",
           "merge_already_on_branch", "merge_no_branch", "merge_unavailable"].includes(code ?? "");
         setMessage({ error: result.status !== "merged", text: result.status === "merged" ? t("team.merge.done")
@@ -77,8 +82,8 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
           ? "status.run.canceled" : "status.run.cancel_requested") });
       }
       await cache.invalidateQueries({ queryKey: ["team", read.runId] });
-    } catch { setMessage({ error: true, text: t("web.error") }); }
-    finally { setBusy(false); }
+      if (accepted) pending.complete(); else pending.fail();
+    } catch { setMessage({ error: true, text: t("web.error") }); pending.fail(); }
   };
   return <div className="ui-run-actions">
     <div className="ui-page-actions">

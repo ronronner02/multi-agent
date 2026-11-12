@@ -9,6 +9,8 @@ import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { approvePlan, confirmDocument, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
 import { documentDiscussionPending, DocumentStages } from "./documents.js";
 import { mergeToolCalls } from "../hooks/useAttemptActivity.js";
+import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
+import { usePendingAction } from "../hooks/usePendingAction.js";
 import { ToolCalls } from "./workspace/workspace-view.js";
 import { Check, ChevronRight } from "./glyphs.js";
 
@@ -93,7 +95,9 @@ export function LeadConversation({ read, runId, chat, connectionError, draft, on
       <WorkflowOutcomes runId={runId} />
       {chat?.available && chat.messages.filter(message => message.kind !== "decision" || message.answeredBy)
         .map(message => <Turn key={message.id} message={message} />)}
-      {chat?.liveTurn && <LiveOutput key={chat.liveTurn.attemptId} turn={chat.liveTurn} connectionError={connectionError} />}
+      {chat?.liveTurn && <LiveOutput key={chat.liveTurn.attemptId} runId={runId} turn={chat.liveTurn}
+        createdAt={read?.attempts.find(attempt => attempt.attemptId === chat.liveTurn!.attemptId)?.createdAt ?? chat.liveTurn.activity?.startedAt}
+        connectionError={connectionError} />}
       {connectionError && <p role="alert" className="ui-muted">{t("chat.liveInterrupted")}</p>}
       {pending.length > 0 && <section aria-label={t("shell.ownerDecisions")}>
         <h3 className="ui-attention-heading">{t("shell.ownerDecisions")}</h3>
@@ -112,16 +116,19 @@ export function LeadConversation({ read, runId, chat, connectionError, draft, on
   </section>;
 }
 
-function LiveOutput({ turn, connectionError }: { turn: LiveLeadTurn; connectionError?: boolean }) {
+function LiveOutput({ runId, turn, createdAt, connectionError }: { runId: string; turn: LiveLeadTurn; createdAt?: string; connectionError?: boolean }) {
   const { t } = useTranslation();
+  const mountedAt = useRef(new Date().toISOString());
   const progress = turn.progress;
   const activity = turn.activity ? { ...turn.activity, records: mergeToolCalls([], turn.activity.records) } : undefined;
-  const state = turn.state === "running" ? progress?.status ?? "working" : progress?.status === "failed" ? "failed" : "stopped";
+  const lifecycle = useAttemptStatus(runId, { attemptId: turn.attemptId, state: turn.state, createdAt: createdAt ?? mountedAt.current }, !!progress?.sequence);
+  const state = turn.state === "running" ? progress?.status ?? lifecycle ?? "started" : progress?.status === "failed" ? "failed" : "stopped";
   const active = !connectionError && turn.state === "running" && !["completed", "failed", "stopped"].includes(state);
   return <section className="turn ui-chat-live" aria-label={t("chat.live")} aria-busy={active} data-attempt={turn.attemptId}>
     <div className="turn-who"><span>{t("role.lead")}</span>
       {!connectionError && <span className="ui-chat-status" role="status" data-active={active}>
-        <span aria-hidden="true" />{t(`chat.progress.${state}`)}</span>}
+        <span aria-hidden="true" />{t(state === "started" || state === "acknowledged" || state === "no-response" || state === "unknown"
+          ? `status.attempt.${state}` : `chat.progress.${state}`)}</span>}
     </div>
     {progress?.blocks.filter(block => block.text).map(block => <p key={block.id} className="turn-body">{block.text}</p>)}
     {activity && <details className="ui-chat-tools"><summary>{t("chat.tools")}</summary><ToolCalls activity={activity} /></details>}
@@ -148,14 +155,15 @@ function DecisionPlate({ message, runId, entityVersion, onChanged }: { message: 
   const { t, i18n } = useTranslation();
   const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
-  const [busy, setBusy] = useState(false);
+  const action = usePendingAction(message.id + ":" + message.answeredBy);
+  const { busy } = action;
   const [failed, setFailed] = useState(false);
   const [question, ...context] = message.body.split("\n\n");
   const answer = async (option: string) => {
-    if (busy) return;
-    setBusy(true); setFailed(false);
-    try { await sendChatMessage(request, runId, option, entityVersion, message.id, responseLanguage); onChanged?.(); }
-    catch { setFailed(true); setBusy(false); }
+    if (!action.begin()) return;
+    setFailed(false);
+    try { await sendChatMessage(request, runId, option, entityVersion, message.id, responseLanguage); action.complete(); onChanged?.(); }
+    catch { setFailed(true); action.fail(); }
   };
   return <div className="plate plate-waiting" role="group" aria-label={t("team.chat.message")}>
     <h2 className="plate-title">{question}</h2>
@@ -201,6 +209,7 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
   const { request } = useOwnerSession();
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowSelection | undefined>();
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   const [failed, setFailed] = useState<string | null>(null);
   const question = chat?.pendingDecision ?? chat?.messages.filter(message => message.kind === "decision" && !message.answeredBy).at(-1);
   const planning = runId && read?.run.phase === "planning";
@@ -218,7 +227,8 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
       && (!workflow || !!proposal.documentVersions) : !!version && !workflow?.error && !workflow?.pendingStage);
   return <form className="composer" onSubmit={async event => {
     event.preventDefault();
-    if (!body.trim() || busy || !ready) return;
+    if (!body.trim() || sending.current || !ready) return;
+    sending.current = true;
     setBusy(true); setFailed(null);
     try {
       if (!runId && projectId) {
@@ -240,7 +250,7 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
       setSelectedWorkflow(undefined);
       onBodyChange(""); onChanged?.();
     }
-    catch (cause) { setFailed(cause instanceof Error ? cause.message : t("web.error")); } finally { setBusy(false); }
+    catch (cause) { setFailed(cause instanceof Error ? cause.message : t("web.error")); } finally { sending.current = false; setBusy(false); }
   }}>
     {(!runId || read?.run.phase === "delivery") && !question &&
       <WorkflowPicker value={selectedWorkflow} onChange={setSelectedWorkflow} disabled={busy} />}
@@ -264,7 +274,8 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
   const { t, i18n } = useTranslation();
   const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
-  const [busy, setBusy] = useState(false);
+  const action = usePendingAction(entityVersion);
+  const { busy } = action;
   const [failed, setFailed] = useState(false);
   if (!read) return null;
   const approved = read.run.phase !== "planning";
@@ -296,16 +307,18 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
     </p>}
     <div className="plate-foot">
       {!approved && !updating && proposal?.error && <button className="btn btn-outline" disabled={busy} onClick={async () => {
-        setBusy(true); setFailed(false);
-        try { await sendChatMessage(request, runId, t("chat.repairPlanMessage"), entityVersion, undefined, responseLanguage); }
-        catch { setFailed(true); } finally { setBusy(false); }
+        if (!action.begin()) return;
+        setFailed(false);
+        try { await sendChatMessage(request, runId, t("chat.repairPlanMessage"), entityVersion, undefined, responseLanguage); action.complete(); }
+        catch { setFailed(true); action.fail(); }
       }}>{t("chat.repairPlan")}</button>}
       {approved ? <span className="plate-done"><Check />{t("team.plan.approvedShort")}</span>
         : <button className="btn btn-primary" disabled={busy || !canApprove} onClick={async () => {
-          setBusy(true); setFailed(false);
+          if (!action.begin()) return;
+          setFailed(false);
           try { await approvePlan(request, runId, entityVersion, proposal?.roster?.digest, proposal?.documentVersions,
-            { ownerMessage: t("team.plan.approve"), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) }, responseLanguage); }
-          catch { setFailed(true); } finally { setBusy(false); }
+            { ownerMessage: t("team.plan.approve"), ...(proposal?.plan ? { planHash: proposal.plan.hash } : {}) }, responseLanguage); action.complete(); }
+          catch { setFailed(true); action.fail(); }
         }}>{t("team.plan.approve")}</button>}
     </div>
   </div>;
@@ -318,7 +331,8 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
 export function ResumePlate({ read }: { read: TeamOwnerRead }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();
-  const [busy, setBusy] = useState(false);
+  const action = usePendingAction(read.run.entityVersion);
+  const { busy } = action;
   const [failed, setFailed] = useState(false);
   const run = read.run;
   const limits = run.binding.limits;
@@ -338,14 +352,16 @@ export function ResumePlate({ read }: { read: TeamOwnerRead }) {
     {failed && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.error")}</p>}
     <div className="plate-foot">
       <button className="btn btn-primary" disabled={busy} onClick={async () => {
-        setBusy(true); setFailed(false);
+        if (!action.begin()) return;
+        setFailed(false);
         try {
           await request(`/runs/${encodeURIComponent(run.id)}/resume`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ protocolVersion: "1.0", runId: run.id, actionId: run.id,
               expectedEntityVersion: run.entityVersion, idempotencyKey: crypto.randomUUID(), payload: increase }),
           });
-        } catch { setFailed(true); } finally { setBusy(false); }
+          action.complete();
+        } catch { setFailed(true); action.fail(); }
       }}>{t("team.resume.action")}</button>
     </div>
   </div>;

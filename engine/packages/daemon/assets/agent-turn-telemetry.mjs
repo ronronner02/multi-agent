@@ -35,6 +35,10 @@ function createTurnProgress(directory, redact) {
     if (Date.now() - lastWrite >= 80) publish();
     else { timer = setTimeout(publish, 80); timer.unref(); }
   };
+  const flush = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    publish();
+  };
   const put = (key, text, append = false, complete = false) => {
     if (typeof text !== "string") return;
     const old = blocks.get(key);
@@ -47,6 +51,7 @@ function createTurnProgress(directory, redact) {
     status = "responding";
   };
   return {
+    flush,
     observe(event) {
       const item = event.item;
       if (["item.started", "item.updated", "item.completed"].includes(event.type) && item) {
@@ -88,9 +93,8 @@ function createTurnProgress(directory, redact) {
       schedule();
     },
     finish() {
-      if (timer) { clearTimeout(timer); timer = null; }
       if (status !== "completed" && status !== "failed") status = "stopped";
-      publish();
+      flush();
     },
   };
 }
@@ -183,5 +187,5 @@ export function createTurnTelemetry(resultFile, args, redact) {
       renameSync(temporary, usagePath);
     });
   }
-  return { observe: event => quiet(() => observe(event)), finish: () => quiet(finish) };
+  return { observe: event => quiet(() => observe(event)), flush: () => quiet(progress.flush), finish: () => quiet(finish) };
 }

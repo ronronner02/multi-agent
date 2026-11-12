@@ -15,6 +15,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export interface TurnTelemetry {
   /** One parsed provider record, in the order the client produced it. */
   observe(record: unknown): void;
+  /** Publish the observed progress before notifying readers through the event stream. */
+  flush(): void;
   /** The turn is over; publish the final snapshot. */
   finish(): void;
 }

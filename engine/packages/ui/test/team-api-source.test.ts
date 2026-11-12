@@ -13,6 +13,10 @@ function sourceFiles(path: string): string[] {
 }
 
 describe("team UI API boundary", () => {
+  it("uses authenticated fetch streaming instead of native EventSource", () => {
+    const violations = sourceFiles(sourceRoot).filter(file => /new\s+EventSource\s*\(/.test(readFileSync(file, "utf8")));
+    expect(violations).toEqual([]);
+  });
   it("contains no legacy /api path literal outside team-control", () => {
     const violations = sourceFiles(sourceRoot).flatMap(file => readFileSync(file, "utf8").split("\n")
       .flatMap((line, index) => /["'`][^"'`]*\/api\/(?!team-control)/.test(line)

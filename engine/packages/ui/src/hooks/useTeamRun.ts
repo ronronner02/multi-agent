@@ -6,7 +6,7 @@ import { useTeamEvents } from "./useTeamEvents.js";
 export function useTeamRun(runId: string) {
   const { paired, request } = useOwnerSession();
   const read = useQuery({
-    queryKey: ["team", runId, "read"], enabled: paired && !!runId, retry: false, refetchInterval: 2_000,
+    queryKey: ["team", runId, "read"], enabled: paired && !!runId, retry: false,
     queryFn: async ({ signal }) => {
       const { read } = await request<{ read: TeamOwnerRead }>(`/runs/${encodeURIComponent(runId)}/read`, { signal });
       parseProtocolVersion(read.protocolVersion);
@@ -15,7 +15,7 @@ export function useTeamRun(runId: string) {
     },
   });
   const health = useQuery({
-    queryKey: ["team", "health"], enabled: paired, retry: false, refetchInterval: 2_000,
+    queryKey: ["team", "health"], enabled: paired, retry: false, refetchInterval: 10_000,
     queryFn: async ({ signal }) => (await request<{ health: TeamSystemHealth }>("/health", { signal })).health,
   });
   const events = useTeamEvents(runId, read.data);

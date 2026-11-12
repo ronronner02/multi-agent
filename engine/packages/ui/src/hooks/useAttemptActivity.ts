@@ -14,7 +14,7 @@ export function mergeToolCalls(previous: readonly ToolActivityRecord[], incoming
   return [...calls.values()];
 }
 
-/** Visibility owns polling; a stopped attempt gets one final read without discarding its visible rows. */
+/** Visibility owns reads; events invalidate live projections, and stopping gets a final read. */
 export function useAttemptActivity(runId: string, attempt: TeamAttemptView | undefined) {
   const { paired, request } = useOwnerSession();
   const cache = useQueryClient();
@@ -37,7 +37,6 @@ export function useAttemptActivity(runId: string, attempt: TeamAttemptView | und
   const query = useQuery<AttemptActivity>({
     queryKey, enabled, retry: false,
     staleTime: attempt?.state === "stopped" ? Infinity : 0,
-    refetchInterval: enabled && attempt?.state === "running" ? 2_000 : false,
     placeholderData: previous => previous?.attemptId === attempt?.attemptId ? previous : undefined,
     queryFn: async ({ signal }): Promise<AttemptActivity> => {
       const previous = cache.getQueryData<AttemptActivity>(queryKey);

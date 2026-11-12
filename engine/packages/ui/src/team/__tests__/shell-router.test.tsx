@@ -53,6 +53,7 @@ beforeEach(() => {
     if (path === "/api/team-control/runs") return response({ runs: [{ id: RUN_ID, rigId: data.run.rigId, rigName: "Status board", displayName: data.run.displayName, state: data.run.state }] });
     if (path.endsWith("/health")) return response({ health: health() });
     if (path.endsWith("/read")) return response({ read: data });
+    if (path.endsWith("/events/stream")) return new Response(new ReadableStream(), { headers: { "Content-Type": "text/event-stream" } });
     if (path.endsWith("/replay")) return response({ runId: RUN_ID, events: [], window: data.replay, gap: false });
     if (path.endsWith("/chat")) return response({ phase: "delivery", pendingDecision: null, messages: [{
       id: "question-1", sender: "lead", kind: "decision", body: "Keep the existing behavior?", options: ["Keep", "Change"], answeredBy: null, createdAt: data.generatedAt,

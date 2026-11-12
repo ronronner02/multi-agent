@@ -68,6 +68,7 @@ import { parseAttemptClassification } from "./domain/attempt-failure.js";
 import { TeamReadModel } from "./team-control-surface.js";
 import { canonicalJson } from "./contracts/team-control.js";
 import type { ManagedWorkerHealthEvidence, TeamSystemHealth } from "./contracts/team-control.js";
+import { workerEventNotification } from "./domain/worker-event-notification.js";
 import { ManagedNativeChannelEvidence } from "./domain/mailbox-delivery.js";
 import { DirectWorkerLauncher, type DirectLaunchFacts } from "./adapters/direct-worker-launch.js";
 import { readSupervisorExit } from "./adapters/child-process-supervisor.js";
@@ -681,10 +682,24 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         return () => roots;
       })()
     : managedWorkerRoots;
+  const lastWorkerHeartbeat = new Map<string, number>();
   const managedLaunch = managed ? composeDirectLaunch({ governance: teamGovernance, rigRepo,
         workflowRuntime: () => workflowRuntime,
         // U4 — every supervised turn records its durable lifecycle facts through governance.
         lifecycle: fact => teamGovernance.recordAttemptLifecycle(fact),
+        onEvent: (facts, event) => {
+          // The lifecycle recorder owns acknowledgment; notifications only wake live projections.
+          if (event.type === "attempt.acknowledged") return;
+          if (event.type === "heartbeat") {
+            const now = Date.now(), last = lastWorkerHeartbeat.get(facts.attemptId);
+            if (last !== undefined && now - last < 15_000) return;
+            lastWorkerHeartbeat.set(facts.attemptId, now);
+          }
+          const run = teamGovernance.getRun(facts.runId);
+          eventBus.emit({ type: "team.control", protocolVersion: "1.0", eventId: randomUUID(), rigId: run.rigId,
+            runId: run.id, taskId: facts.taskId, attemptId: facts.attemptId, entityId: facts.attemptId,
+            entityVersion: run.entityVersion, action: `worker.${event.type}`, payload: workerEventNotification(event) });
+        },
         ...(opts?.directLaunchCommand ? { command: opts.directLaunchCommand } : {}),
         ...(opts?.directLaunchExecutable ? { executablePath: opts.directLaunchExecutable } : {}),
         ...(opts?.directLaunchSupervise ? { supervise: opts.directLaunchSupervise } : {}) }) : undefined;

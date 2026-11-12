@@ -14,6 +14,8 @@ npm run test -w packages/daemon -- \
   test/team-control-auth.test.ts \
   test/team-governance.test.ts \
   test/team-read-model.test.ts \
+  test/team-events-client.test.ts \
+  test/worker-event-notification.test.ts \
   test/display-names.test.ts \
   test/generated-titles.test.ts \
   test/team-workspace.test.ts \
@@ -42,6 +44,7 @@ npm run test -w packages/daemon -- \
   test/team-telemetry-routes.test.ts \
   test/attempt-completion.test.ts \
   test/direct-worker-launch.test.ts \
+  test/child-process-supervisor.test.ts \
   test/attempt-failure.test.ts \
   test/team-cancellation.test.ts \
   test/team-result.test.ts \
@@ -54,6 +57,7 @@ npm run test -w packages/cli -- test/team-start.test.ts test/team-setup.test.ts 
 npm run test -w packages/i18n -- --maxWorkers=2
 
 npm run test -w packages/ui -- \
+  test/team-events.test.tsx test/team-api-source.test.ts \
   src/team/__tests__/shell.test.tsx src/team/__tests__/shell-router.test.tsx \
   src/team/__tests__/overview.test.tsx src/team/__tests__/tasks.test.tsx src/team/__tests__/reviews.test.tsx \
   src/team/__tests__/analytics.test.tsx src/team/__tests__/settings.test.tsx \

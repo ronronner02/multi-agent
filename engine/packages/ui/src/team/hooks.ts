@@ -46,7 +46,6 @@ export function useTeamChat(runId: string, enabled: boolean) {
   const { paired, request } = useOwnerSession();
   return useQuery<ChatState>({
     queryKey: ["team", runId, "chat"], enabled: paired && enabled && !!runId, retry: false,
-    refetchInterval: query => query.state.status !== "error" && query.state.data?.liveTurn?.state === "running" ? 500 : 3_000,
     queryFn: ({ signal }) => readChat(request, runId, signal),
   });
 }
@@ -54,7 +53,7 @@ export function useTeamChat(runId: string, enabled: boolean) {
 export function useIntegration(runId: string, enabled: boolean) {
   const { paired, request } = useOwnerSession();
   return useQuery<IntegrationState>({
-    queryKey: ["team", runId, "integration"], enabled: paired && enabled && !!runId, retry: false, refetchInterval: 5_000,
+    queryKey: ["team", runId, "integration"], enabled: paired && enabled && !!runId, retry: false,
     queryFn: ({ signal }) => readIntegration(request, runId, signal),
   });
 }
@@ -80,7 +79,6 @@ export function useRunTokens(read: TeamOwnerRead | undefined) {
   const queries = useQueries({ queries: (read?.attempts ?? []).map(attempt => ({
     queryKey: ["team", read!.runId, "attempt", attempt.attemptId, "usage", attempt.state],
     enabled: paired, retry: false, staleTime: attempt.state === "stopped" ? Infinity : 0,
-    refetchInterval: attempt.state === "stopped" ? false as const : 2_000,
     queryFn: async ({ signal }: { signal: AbortSignal }) => (await request<{ activity: AttemptActivity }>(
       "/runs/" + encodeURIComponent(read!.runId) + "/attempts/" + encodeURIComponent(attempt.attemptId)
         + "/activity?after=" + Number.MAX_SAFE_INTEGER, { signal })).activity.usage,

@@ -6,6 +6,7 @@ import { I18nextProvider, useTranslation } from "react-i18next";
 import { Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
+import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
 import type { TeamOwnerRead } from "@multi-agent/daemon/team-control";
 import { useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
 import { DocumentsScreen } from "./documents.js";
@@ -227,14 +228,15 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
   const error = data.read.error ?? data.events.error ?? data.health.error;
   const connection = !paired ? "web.pairRequired"
     : error instanceof OwnerReadError ? (error.status === 404 ? "web.notFound" : "web.error")
-      : error instanceof TypeError ? "web.disconnected" : error ? "web.error"
+      : error instanceof TypeError || data.events.data?.connection === "reconnecting" ? "web.disconnected" : error ? "web.error"
         : (runId ? data.read.isPending : data.health.isPending) ? "web.loading" : "shell.connected";
   const selectedTeamId = read?.run.rigId ?? runs.data?.find(entry => entry.id === runId)?.rigId ?? search.team;
   const team = teams.data?.find(entry => entry.id === selectedTeamId);
   const teamName = team?.name ?? runs.data?.find(entry => entry.id === runId)?.rigName ?? "";
   const runName = read?.run.displayName ?? runs.data?.find(entry => entry.id === runId)?.displayName ?? "";
   const lead = read?.attempts.filter(attempt => attempt.role === "lead").at(-1);
-  const coordinator: MessageKey = !read ? "web.unknown" : !lead ? "shell.idle" : lead.state === "running" ? "shell.active" : `status.attempt.${lead.state}`;
+  const leadStatus = useAttemptStatus(runId, lead, !!chat.data?.liveTurn?.progress?.sequence);
+  const coordinator: MessageKey = !read ? "web.unknown" : !leadStatus ? "shell.idle" : `status.attempt.${leadStatus}`;
   const go = (next: TeamDestination, extra?: { run?: string; task?: string; team?: string }) => void navigate({
     to: "/team/$section", params: { section: next }, search: {
       run: extra && "run" in extra ? extra.run : runId || undefined,
