@@ -244,19 +244,21 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
   // A pipe has no permission bits and no filesystem entry to rename, so what these two prove is
   // the POSIX socket file's own identity contract; the Windows integration test covers the pipe.
   it.skipIf(windows)("does not readmit a socket after observing changed endpoint permissions", async () => {
-    incoming(); chmodSync(bridge.endpoint().path, 0o600);
+    // The path is read once: an endpoint this test invalidates no longer answers `endpoint()`.
+    incoming(); const path = bridge.endpoint().path; chmodSync(path, 0o600);
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
-    if (existsSync(bridge.endpoint().path)) chmodSync(bridge.endpoint().path, 0o666);
+    if (existsSync(path)) chmodSync(path, 0o666);
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
     expect(pending()).toBe(1);
   });
 
   it.skipIf(windows)("rejects replaced endpoints and closes already-connected sockets on explicit revocation", async () => {
     incoming();
-    const socket = createConnection(bridge.endpoint().path);
+    const path = bridge.endpoint().path;
+    const socket = createConnection(path);
     await once(socket, "connect");
-    renameSync(bridge.endpoint().path, bridge.endpoint().path + ".replaced");
-    writeFileSync(bridge.endpoint().path, "not a socket");
+    renameSync(path, path + ".replaced");
+    writeFileSync(path, "not a socket");
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
     const closed = once(socket, "close");
     await bridge.close(); await closed;

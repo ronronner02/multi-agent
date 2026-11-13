@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb } from "../src/db/connection.js";
 import { initializeDatabase } from "../src/db/baseline.js";
@@ -41,7 +41,7 @@ describe("mailbox endpoint naming", () => {
     // namespace, where any local process may enumerate them.
     expect(endpoint.path).not.toContain("attempt-1");
     expect(endpoint.path.slice(MAILBOX_PIPE_PREFIX.length)).toMatch(/^[a-f0-9]{32}$/);
-    expect(endpoint.bootstrapPath).toBe(join(directory, "bootstrap.json"));
+    expect(endpoint.bootstrapPath).toBe(win32.join(directory, "bootstrap.json"));
   });
 
   it("derives one name per (directory, generation) and a different name for either alone", () => {

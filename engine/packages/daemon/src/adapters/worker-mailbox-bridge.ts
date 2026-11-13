@@ -71,10 +71,9 @@ export class WorkerMailboxBridge {
     if (this.closed || this.server.listening) throw new Error("mailbox_endpoint_invalid");
     const target = this.descriptor.path;
     // A Windows pipe name is global to the machine, so a name that is already served may belong
-    // to another process entirely. Node refuses such a listen with `EADDRINUSE` (a Node server)
-    // or `EBUSY` (any other pipe server), and either is a collision: nothing here retries,
-    // unlinks or writes over it. The probe below is what turns "somebody else answers" into a
-    // refusal instead of a rotation the caller could mistake for a fresh endpoint.
+    // to another process entirely. The probe below connects once: any answer, or any error other
+    // than `ENOENT`, refuses the name. Nothing here retries, unlinks or writes over a served
+    // name, and a listen Node itself refuses (`EADDRINUSE`) rejects the same way.
     if (this.descriptor.transport === "pipe" && await this.pipeIsServed(target)) {
       throw new Error("mailbox_endpoint_in_use");
     }
@@ -194,8 +193,10 @@ export class WorkerMailboxBridge {
       ...(this.descriptor.transport === "pipe" ? { endpoint: this.descriptor.path } : {}),
       sessionId: this.binding.sessionId, runId: this.binding.runId, attemptId: this.binding.attemptId,
       generation: this.generation, taskId: this.binding.taskId, capability: this.binding.capability });
-    // Written 0600 from the start: a create-then-chmod would leave one window in
-    // which the file is readable by whatever shares this directory.
+    // On POSIX the file is written 0600 from the start: a create-then-chmod would leave one
+    // window in which it is readable by whatever shares this directory. Windows ignores the
+    // mode bits; there the file takes the ACL of the daemon's data directory in the user's
+    // profile, and every frame is still checked against the per-seat capability.
     writeFileSync(source, body, { mode: 0o600, flag: "w" });
     this.bootstrapped = true;
     const stat = lstatSync(source);
