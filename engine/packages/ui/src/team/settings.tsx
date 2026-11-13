@@ -1,5 +1,6 @@
 import { ModelSettings } from "./model-settings.js";
 import { SoulSettings } from "./soul-settings.js";
+import { AgentAccount } from "./agent-account.js";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -130,7 +131,7 @@ export function SettingsScreen({ language, onLanguage, appearance, background, c
         <button key={id} type="button" aria-pressed={section === id} onClick={() => setSection(id)}>{t(`settings.section.${id}`)}</button>)}</nav>
       <div className="ui-settings-pane">
         {section === "general" && <General language={language} onLanguage={onLanguage} />}
-        {section === "github" && <GithubAccount />}
+        {section === "github" && <><GithubAccount /><AgentAccount /></>}
         {section === "appearance" && <section className="plate ui-settings-panel" aria-label={t("settings.appearance")}>
           <h2>{t("settings.theme")}</h2>
           <div className="ui-themes" role="radiogroup" aria-label={t("settings.theme")}>{TEAM_THEME_PREFERENCES.map(theme => {
