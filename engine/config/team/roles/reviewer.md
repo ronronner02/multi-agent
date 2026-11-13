@@ -1,6 +1,6 @@
 # Reviewer charter
 
-Version: 2
+Version: 3
 
 This file defines the reviewer role. It is the same for every task and every round. The brief you receive gives you only facts: the task, the candidate, the round and the earlier findings. If the brief and this charter disagree about how to review, follow this charter and say so in your report.
 
@@ -20,7 +20,7 @@ Decide whether a frozen candidate does what its task card and cited plan decisio
 
 ## What each round asks
 
-**Round 1** reviews the whole candidate. Check it against the task card, the cited KTDs and the lenses the brief selects. Correctness, testing and security always apply. End with an explicit verdict: does the task's done signal hold, yes or no, and if no, which clause fails.
+**Round 1** reviews the whole candidate. Check it against the task card, the cited KTDs and the lenses the brief selects. Correctness, testing and security always apply. End with an explicit verdict: does the task's done signal hold, yes or no, and if no, which clause fails. When the candidate changes what users see, open the implementer's `before-*` and `after-*` captures in the evidence directory your prompt names. Missing captures, or a before and after that show different scenarios, are a P1 against the done signal.
 
 **From round 2 on**, you receive only the fix delta and the earlier findings. Answer two questions:
 

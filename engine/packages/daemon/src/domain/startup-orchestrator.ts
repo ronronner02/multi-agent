@@ -4,10 +4,11 @@ import type { EventBus } from "./event-bus.js";
 import type { RuntimeAdapter, NodeBinding, ManagedAttempt, ResolvedStartupFile } from "./runtime-adapter.js";
 import type { ProjectionPlan } from "./projection-planner.js";
 import type { StartupAction } from "./types.js";
-import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths, continuationNote, leadProgressNote } from "./agent-turn.js";
-import { leadChatTurnNote, listChatMessages, responseLanguageNote, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
+import { join } from "node:path";
+import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths, boundedOwnerWords, continuationNote, leadProgressNote } from "./agent-turn.js";
+import { leadChatTurnNote, listChatMessages, responseLanguageNote, runLeadTask, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
 import { unassignedOwnerWorkflows } from "./team-workflows.js";
-import type { TeamRole } from "../contracts/team-control.js";
+import type { ScopedAssignment, TeamRole } from "../contracts/team-control.js";
 
 export interface StartupInput {
   rigId: string; nodeId: string; sessionId: string; binding: NodeBinding; adapter: RuntimeAdapter;
@@ -64,7 +65,9 @@ export class StartupOrchestrator {
         taskBody: this.taskBody(runId, assignment.taskId), outputs: attempt.context.outputs, permissions: attempt.context.permissions,
         instructions: attempt.context.files.map((file) => ({ path: file.workerPath })),
         continuation: this.continuation(runId, assignment.taskId, assignment.role, attempt.attemptId, Boolean(input.continueSessionId)),
-        taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId).taskReport, workflow: attempt.context.workflow });
+        taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId).taskReport, workflow: attempt.context.workflow,
+        ...(assignment.role === "lead" ? {} : { ownerWords: this.ownerWords(runId),
+          evidenceDirectory: this.evidenceDirectory(attempt.context.mutableStateRoot, runId, assignment, attempt.attemptId) }) });
       writeAgentTurnPrompt(attempt.context, prompt);
       this.pending.set(input.nodeId, { sessionId: input.sessionId, binding });
       const launch = input.skipHarnessLaunch ? { ok: true as const } : await input.adapter.launchHarness(binding, { name: input.sessionName ?? input.sessionId,
@@ -88,6 +91,26 @@ export class StartupOrchestrator {
     const row = this.db.prepare(`SELECT q.body FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
       WHERE a.run_id = ? AND a.task_id = ?`).get(runId, taskId) as { body?: string } | undefined;
     return row?.body ?? "Complete the assigned managed task.";
+  }
+
+  /** The run's goal as the owner wrote it: the lead task's body, which the start route stores verbatim. */
+  private ownerWords(runId: string): string | null {
+    const lead = runLeadTask(this.db, runId);
+    if (!lead) return null;
+    const row = this.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(lead.qitemId) as { body?: string } | undefined;
+    return row?.body ? boundedOwnerWords(row.body) : null;
+  }
+
+  /**
+   * An implementer saves UI captures beside its own turn output. A reviewer is pointed at the
+   * directory of the latest attempt of the task it reviews, which is where those captures are.
+   */
+  private evidenceDirectory(root: string, runId: string, assignment: ScopedAssignment, attemptId: string): string | null {
+    if (assignment.role === "implementer") return join(agentTurnOutputPaths(root, attemptId).directory, "evidence");
+    if (assignment.role !== "reviewer" || !assignment.reviewOf) return null;
+    const reviewed = this.db.prepare(`SELECT p.id FROM team_attempts p JOIN team_queue_authority a ON a.qitem_id = p.qitem_id
+      WHERE a.run_id = ? AND a.task_id = ? ORDER BY p.rowid DESC LIMIT 1`).get(runId, assignment.reviewOf) as { id: string } | undefined;
+    return reviewed ? join(agentTurnOutputPaths(root, reviewed.id).directory, "evidence") : null;
   }
 
   /**

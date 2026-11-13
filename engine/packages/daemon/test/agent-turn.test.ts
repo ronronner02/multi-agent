@@ -13,7 +13,7 @@ import { bindingForGoal, unisolatedPolicyCapability } from "../src/routes/team-s
 import { DirectWorkerLauncher } from "../src/adapters/direct-worker-launch.js";
 import { composePendingDispatch, pendingTasks } from "../src/domain/pending-dispatch.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
-import { agentTurnPromptPath, continuationNote, leadProgressNote, managedTurnPrompt, writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
+import { agentTurnPromptPath, boundedOwnerWords, continuationNote, leadProgressNote, managedTurnPrompt, OWNER_WORDS_LIMIT, writeAgentTurnPrompt } from "../src/domain/agent-turn.js";
 import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
 import type { WorkerEvent } from "../src/contracts/worker-events.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
@@ -153,6 +153,15 @@ describe("the managed turn's command line", () => {
     expect(text).toContain("- /context/charter");
     // A plain continuation says nothing about why; the reason is the continuation's own job.
     expect(text).not.toContain("continues your earlier attempt");
+  });
+
+  it("cuts owner words over the limit at a sentence boundary and says where the rest is", () => {
+    const sentence = "Keep every existing route working. ";
+    const long = sentence.repeat(Math.ceil(OWNER_WORDS_LIMIT / sentence.length) + 10);
+    const bounded = boundedOwnerWords(long);
+    expect(bounded.length).toBeLessThan(OWNER_WORDS_LIMIT + 200);
+    expect(bounded).toMatch(/working\.\n\n\[Shortened here\. The full text is the run's plan and the owner's first message\.\]$/);
+    expect(boundedOwnerWords("Short goal.")).toBe("Short goal.");
   });
 
   it.each([false, true])("only advertises a writable task report for write-enabled turns (read-only: %s)", readOnly => {
@@ -334,6 +343,45 @@ describe("what a continuation is told", () => {
     expect(prompt).toContain("Team progress snapshot:");
     // The prompt is the delivery: the message is now this attempt's, so the next turn does not repeat it.
     expect(pendingOwnerMessages(db, "run")).toHaveLength(0);
+  });
+
+  /** Launch one turn through the orchestrator without starting a client, and return its prompt. */
+  async function launchedPrompt(nodeId: string, seat: string, assignment: ContextManifest["assignment"], attemptId: string): Promise<string> {
+    const context = { ...manifest(attemptId), assignment } as ContextManifest;
+    const orchestrator = new StartupOrchestrator({ db, sessionRegistry: new SessionRegistry(db), eventBus: new EventBus(db) });
+    const adapter = { project: async () => ({ failed: [] }), deliverStartup: async () => ({ failed: [] }) } as unknown as RuntimeAdapter;
+    const started = await orchestrator.startNode({ rigId: "rig", nodeId, sessionId: `s-${nodeId}`,
+      binding: { id: `direct:${nodeId}`, nodeId, attachmentType: "external_cli", tmuxSession: seat, tmuxWindow: null,
+        tmuxPane: null, cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: root,
+        managedAttempt: { attemptId, deadline: Date.now() + 60_000, context } },
+      adapter, plan: { runtime: "claude-code", cwd: root, entries: [], startup: { files: [], actions: [] }, conflicts: [], noOps: [], diagnostics: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: seat, runId: "run", taskId: assignment.taskId,
+      skipHarnessLaunch: true });
+    expect(started.ok, JSON.stringify(started)).toBe(true);
+    return readFileSync(agentTurnPromptPath(context), "utf8");
+  }
+
+  it("gives workers the owner's words verbatim and an evidence directory outside the candidate", async () => {
+    // The lead's brief is not the request. A worker reads the owner's goal as written, so a
+    // requirement the lead added or dropped is visible against the original.
+    for (const [taskId, role, seat, body] of [["task-1", "lead", "lead@rig", "Add dark mode to the settings page, keep the API unchanged."],
+      ["impl", "implementer", "a@rig", "Implement the toggle."], ["review", "reviewer", "reviewer@rig", "Review the toggle."]] as const) {
+      expect(governance.createTask(command(taskId, { assignment: { taskId, role, paths: ["src"], dependencies: [],
+        ...(role === "reviewer" ? { reviewOf: "impl" } : {}) }, outputs: [], permissions: [],
+        sourceSession: role === "lead" ? "owner" : "lead@rig", destinationSession: seat, body }), binding).status).toBe("accepted");
+    }
+    const implementer = await launchedPrompt("a-node", "a@rig", { taskId: "impl", role: "implementer", paths: ["src"], dependencies: [] }, "impl-attempt-1");
+    expect(implementer).toContain("The owner's words for this run, verbatim");
+    expect(implementer).toContain("Add dark mode to the settings page, keep the API unchanged.");
+    expect(implementer).toContain(`Evidence directory (outside the candidate): ${JSON.stringify(join(stateRoot, "turns", "impl-attempt-1", "evidence"))}`);
+    // The reviewer is pointed at the latest attempt of the task it reviews, where the captures are.
+    db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, state, identity_json, usage_json, active_ms, created_at, updated_at)
+      VALUES ('impl-attempt-1', 'run', ?, 'implementer', 'claude', 'stopped', '{}', '{}', 0, '2026-11-04T00:00:00Z', '2026-11-04T00:00:00Z')`)
+      .run(governance.findTask("run", "impl")!.qitemId);
+    const reviewer = await launchedPrompt("rev-node", "reviewer@rig",
+      { taskId: "review", role: "reviewer", paths: ["src"], dependencies: [], reviewOf: "impl" }, "review-attempt-1");
+    expect(reviewer).toContain("Add dark mode to the settings page, keep the API unchanged.");
+    expect(reviewer).toContain(JSON.stringify(join(stateRoot, "turns", "impl-attempt-1", "evidence")));
   });
 
   it("records a rejection with no reason and still reopens the lead", () => {
