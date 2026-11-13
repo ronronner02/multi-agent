@@ -30,6 +30,8 @@ function httpStatus(code: string): 400 | 401 | 409 | 502 | 503 {
 
 export function teamGithubRoutes(
   github: GithubCli,
+  /** Plan KTD10 — the dedicated agent account; its sign-in is separate from the owner's. */
+  agent: GithubCli | undefined,
   credentials: TeamControlCredentials,
   legacyTokens: readonly (string | null | undefined)[],
 ): Hono<TeamControlEnv> {
@@ -49,6 +51,23 @@ export function teamGithubRoutes(
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...github.loginState() });
   });
   app.post("/github/logout", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await github.logout() }));
+  // The agent account acts for the team: it pushes, opens pull requests and answers reviews,
+  // while the owner's account keeps the owner's own actions. The same login on both is
+  // reported as `sameAsOwner`, and nothing acts as the agent until that is resolved.
+  if (agent) {
+    app.get("/github/agent/status", async c => {
+      const [mine, owner] = await Promise.all([agent.status(), github.status()]);
+      const sameAsOwner = mine.signedIn && owner.signedIn && mine.login !== null && mine.login === owner.login;
+      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...mine, sameAsOwner });
+    });
+    app.post("/github/agent/login", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await agent.startLogin() }));
+    app.get("/github/agent/login", c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...agent.loginState() }));
+    app.post("/github/agent/login/stop", async c => {
+      await agent.stop();
+      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...agent.loginState() });
+    });
+    app.post("/github/agent/logout", async c => c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...await agent.logout() }));
+  }
   app.onError((error, c) => {
     const failure = error instanceof GithubCliError ? error : new GithubCliError("github_login_failed");
     // Pass bounded stderr alongside the code and message.
