@@ -1,9 +1,12 @@
 import type Database from "better-sqlite3";
 
+import { SCHEMA_UPGRADES, upgradePath, type SchemaUpgrade } from "./upgrades.js";
+
 /**
  * Marker written to PRAGMA user_version in the same transaction as the fresh team schema.
- * Any change to BASELINE_SQL bumps it: a file marked with an earlier value is refused like an
- * unmarked one, because the daemon never migrates. 2 adds team_seat_mailbox_capabilities.
+ * Any change to BASELINE_SQL bumps it and appends the matching step to SCHEMA_UPGRADES, so a
+ * database the shipped app created is upgraded rather than refused. 2 adds
+ * team_seat_mailbox_capabilities and is the first shipped version.
  */
 export const BASELINE_VERSION = 2;
 
@@ -933,9 +936,27 @@ export class LegacyDatabaseError extends Error {
   }
 }
 
+export class NewerDatabaseError extends Error {
+  readonly code = "newer_database";
+  constructor(public readonly databasePath: string, public readonly version: number) {
+    super(`newer_database: version ${version} at ${databasePath}`);
+    this.name = "NewerDatabaseError";
+  }
+}
+
+export class UpgradeFailedError extends Error {
+  readonly code = "upgrade_failed";
+  constructor(public readonly databasePath: string, public readonly backupPath: string, cause: unknown) {
+    super(`upgrade_failed: ${databasePath} (backup ${backupPath}): ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = "UpgradeFailedError";
+  }
+}
+
 export interface BaselineOptions {
-  /** Test-only failure injection. The callback runs inside the schema transaction. */
+  /** Test-only failure injection. The callback runs inside the schema or upgrade transaction. */
   injectFailure?: () => void;
+  /** The upgrade chain; tests inject one, production uses SCHEMA_UPGRADES. */
+  upgrades?: readonly SchemaUpgrade[];
 }
 
 function writeBaseline(db: Database.Database, options?: BaselineOptions): void {
@@ -956,20 +977,52 @@ function userVersion(db: Database.Database): number {
   return Number(db.pragma("user_version", { simple: true }));
 }
 
-/** Inspect schema metadata only; legacy application rows are never read. */
-export function assertSupportedDatabase(db: Database.Database, databasePath: string): void {
-  if (userVersion(db) !== BASELINE_VERSION && hasUserTables(db)) {
-    throw new LegacyDatabaseError(databasePath);
+/**
+ * Inspect schema metadata only; legacy application rows are never read. A database marked
+ * with an older version the upgrade chain reaches is supported; it is upgraded on open.
+ */
+export function assertSupportedDatabase(db: Database.Database, databasePath: string,
+  upgrades: readonly SchemaUpgrade[] = SCHEMA_UPGRADES): void {
+  const version = userVersion(db);
+  if (version === BASELINE_VERSION || !hasUserTables(db)) return;
+  if (version > BASELINE_VERSION) throw new NewerDatabaseError(databasePath, version);
+  if (version === 0 || !upgradePath(upgrades, version, BASELINE_VERSION)) throw new LegacyDatabaseError(databasePath);
+}
+
+/** Copy the database beside itself before an upgrade. VACUUM INTO writes a consistent copy from a WAL database. */
+function backupBeforeUpgrade(db: Database.Database, databasePath: string, version: number): string {
+  if (databasePath === ":memory:" || databasePath === "") return ":memory:";
+  const backupPath = `${databasePath}.v${version}-${Date.now()}.bak`;
+  db.prepare("VACUUM INTO ?").run(backupPath);
+  return backupPath;
+}
+
+function upgrade(db: Database.Database, databasePath: string, upgrades: readonly SchemaUpgrade[], options?: BaselineOptions): void {
+  const from = userVersion(db);
+  const path = upgradePath(upgrades, from, BASELINE_VERSION)!;
+  const backupPath = backupBeforeUpgrade(db, databasePath, from);
+  try {
+    db.transaction(() => {
+      for (const step of path) {
+        db.exec(step.sql);
+        db.pragma(`user_version = ${step.to}`);
+      }
+      options?.injectFailure?.();
+    })();
+  } catch (error) {
+    throw new UpgradeFailedError(databasePath, backupPath, error);
   }
 }
 
-/** Initialize an empty database atomically, or reopen the existing baseline. */
+/** Initialize an empty database atomically, upgrade an older shipped one, or reopen the baseline. */
 export function initializeDatabase(
   db: Database.Database,
   databasePath: string = db.name,
   options?: BaselineOptions,
 ): void {
-  assertSupportedDatabase(db, databasePath);
+  const upgrades = options?.upgrades ?? SCHEMA_UPGRADES;
+  assertSupportedDatabase(db, databasePath, upgrades);
   if (userVersion(db) === BASELINE_VERSION) return;
-  writeBaseline(db, options);
+  if (hasUserTables(db)) upgrade(db, databasePath, upgrades, options);
+  else writeBaseline(db, options);
 }
