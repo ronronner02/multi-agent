@@ -1,14 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { chmodSync, lstatSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join } from "node:path";
-import { createServer, type Socket } from "node:net";
+import { createConnection, createServer, type Socket } from "node:net";
 import { object, text } from "../contracts/team-control.js";
 import { ChatRepository, ChatRepositoryError } from "../domain/chat-repository.js";
 import { MailboxDelivery, MailboxDeliveryError } from "../domain/mailbox-delivery.js";
+import { mailboxEndpoint } from "../domain/mailbox-endpoint.js";
+import { hostPlatform, type HostPlatform } from "../domain/platform.js";
 import { resolveTeamControlCredential, type TeamControlCredentials } from "../middleware/auth-bearer-token.js";
 
 export interface WorkerMailboxBinding {
-  socketPath: string;
+  /**
+   * The attempt's control-private mailbox directory. The endpoint this bridge serves is derived
+   * from it: a `mailbox.sock` file on POSIX, a named pipe on Windows.
+   */
+  directory: string;
   workerId: string;
   sessionId: string;
   runId: string;
@@ -32,12 +37,15 @@ const REQUEST_FIELDS = new Set(["authorization", "sessionId", "runId", "attemptI
   "operation", "taskId", "recipient", "capability", "body", "messageId", "replyTo", "attachment", "limit", "acknowledgedMessageIds"]);
 
 export class WorkerMailboxBridge {
-  readonly generation = randomUUID();
+  readonly generation: string;
   private readonly sockets = new Set<Socket>();
   private readonly server = createServer((socket) => this.accept(socket));
+  private readonly transport: HostPlatform;
+  private readonly descriptor: ReturnType<typeof mailboxEndpoint>;
   private socketIdentity: { dev: number; ino: number; uid: number; gid: number } | null = null;
   private closed = false;
   private invalid = false;
+  private bootstrapped = false;
   private closing: Promise<void> | null = null;
 
   constructor(
@@ -47,35 +55,50 @@ export class WorkerMailboxBridge {
     private readonly readCredentials: () => TeamControlCredentials,
     private readonly isCurrent: () => boolean,
     private readonly legacyTokens: readonly (string | null | undefined)[] = [],
+    /** The host's transport and generation are overridable so a test can drive either branch. */
+    transport: HostPlatform = hostPlatform(),
+    generation: string = randomUUID(),
   ) {
     this.binding = Object.freeze({ ...binding, recipients: Object.freeze([...binding.recipients]) });
+    this.transport = transport;
+    this.generation = generation;
+    this.descriptor = mailboxEndpoint(binding.directory, this.generation, transport);
     this.server.on("error", () => { void this.close(); });
   }
 
   async listen(): Promise<void> {
     this.checkDirectory();
     if (this.closed || this.server.listening) throw new Error("mailbox_endpoint_invalid");
+    const target = this.descriptor.path;
+    // A Windows pipe name is global to the machine, so a name that is already served may belong
+    // to another process entirely. Node refuses such a listen with `EADDRINUSE` (a Node server)
+    // or `EBUSY` (any other pipe server), and either is a collision: nothing here retries,
+    // unlinks or writes over it. The probe below is what turns "somebody else answers" into a
+    // refusal instead of a rotation the caller could mistake for a fresh endpoint.
+    if (this.descriptor.transport === "pipe" && await this.pipeIsServed(target)) {
+      throw new Error("mailbox_endpoint_in_use");
+    }
+    // Node's own listen reports a collision asynchronously through the server's `error` event,
+    // which the constructor already turns into `close()`; a duplicate would otherwise resolve
+    // `listen()` on a name another bridge owns. The generation makes that comparison exact.
     await new Promise<void>((resolve, reject) => {
       this.server.once("error", reject);
-      this.server.listen(this.binding.socketPath, () => {
+      this.server.listen(target, () => {
         this.server.removeListener("error", reject);
         if (this.closed) { this.server.close(() => reject(new Error("mailbox_endpoint_invalid"))); return; }
         resolve();
       });
     });
     try {
-      // The private control-owned directory prevents host-side discovery and replacement.
-      // Only the individually bound socket is exposed inside this attempt's namespace.
-      chmodSync(this.binding.socketPath, 0o666);
-      // Windows has no POSIX uid/gid; the identity check is only meaningful on POSIX hosts.
-      if (typeof process.getuid === "function") {
-        const stat = lstatSync(this.binding.socketPath);
-        if (!stat.isSocket() || stat.uid !== process.getuid() || stat.gid !== process.getgid!()) {
+      if (this.transport === "posix") {
+        // The private control-owned directory prevents host-side discovery and replacement.
+        // Only the individually bound socket is exposed inside this attempt's namespace.
+        chmodSync(target, 0o666);
+        const stat = lstatSync(target);
+        if (!stat.isSocket() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()) {
           throw new Error("mailbox_endpoint_invalid");
         }
         this.socketIdentity = { dev: stat.dev, ino: stat.ino, uid: stat.uid, gid: stat.gid };
-      } else {
-        this.socketIdentity = { dev: 0, ino: 0, uid: 0, gid: 0 };
       }
       this.endpoint();
       this.writeBootstrap();
@@ -87,16 +110,33 @@ export class WorkerMailboxBridge {
     }
   }
 
+  /**
+   * The endpoint the launcher and the worker are told to reach.
+   *
+   * A POSIX endpoint carries the socket file's dev/ino and owner, re-read on every call, so a
+   * replaced socket or a loosened mode closes this bridge. A pipe has no file to stat: its
+   * identity is the name, and the name stays bound to this server for as long as it listens,
+   * so a server that is still listening (and neither closed nor invalidated) owns it.
+   */
   endpoint() {
+    if (this.descriptor.transport === "pipe") {
+      if (!this.closed && !this.invalid && this.server.listening) {
+        return Object.freeze({ transport: "pipe" as const, path: this.descriptor.path, generation: this.generation });
+      }
+      this.invalid = true;
+      void this.close();
+      throw new Error("mailbox_endpoint_invalid");
+    }
     try {
       this.checkDirectory();
-      const stat = lstatSync(this.binding.socketPath);
+      const stat = lstatSync(this.descriptor.path);
       if (this.closed || this.invalid || !this.server.listening || !stat.isSocket() || !this.socketIdentity
         || stat.dev !== this.socketIdentity.dev || stat.ino !== this.socketIdentity.ino
         || stat.uid !== this.socketIdentity.uid || stat.gid !== this.socketIdentity.gid || (stat.mode & 0o7777) !== 0o666) {
         throw new Error("mailbox_endpoint_invalid");
       }
-      return Object.freeze({ path: this.binding.socketPath, ...this.socketIdentity, generation: this.generation });
+      return Object.freeze({ transport: "unix" as const, path: this.descriptor.path, ...this.socketIdentity,
+        generation: this.generation });
     } catch {
       this.invalid = true;
       void this.close();
@@ -107,12 +147,20 @@ export class WorkerMailboxBridge {
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.closed = true;
-    this.removeBootstrap();
+    // Only the bridge that wrote the bootstrap may remove it. A bridge refused before it ever
+    // listened — an endpoint already served by another one, most importantly — shares the
+    // directory of the bridge that is live there, and cleaning up unconditionally would take
+    // that one's bootstrap away from its worker.
+    if (this.bootstrapped) this.removeBootstrap();
     this.delivery.invalidateNativeChannel({ rigId: this.binding.rigId, recipient: this.binding.sessionId,
       taskId: this.binding.taskId, runId: this.binding.runId });
     for (const socket of this.sockets) socket.destroy();
     this.sockets.clear();
-    this.closing = this.server.listening ? new Promise<void>((resolve) => this.server.close(() => resolve())) : Promise.resolve();
+    // Closing the server is the whole cleanup on both transports: libuv unlinks the socket file
+    // it created, and a pipe stops existing when its server closes.
+    this.closing = this.server.listening
+      ? new Promise<void>((resolve) => this.server.close(() => resolve()))
+      : Promise.resolve();
     return this.closing;
   }
 
@@ -124,6 +172,10 @@ export class WorkerMailboxBridge {
    * these seven string fields, with the socket directory already proven control-owned and
    * 0700. So the writer lives here, where that directory has just been checked.
    *
+   * `endpoint` is the transport-specific connect target: a socket path on POSIX, a pipe name
+   * on Windows. A client connects to this value verbatim, so a worker on either host reaches
+   * the same mailbox without deriving a path of its own.
+   *
    * `authorization` is the worker credential the endpoint authenticates with, not a
    * placeholder: the relay copies it verbatim into the request and `dispatch` hands it to
    * `resolveTeamControlCredential`, which accepts only `Bearer <token>` for a token this
@@ -132,19 +184,24 @@ export class WorkerMailboxBridge {
    * credential source and never from a constant this file chooses.
    */
   private writeBootstrap(): void {
-    const source = join(dirname(this.binding.socketPath), "bootstrap.json");
+    const source = this.descriptor.bootstrapPath;
     const token = this.workerToken();
     if (!token) throw new Error("mailbox_bootstrap_credential_unavailable");
-    const body = JSON.stringify({ authorization: `Bearer ${token}`, sessionId: this.binding.sessionId,
-      runId: this.binding.runId, attemptId: this.binding.attemptId, generation: this.generation,
-      taskId: this.binding.taskId, capability: this.binding.capability });
+    // A Windows worker connects to the pipe named here. The POSIX file keeps exactly the seven
+    // fields the privileged launcher requires (`worker-launch.mjs` refuses any other count), and
+    // its worker-visible endpoint is the sandbox's fixed mount target rather than a host path.
+    const body = JSON.stringify({ authorization: `Bearer ${token}`,
+      ...(this.descriptor.transport === "pipe" ? { endpoint: this.descriptor.path } : {}),
+      sessionId: this.binding.sessionId, runId: this.binding.runId, attemptId: this.binding.attemptId,
+      generation: this.generation, taskId: this.binding.taskId, capability: this.binding.capability });
     // Written 0600 from the start: a create-then-chmod would leave one window in
     // which the file is readable by whatever shares this directory.
     writeFileSync(source, body, { mode: 0o600, flag: "w" });
-    chmodSync(source, 0o600);
+    this.bootstrapped = true;
     const stat = lstatSync(source);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
-      || (stat.mode & 0o7777) !== 0o600 || stat.size > 8_192) {
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 8_192
+      || (this.transport === "posix" && (stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
+        || (stat.mode & 0o7777) !== 0o600))) {
       this.removeBootstrap();
       throw new Error("mailbox_bootstrap_invalid");
     }
@@ -160,17 +217,47 @@ export class WorkerMailboxBridge {
   }
 
   private removeBootstrap(): void {
-    try { unlinkSync(join(dirname(this.binding.socketPath), "bootstrap.json")); } catch { /* Absent is already closed. */ }
+    try { unlinkSync(this.descriptor.bootstrapPath); } catch { /* Absent is already closed. */ }
   }
 
+  /**
+   * Whether some process already serves a pipe of this name.
+   *
+   * A `net` client answers `ENOENT` when nothing serves the name and connects when something
+   * does; that is the only portable question a Node process can ask about a pipe another
+   * process owns. Every other answer counts as taken: a refusal this cannot explain must not
+   * become a listen over somebody else's pipe.
+   */
+  private pipeIsServed(target: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const socket = createConnection(target);
+      const settle = (served: boolean) => {
+        socket.removeAllListeners();
+        socket.on("error", () => { /* A socket finished with by the answer is done either way. */ });
+        socket.destroy();
+        resolve(served);
+      };
+      socket.once("connect", () => settle(true));
+      socket.once("error", (error: NodeJS.ErrnoException) => settle(error.code !== "ENOENT"));
+      socket.setTimeout(2_000, () => settle(true));
+    });
+  }
+
+  /**
+   * The mailbox directory this endpoint's bootstrap lives in.
+   *
+   * POSIX keeps the original contract exactly: a canonical, control-owned, 0700 directory,
+   * which is what the privileged launcher walks and checks. Windows can prove only that the
+   * entry is a real directory and not a reparse point — a junction would redirect the bootstrap
+   * somewhere else — because it has no uid/gid or permission bits to compare.
+   */
   private checkDirectory(): void {
-    const path = this.binding.socketPath, parent = dirname(path), stat = lstatSync(parent);
-    // Windows has no POSIX uid/gid or permission bits; those checks are only meaningful on
-    // POSIX hosts, where the mailbox directory must be control-private.
-    const posix = typeof process.getuid === "function";
-    if (!isAbsolute(path) || basename(path) !== "mailbox.sock" || realpathSync(parent) !== parent
-      || !stat.isDirectory() || (posix && (stat.uid !== process.getuid!() || stat.gid !== process.getgid!()))
-      || (posix && (stat.mode & 0o7777) !== 0o700)) throw new Error("mailbox_endpoint_invalid");
+    const directory = this.binding.directory, stat = lstatSync(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("mailbox_endpoint_invalid");
+    if (this.transport === "posix") {
+      if (realpathSync(directory) !== directory || stat.uid !== process.getuid!() || stat.gid !== process.getgid!()
+        || (stat.mode & 0o7777) !== 0o700) throw new Error("mailbox_endpoint_invalid");
+    }
   }
 
   private accept(socket: Socket): void {

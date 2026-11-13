@@ -5,7 +5,7 @@ import { canonicalJson, parseAttemptIdentity, type NativeAttemptIdentity } from 
 import type { AssignmentInput } from "../domain/team-assignment.js";
 import { assessNativeResumeProbe } from "../domain/native-resume-probe.js";
 import type { ContextMountPolicy, ContextObservation, ManagedNativePolicy, ManagedNativePolicyObservation } from "../integrations/framework/context-manifest.js";
-import type { WorkerMailboxBridge } from "./worker-mailbox-bridge.js";
+import { admitsPosixMailboxEndpoint, socketIdentity, type MailboxEndpoint } from "../domain/mailbox-endpoint.js";
 import type { HarnessLaunchResult, ManagedAttempt, ManagedSessionReceipt, NodeBinding, ReadinessResult } from "../domain/runtime-adapter.js";
 import type { AppliedLaunchObservation } from "../domain/permission-drift.js";
 
@@ -96,7 +96,7 @@ export interface WorkerLaunchPreflight {
   network: WorkerNetworkPolicy;
   provider: { status: "signed_in" | "signed_out" | "unknown"; client: WorkerClient; home: string; evidenceRef: string };
   nativePolicy?: ManagedNativePolicy;
-  mailbox?: ReturnType<WorkerMailboxBridge["endpoint"]>;
+  mailbox?: MailboxEndpoint;
   previous?: ManagedSessionReceipt;
   /** Secret values are used only for output redaction, never copied to receipts or argv. */
   credentialValues: string[];
@@ -132,7 +132,7 @@ export interface WorkerObservation {
   boundary: WorkerBoundary;
   context: ContextObservation;
   nativePolicy?: ManagedNativePolicyObservation;
-  mailbox?: Pick<NonNullable<WorkerLaunchPreflight["mailbox"]>, "uid" | "gid" | "dev" | "ino">;
+  mailbox?: { uid: number; gid: number; dev: number; ino: number };
   /** Observed at exec by the control transport, rather than read from pane text. */
   nativeArgv: string[];
   sessionSource: "exec" | "process_session_file";
@@ -411,7 +411,7 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
           ...(policy.policy_revision >= 5 ? ["--supervise"] : []),
           "--worker", preflight.worker.name, "--role", attempt.context.role, "--tree", preflight.worker.tree,
           "--run", attempt.context.runId, "--attempt", attempt.attemptId, "--client-lock", preflight.clientLock.digest,
-          ...(policy.policy_revision >= 5 ? ["--mailbox", `${preflight.mailbox!.dev}:${preflight.mailbox!.ino}`] : []), "--", ...nativeArgv],
+          ...(policy.policy_revision >= 5 ? ["--mailbox", `${socketIdentity(preflight.mailbox)!.dev}:${socketIdentity(preflight.mailbox)!.ino}`] : []), "--", ...nativeArgv],
         nativeArgv, network, client, attemptId: attempt.attemptId, deadline: attempt.deadline, contextHash: attempt.context.generatedHash,
       });
       await this.record(state, { phase: "prepared" });
@@ -583,11 +583,13 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
     const root = policy.paths.control_state_dir, mailboxRoot = policy.paths.mailbox_root, mailbox = p.mailbox;
     requireFact(root && root !== "/" && resolve(root) === root && mailboxRoot === root + "/mailboxes"
       && policy.sandbox.mailbox === "/run/multi-agent/mailbox.sock", "managed_mailbox_policy_mismatch");
-    requireFact(mailbox && mailbox.path === mailboxRoot + "/" + p.worker.name + "/" + attempt.context.runId + "/" + attempt.attemptId + "/mailbox.sock"
-      && Number.isSafeInteger(p.control.uid) && p.control.uid >= 0 && Number.isSafeInteger(p.control.gid) && p.control.gid! >= 0
-      && mailbox.uid === p.control.uid && mailbox.gid === p.control.gid
-      && Number.isSafeInteger(mailbox.dev) && mailbox.dev >= 0 && Number.isSafeInteger(mailbox.ino) && mailbox.ino > 0
-      && typeof mailbox.generation === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(mailbox.generation),
+    // The privileged launcher mounts a Unix socket file and pins it by dev/ino, so a pipe
+    // endpoint can never satisfy it. That refusal is the Windows answer rather than a gap: this
+    // launcher is composed only where the worker is a separate account under a sandbox, and a
+    // Windows host launches through the direct unisolated path instead.
+    requireFact(mailbox?.transport === "unix"
+      && admitsPosixMailboxEndpoint(mailbox, { mailboxRoot, worker: p.worker.name, runId: attempt.context.runId,
+        attemptId: attempt.attemptId, controlUid: p.control.uid, controlGid: p.control.gid }),
     "managed_mailbox_identity_mismatch");
   }
 
@@ -656,9 +658,8 @@ export class RestrictedWorkerLauncher implements WorkerLauncher {
     });
     let nativePolicy: WorkerLaunchEvent["nativePolicy"];
     if (policy.policy_revision >= 5) {
-      const endpoint = p.mailbox!;
-      requireFact(observed.mailbox && same(observed.mailbox, { uid: endpoint.uid, gid: endpoint.gid, dev: endpoint.dev, ino: endpoint.ino }),
-        "managed_mailbox_identity_mismatch");
+      const identity = socketIdentity(p.mailbox);
+      requireFact(observed.mailbox && same(observed.mailbox, identity), "managed_mailbox_identity_mismatch");
       requireFact(observed.nativePolicy, "managed_native_policy_unobserved");
       try {
         nativePolicy = { installedDigest: p.nativePolicy!.digest, observedDigest: verifyEffectiveNativePolicy(p.nativePolicy!, observed.nativePolicy) };

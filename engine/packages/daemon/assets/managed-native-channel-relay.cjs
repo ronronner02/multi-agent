@@ -23,9 +23,9 @@ function readJson(path, maxBytes) {
   } finally { fs.closeSync(fd); }
 }
 
-function exchange(request) {
+function exchange(target, request) {
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection(SOCKET, () => socket.end(JSON.stringify(request) + "\n"));
+    const socket = net.createConnection(target, () => socket.end(JSON.stringify(request) + "\n"));
     let bytes = Buffer.alloc(0);
     socket.setTimeout(2_000, () => socket.destroy(new Error("Mailbox request timed out")));
     socket.on("error", reject);
@@ -62,6 +62,10 @@ async function main() {
     throw new Error("Invalid private mailbox directory");
   }
   const bootstrap = readJson(BOOTSTRAP, 8_192);
+  // A Windows host has no Unix socket to open: there the bootstrap names the mailbox's named
+  // pipe, and `net.connect` takes that name verbatim. Everywhere else the endpoint is the
+  // sandbox's fixed socket target, which the launcher mounts read-only for exactly this read.
+  const target = typeof bootstrap.endpoint === "string" ? bootstrap.endpoint : SOCKET;
   const request = {};
   for (const field of FIELDS) {
     if (typeof bootstrap[field] !== "string" || !bootstrap[field] || bootstrap[field].length > 1_024) {
@@ -77,7 +81,7 @@ async function main() {
       previous = state.messageIds;
     }
   } catch { /* Missing or interrupted consumer state causes redelivery, never fabricated consumption. */ }
-  const response = await exchange({ ...request, operation: "channel", acknowledgedMessageIds: previous, limit: 4 });
+  const response = await exchange(target, { ...request, operation: "channel", acknowledgedMessageIds: previous, limit: 4 });
   if (!response || response.ok !== true || !response.result) throw new Error("Mailbox context is not admitted");
   const result = response.result;
   if (!["pending", "empty", "delivered"].includes(result.status) || !Array.isArray(result.messageIds)
