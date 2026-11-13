@@ -57,7 +57,7 @@ import { planningRosterRequired } from "./domain/lead-roster.js";
 import { composeLeadTurnEnd } from "./domain/lead-chat.js";
 // T053 — the managed attempt's production inputs, composed here beside the candidate roots.
 import { WorkerControlAccess } from "./domain/worker-control-access.js";
-import { SeatMailboxCapabilities } from "./domain/seat-mailbox-capability.js";
+import { SeatMailboxCapabilities } from "./domain/worker-mailbox-capability.js";
 import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
 import { resolveTeamSoul } from "./domain/team-souls.js";

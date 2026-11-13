@@ -15,7 +15,7 @@ import { SessionRegistry } from "../src/domain/session-registry.js";
 import { createFullTestDb } from "./helpers/test-app.js";
 import { ChatRepository } from "../src/domain/chat-repository.js";
 import { RigRepository } from "../src/domain/rig-repository.js";
-import { SeatMailboxCapabilities } from "../src/domain/seat-mailbox-capability.js";
+import { SeatMailboxCapabilities } from "../src/domain/worker-mailbox-capability.js";
 
 /** A well-formed test capability: `mailbox:` plus 32 bytes in base64url. */
 function cap(label: string): string {
