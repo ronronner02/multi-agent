@@ -125,7 +125,7 @@ export function getChatMessage(db: Database.Database, id: string): TeamChatMessa
 /** The run's conversation, in the order it happened. */
 /** The run's conversation as the owner sees it: every message except the lead's activity notes. */
 export function listChatMessages(db: Database.Database, runId: string): TeamChatMessage[] {
-  const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages WHERE run_id = ? AND visibility = 'chat' ORDER BY rowid`).all(runId) as
+  const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages WHERE run_id = ? AND visibility = 'chat' AND task_id IS NULL ORDER BY rowid`).all(runId) as
     Array<Parameters<typeof rowToMessage>[0]>;
   return rows.map(rowToMessage);
 }
@@ -145,7 +145,7 @@ export function listRunActivity(db: Database.Database, runId: string): TeamChatM
  */
 export function leadMessageVisibility(db: Database.Database, runId: string, attemptId: string): "chat" | "activity" {
   const answered = db.prepare(`SELECT 1 FROM team_chat_messages
-    WHERE run_id = ? AND sender = 'owner' AND delivered_attempt = ? LIMIT 1`).get(runId, attemptId);
+    WHERE run_id = ? AND sender = 'owner' AND task_id IS NULL AND delivered_attempt = ? LIMIT 1`).get(runId, attemptId);
   if (answered) return "chat";
   const tasks = db.prepare(`SELECT json_extract(a.assignment_json, '$.role') AS role, q.state AS state, a.qitem_id AS qitemId
     FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
@@ -168,7 +168,7 @@ export function leadMessageVisibility(db: Database.Database, runId: string, atte
 /** Owner messages no lead prompt has carried yet, oldest first. */
 export function pendingOwnerMessages(db: Database.Database, runId: string): TeamChatMessage[] {
   const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages
-    WHERE run_id = ? AND sender = 'owner' AND kind = 'text' AND delivered_attempt IS NULL ORDER BY rowid`).all(runId) as
+    WHERE run_id = ? AND sender = 'owner' AND task_id IS NULL AND kind = 'text' AND delivered_attempt IS NULL ORDER BY rowid`).all(runId) as
     Array<Parameters<typeof rowToMessage>[0]>;
   return rows.map(rowToMessage);
 }
@@ -176,14 +176,14 @@ export function pendingOwnerMessages(db: Database.Database, runId: string): Team
 /** One extra slot belongs only to this run's lead carrying an owner message. */
 export function ownerMessageSlot(db: Database.Database, runId: string, taskId: string, attemptId?: string): number {
   if (runLeadTask(db, runId)?.taskId !== taskId) return 0;
-  return db.prepare(`SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'owner' AND kind = 'text'
+  return db.prepare(`SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'owner' AND task_id IS NULL AND kind = 'text'
     AND (delivered_attempt IS NULL OR delivered_attempt = ?) LIMIT 1`).get(runId, attemptId ?? null) ? 1 : 0;
 }
 
 /** Return a failed turn's messages only after its reply had a chance to be recorded. */
 function returnUnansweredMessages(db: Database.Database, runId: string, attemptId: string): number {
   return db.prepare(`UPDATE team_chat_messages SET delivered_attempt = NULL
-    WHERE run_id = ? AND sender = 'owner' AND delivered_attempt = ?
+    WHERE run_id = ? AND sender = 'owner' AND task_id IS NULL AND delivered_attempt = ?
       AND NOT EXISTS (SELECT 1 FROM team_chat_messages WHERE run_id = ? AND sender = 'lead' AND attempt_id = ?)`)
     .run(runId, attemptId, runId, attemptId).changes;
 }
@@ -198,11 +198,11 @@ function returnUnansweredMessages(db: Database.Database, runId: string, attemptI
  */
 export function takeOwnerMessages(db: Database.Database, runId: string, attemptId: string): TeamChatMessage[] {
   const pending = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages
-    WHERE run_id = ? AND sender = 'owner' AND kind = 'text' AND (delivered_attempt IS NULL OR delivered_attempt = ?) ORDER BY rowid`)
+    WHERE run_id = ? AND sender = 'owner' AND task_id IS NULL AND kind = 'text' AND (delivered_attempt IS NULL OR delivered_attempt = ?) ORDER BY rowid`)
     .all(runId, attemptId) as Array<Parameters<typeof rowToMessage>[0]>;
   if (!pending.length) return [];
   db.prepare(`UPDATE team_chat_messages SET delivered_attempt = ?
-    WHERE run_id = ? AND sender = 'owner' AND kind = 'text' AND delivered_attempt IS NULL`).run(attemptId, runId);
+    WHERE run_id = ? AND sender = 'owner' AND task_id IS NULL AND kind = 'text' AND delivered_attempt IS NULL`).run(attemptId, runId);
   return pending.map(rowToMessage);
 }
 

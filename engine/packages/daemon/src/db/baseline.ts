@@ -7,9 +7,10 @@ import { SCHEMA_UPGRADES, upgradePath, type SchemaUpgrade } from "./upgrades.js"
  * Any change to BASELINE_SQL bumps it and appends the matching step to SCHEMA_UPGRADES, so a
  * database the shipped app created is upgraded rather than refused. 2 adds
  * team_seat_mailbox_capabilities and is the first shipped version; 3 adds
- * team_chat_messages.visibility.
+ * team_chat_messages.visibility; 4 adds task comments (team_chat_messages.task_id) and task holds
+ * and follow-up links (team_queue_authority.held_at, follow_up_of).
  */
-export const BASELINE_VERSION = 3;
+export const BASELINE_VERSION = 4;
 
 /**
  * The one-shot schema for the retained team product. The statements are kept as one SQL
@@ -515,7 +516,7 @@ CREATE TABLE team_queue_authority (
       CHECK (outputs_json IS NULL OR json_valid(outputs_json)), permissions_json TEXT
       CHECK (permissions_json IS NULL OR json_valid(permissions_json)), display_name TEXT, document_versions_json TEXT
       CHECK (document_versions_json IS NULL OR json_valid(document_versions_json)), workflow_json TEXT
-      CHECK (workflow_json IS NULL OR json_valid(workflow_json)),
+      CHECK (workflow_json IS NULL OR json_valid(workflow_json)), held_at TEXT, follow_up_of TEXT,
       UNIQUE (run_id, task_id),
       UNIQUE (qitem_id, run_id)
     );
@@ -687,7 +688,7 @@ CREATE TABLE "team_chat_messages" (
       kind TEXT NOT NULL DEFAULT 'text',
       options_json TEXT,
       answered_by TEXT, response_language TEXT
-    CHECK (response_language IS NULL OR response_language IN ('en', 'zh-CN')), visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity')),
+    CHECK (response_language IS NULL OR response_language IN ('en', 'zh-CN')), visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity')), task_id TEXT,
       CHECK ((sender = 'lead') = (attempt_id IS NOT NULL)),
       CHECK (sender = 'owner' OR delivered_attempt IS NULL)
     );

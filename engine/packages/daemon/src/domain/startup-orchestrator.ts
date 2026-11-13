@@ -5,6 +5,8 @@ import type { RuntimeAdapter, NodeBinding, ManagedAttempt, ResolvedStartupFile }
 import type { ProjectionPlan } from "./projection-planner.js";
 import type { StartupAction } from "./types.js";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { handbackPath, takeTaskComments, taskCommentNote, taskCommentNotices } from "./task-thread.js";
 import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths, boundedOwnerWords, continuationNote, leadProgressNote } from "./agent-turn.js";
 import { leadChatTurnNote, listChatMessages, responseLanguageNote, runLeadTask, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
 import { unassignedOwnerWorkflows } from "./team-workflows.js";
@@ -64,7 +66,8 @@ export class StartupOrchestrator {
       const prompt = managedTurnPrompt({ identity: "", bundle: "", runId, assignment,
         taskBody: this.taskBody(runId, assignment.taskId), outputs: attempt.context.outputs, permissions: attempt.context.permissions,
         instructions: attempt.context.files.map((file) => ({ path: file.workerPath })),
-        continuation: this.continuation(runId, assignment.taskId, assignment.role, attempt.attemptId, Boolean(input.continueSessionId)),
+        continuation: this.continuation(runId, assignment.taskId, assignment.role, attempt.attemptId, Boolean(input.continueSessionId),
+          attempt.context.mutableStateRoot),
         taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId).taskReport, workflow: attempt.context.workflow,
         ...(assignment.role === "lead" ? {} : { ownerWords: this.ownerWords(runId),
           evidenceDirectory: this.evidenceDirectory(attempt.context.mutableStateRoot, runId, assignment, attempt.attemptId) }) });
@@ -117,14 +120,39 @@ export class StartupOrchestrator {
    * Why this turn exists and what it must answer. A lead's turn is also where the owner's pending
    * messages are delivered: taking them marks them this attempt's, immediately before launch.
    */
-  private continuation(runId: string, taskId: string, role: TeamRole, attemptId: string, resumes: boolean): string | null {
+  private continuation(runId: string, taskId: string, role: TeamRole, attemptId: string, resumes: boolean, root: string): string | null {
     const chat = role === "lead"
       ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attemptId), listChatMessages(this.db, runId), unassignedOwnerWorkflows(this.db, runId))
+      : null;
+    // Plan KTD5 — an implementer's turn carries the owner's comments on its own task.
+    const comments = role === "implementer"
+      ? taskCommentNote(takeTaskComments(this.db, runId, taskId, attemptId), handbackPath(agentTurnOutputPaths(root, attemptId).taskReport))
       : null;
     const preference = this.db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId) as
       { language: ResponseLanguage | null } | undefined;
     return [resumes ? "Continue the existing native conversation." : null, continuationNote(this.db, runId, taskId, role), chat,
-      role === "lead" ? leadProgressNote(this.db, runId) : null,
+      role === "implementer" ? this.followUpContext(runId, taskId, root) : null, comments,
+      role === "lead" ? leadProgressNote(this.db, runId) : null, role === "lead" ? taskCommentNotices(this.db, runId) : null,
       responseLanguageNote(listChatMessages(this.db, runId), preference?.language)].filter(Boolean).join("\n\n") || null;
+  }
+
+  /**
+   * A follow-up starts in its own tree, so it cannot resume the original task's native session.
+   * It reads what that task was asked and what it reported instead.
+   */
+  private followUpContext(runId: string, taskId: string, root: string): string | null {
+    const original = this.db.prepare(`SELECT o.task_id AS taskId, q.body AS body FROM team_queue_authority f
+      JOIN team_queue_authority o ON o.run_id = f.run_id AND o.task_id = f.follow_up_of JOIN queue_items q ON q.qitem_id = o.qitem_id
+      WHERE f.run_id = ? AND f.task_id = ?`).get(runId, taskId) as { taskId: string; body: string } | undefined;
+    if (!original) return null;
+    const last = this.db.prepare(`SELECT p.id FROM team_attempts p JOIN team_queue_authority a ON a.qitem_id = p.qitem_id
+      WHERE a.run_id = ? AND a.task_id = ? AND p.state = 'stopped' ORDER BY p.rowid DESC LIMIT 1`).get(runId, original.taskId) as { id: string } | undefined;
+    let report: string | null = null;
+    if (last) {
+      try { report = readFileSync(agentTurnOutputPaths(root, last.id).lastMessage, "utf8").trim().slice(0, 4_096); }
+      catch { report = null; }
+    }
+    return [`This task follows up task ${original.taskId}, whose change is already on the run's branch your tree starts from.`,
+      `Its brief:\n${original.body.slice(0, 4_096)}`, ...(report ? [`Its final report:\n${report}`] : [])].join("\n\n");
   }
 }

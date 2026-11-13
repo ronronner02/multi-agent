@@ -28,6 +28,7 @@ import { planningRosterRequired, rosterRefusal, type LeadRosterSeat, type LeadSe
 import { addTeamSeats, nextTeamSeatNames } from "./team-setup.js";
 import { appendChatMessage, answerDecision, chatBody, parseResponseLanguage, getChatMessage, listChatMessages, pendingDecision, pendingOwnerMessages, runLeadTask, ownerMessageSlot, type TeamChatMessage, type ResponseLanguage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
+import { appendTaskComment, listTaskComments, moveTaskComments, pendingTaskComments, type TaskComment } from "./task-thread.js";
 import type { ReviewFinding } from "./review-evidence.js";
 import { ScopeExtensions, ScopeExtensionError, type CandidateScopeEvidence } from "./scope-extension.js";
 import type { EventBus, NotifyRegister } from "./event-bus.js";
@@ -1080,6 +1081,124 @@ export class PlanGovernance {
       return { status: "accepted", value: { messageId: message.id, queued: true, ...answered }, taskId: lead.taskId,
         observedBy: owner.sessionId, reason: "The lead task is not dispatchable; the message waits for it" };
     });
+  }
+
+  /**
+   * Plan R7/R8/KTD5 — the owner's comment on one task.
+   *
+   * The comment is stored on the task's thread and the task's own next turn reads it. A task that
+   * can take a turn now is dispatched; a running or held task keeps the comment for later. A task
+   * whose change already landed on the run's branch gets a linked follow-up task that carries the
+   * comment, starts from the branch head, and is reviewed like any change.
+   */
+  postTaskComment(raw: ControlRequest<unknown>, actor: ControlActor, currentBinding: unknown): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("task.commented", raw, owner, (ctx) => {
+      if (!this.reconcile(ctx, currentBinding)) return deny("Plan, repository or policy binding changed");
+      if (ctx.run.state === "canceled" || ctx.run.state === "cancel_requested") return deny("Run is closed; its tasks are not reading comments");
+      const payload = object(ctx.request.payload, "comment");
+      const taskId = text(payload.taskId, "comment.taskId", 256);
+      const task = this.findTask(ctx.run.id, taskId);
+      if (!task) return deny("This run has no task with that id");
+      if (task.assignment.role !== "implementer") return deny("Comment on the implementer task; its agent does the work");
+      const state = this.queue.getById(task.qitemId)?.state;
+      if (state === "canceled" || state === "denied") return deny("The task is closed");
+      const comment = appendTaskComment(this.db, { id: ctx.request.actionId, runId: ctx.run.id, taskId, body: payload.body as string, createdAt: ctx.now });
+      const queued = (reason: string): Result => ({ status: "accepted", value: { messageId: comment.id, taskId, queued: true }, taskId,
+        observedBy: owner.sessionId, reason });
+      if (this.taskHeld(ctx.run.id, taskId)) return queued("The task is held; the comment waits until it is released");
+      if (this.openAttemptCount(task.qitemId) > 0) return queued("The task's turn is running; its next turn reads the comment");
+      if (state === "done" || state === "handed-off") {
+        if (!this.integrated(ctx.run.id, taskId)) return queued("The task's change is awaiting review; the comment is kept for its next turn");
+        return this.startFollowUp(ctx, task, comment.id, owner.sessionId);
+      }
+      if (state === "blocked" || state === "failed") {
+        const updated = withQueueWrite(this.db, { operation: "update", qitemId: task.qitemId }, () => this.queue.updateWithinTransaction({
+          qitemId: task.qitemId, actorSession: ctx.run.id, state: "pending", transitionNote: "The owner commented on the task; its agent continues",
+        }));
+        for (const event of updated.persistedEvents) ctx.register(event);
+      }
+      return { status: "accepted", value: { messageId: comment.id, taskId, queued: false }, effectMayStart: ctx.run.state === "approved",
+        taskId, revisionTaskId: taskId, observedBy: owner.sessionId };
+    });
+  }
+
+  /** Plan R10 — the owner holds or releases a task. Only the owner releases a hold. */
+  holdTask(raw: ControlRequest<unknown>, actor: ControlActor): ControlReceipt {
+    const owner = actorIdentity(actor, true);
+    return this.command("task.held", raw, owner, (ctx) => {
+      const payload = object(ctx.request.payload, "hold");
+      const taskId = text(payload.taskId, "hold.taskId", 256);
+      if (typeof payload.held !== "boolean") throw new TeamContractError("hold.held");
+      const task = this.findTask(ctx.run.id, taskId);
+      if (!task) return deny("This run has no task with that id");
+      this.db.prepare("UPDATE team_queue_authority SET held_at = ? WHERE run_id = ? AND task_id = ?")
+        .run(payload.held ? ctx.now : null, ctx.run.id, taskId);
+      const pending = this.queue.getById(task.qitemId)?.state === "pending";
+      return { status: "accepted", value: { taskId, held: payload.held }, taskId, observedBy: owner.sessionId,
+        ...(!payload.held && pending && ctx.run.state === "approved" ? { effectMayStart: true, revisionTaskId: taskId } : {}) };
+    });
+  }
+
+  /**
+   * Plan KTD6 — a comment that waited for a task under review becomes a follow-up once the task's
+   * change lands. The sweep asks this once per waiting task; the follow-up id makes it idempotent.
+   */
+  promoteTaskComments(runId: string): string[] {
+    const started: string[] = [];
+    const rows = this.db.prepare(`SELECT a.task_id AS taskId FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+      JOIN team_integration_commits i ON i.run_id = a.run_id AND i.task_id = a.task_id
+      WHERE a.run_id = ? AND a.held_at IS NULL AND q.state IN ('done', 'handed-off')`).all(runId) as { taskId: string }[];
+    for (const row of rows) {
+      const waiting = pendingTaskComments(this.db, runId, row.taskId);
+      if (!waiting.length) continue;
+      const receipt = this.command("task.follow-up", { protocolVersion: TEAM_CONTROL_VERSION, runId, actionId: `follow-up:${waiting[0]!.id}`,
+        expectedEntityVersion: this.getRun(runId).entityVersion, idempotencyKey: `follow-up:${waiting[0]!.id}`, payload: {} },
+      { kind: "daemon", sessionId: "daemon" }, ctx => {
+        if (ctx.run.state !== "approved") return deny("The run is not accepting work");
+        const task = this.findTask(runId, row.taskId)!;
+        return this.startFollowUp(ctx, task, waiting[0]!.id, "daemon");
+      });
+      if (receipt.status === "accepted" && receipt.revisionTaskId) started.push(receipt.revisionTaskId);
+    }
+    return started;
+  }
+
+  /** A task's thread, for the owner's read. It writes nothing. */
+  taskComments(runId: string, taskId: string): TaskComment[] {
+    this.getRun(runId);
+    return listTaskComments(this.db, runId, taskId);
+  }
+
+  private taskHeld(runId: string, taskId: string): boolean {
+    return Boolean(this.db.prepare("SELECT 1 FROM team_queue_authority WHERE run_id = ? AND task_id = ? AND held_at IS NOT NULL").get(runId, taskId));
+  }
+
+  private integrated(runId: string, taskId: string): boolean {
+    return Boolean(this.db.prepare("SELECT 1 FROM team_integration_commits WHERE run_id = ? AND task_id = ?").get(runId, taskId));
+  }
+
+  /** The follow-up keeps the task's seat and paths, starts from the branch head, and takes the waiting comments. */
+  private startFollowUp(ctx: CommandContext, task: TeamTaskAuthority, commentId: string, observedBy: string): Result {
+    const count = (this.db.prepare("SELECT count(*) AS count FROM team_queue_authority WHERE run_id = ? AND follow_up_of = ?")
+      .get(ctx.run.id, task.assignment.taskId) as { count: number }).count;
+    const followUpId = `${task.assignment.taskId}-followup-${count + 1}`;
+    const seat = this.queue.getById(task.qitemId)!.destinationSession;
+    const name = (this.db.prepare("SELECT display_name AS name FROM team_queue_authority WHERE qitem_id = ?").get(task.qitemId) as { name: string | null }).name;
+    const definition = taskDefinition(ctx.run.binding, {
+      assignment: { taskId: followUpId, role: "implementer", paths: task.assignment.paths, dependencies: [] },
+      outputs: task.outputs ?? [], permissions: task.permissions ?? ["write-assigned-tree"],
+      sourceSession: "owner", destinationSession: seat,
+      displayName: `Follow-up: ${name ?? task.assignment.taskId}`.slice(0, 80),
+      body: `Follow up on task ${task.assignment.taskId}, whose change already landed on the run's branch, as the owner's comments on this task ask.`,
+    });
+    if (typeof definition === "string") return deny(definition);
+    const admitted = this.admitTask(ctx, definition);
+    if (admitted.status !== "accepted") return admitted;
+    this.db.prepare("UPDATE team_queue_authority SET follow_up_of = ? WHERE run_id = ? AND task_id = ?").run(task.assignment.taskId, ctx.run.id, followUpId);
+    moveTaskComments(this.db, ctx.run.id, task.assignment.taskId, followUpId);
+    return { status: "accepted", value: { messageId: commentId, taskId: followUpId, followUpOf: task.assignment.taskId, queued: false },
+      effectMayStart: true, taskId: followUpId, revisionTaskId: followUpId, observedBy };
   }
 
   documents(runId: string) { return readDocuments(this.db, this.getRun(runId)); }
