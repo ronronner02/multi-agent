@@ -6,7 +6,7 @@ import type { ProjectionPlan } from "./projection-planner.js";
 import type { StartupAction } from "./types.js";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { handbackPath, takeTaskComments, taskCommentNote, taskCommentNotices } from "./task-thread.js";
+import { handbackPath, ownerQuestionNotices, takeTaskComments, taskCommentNote, taskCommentNotices } from "./task-thread.js";
 import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths, boundedOwnerWords, continuationNote, leadProgressNote } from "./agent-turn.js";
 import { leadChatTurnNote, listChatMessages, responseLanguageNote, runLeadTask, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
 import { unassignedOwnerWorkflows } from "./team-workflows.js";
@@ -132,7 +132,7 @@ export class StartupOrchestrator {
       { language: ResponseLanguage | null } | undefined;
     return [resumes ? "Continue the existing native conversation." : null, continuationNote(this.db, runId, taskId, role), chat,
       role === "implementer" ? this.followUpContext(runId, taskId, root) : null, comments,
-      role === "lead" ? leadProgressNote(this.db, runId) : null, role === "lead" ? taskCommentNotices(this.db, runId) : null,
+      role === "lead" ? leadProgressNote(this.db, runId) : null, role === "lead" ? taskCommentNotices(this.db, runId) : null, role === "lead" ? ownerQuestionNotices(this.db, runId) : null,
       responseLanguageNote(listChatMessages(this.db, runId), preference?.language)].filter(Boolean).join("\n\n") || null;
   }
 

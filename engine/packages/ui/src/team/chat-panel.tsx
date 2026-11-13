@@ -6,7 +6,7 @@ import { TextPreview } from "./text-preview.js";
 import type { TeamOwnerRead, WorkflowSelection } from "@multi-agent/daemon/team-control";
 import { WorkflowOutcomes, WorkflowPicker } from "./workflows.js";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
-import { approvePlan, confirmDocument, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
+import { approvePlan, confirmDocument, postTaskComment, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
 import { documentDiscussionPending, DocumentStages } from "./documents.js";
 import { mergeToolCalls } from "../hooks/useAttemptActivity.js";
 import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
@@ -26,6 +26,12 @@ export function pendingOwnerDecisions(read: TeamOwnerRead | undefined, chat: Cha
     if (message.kind === "decision" && !message.answeredBy) decisions.push({ kind: "message", message });
   }
   return decisions;
+}
+
+/** Plan R11 — the questions workers asked the owner, worded as they wrote them. */
+export function pendingWorkerQuestions(read: TeamOwnerRead | undefined): TeamOwnerRead["tasks"] {
+  if (read?.run.state === "canceled" || read?.run.state === "cancel_requested") return [];
+  return (read?.tasks ?? []).filter(task => task.stage === "owner/question" && task.workerReport?.question);
 }
 
 export function ChatPanel({ open, onOpenChange, opener, read, runId, chat, connectionError, draftContext, project, onStarted, onOpenDocuments, onChanged }: {
@@ -328,6 +334,32 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
  * U8 — a blocked run's one owner action. An active-time block needs an explicit increase;
  * each click adds one hour, including after earlier extensions, and states that amount first.
  */
+/** Plan R11 — a worker's question, worded as it wrote it; the answer goes to that worker's task. */
+export function QuestionPlate({ read, task }: { read: TeamOwnerRead; task: TeamOwnerRead["tasks"][number] }) {
+  const { t } = useTranslation();
+  const { request } = useOwnerSession();
+  const action = usePendingAction(task.taskId + ":" + read.run.entityVersion);
+  const [answer, setAnswer] = useState("");
+  const [failed, setFailed] = useState(false);
+  const send = async () => {
+    if (!answer.trim() || !action.begin()) return;
+    setFailed(false);
+    try { await postTaskComment(request, read.runId, task.taskId, answer.trim(), read.run.entityVersion); setAnswer(""); action.complete(); }
+    catch { setFailed(true); action.fail(); }
+  };
+  return <div className="plate plate-waiting" role="group" aria-label={task.displayName}>
+    <h2 className="plate-title"><TextPreview text={task.workerReport?.question ?? ""} /></h2>
+    <p className="plate-meta"><TextPreview text={task.displayName} /></p>
+    {failed && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.error")}</p>}
+    <textarea className="ui-question-answer" aria-label={t("overview.answerWorker")} value={answer} disabled={action.busy}
+      onChange={event => setAnswer(event.target.value)}
+      onKeyDown={event => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void send(); } }} />
+    <div className="plate-foot">
+      <button className="btn btn-primary" disabled={action.busy || !answer.trim()} onClick={() => void send()}>{t("overview.answerWorker")}</button>
+    </div>
+  </div>;
+}
+
 export function ResumePlate({ read }: { read: TeamOwnerRead }) {
   const { t } = useTranslation();
   const { request } = useOwnerSession();

@@ -8,7 +8,7 @@ import { ArrowRight, GitMerge } from "lucide-react";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { usePendingAction } from "../hooks/usePendingAction.js";
 import { mergeBranch, type ChatState, type IntegrationState } from "./clients.js";
-import { pendingOwnerDecisions, ResumePlate } from "./chat-panel.js";
+import { pendingOwnerDecisions, pendingWorkerQuestions, QuestionPlate, ResumePlate } from "./chat-panel.js";
 import { clockTime, namedSeat, taskName } from "./display.js";
 import { useRunTokens } from "./hooks.js";
 import { TaskWorkbench } from "./task-workbench.js";
@@ -123,13 +123,14 @@ export function Overview({ read, chat, integration, health, onOpenTasks, onOpenT
   const tasks = read?.tasks ?? [];
   const [selection, setSelection] = useState<{ runId: string; taskId: string }>();
   const decisions = pendingOwnerDecisions(read, chat);
+  const questions = pendingWorkerQuestions(read);
   const fleet = (read?.seats ?? []).filter(seat => !seat.retired).map(seat => ({
     seat, attempt: read?.attempts.filter(attempt => attempt.session === seat.seat).at(-1),
   }));
   const summary = [
     { label: "overview.agentsActive", value: read ? fleet.filter(item => item.attempt?.state === "running").length : "—" },
     { label: "overview.tasks", value: read ? tasks.length : "—" },
-    { label: "overview.blocked", value: read ? tasks.filter(task => task.stage === "owner/blocked" || task.stage === "lead/report").length : "—" },
+    { label: "overview.blocked", value: read ? tasks.filter(task => task.stage === "owner/blocked" || task.stage === "owner/question" || task.stage === "lead/report").length : "—" },
     { label: "overview.tokens", value: tokens.tokens === null ? "—"
       : new Intl.NumberFormat(i18n.resolvedLanguage, { notation: "compact", maximumFractionDigits: 1 }).format(tokens.tokens) },
   ] as const;
@@ -145,9 +146,10 @@ export function Overview({ read, chat, integration, health, onOpenTasks, onOpenT
     </div>)}</dl></section>
     <Progress read={read} integration={integration} />
     </div>
-      {decisions.length > 0 && <section className="ui-card ui-attention-card" aria-label={t("overview.needsAttention")}>
-        <h2>{t("overview.needsAttention")}<span className="ui-count">{decisions.length}</span></h2>
-        <ul className="ui-attention-list">{decisions.map(decision => <li key={decision.kind === "message" ? decision.message.id : decision.kind}>
+      {decisions.length + questions.length > 0 && <section className="ui-card ui-attention-card" aria-label={t("overview.needsAttention")}>
+        <h2>{t("overview.needsAttention")}<span className="ui-count">{decisions.length + questions.length}</span></h2>
+        <ul className="ui-attention-list">{questions.map(task => <li key={"question:" + task.taskId}><QuestionPlate read={read!} task={task} /></li>)}
+          {decisions.map(decision => <li key={decision.kind === "message" ? decision.message.id : decision.kind}>
           {decision.kind === "resume" ? <ResumePlate read={read!} /> : <>
             <TextPreview text={decision.kind === "plan" ? t("overview.planApproval") : decision.message.body} />
             <p className="ui-muted">{t("tasks.stage.owner")}</p>

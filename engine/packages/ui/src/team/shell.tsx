@@ -24,7 +24,7 @@ import { isRunActive } from "./clients.js";
 import { TEAM_THEME_PREFERENCES, useThemePreference } from "./theme.js";
 import { Background, useBackgroundPreference } from "./background.js";
 import { EntryFrame, GithubGate } from "./github-gate.js";
-import { ChatPanel, pendingOwnerDecisions } from "./chat-panel.js";
+import { ChatPanel, pendingOwnerDecisions, pendingWorkerQuestions } from "./chat-panel.js";
 import { CommandPalette } from "./command-palette.js";
 import "./fonts.js";
 import "./team.css";
@@ -288,7 +288,7 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
 
   return <ShellFrame language={language} section={section} appearance={appearance} backgroundMotion={background.motion} project={teamName} runName={runName ? runName + " · " + t(read?.run.phase === "planning" ? "planning.mode" : "execution.mode") : team ? t("records.projectHistory") : ""}
     coordinator={coordinator} connection={connection} branch={readableBranch(integration.data?.branch ?? "")}
-    notifications={paired ? pendingOwnerDecisions(read, chat.data).length : 0} canChat={paired && (!!runId || !!team?.seats.some(seat => seat.role === "lead"))}
+    notifications={paired ? pendingOwnerDecisions(read, chat.data).length + pendingWorkerQuestions(read).length : 0} canChat={paired && (!!runId || !!team?.seats.some(seat => seat.role === "lead"))}
     projectPicker={<select className="ui-project-picker" aria-label={t("shell.project")} value={team?.id ?? ""} onChange={event => openProject(event.target.value)}>
       <option value="">{t("shell.allProjects")}</option>{teams.data?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
     runPicker={team ? <select className="ui-runselect" aria-label={t("shell.run")} value={runId}

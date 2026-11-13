@@ -158,6 +158,8 @@ export class TeamReadModel {
         queueState: row.queueState as TeamReviewView["queueState"],
         stage: teamTaskStage({
           ownerDecision: waiting && ownerDecision,
+          ownerQuestion: row.role === "implementer" && row.queueState === "blocked" && workerReport !== null && workerReport.status === "needs-decision"
+            && workerReport.question !== null && workerReport.resolution === null,
           ownerBlocked: waiting && run.state === "blocked",
           workerReport: row.queueState === "blocked" && workerReport !== null
             && workerReport.status !== "dropped" && workerReport.resolution === null,

@@ -1,6 +1,6 @@
 # Implementer charter
 
-Version: 3
+Version: 4
 
 This file defines the implementer role. It is the same for every task. The brief you receive gives you only facts: the task card, the cited plan decisions (KTDs), your write paths, dependencies and any earlier review findings to fix. If the brief and this charter disagree about how to work, follow this charter and say so in your report.
 
@@ -43,4 +43,4 @@ If you are blocked, need a decision, or find no work to do, write JSON to the ex
 
 Use `{"status":"blocked","question":"Which response is required?","evidence":"The approved brief names two responses."}`. Status is `blocked`, `needs-decision` or `dropped`. Evidence is a required nonempty string of at most 16,384 characters. The optional question is a nonempty string of at most 500 characters. No other fields or NUL characters are accepted.
 
-A paused report reaches the lead without spending a retry. The lead may revise the brief, reassign the same scope, drop the task or escalate. `dropped` closes without a candidate or review. Leave the report file absent on normal completion, so the daemon validates your candidate and the separate reviewer checks it. A prose status alone never pauses a task.
+A paused report spends no retry. A `needs-decision` question goes to the owner, whose answer arrives as a comment on your task in your next turn. Any other paused report reaches the lead, which may revise the brief, reassign the same scope, drop the task or escalate. `dropped` closes without a candidate or review. Leave the report file absent on normal completion, so the daemon validates your candidate and the separate reviewer checks it. A prose status alone never pauses a task.

@@ -178,7 +178,7 @@ describe("U4 daemon-recorded outcomes", () => {
     writeFileSync(path, typeof content === "string" ? content : JSON.stringify(content));
   };
 
-  it.each(["blocked", "needs-decision"] as const)("pauses a %s report for the lead without a retry or owner decision", async status => {
+  it.each(["blocked", "needs-decision"] as const)("pauses a %s report without a retry; a blocked one goes to the lead, a question to the owner", async status => {
     writeReport(attemptId, { status, question: "Which response is required?", evidence: "The approved plan names two responses." });
     const candidate = vi.fn(() => manifest("diff --git a/src/a.ts b/src/a.ts\n"));
     const observe = completion(candidate);
@@ -190,7 +190,7 @@ describe("U4 daemon-recorded outcomes", () => {
     });
     expect(governance.getRun("run")).toMatchObject({ state: "approved", retriesUsed: 0 });
     expect(db.prepare("SELECT count(*) AS n FROM team_chat_messages WHERE kind = 'decision'").get()).toEqual({ n: 0 });
-    expect(leadTeamEvents(db, "run")).toEqual([expect.objectContaining({ key: "report:task:" + attemptId,
+    expect(leadTeamEvents(db, "run")).toEqual(status === "needs-decision" ? [] : [expect.objectContaining({ key: "report:task:" + attemptId,
       note: expect.stringContaining("Which response is required?") })]);
     expect(pendingTasks(db, "run")).not.toContain("task");
   });
