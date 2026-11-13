@@ -25,5 +25,9 @@ graphify-out/
 desktop/dist/
 desktop/node_modules/
 
+# desktop installer staging: generated from the engine build by npm run stage, never committed
+desktop/resources/
+desktop/.cache/
+
 # oil-ui design workspace: local process files, never part of a delivery
 .oil-ui/

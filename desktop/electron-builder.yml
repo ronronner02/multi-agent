@@ -1,0 +1,58 @@
+# NSIS installer for the native Windows desktop (U18, R23, KTD16).
+#
+# The shipped runtime lives outside `app.asar`: `resources/engine` holds the daemon build, the
+# Web UI it serves, and a production `node_modules` with the better-sqlite3 prebuild, and
+# `resources/engine/plugins/github-cli` holds the bundled `gh.exe`. The daemon resolves those
+# paths from its own module URL, so they must stay real files on disk, not archived entries.
+
+appId: dev.multiagent.desktop
+productName: Multi-Agent
+copyright: Copyright © 2026 Multi-Agent
+
+directories:
+  output: dist
+  buildResources: build
+
+# The packaged app itself is the desktop window only; everything the engine needs is a real file
+# under resources/engine.
+files:
+  - src/**/*
+  - package.json
+  - '!test/**'
+  - '!scripts/**'
+
+# The staging scripts write `resources/` before packaging. The engine tree is copied as real
+# files, never into app.asar: electron-builder's file matcher drops a `node_modules` directory
+# that sits at the root of a file set, so the staged production modules are a separate entry and
+# are named explicitly.
+extraResources:
+  - from: resources/engine
+    to: engine
+    filter:
+      - '**/*'
+      - '!node_modules/**'
+  - from: resources/engine/node_modules
+    to: engine/node_modules
+    filter:
+      - '**/*'
+
+# x64 only; arm64 is deferred (KTD16).
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: false
+  shortcutName: Multi-Agent
+  # User data is not the installer's: %LOCALAPPDATA%\Multi-Agent and %APPDATA%\Multi-Agent keep
+  # their projects, runs and recovery records across both upgrade and uninstall (R23).
+  deleteAppDataOnUninstall: false
+
+publish: null

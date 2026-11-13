@@ -1,5 +1,6 @@
 import { accessSync, constants, existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { delimiter, isAbsolute, join, win32 } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * U1 / KTD2 — the one place that turns a client name into a real executable.
@@ -9,6 +10,11 @@ import { delimiter, isAbsolute, join, win32 } from "node:path";
  * 1. an explicit configured path (an operator override, or a test fixture);
  * 2. the bundled resource, for `gh` only, because the installer ships `gh.exe`;
  * 3. PATH probing, using `PATHEXT` on Windows.
+ *
+ * The bundled resource is looked up under the running install's own `plugins/github-cli`
+ * directory, derived from this module's URL (`resources/engine/plugins/github-cli` in the
+ * installer's tree, `engine/plugins/github-cli` in a checkout where it does not exist). A caller
+ * may name other roots instead, which is how a test proves the order without a real install.
  *
  * Two things are Windows-specific and both are load-bearing. npm installs `claude` and `codex` as
  * `.cmd`/`.ps1` shims, and Node refuses to spawn a `.cmd` with `shell: false` (EINVAL, its
@@ -38,7 +44,7 @@ export type Resolution =
 export interface ResolverOptions {
   /** An operator- or test-supplied path. Checked first, and a broken one is not silently skipped. */
   configuredPath?: string;
-  /** Directories that hold installer-bundled resources. Only `gh` is looked up here. */
+  /** Directories that hold installer-bundled resources. Defaults to the running install's own. */
   bundledRoots?: string[];
   env?: NodeJS.ProcessEnv;
   platform?: "win32" | "posix";
@@ -82,7 +88,7 @@ export function resolveExecutable(client: ResolverClient, options: ResolverOptio
   // 2. The bundled resource, for `gh` only: the installer ships `gh.exe` so GitHub sign-in needs
   // no separate install. A bundled copy is a plain executable, never a shim.
   if (client === "gh") {
-    for (const root of options.bundledRoots ?? []) {
+    for (const root of options.bundledRoots ?? defaultBundledRoots()) {
       for (const extension of windows ? EXECUTABLE_EXTENSIONS : [""]) {
         const candidate = join(root, client + extension);
         tried.push(candidate);
@@ -127,6 +133,18 @@ export function resolveExecutable(client: ResolverClient, options: ResolverOptio
  */
 export function resolveClientDependencies(options: ResolverOptions = {}): Resolution[] {
   return (["claude", "codex", "git", "gh"] as const).map(client => resolveExecutable(client, options));
+}
+
+/**
+ * The installer's bundled-resource directory, as the running install sees it.
+ *
+ * This module is `resources/engine/packages/daemon/dist/domain/executable-resolver.js` in the
+ * packaged tree and `engine/packages/daemon/dist/domain/` in a checkout, so four levels up lands
+ * on the engine root in both. The installer stages `gh.exe` at `plugins/github-cli` beneath it;
+ * nothing exists there in a checkout, which simply leaves PATH as the only candidate.
+ */
+export function defaultBundledRoots(): string[] {
+  return [fileURLToPath(new URL("../../../../plugins/github-cli", import.meta.url))];
 }
 
 /** The extensions this host searches on Windows: real executables first, then npm's launchers. */

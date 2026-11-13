@@ -13,13 +13,13 @@
  * caller in `engine-bridge.js` before forking.
  */
 
-const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { daemonEntry } = require('./engine-paths.js');
 
-// Resolve the daemon entry point relative to this file.
-// Dev layout:  desktop/src/engine-host.js
-//              engine/packages/daemon/dist/index.js
-const DAEMON_INDEX = path.resolve(__dirname, '../../engine/packages/daemon/dist/index.js');
+// Resolve the daemon entry point (U18 — packaged and development layouts).
+// Packaged:    resources/engine/packages/daemon/dist/index.js
+// Development: engine/packages/daemon/dist/index.js
+const DAEMON_INDEX = daemonEntry();
 
 /** Report a fatal error to the parent before exit. */
 function reportError(error) {

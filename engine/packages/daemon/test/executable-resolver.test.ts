@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { resolveClientDependencies, resolveExecutable } from "../src/domain/executable-resolver.js";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { defaultBundledRoots, resolveClientDependencies, resolveExecutable } from "../src/domain/executable-resolver.js";
+
+/**
+ * `engine/` — the root the resolver's own module is four levels below. The test file lives at
+ * `engine/packages/daemon/test/`, which is three levels below the same root.
+ */
+const engineRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 
 /**
  * U1 / KTD2 — one resolver for `claude`, `codex`, `gh` and `git`.
@@ -113,6 +120,24 @@ describe("U1 executable resolver", () => {
   it("finds nothing on an empty PATH", () => {
     const result = resolveExecutable("git", { platform: "win32", env: windowsEnv("") });
     expect(result).toMatchObject({ ok: false, reason: "not-found" });
+  });
+
+  it("derives the installer's bundled gh root from its own module location", () => {
+    // U18: the installer stages gh.exe under `<engine root>/plugins/github-cli`, and the daemon
+    // finds it without any path handed in from Electron. This daemon runs from
+    // `engine/packages/daemon/dist/domain/`, so four levels up is `engine/` — the test asserts the
+    // shape, and whether the file exists is the packaged-engine test's job.
+    const roots = defaultBundledRoots();
+    expect(roots).toHaveLength(1);
+    expect(roots[0]).toBe(join(engineRoot, "plugins", "github-cli"));
+  });
+
+  it("falls back to PATH when the bundled gh.exe is absent", () => {
+    const path_ = temporary();
+    const pathGh = executable(path_, "gh.exe");
+    const missingBundle = join(temporary(), "plugins", "github-cli");
+    expect(resolveExecutable("gh", { bundledRoots: [missingBundle], platform: "win32", env: windowsEnv(path_) }))
+      .toMatchObject({ ok: true, path: pathGh, source: "path" });
   });
 
   it("resolves every dependency for first-run reporting, with the paths it tried", () => {
