@@ -6,9 +6,10 @@ import { SCHEMA_UPGRADES, upgradePath, type SchemaUpgrade } from "./upgrades.js"
  * Marker written to PRAGMA user_version in the same transaction as the fresh team schema.
  * Any change to BASELINE_SQL bumps it and appends the matching step to SCHEMA_UPGRADES, so a
  * database the shipped app created is upgraded rather than refused. 2 adds
- * team_seat_mailbox_capabilities and is the first shipped version.
+ * team_seat_mailbox_capabilities and is the first shipped version; 3 adds
+ * team_chat_messages.visibility.
  */
-export const BASELINE_VERSION = 2;
+export const BASELINE_VERSION = 3;
 
 /**
  * The one-shot schema for the retained team product. The statements are kept as one SQL
@@ -686,7 +687,7 @@ CREATE TABLE "team_chat_messages" (
       kind TEXT NOT NULL DEFAULT 'text',
       options_json TEXT,
       answered_by TEXT, response_language TEXT
-    CHECK (response_language IS NULL OR response_language IN ('en', 'zh-CN')),
+    CHECK (response_language IS NULL OR response_language IN ('en', 'zh-CN')), visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity')),
       CHECK ((sender = 'lead') = (attempt_id IS NOT NULL)),
       CHECK (sender = 'owner' OR delivered_attempt IS NULL)
     );

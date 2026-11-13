@@ -4,6 +4,7 @@ import { TeamContractError } from "../contracts/team-control.js";
 import { readAgentTurnLastMessage } from "./agent-turn.js";
 import { generatedReplyTitle } from "./display-names.js";
 import type { PlanGovernance } from "./plan-governance.js";
+import { ATTEMPT_REASON_CODES, failureClassFor, type AttemptReasonCode } from "./attempt-failure.js";
 
 /**
  * U5 — the owner↔lead conversation, and the two facts a turn needs from it.
@@ -122,10 +123,46 @@ export function getChatMessage(db: Database.Database, id: string): TeamChatMessa
 }
 
 /** The run's conversation, in the order it happened. */
+/** The run's conversation as the owner sees it: every message except the lead's activity notes. */
 export function listChatMessages(db: Database.Database, runId: string): TeamChatMessage[] {
-  const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages WHERE run_id = ? ORDER BY rowid`).all(runId) as
+  const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages WHERE run_id = ? AND visibility = 'chat' ORDER BY rowid`).all(runId) as
     Array<Parameters<typeof rowToMessage>[0]>;
   return rows.map(rowToMessage);
+}
+
+/** The lead's turn notes that needed no owner attention, kept for the lead's detail view. */
+export function listRunActivity(db: Database.Database, runId: string): TeamChatMessage[] {
+  const rows = db.prepare(`SELECT ${COLUMNS} FROM team_chat_messages WHERE run_id = ? AND visibility = 'activity' ORDER BY rowid`).all(runId) as
+    Array<Parameters<typeof rowToMessage>[0]>;
+  return rows.map(rowToMessage);
+}
+
+/**
+ * Whether a lead turn's message is worth the owner's attention (plan KTD3). It is when the turn
+ * answered an owner message, when every task of the run is done (the result), or when a task
+ * failed for a reason only the owner can repair (the blocker). A decision is always shown; the
+ * caller decides that before asking. Everything else is activity.
+ */
+export function leadMessageVisibility(db: Database.Database, runId: string, attemptId: string): "chat" | "activity" {
+  const answered = db.prepare(`SELECT 1 FROM team_chat_messages
+    WHERE run_id = ? AND sender = 'owner' AND delivered_attempt = ? LIMIT 1`).get(runId, attemptId);
+  if (answered) return "chat";
+  const tasks = db.prepare(`SELECT json_extract(a.assignment_json, '$.role') AS role, q.state AS state, a.qitem_id AS qitemId
+    FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+    WHERE a.run_id = ? AND json_extract(a.assignment_json, '$.role') IN ('implementer', 'reviewer')`).all(runId) as
+    Array<{ role: string; state: string; qitemId: string }>;
+  if (tasks.some(task => task.role === "implementer") && tasks.every(task => task.state === "done" || task.state === "handed-off")) return "chat";
+  for (const task of tasks) {
+    if (task.state !== "failed") continue;
+    const latest = db.prepare("SELECT failure_json AS failureJson FROM team_attempts WHERE qitem_id = ? ORDER BY rowid DESC LIMIT 1")
+      .get(task.qitemId) as { failureJson: string | null } | undefined;
+    try {
+      const code = latest?.failureJson ? (JSON.parse(latest.failureJson) as { reasonCode?: string }).reasonCode : undefined;
+      if (code && (ATTEMPT_REASON_CODES as readonly string[]).includes(code)
+        && failureClassFor(code as AttemptReasonCode) === "environment") return "chat";
+    } catch { /* An unreadable classification is no evidence of an owner repair. */ }
+  }
+  return "activity";
 }
 
 /** Owner messages no lead prompt has carried yet, oldest first. */
@@ -179,12 +216,15 @@ export function recordLeadReply(db: Database.Database, input: {
   id: string; runId: string; attemptId: string; body: string; createdAt: string;
   /** U6 — a turn that asked for a decision records that decision as its message. */
   decision?: { options: readonly string[] } | null;
+  /** Plan KTD3 — a message that needs no owner attention is kept as run activity. A decision is always chat. */
+  visibility?: "chat" | "activity";
 }): boolean {
   const decision = input.decision ?? null;
+  const visibility = decision === null ? input.visibility ?? "chat" : "chat";
   const inserted = db.prepare(`INSERT OR IGNORE INTO team_chat_messages
-    (id, run_id, sender, kind, body, options_json, attempt_id, created_at)
-    VALUES (?, ?, 'lead', ?, ?, ?, ?, ?)`).run(input.id, input.runId, decision === null ? "text" : "decision",
-    input.body, decision === null ? null : JSON.stringify(decision.options), input.attemptId, input.createdAt);
+    (id, run_id, sender, kind, body, options_json, attempt_id, created_at, visibility)
+    VALUES (?, ?, 'lead', ?, ?, ?, ?, ?, ?)`).run(input.id, input.runId, decision === null ? "text" : "decision",
+    input.body, decision === null ? null : JSON.stringify(decision.options), input.attemptId, input.createdAt, visibility);
   return inserted.changes === 1;
 }
 
@@ -342,9 +382,10 @@ export function composeLeadTurnEnd(dependencies: LeadTurnEndDependencies): (atte
         ? escalation.context ? `${escalation.question}\n\n${escalation.context}` : escalation.question
         : body!;
       const inserted = dependencies.db.transaction(() => {
+        const visibility = escalation ? "chat" : leadMessageVisibility(dependencies.db, attempt.runId, attempt.id);
         const recorded = recordLeadReply(dependencies.db, { id: `chat-${attempt.id}`, runId: attempt.runId, attemptId: attempt.id,
           body: message, createdAt: (dependencies.now?.() ?? new Date()).toISOString(),
-          ...(escalation ? { decision: { options: escalation.options } } : {}) });
+          ...(escalation ? { decision: { options: escalation.options } } : { visibility }) });
         const title = body ? generatedReplyTitle(body) : null;
         if (recorded && title) {
           dependencies.db.prepare("UPDATE team_runs SET display_name = ? WHERE id = ?").run(title, attempt.runId);
