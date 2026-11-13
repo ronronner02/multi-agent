@@ -1,5 +1,6 @@
 import { ModelSettings } from "./model-settings.js";
 import { SoulSettings } from "./soul-settings.js";
+import { PromptSectionSettings } from "./prompt-sections.js";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -144,7 +145,7 @@ export function SettingsScreen({ language, onLanguage, appearance, background, c
             {t("settings.backgroundMotion")}</label>
         </section>}
         {section === "sessions" && <Sessions connection={connection} isolation={isolation} address={address} />}
-        {section === "agents" && <>{teamId && <><ModelSettings key={teamId} teamId={teamId} /><SoulSettings key={teamId + "-souls"} teamId={teamId} /></>}<section className="plate ui-settings-panel" aria-label={t("settings.section.agents")}>
+        {section === "agents" && <>{teamId && <><ModelSettings key={teamId} teamId={teamId} /><SoulSettings key={teamId + "-souls"} teamId={teamId} /><PromptSectionSettings key={teamId + "-sections"} teamId={teamId} /></>}<section className="plate ui-settings-panel" aria-label={t("settings.section.agents")}>
           <h2>{t("settings.section.agents")}</h2>
           <p className="muted">{t(teamId ? "models.seats" : "settings.agentsReadOnly")}</p>
           {seats.length === 0 ? <p className="muted">{t("settings.noSeats")}</p>

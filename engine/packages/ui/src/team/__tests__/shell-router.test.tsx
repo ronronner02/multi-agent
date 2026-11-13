@@ -36,6 +36,7 @@ beforeEach(() => {
     if ((init?.method ?? "GET") === "GET") {
       if (path === "/api/team-control/workflows") return response({ workflows: FRAMEWORK_CATALOG });
       if (path === `/api/team-control/runs/${RUN_ID}/workflows`) return response({ workflows: [] });
+      if (path === "/api/team-control/teams/fresh-project/prompt-sections") return response({ revision: 0, sections: [] });
       if (path === "/api/team-control/teams/fresh-project/souls") return response({
         profiles: [{ id: "coordinator", name: "Project coordinator", roles: ["lead"], version: 1,
           content: "Plan and delegate the approved work.", digest: "b".repeat(64) }],
