@@ -9,7 +9,7 @@ import { FRAMEWORK_PIN } from "./catalog.js";
 import { soulDigest, type SpecialistSoul } from "../../domain/team-souls.js";
 import { prepareFrameworkInvocation, type PreparedFrameworkInvocation } from "./invocation.js";
 
-export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy" | "core" | "charter" | "soul" | "workflow"; readOnly: true; source?: string }
+export interface ContextFile { path: string; hash: string; kind: "framework" | "role" | "plan" | "protocol" | "roster" | "run" | "native-policy" | "core" | "charter" | "soul" | "workflow" | "team"; readOnly: true; source?: string }
 export interface ContextMountPolicy {
   policy_revision: number; worker_identities: string[];
   paths: { context_root: string; framework_dir: string };
@@ -17,6 +17,8 @@ export interface ContextMountPolicy {
 }
 export interface ContextInput {
   soul?: SpecialistSoul;
+  /** Plan KTD9 — the team's prompt sections, projected after the charter. */
+  teamSections?: string;
   workflow?: PreparedFrameworkInvocation;
   nativePolicy?: ManagedNativePolicy;
   projection: { worker: string; attemptId: string; controlUid: number; workerGid: number; policy: ContextMountPolicy };
@@ -237,7 +239,7 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
   const required = spec.sameIdentity ? ["role", "plan"] : ["framework", "role", "plan"];
   if (!required.every(k => kinds.includes(k as ContextFile["kind"])) || new Set(spec.files.map(f => f.path)).size !== spec.files.length) throw new Error("Missing or duplicate context files");
   for (const f of spec.files) {
-    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter", "soul", "workflow"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
+    if (!["framework", "role", "plan", "protocol", "roster", "run", "native-policy", "core", "charter", "soul", "workflow", "team"].includes(f.kind) || f.readOnly !== true || (f.kind !== "framework" && !within(spec.root, f.path)) || !lstatSync(f.path).isFile() || hashBytes(readFileSync(f.path)) !== f.hash) throw new Error("Projected context changed");
     workerContextPath(spec.projection.policy, spec.root, f.path);
     if (within(spec.root, f.path) && !spec.sameIdentity) {
       const s = lstatSync(f.path);
@@ -318,7 +320,7 @@ function buildContextManifest(input: ContextInput, mode: "create" | "recorded"):
  * resolve beside the skill, rather than beside the single-file projection.
  */
 export function attemptInstructionFiles(manifest: ContextManifest): { kind: ContextFile["kind"]; path: string }[] {
-  const order: ContextFile["kind"][] = ["core", "charter", "protocol", "soul", "framework", "workflow", "roster", "run"];
+  const order: ContextFile["kind"][] = ["core", "charter", "protocol", "team", "soul", "framework", "workflow", "roster", "run"];
   return order.flatMap(kind => manifest.files.filter(file => file.kind === kind)
     .map(file => {
       if (kind === "framework") return { kind, path: manifest.sameIdentity ? file.source!

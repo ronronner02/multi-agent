@@ -480,6 +480,7 @@ function readProjectedDescriptors(root: string, frameworkFiles: readonly { path:
       const relative = path.slice(root.length + 1);
       const kind: ContextFile["kind"] | undefined = relative === "plan" ? "plan" : relative === "role" ? "role"
         : relative === "core" ? "core" : relative === "charter" ? "charter" : relative === "soul" ? "soul" : relative === "workflow" ? "workflow"
+        : relative === "team" ? "team"
         : relative === "protocol" ? "protocol" : relative === "roster" ? "roster"
         : relative === "run" ? "run" : sourceOf.has(relative) ? "framework" : undefined;
       if (!kind) continue;
@@ -1543,6 +1544,9 @@ export class WorkflowRuntime {
       const recordedSoul = files.find(file => file.kind === "soul");
       if (recordedSoul) context.soul = JSON.parse(readFileSync(recordedSoul.path, "utf8")) as ContextInput["soul"];
       else delete context.soul;
+      const recordedTeam = files.find(file => file.kind === "team");
+      if (recordedTeam) context.teamSections = readFileSync(recordedTeam.path, "utf8");
+      else delete context.teamSections;
       const recordedWorkflow = files.find(file => file.kind === "workflow");
       if (recordedWorkflow) context.workflow = JSON.parse(readFileSync(recordedWorkflow.path, "utf8")) as ContextInput["workflow"];
       else delete context.workflow;
@@ -1570,6 +1574,7 @@ export class WorkflowRuntime {
         write("role", canonicalJson(roleConfiguration), "role"),
         ...roleInstructionEntries(role).map(([kind, content]) => write(kind, content, kind)),
         ...(context.soul ? [write("soul", canonicalJson(context.soul), "soul")] : []),
+        ...(context.teamSections ? [write("team", context.teamSections, "team")] : []),
         ...(context.workflow ? [write("workflow", canonicalJson(context.workflow), "workflow")] : []),
         // C3 — a lead activation's roster and run instructions. The protocol entry is already
         // written above: `roleInstructionEntries("lead")` projects it as this role's charter,

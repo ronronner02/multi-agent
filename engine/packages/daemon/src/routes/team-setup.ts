@@ -7,6 +7,7 @@ import { readTeamModelSettings, saveTeamModelSettings, TeamModelError } from "..
 import { nativeModelChoices } from "../domain/native-model-choices.js";
 import { FRAMEWORK_CATALOG, FRAMEWORK_PIN } from "../integrations/framework/catalog.js";
 import { assignSeatSoul, saveTeamSoul, soulId, teamSoulSettings, TeamSoulError } from "../domain/team-souls.js";
+import { saveTeamSections, teamSectionSettings, TeamSectionsError } from "../domain/team-prompt-sections.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import { bootstrapProject, listProjectDirectories, previewProject, ProjectBootstrapError } from "../domain/project-bootstrap.js";
 import { GithubCliError, type GithubCli } from "../domain/github-cli.js";
@@ -83,6 +84,19 @@ export function teamSetupRoutes(
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION,
       profile: saveTeamSoul(rigRepo.db, c.req.param("teamId"), c.req.param("soulId"), await c.req.json()) });
   });
+  // Plan R13/R14 — the team's three editable prompt sections, versioned per team.
+  app.get("/teams/:teamId/prompt-sections", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...teamSectionSettings(rigRepo.db, c.req.param("teamId")) });
+  });
+  app.put("/teams/:teamId/prompt-sections", async c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...saveTeamSections(rigRepo.db, c.req.param("teamId"), await c.req.json()) });
+  });
   app.put("/teams/:teamId/seats/:nodeId/soul", async c => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
@@ -144,6 +158,7 @@ export function teamSetupRoutes(
     }
     if (error instanceof TeamModelError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSoulError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (error instanceof TeamSectionsError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSetupError) {
       const status = error.code === "team_exists" || error.code === "team_name_taken" ? 409 : 400;
       return c.json({ code: error.code, error: error.message }, status);

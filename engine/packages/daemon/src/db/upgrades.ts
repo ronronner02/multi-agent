@@ -10,6 +10,16 @@ export interface SchemaUpgrade { from: number; to: number; sql: string }
  * the previous version to the same schema. The parity test in `db-upgrades.test.ts` holds
  * the chain to the baseline.
  */
+/** Plan KTD9 — one immutable revision of a team's prompt section overrides. Shared by the baseline and step 4→5. */
+export const TEAM_PROMPT_VERSIONS_SQL = `CREATE TABLE team_prompt_versions (
+      rig_id TEXT NOT NULL REFERENCES rigs(id) ON DELETE CASCADE,
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      overrides_json TEXT NOT NULL CHECK (json_valid(overrides_json)),
+      bases_json TEXT NOT NULL CHECK (json_valid(bases_json)),
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (rig_id, revision)
+    )`;
+
 export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   // Plan KTD3: a lead message that needs no owner attention is kept as run activity.
   { from: 2, to: 3, sql: "ALTER TABLE team_chat_messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity'))" },
@@ -17,6 +27,7 @@ export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   { from: 3, to: 4, sql: ["ALTER TABLE team_chat_messages ADD COLUMN task_id TEXT",
     "ALTER TABLE team_queue_authority ADD COLUMN held_at TEXT",
     "ALTER TABLE team_queue_authority ADD COLUMN follow_up_of TEXT"].join(";\n") },
+  { from: 4, to: 5, sql: TEAM_PROMPT_VERSIONS_SQL },
 ];
 
 /** The steps from `from` to `to`, in order, or null when the chain does not reach. */

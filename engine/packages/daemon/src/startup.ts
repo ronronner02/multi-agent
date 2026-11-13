@@ -61,6 +61,7 @@ import { SeatMailboxCapabilities } from "./domain/worker-mailbox-capability.js";
 import { WorkerIdentities } from "./domain/worker-identity.js";
 import { FRAMEWORK_PIN } from "./integrations/framework/catalog.js";
 import { resolveTeamSoul } from "./domain/team-souls.js";
+import { teamSectionsText } from "./domain/team-prompt-sections.js";
 import { recordWorkflowOutcome, workflowCapabilityRefusal } from "./domain/team-workflows.js";
 import { prepareFrameworkInvocation } from "./integrations/framework/invocation.js";
 import { frameworkInstructionSources } from "./integrations/framework/source.js";
@@ -373,6 +374,7 @@ function composeManagedAttemptAttachment(dependencies: {
           soul: resolveTeamSoul(dependencies.db, run.rigId, assignment.role,
             (dependencies.db.prepare(`SELECT n.soul_id AS id FROM nodes n JOIN sessions s ON s.node_id = n.id
               WHERE n.rig_id = ? AND s.session_name = ? ORDER BY s.rowid DESC LIMIT 1`).get(run.rigId, seat) as { id: string | null } | undefined)?.id ?? undefined),
+          teamSections: teamSectionsText(dependencies.db, run.rigId),
           ...(lead ? { lead } : {}) },
         frameworkFiles,
       });    } catch (error) {

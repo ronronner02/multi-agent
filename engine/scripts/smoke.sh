@@ -37,6 +37,7 @@ npm run test -w packages/daemon -- \
   test/team-lead.test.ts \
   test/lead-chat.test.ts \
   test/team-task-thread.test.ts \
+  test/team-prompt-sections.test.ts \
   test/project-documents.test.ts \
   test/run-growth.test.ts \
   test/review-loop.test.ts \

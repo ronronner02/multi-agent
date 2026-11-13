@@ -50,6 +50,7 @@ const tables = [
   "team_document_versions",
   "team_document_workflows",
   "team_integration_commits",
+  "team_prompt_versions",
   "team_queue_authority",
   "team_runs",
   "team_scope_extensions",
@@ -90,7 +91,7 @@ describe("fresh team baseline", () => {
       .all().map(row => (row as {name: string}).name)).toEqual(tables);
     // Captured from the replaced chain, restricted to the retained tables and their objects.
     // This also pins every column type, default, CHECK, UNIQUE and FK declaration.
-    expect(hash(JSON.stringify(schema(db)))).toBe("4845ec4b208ee8aaa0013dae2db9bfe2214c9fada2c4d23e1af80c131f1f12f6");
+    expect(hash(JSON.stringify(schema(db)))).toBe("2285bcff26222da00fb213bfd37cb3a4bb7b57c9bff9a0abbe23f11b115bfc57");
     expect(schema(db).filter(row => (row as {type: string}).type === "index")).toHaveLength(80);
     expect(schema(db).filter(row => (row as {type: string}).type === "trigger")).toHaveLength(1);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -162,7 +163,7 @@ describe("fresh team baseline", () => {
     const db = createDb(join(directory(), "failed.sqlite"));
     connections.push(db);
     expect(() => initializeDatabase(db, db.name, { injectFailure: () => {
-      expect(schema(db)).toHaveLength(138);
+      expect(schema(db)).toHaveLength(139);
       expect(db.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION);
       throw new Error("injected baseline failure");
     } })).toThrow("injected baseline failure");
@@ -175,7 +176,7 @@ describe("fresh team baseline", () => {
     expect(schema(reopened)).toEqual([]);
     expect(reopened.pragma("user_version", { simple: true })).toBe(0);
     initializeDatabase(reopened);
-    expect(schema(reopened)).toHaveLength(138);
+    expect(schema(reopened)).toHaveLength(139);
     expect(reopened.pragma("foreign_key_check")).toEqual([]);
   });
 });
