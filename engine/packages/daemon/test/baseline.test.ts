@@ -90,7 +90,7 @@ describe("fresh team baseline", () => {
       .all().map(row => (row as {name: string}).name)).toEqual(tables);
     // Captured from the replaced chain, restricted to the retained tables and their objects.
     // This also pins every column type, default, CHECK, UNIQUE and FK declaration.
-    expect(hash(JSON.stringify(schema(db)))).toBe("6517c96974dfe8832d1dc26b29124164a3589a0d9518df1bc5dc29e5a8f61d3a");
+    expect(hash(JSON.stringify(schema(db)))).toBe("4845ec4b208ee8aaa0013dae2db9bfe2214c9fada2c4d23e1af80c131f1f12f6");
     expect(schema(db).filter(row => (row as {type: string}).type === "index")).toHaveLength(80);
     expect(schema(db).filter(row => (row as {type: string}).type === "trigger")).toHaveLength(1);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);

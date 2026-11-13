@@ -13,6 +13,10 @@ export interface SchemaUpgrade { from: number; to: number; sql: string }
 export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   // Plan KTD3: a lead message that needs no owner attention is kept as run activity.
   { from: 2, to: 3, sql: "ALTER TABLE team_chat_messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity'))" },
+  // Plan KTD5/KTD6/R10: an owner comment on a task, a task hold, and a follow-up's original task.
+  { from: 3, to: 4, sql: ["ALTER TABLE team_chat_messages ADD COLUMN task_id TEXT",
+    "ALTER TABLE team_queue_authority ADD COLUMN held_at TEXT",
+    "ALTER TABLE team_queue_authority ADD COLUMN follow_up_of TEXT"].join(";\n") },
 ];
 
 /** The steps from `from` to `to`, in order, or null when the chain does not reach. */

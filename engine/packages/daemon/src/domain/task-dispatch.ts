@@ -49,8 +49,10 @@ export function composeTaskDispatch(deps: TaskDispatchDependencies): TaskDispatc
     const key = runId + "\u0000" + taskId;
     const timing = deps.sessions.db.prepare(`SELECT json_extract(evidence_json, '$.retryNotBefore') AS notBefore FROM team_queue_authority WHERE run_id = ? AND task_id = ?`).get(runId, taskId) as { notBefore: string | null } | undefined;
     if (!retryIsDue(timing?.notBefore, now())) return;
-    const row = deps.sessions.db.prepare(`SELECT q.destination_session AS seat, a.qitem_id AS qitemId, a.task_id AS taskId, r.entity_version AS runVersion FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id JOIN team_runs r ON r.id = a.run_id WHERE a.run_id = ? AND a.task_id = ?`).get(runId, taskId) as { seat: string; qitemId: string; taskId: string; runVersion: number } | undefined;
+    const row = deps.sessions.db.prepare(`SELECT q.destination_session AS seat, a.qitem_id AS qitemId, a.task_id AS taskId, a.held_at AS heldAt, r.entity_version AS runVersion FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id JOIN team_runs r ON r.id = a.run_id WHERE a.run_id = ? AND a.task_id = ?`).get(runId, taskId) as { seat: string; qitemId: string; taskId: string; heldAt: string | null; runVersion: number } | undefined;
     if (!row || starting.has(row.seat)) return;
+    // Plan R10 — a held task waits for the owner; nothing automatic starts it.
+    if (row.heldAt) return;
     if (refused.get(key) === row.runVersion) return;
     const backoff = failures.get(key);
     if (backoff !== undefined && backoff.runVersion === row.runVersion && backoff.notBefore > now().getTime()) return;

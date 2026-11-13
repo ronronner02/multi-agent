@@ -3,7 +3,7 @@ import { approvalDocumentPins, documentSourceRefusal, latestDocument, type Docum
 import { canonicalJson, type DocumentPins } from "../contracts/team-control.js";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { TEAM_CONTROL_VERSION, TeamContractError, parseControlRequest, parseProtocolVersion } from "../contracts/team-control.js";
+import { TEAM_CONTROL_VERSION, TeamContractError, parseControlRequest, parseProtocolVersion, type ControlReceipt } from "../contracts/team-control.js";
 import { hashBinding, type PlanGovernance, type ProviderPolicyCapability } from "../domain/plan-governance.js";
 import type { LeadTask } from "../domain/lead-proposal.js";
 import { planningRosterRequired, type LeadRosterEvidence } from "../domain/lead-roster.js";
@@ -265,6 +265,46 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
         .catch(error => console.warn(`team lead: launch for run=${runId} after a chat message failed: ${error instanceof Error ? error.message : String(error)}`));
     }
     return c.json(receipt, receipt.status === "denied" ? 403 : 200);
+  });
+
+  /**
+   * Plan R7–R10 — the owner's comment on one task, and the task's hold.
+   *
+   * Both are governance commands; the route only starts the turn a command says may start. A
+   * comment's turn is the task's own agent, or the follow-up a comment on landed work creates.
+   */
+  const commentRoute = "/runs/:runId/tasks/:taskId/comments";
+  const holdRoute = "/runs/:runId/tasks/:taskId/hold";
+  for (const path of [commentRoute, holdRoute]) {
+    app.use(path, teamControlAuthentication(() => options.credentials, options.legacyTokens));
+    app.use(path, bodyLimit({ maxSize: 1_048_576, onError: c => c.json({ code: "invalid_team_contract", error: "The request exceeds its size limit." }, 413) }));
+  }
+  const taskCommand = async (c: Context<TeamControlEnv>, write: (request: ReturnType<typeof parseControlRequest>, binding: unknown) => ControlReceipt) => {
+    const runId = c.req.param("runId")!, taskId = c.req.param("taskId")!;
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner action is required." }, 403);
+    const request = parseControlRequest(await c.req.json());
+    if (request.runId !== runId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same run." }, 403);
+    const payload = request.payload as Record<string, unknown> | null;
+    if (!payload || payload.taskId !== taskId) return c.json({ code: "control_scope_denied", error: "The request and route must identify the same task." }, 403);
+    const run = governance.getRun(runId), policy = options.readPolicyCapability?.();
+    let binding: unknown = run.binding;
+    try { if (policy) binding = refreshPlanBinding(run.binding, policy); }
+    catch { return c.json({ code: "current_binding_unavailable", error: "Current plan and policy evidence is unavailable." }, 503); }
+    const receipt = write(request, binding);
+    if (receipt.effectMayStart && options.dispatch && receipt.revisionTaskId) {
+      const started = receipt.revisionTaskId;
+      void options.dispatch(runId, started)
+        .catch(error => console.warn(`team task thread: launch for run=${runId} task=${started} failed: ${error instanceof Error ? error.message : String(error)}`));
+    }
+    return c.json(receipt, receipt.status === "denied" ? 403 : 200);
+  };
+  app.post(commentRoute, c => taskCommand(c, (request, binding) => governance.postTaskComment(request, c.get("controlActor"), binding)));
+  app.post(holdRoute, c => taskCommand(c, request => governance.holdTask(request, c.get("controlActor"))));
+  app.get(commentRoute, c => {
+    const runId = c.req.param("runId")!, taskId = c.req.param("taskId")!;
+    if (!ownerFor(c, runId)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, comments: governance.taskComments(runId, taskId) });
   });
 
   /**

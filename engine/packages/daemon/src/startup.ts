@@ -1082,6 +1082,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const turnStateRoot = nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch");
     const telemetry = new AttemptTelemetry(db, { turnStateRoot });
     deps.attemptTelemetry = telemetry;
+    const { composeTaskThreads } = await import("./domain/task-thread.js");
+    const taskThreads = composeTaskThreads({ db, governance: teamGovernance, turnStateRoot, dispatch: () => deps.teamControl?.dispatch });
     // U4 — a restart reconciles the attempts its predecessor left running before the first sweep.
     const { bootReconcileAttempts } = await import("./domain/boot-recovery.js");
     deps.attemptCompletion = composeAttemptCompletion({ db, governance: teamGovernance, sessions: sessionRegistry,
@@ -1138,13 +1140,15 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         // The decomposition is admitted at the turn's end, after the turn's message is stored,
         // so the owner reads what the lead said before the tasks it admitted appear.
         await leadManager.turnEnd(attempt);
+        // Plan R9 — comments an implementer handed back become the lead's owner messages.
+        await taskThreads.attemptStopped(attempt);
       },
       // U7 — an approving review is the run's signal to deliver: the implementer's task lands as
       // one commit on the run's branch, through the same owner the merge route reads.
       ...(deps.integration ? { integrateTask: (runId: string, taskId: string) => deps.integration!.integrate(runId, taskId) } : {}),
       // U6 — the facts no single attempt produces — a failed retry, an exhausted review, an
       // integration conflict, every task done — are read once per tick, after the attempts.
-      onSweep: () => leadManager.sweep(),
+      onSweep: async () => { await leadManager.sweep(); await taskThreads.sweep(); },
       dispatchPending,
       currentBinding });
     // T017 (cancellation half) — the owner's cancel stops the work. Dispatch closure is the
