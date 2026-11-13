@@ -108,7 +108,9 @@ describe("schema upgrades from a shipped baseline", () => {
   it("brings the first shipped schema to today's baseline through the recorded steps", () => {
     // The shipped schema is frozen in this fixture. Editing the baseline without adding the
     // step that carries a shipped database forward makes the two schemas differ here.
-    const shipped = readFileSync(new URL("./fixtures/schema-v2.sql", import.meta.url), "utf8");
+    // A Windows checkout may turn the fixture's line endings into CRLF; SQLite stores the SQL
+    // text as written, so normalize it to the LF the baseline source uses.
+    const shipped = readFileSync(new URL("./fixtures/schema-v2.sql", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const db = track(new Database(":memory:"));
     db.exec(shipped);
     db.pragma("user_version = 2");
