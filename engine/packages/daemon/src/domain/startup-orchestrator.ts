@@ -4,7 +4,10 @@ import type { EventBus } from "./event-bus.js";
 import type { RuntimeAdapter, NodeBinding, ManagedAttempt, ResolvedStartupFile } from "./runtime-adapter.js";
 import type { ProjectionPlan } from "./projection-planner.js";
 import type { StartupAction } from "./types.js";
-import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths } from "./agent-turn.js";
+import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths, continuationNote, leadProgressNote } from "./agent-turn.js";
+import { leadChatTurnNote, listChatMessages, responseLanguageNote, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
+import { unassignedOwnerWorkflows } from "./team-workflows.js";
+import type { TeamRole } from "../contracts/team-control.js";
 
 export interface StartupInput {
   rigId: string; nodeId: string; sessionId: string; binding: NodeBinding; adapter: RuntimeAdapter;
@@ -56,10 +59,11 @@ export class StartupOrchestrator {
       const delivered = await input.adapter.deliverStartup(input.resolvedStartupFiles, binding);
       if (delivered.failed.length) throw new Error(delivered.failed.map((item) => item.error).join("; "));
       const attempt = binding.managedAttempt;
-      const prompt = managedTurnPrompt({ identity: "", bundle: "", runId: attempt.context.runId, assignment: attempt.context.assignment,
-        taskBody: this.taskBody(input.taskId), outputs: attempt.context.outputs, permissions: attempt.context.permissions,
+      const { runId, assignment } = attempt.context;
+      const prompt = managedTurnPrompt({ identity: "", bundle: "", runId, assignment,
+        taskBody: this.taskBody(runId, assignment.taskId), outputs: attempt.context.outputs, permissions: attempt.context.permissions,
         instructions: attempt.context.files.map((file) => ({ path: file.workerPath })),
-        continuation: input.continueSessionId ? "Continue the existing native conversation." : null,
+        continuation: this.continuation(runId, assignment.taskId, assignment.role, attempt.attemptId, Boolean(input.continueSessionId)),
         taskReportPath: agentTurnOutputPaths(attempt.context.mutableStateRoot, attempt.attemptId).taskReport, workflow: attempt.context.workflow });
       writeAgentTurnPrompt(attempt.context, prompt);
       this.pending.set(input.nodeId, { sessionId: input.sessionId, binding });
@@ -79,5 +83,25 @@ export class StartupOrchestrator {
       return { ok: false, startupStatus: "failed", errors: [error instanceof Error ? error.message : String(error)] };
     }
   }
-  private taskBody(taskId?: string): string { if (!taskId) return "Complete the assigned managed task."; const row = this.db.prepare("SELECT body FROM queue_items WHERE qitem_id = ?").get(taskId) as { body?: string } | undefined; return row?.body ?? "Complete the assigned managed task."; }
+  /** The run task's body: assignments name the run's task id, which is not the queue item's id. */
+  private taskBody(runId: string, taskId: string): string {
+    const row = this.db.prepare(`SELECT q.body FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+      WHERE a.run_id = ? AND a.task_id = ?`).get(runId, taskId) as { body?: string } | undefined;
+    return row?.body ?? "Complete the assigned managed task.";
+  }
+
+  /**
+   * Why this turn exists and what it must answer. A lead's turn is also where the owner's pending
+   * messages are delivered: taking them marks them this attempt's, immediately before launch.
+   */
+  private continuation(runId: string, taskId: string, role: TeamRole, attemptId: string, resumes: boolean): string | null {
+    const chat = role === "lead"
+      ? leadChatTurnNote(takeOwnerMessages(this.db, runId, attemptId), listChatMessages(this.db, runId), unassignedOwnerWorkflows(this.db, runId))
+      : null;
+    const preference = this.db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId) as
+      { language: ResponseLanguage | null } | undefined;
+    return [resumes ? "Continue the existing native conversation." : null, continuationNote(this.db, runId, taskId, role), chat,
+      role === "lead" ? leadProgressNote(this.db, runId) : null,
+      responseLanguageNote(listChatMessages(this.db, runId), preference?.language)].filter(Boolean).join("\n\n") || null;
+  }
 }

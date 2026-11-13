@@ -17,6 +17,10 @@ import { agentTurnPromptPath, continuationNote, leadProgressNote, managedTurnPro
 import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
 import type { WorkerEvent } from "../src/contracts/worker-events.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
+import { StartupOrchestrator } from "../src/domain/startup-orchestrator.js";
+import { SessionRegistry } from "../src/domain/session-registry.js";
+import { appendChatMessage, pendingOwnerMessages } from "../src/domain/lead-chat.js";
+import type { RuntimeAdapter } from "../src/domain/runtime-adapter.js";
 
 /**
  * MVP — one attempt is one headless turn.
@@ -301,6 +305,35 @@ describe("what a continuation is told", () => {
     // A fresh fact after that turn is still news.
     leadEvent("lead.woken", { note: "Task \"Add the endpoint\" failed again on its retry.", keys: ["failed:task-2"] });
     expect(continuationNote(db, "run", "task-1", "lead")).toContain("failed again on its retry");
+  });
+
+  it("launches a lead turn whose prompt carries its task body, the owner's chat and the run's progress", async () => {
+    // U20 removed the tmux launcher that composed these into the prompt, and the native launcher
+    // looked the body up by the run's task id as if it were a queue id: every turn was told only
+    // "Complete the assigned managed task", and the lead never read what the owner wrote.
+    expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig",
+      body: "Lead the approved goal." }), binding).status).toBe("accepted");
+    appendChatMessage(db, { id: "m1", runId: "run", body: "Please keep the API unchanged.", createdAt: "2026-11-04T00:00:01.000Z" });
+    const context = { ...manifest("lead-attempt-1"),
+      assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] } } as ContextManifest;
+    const orchestrator = new StartupOrchestrator({ db, sessionRegistry: new SessionRegistry(db), eventBus: new EventBus(db) });
+    const adapter = { project: async () => ({ failed: [] }), deliverStartup: async () => ({ failed: [] }) } as unknown as RuntimeAdapter;
+    const started = await orchestrator.startNode({ rigId: "rig", nodeId: "lead-node", sessionId: "s-lead-node",
+      binding: { id: "direct:lead-node", nodeId: "lead-node", attachmentType: "external_cli", tmuxSession: "lead@rig", tmuxWindow: null,
+        tmuxPane: null, cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: root,
+        managedAttempt: { attemptId: "lead-attempt-1", deadline: Date.now() + 60_000, context } },
+      adapter, plan: { runtime: "claude-code", cwd: root, entries: [], startup: { files: [], actions: [] }, conflicts: [], noOps: [], diagnostics: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "lead@rig", runId: "run", taskId: "task-1",
+      skipHarnessLaunch: true });
+    expect(started.ok, JSON.stringify(started)).toBe(true);
+    const prompt = readFileSync(agentTurnPromptPath(context), "utf8");
+    expect(prompt).toContain("Lead the approved goal.");
+    expect(prompt).not.toContain("Complete the assigned managed task.");
+    expect(prompt).toContain("Owner: Please keep the API unchanged.");
+    expect(prompt).toContain("Team progress snapshot:");
+    // The prompt is the delivery: the message is now this attempt's, so the next turn does not repeat it.
+    expect(pendingOwnerMessages(db, "run")).toHaveLength(0);
   });
 
   it("records a rejection with no reason and still reopens the lead", () => {
