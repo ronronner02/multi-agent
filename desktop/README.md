@@ -84,22 +84,45 @@ or disabling background motion shows the portrait still instead.
 
 ## Building
 
+Build the engine first (`cd engine; npm ci; npm run build`), then:
+
 ```powershell
 cd desktop
 npm ci
-npm run dist -- --publish never
+npm run dist
 ```
 
-`npm run dist` writes an NSIS installer to `desktop/dist/`. The build is unsigned, so
-Windows shows a SmartScreen warning on first run. Building the installer is separate
-from installing it and checking first open with a clean profile; record those checks
-separately before claiming desktop acceptance.
+`npm run dist` stages the installer's runtime, then builds the NSIS artifact:
 
-The app runs the daemon from `engine/packages/daemon/dist/index.js`, so build the engine first
-(`cd engine; npm ci; npm run build`). Run the app from source with `npm start`. Run the unit tests
-with `npm test`; they cover the startup sequence, the dynamic origin, pairing, dependency rows,
-the folder dialog, the preload boundary, reconnect, and shutdown, with an in-memory window and
-never start Electron or spawn a process.
+1. `node scripts/stage-engine.mjs` copies the daemon build, its assets, the shipped specs, the
+   Web UI build and `engine/config` into `desktop/resources/engine/`, and copies the daemon's
+   production `node_modules` beside them (`desktop/resources/engine/node_modules`). That tree
+   keeps the relative layout the daemon resolves with `new URL("../../...", import.meta.url)`.
+   better-sqlite3 is taken from its win32-x64 prebuild; no compiler is involved.
+2. `node scripts/stage-gh.mjs` downloads the GitHub CLI release pinned in
+   `engine/config/toolchain/gh-lock.json`, verifies its SHA-256, and extracts `gh.exe` to
+   `desktop/resources/engine/plugins/github-cli/`. The daemon's executable resolver looks there
+   after an explicit configured path and before PATH, so GitHub sign-in needs no separate install.
+3. `electron-builder --win nsis --x64` writes `desktop/dist/Multi-Agent-Setup-<version>-x64.exe`.
+
+The build is unsigned, so Windows shows a SmartScreen warning on first run: choose **More info**
+then **Run anyway**. Signing, auto-update and publishing are out of scope, so the installer is the
+whole delivery. Installing N+1 over N replaces the program files; uninstalling removes them but
+keeps `%LOCALAPPDATA%\Multi-Agent` and `%APPDATA%\Multi-Agent`, including recovery records of
+interrupted runs.
+
+The engine tree must be rebuilt before staging (`npm run stage:check` fails when the staged copy
+is older than the engine build). The packaged-engine test runs the packaged `Multi-Agent.exe` with
+`ELECTRON_RUN_AS_NODE=1`, so it loads better-sqlite3 from the staged tree and opens a real
+database without opening a window.
+
+The app runs the daemon from `resources/engine/packages/daemon/dist/index.js` when packaged, and
+from `engine/packages/daemon/dist/index.js` in a source checkout (`src/engine-paths.js`). Run the
+app from source with `npm start`. Run the unit tests with `npm test`; they cover the startup
+sequence, the dynamic origin, pairing, dependency rows, the folder dialog, the preload boundary,
+reconnect, shutdown, and the staged installer tree, with an in-memory window. The installer
+lifecycle test is opt-in (`MULTI_AGENT_INSTALLER_SMOKE=1` with two artifacts) because it installs
+an artifact and writes an uninstall entry.
 
 ## How it authenticates
 

@@ -21,12 +21,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const engineBridge = require('./engine-bridge.js');
+const { daemonEntry } = require('./engine-paths.js');
 const { dependencyRows } = require('./dependencies.js');
 const { isAllowedNavigation, isDaemonHealth } = require('./origin.js');
 
 const BACKGROUND = '#151619';
 const FIRST_RUN_URL = new URL(`file://${path.join(__dirname, 'first-run.html').replace(/\\/g, '/')}`).href;
-const DAEMON_ENTRY = path.resolve(__dirname, '../../engine/packages/daemon/dist/index.js');
+const DAEMON_ENTRY = daemonEntry();
 
 // KTD7 — the stable data directory. Production is %LOCALAPPDATA%\Multi-Agent; a test or a manual
 // run points MULTI_AGENT_DESKTOP_DATA_DIR somewhere else.

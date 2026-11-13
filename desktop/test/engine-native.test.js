@@ -15,6 +15,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const originRules = require('../src/origin.js');
 const { dependencyRows } = require('../src/dependencies.js');
+const enginePaths = require('../src/engine-paths.js');
 
 const PORT = 58123;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -139,6 +140,7 @@ function nativeDesktop(opts = {}) {
     require: name => {
       if (name === 'electron') return electron;
       if (name === './engine-bridge.js') return bridge;
+      if (name === './engine-paths.js') return enginePaths;
       if (name === './origin.js') return originRules;
       if (name === './dependencies.js') return { dependencyRows };
       if (name === 'node:child_process') throw new Error('No process in these tests');
