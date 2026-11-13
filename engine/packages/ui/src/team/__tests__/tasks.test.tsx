@@ -6,6 +6,13 @@ import { I18nextProvider } from "react-i18next";
 import type { TeamOwnerRead, TeamTaskStage } from "@multi-agent/daemon/team-control";
 import { TasksScreen, groupTasks } from "../tasks.js";
 import { attempt, read, reviewTask, task } from "./fixtures.js";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const { request } = vi.hoisted(() => ({ request: vi.fn(async () => ({ comments: [] })) }));
+vi.mock("../../hooks/useOwnerSession.js", () => ({
+  OwnerReadError: class extends Error {},
+  useOwnerSession: () => ({ paired: true, request }),
+}));
 
 afterEach(cleanup);
 async function show(snapshot: TeamOwnerRead, locale: "en" | "zh-CN" = "en") {
@@ -15,7 +22,8 @@ async function show(snapshot: TeamOwnerRead, locale: "en" | "zh-CN" = "en") {
     const [selected, setSelected] = useState("");
     return <TasksScreen read={snapshot} selectedTaskId={selected} onSelect={setSelected} onNewTask={onNewTask} />;
   }
-  return { ...render(<I18nextProvider i18n={language.instance}><Board /></I18nextProvider>), onNewTask };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return { ...render(<QueryClientProvider client={client}><I18nextProvider i18n={language.instance}><Board /></I18nextProvider></QueryClientProvider>), onNewTask };
 }
 
 describe("Tasks board and drawer", () => {

@@ -1164,6 +1164,13 @@ export class PlanGovernance {
     return started;
   }
 
+  /** Whether the owner holds a task, and the task a follow-up continues. A read for the read model. */
+  taskThreadState(runId: string, taskId: string): { held: boolean; followUpOf: string | null } {
+    const row = this.db.prepare("SELECT held_at AS heldAt, follow_up_of AS followUpOf FROM team_queue_authority WHERE run_id = ? AND task_id = ?")
+      .get(runId, taskId) as { heldAt: string | null; followUpOf: string | null } | undefined;
+    return { held: Boolean(row?.heldAt), followUpOf: row?.followUpOf ?? null };
+  }
+
   /** A task's thread, for the owner's read. It writes nothing. */
   taskComments(runId: string, taskId: string): TaskComment[] {
     this.getRun(runId);

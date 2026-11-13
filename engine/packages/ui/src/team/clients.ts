@@ -91,6 +91,22 @@ export async function postTaskComment(request: Request, runId: string, taskId: s
   });
 }
 
+export interface TaskComment { id: string; runId: string; taskId: string; body: string; createdAt: string; deliveredAttempt: string | null }
+
+/** Plan R7 — `GET /runs/:runId/tasks/:taskId/comments`: the task's thread. */
+export async function readTaskComments(request: Request, runId: string, taskId: string, signal?: AbortSignal): Promise<TaskComment[]> {
+  const body = await request<{ comments?: TaskComment[] }>(`/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/comments`, { signal });
+  return body.comments ?? [];
+}
+
+/** Plan R10 — `POST /runs/:runId/tasks/:taskId/hold`. */
+export async function holdTask(request: Request, runId: string, taskId: string, held: boolean, entityVersion: number): Promise<void> {
+  await request(`/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/hold`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { taskId, held }),
+  });
+}
+
 /** U5 — `POST /runs/:runId/plan/approve`. */
 export async function approvePlan(request: Request, runId: string, entityVersion: number, rosterDigest?: string, documentVersions?: DocumentPins, conversation?: { ownerMessage: string; planHash?: string }, responseLanguage?: ResponseLanguage): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/plan/approve`, {

@@ -436,6 +436,10 @@ export interface TeamReviewView {
   queueState: TeamQueueState;
   /** One daemon-owned projection; consumers group this value without reclassifying queue rows. */
   stage: TeamTaskStage;
+  /** Plan R10 — the owner holds this task; nothing automatic starts it until the owner releases it. */
+  held?: boolean;
+  /** Plan KTD6 — the task whose landed change this follow-up continues. */
+  followUpOf?: string | null;
   seat: string | null;
   workerReport: TeamWorkerReportView | null;
   /**

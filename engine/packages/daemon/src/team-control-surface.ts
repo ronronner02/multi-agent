@@ -167,6 +167,7 @@ export class TeamReadModel {
             || (actionable && row.queueState === "failed" && typeof evidence?.retryNotBefore === "string"),
           liveAttempt, awaitingReview,
         }),
+        ...this.deps.governance.taskThreadState(runId, row.taskId),
         seat: row.session,
         workerReport,
         displayName: name.displayName,
