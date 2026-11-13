@@ -10,6 +10,6 @@ The renderer also follows density and heat-map formula patterns described by ope
 
 Multi-Agent team instructions
 
-The attention rules in `engine/config/team/core.md`, the lead protocol and the role charters
+The attention rules in `engine/config/team/core.md`, the lead protocol, the role charters and the default team sections in `engine/config/team/sections/`
 adapt principles and wording from deepseek-ai/dsh-superagent-prototype (`docs/000-philosophy.md`
 and `prompts/team/*.md`), MIT License, Copyright (c) 2026 DeepSeek Harness Team.
