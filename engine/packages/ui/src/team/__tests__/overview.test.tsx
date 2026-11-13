@@ -96,6 +96,23 @@ describe("Overview", () => {
     expect(within(within(screen.getByRole("region", { name: "Task list" })).getByRole("list")).getByText("Waiting on lead")).toBeTruthy();
   });
 
+  it("shows a worker's question word for word and sends the owner's answer to that task", async () => {
+    // Covers AE3: the question is in Needs attention as the worker wrote it, and the answer is a
+    // comment on the worker's own task rather than a chat message to the lead.
+    const question = "Keep the v1 endpoint or remove it?";
+    await show(read({ tasks: [task({ taskId: "task-api", stage: "owner/question", queueState: "blocked",
+      workerReport: { status: "needs-decision", question, evidence: "Both callers still exist.", truncated: false, attemptId: "a1", resolution: null } })] }));
+    const attention = screen.getByRole("region", { name: "Needs attention" });
+    expect(within(attention).getByText(question)).toBeTruthy();
+    expect(attention.querySelector(".ui-count")?.textContent).toBe("1");
+    fireEvent.change(within(attention).getByRole("textbox", { name: "Answer" }), { target: { value: "Remove it." } });
+    fireEvent.click(within(attention).getByRole("button", { name: "Answer" }));
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    const [path, init] = request.mock.calls[0]!;
+    expect(path).toBe(`/runs/${RUN_ID}/tasks/task-api/comments`);
+    expect(JSON.parse((init as { body: string }).body).payload).toEqual({ taskId: "task-api", body: "Remove it." });
+  });
+
   it("opens the existing chat for plan approval and uses the same decision count", async () => {
     const snapshot = read(); snapshot.run = { ...snapshot.run, phase: "planning" };
     const { onOpenChat } = await show(snapshot);

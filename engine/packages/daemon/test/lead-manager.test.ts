@@ -113,7 +113,7 @@ describe("U6 — the lead as manager", () => {
     db.prepare("UPDATE team_attempts SET state = 'stopped' WHERE id = ?").run(attemptId);
     expect(governance.recordTaskOutcome(request(task.qitemId, { expectedTaskVersion: task.entityVersion, state: "blocked",
       actorSession: seat, attemptId, expectedAttemptVersion: 1, evidence: { taskReport: {
-        status: "needs-decision", question: "Which response is required?", evidence: "Two responses are named in the brief." } } }), daemon).status)
+        status: "blocked", question: "Which response is required?", evidence: "Two responses are named in the brief." } } }), daemon).status)
       .toBe("observed");
     return governance.findTask("run", taskId)!;
   };
@@ -130,7 +130,7 @@ describe("U6 — the lead as manager", () => {
     expect(() => parseLeadProposalFile({ tasks: [] })).toThrow();
   });
 
-  it("carries a worker question to the lead and reworks only its brief, with one fresh attempt", async () => {
+  it("carries a blocked worker's question to the lead and reworks only its brief, with one fresh attempt", async () => {
     endLeadTurn();
     const task = pauseWorker();
     await manager(new LeadProposalMissingError()).sweep();

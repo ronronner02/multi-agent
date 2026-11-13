@@ -52,6 +52,14 @@ export interface LeadManager {
   sweep(): Promise<void>;
 }
 
+/** A paused report that asks the owner a question: `needs-decision` with a question. */
+export function ownerQuestion(taskReportJson: string): boolean {
+  try {
+    const report = JSON.parse(taskReportJson) as { status?: string; question?: string };
+    return report.status === "needs-decision" && typeof report.question === "string" && report.question.trim() !== "";
+  } catch { return false; }
+}
+
 /**
  * The events one run's team produced that the lead has not been told about.
  *
@@ -81,6 +89,9 @@ export function leadTeamEvents(db: Database.Database, runId: string): LeadTeamEv
   const events: LeadTeamEvent[] = [];
   for (const row of rows) {
     if (row.role !== "implementer" && row.role !== "reviewer") continue;
+    // Plan KTD4 — a worker's question is the owner's: it waits in Needs you, and the owner's
+    // answer goes to the worker. The lead reads a copy in its next turn instead of being woken.
+    if (row.role === "implementer" && row.taskReportJson !== null && row.state === "blocked" && ownerQuestion(row.taskReportJson)) continue;
     if (row.taskReportJson !== null && (row.state === "blocked" || row.state === "done")) {
       events.push({ key: `report:${row.taskId}:${row.reportedAttemptId}`,
         note: `Worker report for task "${row.name}" (taskId: ${row.taskId}): ${row.taskReportJson}. ` +

@@ -108,7 +108,7 @@ export function readableBranch(branch: string): string {
 }
 
 export const TASK_STAGE_LABELS = {
-  "owner/decision": "tasks.stage.owner", "owner/blocked": "tasks.stage.owner",
+  "owner/decision": "tasks.stage.owner", "owner/question": "tasks.stage.owner", "owner/blocked": "tasks.stage.owner",
   "lead/report": "tasks.stage.lead", queued: "tasks.column.pending", running: "tasks.column.in-progress",
   review: "progress.review", done: "team.state.done",
 } as const satisfies Record<TeamTaskStage, string>;

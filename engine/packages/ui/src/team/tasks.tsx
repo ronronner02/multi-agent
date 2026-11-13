@@ -14,7 +14,7 @@ type BoardColumn = typeof BOARD_COLUMNS[number];
 export function groupTasks(tasks: readonly TeamReviewView[]): Record<BoardColumn, TeamReviewView[]> {
   const groups: Record<BoardColumn, TeamReviewView[]> = { queued: [], running: [], review: [],
     "lead/report": [], "owner/decision": [], done: [] };
-  for (const task of tasks) groups[task.stage === "owner/blocked" ? "owner/decision" : task.stage].push(task);
+  for (const task of tasks) groups[task.stage === "owner/blocked" || task.stage === "owner/question" ? "owner/decision" : task.stage].push(task);
   return groups;
 }
 

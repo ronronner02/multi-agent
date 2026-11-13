@@ -254,12 +254,12 @@ const worker = { kind: "worker" as const, sessionId: "worker-session" };
     const receipt = governance.recordTaskOutcome(command("run", {
       expectedTaskVersion: governance.getTask(qitemId)!.entityVersion, state: "blocked",
       actorSession: "seat-a", attemptId: attempt.id, expectedAttemptVersion: attempt.entityVersion,
-      evidence: { taskReport: { status: "needs-decision", question: "Which input should I use?", evidence: "Evidence line. ".repeat(180) } },
+      evidence: { taskReport: { status: "blocked", question: "Which input should I use?", evidence: "Evidence line. ".repeat(180) } },
     }, qitemId), { kind: "daemon", sessionId: "daemon" });
     expect(receipt.status).toBe("observed");
     const projection = model.read("run").tasks[0]!;
     expect(projection).toMatchObject({ stage: "lead/report", workerReport: {
-      status: "needs-decision", question: "Which input should I use?", truncated: true,
+      status: "blocked", question: "Which input should I use?", truncated: true,
       attemptId: attempt.id, resolution: null,
     } });
     expect(projection.workerReport!.evidence).toHaveLength(2000);

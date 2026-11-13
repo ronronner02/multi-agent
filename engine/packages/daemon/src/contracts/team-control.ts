@@ -417,7 +417,7 @@ export interface TeamSeatView {
   retired: boolean;
 }
 
-export const TEAM_TASK_STAGES = ["owner/decision", "owner/blocked", "lead/report", "queued", "running", "review", "done"] as const;
+export const TEAM_TASK_STAGES = ["owner/decision", "owner/question", "owner/blocked", "lead/report", "queued", "running", "review", "done"] as const;
 export type TeamTaskStage = (typeof TEAM_TASK_STAGES)[number];
 
 export interface TeamWorkerReportView {

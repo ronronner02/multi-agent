@@ -343,6 +343,7 @@
   "overview.planApproval": "审批计划和团队",
   "overview.reviewPlan": "在聊天中审批计划",
   "overview.answerLead": "在聊天中回答",
+  "overview.answerWorker": "回答",
   "overview.nativeTokens": "原生尝试用量",
   "overview.partialTokens": "部分原生用量",
   "tasks.rawTask": "任务标识",

@@ -146,6 +146,19 @@ export function composeTaskThreads(dependencies: TaskThreadDependencies) {
   };
 }
 
+/** Plan KTD4 — the lead's copy of the questions workers asked the owner, which the owner answers. */
+export function ownerQuestionNotices(db: Database.Database, runId: string): string | null {
+  const rows = db.prepare(`SELECT a.task_id AS taskId, json_extract(a.evidence_json, '$.taskReport.question') AS question
+    FROM team_queue_authority a JOIN queue_items q ON q.qitem_id = a.qitem_id
+    WHERE a.run_id = ? AND json_extract(a.assignment_json, '$.role') = 'implementer' AND q.state = 'blocked'
+      AND json_extract(a.evidence_json, '$.taskReport.status') = 'needs-decision'
+      AND json_extract(a.evidence_json, '$.taskReport.question') IS NOT NULL
+      AND json_extract(a.evidence_json, '$.resolution') IS NULL ORDER BY a.rowid`).all(runId) as { taskId: string; question: string }[];
+  if (!rows.length) return null;
+  return ["Questions workers asked the owner (the owner answers them on the task; you need not act):",
+    ...rows.map(row => `- ${row.taskId}: ${row.question.slice(0, 500)}`)].join("\n");
+}
+
 /** Plan KTD7 — the lead's context, not a wake: the latest owner comments on tasks. */
 export function taskCommentNotices(db: Database.Database, runId: string, limit = 10): string | null {
   const rows = db.prepare(`SELECT task_id AS taskId, body, delivered_attempt AS deliveredAttempt FROM team_chat_messages

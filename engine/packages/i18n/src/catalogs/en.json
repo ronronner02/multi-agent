@@ -343,6 +343,7 @@
   "overview.planApproval": "Plan and team approval",
   "overview.reviewPlan": "Review plan in chat",
   "overview.answerLead": "Answer in chat",
+  "overview.answerWorker": "Answer",
   "overview.nativeTokens": "Native attempt usage",
   "overview.partialTokens": "Partial native usage",
   "tasks.rawTask": "Task ID",

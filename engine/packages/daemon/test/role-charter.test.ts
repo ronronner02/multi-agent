@@ -78,7 +78,7 @@ describe("role charters", () => {
 
   it("keeps worker report permissions outside the frozen candidate and states the resolution contract", () => {
     for (const role of ["implementer", "reviewer"] as const) {
-      expect(instructionVersion(roleCharters[role])).toBe("3");
+      expect(instructionVersion(roleCharters[role])).toBe(role === "implementer" ? "4" : "3");
       expect(roleCharters[role]).toContain("task-report.json");
       expect(roleCharters[role]).toContain("16,384");
       expect(roleCharters[role]).toContain("500");

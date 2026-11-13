@@ -14,7 +14,8 @@ import { StartupOrchestrator } from "../src/domain/startup-orchestrator.js";
 import { SessionRegistry } from "../src/domain/session-registry.js";
 import { agentTurnOutputPaths, agentTurnPromptPath } from "../src/domain/agent-turn.js";
 import { appendChatMessage, listChatMessages, pendingOwnerMessages } from "../src/domain/lead-chat.js";
-import { composeTaskThreads, listTaskComments, taskCommentNotices } from "../src/domain/task-thread.js";
+import { composeTaskThreads, listTaskComments, ownerQuestionNotices, taskCommentNotices } from "../src/domain/task-thread.js";
+import { leadTeamEvents } from "../src/domain/lead-manager.js";
 import type { ControlRequest, PlanBinding } from "../src/contracts/team-control.js";
 import type { ContextManifest } from "../src/integrations/framework/context-manifest.js";
 import type { RuntimeAdapter } from "../src/domain/runtime-adapter.js";
@@ -168,6 +169,24 @@ describe("task threads", () => {
     expect(pendingOwnerMessages(db, "run").map(message => message.body)).toEqual(["Also redo the billing page."]);
     expect(listTaskComments(db, "run", "impl")).toEqual([]);
     expect(started).toEqual(["lead"]);
+  });
+
+  it("sends a worker's question to the owner, not the lead, and gives the lead a copy", () => {
+    // Plan KTD4: a needs-decision question waits for the owner; the lead is not woken for it.
+    const report = (status: string, question?: string) => db.prepare(`UPDATE team_queue_authority SET evidence_json = ? WHERE run_id = 'run' AND task_id = 'impl'`)
+      .run(JSON.stringify({ taskReport: { status, evidence: "Both callers still exist.", ...(question ? { question } : {}) }, reportedAttemptId: "impl-a1" }));
+    setState("impl", "blocked");
+    report("needs-decision", "Keep the v1 endpoint or remove it?");
+    expect(leadTeamEvents(db, "run").filter(event => event.key.startsWith("report:"))).toEqual([]);
+    expect(ownerQuestionNotices(db, "run")).toContain("impl: Keep the v1 endpoint or remove it?");
+    // A blocked report with no question is still the lead's to resolve.
+    report("blocked");
+    expect(leadTeamEvents(db, "run").map(event => event.key)).toContain("report:impl:impl-a1");
+    expect(ownerQuestionNotices(db, "run")).toBeNull();
+    // The owner's answer is a comment, which resumes the paused task.
+    report("needs-decision", "Keep the v1 endpoint or remove it?");
+    expect(comment("c1", "impl", "Remove it.")).toMatchObject({ status: "accepted", effectMayStart: true, revisionTaskId: "impl" });
+    expect(queueState("impl")).toBe("pending");
   });
 
   it("refuses a comment from someone who is not the owner, and on a reviewer task", () => {

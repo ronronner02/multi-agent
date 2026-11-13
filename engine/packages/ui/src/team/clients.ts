@@ -83,6 +83,14 @@ export async function sendChatMessage(request: Request, runId: string, body: str
   });
 }
 
+/** Plan R7 — `POST /runs/:runId/tasks/:taskId/comments`: the owner's comment goes to that task's agent. */
+export async function postTaskComment(request: Request, runId: string, taskId: string, body: string, entityVersion: number): Promise<void> {
+  await request(`/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/comments`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { taskId, body }),
+  });
+}
+
 /** U5 — `POST /runs/:runId/plan/approve`. */
 export async function approvePlan(request: Request, runId: string, entityVersion: number, rosterDigest?: string, documentVersions?: DocumentPins, conversation?: { ownerMessage: string; planHash?: string }, responseLanguage?: ResponseLanguage): Promise<void> {
   await request(`/runs/${encodeURIComponent(runId)}/plan/approve`, {

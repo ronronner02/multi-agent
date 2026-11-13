@@ -225,6 +225,12 @@ body:has(.team-shell) > #root { height: 100%; }
 }
 .team-shell .composer textarea::placeholder { color: var(--faint); }
 .team-shell .composer textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.team-shell .ui-question-answer {
+  width: 100%; min-height: 64px; max-height: 200px; resize: vertical; margin-top: 8px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+  padding: 9px 12px; font: 14px/1.5 var(--font-ui); color: var(--ink);
+}
+.team-shell .ui-question-answer:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .team-shell .composer .btn-primary { min-height: 44px; }
 
 /* --- pages that read as a document ------------------------------------- */
