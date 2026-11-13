@@ -920,6 +920,12 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .team-shell .composer .ui-workflow-picker { grid-column: 1 / -1; }
 .ui-workflow-picker { display: grid; gap: 8px; min-width: 0; }
 .ui-soul-content { height: auto; min-height: 12rem; resize: vertical; line-height: 1.5; }
+.ui-prompt-section { display: grid; gap: 8px; margin-bottom: 16px; }
+.ui-default-changed { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px; }
+.ui-default-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ui-default-compare pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin: 0; }
+.ui-save-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@media (max-width: 760px) { .ui-default-compare { grid-template-columns: 1fr; } }
 .ui-workflow-outcomes { margin-block: 12px; overflow-wrap: anywhere; }
 
 .team-shell .ui-chat-latest { align-self: center; margin-bottom: 8px; }
