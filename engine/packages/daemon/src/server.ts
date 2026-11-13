@@ -1,3 +1,4 @@
+import { getStatePath } from "./data-paths.js";
 import { requireLocalTarget } from "./middleware/local-target.js";
 import { Hono } from "hono";
 import fs from "node:fs";
@@ -56,6 +57,8 @@ const MANAGED_ROUTE_PREFIXES = ["/api/team-control"] as const;
 export interface AppDeps {
   teamControl?: TeamControlOptions;
   github?: GithubCli;
+  /** Plan KTD10 — the dedicated agent account, signed in to its own gh config directory. */
+  githubAgent?: GithubCli;
   ownerSessions?: OwnerSessions;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
@@ -269,11 +272,13 @@ export function createApp(deps: AppDeps): Hono {
   if (ownerSessions && ownerSessions.db !== deps.rigRepo.db) throw new Error("Owner sessions must use the control database.");
   deps.ownerSessions = ownerSessions;
   const github = deps.github ?? new GithubCli();
+  const githubAgent = deps.githubAgent ?? new GithubCli({ env: { ...process.env, GH_CONFIG_DIR: getStatePath("github-agent") } });
+  deps.githubAgent = githubAgent;
   deps.github = github;
   // U9 (R18): the owner's proxy setting is read at each gh/git spawn, so a change applies to the next
   // upload without a restart; an empty setting falls back to the daemon environment.
   const settingsStore = deps.settingsStore;
-  if (settingsStore) github.setProxySource(() => {
+  if (settingsStore) for (const cli of [github, githubAgent]) cli.setProxySource(() => {
     const value = settingsStore.resolveOne("github.proxy").value;
     return typeof value === "string" ? value : undefined;
   });
@@ -473,7 +478,7 @@ export function createApp(deps: AppDeps): Hono {
   }));
   // U3 — the owner's teams: the rig and seats a repository's team runs on. Same surface and the
   // same owner credential as the start below, because a team is what a start routes work to.
-  app.route("/api/team-control", teamGithubRoutes(github, teamOptions.credentials,
+  app.route("/api/team-control", teamGithubRoutes(github, githubAgent, teamOptions.credentials,
     [deps.legacyBearerToken]));
   app.route("/api/team-control", teamSettingsRoutes(deps.settingsStore, teamOptions.credentials,
     [deps.legacyBearerToken]));

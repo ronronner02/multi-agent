@@ -369,3 +369,48 @@ describe("GitHub push with retry and error classification", () => {
     expect(redacted).toContain("ghp_REDACTED");
   });
 });
+
+describe("the dedicated agent GitHub account", () => {
+  let ownerDir: string, agentDir: string, db: Database.Database, github: GithubCli, agent: GithubCli;
+  let app: ReturnType<typeof createTestApp>["app"];
+  const call = (method: string, path: string, token: string | null = ownerToken) =>
+    app.request("/api/team-control/github" + path, { method, headers: token ? { Authorization: "Bearer " + token } : {} },
+      { incoming: { socket: { remoteAddress: "127.0.0.1" } } });
+
+  beforeEach(() => {
+    ownerDir = mkdtempSync(join(tmpdir(), "team-github-owner-"));
+    agentDir = mkdtempSync(join(tmpdir(), "team-github-agent-"));
+    const owner = ghSetup(ownerDir), second = ghSetup(agentDir);
+    github = new GithubCli({ executable: owner.executable, execArgv: owner.extraArgs, env: { ...process.env, GH_STUB_DIR: ownerDir } });
+    agent = new GithubCli({ executable: second.executable, execArgv: second.extraArgs,
+      env: { ...process.env, GH_STUB_DIR: agentDir, GH_CONFIG_DIR: join(agentDir, "gh-config") } });
+    db = createDb(); initializeDatabase(db); fixDaemonMode(db, true);
+    app = createTestApp(db, { appDeps: { github, githubAgent: agent, teamControl: { credentials: { ownerToken, workers: [
+      { token: workerToken, sessionId: "dev@fixture", runId: "other" }] } } } }).app;
+  });
+  afterEach(async () => {
+    await github?.stop(); await agent?.stop();
+    if (db?.open) db.close();
+    rmSync(ownerDir, { recursive: true, force: true }); rmSync(agentDir, { recursive: true, force: true });
+  });
+
+  it("reports the agent's sign-in apart from the owner's", async () => {
+    writeFileSync(join(ownerDir, "account"), "owner-login");
+    expect(await (await call("GET", "/agent/status")).json()).toMatchObject({ signedIn: false, login: null, sameAsOwner: false });
+    writeFileSync(join(agentDir, "account"), "team-agent");
+    expect(await (await call("GET", "/agent/status")).json()).toMatchObject({ signedIn: true, login: "team-agent", sameAsOwner: false });
+    expect(await (await call("GET", "/status")).json()).toMatchObject({ signedIn: true, login: "owner-login" });
+  });
+
+  it("flags the owner's own login signed in as the agent", async () => {
+    writeFileSync(join(ownerDir, "account"), "owner-login");
+    writeFileSync(join(agentDir, "account"), "owner-login");
+    expect(await (await call("GET", "/agent/status")).json()).toMatchObject({ signedIn: true, sameAsOwner: true });
+  });
+
+  it("keeps the agent routes owner-only", async () => {
+    for (const [method, path] of [["GET", "/agent/status"], ["POST", "/agent/login"], ["GET", "/agent/login"], ["POST", "/agent/logout"]] as const) {
+      expect((await call(method, path, workerToken)).status).toBe(403);
+    }
+  });
+});

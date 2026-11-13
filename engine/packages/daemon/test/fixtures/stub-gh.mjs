@@ -31,7 +31,7 @@ if (args[0] === "--version") {
   const validationError = join(root, "validation-error");
   const state = existsSync(validationError) ? "error" : "success";
   console.log(JSON.stringify({ hosts: { "github.com": signedIn
-    ? [{ state, host: "github.com", login: "octocat", active: true, token: "ghp_fixture_DO_NOT_EXPOSE" }]
+    ? [{ state, host: "github.com", login: readFileSync(account, "utf8").trim() || "octocat", active: true, token: "ghp_fixture_DO_NOT_EXPOSE" }]
     : [] } }));
   process.exitCode = existsSync(validationError) ? Number(readFileSync(validationError, "utf8")) : signedIn ? 0 : 1;
 } else if (args[0] === "auth" && args[1] === "login") {
