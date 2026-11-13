@@ -25,7 +25,7 @@ describe("role charters", () => {
   });
 
   it("gives every role a versioned charter under one versioned core", () => {
-    expect(instructionVersion(coreInstructions)).toBe("2");
+    expect(instructionVersion(coreInstructions)).toBe("3");
     for (const role of roles) {
       expect(instructionVersion(roleCharters[role])).toMatch(/^\d+$/);
       expect(roleInstructionEntries(role)[0]).toEqual(["core", coreInstructions]);
@@ -33,9 +33,9 @@ describe("role charters", () => {
     expect(new Set(roles.map(role => roleCharters[role])).size).toBe(roles.length);
   });
 
-  it("projects protocol 5 and keeps each composed role prompt within 16 KiB", () => {
-    expect(LEAD_PROTOCOL_VERSION).toBe("5");
-    expect(instructionVersion(leadProtocol)).toBe("5");
+  it("projects protocol 6 and keeps each composed role prompt within 16 KiB", () => {
+    expect(LEAD_PROTOCOL_VERSION).toBe("6");
+    expect(instructionVersion(leadProtocol)).toBe("6");
     for (const role of roles) {
       const brief = role === "lead" ? Math.max(leadInstructions("A".repeat(300)).length,
         planningInstructions("A".repeat(300), "docs/plan.md", true).length) : 1_024;
@@ -78,7 +78,7 @@ describe("role charters", () => {
 
   it("keeps worker report permissions outside the frozen candidate and states the resolution contract", () => {
     for (const role of ["implementer", "reviewer"] as const) {
-      expect(instructionVersion(roleCharters[role])).toBe("2");
+      expect(instructionVersion(roleCharters[role])).toBe("3");
       expect(roleCharters[role]).toContain("task-report.json");
       expect(roleCharters[role]).toContain("16,384");
       expect(roleCharters[role]).toContain("500");

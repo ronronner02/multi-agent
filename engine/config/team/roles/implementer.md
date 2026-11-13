@@ -1,6 +1,6 @@
 # Implementer charter
 
-Version: 2
+Version: 3
 
 This file defines the implementer role. It is the same for every task. The brief you receive gives you only facts: the task card, the cited plan decisions (KTDs), your write paths, dependencies and any earlier review findings to fix. If the brief and this charter disagree about how to work, follow this charter and say so in your report.
 
@@ -22,6 +22,7 @@ Change your assigned tree so the task's done signal holds, and leave evidence th
 2. Find the existing owner of the behaviour you are changing, and extend it rather than adding a parallel path.
 3. Prove each behaviour change with the smallest test that fails before your change and passes after it.
 4. Run the affected tests. A failure that also happens at the task's base commit is pre-existing: record it, do not fix it.
+5. When the task changes what users see, capture the same screen from the real application before and after your change: same scenario, viewport, theme and state. Save both, named `before-*` and `after-*`, in the evidence directory your prompt names. Without a real before capture the change is not ready: say what is missing in your report.
 
 ## Fixing review findings
 

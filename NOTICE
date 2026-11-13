@@ -7,3 +7,9 @@ scion's `extras/agent-viz/web/src` by Google LLC. The adapted portions retain th
 The renderer also follows density and heat-map formula patterns described by openspawn PR #155
 (MIT, BikiniBottom Contributors). No openspawn source code is copied into this repository.
 
+
+Multi-Agent team instructions
+
+The attention rules in `engine/config/team/core.md`, the lead protocol and the role charters
+adapt principles and wording from deepseek-ai/dsh-superagent-prototype (`docs/000-philosophy.md`
+and `prompts/team/*.md`), MIT License, Copyright (c) 2026 DeepSeek Harness Team.
