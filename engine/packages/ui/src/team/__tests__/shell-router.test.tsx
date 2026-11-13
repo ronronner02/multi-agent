@@ -58,6 +58,7 @@ beforeEach(() => {
     if (path.endsWith("/chat")) return response({ phase: "delivery", pendingDecision: null, messages: [{
       id: "question-1", sender: "lead", kind: "decision", body: "Keep the existing behavior?", options: ["Keep", "Change"], answeredBy: null, createdAt: data.generatedAt,
     }] });
+    if (path.endsWith("/comments")) return response({ comments: [] });
     if (path.endsWith("/integration")) return response({ integration: { branch: "team/status-filter", commits: [], tasksDone: false, merge: { possible: false, reason: null } } });
     if (path.endsWith("/result")) return response({ result: { patch: "" } });
     if (path.endsWith("/completion")) return response({ completion: { queueState: "pending", attempt: null } });

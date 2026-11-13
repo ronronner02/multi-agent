@@ -2,7 +2,10 @@ import { TextPreview } from "./text-preview.js";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOwnerSession } from "../hooks/useOwnerSession.js";
+import { holdTask, postTaskComment, readTaskComments } from "./clients.js";
 import type { TeamOwnerRead, TeamReviewView } from "@multi-agent/daemon/team-control";
 import { assignedSeat, clockTime, TASK_STAGE_LABELS, taskName } from "./display.js";
 import { TaskProgress } from "./task-progress.js";
@@ -23,13 +26,53 @@ export function TaskTimeline({ logs, tasks }: { logs: TeamOwnerRead["logs"]; tas
     })}</ol>;
 }
 
-export function TaskDetails({ read, task }: { read?: TeamOwnerRead; task: TeamReviewView }) {
+/** Plan R7/R10 — the owner's comments on this task, a composer that sends to its agent, and its hold. */
+export function TaskThread({ read, task }: { read: TeamOwnerRead; task: TeamReviewView }) {
+  const { t } = useTranslation();
+  const { paired, request } = useOwnerSession();
+  const client = useQueryClient();
+  const key = ["team", read.runId, "task", task.taskId, "comments"];
+  const comments = useQuery({ queryKey: key, enabled: paired, retry: false,
+    queryFn: ({ signal }) => readTaskComments(request, read.runId, task.taskId, signal) });
+  const [draft, setDraft] = useState("");
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const run = async (action: () => Promise<void>, clear = false) => {
+    if (busy) return;
+    setBusy(true); setFailed(false);
+    try { await action(); if (clear) setDraft(""); await client.invalidateQueries({ queryKey: key }); await client.invalidateQueries({ queryKey: ["team", read.runId] }); }
+    catch { setFailed(true); }
+    finally { setBusy(false); }
+  };
+  const send = () => { if (draft.trim()) void run(() => postTaskComment(request, read.runId, task.taskId, draft.trim(), read.run.entityVersion), true); };
+  return <section aria-label={t("tasks.thread")}><h3>{t("tasks.thread")}{task.held && <span className="chip">{t("tasks.held")}</span>}</h3>
+    {(comments.data ?? []).length > 0 && <ol className="ui-task-thread">{comments.data!.map(comment => <li key={comment.id}>
+      <TextPreview text={comment.body} />
+      <small className="ui-muted">{clockTime(comment.createdAt)} · {t(comment.deliveredAttempt ? "tasks.commentDelivered" : "tasks.commentWaiting")}</small>
+    </li>)}</ol>}
+    {failed && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>{t("web.error")}</p>}
+    <textarea className="ui-question-answer" aria-label={t("tasks.comment")} value={draft} disabled={busy}
+      onChange={event => setDraft(event.target.value)}
+      onKeyDown={event => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } }} />
+    <div className="plate-foot">
+      <button className="btn btn-outline" disabled={busy}
+        onClick={() => void run(() => holdTask(request, read.runId, task.taskId, !task.held, read.run.entityVersion))}>
+        {t(task.held ? "tasks.release" : "tasks.hold")}</button>
+      <button className="btn btn-primary" disabled={busy || !draft.trim()} onClick={send}>{t("tasks.comment")}</button>
+    </div>
+  </section>;
+}
+
+export function TaskDetails({ read, task, thread = false }: { read?: TeamOwnerRead; task: TeamReviewView; thread?: boolean }) {
   const { t } = useTranslation();
   const attempts = read?.attempts.filter(attempt => attempt.taskId === task?.taskId) ?? [];
   const logs = read?.logs.filter(log => log.taskId === task?.taskId).slice().reverse() ?? [];
   const report = task?.workerReport;
+  const original = task.followUpOf ? read?.tasks.find(item => item.taskId === task.followUpOf) : undefined;
   return <div className="ui-drawer-body">
   <p className="ui-muted">{assignedSeat(task, read?.seats ?? [], t)}</p>
+  {original && <p className="ui-muted">{t("tasks.followUpOf", { name: taskName(original, t) })}</p>}
+  {thread && read && task.role === "implementer" && <TaskThread read={read} task={task} />}
   {task.description && <section><h3>{t("tasks.description")}</h3>
     <div className="ui-task-brief"><TextPreview text={task.description.body} /></div>
     {task.description.truncated && <small className="ui-muted">{t("web.truncated")}</small>}
@@ -112,7 +155,7 @@ export function TaskDrawer({ read, task, onClose, opener }: {
           <Dialog.Description>{task ? t(TASK_STAGE_LABELS[task.stage]) : t("value.unavailable")}</Dialog.Description></div>
         <Dialog.Close className="ui-icon-button" aria-label={t("web.close")}><X aria-hidden="true" /></Dialog.Close>
       </header>
-      {task && <TaskDetails read={read} task={task} />}
+      {task && <TaskDetails read={read} task={task} thread />}
     </Dialog.Content>
   </Dialog.Root>;
 }
