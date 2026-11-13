@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { localFrameworkRoot } from "../integrations/framework/source.js";
+import { mailboxEndpoint } from "./mailbox-endpoint.js";
 import { assertPrivateDirectory, isWindows, processOwnerIds } from "./platform.js";
 
 /**
@@ -51,7 +52,9 @@ function localMailboxRoot(home: string): string {
     assertPrivateDirectory(preferred, processOwnerIds());
     return preferred;
   }
-  const endpoint = join(preferred, UNISOLATED_WORKER, "0".repeat(36), "mailbox.sock");
+  // The probe names the endpoint through the one helper, so the AF_UNIX budget it measures is
+  // the path the bridge will actually bind rather than a second spelling kept in step by hand.
+  const endpoint = mailboxEndpoint(join(preferred, UNISOLATED_WORKER, "0".repeat(36)), "0".repeat(36), "posix").path;
   if (Buffer.byteLength(endpoint) < 108) return preferred;
 
   // Linux counts bytes, including the terminating NUL. TMPDIR can itself be the

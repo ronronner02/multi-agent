@@ -219,7 +219,8 @@ describe("the managed attempt a seat launches from", () => {
     const produced = await runtime.produceManagedAttempt("run-1", produceInput());
     const socket = join(mailboxDir("attempt-1"), "mailbox.sock");
     const bootstrap = join(mailboxDir("attempt-1"), "bootstrap.json");
-    expect(produced.bridge.binding.socketPath).toBe(socket);
+    expect(produced.bridge.binding.directory).toBe(mailboxDir("attempt-1"));
+    expect(produced.bridge.endpoint()).toMatchObject({ transport: "unix", path: socket });
     expect(lstatSync(socket).isSocket()).toBe(true);
     const stat = lstatSync(bootstrap);
     expect(stat.mode & 0o7777).toBe(0o600);
@@ -239,7 +240,7 @@ describe("the managed attempt a seat launches from", () => {
     const produced = await runtime.produceManagedAttempt("run-1", produceInput());
     const body = JSON.parse(readFileSync(join(mailboxDir("attempt-1"), "bootstrap.json"), "utf8"));
     const ask = async (authorization: string) => {
-      const socketPath = produced.bridge.binding.socketPath;
+      const socketPath = produced.bridge.endpoint().path;
       const response = await new Promise<string>((resolve, reject) => {
         const socket = createConnection(socketPath, () => {
           socket.write(JSON.stringify({ authorization, sessionId: body.sessionId,
@@ -458,7 +459,7 @@ describe("the managed attempt a seat launches from", () => {
   it("closes every endpoint this daemon owns", async () => {
     await runtime.produceManagedAttempt("run-1", produceInput());
     const second = await runtime.produceManagedAttempt("run-1", produceInput({ attemptId: "attempt-2" }));
-    expect(existsSync(second.bridge.binding.socketPath)).toBe(true);
+    expect(existsSync(second.bridge.endpoint().path)).toBe(true);
     await runtime.closeManagedAttempts();
     expect(runtime.managedAttemptFor("attempt-1")).toBeUndefined();
     expect(runtime.managedAttemptFor("attempt-2")).toBeUndefined();

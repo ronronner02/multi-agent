@@ -113,6 +113,8 @@ describe("mailbox transport credential resolution", () => {
   });
 });
 
+const windows = process.platform === "win32";
+
 describe("authenticated per-attempt Unix mailbox transport", () => {
   let directory: string, db: ReturnType<typeof createDb>, chat: ChatRepository, bridge: WorkerMailboxBridge;
   let current: boolean, prompt: "clear" | "blocked";
@@ -127,7 +129,7 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     chat = new ChatRepository(db); current = true; prompt = "clear"; active = credentials;
     channel = null; promptReader = () => prompt;
     delivery = new MailboxDelivery(chat, () => promptReader(), () => channel);
-    bridge = new WorkerMailboxBridge({ socketPath: join(directory, "mailbox.sock"), workerId: "worker",
+    bridge = new WorkerMailboxBridge({ directory, workerId: "worker",
       sessionId: worker.sessionId, runId: "run", attemptId: "attempt", rigId: "rig", taskId: "task", recipients: ["peer"] },
     delivery, chat, () => active, () => current);
     await bridge.listen();
@@ -141,7 +143,7 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     generation: bridge.generation, taskId: "task", capability, operation: "poll", ...fields,
   });
   const request = (fields: Record<string, unknown>) => new Promise<{ ok: boolean; result?: unknown; code?: string }>((resolve, reject) => {
-    const socket = createConnection(bridge.binding.socketPath, () => socket.write(JSON.stringify(frame(fields)) + "\n"));
+    const socket = createConnection(bridge.endpoint().path, () => socket.write(JSON.stringify(frame(fields)) + "\n"));
     let output = "";
     socket.setTimeout(3_000, () => { socket.destroy(); reject(new Error("fixture response timeout")); });
     socket.on("data", chunk => { output += chunk; });
@@ -194,7 +196,7 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     expect(pending()).toBe(1);
   });
   const rawRequest = (payload: string | Buffer) => new Promise<string>((resolve, reject) => {
-    const socket = createConnection(bridge.binding.socketPath, () => socket.write(payload));
+    const socket = createConnection(bridge.endpoint().path, () => socket.write(payload));
     let output = "";
     socket.setTimeout(3_000, () => { socket.destroy(); reject(new Error("fixture response timeout")); });
     socket.on("data", chunk => { output += chunk; });
@@ -222,7 +224,7 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     { operation: "reply", recipient: "peer", messageId: "out", body: "payload", replyTo: "missing" },
     { operation: "reply", recipient: "peer", messageId: "out", body: "payload", replyTo: "parent", capability: `mailbox:${"b".repeat(43)}` },
     { operation: "send", recipient: "peer", messageId: "out", body: "payload", attachment: [{ taskId: "other", runId: "run", artifactId: "x", hash: "sha256:x" }] },
-    { limit: 101 }, { ready: true }, { promptState: "clear" }, { socketPath: "/tmp/other.sock" },
+    { limit: 101 }, { ready: true }, { promptState: "clear" }, { directory: "/tmp/other.sock" },
   ])("preserves durable state after a rejected operation: %j", async (fields) => {
     incoming();
     expect((await request(fields)).ok).toBe(false);
@@ -239,20 +241,22 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     expect(pending()).toBe(1);
   });
 
-  it("does not readmit a socket after observing changed endpoint permissions", async () => {
-    incoming(); chmodSync(bridge.binding.socketPath, 0o600);
+  // A pipe has no permission bits and no filesystem entry to rename, so what these two prove is
+  // the POSIX socket file's own identity contract; the Windows integration test covers the pipe.
+  it.skipIf(windows)("does not readmit a socket after observing changed endpoint permissions", async () => {
+    incoming(); chmodSync(bridge.endpoint().path, 0o600);
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
-    if (existsSync(bridge.binding.socketPath)) chmodSync(bridge.binding.socketPath, 0o666);
+    if (existsSync(bridge.endpoint().path)) chmodSync(bridge.endpoint().path, 0o666);
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
     expect(pending()).toBe(1);
   });
 
-  it("rejects replaced endpoints and closes already-connected sockets on explicit revocation", async () => {
+  it.skipIf(windows)("rejects replaced endpoints and closes already-connected sockets on explicit revocation", async () => {
     incoming();
-    const socket = createConnection(bridge.binding.socketPath);
+    const socket = createConnection(bridge.endpoint().path);
     await once(socket, "connect");
-    renameSync(bridge.binding.socketPath, bridge.binding.socketPath + ".replaced");
-    writeFileSync(bridge.binding.socketPath, "not a socket");
+    renameSync(bridge.endpoint().path, bridge.endpoint().path + ".replaced");
+    writeFileSync(bridge.endpoint().path, "not a socket");
     expect(() => bridge.endpoint()).toThrow("mailbox_endpoint_invalid");
     const closed = once(socket, "close");
     await bridge.close(); await closed;
@@ -273,10 +277,10 @@ describe("authenticated per-attempt Unix mailbox transport", () => {
     const sockets = [];
     try {
       for (let index = 0; index < 8; index += 1) {
-        const socket = createConnection(bridge.binding.socketPath);
+        const socket = createConnection(bridge.endpoint().path);
         sockets.push(socket); await once(socket, "connect");
       }
-      const extra = createConnection(bridge.binding.socketPath);
+      const extra = createConnection(bridge.endpoint().path);
       sockets.push(extra);
       await once(extra, "close");
       expect(extra.destroyed).toBe(true);

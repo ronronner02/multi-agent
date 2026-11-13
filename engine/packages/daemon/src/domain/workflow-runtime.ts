@@ -7,6 +7,8 @@ import { prepareTeamAssignment, LeadActivation, type AssignmentInput } from "./t
 import { buildManagedNativePolicy, createContextManifest, recordedContextManifest, roleConfiguration, roleInstructionEntries, within,
   type ContextFile, type ContextInput, type ContextManifest, type ContextObservation } from "../integrations/framework/context-manifest.js";
 import { WorkerMailboxBridge } from "../adapters/worker-mailbox-bridge.js";
+import { MAILBOX_SOCKET_NAME } from "./mailbox-endpoint.js";
+import { isWindows } from "./platform.js";
 import type { ManagedAttempt } from "./runtime-adapter.js";
 import type { MailboxDelivery } from "./mailbox-delivery.js";
 import type { ChatRepository } from "./chat-repository.js";
@@ -1362,7 +1364,6 @@ export class WorkflowRuntime {
         ? resolve(roots.mailboxRoot, worker, attemptId)
         : resolve(roots.mailboxRoot, worker, runId, attemptId);
       const mailboxAtStart = existsSync(mailboxDirectoryPath);
-      const socketPath = resolve(mailboxDirectoryPath, "mailbox.sock");
       ensureMailboxDirectory(mailboxDirectoryPath,
         { mailboxRoot: roots.mailboxRoot, worker, controlStateDir: roots.controlStateDir }, this.sameIdentity);
       // Named only once this call has established the directory: the failure path removes it
@@ -1370,13 +1371,18 @@ export class WorkflowRuntime {
       mailboxDirectory = mailboxAtStart ? "" : mailboxDirectoryPath;
       // A socket left by a daemon that died is still a file; the bridge refuses to
       // listen over one, so it is removed first. It can only ever be this attempt's,
-      // because the path is built from the attempt id.
-      if (existsSync(socketPath)) rmSync(socketPath);
+      // because the path is built from the attempt id. A Windows named pipe needs no
+      // such cleanup: it stops existing when its server closes, and a name that is
+      // still served is refused rather than replaced.
+      if (!isWindows()) {
+        const staleSocket = resolve(mailboxDirectoryPath, MAILBOX_SOCKET_NAME);
+        if (existsSync(staleSocket)) rmSync(staleSocket);
+      }
       // Issued once, immediately before the endpoint that authenticates with it, and inside
       // the try so every later failure revokes it below. A token minted and then abandoned
       // would stay live for that seat with no endpoint to bound it.
       if (owned && !owned.hasCredential(runId, input.sessionId)) owned.issueCredential(runId, input.sessionId);
-      const bridge = new WorkerMailboxBridge({ socketPath, workerId: worker, sessionId: input.sessionId,
+      const bridge = new WorkerMailboxBridge({ directory: mailboxDirectoryPath, workerId: worker, sessionId: input.sessionId,
         runId, attemptId, rigId: input.rigId, taskId: input.taskId, recipients: input.recipients,
         capability: mailboxCapability },
       input.delivery, input.chat, readCredentials, input.isCurrent);

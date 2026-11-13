@@ -300,6 +300,10 @@ describe("immutable managed native policy", () => {
     expect(policy.files.every(f => f.hash === "sha256:" + createHash("sha256").update(f.content).digest("hex"))).toBe(true);
     expect(policy.files.find(f => f.workerPath.endsWith("managed-native-channel-relay.cjs"))!.content)
       .toContain('const SOCKET = "/run/multi-agent/mailbox.sock"');
+    // The relay connects to the endpoint the bootstrap names (a Windows pipe there), and falls
+    // back to the sandbox's fixed socket only when the bootstrap names none.
+    expect(policy.files.find(f => f.workerPath.endsWith("managed-native-channel-relay.cjs"))!.content)
+      .toContain('const target = typeof bootstrap.endpoint === "string" ? bootstrap.endpoint : SOCKET;');
     expect(Object.isFrozen(policy.files[0])).toBe(true);
     if (client === "claude-code") {
       expect(policy.selectedSource).toBe("/etc/claude-code/managed-settings.json");
