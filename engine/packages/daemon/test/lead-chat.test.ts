@@ -10,7 +10,7 @@ import { EventBus } from "../src/domain/event-bus.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { PlanGovernance, fixDaemonMode, hashBinding, hashBytes } from "../src/domain/plan-governance.js";
 import { bindingForGoal, unisolatedPolicyCapability, refreshPlanBinding } from "../src/routes/team-start.js";
-import { composeLeadTurnEnd, responseLanguageNote, leadChatTurnNote, listChatMessages, pendingOwnerMessages, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
+import { appendChatMessage, composeLeadTurnEnd, responseLanguageNote, leadChatTurnNote, listChatMessages, listRunActivity, pendingOwnerMessages, recordLeadReply, takeOwnerMessages } from "../src/domain/lead-chat.js";
 import { AttemptTelemetry } from "../src/domain/attempt-telemetry.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
@@ -565,27 +565,78 @@ describe("U5 — the lead turn's end is its reply", () => {
   });
   afterEach(() => { if (db?.open) db.close(); rmSync(root, { recursive: true, force: true }); });
 
+  /** A lead turn's final message, written where either client leaves it. */
+  const finalMessage = (attemptId: string, text: string) => {
+    const output = agentTurnOutputPaths(root, attemptId);
+    mkdirSync(output.directory, { recursive: true });
+    writeFileSync(output.lastMessage, text);
+  };
+  /** One task of the run, in the given queue state. */
+  const task = (taskId: string, role: "implementer" | "reviewer", state: string) => {
+    db.prepare(`INSERT INTO queue_items (qitem_id, ts_created, ts_updated, source_session, destination_session, state, priority, tier, tags, body)
+      VALUES (?, '2026-11-05T00:00:00Z', '2026-11-05T00:00:00Z', 'lead@rig', 'a@rig', ?, 'routine', 'mode-1', '[]', 'Work.')`).run(`q-${taskId}`, state);
+    db.prepare(`INSERT INTO team_queue_authority (qitem_id, run_id, task_id, assignment_json, outputs_json, permissions_json, evidence_json, entity_version)
+      VALUES (?, 'run', ?, ?, '[]', '[]', '{}', 1)`).run(`q-${taskId}`, taskId, JSON.stringify({ taskId, role, paths: ["src"], dependencies: [] }));
+  };
+
+  it("keeps a turn that needs no owner attention as activity, not chat", async () => {
+    // Covers AE4: a turn woken by a team event writes prose; nothing needs the owner, so the
+    // conversation stays quiet and the text is kept for the lead's detail view.
+    task("t1", "implementer", "in-progress");
+    finalMessage("wake-1", "Task 1 finished; task 2 is still running.\n");
+    const turnEnd = composeLeadTurnEnd({ db, governance, turnStateRoot: root, dispatch: () => undefined });
+    await turnEnd({ id: "wake-1", runId: "run", qitemId: null, role: "lead" });
+    expect(listChatMessages(db, "run")).toEqual([]);
+    expect(listRunActivity(db, "run")).toMatchObject([{ sender: "lead", body: "Task 1 finished; task 2 is still running.", attemptId: "wake-1" }]);
+  });
+
+  it("shows a turn's message when it answers the owner, reports the result, or names an owner-only blocker", async () => {
+    const turnEnd = composeLeadTurnEnd({ db, governance, turnStateRoot: root, dispatch: () => undefined });
+    // The reply: the turn carried an owner message.
+    appendChatMessage(db, { id: "m1", runId: "run", body: "What is left?", createdAt: "2026-11-05T00:00:01.000Z" });
+    takeOwnerMessages(db, "run", "reply-1");
+    finalMessage("reply-1", "Only the settings page is left.\n");
+    await turnEnd({ id: "reply-1", runId: "run", qitemId: null, role: "lead" });
+    // The result: every task of the run is done.
+    task("t1", "implementer", "done"); task("t1-review", "reviewer", "done");
+    finalMessage("result-1", "The run is ready to merge.\n");
+    await turnEnd({ id: "result-1", runId: "run", qitemId: null, role: "lead" });
+    // The blocker: a task failed for a reason only the owner can repair.
+    task("t2", "implementer", "failed");
+    db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, state, identity_json, usage_json, active_ms, created_at, updated_at, failure_json)
+      VALUES ('t2-a1', 'run', 'q-t2', 'implementer', 'claude', 'stopped', '{}', '{}', 0, '2026-11-05T00:00:00Z', '2026-11-05T00:00:00Z', ?)`)
+      .run(JSON.stringify({ reasonCode: "agent_error.provider_auth_or_access" }));
+    finalMessage("blocker-1", "Claude Code is signed out; sign in again to continue.\n");
+    await turnEnd({ id: "blocker-1", runId: "run", qitemId: null, role: "lead" });
+    expect(listChatMessages(db, "run").filter(message => message.sender === "lead").map(message => message.attemptId))
+      .toEqual(["reply-1", "result-1", "blocker-1"]);
+    expect(listRunActivity(db, "run")).toEqual([]);
+  });
+
   it("stores the turn's final message as the lead's reply, once, from either client's one file", async () => {
+    // The turn answers an owner message, so its final message is the owner's reply.
+    appendChatMessage(db, { id: "m1", runId: "run", body: "Where would you start?", createdAt: "2026-11-05T00:00:01.000Z" });
+    takeOwnerMessages(db, "run", "attempt-1");
     // The same file a Codex turn writes through `-o`, under the attempt's own output directory.
     const output = agentTurnOutputPaths(root, "attempt-1");
     mkdirSync(output.directory, { recursive: true });
     writeFileSync(output.lastMessage, "  I would start with a health endpoint.\n");
     const turnEnd = composeLeadTurnEnd({ db, governance, turnStateRoot: root, dispatch: () => undefined });
     await turnEnd({ id: "attempt-1", runId: "run", qitemId: null, role: "lead" });
-    expect(listChatMessages(db, "run")).toMatchObject([{ sender: "lead", body: "I would start with a health endpoint.",
+    expect(listChatMessages(db, "run").filter(message => message.sender === "lead")).toMatchObject([{ sender: "lead", body: "I would start with a health endpoint.",
       attemptId: "attempt-1" }]);
     // A second sweep observation records nothing twice.
     await turnEnd({ id: "attempt-1", runId: "run", qitemId: null, role: "lead" });
-    expect(listChatMessages(db, "run")).toHaveLength(1);
+    expect(listChatMessages(db, "run")).toHaveLength(2);
     // A turn with no recorded final message stores no reply at all.
     await turnEnd({ id: "attempt-2", runId: "run", qitemId: null, role: "lead" });
-    expect(listChatMessages(db, "run")).toHaveLength(1);
+    expect(listChatMessages(db, "run")).toHaveLength(2);
     // A non-lead attempt's message is not a chat reply.
     const implementer = agentTurnOutputPaths(root, "attempt-3");
     mkdirSync(implementer.directory, { recursive: true });
     writeFileSync(implementer.lastMessage, "implemented\n");
     await turnEnd({ id: "attempt-3", runId: "run", qitemId: null, role: "implementer" });
-    expect(listChatMessages(db, "run")).toHaveLength(1);
+    expect(listChatMessages(db, "run")).toHaveLength(2);
   });
 
   it("asks the turn-end owner once the sweep has observed the lead's attempt stop", async () => {

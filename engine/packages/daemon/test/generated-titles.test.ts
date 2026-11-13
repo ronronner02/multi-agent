@@ -8,7 +8,7 @@ import { initializeDatabase } from "../src/db/baseline.js";
 import { agentTurnOutputPaths } from "../src/domain/agent-turn.js";
 import { generatedReplyTitle } from "../src/domain/display-names.js";
 import { EventBus } from "../src/domain/event-bus.js";
-import { composeLeadTurnEnd, listChatMessages } from "../src/domain/lead-chat.js";
+import { composeLeadTurnEnd, listChatMessages, listRunActivity } from "../src/domain/lead-chat.js";
 import { PlanGovernance, hashBinding } from "../src/domain/plan-governance.js";
 import { QueueRepository } from "../src/domain/queue-repository.js";
 import { unisolatedPolicyCapability } from "../src/routes/team-start.js";
@@ -85,17 +85,17 @@ describe("lead turn title persistence", () => {
     const body = "# Clarify product requirements\n\nI will read the complete documents, identify the product requirements, and discuss open choices.";
     await finish("turn-1", body);
     expect(names()).toEqual({ run: "Clarify product requirements", task: "Clarify product requirements" });
-    expect(listChatMessages(db, "run").map(message => message.body)).toEqual([body]);
+    expect(listRunActivity(db, "run").map(message => message.body)).toEqual([body]);
     expect(db.prepare("SELECT body FROM queue_items WHERE qitem_id = 'lead-item'").get()).toEqual({ body: goal });
     await finish("turn-1", "# A stale replay title\n\nA changed observation of the same attempt.");
     expect(names()).toEqual({ run: "Clarify product requirements", task: "Clarify product requirements" });
-    expect(listChatMessages(db, "run").map(message => message.body)).toEqual([body]);
+    expect(listRunActivity(db, "run").map(message => message.body)).toEqual([body]);
   });
 
   it("keeps the existing labels for a legacy reply or a non-lead attempt", async () => {
     await finish("legacy", "I will read the documents.\n\n# A detail heading");
     await finish("implementation", "# An implementation result", "implementer");
     expect(names()).toEqual({ run: initialName, task: initialName });
-    expect(listChatMessages(db, "run")).toHaveLength(1);
+    expect(listRunActivity(db, "run")).toHaveLength(1);
   });
 });

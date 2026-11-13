@@ -90,7 +90,7 @@ describe("fresh team baseline", () => {
       .all().map(row => (row as {name: string}).name)).toEqual(tables);
     // Captured from the replaced chain, restricted to the retained tables and their objects.
     // This also pins every column type, default, CHECK, UNIQUE and FK declaration.
-    expect(hash(JSON.stringify(schema(db)))).toBe("0736d1a3fadb03a62f74bbd3283b8f06c4272edb2975ef21601d22fc24cb7a26");
+    expect(hash(JSON.stringify(schema(db)))).toBe("6517c96974dfe8832d1dc26b29124164a3589a0d9518df1bc5dc29e5a8f61d3a");
     expect(schema(db).filter(row => (row as {type: string}).type === "index")).toHaveLength(80);
     expect(schema(db).filter(row => (row as {type: string}).type === "trigger")).toHaveLength(1);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -124,13 +124,13 @@ describe("fresh team baseline", () => {
     expect(reopened.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION);
   });
 
-  it("refuses a database marked with an earlier baseline", () => {
+  it("refuses a database marked with an earlier baseline no upgrade step reaches", () => {
     const file = join(directory(), "multi-agent.sqlite");
     const earlier = new Database(file); connections.push(earlier);
     earlier.exec("CREATE TABLE rigs (id TEXT PRIMARY KEY)");
-    earlier.pragma(`user_version = ${BASELINE_VERSION - 1}`);
+    earlier.pragma(`user_version = 1`);
     expect(() => initializeDatabase(earlier, file)).toThrow(LegacyDatabaseError);
-    expect(earlier.pragma("user_version", { simple: true })).toBe(BASELINE_VERSION - 1);
+    expect(earlier.pragma("user_version", { simple: true })).toBe(1);
     expect(earlier.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toEqual([{ name: "rigs" }]);
   });
 

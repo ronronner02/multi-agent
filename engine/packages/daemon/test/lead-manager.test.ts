@@ -10,7 +10,7 @@ import { TEAM_CONTROL_VERSION, TeamContractError, type ControlRequest } from "..
 import { composeAttemptCompletion } from "../src/domain/attempt-completion.js";
 import { agentTurnOutputPaths, continuationNote } from "../src/domain/agent-turn.js";
 import { EventBus } from "../src/domain/event-bus.js";
-import { composeLeadTurnEnd, leadChatTurnNote, pendingOwnerMessages } from "../src/domain/lead-chat.js";
+import { composeLeadTurnEnd, leadChatTurnNote, listRunActivity, pendingOwnerMessages } from "../src/domain/lead-chat.js";
 import { LeadProposalMissingError, parseLeadProposalFile, type LeadProposal } from "../src/domain/lead-proposal.js";
 import { composeLeadManager, deliveredLeadEvents, leadTeamEvents, proposalRefusalReason } from "../src/domain/lead-manager.js";
 import { LeadWakePolicy } from "../src/domain/lead-wake-policy.js";
@@ -365,9 +365,9 @@ describe("U6 — the lead as manager", () => {
     mkdirSync(next.directory, { recursive: true });
     writeFileSync(next.lastMessage, "Still waiting on your answer.\n");
     await turnEnd({ id: "attempt-lead-2", runId: "run", qitemId: leadQitemId, role: "lead" });
-    expect(governance.chatMessages("run")).toHaveLength(2);
-    expect(governance.chatMessages("run")[1]).toMatchObject({ sender: "lead", kind: "text",
-      body: "Still waiting on your answer." });
+    expect(governance.chatMessages("run")).toHaveLength(1);
+    expect(listRunActivity(db, "run")).toMatchObject([{ sender: "lead", kind: "text",
+      body: "Still waiting on your answer." }]);
 
     endLeadTurn();
     const answered = governance.postChatMessage(request("chat-answer", { body: escalation.options[0], answerTo: decision.id }),
