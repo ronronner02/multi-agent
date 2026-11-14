@@ -345,6 +345,31 @@ describe("what a continuation is told", () => {
     expect(pendingOwnerMessages(db, "run")).toHaveLength(0);
   });
 
+  it("records the receipt a launch returns, so the completion sweep can admit and close the turn", async () => {
+    // 5dcfd9e rewrote the orchestrator without the receipt event. The completion sweep admits an
+    // attempt only from that event, so every native turn ran, ended and was never recorded: the
+    // lead's reply was lost and its task stayed pending forever.
+    expect(governance.createTask(command("task-1", { assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] },
+      outputs: [], permissions: ["request-assignment"], sourceSession: "owner", destinationSession: "lead@rig",
+      body: "Lead the approved goal." }), binding).status).toBe("accepted");
+    const context = { ...manifest("lead-attempt-1"),
+      assignment: { taskId: "task-1", role: "lead", paths: ["src"], dependencies: [] } } as ContextManifest;
+    const receipt = { attemptId: "lead-attempt-1", runId: "run", client: "codex", identity: { nativeSessionId: null, paneId: null } };
+    const adapter = { project: async () => ({ failed: [] }), deliverStartup: async () => ({ failed: [] }),
+      launchHarness: async () => ({ ok: true, managedSession: receipt }), checkReady: async () => ({ ready: true }) } as unknown as RuntimeAdapter;
+    const orchestrator = new StartupOrchestrator({ db, sessionRegistry: new SessionRegistry(db), eventBus: new EventBus(db) });
+    const started = await orchestrator.startNode({ rigId: "rig", nodeId: "lead-node", sessionId: "s-lead-node",
+      binding: { id: "direct:lead-node", nodeId: "lead-node", attachmentType: "external_cli", tmuxSession: "lead@rig", tmuxWindow: null,
+        tmuxPane: null, cmuxWorkspace: null, cmuxSurface: null, updatedAt: "", cwd: root, model: "gpt-6.1-sol",
+        managedAttempt: { attemptId: "lead-attempt-1", deadline: Date.now() + 60_000, context } },
+      adapter, plan: { runtime: "codex", cwd: root, entries: [], startup: { files: [], actions: [] }, conflicts: [], noOps: [], diagnostics: [] },
+      resolvedStartupFiles: [], startupActions: [], isRestore: false, sessionName: "lead@rig", runId: "run", taskId: "task-1" });
+    expect(started.ok, JSON.stringify(started)).toBe(true);
+    const events = db.prepare("SELECT payload FROM events WHERE type = 'managed.attempt.receipt'").all() as { payload: string }[];
+    expect(events.map(row => JSON.parse(row.payload))).toMatchObject([{ type: "managed.attempt.receipt", rigId: "rig", nodeId: "lead-node",
+      sessionId: "s-lead-node", runId: "run", sessionName: "lead@rig", requestedModel: "gpt-6.1-sol", receipt }]);
+  });
+
   /** Launch one turn through the orchestrator without starting a client, and return its prompt. */
   async function launchedPrompt(nodeId: string, seat: string, assignment: ContextManifest["assignment"], attemptId: string): Promise<string> {
     const context = { ...manifest(attemptId), assignment } as ContextManifest;

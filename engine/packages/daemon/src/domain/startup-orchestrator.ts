@@ -76,6 +76,13 @@ export class StartupOrchestrator {
       const launch = input.skipHarnessLaunch ? { ok: true as const } : await input.adapter.launchHarness(binding, { name: input.sessionName ?? input.sessionId,
         ...(input.resumeToken ? { resumeToken: input.resumeToken } : {}), ...(input.continueSessionId ? { continueSessionId: input.continueSessionId } : {}), ...(input.forkSource ? { forkSource: input.forkSource } : {}) });
       if (!launch.ok) throw new Error(launch.error);
+      // The completion sweep admits an attempt only from this event, so it is recorded before
+      // readiness can fail: a turn that started must be closed even if it never became ready.
+      if ("managedSession" in launch && launch.managedSession) {
+        this.events.emit({ type: "managed.attempt.receipt", rigId: input.rigId, nodeId: input.nodeId, sessionId: input.sessionId,
+          runId: launch.managedSession.runId, sessionName: input.sessionName ?? input.sessionId,
+          requestedModel: binding.model ?? null, receipt: launch.managedSession });
+      }
       const ready = input.skipHarnessLaunch ? { ready: true } : await input.adapter.checkReady(binding);
       if (!ready.ready) throw new Error(ready.reason ?? ready.code ?? "Native worker is not ready");
       input.assertContinuation?.();
