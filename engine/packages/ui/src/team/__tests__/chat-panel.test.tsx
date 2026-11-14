@@ -444,6 +444,15 @@ describe("persistent lead chat", () => {
     });
   });
 
+  it("offers cancellation when planning evidence is still unavailable", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await show(planningRead(), { ...planningChat(), planApproval: undefined });
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/cancel`);
+  });
+
   it.each([
     ["unread proposal", undefined],
     ["missing plan", { ...planApproval, plan: null }],
