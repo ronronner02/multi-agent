@@ -270,6 +270,17 @@ describe("U5 — lead chat and plan approval", () => {
     recordLeadReply(db, { id: "chat-attempt-live", runId: receipt.runId!, attemptId: "attempt-live", body: "The final reply.",
       createdAt: "2026-11-08T01:01:00Z" });
     expect(await (await call(`/runs/${receipt.runId}/chat`)).json()).toMatchObject({ liveTurn: null });
+    // Plan KTD3 — a later turn kept as activity has ended too, and is readable without joining the conversation.
+    db.prepare(`INSERT INTO team_attempts (id, run_id, qitem_id, role, provider, identity_json, unknown_reason, state,
+      usage_json, active_ms, created_at, updated_at) SELECT 'attempt-quiet', run_id, qitem_id, role, provider, identity_json, NULL, 'running',
+      usage_json, 0, '2026-11-04T00:01:00.000Z', '2026-11-04T00:01:00.000Z' FROM team_attempts WHERE id = 'attempt-live'`).run();
+    expect(await (await call(`/runs/${receipt.runId}/chat`)).json()).toMatchObject({ liveTurn: { attemptId: "attempt-quiet" } });
+    recordLeadReply(db, { id: "chat-attempt-quiet", runId: receipt.runId!, attemptId: "attempt-quiet", body: "Task 1 finished.",
+      createdAt: "2026-11-08T01:02:00Z", visibility: "activity" });
+    const quiet = await (await call(`/runs/${receipt.runId}/chat`)).json();
+    expect(quiet).toMatchObject({ liveTurn: null,
+      activity: [{ id: "chat-attempt-quiet", body: "Task 1 finished.", createdAt: "2026-11-08T01:02:00Z" }] });
+    expect(quiet.messages.map((message: { body: string }) => message.body)).not.toContain("Task 1 finished.");
   });
 
   it("refuses a plan approval with no plan in the lead's tree", async () => {

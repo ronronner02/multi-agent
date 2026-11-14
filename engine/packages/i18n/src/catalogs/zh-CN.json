@@ -600,6 +600,7 @@
   "chat.progress.failed": "本轮发生错误",
   "chat.progress.stopped": "本轮已结束",
   "chat.tools": "工具活动",
+  "chat.activity": "负责人动态（{{count}}）",
   "chat.liveInterrupted": "实时更新已中断，已收到的内容仍然保留。",
   "chat.liveTruncated": "实时预览已缩短，保存后的回复仍在对话中。",
   "layout.showMore": "展开全文",

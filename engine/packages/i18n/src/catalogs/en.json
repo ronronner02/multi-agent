@@ -600,6 +600,7 @@
   "chat.progress.failed": "This turn failed",
   "chat.progress.stopped": "Turn ended",
   "chat.tools": "Tool activity",
+  "chat.activity": "Lead activity ({{count}})",
   "chat.liveInterrupted": "Live updates interrupted. The last received output is retained.",
   "chat.liveTruncated": "Live preview shortened. The saved reply remains in the conversation.",
   "layout.showMore": "Show more",

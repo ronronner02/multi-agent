@@ -117,6 +117,21 @@ describe("persistent lead chat", () => {
     expect(await readChat(request, RUN_ID)).toMatchObject({ liveTurn });
   });
 
+  it("keeps the lead's quiet turns in a collapsed activity list, apart from the conversation", async () => {
+    const activity = [{ id: "quiet-1", body: "Task 1 finished; task 2 is still running.", createdAt: "2026-11-08T01:02:00Z" }];
+    request.mockResolvedValueOnce({ ...chat, activity });
+    expect(await readChat(request, RUN_ID)).toMatchObject({ activity });
+    await show(read(), { ...chat, activity });
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    const details = screen.getByText("Lead activity (1)").closest("details")!;
+    expect(details.open).toBe(false);
+    expect(within(details).getByText("Task 1 finished; task 2 is still running.")).toBeTruthy();
+    cleanup();
+    await show(read(), chat);
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    expect(screen.queryByText(/Lead activity/)).toBeNull();
+  });
+
   it("updates an actual response block in place, then replaces it with the saved reply and a question", async () => {
     const first = { ...planningChat(), liveTurn: { attemptId: "live-1", state: "running" as const, activity: null,
       progress: { sequence: 1, at: "2026-11-08T01:00:00Z", status: "responding" as const, truncated: false,

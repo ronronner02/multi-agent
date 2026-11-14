@@ -26,7 +26,7 @@ import type { LeadTask, LeadResolution } from "./lead-proposal.js";
 import { parseTaskReport } from "./task-report.js";
 import { planningRosterRequired, rosterRefusal, type LeadRosterSeat, type LeadSeatChanges } from "./lead-roster.js";
 import { addTeamSeats, nextTeamSeatNames } from "./team-setup.js";
-import { appendChatMessage, answerDecision, chatBody, parseResponseLanguage, getChatMessage, listChatMessages, pendingDecision, pendingOwnerMessages, runLeadTask, ownerMessageSlot, type TeamChatMessage, type ResponseLanguage } from "./lead-chat.js";
+import { appendChatMessage, answerDecision, chatBody, parseResponseLanguage, getChatMessage, listChatMessages, listRunActivity, pendingDecision, pendingOwnerMessages, runLeadTask, ownerMessageSlot, type TeamChatMessage, type ResponseLanguage } from "./lead-chat.js";
 import { blockingFindings, recordedFindings, reviewBody, reviewerTaskId, reviewVerdict } from "./review-loop.js";
 import { appendTaskComment, listTaskComments, moveTaskComments, pendingTaskComments, type TaskComment } from "./task-thread.js";
 import type { ReviewFinding } from "./review-evidence.js";
@@ -1325,6 +1325,12 @@ export class PlanGovernance {
   chatMessages(runId: string): TeamChatMessage[] {
     this.getRun(runId);
     return listChatMessages(this.db, runId);
+  }
+
+  /** Plan KTD3 — the lead messages that needed no owner attention, kept as the run's activity. */
+  activityMessages(runId: string): TeamChatMessage[] {
+    this.getRun(runId);
+    return listRunActivity(this.db, runId);
   }
 
   /** U5 — the run's one lead task: the task a chat message and a plan approval address. */
