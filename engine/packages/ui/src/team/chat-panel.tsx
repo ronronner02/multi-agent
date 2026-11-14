@@ -296,6 +296,7 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
   const proposal = chat?.planApproval;
   const proposalReady = proposal === null || (!!proposal?.plan?.content.trim() && !!proposal.roster?.digest && !proposal.error);
   const updating = !approved && documentDiscussionPending(read, chat);
+  const needsRecovery = !approved && !!proposal?.error && !proposal.plan && !proposal.roster;
   const canApprove = chat?.available && chat.phase === "planning" && proposalReady && !updating && read.run.state === "approved"
     && (!chat.documentWorkflow || !!proposal?.documentVersions);
   const work = read.tasks.filter(task => task.role !== "reviewer").length;
@@ -313,6 +314,7 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
       </p>)}
     </div>}
     {!approved && (updating || !proposalReady) && !proposal?.error && <p className="plate-meta">{t("team.plan.preparing")}</p>}
+    {needsRecovery && <p className="plate-meta">{t("team.plan.staleRun")}</p>}
     {(!updating && proposal?.error || failed) && <p role="alert" style={{ color: "var(--danger)", fontSize: 13 }}>
       {proposal?.error || t("team.plan.approvalFailed")}
     </p>}

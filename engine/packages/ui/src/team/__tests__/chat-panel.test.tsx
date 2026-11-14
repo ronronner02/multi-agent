@@ -420,6 +420,16 @@ describe("persistent lead chat", () => {
     expect(within(roster).getByText("Reviewer · Claude Code")).toBeTruthy();
   });
 
+  it("explains recovery for a planning run with no recorded proposal while keeping approval disabled", async () => {
+    await show(planningRead(), { ...planningChat(), planApproval: { plan: null, roster: null, error: "The planning files are not available yet." } });
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    expect(screen.getByText("No plan or team evidence was recorded for this run. If the lead never replied, cancel this run and start a new one; approval stays disabled until the new plan is available.")).toBeTruthy();
+    const approve = screen.getByRole("button", { name: "Approve plan" }) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    fireEvent.click(approve);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["unread proposal", undefined],
     ["missing plan", { ...planApproval, plan: null }],
