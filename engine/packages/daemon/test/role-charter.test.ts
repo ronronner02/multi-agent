@@ -6,6 +6,7 @@ import type { TeamRole } from "../src/contracts/team-control.js";
 import { createDb } from "../src/db/connection.js";
 import { initializeDatabase } from "../src/db/baseline.js";
 import { leadActivation, leadInstructions, planningInstructions } from "../src/domain/lead-proposal.js";
+import { teamSectionsText } from "../src/domain/team-prompt-sections.js";
 import { leadProtocol, LEAD_PROTOCOL_VERSION } from "../src/integrations/framework/context-manifest.js";
 
 // KTD28 / U14: the charters are pinned source, the reviewer charter's report
@@ -34,14 +35,18 @@ describe("role charters", () => {
   });
 
   it("projects protocol 6 and keeps each composed role prompt within 16 KiB", () => {
+    const sectionsDb = createDb();
+    initializeDatabase(sectionsDb);
     expect(LEAD_PROTOCOL_VERSION).toBe("6");
     expect(instructionVersion(leadProtocol)).toBe("6");
     for (const role of roles) {
       const brief = role === "lead" ? Math.max(leadInstructions("A".repeat(300)).length,
         planningInstructions("A".repeat(300), "docs/plan.md", true).length) : 1_024;
-      const bytes = Buffer.byteLength([coreInstructions, roleCharters[role], role === "lead" ? leadProtocol : ""].join("\n")) + brief;
+      // What an attempt reads: the core, its charter (the Lead's is its protocol, projected once) and the team sections.
+      const bytes = Buffer.byteLength([...roleInstructionEntries(role).map(([, content]) => content), teamSectionsText(sectionsDb, "none")].join("\n")) + brief;
       expect(bytes, role).toBeLessThanOrEqual(16_384);
     }
+    sectionsDb.close();
     expect(planningInstructions("Build a feature", "docs/plan.md", true, 4)).toContain("docs/lead-roster.json");
     expect(planningInstructions("Build a feature", "docs/plan.md", true, 4)).toContain("at most 4");
     expect(coreInstructions).toContain("rules enforced by the daemon; the core and role charters; the task brief");
@@ -71,7 +76,8 @@ describe("role charters", () => {
         { role: "implementer", client: "codex", model: null, count: seatCount / 2 - 1 },
         { role: "reviewer", client: "codex", model: null, count: 1 },
       ]));
-      const prompt = [coreInstructions, roleCharters.lead, leadProtocol, activation.instructions].join("\n");
+      const prompt = [...roleInstructionEntries("lead").map(([, content]) => content), teamSectionsText(db, "budget-rig"),
+        activation.instructions].join("\n");
       expect(Buffer.byteLength(prompt)).toBeLessThanOrEqual(16_384);
     } finally { db.close(); }
   });
