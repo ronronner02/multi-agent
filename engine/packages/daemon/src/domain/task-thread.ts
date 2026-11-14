@@ -57,14 +57,24 @@ export function handbackPath(taskReportPath: string): string {
   return join(dirname(taskReportPath), "handback.json");
 }
 
-/** The turn prompt's note for the comments it carries, and how to hand one back. */
-export function taskCommentNote(comments: readonly TaskComment[], handbackFile: string): string | null {
+/** Plan R19 — the GitHub review comments a turn declines sit beside its hand-back file, in the same shape. */
+export function declinePath(taskReportPath: string): string {
+  return join(dirname(taskReportPath), "declined.json");
+}
+
+/** The turn prompt's note for the comments it carries, and how to hand one back or decline a GitHub one. */
+export function taskCommentNote(comments: readonly TaskComment[], handbackFile: string, declineFile?: string): string | null {
   if (!comments.length) return null;
+  const github = declineFile !== undefined && comments.some(comment => comment.id.startsWith("gh-"));
   return ["The owner commented on this task:",
     ...comments.map(comment => `Comment ${comment.id}: ${comment.body}`),
     "Act on each comment within this task's paths and the approved plan. A comment that asks for work beyond this task, or belongs " +
       `to another task, is not yours: write [{"messageId":"<id>","reason":"<one sentence>"}] to ${JSON.stringify(handbackFile)} ` +
-      "and do not act on it. Leave ordinary discussion unanswered."].join("\n\n");
+      "and do not act on it. Leave ordinary discussion unanswered.",
+    ...(github ? ["Comments whose id starts with gh- are GitHub review comments on the team's pull request. Never post on GitHub " +
+      "yourself; the team's agent account answers for you. To decline one, write " +
+      `[{"messageId":"<id>","reason":"<one sentence, in the reviewer's language>"}] to ${JSON.stringify(declineFile)}: the reason ` +
+      "is posted as the reply. Every other GitHub comment you took counts as fixed, and its thread is resolved once your change is pushed."] : [])].join("\n\n");
 }
 
 export interface Handback { messageId: string; reason: string }

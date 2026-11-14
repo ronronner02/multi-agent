@@ -74,6 +74,26 @@ export const TEAM_INTAKE_SQL = [`CREATE TABLE team_intake_policies (
       since TEXT NOT NULL
     )`].join(";\n");
 
+/**
+ * Plan R19 — a GitHub review comment a task took, and the reply its outcome owes: a resolved
+ * thread once the fix is pushed, or one sentence of reason. Shared by the baseline and step 8→9.
+ */
+export const TEAM_GITHUB_THREADS_SQL = `CREATE TABLE team_github_threads (
+      run_id TEXT NOT NULL REFERENCES team_runs(id),
+      message_id TEXT NOT NULL,
+      repository TEXT NOT NULL,
+      number INTEGER NOT NULL CHECK (number > 0),
+      comment_id INTEGER NOT NULL,
+      node_id TEXT NOT NULL,
+      outcome TEXT CHECK (outcome IS NULL OR outcome IN ('fixed', 'declined')),
+      reason TEXT,
+      head_sha TEXT,
+      state TEXT NOT NULL CHECK (state IN ('open', 'done', 'failed')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (run_id, message_id)
+    )`;
+
 export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   // Plan KTD3: a lead message that needs no owner attention is kept as run activity.
   { from: 2, to: 3, sql: "ALTER TABLE team_chat_messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity'))" },
@@ -85,6 +105,7 @@ export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   { from: 5, to: 6, sql: TEAM_PULL_REQUESTS_SQL },
   { from: 6, to: 7, sql: TEAM_GITHUB_SEEN_SQL },
   { from: 7, to: 8, sql: TEAM_INTAKE_SQL },
+  { from: 8, to: 9, sql: TEAM_GITHUB_THREADS_SQL },
 ];
 
 /** The steps from `from` to `to`, in order, or null when the chain does not reach. */

@@ -5,6 +5,8 @@ import { isWindows, treeKillArgv } from "./platform.js";
 
 const execute = promisify(execFile);
 const HOST = "github.com";
+/** What one paginated API read may return. */
+const API_READ_LIMIT = 16 * 1024 * 1024;
 const DEVICE_URL = "https://github.com/login/device";
 
 const MAX_STDERR_BYTES = 2048;
@@ -166,13 +168,13 @@ export class GithubCli {
     throw new GithubCliError("github_cli_missing");
   }
 
-  private async run(args: string[], options: { cwd?: string; timeout?: number; failure?: GithubCliErrorCode } = {}):
+  private async run(args: string[], options: { cwd?: string; timeout?: number; failure?: GithubCliErrorCode; maxBuffer?: number } = {}):
     Promise<{ stdout: string; stderr: string; ok: boolean }> {
     const { executable, args: fullArgs, env } = this.ghArgv(args);
     try {
       const { stdout, stderr } = await execute(executable, fullArgs, {
         windowsHide: true,
-        env, encoding: "utf8", timeout: options.timeout ?? 15_000, maxBuffer: 65_536, cwd: options.cwd,
+        env, encoding: "utf8", timeout: options.timeout ?? 15_000, maxBuffer: options.maxBuffer ?? 65_536, cwd: options.cwd,
       });
       return { stdout, stderr, ok: true };
     } catch (error) {
@@ -304,10 +306,30 @@ export class GithubCli {
 
   /** Plan KTD12 — one REST read, every page joined into one array when the answer is a list. */
   async apiGet<T = unknown>(path: string): Promise<T> {
-    const result = await this.run(["api", path, "--hostname", HOST, "--paginate", "--slurp"], { timeout: 30_000, failure: "github_network_failure" });
+    // A busy pull request's comments run to megabytes across pages; the 64 KiB default would fail the read.
+    const result = await this.run(["api", path, "--hostname", HOST, "--paginate", "--slurp"],
+      { timeout: 30_000, failure: "github_network_failure", maxBuffer: API_READ_LIMIT });
     if (!result.ok) throw new GithubCliError("github_network_failure", redactCredentials(result.stderr));
     const pages = JSON.parse(result.stdout || "[]") as unknown[];
     return (pages.every(Array.isArray) ? (pages as unknown[][]).flat() : pages[0]) as T;
+  }
+
+  /** A REST write as this account. Each field is sent as a string. */
+  async apiPost<T = unknown>(path: string, fields: Record<string, string>): Promise<T> {
+    const result = await this.run(["api", "-X", "POST", path, "--hostname", HOST,
+      ...Object.entries(fields).flatMap(([key, value]) => ["-f", `${key}=${value}`])],
+    { timeout: 30_000, failure: "github_network_failure", maxBuffer: API_READ_LIMIT });
+    if (!result.ok) throw new GithubCliError("github_network_failure", redactCredentials(result.stderr));
+    return JSON.parse(result.stdout || "null") as T;
+  }
+
+  /** A GraphQL request as this account; numbers are sent typed, strings as strings. */
+  async graphql<T = unknown>(query: string, variables: Record<string, string | number>): Promise<T> {
+    const result = await this.run(["api", "graphql", "--hostname", HOST, "-f", `query=${query}`,
+      ...Object.entries(variables).flatMap(([key, value]) => [typeof value === "number" ? "-F" : "-f", `${key}=${value}`])],
+    { timeout: 30_000, failure: "github_network_failure", maxBuffer: API_READ_LIMIT });
+    if (!result.ok) throw new GithubCliError("github_network_failure", redactCredentials(result.stderr));
+    return (JSON.parse(result.stdout || "{}") as { data: T }).data;
   }
 
   /** Push one branch to the checkout's origin as this account, a collaborator rather than the owner. */

@@ -1084,7 +1084,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const turnStateRoot = nodePath.join(rootsNow().workerRoot, rootsNow().worker, "scratch");
     const telemetry = new AttemptTelemetry(db, { turnStateRoot });
     deps.attemptTelemetry = telemetry;
-    const { composeTaskThreads } = await import("./domain/task-thread.js");
+    const { composeTaskThreads, declinePath } = await import("./domain/task-thread.js");
+    const { agentTurnOutputPaths } = await import("./domain/agent-turn.js");
     const taskThreads = composeTaskThreads({ db, governance: teamGovernance, turnStateRoot, dispatch: () => deps.teamControl?.dispatch });
     // U4 — a restart reconciles the attempts its predecessor left running before the first sweep.
     const { bootReconcileAttempts } = await import("./domain/boot-recovery.js");
@@ -1144,6 +1145,8 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
         await leadManager.turnEnd(attempt);
         // Plan R9 — comments an implementer handed back become the lead's owner messages.
         await taskThreads.attemptStopped(attempt);
+        // Plan R19 — the outcome of the GitHub review comments the turn took, answered on the next sweeps.
+        deps.githubSource?.attemptStopped(attempt, declinePath(agentTurnOutputPaths(turnStateRoot, attempt.id).taskReport));
       },
       // U7 — an approving review is the run's signal to deliver: the implementer's task lands as
       // one commit on the run's branch, through the same owner the merge route reads.
