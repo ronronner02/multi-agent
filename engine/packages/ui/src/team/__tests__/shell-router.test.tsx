@@ -37,6 +37,7 @@ beforeEach(() => {
       if (path === "/api/team-control/workflows") return response({ workflows: FRAMEWORK_CATALOG });
       if (path === `/api/team-control/runs/${RUN_ID}/workflows`) return response({ workflows: [] });
       if (path === "/api/team-control/teams/fresh-project/prompt-sections") return response({ revision: 0, sections: [] });
+      if (/\/api\/team-control\/teams\/[^/]+\/intake$/.test(path)) return response({ policy: { revision: 0, mode: "observe", rules: [] }, repository: null, items: [] });
       if (path === "/api/team-control/teams/fresh-project/souls") return response({
         profiles: [{ id: "coordinator", name: "Project coordinator", roles: ["lead"], version: 1,
           content: "Plan and delegate the approved work.", digest: "b".repeat(64) }],
@@ -177,7 +178,7 @@ describe("command-center router integration", () => {
     const field = within(panel).getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
     fireEvent.change(field, { target: { value: "Retain this question across sections" } });
     const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
-    for (const section of ["Documents", "Tasks", "Documents", "Workspace", "Reviews", "Documents", "Analytics", "Settings", "Overview"]) {
+    for (const section of ["Documents", "Inbox", "Tasks", "Documents", "Workspace", "Reviews", "Documents", "Analytics", "Settings", "Overview"]) {
       const link = within(nav).getByRole("link", { name: section });
       fireEvent.pointerDown(link); fireEvent.click(link);
       await waitFor(() => expect(router.state.location.pathname).toBe(`/team/${section.toLowerCase()}`));
@@ -185,7 +186,8 @@ describe("command-center router integration", () => {
       expect(link.getAttribute("aria-current")).toBe("page");
       expect(within(panel).getByRole("textbox", { name: "Message" })).toBe(field);
       expect(field.value).toBe("Retain this question across sections");
-      expect(screen.queryAllByRole("heading", { name: "Documents" })).toHaveLength(section === "Documents" ? 1 : 0);
+      expect(screen.queryAllByRole("heading", { name: section === "Inbox" ? "Inbox" : "Documents" }))
+        .toHaveLength(section === "Documents" || section === "Inbox" ? 1 : 0);
     }
     expect(renderErrors).not.toHaveBeenCalled();
     const rows = within(panel).getByRole("region", { name: "Needs your attention" });

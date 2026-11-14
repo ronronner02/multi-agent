@@ -925,6 +925,26 @@ html[data-desktop="true"] .team-shell .ui-entry-header :is(button, a, input, sel
 .ui-default-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .ui-default-compare pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin: 0; }
 .ui-save-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* U13 — accept mode, rules and the project inbox reuse the settings and card surfaces. */
+.ui-intake-modes { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 16px; }
+.ui-intake-modes legend { margin-bottom: 8px; }
+.team-shell .ui-intake-rule { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--ui-divider-soft); }
+.team-shell .ui-intake-rule .field { max-width: none; }
+.team-shell .ui-intake-rule-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.team-shell .ui-inbox .ui-page-head > span { font-size: 12px; overflow-wrap: anywhere; }
+.team-shell .ui-intake-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.team-shell .ui-intake-list > li { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--ui-divider); border-radius: var(--ui-radius); background: var(--ui-surface); }
+.team-shell .ui-intake-status { display: grid; justify-items: start; gap: 8px; }
+.team-shell .ui-intake-open { display: flex; align-items: baseline; gap: 10px; color: inherit; min-width: 0; }
+.team-shell .ui-intake-open strong { font-weight: 500; min-width: 0; }
+.team-shell .ui-intake-open:hover strong { text-decoration: underline; }
+.team-shell .ui-intake-open > svg { width: 14px; height: 14px; margin-left: auto; flex-shrink: 0; color: var(--ui-muted); }
+.team-shell .ui-intake-kind { flex-shrink: 0; font-size: 11px; color: var(--ui-muted); text-transform: uppercase; letter-spacing: .04em; }
+.team-shell .ui-intake-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-muted); overflow-wrap: anywhere; }
+.team-shell .ui-intake-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.team-shell .ui-intake-actions .btn { min-height: 32px; padding: 4px 12px; font-size: 12px; }
+.team-shell .ui-intake-list > li[data-explicit="true"] { border-color: var(--ui-accent); }
+.team-shell .ui-intake-explicit { border-color: var(--ui-accent); color: var(--ui-text); }
 @media (max-width: 760px) { .ui-default-compare { grid-template-columns: 1fr; } }
 .ui-workflow-outcomes { margin-block: 12px; overflow-wrap: anywhere; }
 

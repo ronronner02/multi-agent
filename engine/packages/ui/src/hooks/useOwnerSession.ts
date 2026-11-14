@@ -2,7 +2,8 @@ import { createContext, createElement, useCallback, useContext, useRef, useState
 import { parseProtocolVersion } from "../../../daemon/dist/contracts/team-control.js";
 
 export class OwnerReadError extends Error {
-  constructor(readonly status: number, readonly code: string, readonly details: { oversizedPaths?: string[] } = {}) {
+  /** `error` keeps the daemon's own explanation when a refusal has one; `code` stays the mapping key. */
+  constructor(readonly status: number, readonly code: string, readonly details: { oversizedPaths?: string[] } = {}, readonly error: string | null = null) {
     super(code);
   }
 }
@@ -73,7 +74,8 @@ function usePairedBrowser() {
       // Other requests must not clear a credential while revocation uses it.
       if (rejectedSession && (automaticReconnect.current || path === "/owner-session") && credential.current === token) clearSession();
       throw new OwnerReadError(response.status, body.code ?? "read_failed",
-        Array.isArray(body.oversizedPaths) ? { oversizedPaths: body.oversizedPaths.filter((path: unknown): path is string => typeof path === "string") } : {});
+        Array.isArray(body.oversizedPaths) ? { oversizedPaths: body.oversizedPaths.filter((path: unknown): path is string => typeof path === "string") } : {},
+        typeof body.error === "string" ? body.error : null);
     }
   }, [clearSession, reconnect]);
   const openStream = useCallback(async (path: string, init: RequestInit): Promise<Response> => {
