@@ -53,7 +53,7 @@ describe("intake policy settings", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Save intake policy" }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0]).toEqual({ path: "/teams/team-1/intake/policy", method: "PUT", body: {
-      mode: "auto",
+      baseRevision: 2, mode: "auto",
       rules: [
         { name: "Failing main", instruction: "Fix a failing default-branch CI run.", enabled: true },
         { name: "Crashes", instruction: "Triage issues labelled crash.", enabled: true },
@@ -91,6 +91,20 @@ describe("intake policy settings", () => {
     expect(await within(panel).findByRole("alert")).toHaveProperty("textContent", "Rule 2 needs an instruction.");
     expect(within(panel).getByRole("button", { name: "Save intake policy" })).toHaveProperty("disabled", false);
   });
+
+  it("names a save that another save overtook and reloads the policy on request", async () => {
+    await show(<IntakeSettings teamId="team-1" />);
+    const panel = await screen.findByRole("region", { name: "Intake" });
+    fireEvent.click(within(panel).getByRole("radio", { name: "Off" }));
+    request.mockImplementationOnce(async () => { throw new ReadError("intake_policy_conflict", "The intake policy changed. Reload it before saving."); });
+    fireEvent.click(within(panel).getByRole("button", { name: "Save intake policy" }));
+    expect(await within(panel).findByRole("alert")).toHaveProperty("textContent", "The intake policy changed. Reload it before saving.");
+    const reads = request.mock.calls.length;
+    fireEvent.click(within(panel).getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(request.mock.calls.length).toBeGreaterThan(reads));
+    expect((within(panel).getByRole("radio", { name: "Observe" }) as HTMLInputElement).checked).toBe(true);
+    expect(within(panel).queryByRole("alert")).toBeNull();
+  });
 });
 
 describe("project inbox", () => {
@@ -125,6 +139,17 @@ describe("project inbox", () => {
     fireEvent.click(within(region).getAllByRole("button", { name: "Start" })[0]!);
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0]).toEqual({ path: "/teams/team-1/intake/items/issue%3A1/start", method: "POST", body: undefined });
+  });
+
+  it("shows the daemon's reason when a start is refused", async () => {
+    await show(<InboxScreen teamId="team-1" onOpenRun={vi.fn()} />);
+    const region = await screen.findByRole("region", { name: "Inbox" });
+    request.mockImplementationOnce(async () => {
+      throw new ReadError("intake_start_failed", "A planning run needs a lead seat: name one, or create a team with `multi-agent team create`.");
+    });
+    fireEvent.click(within(region).getAllByRole("button", { name: "Start" })[0]!);
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent",
+      "A planning run needs a lead seat: name one, or create a team with `multi-agent team create`.");
   });
 
   it("dismisses an item through its own endpoint and keeps the returned state", async () => {

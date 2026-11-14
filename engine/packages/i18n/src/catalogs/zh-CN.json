@@ -639,6 +639,8 @@
   "intake.empty": "收件箱暂无内容。",
   "intake.readFailed": "未能加载收件箱。",
   "intake.actionFailed": "受理操作失败，请重试。",
+  "intake.conflict": "受理策略已被修改。请重新加载后再保存。",
+  "intake.reload": "重新加载",
   "intake.noProject": "请选择项目。",
   "intake.kind.issue": "议题",
   "intake.kind.comment": "评论",

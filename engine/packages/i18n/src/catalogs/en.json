@@ -639,6 +639,8 @@
   "intake.empty": "Nothing in the inbox yet.",
   "intake.readFailed": "The inbox could not be loaded.",
   "intake.actionFailed": "The intake change failed. Try again.",
+  "intake.conflict": "The intake policy changed. Reload it before saving.",
+  "intake.reload": "Reload",
   "intake.noProject": "Choose a project.",
   "intake.kind.issue": "Issue",
   "intake.kind.comment": "Comment",

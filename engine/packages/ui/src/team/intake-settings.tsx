@@ -14,7 +14,7 @@ export function IntakeSettings({ teamId }: { teamId: string }) {
   const intake = useIntake(teamId);
   const [draft, setDraft] = useState<IntakeDraft | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<{ error: string | null } | null>(null);
+  const [failure, setFailure] = useState<{ code: string | null; error: string | null } | null>(null);
   const saved = intake.data?.policy;
   if (!saved) return <section className="plate ui-settings-panel" aria-label={t("intake.title")}>
     <h2>{t("intake.title")}</h2><p role={intake.isError ? "alert" : "status"}>{t(intake.isError ? "settings.saveFailed" : "web.loading")}</p>
@@ -31,12 +31,12 @@ export function IntakeSettings({ teamId }: { teamId: string }) {
     if (busy || !draft) return;
     setBusy(true); setFailure(null);
     try {
-      const policy = await saveIntakePolicy(request, teamId, form);
+      const policy = await saveIntakePolicy(request, teamId, saved.revision, form);
       await cache.cancelQueries({ queryKey: intakeKey(teamId) });
       cache.setQueryData(intakeKey(teamId), { ...intake.data, policy });
       setDraft(null);
     } catch (error) {
-      setFailure({ error: error instanceof OwnerReadError ? error.error : null });
+      setFailure(error instanceof OwnerReadError ? { code: error.code, error: error.error } : { code: null, error: null });
     } finally { setBusy(false); }
   };
   return <section className="plate ui-settings-panel" aria-label={t("intake.title")}>
@@ -66,7 +66,9 @@ export function IntakeSettings({ teamId }: { teamId: string }) {
         onClick={() => update({ rules: [...form.rules, emptyRule] })}>{t("intake.addRule")}</button>
     </fieldset>
     {(draft || busy || failure) && <div className="ui-save-bar">
-      {failure && <p role="alert">{failure.error ?? t("settings.saveFailed")}</p>}
+      {failure && <p role="alert">{failure.code === "intake_policy_conflict" ? t("intake.conflict") : failure.error ?? t("settings.saveFailed")}</p>}
+      {failure?.code === "intake_policy_conflict" && <button className="btn btn-outline" type="button"
+        onClick={() => { setDraft(null); setFailure(null); void intake.refetch(); }}>{t("intake.reload")}</button>}
       <button className="btn btn-primary" type="button" disabled={busy || !draft || duplicate || !complete}
         onClick={() => void save()}>{t("intake.save")}</button>
       {draft && <button className="btn btn-outline" type="button" disabled={busy}
