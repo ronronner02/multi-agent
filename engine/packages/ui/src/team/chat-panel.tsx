@@ -300,6 +300,7 @@ function PlanPlate({ read, runId, entityVersion, chat, onChanged }: {
   const proposalReady = proposal === null || (!!proposal?.plan?.content.trim() && !!proposal.roster?.digest && !proposal.error);
   const updating = !approved && documentDiscussionPending(read, chat);
   const needsRecovery = !approved && !!proposal?.error && !proposal.plan && !proposal.roster;
+  const canCancel = !approved && read.run.state !== "canceled" && read.run.state !== "cancel_requested";
   const canApprove = chat?.available && chat.phase === "planning" && proposalReady && !updating && read.run.state === "approved"
     && (!chat.documentWorkflow || !!proposal?.documentVersions);
   const work = read.tasks.filter(task => task.role !== "reviewer").length;
@@ -325,7 +326,7 @@ function PlanPlate({ read, runId, entityVersion, chat, onChanged }: {
       {t(read.run.binding.readPaths.includes(".") ? "team.plan.projectScopeConsequence" : "documents.approveConsequence")}
     </p>}
     <div className="plate-foot">
-      {needsRecovery && <button className="btn btn-outline" disabled={busy} onClick={async () => {
+      {canCancel && <button className="btn btn-outline" disabled={busy} onClick={async () => {
         if (!window.confirm(t("team.cancelPrompt")) || !action.begin()) return;
         setFailed(false); setCancelStatus(null);
         try {
