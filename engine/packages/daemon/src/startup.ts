@@ -1150,7 +1150,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       ...(deps.integration ? { integrateTask: (runId: string, taskId: string) => deps.integration!.integrate(runId, taskId) } : {}),
       // U6 — the facts no single attempt produces — a failed retry, an exhausted review, an
       // integration conflict, every task done — are read once per tick, after the attempts.
-      onSweep: async () => { await leadManager.sweep(); await taskThreads.sweep(); await deps.pullRequestDelivery?.sweep(); },
+      onSweep: async () => { await leadManager.sweep(); await taskThreads.sweep(); await deps.pullRequestDelivery?.sweep(); await deps.githubSource?.sweep(); },
       dispatchPending,
       currentBinding });
     // T017 (cancellation half) — the owner's cancel stops the work. Dispatch closure is the
@@ -1185,6 +1185,9 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const { composePullRequestDelivery } = await import("./domain/pull-request-delivery.js");
     deps.pullRequestDelivery = composePullRequestDelivery({ db, governance: teamGovernance, integration: deps.integration,
       agent: deps.githubAgent, owner: deps.github });
+    const { composeGithubSource } = await import("./domain/github-source.js");
+    deps.githubSource = composeGithubSource({ db, governance: teamGovernance, agent: deps.githubAgent, owner: deps.github,
+      dispatch: () => deps.teamControl?.dispatch });
   }
 
   return { app, db, deps, contextMonitor, eventLoopMonitor };

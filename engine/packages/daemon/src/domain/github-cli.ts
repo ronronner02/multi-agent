@@ -302,6 +302,14 @@ export class GithubCli {
     return { push: value.push === true, defaultBranch: value.base };
   }
 
+  /** Plan KTD12 — one REST read, every page joined into one array when the answer is a list. */
+  async apiGet<T = unknown>(path: string): Promise<T> {
+    const result = await this.run(["api", path, "--hostname", HOST, "--paginate", "--slurp"], { timeout: 30_000, failure: "github_network_failure" });
+    if (!result.ok) throw new GithubCliError("github_network_failure", redactCredentials(result.stderr));
+    const pages = JSON.parse(result.stdout || "[]") as unknown[];
+    return (pages.every(Array.isArray) ? (pages as unknown[][]).flat() : pages[0]) as T;
+  }
+
   /** Push one branch to the checkout's origin as this account, a collaborator rather than the owner. */
   async pushBranch(repository: string, branch: string): Promise<void> {
     const refspec = `refs/heads/${branch}:refs/heads/${branch}`;
