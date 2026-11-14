@@ -430,6 +430,20 @@ describe("persistent lead chat", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it("offers cancellation beside stale planning recovery guidance", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await show(planningRead(), { ...planningChat(), planApproval: { plan: null, roster: null, error: "The planning files are not available yet." } });
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]![0]).toBe(`/runs/${RUN_ID}/cancel`);
+    expect(JSON.parse(request.mock.calls[0]![1].body)).toMatchObject({
+      protocolVersion: "1.0", runId: RUN_ID, actionId: expect.any(String),
+      expectedEntityVersion: planningRead().run.entityVersion, idempotencyKey: expect.any(String),
+      payload: { reason: "Owner canceled the run" },
+    });
+  });
+
   it.each([
     ["unread proposal", undefined],
     ["missing plan", { ...planApproval, plan: null }],

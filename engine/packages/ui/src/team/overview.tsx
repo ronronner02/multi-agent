@@ -7,7 +7,7 @@ import { TEAM_HEALTH_LIGHTS } from "../../../daemon/dist/contracts/team-control.
 import { ArrowRight, ArrowUpRight, GitMerge } from "lucide-react";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { usePendingAction } from "../hooks/usePendingAction.js";
-import { mergeBranch, type ChatState, type IntegrationState } from "./clients.js";
+import { cancelRun, mergeBranch, type ChatState, type IntegrationState } from "./clients.js";
 import { pendingOwnerDecisions, pendingWorkerQuestions, QuestionPlate, ResumePlate } from "./chat-panel.js";
 import { clockTime, namedSeat, taskName } from "./display.js";
 import { useRunTokens } from "./hooks.js";
@@ -77,12 +77,7 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
           : result.status === "conflict" ? t("team.merge.conflict")
             : knownCode ? t(("team.merge.refused." + code) as "team.merge.refused.merge_unavailable") : t("team.merge.blocked") });
       } else {
-        const result = await request<{ status: string; value?: { state?: string } }>("/runs/" + encodeURIComponent(read.runId) + "/cancel", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ protocolVersion: "1.0", runId: read.runId, actionId: crypto.randomUUID(),
-            expectedEntityVersion: read.run.entityVersion, idempotencyKey: crypto.randomUUID(),
-            payload: { reason: "Owner canceled the run" } }),
-        });
+        const result = await cancelRun(request, read.runId, read.run.entityVersion);
         if (result.status === "denied") throw new Error("Cancellation denied");
         setMessage({ error: false, text: t(result.value?.state === "canceled"
           ? "status.run.canceled" : "status.run.cancel_requested") });

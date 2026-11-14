@@ -208,6 +208,16 @@ export async function mergeBranch(request: Request, runId: string, entityVersion
   }
 }
 
+export interface CancelOutcome { status: string; value?: { state?: string } }
+
+/** The owner-visible run cancellation command shared by the overview and recovery surfaces. */
+export async function cancelRun(request: Request, runId: string, entityVersion: number): Promise<CancelOutcome> {
+  return request<CancelOutcome>(`/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: controlBody(runId, crypto.randomUUID(), entityVersion, { reason: "Owner canceled the run" }),
+  });
+}
+
 /** A run whose state still means work is going on, for the teams list. */
 export function isRunActive(run: { state: string }): boolean {
   return run.state === "pending" || run.state === "approved" || run.state === "cancel_requested";

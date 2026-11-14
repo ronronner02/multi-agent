@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { FileText, X } from "lucide-react";
 import { TextPreview } from "./text-preview.js";
 import type { TeamOwnerRead, WorkflowSelection } from "@multi-agent/daemon/team-control";
 import { WorkflowOutcomes, WorkflowPicker } from "./workflows.js";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
-import { approvePlan, confirmDocument, postTaskComment, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
+import { approvePlan, cancelRun, confirmDocument, postTaskComment, selectDocumentStage, sendChatMessage, type ChatMessage, type ChatState, type LiveLeadTurn } from "./clients.js";
 import { documentDiscussionPending, DocumentStages } from "./documents.js";
 import { mergeToolCalls } from "../hooks/useAttemptActivity.js";
 import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
@@ -117,12 +118,12 @@ export function LeadConversation({ read, runId, chat, connectionError, draft, on
         <h3 className="ui-attention-heading">{t("shell.ownerDecisions")}</h3>
         {pending.some(decision => decision.kind === "message") && <p className="ui-muted" role="status">{t("chat.questionWaiting")}</p>}
         <ul className="ui-decision-list">{pending.map(decision => <li key={decision.kind === "message" ? decision.message.id : decision.kind}>
-          {decision.kind === "plan" ? <PlanPlate read={read} runId={runId} entityVersion={entityVersion} chat={chat} />
+          {decision.kind === "plan" ? <PlanPlate read={read} runId={runId} entityVersion={entityVersion} chat={chat} onChanged={onChanged} />
             : decision.kind === "resume" ? <ResumePlate read={read!} />
               : <DecisionPlate message={decision.message} runId={runId} entityVersion={entityVersion} onChanged={onChanged} />}
         </li>)}</ul>
       </section>}
-      {read?.run.phase !== "planning" && <PlanPlate read={read} runId={runId} entityVersion={entityVersion} />}
+      {read?.run.phase !== "planning" && <PlanPlate read={read} runId={runId} entityVersion={entityVersion} onChanged={onChanged} />}
       {chat && !chat.available && <p className="muted">{t("team.chat.unavailable")}</p>}
     </div>
     {!following && <button className="btn btn-outline ui-chat-latest" onClick={() => setFollowing(true)}>{t("chat.latest")}</button>}
@@ -282,15 +283,17 @@ function Composer({ runId, entityVersion, body, onBodyChange, projectId, onStart
 }
 
 /** Approval carries the digest of the proposal displayed here, never an unseen re-read. */
-function PlanPlate({ read, runId, entityVersion, chat }: {
-  read?: TeamOwnerRead; runId: string; entityVersion: number; chat?: ChatState;
+function PlanPlate({ read, runId, entityVersion, chat, onChanged }: {
+  read?: TeamOwnerRead; runId: string; entityVersion: number; chat?: ChatState; onChanged?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const responseLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
   const { request } = useOwnerSession();
+  const cache = useQueryClient();
   const action = usePendingAction(entityVersion);
   const { busy } = action;
   const [failed, setFailed] = useState(false);
+  const [cancelStatus, setCancelStatus] = useState<"canceled" | "cancel_requested" | null>(null);
   if (!read) return null;
   const approved = read.run.phase !== "planning";
   const proposal = chat?.planApproval;
@@ -322,6 +325,18 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
       {t(read.run.binding.readPaths.includes(".") ? "team.plan.projectScopeConsequence" : "documents.approveConsequence")}
     </p>}
     <div className="plate-foot">
+      {needsRecovery && <button className="btn btn-outline" disabled={busy} onClick={async () => {
+        if (!window.confirm(t("team.cancelPrompt")) || !action.begin()) return;
+        setFailed(false); setCancelStatus(null);
+        try {
+          const result = await cancelRun(request, runId, entityVersion);
+          if (result.status === "denied") throw new Error("Cancellation denied");
+          setCancelStatus(result.value?.state === "canceled" ? "canceled" : "cancel_requested");
+          await cache.invalidateQueries({ queryKey: ["team", runId] });
+          onChanged?.();
+          action.complete();
+        } catch { setFailed(true); action.fail(); }
+      }}>{t("action.cancel")}</button>}
       {!approved && !updating && proposal?.error && <button className="btn btn-outline" disabled={busy} onClick={async () => {
         if (!action.begin()) return;
         setFailed(false);
@@ -337,6 +352,7 @@ function PlanPlate({ read, runId, entityVersion, chat }: {
           catch { setFailed(true); action.fail(); }
         }}>{t("team.plan.approve")}</button>}
     </div>
+    {cancelStatus && <p role="status">{t(cancelStatus === "canceled" ? "status.run.canceled" : "status.run.cancel_requested")}</p>}
   </div>;
 }
 
