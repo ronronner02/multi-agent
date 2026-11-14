@@ -52,7 +52,7 @@ export interface MergeOutcome {
   code: string | null;
   reason: string | null;
   branch: string;
-  mode: "fast-forward" | "merge-commit" | "up-to-date" | null;
+  mode: "fast-forward" | "merge-commit" | "up-to-date" | "pull-request" | null;
   head: string | null;
 }
 

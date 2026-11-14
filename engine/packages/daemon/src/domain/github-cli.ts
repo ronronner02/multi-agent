@@ -34,6 +34,8 @@ const ERROR_MESSAGES = {
   github_network_failure: "A network or proxy failure prevented the upload. Check your connection and proxy settings.",
   github_auth_failure: "Authentication to GitHub failed. Sign in again.",
   github_proxy_unreachable: "The configured proxy is unreachable. Check the proxy settings.",
+  github_agent_no_access: "The agent account cannot push to this repository. Give it write access.",
+  github_pr_failed: "The pull request could not be opened or merged. Check access and retry.",
 } as const;
 
 export type GithubCliErrorCode = keyof typeof ERROR_MESSAGES;
@@ -285,6 +287,51 @@ export class GithubCli {
         if (!result) throw error;
       }
     });
+  }
+
+  /**
+   * Plan KTD13 — the agent account's access to a repository it does not own: whether it may push,
+   * and the branch a pull request targets.
+   */
+  async repositoryAccess(identity: string): Promise<{ push: boolean; defaultBranch: string }> {
+    const result = await this.run(["api", `repos/${identity}`, "--hostname", HOST, "--jq", "{push: .permissions.push, base: .default_branch}"],
+      { timeout: 30_000, failure: "github_agent_no_access" });
+    if (!result.ok) throw new GithubCliError("github_agent_no_access", redactCredentials(result.stderr));
+    const value = JSON.parse(result.stdout) as { push?: boolean; base?: string };
+    if (typeof value.base !== "string" || !value.base) throw new GithubCliError("github_agent_no_access");
+    return { push: value.push === true, defaultBranch: value.base };
+  }
+
+  /** Push one branch to the checkout's origin as this account, a collaborator rather than the owner. */
+  async pushBranch(repository: string, branch: string): Promise<void> {
+    const refspec = `refs/heads/${branch}:refs/heads/${branch}`;
+    const pushed = await this.runGitPush(repository, refspec, await this.pushTimeout(repository, refspec));
+    if (!pushed) throw new GithubCliError("github_push_failed");
+  }
+
+  /** The pull request whose head is this branch, in any state, or null. */
+  async findPullRequest(identity: string, branch: string): Promise<{ number: number; url: string; state: string; headSha: string } | null> {
+    const result = await this.run(["pr", "list", "--repo", identity, "--head", branch, "--state", "all", "--limit", "1",
+      "--json", "number,url,state,headRefOid"], { timeout: 30_000, failure: "github_pr_failed" });
+    if (!result.ok) throw new GithubCliError("github_pr_failed", redactCredentials(result.stderr));
+    const [found] = JSON.parse(result.stdout || "[]") as Array<{ number: number; url: string; state: string; headRefOid: string }>;
+    return found ? { number: found.number, url: found.url, state: found.state.toLowerCase(), headSha: found.headRefOid } : null;
+  }
+
+  async createPullRequest(identity: string, branch: string, base: string, title: string, body: string): Promise<{ number: number; url: string }> {
+    const result = await this.run(["pr", "create", "--repo", identity, "--head", branch, "--base", base, "--title", title, "--body", body],
+      { timeout: 60_000, failure: "github_pr_failed" });
+    const url = result.stdout.trim().split("\n").at(-1) ?? "";
+    const number = Number(/\/pull\/(\d+)$/.exec(url)?.[1]);
+    if (!result.ok || !Number.isSafeInteger(number)) throw new GithubCliError("github_pr_failed", redactCredentials(result.stderr));
+    return { number, url };
+  }
+
+  /** Merge a pull request at the head the caller saw, so a newer push is never merged unseen. */
+  async mergePullRequest(identity: string, number: number, headSha: string): Promise<void> {
+    const result = await this.run(["pr", "merge", String(number), "--repo", identity, "--merge", "--match-head-commit", headSha],
+      { timeout: 60_000, failure: "github_pr_failed" });
+    if (!result.ok) throw new GithubCliError("github_pr_failed", redactCredentials(result.stderr));
   }
 
   /** Check whether the remote is visible and private. Returns null on transient not-found. */

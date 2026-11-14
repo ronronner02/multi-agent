@@ -2,6 +2,8 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { TEAM_CONTROL_VERSION, parseControlRequest, parseProtocolVersion } from "../contracts/team-control.js";
 import type { Integration } from "../domain/integration-branch.js";
+import type { PullRequestDelivery } from "../domain/pull-request-delivery.js";
+import { GithubCliError } from "../domain/github-cli.js";
 import { teamControlAuthentication, type TeamControlCredentials, type TeamControlEnv } from "../middleware/auth-bearer-token.js";
 
 /**
@@ -20,6 +22,8 @@ export function teamMergeRoutes(options: {
   legacyTokens: readonly (string | null | undefined)[];
   /** The integration owner. Absent leaves delivery unreadable rather than answering partially. */
   integration?: Integration;
+  /** Plan KTD13 — read at use, because the delivery is composed after the app. */
+  delivery?: () => PullRequestDelivery | undefined;
 }): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
   const readRoute = "/runs/:runId/integration";
@@ -43,7 +47,8 @@ export function teamMergeRoutes(options: {
     }
     try {
       c.header("Cache-Control", "no-store");
-      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, integration: options.integration.status(runId) });
+      return c.json({ protocolVersion: TEAM_CONTROL_VERSION, integration: options.integration.status(runId),
+        pullRequest: options.delivery?.()?.pullRequest(runId) ?? null });
     } catch (error) {
       if (/not found/i.test((error as Error).message)) {
         return c.json({ code: "control_not_found", error: "The requested run was not found." }, 404);
@@ -63,6 +68,15 @@ export function teamMergeRoutes(options: {
       return c.json({ code: "integration_unavailable", error: "This daemon does not compose an integration branch." }, 503);
     }
     let outcome;
+    // Plan KTD13 — an open pull request is merged on GitHub with the owner's account; any other run
+    // keeps the local merge into the owner's checkout.
+    try {
+      const viaPull = await options.delivery?.()?.merge(runId);
+      if (viaPull) return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...viaPull }, 200);
+    } catch (error) {
+      if (error instanceof GithubCliError) return c.json({ code: error.code, error: error.message }, 502);
+      throw error;
+    }
     try { outcome = options.integration.merge(runId); }
     catch (error) {
       if (/not found/i.test((error as Error).message)) {

@@ -20,6 +20,17 @@ export const TEAM_PROMPT_VERSIONS_SQL = `CREATE TABLE team_prompt_versions (
       PRIMARY KEY (rig_id, revision)
     )`;
 
+/** Plan KTD13 — the pull request a run's branch is delivered through. Shared by the baseline and step 5→6. */
+export const TEAM_PULL_REQUESTS_SQL = `CREATE TABLE team_pull_requests (
+      run_id TEXT PRIMARY KEY REFERENCES team_runs(id),
+      repository TEXT NOT NULL,
+      number INTEGER NOT NULL CHECK (number > 0),
+      url TEXT NOT NULL,
+      head_sha TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('open', 'merged', 'closed')),
+      updated_at TEXT NOT NULL
+    )`;
+
 export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   // Plan KTD3: a lead message that needs no owner attention is kept as run activity.
   { from: 2, to: 3, sql: "ALTER TABLE team_chat_messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity'))" },
@@ -28,6 +39,7 @@ export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
     "ALTER TABLE team_queue_authority ADD COLUMN held_at TEXT",
     "ALTER TABLE team_queue_authority ADD COLUMN follow_up_of TEXT"].join(";\n") },
   { from: 4, to: 5, sql: TEAM_PROMPT_VERSIONS_SQL },
+  { from: 5, to: 6, sql: TEAM_PULL_REQUESTS_SQL },
 ];
 
 /** The steps from `from` to `to`, in order, or null when the chain does not reach. */

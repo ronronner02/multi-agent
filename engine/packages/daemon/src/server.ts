@@ -59,6 +59,8 @@ export interface AppDeps {
   github?: GithubCli;
   /** Plan KTD10 — the dedicated agent account, signed in to its own gh config directory. */
   githubAgent?: GithubCli;
+  /** Plan KTD13 — the pull-request delivery for GitHub projects, composed once both GitHub accounts exist. */
+  pullRequestDelivery?: import("./domain/pull-request-delivery.js").PullRequestDelivery;
   ownerSessions?: OwnerSessions;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
@@ -511,6 +513,7 @@ export function createApp(deps: AppDeps): Hono {
     credentials: teamOptions.credentials,
     legacyTokens: [deps.legacyBearerToken],
     ...(deps.integration ? { integration: deps.integration } : {}),
+    delivery: () => deps.pullRequestDelivery,
   }));
 
   app.get("/healthz", (c) => {
