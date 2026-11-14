@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-import { SCHEMA_UPGRADES, TEAM_PROMPT_VERSIONS_SQL, upgradePath, type SchemaUpgrade } from "./upgrades.js";
+import { SCHEMA_UPGRADES, TEAM_PROMPT_VERSIONS_SQL, TEAM_PULL_REQUESTS_SQL, upgradePath, type SchemaUpgrade } from "./upgrades.js";
 
 /**
  * Marker written to PRAGMA user_version in the same transaction as the fresh team schema.
@@ -8,9 +8,9 @@ import { SCHEMA_UPGRADES, TEAM_PROMPT_VERSIONS_SQL, upgradePath, type SchemaUpgr
  * database the shipped app created is upgraded rather than refused. 2 adds
  * team_seat_mailbox_capabilities and is the first shipped version; 3 adds
  * team_chat_messages.visibility; 4 adds task comments (team_chat_messages.task_id) and task holds
- * and follow-up links (team_queue_authority.held_at, follow_up_of); 5 adds team_prompt_versions.
+ * and follow-up links (team_queue_authority.held_at, follow_up_of); 5 adds team_prompt_versions; 6 adds team_pull_requests.
  */
-export const BASELINE_VERSION = 5;
+export const BASELINE_VERSION = 6;
 
 /**
  * The one-shot schema for the retained team product. The statements are kept as one SQL
@@ -692,6 +692,8 @@ CREATE TABLE "team_chat_messages" (
       CHECK ((sender = 'lead') = (attempt_id IS NOT NULL)),
       CHECK (sender = 'owner' OR delivered_attempt IS NULL)
     );
+-- team_pull_requests
+${TEAM_PULL_REQUESTS_SQL};
 -- team_prompt_versions
 ${TEAM_PROMPT_VERSIONS_SQL};
 -- team_soul_versions
