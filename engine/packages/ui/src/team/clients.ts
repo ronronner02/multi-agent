@@ -136,16 +136,26 @@ export interface IntegrationState {
   /** Every task the run admitted has finished. */
   tasksDone: boolean;
   merge: { possible: boolean; reason: string | null; merged?: boolean | null };
+  /** Plan R17 — the pull request a GitHub project's run is delivered through; the owner merges it on GitHub. */
+  pullRequest?: IntegrationPullRequest | null;
 }
+export interface IntegrationPullRequest { number: number; url: string; state: "open" | "merged" | "closed" }
 
 const ABSENT_INTEGRATION: IntegrationState = {
-  available: false, branch: "", commits: [], tasksDone: false, merge: { possible: false, reason: null, merged: null },
+  available: false, branch: "", commits: [], tasksDone: false, merge: { possible: false, reason: null, merged: null }, pullRequest: null,
 };
+
+function pullRequestOf(value: unknown): IntegrationPullRequest | null {
+  if (!value || typeof value !== "object") return null;
+  const { number, url, state } = value as Record<string, unknown>;
+  return typeof number === "number" && typeof url === "string" && /^https:\/\/github\.com\//.test(url)
+    && (state === "open" || state === "merged" || state === "closed") ? { number, url, state } : null;
+}
 
 /** U7 — `GET /runs/:runId/integration`. */
 export async function readIntegration(request: Request, runId: string, signal?: AbortSignal): Promise<IntegrationState> {
   try {
-    const body = await request<{ integration?: Partial<IntegrationState> }>(
+    const body = await request<{ integration?: Partial<IntegrationState>; pullRequest?: unknown }>(
       `/runs/${encodeURIComponent(runId)}/integration`, { signal },
     );
     const integration = body.integration;
@@ -157,6 +167,7 @@ export async function readIntegration(request: Request, runId: string, signal?: 
       tasksDone: integration.tasksDone === true,
       merge: { possible: integration.merge?.possible === true, reason: integration.merge?.reason ?? null,
         merged: typeof integration.merge?.merged === "boolean" ? integration.merge.merged : null },
+      pullRequest: pullRequestOf(body.pullRequest),
     };
   } catch (error) {
     if (error instanceof OwnerReadError && error.status === 404) return { ...ABSENT_INTEGRATION };
@@ -169,7 +180,7 @@ export interface MergeOutcome {
   code: string | null;
   reason: string | null;
   branch: string | null;
-  mode: "fast-forward" | "merge-commit" | "up-to-date" | null;
+  mode: "fast-forward" | "merge-commit" | "up-to-date" | "pull-request" | null;
   head: string | null;
 }
 
@@ -186,7 +197,7 @@ export async function mergeBranch(request: Request, runId: string, entityVersion
     });
     return body;
   } catch (error) {
-    if (error instanceof OwnerReadError && (error.status === 409 || error.status === 403)) {
+    if (error instanceof OwnerReadError && (error.status === 409 || error.status === 403 || error.status === 502)) {
       return { status: "refused", code: error.code, reason: null, branch: null, mode: null, head: null };
     }
     throw error;

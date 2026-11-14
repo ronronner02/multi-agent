@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TeamOwnerRead, TeamReviewView, TeamSystemHealth } from "@multi-agent/daemon/team-control";
 import { TEAM_HEALTH_LIGHTS } from "../../../daemon/dist/contracts/team-control.js";
-import { ArrowRight, GitMerge } from "lucide-react";
+import { ArrowRight, ArrowUpRight, GitMerge } from "lucide-react";
 import { useOwnerSession } from "../hooks/useOwnerSession.js";
 import { usePendingAction } from "../hooks/usePendingAction.js";
 import { mergeBranch, type ChatState, type IntegrationState } from "./clients.js";
@@ -31,7 +31,7 @@ function Progress({ read, integration }: { read?: TeamOwnerRead; integration?: I
     { label: "progress.plan", state: planning ? "active" : "complete" },
     { label: "progress.build", state: planning ? "pending" : building ? "active" : tasks.length ? "complete" : "pending" },
     { label: "progress.review", state: planning || tasks.length === 0 ? "pending" : reviewing ? "active" : integration?.tasksDone ? "complete" : "pending" },
-    { label: "progress.merge", state: integration?.available && integration.merge.merged === true
+    { label: "progress.merge", state: integration?.available && (integration.merge.merged === true || integration.pullRequest?.state === "merged")
       ? "complete" : integration?.merge.possible ? "awaiting-decision" : "pending" },
   ] as const;
   return <section className="ui-card ui-progress" aria-label={t("overview.progress")}>
@@ -52,11 +52,16 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
   const { busy } = pending;
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const closed = read?.run.state === "canceled" || read?.run.state === "cancel_requested";
-  const merged = integration?.available === true && integration.merge.merged === true;
+  // Plan R17 — a GitHub project's run is merged as its open pull request, on GitHub, with the owner's account.
+  const pull = integration?.available ? integration.pullRequest ?? null : null;
+  const viaPull = pull?.state === "open" ? pull : null;
+  const merged = integration?.available === true && (integration.merge.merged === true || pull?.state === "merged");
   const canMerge = !!read && !closed && !merged && integration?.available === true && integration.merge.possible;
   const act = async (action: "merge" | "cancel") => {
     if (!read || busy || (action === "merge" && !canMerge)) return;
-    if (!window.confirm(t(action === "merge" ? "overview.mergeConsequence" : "team.cancelPrompt"))) return;
+    const prompt = action === "cancel" ? t("team.cancelPrompt")
+      : viaPull ? t("overview.mergePullRequestConsequence", { number: viaPull.number }) : t("overview.mergeConsequence");
+    if (!window.confirm(prompt)) return;
     if (!pending.begin()) return;
     setMessage(null);
     let accepted = true;
@@ -66,7 +71,8 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
         const code = result.code;
         accepted = result.status === "merged";
         const knownCode = ["merge_tasks_open", "merge_checkout_dirty", "merge_detached_head",
-          "merge_already_on_branch", "merge_no_branch", "merge_unavailable"].includes(code ?? "");
+          "merge_already_on_branch", "merge_no_branch", "merge_unavailable",
+          "github_pr_failed", "github_network_failure", "github_not_signed_in"].includes(code ?? "");
         setMessage({ error: result.status !== "merged", text: result.status === "merged" ? t("team.merge.done")
           : result.status === "conflict" ? t("team.merge.conflict")
             : knownCode ? t(("team.merge.refused." + code) as "team.merge.refused.merge_unavailable") : t("team.merge.blocked") });
@@ -88,7 +94,10 @@ function RunActions({ read, integration }: { read?: TeamOwnerRead; integration?:
   return <div className="ui-run-actions">
     <div className="ui-page-actions">
       <button className="btn btn-outline" disabled={!read || closed || busy} onClick={() => void act("cancel")}>{t("action.cancel")}</button>
-      <button className="btn btn-primary" disabled={!canMerge || busy} onClick={() => void act("merge")}><GitMerge aria-hidden="true" />{t(merged ? "team.merge.done" : "team.merge.action")}</button>
+      {pull && <a className="btn btn-outline" href={pull.url} target="_blank" rel="noopener noreferrer">
+        <ArrowUpRight aria-hidden="true" />{t("team.pullRequest.link", { number: pull.number })}</a>}
+      <button className="btn btn-primary" disabled={!canMerge || busy} onClick={() => void act("merge")}><GitMerge aria-hidden="true" />
+        {merged ? t("team.merge.done") : viaPull ? t("team.merge.pullRequest", { number: viaPull.number }) : t("team.merge.action")}</button>
     </div>
     {!canMerge && !merged && <small className="ui-muted">{t(integration?.available ? "team.merge.blocked" : "team.merge.unavailable")}</small>}
     {message && <p role={message.error ? "alert" : "status"}>{message.text}</p>}

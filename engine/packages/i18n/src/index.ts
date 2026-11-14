@@ -92,6 +92,10 @@ export const MESSAGE_PARAMETERS = {
   "team.resume.retries": ["count"],
   "team.resume.rounds": ["count"],
   "team.merge.openTasks": ["count"],
+  // Plan R17 — a GitHub project's run is merged as its numbered pull request.
+  "team.merge.pullRequest": ["number"],
+  "team.pullRequest.link": ["number"],
+  "overview.mergePullRequestConsequence": ["number"],
   // U13 — a rule editor labels each row by its position.
   "intake.ruleName": ["index"],
   "intake.ruleInstruction": ["index"],
