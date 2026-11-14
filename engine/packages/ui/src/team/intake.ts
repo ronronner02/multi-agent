@@ -41,10 +41,11 @@ export function useIntake(teamId: string | undefined) {
   });
 }
 
-export async function saveIntakePolicy(request: Request, teamId: string, draft: IntakeDraft): Promise<IntakePolicy> {
+/** `baseRevision` is the revision the editor read; the daemon refuses the save if another one replaced it. */
+export async function saveIntakePolicy(request: Request, teamId: string, baseRevision: number, draft: IntakeDraft): Promise<IntakePolicy> {
   const body = await request<{ policy: IntakePolicy }>(`/teams/${encodeURIComponent(teamId)}/intake/policy`, {
     method: "PUT", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: draft.mode, rules: draft.rules }),
+    body: JSON.stringify({ baseRevision, mode: draft.mode, rules: draft.rules }),
   });
   return body.policy;
 }

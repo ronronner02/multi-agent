@@ -27,17 +27,25 @@ describe("the team intake policy", () => {
 
   it("is observe with no rules until the owner saves one, and each save is a new revision", () => {
     expect(readIntakePolicy(db, "rig")).toEqual({ revision: 0, mode: "observe", rules: [] });
-    saveIntakePolicy(db, "rig", { mode: "auto", rules: [ciRule] });
-    expect(saveIntakePolicy(db, "rig", { mode: "off", rules: [{ ...ciRule, name: " renamed " }] }))
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto", rules: [ciRule] });
+    expect(saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "off", rules: [{ ...ciRule, name: " renamed " }] }))
       .toEqual({ revision: 2, mode: "off", rules: [{ ...ciRule, name: "renamed" }] });
     expect(readIntakePolicy(db, "rig").revision).toBe(2);
   });
 
+  it("refuses a save made against a revision another save already replaced", () => {
+    saveIntakePolicy(db, "rig", { baseRevision: 0, mode: "auto", rules: [ciRule] });
+    expect(() => saveIntakePolicy(db, "rig", { baseRevision: 0, mode: "off", rules: [] }))
+      .toThrow(expect.objectContaining({ code: "intake_policy_conflict", status: 409 }));
+    expect(() => saveIntakePolicy(db, "rig", { mode: "off", rules: [] })).toThrow(TeamContractError);
+    expect(readIntakePolicy(db, "rig")).toMatchObject({ revision: 1, mode: "auto" });
+  });
+
   it("refuses an unknown mode, duplicate names, empty text and too many rules", () => {
-    expect(() => saveIntakePolicy(db, "rig", { mode: "always", rules: [] })).toThrow(TeamContractError);
-    expect(() => saveIntakePolicy(db, "rig", { mode: "auto", rules: [ciRule, ciRule] })).toThrow(TeamPolicyError);
-    expect(() => saveIntakePolicy(db, "rig", { mode: "auto", rules: [{ ...ciRule, instruction: " " }] })).toThrow(TeamPolicyError);
-    expect(() => saveIntakePolicy(db, "rig", { mode: "auto",
+    expect(() => saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "always", rules: [] })).toThrow(TeamContractError);
+    expect(() => saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto", rules: [ciRule, ciRule] })).toThrow(TeamPolicyError);
+    expect(() => saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto", rules: [{ ...ciRule, instruction: " " }] })).toThrow(TeamPolicyError);
+    expect(() => saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto",
       rules: Array.from({ length: 21 }, (_, index) => ({ ...ciRule, name: `rule ${index}` })) })).toThrow(TeamPolicyError);
     expect(() => saveIntakePolicy(db, "missing", { mode: "auto", rules: [] })).toThrow(TeamPolicyError);
     expect(readIntakePolicy(db, "rig").revision).toBe(0);
@@ -92,7 +100,7 @@ describe("the GitHub intake", () => {
 
   it("in observe records a failed CI check that matches a rule as would-start, and starts nothing", async () => {
     // Covers AE7.
-    saveIntakePolicy(db, "rig", { mode: "observe", rules: [ciRule] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "observe", rules: [ciRule] });
     const service = intake();
     await begin(service);
     checks = [failedCheck, { ...failedCheck, name: "lint", conclusion: "success" }];
@@ -106,7 +114,7 @@ describe("the GitHub intake", () => {
   });
 
   it("in auto starts a planning run that records the policy revision and the matched rules", async () => {
-    saveIntakePolicy(db, "rig", { mode: "auto", rules: [ciRule] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto", rules: [ciRule] });
     const service = intake();
     await begin(service);
     checks = [failedCheck];
@@ -119,7 +127,7 @@ describe("the GitHub intake", () => {
   });
 
   it("in off skips inferred candidates unassessed, but an owner's mention of the agent still starts a run", async () => {
-    saveIntakePolicy(db, "rig", { mode: "off", rules: [ciRule] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "off", rules: [ciRule] });
     const service = intake();
     await begin(service);
     issues = [issue("STRANGER", "stranger", "@team-agent please rewrite everything"), issue("OWNER", "owner-login", "@Team-Agent add a changelog")];
@@ -142,7 +150,7 @@ describe("the GitHub intake", () => {
   });
 
   it("records an item as unavailable after its assessment fails twice", async () => {
-    saveIntakePolicy(db, "rig", { mode: "auto", rules: [ciRule] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto", rules: [ciRule] });
     const service = intake();
     await begin(service);
     checks = [failedCheck];
@@ -157,7 +165,7 @@ describe("the GitHub intake", () => {
   });
 
   it("discards an assessment that a policy change overtook, and judges the item again under the new policy", async () => {
-    saveIntakePolicy(db, "rig", { mode: "auto", rules: [ciRule] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "auto", rules: [ciRule] });
     const service = intake();
     await begin(service);
     checks = [failedCheck];
@@ -166,7 +174,7 @@ describe("the GitHub intake", () => {
     await service.poll("rig");
     const running = service.assessNext();
     await Promise.resolve();
-    saveIntakePolicy(db, "rig", { mode: "observe", rules: [{ ...ciRule, instruction: "Only when the smoke check fails." }] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "observe", rules: [{ ...ciRule, instruction: "Only when the smoke check fails." }] });
     answer([ciRule.name]);
     await running;
     expect(readIntakeItem(db, "rig", "ci-abc123")).toMatchObject({ state: "pending", policyRevision: null });
@@ -178,7 +186,7 @@ describe("the GitHub intake", () => {
   });
 
   it("lets the owner start a held-back item or dismiss it, once", async () => {
-    saveIntakePolicy(db, "rig", { mode: "observe", rules: [ciRule] });
+    saveIntakePolicy(db, "rig", { baseRevision: readIntakePolicy(db, "rig").revision, mode: "observe", rules: [ciRule] });
     const service = intake();
     await begin(service);
     checks = [failedCheck];

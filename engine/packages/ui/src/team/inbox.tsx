@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { MessageKey } from "@multi-agent/i18n";
 import { ArrowUpRight } from "lucide-react";
-import { useOwnerSession } from "../hooks/useOwnerSession.js";
+import { OwnerReadError, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { relativeTime } from "./display.js";
 import {
   DISMISSABLE_STATES, STARTABLE_STATES, dismissIntakeItem, intakeKey, startIntakeItem, useIntake,
@@ -27,19 +27,23 @@ export function InboxScreen({ teamId, onOpenRun }: { teamId?: string; onOpenRun:
   const intake = useIntake(teamId);
   const now = Date.now();
   const [busyItem, setBusyItem] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  /** The daemon's reason for a refused Start or Dismiss, or "" when it gave none. */
+  const [failed, setFailed] = useState<string | null>(null);
   const reply = intake.data;
   const replace = (item: IntakeItem) => cache.setQueryData(intakeKey(teamId ?? ""), { ...reply!,
     items: reply!.items.map(entry => entry.item === item.item ? item : entry) });
   const act = async (item: IntakeItem, action: "start" | "dismiss") => {
     if (!teamId || busyItem) return;
-    setBusyItem(item.item); setFailed(false);
+    setBusyItem(item.item); setFailed(null);
     try {
       if (action === "start") {
         const runId = await startIntakeItem(request, teamId, item.item);
         replace({ ...item, state: "started", runId });
       } else replace(await dismissIntakeItem(request, teamId, item.item));
-    } catch { setFailed(true); } finally { setBusyItem(null); }
+    } catch (error) {
+      setFailed(error instanceof OwnerReadError && error.error ? error.error : "");
+      void intake.refetch();
+    } finally { setBusyItem(null); }
   };
   return <main className="ui-screen ui-inbox">
     <header className="ui-page-head"><div><h1>{t("nav.inbox")}</h1></div>
@@ -76,6 +80,6 @@ export function InboxScreen({ teamId, onOpenRun }: { teamId?: string; onOpenRun:
             </div>
           </li>)}
         </ul></section>}
-    {failed && <p role="alert">{t("intake.actionFailed")}</p>}
+    {failed !== null && <p role="alert">{failed || t("intake.actionFailed")}</p>}
   </main>;
 }

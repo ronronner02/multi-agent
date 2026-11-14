@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { object, TeamContractError } from "../contracts/team-control.js";
+import { integer, object, TeamContractError } from "../contracts/team-control.js";
 
 /**
  * Plan R20 / KTD14 — what a team may start on its own.
@@ -55,14 +55,20 @@ function rules(value: unknown): IntakeRule[] {
 /**
  * Save a new revision. Items still waiting for an assessment are requeued, so each one is judged
  * once under the policy now in force; an assessment already running under the old revision is
- * discarded when it returns.
+ * discarded when it returns. `baseRevision` is the revision the editor read: a save made against
+ * an older one is refused, so two editors never overwrite each other unseen.
  */
 export function saveIntakePolicy(db: Database.Database, rigId: string, value: unknown, now = new Date()): IntakePolicy {
   if (!db.prepare("SELECT 1 FROM rigs WHERE id = ?").get(rigId)) throw new TeamPolicyError("team_not_found", "No team has that id.", 404);
   const v = object(value, "policy");
+  if (Object.keys(v).some(key => !["baseRevision", "mode", "rules"].includes(key))) throw new TeamContractError("policy");
+  const baseRevision = integer(v.baseRevision, "policy.baseRevision", 0);
   if (!INTAKE_MODES.includes(v.mode as IntakeMode)) throw new TeamContractError("mode");
-  const policy = { revision: readIntakePolicy(db, rigId).revision + 1, mode: v.mode as IntakeMode, rules: rules(v.rules) };
+  const policy = { revision: baseRevision + 1, mode: v.mode as IntakeMode, rules: rules(v.rules) };
   db.transaction(() => {
+    if (readIntakePolicy(db, rigId).revision !== baseRevision) {
+      throw new TeamPolicyError("intake_policy_conflict", "The intake policy changed. Reload it before saving.", 409);
+    }
     db.prepare("INSERT INTO team_intake_policies (rig_id, revision, mode, rules_json, created_at) VALUES (?, ?, ?, ?, ?)")
       .run(rigId, policy.revision, policy.mode, JSON.stringify(policy.rules), now.toISOString());
     db.prepare("UPDATE team_intake_items SET attempts = 0, policy_revision = NULL, updated_at = ? WHERE rig_id = ? AND state = 'pending'")
