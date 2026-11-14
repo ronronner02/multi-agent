@@ -8,6 +8,8 @@ import { nativeModelChoices } from "../domain/native-model-choices.js";
 import { FRAMEWORK_CATALOG, FRAMEWORK_PIN } from "../integrations/framework/catalog.js";
 import { assignSeatSoul, saveTeamSoul, soulId, teamSoulSettings, TeamSoulError } from "../domain/team-souls.js";
 import { saveTeamSections, teamSectionSettings, TeamSectionsError } from "../domain/team-prompt-sections.js";
+import { dismissIntakeItem, listIntakeItems, readIntakePolicy, saveIntakePolicy, TeamPolicyError } from "../domain/team-policy.js";
+import type { GithubIntake } from "../domain/github-intake.js";
 import type { RigRepository } from "../domain/rig-repository.js";
 import { bootstrapProject, listProjectDirectories, previewProject, ProjectBootstrapError } from "../domain/project-bootstrap.js";
 import { GithubCliError, type GithubCli } from "../domain/github-cli.js";
@@ -33,7 +35,7 @@ import {
 
 export function teamSetupRoutes(
   rigRepo: RigRepository,
-  options: { credentials: TeamControlCredentials; github: GithubCli; settingsStore?: SettingsStore },
+  options: { credentials: TeamControlCredentials; github: GithubCli; settingsStore?: SettingsStore; intake?: () => GithubIntake | undefined },
   legacyTokens: readonly (string | null | undefined)[],
 ): Hono<TeamControlEnv> {
   const app = new Hono<TeamControlEnv>();
@@ -97,6 +99,35 @@ export function teamSetupRoutes(
     c.header("Cache-Control", "no-store");
     return c.json({ protocolVersion: TEAM_CONTROL_VERSION, ...saveTeamSections(rigRepo.db, c.req.param("teamId"), await c.req.json()) });
   });
+  // Plan R20 / KTD14 — the team's intake policy and the inbox of GitHub items it has seen.
+  app.get("/teams/:teamId/intake", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner read is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    const teamId = c.req.param("teamId");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, policy: readIntakePolicy(rigRepo.db, teamId),
+      repository: options.intake?.()?.repository(teamId) ?? null, items: listIntakeItems(rigRepo.db, teamId) });
+  });
+  app.put("/teams/:teamId/intake/policy", async c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, policy: saveIntakePolicy(rigRepo.db, c.req.param("teamId"), await c.req.json()) });
+  });
+  app.post("/teams/:teamId/intake/items/:item/start", async c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    const intake = options.intake?.();
+    if (!intake) return c.json({ code: "intake_unavailable", error: "GitHub intake is not running on this daemon." }, 503);
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, runId: await intake.startItem(c.req.param("teamId"), c.req.param("item")) });
+  });
+  app.post("/teams/:teamId/intake/items/:item/dismiss", c => {
+    if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
+    parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
+    c.header("Cache-Control", "no-store");
+    return c.json({ protocolVersion: TEAM_CONTROL_VERSION, item: dismissIntakeItem(rigRepo.db, c.req.param("teamId"), c.req.param("item")) });
+  });
   app.put("/teams/:teamId/seats/:nodeId/soul", async c => {
     if (!owner(c)) return c.json({ code: "owner_control_required", error: "An authenticated owner update is required." }, 403);
     parseProtocolVersion(c.req.header("X-Team-Control-Version") ?? TEAM_CONTROL_VERSION);
@@ -159,6 +190,7 @@ export function teamSetupRoutes(
     if (error instanceof TeamModelError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSoulError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSectionsError) return c.json({ code: error.code, error: error.message }, error.status);
+    if (error instanceof TeamPolicyError) return c.json({ code: error.code, error: error.message }, error.status);
     if (error instanceof TeamSetupError) {
       const status = error.code === "team_exists" || error.code === "team_name_taken" ? 409 : 400;
       return c.json({ code: error.code, error: error.message }, status);

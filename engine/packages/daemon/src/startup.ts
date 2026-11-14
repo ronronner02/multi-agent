@@ -1150,7 +1150,7 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
       ...(deps.integration ? { integrateTask: (runId: string, taskId: string) => deps.integration!.integrate(runId, taskId) } : {}),
       // U6 — the facts no single attempt produces — a failed retry, an exhausted review, an
       // integration conflict, every task done — are read once per tick, after the attempts.
-      onSweep: async () => { await leadManager.sweep(); await taskThreads.sweep(); await deps.pullRequestDelivery?.sweep(); await deps.githubSource?.sweep(); },
+      onSweep: async () => { await leadManager.sweep(); await taskThreads.sweep(); await deps.pullRequestDelivery?.sweep(); await deps.githubSource?.sweep(); await deps.githubIntake?.sweep(); },
       dispatchPending,
       currentBinding });
     // T017 (cancellation half) — the owner's cancel stops the work. Dispatch closure is the
@@ -1188,6 +1188,28 @@ export async function createDaemon(opts?: DaemonOptions): Promise<DaemonResult> 
     const { composeGithubSource } = await import("./domain/github-source.js");
     deps.githubSource = composeGithubSource({ db, governance: teamGovernance, agent: deps.githubAgent, owner: deps.github,
       dispatch: () => deps.teamControl?.dispatch });
+    // Plan KTD14 — issues and the owner's rules start planning runs through the owner's own start.
+    if (deps.teamControl) {
+      const { composeGithubIntake } = await import("./domain/github-intake.js");
+      const { commandAssessor } = await import("./domain/intake-assessor.js");
+      const { startTeamRun } = await import("./routes/team-start.js");
+      const { resolveExecutable } = await import("./domain/executable-resolver.js");
+      const control = deps.teamControl;
+      const intakeActor = { kind: "owner" as const, sessionId: "github-intake" };
+      deps.githubIntake = composeGithubIntake({ db, agent: deps.githubAgent, owner: deps.github,
+        assess: commandAssessor({ resolve: client => {
+          const configured = opts?.directLaunchExecutable?.(client === "codex" ? "codex" : "claude-code");
+          const resolution = resolveExecutable(client === "codex" ? "codex" : "claude", configured ? { configuredPath: configured } : {});
+          return resolution.ok ? resolution.path : null;
+        } }),
+        start: async (rigId, goal, displayName) => {
+          const outcome = await startTeamRun(teamGovernance, deps.rigRepo,
+            { ...control, ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}) }, intakeActor,
+            { goal, rig: rigId, planning: true, displayName });
+          if (outcome.status !== 201) throw new Error(String(outcome.body.error ?? outcome.body.code ?? "The start was refused."));
+          return String(outcome.body.runId);
+        } });
+    }
   }
 
   return { app, db, deps, contextMonitor, eventLoopMonitor };

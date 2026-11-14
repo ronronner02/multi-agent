@@ -63,6 +63,7 @@ export interface AppDeps {
   pullRequestDelivery?: import("./domain/pull-request-delivery.js").PullRequestDelivery;
   /** Plan KTD12 — the poller that routes the team pull request's reviews and CI to the owning work. */
   githubSource?: import("./domain/github-source.js").GithubSource;
+  githubIntake?: import("./domain/github-intake.js").GithubIntake;
   ownerSessions?: OwnerSessions;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
@@ -487,7 +488,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/team-control", teamSettingsRoutes(deps.settingsStore, teamOptions.credentials,
     [deps.legacyBearerToken]));
   app.route("/api/team-control", teamSetupRoutes(deps.rigRepo, { credentials: teamOptions.credentials, github,
-    ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}) },
+    ...(deps.settingsStore ? { settingsStore: deps.settingsStore } : {}), intake: () => deps.githubIntake },
     [deps.legacyBearerToken]));
   // MVP slice 2 — the owner's run collection: list the runs, and start one from a goal.
   app.route("/api/team-control", teamStartRoutes(teamGovernance, deps.rigRepo, {

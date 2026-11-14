@@ -39,6 +39,41 @@ export const TEAM_GITHUB_SEEN_SQL = `CREATE TABLE team_github_seen (
       PRIMARY KEY (run_id, item)
     )`;
 
+/**
+ * Plan KTD14 — a team's versioned intake policy, the GitHub items it has seen, and where each
+ * team's polling resumes. Shared by the baseline and step 7→8.
+ */
+export const TEAM_INTAKE_SQL = [`CREATE TABLE team_intake_policies (
+      rig_id TEXT NOT NULL REFERENCES rigs(id) ON DELETE CASCADE,
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      mode TEXT NOT NULL CHECK (mode IN ('off', 'observe', 'auto')),
+      rules_json TEXT NOT NULL CHECK (json_valid(rules_json)),
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (rig_id, revision)
+    )`, `CREATE TABLE team_intake_items (
+      rig_id TEXT NOT NULL REFERENCES rigs(id) ON DELETE CASCADE,
+      item TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('issue', 'comment', 'ci')),
+      title TEXT NOT NULL,
+      url TEXT NOT NULL,
+      author TEXT NOT NULL,
+      body TEXT NOT NULL,
+      explicit INTEGER NOT NULL CHECK (explicit IN (0, 1)),
+      state TEXT NOT NULL CHECK (state IN ('pending', 'would_start', 'started', 'skipped', 'unavailable', 'dismissed')),
+      matched_json TEXT NOT NULL CHECK (json_valid(matched_json)),
+      policy_revision INTEGER,
+      run_id TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (rig_id, item)
+    )`, `CREATE TABLE team_intake_sources (
+      rig_id TEXT PRIMARY KEY REFERENCES rigs(id) ON DELETE CASCADE,
+      repository TEXT NOT NULL,
+      since TEXT NOT NULL
+    )`].join(";\n");
+
 export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   // Plan KTD3: a lead message that needs no owner attention is kept as run activity.
   { from: 2, to: 3, sql: "ALTER TABLE team_chat_messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity'))" },
@@ -49,6 +84,7 @@ export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   { from: 4, to: 5, sql: TEAM_PROMPT_VERSIONS_SQL },
   { from: 5, to: 6, sql: TEAM_PULL_REQUESTS_SQL },
   { from: 6, to: 7, sql: TEAM_GITHUB_SEEN_SQL },
+  { from: 7, to: 8, sql: TEAM_INTAKE_SQL },
 ];
 
 /** The steps from `from` to `to`, in order, or null when the chain does not reach. */
