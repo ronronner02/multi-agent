@@ -6,7 +6,7 @@ import type { ProjectionPlan } from "./projection-planner.js";
 import type { StartupAction } from "./types.js";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { handbackPath, ownerQuestionNotices, takeTaskComments, taskCommentNote, taskCommentNotices } from "./task-thread.js";
+import { declinePath, handbackPath, ownerQuestionNotices, takeTaskComments, taskCommentNote, taskCommentNotices } from "./task-thread.js";
 import { managedTurnPrompt, writeAgentTurnPrompt, agentTurnOutputPaths, boundedOwnerWords, continuationNote, leadProgressNote } from "./agent-turn.js";
 import { leadChatTurnNote, listChatMessages, responseLanguageNote, runLeadTask, takeOwnerMessages, type ResponseLanguage } from "./lead-chat.js";
 import { unassignedOwnerWorkflows } from "./team-workflows.js";
@@ -126,7 +126,8 @@ export class StartupOrchestrator {
       : null;
     // Plan KTD5 — an implementer's turn carries the owner's comments on its own task.
     const comments = role === "implementer"
-      ? taskCommentNote(takeTaskComments(this.db, runId, taskId, attemptId), handbackPath(agentTurnOutputPaths(root, attemptId).taskReport))
+      ? taskCommentNote(takeTaskComments(this.db, runId, taskId, attemptId), handbackPath(agentTurnOutputPaths(root, attemptId).taskReport),
+        declinePath(agentTurnOutputPaths(root, attemptId).taskReport))
       : null;
     const preference = this.db.prepare("SELECT response_language AS language FROM team_runs WHERE id = ?").get(runId) as
       { language: ResponseLanguage | null } | undefined;
