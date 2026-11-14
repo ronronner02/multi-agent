@@ -12,17 +12,19 @@ vi.mock("@xterm/xterm", () => ({ Terminal: class {} }));
 let mobile = false;
 let signedIn = true;
 let accountFailure = false;
+let replayEvents: object[] = [];
 const data = read({ tasks: [task({ queueState: "pending", stage: "queued" }), task({ taskId: "task-2", displayName: "Filter chips", queueState: "pending", stage: "queued" })] });
 const unexpected: string[] = [];
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
-  mobile = false; signedIn = true; accountFailure = false; unexpected.length = 0;
+  mobile = false; signedIn = true; accountFailure = false; replayEvents = []; unexpected.length = 0;
   vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   localStorage.clear(); sessionStorage.clear(); queryClient.clear();
   localStorage.setItem("multi-agent.interfaceLanguage", "en");
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   const original = window.matchMedia.bind(window);
   vi.spyOn(window, "matchMedia").mockImplementation(query => ({ ...original(query), matches: mobile && query === "(max-width: 760px)" }));
   vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -56,7 +58,7 @@ beforeEach(() => {
     if (path.endsWith("/health")) return response({ health: health() });
     if (path.endsWith("/read")) return response({ read: data });
     if (path.endsWith("/events/stream")) return new Response(new ReadableStream(), { headers: { "Content-Type": "text/event-stream" } });
-    if (path.endsWith("/replay")) return response({ runId: RUN_ID, events: [], window: data.replay, gap: false });
+    if (path.endsWith("/replay")) return response({ runId: RUN_ID, events: replayEvents, window: data.replay, gap: false });
     if (path.endsWith("/chat")) return response({ phase: "delivery", pendingDecision: null, messages: [{
       id: "question-1", sender: "lead", kind: "decision", body: "Keep the existing behavior?", options: ["Keep", "Change"], answeredBy: null, createdAt: data.generatedAt,
     }] });
@@ -97,6 +99,20 @@ describe("command-center router integration", () => {
     expect(await screen.findByRole("heading", { name: "Sign in to GitHub" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Multi-Agent" })).toBeNull();
     expect(vi.mocked(fetch).mock.calls.some(([path]) => /\/(teams|runs)(?:\?|$)/.test(String(path)))).toBe(false);
+  });
+
+  it("renders replay events in the dedicated live Flow destination", async () => {
+    replayEvents = [{
+      seq: 2, createdAt: "2026-11-14 10:00:00", type: "team.control", action: "task.created",
+      runId: RUN_ID, taskId: "task-1", attemptId: "attempt-1",
+      body: '{"workerSeat":"impl@rig"}', truncated: false,
+    }];
+    await openShell();
+    const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
+    fireEvent.click(within(nav).getByRole("link", { name: "Flow" }));
+    expect(await screen.findByRole("heading", { name: "Flow" })).toBeTruthy();
+    expect(await screen.findByText(/Task assigned/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Implementer/ })).toBeTruthy();
   });
 
   it("publishes the restored Overview summary through the real route", async () => {

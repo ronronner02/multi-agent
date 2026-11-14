@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { createInterfaceI18n, type InterfaceI18n, type MessageKey } from "@multi-agent/i18n";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import { Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, Inbox, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
+import { Activity, Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, Inbox, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
 import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
@@ -27,11 +27,13 @@ import { Background, useBackgroundPreference } from "./background.js";
 import { EntryFrame, GithubGate } from "./github-gate.js";
 import { ChatPanel, pendingOwnerDecisions, pendingWorkerQuestions } from "./chat-panel.js";
 import { CommandPalette } from "./command-palette.js";
+import { FlowView } from "./flow/FlowView.js";
+import { adaptTeamEvents, mapTeamSeat } from "./flow/team-flow-adapter.js";
 import "./fonts.js";
 import "./team.css";
 
 export const INTERFACE_LANGUAGE_KEY = "multi-agent.interfaceLanguage";
-export const TEAM_SECTIONS = ["overview", "inbox", "documents", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
+export const TEAM_SECTIONS = ["overview", "inbox", "flow", "documents", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
 export type TeamSection = (typeof TEAM_SECTIONS)[number];
 type TeamDestination = TeamSection;
 const DESTINATIONS: readonly string[] = TEAM_SECTIONS;
@@ -44,9 +46,9 @@ export function teamSection(pathname: string): TeamDestination {
 
 const SECTION_LABELS: Record<TeamDestination, MessageKey> = {
   documents: "nav.documents", overview: "nav.overview", inbox: "nav.inbox", workspace: "nav.workspace", tasks: "nav.tasks",
-  reviews: "nav.reviews", analytics: "nav.analytics", settings: "nav.settings",
+  reviews: "nav.reviews", analytics: "nav.analytics", settings: "nav.settings", flow: "nav.flow",
 };
-const NAV_ICONS = { documents: FileText, overview: House, inbox: Inbox, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
+const NAV_ICONS = { documents: FileText, overview: House, inbox: Inbox, flow: Activity, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
 
 export function Pairing() {
   const { t } = useTranslation();
@@ -258,6 +260,7 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
   const openExisting = (opener: HTMLButtonElement) => { openOpener.current = opener; setOpening(true); };
   let content: ReactNode;
   if (!paired) content = <Pairing />;
+  else if (section === "flow") content = <FlowView events={adaptTeamEvents(data.events.data?.events ?? [], runId)} seats={read?.seats.map(mapTeamSeat)} />;
   else if (section === "settings") content = <SettingsScreen language={language} connection={connection}
     onLanguage={onLanguage} appearance={appearance} background={background} seats={read?.seats ?? team?.seats ?? []}
     isolation={data.health.data?.runtime?.isolation ?? null} address={window.location.origin} teamId={team?.seats.some(seat => seat.role === "lead") ? team.id : undefined} />;
