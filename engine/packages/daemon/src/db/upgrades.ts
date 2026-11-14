@@ -31,6 +31,14 @@ export const TEAM_PULL_REQUESTS_SQL = `CREATE TABLE team_pull_requests (
       updated_at TEXT NOT NULL
     )`;
 
+/** Plan KTD12 — the GitHub items a run's source has already delivered. Shared by the baseline and step 6→7. */
+export const TEAM_GITHUB_SEEN_SQL = `CREATE TABLE team_github_seen (
+      run_id TEXT NOT NULL REFERENCES team_runs(id),
+      item TEXT NOT NULL,
+      seen_at TEXT NOT NULL,
+      PRIMARY KEY (run_id, item)
+    )`;
+
 export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
   // Plan KTD3: a lead message that needs no owner attention is kept as run activity.
   { from: 2, to: 3, sql: "ALTER TABLE team_chat_messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'chat' CHECK (visibility IN ('chat', 'activity'))" },
@@ -40,6 +48,7 @@ export const SCHEMA_UPGRADES: readonly SchemaUpgrade[] = [
     "ALTER TABLE team_queue_authority ADD COLUMN follow_up_of TEXT"].join(";\n") },
   { from: 4, to: 5, sql: TEAM_PROMPT_VERSIONS_SQL },
   { from: 5, to: 6, sql: TEAM_PULL_REQUESTS_SQL },
+  { from: 6, to: 7, sql: TEAM_GITHUB_SEEN_SQL },
 ];
 
 /** The steps from `from` to `to`, in order, or null when the chain does not reach. */

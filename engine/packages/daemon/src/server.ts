@@ -61,6 +61,8 @@ export interface AppDeps {
   githubAgent?: GithubCli;
   /** Plan KTD13 — the pull-request delivery for GitHub projects, composed once both GitHub accounts exist. */
   pullRequestDelivery?: import("./domain/pull-request-delivery.js").PullRequestDelivery;
+  /** Plan KTD12 — the poller that routes the team pull request's reviews and CI to the owning work. */
+  githubSource?: import("./domain/github-source.js").GithubSource;
   ownerSessions?: OwnerSessions;
   /** The one governance owner, shared with the managed launch control when startup composes it. */
   teamGovernance?: PlanGovernance;
