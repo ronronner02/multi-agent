@@ -3,13 +3,14 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { createInterfaceI18n, type InterfaceI18n, type MessageKey } from "@multi-agent/i18n";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import { Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
+import { Bell, ChartColumn, CheckCircle2, FileText, GitBranch, House, Inbox, LayoutGrid, Menu, MessageSquare, Search, Settings, SquareCheck, X } from "lucide-react";
 import { OwnerReadError, OwnerSessionProvider, useOwnerSession } from "../hooks/useOwnerSession.js";
 import { useTeamRun } from "../hooks/useTeamRun.js";
 import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
 import type { TeamOwnerRead } from "@multi-agent/daemon/team-control";
 import { useIntegration, useRuns, useTeamChat, useTeams } from "./hooks.js";
 import { DocumentsScreen } from "./documents.js";
+import { InboxScreen } from "./inbox.js";
 import { ProjectHome } from "./project-home.js";
 import { CreateProject, ProjectsScreen } from "./create-project.js";
 import { Overview } from "./overview.js";
@@ -30,7 +31,7 @@ import "./fonts.js";
 import "./team.css";
 
 export const INTERFACE_LANGUAGE_KEY = "multi-agent.interfaceLanguage";
-export const TEAM_SECTIONS = ["overview", "documents", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
+export const TEAM_SECTIONS = ["overview", "inbox", "documents", "workspace", "tasks", "reviews", "analytics", "settings"] as const;
 export type TeamSection = (typeof TEAM_SECTIONS)[number];
 type TeamDestination = TeamSection;
 const DESTINATIONS: readonly string[] = TEAM_SECTIONS;
@@ -42,10 +43,10 @@ export function teamSection(pathname: string): TeamDestination {
 }
 
 const SECTION_LABELS: Record<TeamDestination, MessageKey> = {
-  documents: "nav.documents", overview: "nav.overview", workspace: "nav.workspace", tasks: "nav.tasks", reviews: "nav.reviews",
-  analytics: "nav.analytics", settings: "nav.settings",
+  documents: "nav.documents", overview: "nav.overview", inbox: "nav.inbox", workspace: "nav.workspace", tasks: "nav.tasks",
+  reviews: "nav.reviews", analytics: "nav.analytics", settings: "nav.settings",
 };
-const NAV_ICONS = { documents: FileText, overview: House, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
+const NAV_ICONS = { documents: FileText, overview: House, inbox: Inbox, workspace: LayoutGrid, tasks: SquareCheck, reviews: CheckCircle2, analytics: ChartColumn, settings: Settings };
 
 export function Pairing() {
   const { t } = useTranslation();
@@ -261,6 +262,7 @@ function ProjectShell({ language, onLanguage, appearance, background }: {
     onLanguage={onLanguage} appearance={appearance} background={background} seats={read?.seats ?? team?.seats ?? []}
     isolation={data.health.data?.runtime?.isolation ?? null} address={window.location.origin} teamId={team?.seats.some(seat => seat.role === "lead") ? team.id : undefined} />;
   else if (section === "analytics") content = <AnalyticsScreen teamId={selectedTeamId} seats={read?.seats} />;
+  else if (section === "inbox") content = <InboxScreen teamId={selectedTeamId} onOpenRun={id => go("overview", { run: id, task: undefined })} />;
   else if (!runId && (teams.isError || runs.isError)) content = <div className="page"><p role="alert">{t("records.readFailed")}</p>
     <button className="btn btn-outline" onClick={() => { void teams.refetch(); void runs.refetch(); }}>{t("action.retry")}</button></div>;
   else if (!runId) content = team ? <ProjectHome team={team} runs={currentRuns} section={section}

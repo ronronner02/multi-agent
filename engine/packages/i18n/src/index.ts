@@ -92,6 +92,10 @@ export const MESSAGE_PARAMETERS = {
   "team.resume.retries": ["count"],
   "team.resume.rounds": ["count"],
   "team.merge.openTasks": ["count"],
+  // U13 — a rule editor labels each row by its position.
+  "intake.ruleName": ["index"],
+  "intake.ruleInstruction": ["index"],
+  "intake.removeRule": ["index"],
 } as const satisfies Partial<Record<MessageKey, readonly string[]>>;
 
 export type MessageArguments<Key extends MessageKey> = Key extends keyof typeof MESSAGE_PARAMETERS

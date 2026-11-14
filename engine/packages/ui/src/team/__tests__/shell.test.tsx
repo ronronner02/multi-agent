@@ -35,8 +35,8 @@ async function show(locale: "en" | "zh-CN" = "en") {
 }
 
 describe("command-center shell", () => {
-  it("has seven destinations including documents and falls back for unknown URLs", () => {
-    expect([...TEAM_SECTIONS]).toEqual(["overview", "documents", "workspace", "tasks", "reviews", "analytics", "settings"]);
+  it("has eight destinations including the inbox and falls back for unknown URLs", () => {
+    expect([...TEAM_SECTIONS]).toEqual(["overview", "inbox", "documents", "workspace", "tasks", "reviews", "analytics", "settings"]);
     for (const section of TEAM_SECTIONS) {
       expect(teamSection(`/team/${section}`)).toBe(section);
     }
@@ -47,8 +47,8 @@ describe("command-center shell", () => {
   it("links every destination and marks the selected one as current", async () => {
     const { onSelect } = await show();
     const nav = screen.getByRole("navigation", { name: "Multi-Agent" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(7);
-    for (const [index, name] of ["Overview", "Documents", "Workspace", "Tasks", "Reviews", "Analytics", "Settings"].entries()) {
+    expect(within(nav).getAllByRole("link")).toHaveLength(8);
+    for (const [index, name] of ["Overview", "Inbox", "Documents", "Workspace", "Tasks", "Reviews", "Analytics", "Settings"].entries()) {
       const link = within(nav).getByRole("link", { name });
       expect(link.getAttribute("href")).toBe(`/team/${TEAM_SECTIONS[index]}?run=run-1`);
       fireEvent.click(link);

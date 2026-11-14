@@ -74,4 +74,4 @@ npm run test -w packages/ui -- \
   src/team/__tests__/documents.test.tsx \
   src/team/__tests__/souls-workflows.test.tsx \
   src/team/__tests__/background.test.tsx src/team/__tests__/model-settings.test.tsx \
-  src/team/__tests__/new-task.test.tsx src/team/__tests__/diff.test.tsx --maxWorkers=2
+  src/team/__tests__/new-task.test.tsx src/team/__tests__/diff.test.tsx src/team/__tests__/intake.test.tsx --maxWorkers=2
