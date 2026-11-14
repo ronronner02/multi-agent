@@ -195,6 +195,39 @@ describe("Overview", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it("links a GitHub project's pull request and merges it there with the owner's account", async () => {
+    const decoded = await readIntegration(vi.fn().mockResolvedValue({ integration: { ...integration, tasksDone: true, merge: { possible: true, reason: null } },
+      pullRequest: { runId: RUN_ID, repository: "acme/app", number: 12, url: "https://github.com/acme/app/pull/12", headSha: "abc", state: "open" } }), RUN_ID);
+    expect(decoded.pullRequest).toEqual({ number: 12, url: "https://github.com/acme/app/pull/12", state: "open" });
+    request.mockResolvedValue({ status: "merged", code: null, reason: null, branch: "team/status-filter", mode: "pull-request", head: "abc" });
+    await show(read(), { integration: decoded });
+    const link = screen.getByRole("link", { name: "Pull request #12" });
+    expect(link.getAttribute("href")).toBe("https://github.com/acme/app/pull/12");
+    expect(link.getAttribute("target")).toBe("_blank");
+    fireEvent.click(screen.getByRole("button", { name: "Merge pull request #12" }));
+    expect(window.confirm).toHaveBeenCalledWith("Merge pull request #12 on GitHub with your account.");
+    expect((await screen.findByRole("status")).textContent).toBe("Merged");
+  });
+
+  it("names a merge GitHub refused, and shows a merged pull request as merged", async () => {
+    const pullRequest = { number: 12, url: "https://github.com/acme/app/pull/12", state: "open" as const };
+    request.mockResolvedValue({ status: "refused", code: "github_pr_failed", reason: null, branch: null, mode: null, head: null });
+    const first = await show(read(), { integration: { ...integration, tasksDone: true, merge: { possible: true, reason: null }, pullRequest } });
+    fireEvent.click(screen.getByRole("button", { name: "Merge pull request #12" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("GitHub refused the merge");
+    first.unmount();
+    await show(read({ tasks: [task({ stage: "done", queueState: "done" })] }),
+      { integration: { ...integration, tasksDone: true, merge: { possible: true, reason: null }, pullRequest: { ...pullRequest, state: "merged" } } });
+    expect((screen.getByRole("button", { name: "Merged" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(screen.getByRole("region", { name: "Verified progress" })).getByText("Merge").closest("li")?.getAttribute("data-state")).toBe("complete");
+  });
+
+  it("ignores a pull request record whose link is not on GitHub", async () => {
+    const decoded = await readIntegration(vi.fn().mockResolvedValue({ integration,
+      pullRequest: { number: 3, url: "javascript:alert(1)", state: "open" } }), RUN_ID);
+    expect(decoded.pullRequest).toBeNull();
+  });
+
   it("confirms Cancel and sends the existing run-level command only after confirmation", async () => {
     await show();
     vi.mocked(window.confirm).mockReturnValueOnce(false);
