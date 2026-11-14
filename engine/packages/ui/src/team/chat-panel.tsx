@@ -12,6 +12,7 @@ import { mergeToolCalls } from "../hooks/useAttemptActivity.js";
 import { useAttemptStatus } from "../hooks/useAttemptStatus.js";
 import { usePendingAction } from "../hooks/usePendingAction.js";
 import { ToolCalls } from "./workspace/workspace-view.js";
+import { clockTime } from "./display.js";
 import { Check, ChevronRight } from "./glyphs.js";
 
 type OwnerDecision = { kind: "plan" } | { kind: "resume" } | { kind: "message"; message: ChatMessage };
@@ -101,6 +102,13 @@ export function LeadConversation({ read, runId, chat, connectionError, draft, on
       <WorkflowOutcomes runId={runId} />
       {chat?.available && chat.messages.filter(message => message.kind !== "decision" || message.answeredBy)
         .map(message => <Turn key={message.id} message={message} />)}
+      {chat?.available && !!chat.activity?.length && <details className="ui-chat-tools ui-chat-activity">
+        <summary>{t("chat.activity", { count: chat.activity.length })}</summary>
+        {chat.activity.map(entry => <div key={entry.id} className="turn">
+          <div className="turn-who">{t("role.lead")}<time className="ui-muted" dateTime={entry.createdAt}>{clockTime(entry.createdAt)}</time></div>
+          <p className="turn-body" style={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{entry.body}</p>
+        </div>)}
+      </details>}
       {chat?.liveTurn && <LiveOutput key={chat.liveTurn.attemptId} runId={runId} turn={chat.liveTurn}
         createdAt={read?.attempts.find(attempt => attempt.attemptId === chat.liveTurn!.attemptId)?.createdAt ?? chat.liveTurn.activity?.startedAt}
         connectionError={connectionError} />}

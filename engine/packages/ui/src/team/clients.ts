@@ -37,12 +37,16 @@ export interface LiveLeadTurn {
   attemptId: string; state: TeamAttemptView["state"]; progress: TurnProgress | null; activity: AttemptActivity | null;
 }
 
+export interface ActivityMessage { id: string; body: string; createdAt: string }
+
 export interface ChatState {
   liveTurn?: LiveLeadTurn | null;
   documentWorkflow?: ProjectDocumentWorkflow | null;
   available: boolean;
   phase: RunPhase;
   messages: ChatMessage[];
+  /** Plan KTD3 — lead turns that needed no owner attention, oldest first. */
+  activity?: ActivityMessage[];
   /** The newest unanswered decision: the "waiting on you" signal. */
   pendingDecision: { id: string; body: string; options: string[]; createdAt: string } | null;
   /** Null identifies legacy planning without a roster; missing evidence is not approval-ready. */
@@ -59,10 +63,10 @@ function controlBody(runId: string, actionId: string, entityVersion: number, pay
 /** U5 — `GET /runs/:runId/chat`. */
 export async function readChat(request: Request, runId: string, signal?: AbortSignal): Promise<ChatState> {
   try {
-    const body = await request<{ liveTurn?: LiveLeadTurn | null; messages?: ChatMessage[]; phase?: RunPhase; pendingDecision?: ChatState["pendingDecision"]; planApproval?: PlanApproval | null; documentWorkflow?: ProjectDocumentWorkflow | null }>(
+    const body = await request<{ liveTurn?: LiveLeadTurn | null; messages?: ChatMessage[]; activity?: ActivityMessage[]; phase?: RunPhase; pendingDecision?: ChatState["pendingDecision"]; planApproval?: PlanApproval | null; documentWorkflow?: ProjectDocumentWorkflow | null }>(
       `/runs/${encodeURIComponent(runId)}/chat`, { signal },
     );
-    return { available: true, messages: body.messages ?? [], phase: body.phase ?? "delivery",
+    return { available: true, messages: body.messages ?? [], activity: body.activity ?? [], phase: body.phase ?? "delivery",
       pendingDecision: body.pendingDecision ?? null, liveTurn: body.liveTurn ?? null, planApproval: body.planApproval, documentWorkflow: body.documentWorkflow };
   } catch (error) {
     if (error instanceof OwnerReadError && error.status === 404) {

@@ -201,9 +201,11 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
       throw error;
     }
     const decision = governance.chatDecision(runId);
-    const messages = governance.chatMessages(runId), leadTask = governance.leadTask(runId);
+    const messages = governance.chatMessages(runId), activity = governance.activityMessages(runId), leadTask = governance.leadTask(runId);
     const attempt = leadTask ? governance.getLatestTaskAttempt(leadTask.qitemId) : null;
-    const liveTurn = attempt?.role === "lead" && attempt.runId === runId && !messages.some(message => message.attemptId === attempt.id)
+    // A turn whose message was kept as activity has ended too; only a turn with no message yet is live.
+    const liveTurn = attempt?.role === "lead" && attempt.runId === runId
+      && ![...messages, ...activity].some(message => message.attemptId === attempt.id)
       ? { attemptId: attempt.id, state: attempt.state, progress: options.telemetry?.readProgress(attempt) ?? null,
         activity: options.telemetry?.read(attempt) ?? null } : null;
     const documentWorkflow = governance.documents(runId);
@@ -226,6 +228,8 @@ export function teamLeadRoutes(governance: PlanGovernance, options: LeadProposal
       messages: messages.map(message => ({ id: message.id, sender: message.sender,
         kind: message.kind, body: message.body, options: message.options,
         answeredBy: message.answeredBy, createdAt: message.createdAt })),
+      // Plan KTD3 — lead turns that needed no owner attention: readable on request, never a notification.
+      activity: activity.map(message => ({ id: message.id, body: message.body, createdAt: message.createdAt })),
       // The run waits on this until the owner answers it through this same endpoint, naming it
       // in `answerTo`. Null means nothing is waiting.
       pendingDecision: decision === null ? null : { id: decision.id, body: decision.body,
